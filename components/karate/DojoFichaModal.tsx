@@ -7,7 +7,7 @@
 //
 // Princípios (decisões Caio):
 //  - Dado AUSENTE é neutro/opcional ("Completar quando quiser"), NÃO é erro.
-//    Só dado INVÁLIDO (CNPJ/CPF/data impossível) é sinalizado.
+//    Só dado INVÁLIDO (CNPJ/data impossível) é sinalizado.
 //  - CEP em destaque → preenche o endereço ESTRUTURADO (campos separados,
 //    igual à ficha do praticante) via ViaCEP: logradouro, bairro, cidade, UF.
 //  - FPKT-ID é gerado no backend — aqui só exibimos.
@@ -40,6 +40,12 @@
 //   salvo no banco não constar na lista, aparece selecionado em "Outra…" e o
 //   texto é preservado num campo livre de fallback. Salva sempre a string de
 //   texto (coluna `region` — sem quebra de contrato com o backend).
+//
+// DJ2 (feat/karate-dojo-sensei-autocomplete): campo "CPF do sensei" removido.
+//   Substituído por "Sensei responsável" com autocomplete ligado a
+//   karateApi.listPractitioners (debounce 300ms, a partir de 2 chars).
+//   Permite texto livre (sensei não cadastrado). Envia sensei_name +
+//   sensei_practitioner_id no create/patch (sem sensei_cpf).
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -48,7 +54,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
-import { karateApi, AffiliationModel, DojoInput } from "@/services/karateApi";
+import { karateApi, AffiliationModel, DojoInput, PractitionerListItem } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { KARATE_REGIONS, KARATE_REGIONS_VALUES, REGION_OTHER } from "@/constants/karateRegions";
 
@@ -73,7 +79,10 @@ const EMPTY = {
   // fallback de texto livre quando region_pick === REGION_OTHER
   region_custom: "",
   cnpj: "",
-  sensei_cpf: "", affiliation_since: "", dojo_founded_year: "",
+  // sensei: nome (texto livre ou selecionado do autocomplete) + uuid do praticante vinculado
+  sensei_name: "",
+  sensei_practitioner_id: null as string | null,
+  affiliation_since: "", dojo_founded_year: "",
   phone: "", email: "",
   // endereço estruturado (igual ao praticante)
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
@@ -86,10 +95,6 @@ type Form = typeof EMPTY;
 
 // ── máscaras / validações BR ─────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
-function maskCPF(v: string) {
-  return onlyD(v).slice(0, 11)
-    .replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
 function maskCNPJ(v: string) {
   return onlyD(v).slice(0, 14)
     .replace(/(\d{2})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2")
@@ -105,14 +110,6 @@ function maskPhone(v: string) {
   if (d.length > 6) return d.replace(/(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
   if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "($1) $2");
   return d;
-}
-function cpfValido(c: string) {
-  c = onlyD(c);
-  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
-  let s = 0; for (let i = 0; i < 9; i++) s += +c[i] * (10 - i);
-  let d = 11 - (s % 11); if (d >= 10) d = 0; if (d !== +c[9]) return false;
-  s = 0; for (let i = 0; i < 10; i++) s += +c[i] * (11 - i);
-  d = 11 - (s % 11); if (d >= 10) d = 0; return d === +c[10];
 }
 function cnpjValido(v: string) {
   const c = onlyD(v);
@@ -169,6 +166,18 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   // dropdown de região: estado aberto/fechado
   const [regionOpen, setRegionOpen] = useState(false);
 
+  // ── Autocomplete de sensei ────────────────────────────────────
+  // suggestions: lista de praticantes retornados pela busca
+  // suggestionsOpen: dropdown visível
+  // senseiLoading: spinner de busca
+  const [suggestions, setSuggestions] = useState<PractitionerListItem[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [senseiLoading, setSenseiLoading] = useState(false);
+  // ref para cancelar a busca anterior (debounce manual)
+  const senseiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // flag: praticante foi SELECIONADO pelo usuário (vinculado)
+  const senseiLinked = !!form.sensei_practitioner_id;
+
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
   const regionCustomRef = useRef<TextInput>(null);
@@ -184,6 +193,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   useEffect(() => {
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null); setToast(null); setRegionOpen(false);
+    setSuggestions([]); setSuggestionsOpen(false);
     if (!dojoId) { setForm(EMPTY); setFpkt(null); setStatusLabel(null); return; }
     setLoading(true);
     karateApi.getDojo(federationId, dojoId)
@@ -199,7 +209,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",
           region_pick, region_custom,
-          cnpj: d.cnpj ? maskCNPJ(d.cnpj) : "", sensei_cpf: d.sensei_cpf ? maskCPF(d.sensei_cpf) : "",
+          cnpj: d.cnpj ? maskCNPJ(d.cnpj) : "",
+          sensei_name: d.sensei_name || "",
+          sensei_practitioner_id: d.sensei_practitioner_id || null,
           affiliation_since: fromISO(d.affiliation_since), dojo_founded_year: d.dojo_founded_year ? String(d.dojo_founded_year) : "",
           phone: d.phone ? maskPhone(d.phone) : "", email: d.email || "",
           zip_code: d.address_zip ? maskCEP(d.address_zip) : "",
@@ -259,8 +271,61 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     } catch { setCepStatus({ msg: "Falha ao buscar o CEP — preencha manualmente.", ok: false }); }
   }, []);
 
+  // ── Sensei autocomplete handlers ─────────────────────────────
+  // Chamado a cada keystroke no campo de sensei.
+  // • Se há praticante vinculado e o usuário edita → desvincula (sensei_practitioner_id = null).
+  // • Debounce 300 ms → busca listPractitioners com q=termo.
+  // • Menos de 2 chars → fecha dropdown sem buscar.
+  const onSenseiChange = useCallback((text: string) => {
+    setForm((p) => ({
+      ...p,
+      sensei_name: text,
+      // editar o texto desvincula qualquer praticante previamente selecionado
+      sensei_practitioner_id: p.sensei_practitioner_id ? null : p.sensei_practitioner_id,
+    }));
+
+    // cancela debounce anterior
+    if (senseiDebounceRef.current) clearTimeout(senseiDebounceRef.current);
+
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      setSenseiLoading(false);
+      return;
+    }
+
+    setSenseiLoading(true);
+    senseiDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await karateApi.listPractitioners(federationId, { q: text.trim(), pageSize: 8 });
+        setSuggestions(res.data ?? []);
+        setSuggestionsOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSenseiLoading(false);
+      }
+    }, 300);
+  }, [federationId]);
+
+  // Limpa o debounce ao desmontar
+  useEffect(() => () => {
+    if (senseiDebounceRef.current) clearTimeout(senseiDebounceRef.current);
+  }, []);
+
+  // Selecionar uma sugestão: vincula o praticante e fecha o dropdown.
+  const onSelectSuggestion = useCallback((item: PractitionerListItem) => {
+    setForm((p) => ({
+      ...p,
+      sensei_name: item.full_name,
+      sensei_practitioner_id: item.id,
+    }));
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+    setSenseiLoading(false);
+  }, []);
+
   const cnpjBad = form.cnpj.length > 0 && !cnpjValido(form.cnpj);
-  const senseiBad = form.sensei_cpf.length > 0 && !cpfValido(form.sensei_cpf);
   // data "Filiado desde": ISO validado (parseBrDate rejeita 31/02). Completo mas inválido = sinaliza.
   const sinceIso = parseBrDate(form.affiliation_since);
   const sinceBad = form.affiliation_since.length === 10 && sinceIso === null;
@@ -271,16 +336,15 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     const e: string[] = [];
     const regionFinal = resolveRegionValue(form.region_pick, form.region_custom);
     if (!regionFinal) e.push("Região");
-    if (!form.sensei_cpf) e.push("Sensei (CPF)");
+    if (!form.sensei_name) e.push("Sensei");
     if (!form.phone) e.push("Telefone");
     return e;
-  }, [form.region_pick, form.region_custom, form.sensei_cpf, form.phone]);
+  }, [form.region_pick, form.region_custom, form.sensei_name, form.phone]);
 
   async function handleSave() {
     if (!form.name.trim()) { setErrorMsg("Informe o nome do dojô."); return; }
     if (!form.affiliation_model) { setErrorMsg("Escolha o modelo de filiação."); return; }
     if (cnpjBad) { setErrorMsg("O CNPJ informado é inválido. Corrija ou deixe em branco."); return; }
-    if (senseiBad) { setErrorMsg("O CPF do sensei é inválido. Corrija ou deixe em branco."); return; }
     if (sinceBad) { setErrorMsg("A data \"Filiado desde\" é inválida. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
     // Endereço: envia campos estruturados (address_*). Mantém compat com o texto
@@ -290,11 +354,14 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       form.neighborhood || form.city || form.state || form.zip_code);
     // Região: resolve o valor final (string do picker ou texto livre de "Outra…")
     const regionFinal = resolveRegionValue(form.region_pick, form.region_custom);
-    const body: DojoInput & { is_active?: boolean } = {
+    // O backend já aceita sensei_name + sensei_practitioner_id; o tipo DojoInput
+    // ainda não reflete (será atualizado em follow-up), então usamos `as any`.
+    const body: (DojoInput & { is_active?: boolean; sensei_name?: string | null; sensei_practitioner_id?: string | null }) = {
       name: form.name.trim(),
       affiliation_model: form.affiliation_model as AffiliationModel,
       cnpj: onlyD(form.cnpj) || null,
-      sensei_cpf: onlyD(form.sensei_cpf) || null,
+      sensei_name: form.sensei_name.trim() || null,
+      sensei_practitioner_id: form.sensei_practitioner_id || null,
       region: regionFinal || undefined,
       affiliation_since: sinceIso || undefined,
       dojo_founded_year: form.dojo_founded_year ? parseInt(form.dojo_founded_year, 10) : null,
@@ -310,7 +377,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       address_zip: onlyD(form.zip_code) || null,
       // texto legado: só preserva se NÃO houver estruturado preenchido
       address: hasStructured ? null : (form.legacy_address || null),
-    };
+    } as any;
     // Status: só envia is_active na EDIÇÃO (cadastro novo nasce ativo no back).
     if (isEdit) body.is_active = form.active;
     try {
@@ -334,7 +401,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => { setRegionOpen(false); onClose(); }} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => { setRegionOpen(false); setSuggestionsOpen(false); onClose(); }} />
         <View style={[styles.card, { width: cardW }]}>
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
@@ -480,12 +547,106 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                   note={cnpjBad ? "CNPJ inválido" : undefined} />
               </View>
 
+              {/* ── Sensei & fundação ──────────────────────────────────────── */}
               <SectionTitle>Sensei &amp; fundação</SectionTitle>
-              <View style={styles.row2}>
-                <Field flex label="CPF do sensei responsável" mono value={form.sensei_cpf} onChangeText={(v) => set("sensei_cpf", maskCPF(v))} keyboardType="numeric" placeholder="000.000.000-00" bad={senseiBad}
-                  inputRef={senseiRef} returnKeyType="next" onSubmitEditing={() => sinceRef.current?.focus()}
-                  note={senseiBad ? "CPF inválido" : (form.sensei_cpf && !senseiBad ? "CPF válido" : undefined)} noteOk={!!form.sensei_cpf && !senseiBad} />
+
+              {/* Autocomplete de sensei responsável */}
+              <View style={styles.field}>
+                <Text style={styles.label}>
+                  Sensei responsável
+                  <Text style={styles.labelHint}>  · opcional</Text>
+                </Text>
+                {/* Wrapper com zIndex alto para o dropdown flutuar sobre campos abaixo */}
+                <View style={styles.senseiWrap}>
+                  <View style={[
+                    styles.input,
+                    styles.senseiInputRow,
+                    senseiLinked && styles.senseiInputLinked,
+                  ]}>
+                    <TextInput
+                      ref={senseiRef}
+                      style={styles.senseiTextInput}
+                      value={form.sensei_name}
+                      onChangeText={onSenseiChange}
+                      onFocus={() => {
+                        if (suggestions.length > 0) setSuggestionsOpen(true);
+                      }}
+                      onBlur={() => {
+                        // pequeno delay para permitir que o tap na sugestão seja registrado
+                        setTimeout(() => setSuggestionsOpen(false), 160);
+                      }}
+                      placeholder="Nome do sensei…"
+                      placeholderTextColor={P.ink4}
+                      returnKeyType="next"
+                      onSubmitEditing={() => sinceRef.current?.focus()}
+                      accessibilityLabel="Sensei responsável"
+                      autoCorrect={false}
+                    />
+                    {senseiLoading ? (
+                      <ActivityIndicator size="small" color={P.red} style={styles.senseiIcon} />
+                    ) : senseiLinked ? (
+                      <TouchableOpacity
+                        style={styles.senseiIcon}
+                        onPress={() => {
+                          setForm((p) => ({ ...p, sensei_name: "", sensei_practitioner_id: null }));
+                          setSuggestions([]);
+                          setSuggestionsOpen(false);
+                          senseiRef.current?.focus();
+                        }}
+                        hitSlop={8}
+                        accessibilityLabel="Limpar sensei"
+                      >
+                        <Icon name="x" size={15} color={P.ink3} />
+                      </TouchableOpacity>
+                    ) : (
+                      <Icon name="search" size={15} color={P.ink4} style={styles.senseiIcon} />
+                    )}
+                  </View>
+
+                  {/* Badge de praticante vinculado */}
+                  {senseiLinked && (
+                    <Text style={styles.senseiLinkedNote}>
+                      <Icon name="check" size={11} color={P.ok} />{"  "}Praticante vinculado
+                    </Text>
+                  )}
+
+                  {/* Dropdown de sugestões */}
+                  {suggestionsOpen && suggestions.length > 0 && (
+                    <View style={styles.senseiDropList}>
+                      {suggestions.map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={styles.senseiDropItem}
+                          onPress={() => onSelectSuggestion(item)}
+                          activeOpacity={0.75}
+                          accessibilityRole="menuitem"
+                          accessibilityLabel={item.full_name}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.senseiDropName}>{item.full_name}</Text>
+                            {(item.dojo_name || item.karate_registration_number) ? (
+                              <Text style={styles.senseiDropSub} numberOfLines={1}>
+                                {[item.dojo_name, item.karate_registration_number].filter(Boolean).join("  ·  ")}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <Icon name="user" size={14} color={P.ink4} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Nenhuma sugestão encontrada */}
+                  {suggestionsOpen && !senseiLoading && suggestions.length === 0 && form.sensei_name.trim().length >= 2 && (
+                    <View style={styles.senseiDropList}>
+                      <View style={styles.senseiDropEmpty}>
+                        <Text style={styles.senseiDropEmptyTxt}>Nenhum praticante encontrado — o nome será salvo como texto livre.</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
               </View>
+
               <View style={styles.row2}>
                 <Field flex label="Filiado desde" hint="dd/mm/aaaa" mono value={form.affiliation_since} onChangeText={(v) => set("affiliation_since", maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa"
                   inputRef={sinceRef} returnKeyType="next" onSubmitEditing={() => foundedRef.current?.focus()}
@@ -650,6 +811,39 @@ const styles = StyleSheet.create({
   cepLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.ink, marginBottom: 7 } as TextStyle,
   cepHint: { fontWeight: "500", color: P.ink3 } as TextStyle,
   cepRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+
+  // Autocomplete de sensei
+  senseiWrap: { position: "relative", zIndex: 200 } as ViewStyle,
+  senseiInputRow: {
+    flexDirection: "row", alignItems: "center", paddingVertical: 0, paddingHorizontal: 0,
+    paddingRight: 8,
+  } as ViewStyle,
+  senseiInputLinked: { borderColor: P.ok } as ViewStyle,
+  senseiTextInput: {
+    flex: 1, fontFamily: F.body, fontSize: 14, color: P.ink,
+    paddingHorizontal: 12, paddingVertical: 11,
+  } as TextStyle,
+  senseiIcon: { width: 28, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  senseiLinkedNote: {
+    fontFamily: F.body, fontSize: 11, color: P.ok, marginTop: 4,
+  } as TextStyle,
+  senseiDropList: {
+    position: "absolute", top: "100%", left: 0, right: 0,
+    backgroundColor: P.paper, borderWidth: 1, borderColor: P.line2,
+    borderRadius: R.md, overflow: "hidden", zIndex: 300,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
+    marginTop: 3,
+  } as ViewStyle,
+  senseiDropItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 11, paddingHorizontal: 14,
+    borderBottomWidth: 1, borderBottomColor: P.line,
+  } as ViewStyle,
+  senseiDropName: { fontFamily: F.body, fontSize: 14, color: P.ink, fontWeight: "600" } as TextStyle,
+  senseiDropSub: { fontFamily: F.mono, fontSize: 11, color: P.ink3, marginTop: 1 } as TextStyle,
+  senseiDropEmpty: { paddingVertical: 14, paddingHorizontal: 14 } as ViewStyle,
+  senseiDropEmptyTxt: { fontFamily: F.body, fontSize: 12.5, color: P.ink3 } as TextStyle,
 
   errBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(184,70,58,0.08)", borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11, marginTop: 12 } as ViewStyle,
   errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
