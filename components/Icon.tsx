@@ -201,6 +201,102 @@ const ALIASES: Record<string, string> = {
   // Power / liga-desliga (toggle Suspender/Reativar — dojo karate)
   "power-outline":        "power",
   "power-off":            "power",
+  // ── Ionicons karate status maps (fix/karate-icon-aliases) ───
+  // checkmark / check variants
+  "checkmark-circle":         "check",
+  "checkmark":                "check",
+  "checkmark-outline":        "check",
+  "checkmark-circle-outline": "check",
+  // close / x variants
+  "close-circle":             "x",
+  "close":                    "x",
+  "close-outline":            "x",
+  "close-circle-outline":     "x",
+  // warning / alert variants
+  "warning":                  "alert",
+  "warning-outline":          "alert",
+  // ban variants
+  "ban":                      "x",
+  "ban-outline":              "x",
+  // time / clock variants
+  "time":                     "clock",
+  "time-outline":             "clock",
+  "hourglass":                "clock",
+  "hourglass-outline":        "clock",
+  // ellipse → info
+  "ellipse":                  "info",
+  "ellipse-outline":          "info",
+  // person → users
+  "person":                   "users",
+  "person-outline":           "users",
+  "person-circle":            "users",
+  "person-circle-outline":    "users",
+  // pencil → edit
+  "pencil":                   "edit",
+  "pencil-outline":           "edit",
+  // trash variants
+  "trash-outline":            "trash",
+  "trash-bin":                "trash",
+  "trash-bin-outline":        "trash",
+  // add/remove circle variants
+  "add-circle":               "plus",
+  "add-circle-outline":       "plus",
+  "remove-circle":            "minus",
+  "remove-circle-outline":    "minus",
+  // information-circle → info
+  "information-circle":       "info",
+  "information-circle-outline": "info",
+  // card → credit_card
+  "card":                     "credit_card",
+  "card-outline":             "credit_card",
+  // wallet variant
+  "wallet-outline":           "wallet",
+  // school → users
+  "school":                   "users",
+  "school-outline":           "users",
+  // medal → ribbon
+  "medal":                    "ribbon",
+  "medal-outline":            "ribbon",
+  // document variants → file_text
+  "document-text":            "file_text",
+  "document-text-outline":    "file_text",
+  "document":                 "file_text",
+  "document-outline":         "file_text",
+  // print → download
+  "print":                    "download",
+  "print-outline":            "download",
+  // location variants
+  "location-outline":         "location",
+  "pin":                      "location",
+  // mail / chat → message
+  "mail":                     "message",
+  "mail-outline":             "message",
+  "chatbubble-ellipses":      "message",
+  "chatbubble-ellipses-outline": "message",
+  // call → headset
+  "call":                     "headset",
+  "call-outline":             "headset",
+  // swap → repeat
+  "swap-horizontal":          "repeat",
+  "swap-horizontal-outline":  "repeat",
+  // cloud-offline → alert_circle
+  "cloud-offline":            "alert_circle",
+  "cloud-offline-outline":    "alert_circle",
+  // hand-left → info
+  "hand-left":                "info",
+  "hand-left-outline":        "info",
+  // folder-open → package
+  "folder-open":              "package",
+  "folder-open-outline":      "package",
+  // home → dashboard
+  "home":                     "dashboard",
+  "home-outline":             "dashboard",
+  // chevron-back → chevron_left; chevron-down-outline → chevron_down
+  "chevron-back":             "chevron_left",
+  "chevron-down-outline":     "chevron_down",
+  // calendar-clear → calendar
+  "calendar-clear":           "calendar",
+  "calendar-clear-outline":   "calendar",
 };
 
 function resolveName(name: string): string {
