@@ -29,6 +29,14 @@
 //   da federação no microsite (/karate/[slug]/ranking servido em
 //   {slug}.getaura.com.br/ranking), onde os atletas deste dojô aparecem.
 //   O slug vem de getFederationIdentity (fallback: slug do host atual).
+//
+// DJ2: card Cadastro exibe "Sensei responsável" (sensei_practitioner_name ou
+//   sensei_name) em vez do CPF. CPF removido da exibição.
+//
+// DJ4: cada anuidade não paga ganha botão "Registrar pagamento" (modal pequeno:
+//   data + forma + valor opcional → payAnnuity). Botão geral "Lançar pagamento"
+//   no topo da seção → modal (competência + valor + data + forma →
+//   registerAnnuityPayment). Convive com Editar/Estornar já existentes.
 // ============================================================
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -54,14 +62,6 @@ const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannua
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-// Máscara leve de CPF só para exibição (não altera o dado).
-const fmtCpf = (v: string | null | undefined): string | null => {
-  if (!v) return null;
-  const d = String(v).replace(/\D/g, "");
-  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  return String(v);
-};
 
 // Máscara leve de CEP só para exibição (não altera o dado).
 const fmtCep = (v: string | null | undefined): string | null => {
@@ -96,7 +96,7 @@ const COUNT_LABEL: Record<string, string> = {
   connections: "conexões",
 };
 
-// Máscara de data dd/mm/aaaa para o editor de anuidade.
+// Máscara de data dd/mm/aaaa para os modais de anuidade.
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
 function maskDate(v: string) {
   const d = onlyD(v).slice(0, 8);
@@ -117,6 +117,12 @@ function isoToBr(v: string | null | undefined): string {
   const m = String(v).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
+function todayBr(): string {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${now.getFullYear()}`;
+}
 
 // Tipo defensivo: a entrada do annuity_history PODE trazer o id da anuidade
 // (annuity_history_id / id). Sem id não dá para editar/estornar; nesse caso
@@ -127,6 +133,14 @@ type AnnuityRow = DojoDetail["annuity_history"][number] & {
   due_date?: string | null;
 };
 const annuityId = (a: AnnuityRow): string | null => a.annuity_history_id || a.id || null;
+
+type PaymentMethod = "pix" | "dinheiro" | "transferencia" | "outro";
+const PM_LABELS: { value: PaymentMethod; label: string }[] = [
+  { value: "pix", label: "Pix" },
+  { value: "dinheiro", label: "Dinheiro" },
+  { value: "transferencia", label: "Transferência" },
+  { value: "outro", label: "Outro" },
+];
 
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
@@ -140,15 +154,19 @@ export default function DojoDetailScreen() {
   // Modal de exportação (round-trip com o import)
   const [exportOpen, setExportOpen] = useState(false);
   // Nav P2: slug público da federação (para montar o link do microsite).
-  // null = ainda não resolvido / federação sem slug → ações ficam ocultas.
   const [pubSlug, setPubSlug] = useState<string | null>(null);
 
   // Gestão da federação: estado das ações destrutivas / de ciclo de vida.
-  const [busy, setBusy] = useState(false);                 // suspender/reativar/excluir em voo
-  const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null); // 409 → escolha
-  const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);   // anuidade em edição
+  const [busy, setBusy] = useState(false);
+  const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null);
+  const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);
 
-  // Toast inline (sem sistema global) — padrão das fichas Shoji.
+  // DJ4: modal "Registrar pagamento" (anuidade existente não paga)
+  const [payModal, setPayModal] = useState<AnnuityRow | null>(null);
+  // DJ4: modal "Lançar pagamento" (período novo já pago)
+  const [registerModal, setRegisterModal] = useState(false);
+
+  // Toast inline — padrão das fichas Shoji.
   const [toast, setToast] = useState<string | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,7 +200,6 @@ export default function DojoDetailScreen() {
     return () => { alive = false; };
   }, [federationId]);
 
-  // URL pública relevante do dojô = página pública (ranking) da federação.
   const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/ranking") : null;
 
   const openPublic = () => {
@@ -197,14 +214,11 @@ export default function DojoDetailScreen() {
     Alert.alert(ok ? "Link copiado" : "Não foi possível copiar", ok ? publicUrl : "Copie manualmente: " + publicUrl);
   };
 
-  // ── Suspender / Reativar (toggle is_active via updateDojo) ──────────
-  // O backend não devolve is_active no detalhe; o sinal de "suspenso" é o
-  // status === "suspended". Suspenso → Reativar (is_active:true); senão →
-  // Suspender (is_active:false).
+  // ── Suspender / Reativar ─────────────────────────────────────────
   const isSuspended = data?.status === "suspended";
   const toggleSuspend = useCallback(async () => {
     if (!data || busy) return;
-    const next = isSuspended; // se está suspenso, vamos reativar (true)
+    const next = isSuspended;
     const verb = next ? "reativar" : "suspender";
     if (typeof window !== "undefined" && !window.confirm(`Deseja ${verb} o dojô "${data.name}"?`)) return;
     setBusy(true);
@@ -217,9 +231,7 @@ export default function DojoDetailScreen() {
     } finally { setBusy(false); }
   }, [data, busy, isSuspended, federationId, dojoId, load, showToast]);
 
-  // ── Excluir dojô ────────────────────────────────────────────────────
-  // Sem histórico → hard delete direto (após window.confirm). Com histórico,
-  // o backend responde 409 → HasHistoryError; abrimos o modal de escolha.
+  // ── Excluir dojô ─────────────────────────────────────────────────
   const deleteDojo = useCallback(async () => {
     if (!data || busy) return;
     if (typeof window !== "undefined" &&
@@ -231,14 +243,13 @@ export default function DojoDetailScreen() {
       setTimeout(() => router.replace("/karate/dojos" as any), 320);
     } catch (e: any) {
       if (e instanceof HasHistoryError) {
-        setHistModal(e.counts || {}); // → modal de escolha (Desativar / Excluir definitivamente)
+        setHistModal(e.counts || {});
       } else {
         Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
       }
     } finally { setBusy(false); }
   }, [data, busy, federationId, dojoId, router, showToast]);
 
-  // Modal HAS_HISTORY → Desativar (soft delete)
   const desativarFromModal = useCallback(async () => {
     if (!dojoId || busy) return;
     setBusy(true);
@@ -252,7 +263,6 @@ export default function DojoDetailScreen() {
     } finally { setBusy(false); }
   }, [dojoId, busy, federationId, load, showToast]);
 
-  // Modal HAS_HISTORY → Excluir definitivamente (cascade)
   const excluirDefinitivo = useCallback(async () => {
     if (!data || !dojoId || busy) return;
     if (typeof window !== "undefined" && !window.confirm(
@@ -271,7 +281,7 @@ export default function DojoDetailScreen() {
     } finally { setBusy(false); }
   }, [data, dojoId, busy, federationId, router, showToast]);
 
-  // ── Anuidades: estornar / editar ────────────────────────────────────
+  // ── Anuidades: estornar / editar ─────────────────────────────────
   const voidAnnuity = useCallback(async (a: AnnuityRow) => {
     const id = annuityId(a);
     if (!id || busy) return;
@@ -293,12 +303,15 @@ export default function DojoDetailScreen() {
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
 
-  // Endereço estruturado (address_*). Se nenhum campo estruturado vier do
-  // backend, caímos no `address` legado (texto livre) numa linha só.
+  // Endereço estruturado.
   const streetLine = fmtStreetLine(data.address_street, data.address_number);
   const cityLine = fmtCityLine(data.address_city, data.address_state);
   const cepLine = fmtCep(data.address_zip);
   const hasStructuredAddress = !!(streetLine || data.address_complement || data.address_neighborhood || cityLine || cepLine);
+
+  // DJ2: nome do sensei responsável (praticante vinculado tem precedência).
+  const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
+  const senseiIsPractitioner = !!(data as any).sensei_practitioner_id;
 
   return (
     <ShojiBackground>
@@ -327,7 +340,6 @@ export default function DojoDetailScreen() {
               <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
 
-              {/* Suspender / Reativar — toggle is_active */}
               <TouchableOpacity
                 style={[styles.iconBtn, busy && styles.btnDisabled]}
                 disabled={busy}
@@ -339,7 +351,6 @@ export default function DojoDetailScreen() {
                 <Text style={styles.iconBtnTxt}>{isSuspended ? "Reativar" : "Suspender"}</Text>
               </TouchableOpacity>
 
-              {/* Excluir dojô — destrutivo */}
               <TouchableOpacity
                 style={[styles.dangerBtn, busy && styles.btnDisabled]}
                 disabled={busy}
@@ -354,12 +365,21 @@ export default function DojoDetailScreen() {
           </View>
         </View>
 
+        {/* DJ2: card Cadastro — "Sensei responsável" em vez de "CPF do sensei" */}
         <Card style={{ marginTop: SP[6] }}>
           <SectionHead title="Cadastro" />
           <KV k="Nome do dojô" v={data.name} />
           <KV k="Código FPKT" v={data.fpkt_affiliation_id} />
           <KV k="CNPJ" v={data.cnpj} />
-          <KV k="CPF do sensei" v={fmtCpf(data.sensei_cpf)} />
+          <View style={styles.senseiRow}>
+            <KV k="Sensei responsável" v={senseiDisplay} />
+            {senseiIsPractitioner && senseiDisplay ? (
+              <View style={styles.senseiChip}>
+                <Icon name="person" size={11} color={C.ink2} />
+                <Text style={styles.senseiChipTxt}>praticante vinculado</Text>
+              </View>
+            ) : null}
+          </View>
           <KV k="Telefone" v={data.phone} />
           <KV k="E-mail" v={data.email} />
           <KV k="Região" v={data.region} />
@@ -369,8 +389,7 @@ export default function DojoDetailScreen() {
           <KV k="Praticantes" v={String(data.practitioner_count)} />
         </Card>
 
-        {/* Endereço — estruturado (com Complemento) ou texto legado.
-            Complemento é vital para envio de certificados/carteirinhas. */}
+        {/* Endereço — estruturado ou texto legado */}
         <Card style={{ marginTop: SP[6] }}>
           <SectionHead title="Endereço" sub="Usado no envio de certificados e carteirinhas" />
           {hasStructuredAddress ? (
@@ -402,8 +421,20 @@ export default function DojoDetailScreen() {
             ))}
         </Card>
 
+        {/* DJ4: seção Anuidades com "Lançar pagamento" no topo */}
         <Card style={{ marginTop: SP[6] }}>
-          <SectionHead title="Anuidades" sub="Editar ou estornar lançamentos da federação" />
+          <View style={styles.annuityHead}>
+            <SectionHead title="Anuidades" sub="Editar, estornar ou registrar pagamentos" />
+            <TouchableOpacity
+              style={styles.launchBtn}
+              onPress={() => setRegisterModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Lançar pagamento de anuidade"
+            >
+              <Icon name="add" size={13} color={C.ink} />
+              <Text style={styles.launchBtnTxt}>Lançar pagamento</Text>
+            </TouchableOpacity>
+          </View>
           {data.annuity_history.length === 0 ? <Body muted>Nenhuma anuidade registrada.</Body>
             : (data.annuity_history as AnnuityRow[]).map((a, i) => {
               const id = annuityId(a);
@@ -418,11 +449,24 @@ export default function DojoDetailScreen() {
                   <ShojiBadge dojoStatus={a.status} />
                   {id ? (
                     <View style={styles.annActions}>
+                      {/* DJ4: Registrar pagamento — só se não pago */}
+                      {canActUnpaid ? (
+                        <TouchableOpacity
+                          style={[styles.annBtn, styles.annBtnPay]}
+                          disabled={busy}
+                          onPress={() => setPayModal(a)}
+                          accessibilityLabel="Registrar pagamento"
+                        >
+                          <Icon name="checkmark" size={13} color={P.ok ?? "#2d8a4e"} />
+                        </TouchableOpacity>
+                      ) : null}
+                      {/* Editar — só se não pago */}
                       {canActUnpaid ? (
                         <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
                           <Icon name="edit" size={13} color={C.ink} />
                         </TouchableOpacity>
                       ) : null}
+                      {/* Estornar — sempre se tem id */}
                       <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => voidAnnuity(a)} accessibilityLabel="Estornar anuidade">
                         <Icon name="repeat" size={13} color={P.red} />
                       </TouchableOpacity>
@@ -434,7 +478,7 @@ export default function DojoDetailScreen() {
         </Card>
       </ScrollView>
 
-      {/* Modal de edição da ficha (reusa o cadastro com o id atual) */}
+      {/* Modal de edição da ficha */}
       <DojoFichaModal
         federationId={federationId}
         visible={editOpen}
@@ -443,7 +487,7 @@ export default function DojoDetailScreen() {
         onSaved={() => load()}
       />
 
-      {/* Modal de exportação (round-trip com o import) */}
+      {/* Modal de exportação */}
       <DojoExportModal
         federationId={federationId}
         visible={exportOpen}
@@ -453,7 +497,7 @@ export default function DojoDetailScreen() {
         onClose={() => setExportOpen(false)}
       />
 
-      {/* Modal HAS_HISTORY: Desativar (soft) × Excluir definitivamente (cascade) */}
+      {/* Modal HAS_HISTORY */}
       <Modal visible={!!histModal} transparent animationType="fade" onRequestClose={() => setHistModal(null)}>
         <View style={styles.backdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setHistModal(null)} />
@@ -519,7 +563,46 @@ export default function DojoDetailScreen() {
         }}
       />
 
-      {/* Toast inline (sem sistema global) */}
+      {/* DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente */}
+      <PayAnnuityModal
+        visible={!!payModal}
+        row={payModal}
+        busy={busy}
+        onClose={() => setPayModal(null)}
+        onSave={async (payload) => {
+          const id = payModal ? annuityId(payModal) : null;
+          if (!id) return;
+          setBusy(true);
+          try {
+            await karateApi.payAnnuity(federationId, dojoId!, id, payload);
+            setPayModal(null);
+            showToast("Pagamento registrado");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível registrar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia */}
+      <RegisterPaymentModal
+        visible={registerModal}
+        busy={busy}
+        onClose={() => setRegisterModal(false)}
+        onSave={async (payload) => {
+          setBusy(true);
+          try {
+            await karateApi.registerAnnuityPayment(federationId, dojoId!, payload);
+            setRegisterModal(false);
+            showToast("Pagamento lançado");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível lançar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* Toast inline */}
       {toast ? (
         <Animated.View pointerEvents="none" style={[styles.toast, {
           opacity: toastAnim,
@@ -533,7 +616,7 @@ export default function DojoDetailScreen() {
   );
 }
 
-// ── Modal de edição de anuidade ────────────────────────────────────────
+// ── Modal de edição de anuidade (valor / vencimento / competência) ─────
 function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
   visible: boolean;
   row: AnnuityRow | null;
@@ -605,6 +688,180 @@ function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
   );
 }
 
+// ── DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente ──
+function PayAnnuityModal({ visible, row, busy, onClose, onSave }: {
+  visible: boolean;
+  row: AnnuityRow | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number }) => void;
+}) {
+  const [paidAt, setPaidAt] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("pix");
+  const [amount, setAmount] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    setErr(null);
+    setPaidAt(todayBr());
+    setMethod("pix");
+    setAmount(row?.amount != null ? String(row.amount).replace(".", ",") : "");
+  }, [visible, row]);
+
+  function submit() {
+    setErr(null);
+    const payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number } = {};
+    if (paidAt.trim()) {
+      const iso = brToISO(paidAt);
+      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
+      payload.paid_at = iso;
+    }
+    payload.payment_method = method;
+    if (amount.trim()) {
+      const n = Number(amount.replace(/\./g, "").replace(",", "."));
+      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
+      payload.amount = n;
+    }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Registrar pagamento</Text>
+          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
+
+          <Text style={styles.fieldLbl}>Data do pagamento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
+
+          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
+          <View style={styles.pmChips}>
+            {PM_LABELS.map((pm) => (
+              <TouchableOpacity
+                key={pm.value}
+                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
+                onPress={() => setMethod(pm.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: method === pm.value }}
+              >
+                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.fieldLbl}>Valor recebido (R$) <Text style={styles.fieldOptional}>opcional</Text></Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Confirmar pagamento</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia ────
+function RegisterPaymentModal({ visible, busy, onClose, onSave }: {
+  visible: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod }) => void;
+}) {
+  const [period, setPeriod] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paidAt, setPaidAt] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("pix");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    setErr(null);
+    setPeriod("");
+    setAmount("");
+    setPaidAt(todayBr());
+    setMethod("pix");
+  }, [visible]);
+
+  function submit() {
+    setErr(null);
+    if (!period.trim()) { setErr("Informe a competência (ex.: 2026)."); return; }
+    const n = Number(amount.replace(/\./g, "").replace(",", "."));
+    if (!amount.trim() || !isFinite(n) || n <= 0) { setErr("Informe o valor."); return; }
+    const payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod } = {
+      reference_period: period.trim(),
+      amount: n,
+      payment_method: method,
+    };
+    if (paidAt.trim()) {
+      const iso = brToISO(paidAt);
+      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
+      payload.paid_at = iso;
+    }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Lançar pagamento</Text>
+          <Text style={styles.modalTitle}>Período já pago<Text style={{ color: P.red }}>.</Text></Text>
+          <Text style={styles.modalBody}>
+            Use para registrar um pagamento recebido via PIX estática quando não havia cobrança prévia no sistema.
+          </Text>
+
+          <Text style={styles.fieldLbl}>Competência <Text style={styles.fieldRequired}>*</Text></Text>
+          <TextInput style={styles.input} value={period} onChangeText={setPeriod} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
+
+          <Text style={styles.fieldLbl}>Valor (R$) <Text style={styles.fieldRequired}>*</Text></Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          <Text style={styles.fieldLbl}>Data do pagamento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
+
+          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
+          <View style={styles.pmChips}>
+            {PM_LABELS.map((pm) => (
+              <TouchableOpacity
+                key={pm.value}
+                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
+                onPress={() => setMethod(pm.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: method === pm.value }}
+              >
+                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Lançar pagamento</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
   head: { flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" } as ViewStyle,
@@ -617,9 +874,31 @@ const styles = StyleSheet.create({
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
 
+  // DJ2: chip "praticante vinculado" ao lado do sensei
+  senseiRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as ViewStyle,
+  senseiChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: P.glass2, borderWidth: 1, borderColor: P.line2, borderRadius: 10, paddingVertical: 3, paddingHorizontal: 8, marginTop: 2 } as ViewStyle,
+  senseiChipTxt: { fontFamily: F.body, fontSize: 10.5, color: C.ink2 } as TextStyle,
+
+  // DJ4: cabeçalho da seção anuidades com botão "Lançar pagamento"
+  annuityHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 } as ViewStyle,
+  launchBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  launchBtnTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: C.ink } as TextStyle,
+
   // Ações de anuidade (linha)
   annActions: { flexDirection: "row", gap: 6, marginLeft: 4 } as ViewStyle,
   annBtn: { width: 30, height: 30, borderRadius: R.sm, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  annBtnPay: { borderColor: "#b7e0c2", backgroundColor: "#f0faf2" } as ViewStyle,
+
+  // Chips de forma de pagamento
+  pmChips: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
+  pmChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  pmChipActive: { borderColor: P.ink, backgroundColor: P.ink } as ViewStyle,
+  pmChipTxt: { fontFamily: F.body, fontSize: 13, color: C.ink } as TextStyle,
+  pmChipTxtActive: { color: "#fdf8f2" } as TextStyle,
+
+  // Campo labels
+  fieldOptional: { fontWeight: "400", color: P.ink3, fontFamily: F.body } as TextStyle,
+  fieldRequired: { color: P.red, fontFamily: F.body } as TextStyle,
 
   // Botões do header (toggle + excluir)
   iconBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
@@ -628,7 +907,7 @@ const styles = StyleSheet.create({
   dangerBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
   btnDisabled: { opacity: 0.5 } as ViewStyle,
 
-  // Modais in-app (HAS_HISTORY + edição de anuidade)
+  // Modais in-app
   backdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
   modalCard: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, padding: 22, width: "100%", maxWidth: 460 } as ViewStyle,
   modalEyebrow: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 1.4, color: P.ink3, textTransform: "uppercase" } as TextStyle,
@@ -647,7 +926,7 @@ const styles = StyleSheet.create({
   ghostBtn: { paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, alignItems: "center" } as ViewStyle,
   ghostBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
 
-  // Campos do editor de anuidade
+  // Campos dos modais de anuidade
   fieldLbl: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginTop: 12, marginBottom: 5 } as TextStyle,
   input: { fontFamily: F.body, fontSize: 14, color: P.ink, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 11 } as TextStyle,
   mono: { fontFamily: F.mono, letterSpacing: 0.5 } as TextStyle,
