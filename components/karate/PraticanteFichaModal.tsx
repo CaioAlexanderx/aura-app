@@ -41,6 +41,7 @@ import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/consta
 import { karateApi, Dojo } from "@/services/karateApi";
 import { request } from "@/services/api";
 import { parseBrDate } from "@/components/inputs/DateInput";
+import { maskCpf } from "@/utils/masks";
 
 interface Props {
   federationId: string;
@@ -76,11 +77,7 @@ let lastShared: SharedSnapshot | null = null;
 
 // ── máscaras BR ──────────────────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
-function maskCPF(v: string) {
-  return onlyD(v).slice(0, 11)
-    .replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-}
+// maskCpf importado de @/utils/masks (shared util)
 function maskCEP(v: string) {
   const d = onlyD(v).slice(0, 8);
   return d.length > 5 ? d.replace(/(\d{5})(\d+)/, "$1-$2") : d;
@@ -174,7 +171,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         const dojoName = p.dojo_name || "";
         if (p.dojo_id && dojoName) lastDojo = { id: p.dojo_id, name: dojoName };
         setForm({
-          full_name: p.full_name || "", cpf: p.cpf ? maskCPF(p.cpf) : "", rg: p.rg || "",
+          full_name: p.full_name || "", cpf: p.cpf ? maskCpf(p.cpf) : "", rg: p.rg || "",
           birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhone(p.phone) : "",
           dojo_id: p.dojo_id || "", dojo_name: dojoName,
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
@@ -361,7 +358,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   inputRef={birthRef} returnKeyType="next" onSubmitEditing={() => cpfRef.current?.focus()}
                   bad={dateBad}
                   note={dateBad ? "Data inválida" : (age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined)} />
-                <Field flex label="CPF" mono value={form.cpf} onChangeText={(v) => set("cpf", maskCPF(v))}
+                <Field flex label="CPF" mono value={form.cpf} onChangeText={(v) => set("cpf", maskCpf(v))}
                   keyboardType="numeric" placeholder="000.000.000-00" bad={cpfBad}
                   inputRef={cpfRef} returnKeyType="next" onSubmitEditing={() => rgRef.current?.focus()}
                   note={cpfBad ? "Dígitos não conferem" : form.cpf ? "CPF válido" : undefined} noteOk={!cpfBad && !!form.cpf} />

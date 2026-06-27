@@ -1,9 +1,9 @@
 // ============================================================
-// Ficha do Praticante — Aura Karâtê
+// Ficha do Praticante — Aura Karatê
 //
 // Tabs: Cadastro | Trajetória | Certif./Exames | Carteirinha | Transferência | Documentos
 // Wired: GET /federation/{id}/practitioners/{practitionerId}
-// Track C (Fase 2): aba "Certif./Exames" mostra a nova faixa após aprovacão
+// Track C (Fase 2): aba "Certif./Exames" mostra a nova faixa após aprovação
 //   e o status/URL do certificado com botão "Solicitar emissão".
 // Track D (Fase 3): aba "Carteirinha" emite/renova + renderiza o cartão.
 // Track N: aba "Transferência" mostra o histórico imutável + botão transferir
@@ -29,7 +29,7 @@
 // Padronização de CTAs (Shoji): as ações das abas de detalhe ("Registrar
 //   graduação", "Transferir para outro dojô") são CTAs primários em sumi
 //   (escuro), em tamanho normal e alinhados à direita — não mais faixas
-//   vermelhas full-width. O vermelhão (primary) fica reservado a ações
+//   vermelhas full-width. O vermelho (primary) fica reservado a ações
 //   destrutivas/críticas.
 //
 // Fix C4 (23/06): o backfill de faixas sem data conhecida usa a data-sentinela
@@ -99,6 +99,22 @@ function formatCepDisplay(v: string | null | undefined): string | null {
   if (d.length !== 8) return String(v);
   return d.replace(/(\d{5})(\d{3})/, "$1-$2");
 }
+// P8: idade em anos completos a partir de "YYYY-MM-DD". Parseamos como data
+// local (new Date(year, month-1, day)) para evitar o shift UTC que acontece
+// com new Date("YYYY-MM-DD") (ISO string = meia-noite UTC → pode virar dia
+// anterior em fusos negativos).
+function ageFromBirthDate(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const birth = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const mm = today.getMonth() - birth.getMonth();
+  if (mm < 0 || (mm === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 // Confirmação cross-plataforma. Na web o Alert.alert com botões é um no-op
 // (o onPress nunca dispara) → usamos window.confirm. Em nativo, Alert.alert.
@@ -139,7 +155,12 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="person-outline"   label="Nome"         val={p.full_name} />
       <Row icon="id-card-outline"  label="CPF"          val={formatCpfDisplay(p.cpf)} />
       <Row icon="document-outline" label="RG"           val={p.rg ?? null} />
-      <Row icon="calendar-outline" label="Nascimento"   val={p.birth_date ? formatIsoToBr(p.birth_date) : null} />
+      <Row icon="calendar-outline" label="Nascimento"   val={(() => {
+        if (!p.birth_date) return null;
+        const dateBr = formatIsoToBr(p.birth_date);
+        const age = ageFromBirthDate(p.birth_date);
+        return age != null ? `${dateBr} · ${age} anos` : dateBr;
+      })()} />
       <Row icon="mail-outline"     label="E-mail"       val={p.email ?? null} />
       <Row icon="call-outline"     label="Telefone"     val={formatPhoneDisplay(p.phone)} />
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
@@ -233,7 +254,7 @@ function TrajetoriaTab({
         <EmptyState
           icon="ribbon-outline"
           title="Sem histórico de faixas"
-          subtitle={allowed ? "Use "Registrar graduação" para adicionar a primeira faixa." : undefined}
+          subtitle={allowed ? "Use “Registrar graduação” para adicionar a primeira faixa." : undefined}
           style={{ paddingVertical: 32 }}
         />
       ) : (
