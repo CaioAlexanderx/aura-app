@@ -55,6 +55,23 @@ import { VariantImageButton } from "@/components/VariantImageButton";
 //   pra rota /variant-image (que sobrevive ao soft-delete +
 //   INSERT porque busca por combinacao). Backend tambem
 //   preserva image_url no rewrite via snapshot map.
+//
+// 27/06/2026 (fix Davi — variant-image-upload-unsaved):
+// quando o usuario adiciona cor/tamanho e clica IMEDIATAMENTE
+// no botao da foto, a variante ainda nao foi salva no banco
+// (debounce 400ms + RTT do PUT). Antes o backend respondia 404
+// e o toast era "Salve a variante antes de subir foto" — UX ruim
+// porque o botao parecia ativo e a mensagem so aparecia apos o
+// click. Agora:
+//   (a) Rastreamos `persistedKeys` (Set<matrixKey>) — combos que
+//       o servidor confirma existirem. Hidratado do GET e atualizado
+//       no onSuccess do saveMut.
+//   (b) Passamos isPersisted/isSaving pro VariantImageButton, que
+//       fica esmaecido (opacity 0.45) + spinner enquanto pendente.
+//   (c) Click em variante pendente dispara `flushSave()` (cancela
+//       debounce e PUT imediato); apos sucesso, abrimos o file picker.
+//   (d) Hint inline abaixo do stockLabel quando ha combos pendentes:
+//       "Aguarde — fotos liberam apos salvar".
 // ============================================================
 
 const PRESET_COLORS = [
@@ -216,6 +233,15 @@ type Props = {
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
+// 27/06/2026: helper de normalizacao de chave persistida. Usamos hex
+// SEMPRE em UPPERCASE pra bater com o que o backend devolve no GET
+// (a fonte da verdade — o PUT normaliza pra UPPERCASE no INSERT do
+// product_variants). matrixKey em si nao normaliza; fazemos aqui.
+function persistedKey(hex: string | null, size: string | null): string {
+  const normHex = hex ? hex.toUpperCase() : null;
+  return matrixKey(normHex, size);
+}
+
 export function ProductVariationsSection({ productId, productName, parentColor, parentSize, parentStock }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
@@ -252,6 +278,28 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // Mostra toast no maximo 1x a cada 2.5s.
   const lastToastAtRef = useRef(0);
 
+  // 27/06/2026: Set de combos (matrixKey UPPERCASE) que ja existem no
+  // banco. Atualizado em (a) hidratacao do GET, (b) onSuccess do saveMut.
+  // Use ref pra evitar re-render de toda a tabela quando muda; o estado
+  // visual derivado eh recomputado quando necessario via persistedTick.
+  const persistedKeysRef = useRef<Set<string>>(new Set());
+  const [persistedTick, setPersistedTick] = useState(0);
+  function bumpPersisted() { setPersistedTick(t => (t + 1) & 0x7fffffff); }
+
+  // 27/06/2026: handlers pendentes do flushSave. saveMut.onSuccess/onError
+  // resolvem/rejectam a fila — permite ao VariantImageButton aguardar o PUT.
+  const pendingFlushRef = useRef<{ resolve: () => void; reject: (e: any) => void }[]>([]);
+  function resolveAllFlush() {
+    const queue = pendingFlushRef.current;
+    pendingFlushRef.current = [];
+    queue.forEach(p => p.resolve());
+  }
+  function rejectAllFlush(err: any) {
+    const queue = pendingFlushRef.current;
+    pendingFlushRef.current = [];
+    queue.forEach(p => p.reject(err));
+  }
+
   // Fetch inicial
   const { data, isLoading } = useQuery({
     queryKey: ["productVariations", company?.id, productId],
@@ -264,6 +312,20 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // ha estoque orfao (cor+tamanho do pai sem variante correspondente).
   useEffect(() => {
     if (!data) return;
+    // 27/06/2026: sempre atualiza persistedKeysRef a partir do GET — eh
+    // fonte da verdade sobre o que existe no servidor. Roda mesmo no skip
+    // (pra que apos o PUT, a hidratacao "ignorada" ainda atualize os combos
+    // confirmados).
+    const next = new Set<string>();
+    for (const k of Object.keys(data.matrix || {})) {
+      // O backend devolve chave ja no formato matrixKey(UPPERCASE_HEX, size);
+      // mas defensivamente normalizamos pra UPPERCASE da parte do hex.
+      const [hex, size] = k.split('|');
+      next.add(persistedKey(hex || null, size || null));
+    }
+    persistedKeysRef.current = next;
+    bumpPersisted();
+
     // Se o ultimo PUT acabou de retornar, o invalidate vai trazer dados
     // identicos ao que ja temos. Pula a hidratacao pra evitar overwrite
     // de quaisquer alteracoes feitas pelo usuario entre o PUT e o GET.
@@ -369,6 +431,28 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     saveMut.mutate();
   }
 
+  // 27/06/2026: chamado pelo VariantImageButton quando o user clica numa
+  // variante ainda nao persistida. Cancela debounce, dispara PUT imediato
+  // e devolve uma Promise que resolve no onSuccess (ou rejeita no onError).
+  function flushSave(): Promise<void> {
+    // Sem alteracoes pendentes e nada em voo: ja esta tudo salvo.
+    if (!dirty && !inFlightRef.current && !saveTimerRef.current) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      pendingFlushRef.current.push({ resolve, reject });
+      // Cancela debounce e dispara saveMut agora (se nao tem outro em voo).
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (!inFlightRef.current) {
+        triggerSave();
+      }
+      // Se ja tem inFlight, o onSuccess corrente vai resolver tudo.
+    });
+  }
+
   // Save mutation — inclui barcodes no payload (21/05/2026)
   const saveMut = useMutation({
     mutationFn: () => {
@@ -385,6 +469,31 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       });
     },
     onSuccess: (res) => {
+      // 27/06/2026: o PUT que acabou de rodar persistiu exatamente o snap
+      // do stateRef. Reconstruimos persistedKeysRef a partir dele (mais
+      // confiavel e imediato que esperar o GET; o GET subsequente vai
+      // confirmar mas sem janela de race). Cobre TODAS as chaves do
+      // matrix snapshot, mesmo as com stock 0 (o backend cria variante
+      // mesmo com estoque zero).
+      const snap = stateRef.current;
+      const next = new Set<string>();
+      for (const k of Object.keys(snap.matrix || {})) {
+        const [hex, size] = k.split('|');
+        next.add(persistedKey(hex || null, size || null));
+      }
+      // Cobre tambem combos derivados de colors/sizes (matrix mode pode ter
+      // entradas sem chave explicita se o user nunca digitou estoque — o
+      // backend ainda cria a variante por causa do for-loop combinations).
+      if (snap.colors.length > 0 && snap.sizes.length > 0) {
+        for (const c of snap.colors) for (const sz of snap.sizes) next.add(persistedKey(c.hex, sz));
+      } else if (snap.colors.length > 0) {
+        for (const c of snap.colors) next.add(persistedKey(c.hex, null));
+      } else if (snap.sizes.length > 0) {
+        for (const sz of snap.sizes) next.add(persistedKey(null, sz));
+      }
+      persistedKeysRef.current = next;
+      bumpPersisted();
+
       // Marca pra pular a proxima hidratacao (o invalidate vai disparar
       // refetch que retornaria os mesmos dados que ja temos localmente)
       skipNextHydrateRef.current = true;
@@ -393,6 +502,10 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       setSaveStatus('saved');
       setDirty(false);
       setParentMerged(false);
+
+      // 27/06/2026: libera quem estava aguardando flush.
+      resolveAllFlush();
+
       // Toast flutuante "Informacoes salvas" — throttle de 2.5s pra nao
       // inundar a tela se o user editar varias celulas em sequencia
       // (cada blur dispara um PUT, mas o toast aparece no maximo 1x a cada
@@ -405,6 +518,8 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     },
     onError: (err: any) => {
       setSaveStatus('error');
+      // 27/06/2026: rejeita pendentes — o botao mostra mensagem propria.
+      rejectAllFlush(err);
       toast.error(err?.data?.error || err?.message || "Erro ao salvar variacoes");
     },
     onSettled: () => {
@@ -540,6 +655,27 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
+  // 27/06/2026: deriva se uma combinacao ja foi persistida no banco.
+  // Depende de persistedTick pra recomputar quando o set muda.
+  function isPersisted(hex: string | null, size: string | null): boolean {
+    void persistedTick;
+    return persistedKeysRef.current.has(persistedKey(hex, size));
+  }
+
+  // 27/06/2026: ha pelo menos 1 combo do modo atual ainda nao persistido?
+  // Usado pra mostrar o hint inline "aguarde — fotos liberam apos salvar".
+  const hasUnpersistedCombo = useMemo(() => {
+    void persistedTick;
+    if (mode === 'none') return false;
+    const check = (h: string | null, sz: string | null) =>
+      !persistedKeysRef.current.has(persistedKey(h, sz));
+    if (mode === 'color') return colors.some(c => check(c.hex, null));
+    if (mode === 'size') return sizes.some(sz => check(null, sz));
+    // matrix
+    for (const c of colors) for (const sz of sizes) if (check(c.hex, sz)) return true;
+    return false;
+  }, [mode, colors, sizes, persistedTick]);
+
   // Handler de onBlur dos inputs — forca flush imediato pra refletir
   // visualmente "✓ Salvo" antes do user sair da celula (latencia
   // perceptivel menor que esperar o debounce de 400ms).
@@ -566,6 +702,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
 
   const totalStock = Object.values(matrix).reduce((acc, v) => acc + (v || 0), 0);
+  const savingNow = saveStatus === 'saving';
 
   return (
     <View style={s.container}>
@@ -697,6 +834,18 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       {mode !== 'none' && (
         <View style={s.stockBlock}>
           <Text style={s.stockLabel}>Estoque por variacao (clique na bolinha esquerda pra foto)</Text>
+          {/* 27/06/2026: hint quando ha combo recem-criado ainda nao salvo.
+              Esmaecer os botoes ja transmite "aguarde", mas a frase deixa
+              o motivo explicito (evita a velha mensagem "salve a variante
+              antes de subir foto" aparecer so apos o click). */}
+          {hasUnpersistedCombo && (
+            <View style={s.photoHint}>
+              <ActivityIndicator size="small" color={Colors.violet3} />
+              <Text style={s.photoHintText}>
+                Fotos das variantes recem-adicionadas liberam apos salvar (auto, ~1s).
+              </Text>
+            </View>
+          )}
 
           {/* ── Color-only: thumb foto + label + stock + barcode ── */}
           {mode === 'color' && (
@@ -712,6 +861,9 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     fallbackColor={c.hex}
                     onUploaded={(url) => setImageLocal(c.hex, null, url)}
                     onDeleted={() => setImageLocal(c.hex, null, null)}
+                    isPersisted={isPersisted(c.hex, null)}
+                    isSaving={savingNow}
+                    onRequestFlush={flushSave}
                   />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
                   <TextInput
@@ -753,6 +905,9 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                     fallbackColor={Colors.violet}
                     onUploaded={(url) => setImageLocal(null, sz, url)}
                     onDeleted={() => setImageLocal(null, sz, null)}
+                    isPersisted={isPersisted(null, sz)}
+                    isSaving={savingNow}
+                    onRequestFlush={flushSave}
                   />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{sz}</Text>
                   <TextInput
@@ -837,6 +992,9 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                         fallbackColor={c.hex}
                         onUploaded={(url) => setImageLocal(c.hex, sz, url)}
                         onDeleted={() => setImageLocal(c.hex, sz, null)}
+                        isPersisted={isPersisted(c.hex, sz)}
+                        isSaving={savingNow}
+                        onRequestFlush={flushSave}
                       />
                       <Text style={s.stockRowLabel} numberOfLines={1}>
                         {(c.name || hexToName(c.hex))} · {sz}
@@ -933,6 +1091,16 @@ const s = StyleSheet.create({
   // 21/05/2026: divider e campo barcode nas linhas de estoque
   stockRowDivider: { width: 1, height: 20, backgroundColor: Colors.border, flexShrink: 0 },
   barcodeInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 11, color: Colors.ink, minWidth: 80 },
+
+  // 27/06/2026: hint inline acima do grid quando ha variante pendente.
+  photoHint: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1, borderColor: Colors.border2,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+    marginBottom: 8,
+  },
+  photoHintText: { fontSize: 11, color: Colors.violet3, fontWeight: "600", flex: 1 },
 
   // Matrix
   matrixRow: { flexDirection: "row", gap: 4, marginBottom: 4 },
