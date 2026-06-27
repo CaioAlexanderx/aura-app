@@ -10,7 +10,7 @@ import {
   type ColorEntry, type MatrixMap, type BarcodesMap, type ImagesMap, type VariationsMode,
 } from "@/services/productsVariationsApi";
 import { hexToName, nameToHex } from "@/utils/colorNames";
-import { VariantImageButton } from "@/components/VariantImageButton";
+import { ColorImageButton } from "@/components/ColorImageButton";
 
 // ============================================================
 // AURA. -- ProductVariationsSection (reformulado)
@@ -72,6 +72,28 @@ import { VariantImageButton } from "@/components/VariantImageButton";
 //       debounce e PUT imediato); apos sucesso, abrimos o file picker.
 //   (d) Hint inline abaixo do stockLabel quando ha combos pendentes:
 //       "Aguarde — fotos liberam apos salvar".
+//
+// 27/06/2026 (frente 1 fix Davi — variant-photo-by-color):
+// UX radicalmente mais simples e mais segura, baseada na pesquisa
+// do catalogo Davi (1076 produtos = 1 produto/modelo/cor, variantes
+// so-tamanho).
+//   - Mode 'size' (so tamanho): ESCONDE upload por linha. Esse
+//     produto nao tem cor — todos os tamanhos compartilham a foto
+//     do produto pai (gerenciada por ProductImageUpload no form).
+//     Hint inline explica.
+//   - Mode 'color' (so cor): usa ColorImageButton (POST /color-image).
+//     Em color-only ja era "1 foto por cor"; agora usa o endpoint
+//     novo (semanticamente correto) e evita a janela de race do
+//     /variant-image por combo.
+//   - Mode 'matrix' (cor + tamanho): nova secao "Foto por cor"
+//     ACIMA da secao de codigos de barras. UMA ColorImageButton
+//     por cor; a foto se aplica a TODAS as variantes da cor
+//     (independente de tamanho) via POST /color-image. A secao
+//     de barcodes agora so tem swatch da cor + label + barcode
+//     (sem botao de foto por combo) — uma foto por modelo+cor
+//     elimina a categoria de bugs onde "subir foto numa variante
+//     de combo cor+tamanho acertava a variante errada quando havia
+//     dups historicas".
 // ============================================================
 
 const PRESET_COLORS = [
@@ -655,6 +677,39 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
+  // 27/06/2026 (frente 1): foto POR COR. Em color-only mode, ha 1 chave
+  // por cor (matrixKey(hex, null)). Em matrix mode, ha N chaves por cor
+  // (1 por tamanho); aplicamos a mesma URL em todas.
+  function colorImageAt(hex: string): string | null {
+    // Se ha images em matrix mode pra essa cor, retorna a primeira
+    // (todas devem ter a mesma URL apos uploadColorImage)
+    if (sizes.length > 0) {
+      for (const sz of sizes) {
+        const v = images[matrixKey(hex, sz)];
+        if (v) return v;
+      }
+      return null;
+    }
+    // Color-only: 1 chave hex|
+    return images[matrixKey(hex, null)] || null;
+  }
+  function setColorImageLocal(hex: string, url: string | null) {
+    const next = { ...images };
+    if (sizes.length > 0) {
+      // Matrix mode: aplica em todas as chaves dessa cor (uma por tamanho)
+      for (const sz of sizes) {
+        const k = matrixKey(hex, sz);
+        if (url) { next[k] = url; } else { delete next[k]; }
+      }
+    } else {
+      // Color-only: 1 chave
+      const k = matrixKey(hex, null);
+      if (url) { next[k] = url; } else { delete next[k]; }
+    }
+    setImages(next);
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
+  }
+
   // 27/06/2026: deriva se uma combinacao ja foi persistida no banco.
   // Depende de persistedTick pra recomputar quando o set muda.
   function isPersisted(hex: string | null, size: string | null): boolean {
@@ -662,18 +717,27 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
     return persistedKeysRef.current.has(persistedKey(hex, size));
   }
 
-  // 27/06/2026: ha pelo menos 1 combo do modo atual ainda nao persistido?
-  // Usado pra mostrar o hint inline "aguarde — fotos liberam apos salvar".
-  const hasUnpersistedCombo = useMemo(() => {
+  // 27/06/2026 (frente 1): cor ja persistida? (cor existe se ao menos
+  // 1 das chaves dela esta em persistedKeysRef). Em matrix mode, basta
+  // 1 combo (hex, sz) confirmado; em color-only, eh a chave hex|null.
+  function isColorPersisted(hex: string): boolean {
     void persistedTick;
-    if (mode === 'none') return false;
-    const check = (h: string | null, sz: string | null) =>
-      !persistedKeysRef.current.has(persistedKey(h, sz));
-    if (mode === 'color') return colors.some(c => check(c.hex, null));
-    if (mode === 'size') return sizes.some(sz => check(null, sz));
-    // matrix
-    for (const c of colors) for (const sz of sizes) if (check(c.hex, sz)) return true;
-    return false;
+    if (sizes.length > 0) {
+      for (const sz of sizes) {
+        if (persistedKeysRef.current.has(persistedKey(hex, sz))) return true;
+      }
+      return false;
+    }
+    return persistedKeysRef.current.has(persistedKey(hex, null));
+  }
+
+  // 27/06/2026: ha pelo menos 1 cor do modo atual ainda nao persistida?
+  // Usado pra mostrar o hint inline "aguarde — fotos liberam apos salvar".
+  const hasUnpersistedColor = useMemo(() => {
+    void persistedTick;
+    if (mode === 'none' || mode === 'size') return false;
+    return colors.some(c => !isColorPersisted(c.hex));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, colors, sizes, persistedTick]);
 
   // Handler de onBlur dos inputs — forca flush imediato pra refletir
@@ -833,36 +897,47 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       {/* Grid de estoque */}
       {mode !== 'none' && (
         <View style={s.stockBlock}>
-          <Text style={s.stockLabel}>Estoque por variacao (clique na bolinha esquerda pra foto)</Text>
-          {/* 27/06/2026: hint quando ha combo recem-criado ainda nao salvo.
-              Esmaecer os botoes ja transmite "aguarde", mas a frase deixa
-              o motivo explicito (evita a velha mensagem "salve a variante
-              antes de subir foto" aparecer so apos o click). */}
-          {hasUnpersistedCombo && (
+          <Text style={s.stockLabel}>Estoque por variacao</Text>
+
+          {/* 27/06/2026 (frente 1): hint quando ha cor recem-adicionada
+              ainda nao salva. Substitui o hint generico anterior. */}
+          {hasUnpersistedColor && (
             <View style={s.photoHint}>
               <ActivityIndicator size="small" color={Colors.violet3} />
               <Text style={s.photoHintText}>
-                Fotos das variantes recem-adicionadas liberam apos salvar (auto, ~1s).
+                Fotos das cores recem-adicionadas liberam apos salvar (auto, ~1s).
               </Text>
             </View>
           )}
 
-          {/* ── Color-only: thumb foto + label + stock + barcode ── */}
+          {/* 27/06/2026 (frente 1): hint pro mode so-tamanho — sem foto por
+              variante. Foto do produto (acima do formulario) serve a todos os
+              tamanhos. Cobre o modelo legitimo do Davi: 1 produto = 1 modelo+
+              cor, variantes so-tamanho. */}
+          {mode === 'size' && (
+            <View style={s.photoHintNeutral}>
+              <Icon name="image" size={12} color={Colors.ink3} />
+              <Text style={s.photoHintNeutralText}>
+                Esse produto nao tem cor — use a foto do produto (no topo do formulario) para todos os tamanhos.
+              </Text>
+            </View>
+          )}
+
+          {/* ── Color-only: foto-por-cor + label + stock + barcode ── */}
           {mode === 'color' && (
             <View style={{ gap: 6 }}>
               {colors.map(c => (
                 <View key={c.hex} style={s.stockRow}>
-                  {/* 23/05/2026: substitui o dot estatico por botao de foto */}
-                  <VariantImageButton
+                  {/* 27/06/2026 (frente 1): substitui VariantImageButton por
+                      ColorImageButton (endpoint /color-image — semanticamente
+                      identico em color-only, mas evita o legado /variant-image). */}
+                  <ColorImageButton
                     productId={productId}
                     colorHex={c.hex}
-                    sizeValue={null}
-                    imageUrl={imageAt(c.hex, null)}
-                    fallbackColor={c.hex}
-                    onUploaded={(url) => setImageLocal(c.hex, null, url)}
-                    onDeleted={() => setImageLocal(c.hex, null, null)}
-                    isPersisted={isPersisted(c.hex, null)}
-                    isSaving={savingNow}
+                    imageUrl={colorImageAt(c.hex)}
+                    onUploaded={(url) => setColorImageLocal(c.hex, url)}
+                    onDeleted={() => setColorImageLocal(c.hex, null)}
+                    isSaving={savingNow && !isColorPersisted(c.hex)}
                     onRequestFlush={flushSave}
                   />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{c.name || hexToName(c.hex)}</Text>
@@ -892,23 +967,15 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             </View>
           )}
 
-          {/* ── Size-only: thumb foto + label + stock + barcode ── */}
+          {/* ── Size-only: SEM foto-por-variante (esconde). Apenas label +
+                stock + barcode. Foto do produto pai cobre todos os tamanhos. ── */}
           {mode === 'size' && (
             <View style={{ gap: 6 }}>
               {sizes.map(sz => (
                 <View key={sz} style={s.stockRow}>
-                  <VariantImageButton
-                    productId={productId}
-                    colorHex={null}
-                    sizeValue={sz}
-                    imageUrl={imageAt(null, sz)}
-                    fallbackColor={Colors.violet}
-                    onUploaded={(url) => setImageLocal(null, sz, url)}
-                    onDeleted={() => setImageLocal(null, sz, null)}
-                    isPersisted={isPersisted(null, sz)}
-                    isSaving={savingNow}
-                    onRequestFlush={flushSave}
-                  />
+                  {/* 27/06/2026 (frente 1): bullet estatico no lugar do botao
+                      de foto. Mantem alinhamento visual da linha. */}
+                  <View style={[s.staticDot, { backgroundColor: Colors.violet }]} />
                   <Text style={s.stockRowLabel} numberOfLines={1}>{sz}</Text>
                   <TextInput
                     style={s.stockInput}
@@ -936,7 +1003,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             </View>
           )}
 
-          {/* ── Matrix: grade de estoque + secao de barcodes (com foto) abaixo ── */}
+          {/* ── Matrix: grade de estoque + foto-POR-COR + barcodes por combo ── */}
           {mode === 'matrix' && (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -978,24 +1045,44 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
                 </View>
               </ScrollView>
 
-              {/* Codigos de barras + foto por combinacao (matrix mode) */}
+              {/* 27/06/2026 (frente 1): NOVA secao "Foto por cor" — UMA
+                  foto por cor que se aplica a todos os tamanhos daquela
+                  cor (via novo endpoint /color-image). Substitui as fotos
+                  por combinacao (cor,tamanho) da secao de barcodes. */}
+              <View style={s.matrixColorPhotosSection}>
+                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Foto por cor</Text>
+                <View style={{ gap: 6 }}>
+                  {colors.map(c => (
+                    <View key={c.hex} style={s.stockRow}>
+                      <ColorImageButton
+                        productId={productId}
+                        colorHex={c.hex}
+                        imageUrl={colorImageAt(c.hex)}
+                        onUploaded={(url) => setColorImageLocal(c.hex, url)}
+                        onDeleted={() => setColorImageLocal(c.hex, null)}
+                        isSaving={savingNow && !isColorPersisted(c.hex)}
+                        onRequestFlush={flushSave}
+                      />
+                      <Text style={s.stockRowLabel} numberOfLines={1}>
+                        {c.name || hexToName(c.hex)}
+                      </Text>
+                      <Text style={s.stockRowHelper} numberOfLines={1}>
+                        aplica em todos os tamanhos
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Codigos de barras por combinacao (sem foto — agora eh
+                  por cor, secao acima) */}
               <View style={s.matrixBarcodeSection}>
-                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Fotos e codigos de barras por combinacao</Text>
+                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Codigos de barras por combinacao</Text>
                 <View style={{ gap: 6 }}>
                   {colors.map(c => sizes.map(sz => (
                     <View key={matrixKey(c.hex, sz)} style={s.stockRow}>
-                      <VariantImageButton
-                        productId={productId}
-                        colorHex={c.hex}
-                        sizeValue={sz}
-                        imageUrl={imageAt(c.hex, sz)}
-                        fallbackColor={c.hex}
-                        onUploaded={(url) => setImageLocal(c.hex, sz, url)}
-                        onDeleted={() => setImageLocal(c.hex, sz, null)}
-                        isPersisted={isPersisted(c.hex, sz)}
-                        isSaving={savingNow}
-                        onRequestFlush={flushSave}
-                      />
+                      {/* 27/06/2026: dot estatico (a foto agora eh por cor) */}
+                      <View style={[s.staticDot, { backgroundColor: c.hex }]} />
                       <Text style={s.stockRowLabel} numberOfLines={1}>
                         {(c.name || hexToName(c.hex))} · {sz}
                       </Text>
@@ -1085,12 +1172,17 @@ const s = StyleSheet.create({
   stockLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase" as any, letterSpacing: 0.5, marginBottom: 8 },
   stockRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 8, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   // stockRowDot removido — substituido pelo VariantImageButton (23/05/2026)
-  stockRowLabel: { minWidth: 36, maxWidth: 90, fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  stockRowLabel: { minWidth: 36, maxWidth: 120, fontSize: 12, color: Colors.ink, fontWeight: "500" },
+  stockRowHelper: { fontSize: 10, color: Colors.ink3, fontStyle: "italic" as any, flex: 1 },
   stockInput: { width: 64, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12, color: Colors.ink, textAlign: "right", fontWeight: "600" },
   stockUnit: { fontSize: 10, color: Colors.ink3, fontWeight: "600", width: 20 },
   // 21/05/2026: divider e campo barcode nas linhas de estoque
   stockRowDivider: { width: 1, height: 20, backgroundColor: Colors.border, flexShrink: 0 },
   barcodeInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6, fontSize: 11, color: Colors.ink, minWidth: 80 },
+
+  // 27/06/2026 (frente 1): bullet estatico no lugar do VariantImageButton
+  // em mode 'size' e na secao de barcodes do mode 'matrix'.
+  staticDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", flexShrink: 0 },
 
   // 27/06/2026: hint inline acima do grid quando ha variante pendente.
   photoHint: {
@@ -1102,6 +1194,17 @@ const s = StyleSheet.create({
   },
   photoHintText: { fontSize: 11, color: Colors.violet3, fontWeight: "600", flex: 1 },
 
+  // 27/06/2026 (frente 1): hint neutro pro mode 'size' (sem foto por
+  // variante; foto do produto cobre todos os tamanhos)
+  photoHintNeutral: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+    marginBottom: 8,
+  },
+  photoHintNeutralText: { fontSize: 11, color: Colors.ink3, fontWeight: "500", flex: 1 },
+
   // Matrix
   matrixRow: { flexDirection: "row", gap: 4, marginBottom: 4 },
   matrixCellHeader: { width: 70, height: 34, borderRadius: 6, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
@@ -1111,6 +1214,8 @@ const s = StyleSheet.create({
   matrixRowLabel: { fontSize: 10, color: Colors.ink, fontWeight: "600", flex: 1 },
   matrixCell: { width: 70, height: 34 },
   matrixInput: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, fontSize: 12, color: Colors.ink, textAlign: "center", fontWeight: "600" },
+  // 27/06/2026 (frente 1): nova secao foto-por-cor em matrix mode
+  matrixColorPhotosSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   // 21/05/2026: secao de barcodes abaixo da grade de matrix
   matrixBarcodeSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
 });
