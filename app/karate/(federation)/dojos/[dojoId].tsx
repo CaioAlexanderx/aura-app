@@ -24,11 +24,9 @@
 //   e da NF-e. O Complemento é vital para envio de certificados/carteirinhas.
 //   Se o registro ainda não tem campos estruturados, cai no `address` legado.
 //
-// Nav P2 (7.3): ações de link público no header — "Página pública" (abre)
-//   e "Copiar link". Não há rota pública POR-DOJÔ (o portal do dojô abre
-//   por link/token fixo, e o microsite expõe ranking/portais a nível de
-//   FEDERAÇÃO). Então o link relevante e que resolve é a página pública da
-//   federação — o RANKING do microsite (/karate/[slug]/ranking servido em
+// Nav P2 (7.3): ações de link público no header — "Ranking público" (abre)
+//   e "Copiar link do ranking". O link relevante é a página pública do RANKING
+//   da federação no microsite (/karate/[slug]/ranking servido em
 //   {slug}.getaura.com.br/ranking), onde os atletas deste dojô aparecem.
 //   O slug vem de getFederationIdentity (fallback: slug do host atual).
 // ============================================================
@@ -316,8 +314,8 @@ export default function DojoDetailScreen() {
             <View style={styles.headBtns}>
               {publicUrl && (
                 <>
-                  <ShojiButton label="Página pública" icon="open-outline" variant="ghost" onPress={openPublic} />
-                  <ShojiButton label="Copiar link" icon="link-outline" variant="ghost" onPress={copyPublic} />
+                  <ShojiButton label="Ranking público" icon="open-outline" variant="ghost" onPress={openPublic} />
+                  <ShojiButton label="Copiar link do ranking" icon="link-outline" variant="ghost" onPress={copyPublic} />
                 </>
               )}
               <ShojiButton
