@@ -9,7 +9,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { EligibilityResult } from "@/services/karateApi";
 
@@ -29,7 +29,7 @@ export function EligibilityChecklist({ eligibility, showEnrollAnyway, onEnrollAn
       {/* Decisao FPKT #1 — Banner apenas aviso */}
       {hasWarnings && (
         <View style={styles.advisoryBanner}>
-          <Ionicons name="information-circle" size={14} color={KarateColors.warn} />
+          <Icon name="info" size={14} color={KarateColors.warn} />
           <Text style={styles.advisoryText}>
             Elegibilidade com ressalvas — inscrição NÃO é bloqueada (Decisão FPKT #1).
           </Text>
@@ -39,8 +39,8 @@ export function EligibilityChecklist({ eligibility, showEnrollAnyway, onEnrollAn
       {/* Lista de critérios */}
       {eligibility.checks.map((check, i) => (
         <View key={i} style={styles.checkRow}>
-          <Ionicons
-            name={check.ok ? "checkmark-circle" : "alert-circle"}
+          <Icon
+            name={check.ok ? "check" : "alert_circle"}
             size={16}
             color={check.ok ? KarateColors.ok : KarateColors.warn}
           />
@@ -56,7 +56,7 @@ export function EligibilityChecklist({ eligibility, showEnrollAnyway, onEnrollAn
       {/* Avisos textuais */}
       {eligibility.warnings.map((w, i) => (
         <View key={`w-${i}`} style={styles.warningRow}>
-          <Ionicons name="warning" size={14} color={KarateColors.warn} />
+          <Icon name="alert" size={14} color={KarateColors.warn} />
           <Text style={styles.warningText}>{w}</Text>
         </View>
       ))}

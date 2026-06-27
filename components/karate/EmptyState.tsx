@@ -6,21 +6,21 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
 
 interface EmptyStateProps {
-  icon?:      string;  // nome do Ionicons
+  icon?:      string;  // nome do Icon (SVG inline)
   title:      string;
   subtitle?:  string;
   action?:    React.ReactNode;
   style?:     ViewStyle;
 }
 
-export function KarateEmptyState({ icon = "folder-open-outline", title, subtitle, action, style }: EmptyStateProps) {
+export function KarateEmptyState({ icon = "package", title, subtitle, action, style }: EmptyStateProps) {
   return (
     <View style={[styles.container, style]} accessibilityLiveRegion="polite">
-      <Ionicons name={icon as any} size={48} color={KarateColors.ink4} />
+      <Icon name={icon as any} size={48} color={KarateColors.ink4} />
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {action ?? null}

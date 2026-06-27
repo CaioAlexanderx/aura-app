@@ -19,7 +19,7 @@ import { ShipporiMincho_400Regular } from "@expo-google-fonts/shippori-mincho";
 import { ZenKakuGothicNew_400Regular } from "@expo-google-fonts/zen-kaku-gothic-new";
 import { DMMono_400Regular } from "@expo-google-fonts/dm-mono";
 import { InstrumentSerif_400Regular } from "@expo-google-fonts/instrument-serif";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R,
   KarateFonts as F, KarateType as T, KarateShadows as SH, KarateSpacing as SP,
@@ -194,7 +194,7 @@ export function Alert({ urgent, title, desc, when, onPress }: {
         {desc ? <Text style={styles.alertDesc}>{desc}</Text> : null}
       </View>
       {when ? <Mono style={{ fontSize: 11, color: C.ink3 }}>{when}</Mono> : null}
-      {onPress ? <Ionicons name="chevron-forward" size={16} color={C.ink4} /> : null}
+      {onPress ? <Icon name="chevron_right" size={16} color={C.ink4} /> : null}
     </TouchableOpacity>
   );
 }
@@ -207,7 +207,7 @@ export function ShojiButton({ label, icon, variant = "sumi", onPress, style }: {
   const v = BTN[variant];
   return (
     <TouchableOpacity style={[styles.btn, v.box, variant !== "text" && SH.sm, style]} onPress={onPress} activeOpacity={0.85} accessibilityRole="button">
-      {icon ? <Ionicons name={icon as any} size={14} color={v.fg} /> : null}
+      {icon ? <Icon name={icon as any} size={14} color={v.fg} /> : null}
       <Text style={[styles.btnLabel, { color: v.fg }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -234,7 +234,7 @@ export function SearchField({ value, onChangeText, placeholder, onSubmit, style 
 }) {
   return (
     <View style={[styles.search, style]}>
-      <Ionicons name="search-outline" size={16} color={C.ink3} />
+      <Icon name="search" size={16} color={C.ink3} />
       <TextInput
         style={styles.searchInput as any}
         value={value}
@@ -267,7 +267,7 @@ export function ShojiBadge({ status, dojoStatus, affiliationStatus, label }: {
   else { const s = KarateStatus[status ?? "neutral"]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? (status ?? ""); }
   return (
     <View style={[styles.badge, { backgroundColor: bg }]} accessibilityLabel={txt}>
-      <Ionicons name={icon as any} size={11} color={color} />
+      <Icon name={icon as any} size={11} color={color} />
       <Text style={[styles.badgeText, { color }]}>{txt}</Text>
     </View>
   );

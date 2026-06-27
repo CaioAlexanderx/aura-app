@@ -8,7 +8,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P } from "@/constants/karateTheme";
 import { ShojiBadge, ShojiButton, Pill } from "@/components/karate/shoji";
 import {
@@ -104,7 +104,7 @@ export function SorteioPanel({
 
         {hasDraft && (
           <View style={S.infoRow}>
-            <Ionicons name="information-circle-outline" size={13} color={C.ink3} />
+            <Icon name="info" size={13} color={C.ink3} />
             <Text style={S.infoText}>
               Pode regenerar quantas vezes quiser. Travar torna a chave oficial e libera o lançamento de resultados.
             </Text>
@@ -131,7 +131,7 @@ export function SorteioPanel({
           <Text style={S.cardTitle}>Inscritos</Text>
           <Text style={S.cardSub}>Os atletas aparecerão aqui após gerar o sorteio</Text>
           <View style={S.emptyBox}>
-            <Ionicons name="people-outline" size={32} color={C.ink4} />
+            <Icon name="users" size={32} color={C.ink4} />
             <Text style={S.emptyText}>Gere o sorteio para ver os confrontos</Text>
           </View>
         </View>

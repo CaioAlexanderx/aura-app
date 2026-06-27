@@ -14,7 +14,7 @@ import React from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P } from "@/constants/karateTheme";
 import { ShojiBadge } from "@/components/karate/shoji";
 import {
@@ -52,7 +52,7 @@ export function BracketView({
       </View>
 
       <View style={S.bracketHint}>
-        <Ionicons name="hand-left-outline" size={14} color={P.red} />
+        <Icon name="info" size={14} color={P.red} />
         <Text style={S.bracketHintText}>
           Clique no vencedor para lançar o resultado.
         </Text>

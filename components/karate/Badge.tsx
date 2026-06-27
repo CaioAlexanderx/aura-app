@@ -6,7 +6,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateStatus,
   KarateStatusKey,
@@ -49,7 +49,7 @@ export function Badge({ status, dojoStatus, affiliationStatus, label, style }: B
       style={[styles.container, { backgroundColor: bg }, style]}
       accessibilityLabel={resolvedLabel}
     >
-      <Ionicons name={icon as any} size={12} color={color} />
+      <Icon name={icon as any} size={12} color={color} />
       <Text style={[styles.text, { color }]}>{resolvedLabel}</Text>
     </View>
   );

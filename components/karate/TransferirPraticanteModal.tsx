@@ -15,7 +15,7 @@ import {
   Modal, View, Text, ScrollView, TouchableOpacity, TextInput,
   FlatList, ActivityIndicator, StyleSheet, Alert, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -106,7 +106,7 @@ export function TransferirPraticanteModal({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Transferir praticante</Text>
           <TouchableOpacity onPress={reset} accessibilityLabel="Fechar">
-            <Ionicons name="close" size={24} color={KarateColors.ink} />
+            <Icon name="x" size={24} color={KarateColors.ink} />
           </TouchableOpacity>
         </View>
         <Stepper steps={STEPS} currentStep={step} style={styles.stepper} />
@@ -116,7 +116,7 @@ export function TransferirPraticanteModal({
           {step === 0 && (
             <View style={{ gap: 10 }}>
               <View style={styles.fromRow}>
-                <Ionicons name="home" size={14} color={KarateColors.ink3} />
+                <Icon name="dashboard" size={14} color={KarateColors.ink3} />
                 <Text style={styles.fromText}>
                   De: <Text style={styles.fromStrong}>{originDojoName || "Sem dojô atual"}</Text>
                 </Text>
@@ -146,14 +146,14 @@ export function TransferirPraticanteModal({
                       accessibilityRole="radio"
                       accessibilityState={{ checked: dest?.id === item.id }}
                     >
-                      <View style={styles.avatar}><Ionicons name="home" size={16} color={KarateColors.ink3} /></View>
+                      <View style={styles.avatar}><Icon name="dashboard" size={16} color={KarateColors.ink3} /></View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.dojoName}>{item.name}</Text>
                         {item.fpkt_affiliation_id ? (
                           <Text style={styles.dojoMeta}>{item.fpkt_affiliation_id}</Text>
                         ) : null}
                       </View>
-                      {dest?.id === item.id && <Ionicons name="checkmark-circle" size={20} color={KarateColors.primary} />}
+                      {dest?.id === item.id && <Icon name="check" size={20} color={KarateColors.primary} />}
                     </TouchableOpacity>
                   )}
                 />
@@ -196,23 +196,23 @@ export function TransferirPraticanteModal({
             <View style={{ gap: 12 }}>
               <Text style={styles.hint}>Confira os dados antes de confirmar.</Text>
               <View style={styles.summaryCard}>
-                <SummaryRow icon="person" label="Praticante" value={practitionerName} />
+                <SummaryRow icon="users" label="Praticante" value={practitionerName} />
                 <View style={styles.summaryArrow}>
                   <View style={styles.summaryDojo}>
                     <Text style={styles.summaryDojoLabel}>Origem</Text>
                     <Text style={styles.summaryDojoName}>{originDojoName || "Sem dojô"}</Text>
                   </View>
-                  <Ionicons name="arrow-forward" size={18} color={KarateColors.primary} />
+                  <Icon name="arrow_right" size={18} color={KarateColors.primary} />
                   <View style={styles.summaryDojo}>
                     <Text style={styles.summaryDojoLabel}>Destino</Text>
                     <Text style={[styles.summaryDojoName, { color: KarateColors.primary }]}>{dest?.name}</Text>
                   </View>
                 </View>
                 <SummaryRow icon="calendar" label="Data" value={date} />
-                {reason.trim() ? <SummaryRow icon="chatbubble-ellipses" label="Motivo" value={reason.trim()} /> : null}
+                {reason.trim() ? <SummaryRow icon="message" label="Motivo" value={reason.trim()} /> : null}
               </View>
               <View style={styles.noteBox}>
-                <Ionicons name="shield-checkmark" size={15} color={KarateColors.ink3} />
+                <Icon name="shield" size={15} color={KarateColors.ink3} />
                 <Text style={styles.noteText}>
                   O histórico de faixas e presenças do praticante é preservado. A transferência fica registrada de forma permanente.
                 </Text>
@@ -223,7 +223,7 @@ export function TransferirPraticanteModal({
           {/* Passo 4 — pronto */}
           {step === 3 && (
             <View style={styles.doneWrap}>
-              <View style={styles.doneIco}><Ionicons name="checkmark" size={34} color={KarateColors.ok} /></View>
+              <View style={styles.doneIco}><Icon name="check" size={34} color={KarateColors.ok} /></View>
               <Text style={styles.doneT}>Transferência concluída!</Text>
               <Text style={styles.doneS}>
                 {practitionerName} agora pertence ao {dest?.name}. Avisamos os dojôs de origem e destino por e-mail.
@@ -264,7 +264,7 @@ export function TransferirPraticanteModal({
 function SummaryRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
     <View style={styles.sumRow}>
-      <Ionicons name={icon as any} size={14} color={KarateColors.ink3} />
+      <Icon name={icon as any} size={14} color={KarateColors.ink3} />
       <Text style={styles.sumLabel}>{label}</Text>
       <Text style={styles.sumValue}>{value}</Text>
     </View>

@@ -27,7 +27,7 @@ import {
   Modal, View, Text, Pressable, TouchableOpacity, ActivityIndicator,
   Platform, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as XLSX from "xlsx";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, ExportDojoPayload } from "@/services/karateApi";
@@ -200,26 +200,26 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
                 Baixa uma planilha (.xlsx) no mesmo formato da importação — você edita e reenvia pela Importação para atualizar em massa.
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}><Ionicons name="close" size={20} color={P.ink2} /></TouchableOpacity>
+            <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}><Icon name="x" size={20} color={P.ink2} /></TouchableOpacity>
           </View>
 
           <View style={{ padding: 20, paddingTop: 14 }}>
             {/* Dados a incluir */}
             <Text style={styles.label}>Dados a incluir</Text>
             <View style={styles.fixedRow}>
-              <Ionicons name="people-outline" size={16} color={P.ink2} />
+              <Icon name="users" size={16} color={P.ink2} />
               <Text style={styles.fixedTxt}>Praticantes</Text>
               <Text style={styles.fixedHint}>sempre incluído</Text>
             </View>
             <ToggleRow
-              icon="ribbon-outline"
+              icon="ribbon"
               label="Trajetória de faixas"
               hint="histórico de graduações na aba Histórico"
               on={includeBelts}
               onToggle={() => setIncludeBelts((v) => !v)}
             />
             <ToggleRow
-              icon="swap-horizontal-outline"
+              icon="repeat"
               label="Transferências"
               hint="mudanças de academia na aba Histórico"
               on={includeTransfers}
@@ -240,7 +240,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
             </View>
 
             {error ? (
-              <View style={styles.errBox}><Ionicons name="alert-circle" size={15} color={P.red} /><Text style={styles.errTxt}>{error}</Text></View>
+              <View style={styles.errBox}><Icon name="alert_circle" size={15} color={P.red} /><Text style={styles.errTxt}>{error}</Text></View>
             ) : null}
           </View>
 
@@ -249,7 +249,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
             <TouchableOpacity onPress={handleExport} disabled={busy} style={[styles.btnPrimary, busy && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="Exportar planilha">
               {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="download-outline" size={16} color="#fdf8f2" />
+                  <Icon name="download" size={16} color="#fdf8f2" />
                   <Text style={styles.btnPrimaryTxt}>Exportar .xlsx</Text>
                 </View>
               )}
@@ -264,7 +264,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
 function ToggleRow({ icon, label, hint, on, onToggle }: { icon: any; label: string; hint: string; on: boolean; onToggle: () => void }) {
   return (
     <TouchableOpacity style={[styles.toggleRow, on && styles.toggleRowOn]} onPress={onToggle} activeOpacity={0.85} accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={label}>
-      <Ionicons name={icon} size={16} color={on ? P.red : P.ink3} />
+      <Icon name={icon} size={16} color={on ? P.red : P.ink3} />
       <View style={{ flex: 1 }}>
         <Text style={[styles.toggleLabel, on && { color: P.ink }]}>{label}</Text>
         <Text style={styles.toggleHint}>{hint}</Text>

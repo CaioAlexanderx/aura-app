@@ -9,7 +9,7 @@ import React from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P } from "@/constants/karateTheme";
 import { EstadoSelo, normalizeCertStatus, CertOrderStatus } from "@/components/karate/EstadoSelo";
 import { CertOrder } from "@/services/karateApi";
@@ -38,7 +38,7 @@ export function DetalheDrawer({
               <Text style={cs.drawerBelt}>{order.belt_name}</Text>
             </View>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color={C.ink3} />
+              <Icon name="x" size={22} color={C.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -102,7 +102,7 @@ export function DetalheDrawer({
                       }}
                     >
                       <Text style={[cs.processOptText, opt.value === "refused_trigger" && { color: C.danger }]}>{opt.label}</Text>
-                      <Ionicons name="chevron-forward" size={14} color={C.ink4} />
+                      <Icon name="chevron_right" size={14} color={C.ink4} />
                     </TouchableOpacity>
                   ))}
                 </View>

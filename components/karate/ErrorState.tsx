@@ -6,7 +6,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
 interface ErrorStateProps {
@@ -24,12 +24,12 @@ export function KarateErrorState({
 }: ErrorStateProps) {
   return (
     <View style={[styles.container, style]} accessibilityLiveRegion="polite">
-      <Ionicons name="cloud-offline-outline" size={44} color={KarateColors.ink4} />
+      <Icon name="alert_circle" size={44} color={KarateColors.ink4} />
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
       {onRetry ? (
         <TouchableOpacity style={styles.retry} onPress={onRetry} accessibilityRole="button">
-          <Ionicons name="refresh" size={15} color={KarateColors.primary} />
+          <Icon name="refresh" size={15} color={KarateColors.primary} />
           <Text style={styles.retryText}>Tentar de novo</Text>
         </TouchableOpacity>
       ) : null}

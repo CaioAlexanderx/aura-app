@@ -34,7 +34,7 @@ import {
   TextStyle,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
@@ -216,7 +216,7 @@ export function PixPaymentModal({
               accessibilityRole="button"
               style={styles.closeBtn}
             >
-              <Ionicons name="close" size={22} color={KarateColors.ink3} />
+              <Icon name="x" size={22} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
@@ -262,8 +262,8 @@ export function PixPaymentModal({
                   accessibilityRole="button"
                   accessibilityLabel={copied ? "Código copiado" : "Copiar código PIX"}
                 >
-                  <Ionicons
-                    name={copied ? "checkmark" : "copy-outline"}
+                  <Icon
+                    name={copied ? "check" : "copy"}
                     size={16}
                     color={copied ? ShojiPalette.ok : KarateColors.primary}
                   />
@@ -300,7 +300,7 @@ export function PixPaymentModal({
             {state.phase === "paid" && (
               <View style={styles.centeredSection}>
                 <View style={styles.successIcon}>
-                  <Ionicons name="checkmark-circle" size={56} color={ShojiPalette.ok} />
+                  <Icon name="check" size={56} color={ShojiPalette.ok} />
                 </View>
                 <Text style={styles.successTitle}>Pagamento confirmado!</Text>
                 <Text style={styles.successSub}>
@@ -318,7 +318,7 @@ export function PixPaymentModal({
             {/* Error */}
             {state.phase === "error" && (
               <View style={styles.centeredSection}>
-                <Ionicons name="alert-circle" size={48} color={KarateColors.danger} />
+                <Icon name="alert_circle" size={48} color={KarateColors.danger} />
                 <Text style={styles.errorTitle}>Erro no pagamento</Text>
                 <Text style={styles.errorMessage}>{state.message}</Text>
                 <View style={styles.errorActions}>

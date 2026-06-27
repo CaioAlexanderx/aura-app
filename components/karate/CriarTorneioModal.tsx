@@ -40,7 +40,7 @@ import {
   Modal, View, Text, TextInput, ScrollView, TouchableOpacity, Pressable,
   StyleSheet, useWindowDimensions, ViewStyle, TextStyle, ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -301,7 +301,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
               <Text style={styles.sub}>Defina os dados e monte as categorias. Tudo nasce como rascunho.</Text>
             </View>
             <TouchableOpacity onPress={resetAndClose} hitSlop={10} style={styles.close} accessibilityLabel="Fechar modal">
-              <Ionicons name="close" size={20} color={P.ink2} />
+              <Icon name="x" size={20} color={P.ink2} />
             </TouchableOpacity>
           </View>
 
@@ -310,7 +310,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="handled">
             {error ? (
               <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle" size={15} color={P.red} />
+                <Icon name="alert_circle" size={15} color={P.red} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
@@ -355,7 +355,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => removeCategory(c.key)} accessibilityLabel={`Remover ${c.name}`}>
-                      <Ionicons name="trash-outline" size={18} color={P.red} />
+                      <Icon name="trash" size={18} color={P.red} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -440,7 +440,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                   <Text style={styles.reviewMeta}>Taxa padrão: {fee ? `R$ ${fee}` : "—"}</Text>
                   {createdCompId ? (
                     <View style={styles.createdTag}>
-                      <Ionicons name="checkmark-circle" size={13} color={P.ok} />
+                      <Icon name="check" size={13} color={P.ok} />
                       <Text style={styles.createdTagTxt}>Competição criada — concluindo as categorias.</Text>
                     </View>
                   ) : null}
@@ -457,7 +457,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                 {/* resumo do resultado (após tentativa) */}
                 {attempted && !progress ? (
                   <View style={[styles.resultBanner, failedCount > 0 ? styles.resultBannerWarn : styles.resultBannerOk]}>
-                    <Ionicons name={failedCount > 0 ? "warning" : "checkmark-circle"} size={15} color={failedCount > 0 ? P.red : P.ok} />
+                    <Icon name={failedCount > 0 ? "alert" : "check"} size={15} color={failedCount > 0 ? P.red : P.ok} />
                     <Text style={styles.resultTxt}>
                       {okCount} entraram{failedCount > 0 ? ` · ${failedCount} falharam` : ""}. {failedCount > 0 ? "Tente novamente as que falharam." : "Tudo certo."}
                     </Text>
@@ -476,8 +476,8 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                           <Text style={styles.catName}>{c.name}</Text>
                           {r?.state === "error" && r.errorMsg ? <Text style={styles.catErr}>{r.errorMsg}</Text> : null}
                         </View>
-                        {r?.state === "ok" ? <Ionicons name="checkmark-circle" size={18} color={P.ok} accessibilityLabel="Criada" /> : null}
-                        {r?.state === "error" ? <Ionicons name="close-circle" size={18} color={P.red} accessibilityLabel="Falhou" /> : null}
+                        {r?.state === "ok" ? <Icon name="check" size={18} color={P.ok} /> : null}
+                        {r?.state === "error" ? <Icon name="x" size={18} color={P.red} /> : null}
                         {r?.state === "pending" || (loading && !r) ? <ActivityIndicator size="small" color={P.ink3} /> : null}
                       </View>
                     );
@@ -512,7 +512,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           {/* toast de sucesso (inline) */}
           {toast ? (
             <View pointerEvents="none" style={styles.toast}>
-              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Icon name="check" size={16} color="#bfe3c4" />
               <Text style={styles.toastTxt}>Torneio criado — {toast}</Text>
             </View>
           ) : null}

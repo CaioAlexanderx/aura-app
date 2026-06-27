@@ -40,7 +40,7 @@ import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Animated,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, AffiliationModel, DojoInput } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
@@ -306,7 +306,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                 <Text style={styles.sub}>Só o nome e o modelo de filiação são obrigatórios — o resto você completa quando quiser. O código FPKT é gerado automaticamente ao salvar.</Text>
               )}
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}><Ionicons name="close" size={20} color={P.ink2} /></TouchableOpacity>
+            <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}><Icon name="x" size={20} color={P.ink2} /></TouchableOpacity>
           </View>
 
           {loading ? (
@@ -315,7 +315,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
             <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 20, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
               {empties.length > 0 && (
                 <View style={styles.completar}>
-                  <Ionicons name="create-outline" size={14} color={P.ink3} />
+                  <Icon name="edit" size={14} color={P.ink3} />
                   <Text style={styles.completarTtl}>Completar quando quiser:</Text>
                   <Text style={styles.completarList}>{empties.join("  ·  ")}</Text>
                 </View>
@@ -402,7 +402,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                 <Text style={styles.cepLabel}>CEP <Text style={styles.cepHint}>· preenche o endereço automaticamente</Text></Text>
                 <View style={styles.cepRow}>
                   <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.zip_code} onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9} accessibilityLabel="CEP" />
-                  {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Ionicons name="search" size={18} color={P.ink3} style={{ width: 36, textAlign: "center" }} />}
+                  {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Icon name="search" size={18} color={P.ink3} style={{ width: 36, alignSelf: "center" }} />}
                 </View>
                 {cepStatus ? <Text style={[styles.note, cepStatus.ok ? styles.noteOk : styles.noteBad]}>{cepStatus.msg}</Text> : null}
               </View>
@@ -431,7 +431,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               ) : null}
 
               {errorMsg ? (
-                <View style={styles.errBox}><Ionicons name="alert-circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
+                <View style={styles.errBox}><Icon name="alert_circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
               ) : null}
             </ScrollView>
           )}
@@ -449,7 +449,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               opacity: toastAnim,
               transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }]}>
-              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Icon name="check" size={16} color="#bfe3c4" />
               <Text style={styles.toastTxt}>{toast}</Text>
             </Animated.View>
           ) : null}

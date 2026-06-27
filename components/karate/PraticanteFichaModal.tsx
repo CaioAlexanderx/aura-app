@@ -36,7 +36,7 @@ import {
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, FlatList,
   Animated,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, Dojo } from "@/services/karateApi";
 import { request } from "@/services/api";
@@ -323,7 +323,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
-              <Ionicons name="close" size={20} color={P.ink2} />
+              <Icon name="x" size={20} color={P.ink2} />
             </TouchableOpacity>
           </View>
 
@@ -334,7 +334,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {/* repetir dados do último cadastro (opt-in, discreto, só cadastro novo) */}
               {!isEdit && canRepeat && (
                 <TouchableOpacity style={styles.repeat} onPress={repeatLast} activeOpacity={0.7} accessibilityLabel="Repetir dados do último cadastro">
-                  <Ionicons name="copy-outline" size={14} color={P.ink2} />
+                  <Icon name="copy" size={14} color={P.ink2} />
                   <Text style={styles.repeatTxt}>Repetir dados do último cadastro</Text>
                   <Text style={styles.repeatHint}>dojô e endereço</Text>
                 </TouchableOpacity>
@@ -343,7 +343,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {/* completar (neutro) */}
               {empties.length > 0 && (
                 <View style={styles.completar}>
-                  <Ionicons name="create-outline" size={14} color={P.ink3} />
+                  <Icon name="edit" size={14} color={P.ink3} />
                   <Text style={styles.completarTtl}>Completar quando quiser:</Text>
                   <Text style={styles.completarList}>{empties.join("  ·  ")}</Text>
                 </View>
@@ -370,7 +370,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 inputRef={rgRef} returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} />
               {age != null && age < 18 && (
                 <View style={styles.lgpd}>
-                  <Ionicons name="shield-checkmark-outline" size={14} color={P.ink2} />
+                  <Icon name="shield" size={14} color={P.ink2} />
                   <Text style={styles.lgpdTxt}>Menor de idade — responsável legal exigido (LGPD Art. 14). O cadastro do responsável entra no próximo passo.</Text>
                 </View>
               )}
@@ -391,7 +391,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   <TextInput style={[styles.input, styles.mono, { flex: 1, fontSize: 16 }]} value={form.zip_code}
                     onChangeText={onCep} keyboardType="numeric" placeholder="00000-000" placeholderTextColor={P.ink4} maxLength={9}
                     accessibilityLabel="CEP" returnKeyType="next" />
-                  {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Ionicons name="search" size={18} color={P.ink3} style={{ width: 36, textAlign: "center" }} />}
+                  {cepStatus?.msg === "Buscando endereço…" ? <ActivityIndicator color={P.red} style={{ width: 36 }} /> : <Icon name="search" size={18} color={P.ink3} style={{ width: 36, alignSelf: "center" }} />}
                 </View>
                 {cepStatus ? <Text style={[styles.note, cepStatus.ok ? styles.noteOk : styles.noteBad]}>{cepStatus.msg}</Text> : null}
               </View>
@@ -429,7 +429,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               )}
 
               {errorMsg ? (
-                <View style={styles.errBox}><Ionicons name="alert-circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
+                <View style={styles.errBox}><Icon name="alert_circle" size={15} color={P.red} /><Text style={styles.errTxt}>{errorMsg}</Text></View>
               ) : null}
             </ScrollView>
           )}
@@ -448,7 +448,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               opacity: toastAnim,
               transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }]}>
-              <Ionicons name="checkmark-circle" size={16} color="#bfe3c4" />
+              <Icon name="check" size={16} color="#bfe3c4" />
               <Text style={styles.toastTxt}>{toast}</Text>
             </Animated.View>
           ) : null}
@@ -583,7 +583,7 @@ function DojoSelect({ federationId, valueId, valueName, onSelect }: {
       <TouchableOpacity style={styles.input} onPress={() => setOpen((o) => !o)} activeOpacity={0.7} accessibilityLabel="Dojô">
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ fontFamily: F.body, fontSize: 14, color: label ? P.ink : P.ink4 }} numberOfLines={1}>{label || "Selecionar dojô…"}</Text>
-          <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color={P.ink3} />
+          <Icon name={open ? "chevron_up" : "chevron_down"} size={14} color={P.ink3} />
         </View>
       </TouchableOpacity>
       {open && (
