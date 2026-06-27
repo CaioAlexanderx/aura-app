@@ -5,8 +5,8 @@
 // fichas de ouro (PraticanteFichaModal / DojoFichaModal). Antes abria em
 // <Modal presentationStyle="pageSheet"> que no web vira TELA CHEIA.
 //
-//   Passo 1 — Dados do torneio (nome, temporada, data, local, etapa, taxa)
-//   Passo 2 — Categorias (modalidade, faixa etária, graduação, sexo, peso, vagas, taxa)
+//   Passo 1 — Dados do campeonato (nome, temporada, data, local, etapa, taxa)
+//   Passo 2 — Categorias (modalidade, faixa etária, graduação, sexo, vagas, taxa)
 //   Passo 3 — Revisão → cria competição + categorias
 //
 // Wired: karateCompetitionsApi.createCompetition + createCategory.
@@ -17,12 +17,12 @@
 //     centavos e envia em reais corretamente (antes era parseFloat de texto livre).
 //   - Data com validação de calendário real (parseBrDate) — rejeita 31/02.
 //   - Validação inline; asterisco real nos obrigatórios; autofocus; Enter avança.
-//   - CTA do rodapé ("Próximo"/"Criar torneio") é primário em sumi (escuro),
+//   - CTA do rodapé ("Próximo"/"Criar campeonato") é primário em sumi (escuro),
 //     consistente com "Salvar"; full-width no footer (padrão de form). O
 //     vermelhão fica reservado a ações destrutivas.
 //
 // NOTA: os pickers de graduação oferecem TODAS as faixas de propósito —
-// um torneio tem categorias para qualquer graduação. A regra "só Marrom →
+// um campeonato tem categorias para qualquer graduação. A regra "só Marrom →
 // Preta" vale apenas para EXAMES da federação, não para competições.
 //
 // Criação de categorias (P2) — transacional no FRONT (backend não muda):
@@ -97,7 +97,6 @@ interface DraftCategory {
   beltMin: BeltKey | "";
   beltMax: BeltKey | "";
   sex: Sex;
-  weight: string;
   maxEntries: string;
   fee: string;
   // estado de envio (transacional no front) — não enviado ao backend
@@ -111,7 +110,7 @@ let __k = 0;
 const newKey = () => `cat-${Date.now()}-${++__k}`;
 const emptyDraft = (): DraftCategory => ({
   key: newKey(), name: "", modality: "kata", ageMin: "", ageMax: "",
-  beltMin: "", beltMax: "", sex: "mixed", weight: "", maxEntries: "", fee: "",
+  beltMin: "", beltMax: "", sex: "mixed", maxEntries: "", fee: "",
 });
 
 interface Props {
@@ -165,7 +164,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
   };
 
   const handleStep1Next = () => {
-    if (!name.trim()) { setError("Informe o nome do torneio."); return; }
+    if (!name.trim()) { setError("Informe o nome do campeonato."); return; }
     if (eventDate && parseBrDate(eventDate) === null) { setError("Data inválida — use dd/mm/aaaa."); return; }
     setError(null); setStep(1);
   };
@@ -176,6 +175,18 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
     setCategories((prev) => [...prev, draft]);
     setDraft(emptyDraft());
   };
+
+  const copyCategory = (cat: DraftCategory) => {
+    const copy: DraftCategory = {
+      ...cat,
+      key: newKey(),
+      name: `${cat.name} (cópia)`,
+      state: undefined,
+      errorMsg: undefined,
+    };
+    setCategories((prev) => [...prev, copy]);
+  };
+
   const removeCategory = (key: string) => {
     setCategories((prev) => prev.filter((c) => c.key !== key));
     setCatResult((prev) => { const n = { ...prev }; delete n[key]; return n; });
@@ -194,7 +205,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           min_age: c.ageMin ? parseInt(c.ageMin, 10) : null,
           max_age: c.ageMax ? parseInt(c.ageMax, 10) : null,
           belt_min: c.beltMin || null, belt_max: c.beltMax || null,
-          sex: c.sex, weight_class: c.weight || null,
+          sex: c.sex, weight_class: null,
           max_entries: c.maxEntries ? parseInt(c.maxEntries, 10) : null,
           fee_amount: c.fee ? moneyToNumber(c.fee) : null,
         });
@@ -250,7 +261,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
       if (!allOk) setError("Algumas categorias não entraram. Veja abaixo e tente novamente as que falharam.");
     } catch (e: any) {
       // falha ao CRIAR A COMPETIÇÃO (antes das categorias) — nada parcial ainda
-      setError(e?.message || "Não foi possível criar o torneio. Tente novamente.");
+      setError(e?.message || "Não foi possível criar o campeonato. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -268,7 +279,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
       const allOk = categories.every((c) =>
         (catResult[c.key]?.state === "ok") || results[c.key]?.state === "ok");
       finishUp(allOk);
-      if (!allOk) setError("Ainda há categorias com falha. Você pode tentar novamente ou concluir depois no detalhe do torneio.");
+      if (!allOk) setError("Ainda há categorias com falha. Você pode tentar novamente ou concluir depois no detalhe do campeonato.");
     } catch (e: any) {
       setError(e?.message || "Falha ao reenviar. Tente novamente.");
     } finally {
@@ -280,10 +291,10 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
   const finishLabel = (() => {
     if (loading) {
       if (progress) return `Criando categorias… ${progress.done}/${progress.total}`;
-      return createdCompId ? "Reenviando…" : "Criando torneio…";
+      return createdCompId ? "Reenviando…" : "Criando campeonato…";
     }
     if (attempted && failedCount > 0) return `Tentar novamente (${failedCount})`;
-    return "Criar torneio";
+    return "Criar campeonato";
   })();
 
   const onFinishPress = attempted && failedCount > 0 && createdCompId ? handleRetryFailed : handleFinish;
@@ -296,9 +307,9 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           {/* header */}
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.eyebrow}>空  FPKT · Novo torneio</Text>
-              <Text style={styles.title}>Criar torneio<Text style={{ color: P.red }}>.</Text></Text>
-              <Text style={styles.sub}>Defina os dados e monte as categorias. Tudo nasce como rascunho.</Text>
+              <Text style={styles.eyebrow}>空  FPKT · Novo campeonato</Text>
+              <Text style={styles.title}>Criar campeonato<Text style={{ color: P.red }}>.</Text></Text>
+              <Text style={styles.sub}>Defina os dados e monte as categorias.</Text>
             </View>
             <TouchableOpacity onPress={resetAndClose} hitSlop={10} style={styles.close} accessibilityLabel="Fechar modal">
               <Icon name="x" size={20} color={P.ink2} />
@@ -318,7 +329,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
             {/* STEP 1 — DADOS */}
             {step === 0 && (
               <View style={styles.stepContent}>
-                <Field label="Nome do torneio" req value={name} onChangeText={setName}
+                <Field label="Nome do campeonato" req value={name} onChangeText={setName}
                   placeholder="Ex: Copa Interior 2026 — 1ª Etapa" autoFocus returnKeyType="next" />
                 <Row2>
                   <Field flex label="Temporada" mono value={season} onChangeText={(v) => setSeason(onlyD(v).slice(0, 4))}
@@ -341,7 +352,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
             {/* STEP 2 — CATEGORIAS */}
             {step === 1 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepHint}>Adicione as categorias do torneio. Cada uma pode ter faixa etária, graduação, sexo e peso próprios.</Text>
+                <Text style={styles.stepHint}>Adicione as categorias do campeonato. Cada uma pode ter faixa etária, graduação e sexo próprios.</Text>
 
                 {categories.map((c) => (
                   <View key={c.key} style={styles.catRow}>
@@ -350,10 +361,12 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                       <Text style={styles.catMeta}>
                         {MODALITIES.find((m) => m.value === c.modality)?.label}
                         {c.sex !== "mixed" ? ` · ${c.sex === "M" ? "Masc." : "Fem."}` : " · Misto"}
-                        {c.weight ? ` · ${c.weight}` : ""}
                         {c.ageMin || c.ageMax ? ` · ${c.ageMin || "0"}–${c.ageMax || "∞"} anos` : ""}
                       </Text>
                     </View>
+                    <TouchableOpacity onPress={() => copyCategory(c)} accessibilityLabel={`Copiar ${c.name}`} style={styles.iconBtn}>
+                      <Icon name="copy" size={18} color={P.ink3} />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => removeCategory(c.key)} accessibilityLabel={`Remover ${c.name}`}>
                       <Icon name="trash" size={18} color={P.red} />
                     </TouchableOpacity>
@@ -416,11 +429,8 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                     ))}
                   </ScrollView>
 
-                  <Row2>
-                    <Field flex label="Peso" value={draft.weight} onChangeText={(v) => setDraft((d) => ({ ...d, weight: v }))} placeholder="-60kg" />
-                    <Field flex label="Vagas" mono value={draft.maxEntries}
-                      onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
-                  </Row2>
+                  <Field flex label="Vagas" mono value={draft.maxEntries}
+                    onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
                   <Field label="Taxa da categoria" hint="usa a taxa padrão se vazio" mono value={draft.fee}
                     onChangeText={(v) => setDraft((d) => ({ ...d, fee: maskMoney(v) }))} placeholder="0,00" keyboardType="numeric" prefix="R$" />
 
@@ -466,7 +476,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
 
                 <Text style={styles.fieldLabel}>{categories.length} categoria(s)</Text>
                 {categories.length === 0 ? (
-                  <Text style={styles.stepHint}>Nenhuma categoria adicionada. Você pode adicioná-las depois no detalhe do torneio.</Text>
+                  <Text style={styles.stepHint}>Nenhuma categoria adicionada. Você pode adicioná-las depois no detalhe do campeonato.</Text>
                 ) : (
                   categories.map((c) => {
                     const r = catResult[c.key];
@@ -483,7 +493,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                     );
                   })
                 )}
-                <Text style={styles.stepHint}>O torneio será criado como rascunho. Você poderá abrir inscrições e lançar resultados no detalhe.</Text>
+                <Text style={styles.stepHint}>O campeonato será criado como rascunho. Você poderá abrir inscrições e lançar resultados no detalhe.</Text>
               </View>
             )}
           </ScrollView>
@@ -513,7 +523,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           {toast ? (
             <View pointerEvents="none" style={styles.toast}>
               <Icon name="check" size={16} color="#bfe3c4" />
-              <Text style={styles.toastTxt}>Torneio criado — {toast}</Text>
+              <Text style={styles.toastTxt}>Campeonato criado — {toast}</Text>
             </View>
           ) : null}
         </View>
@@ -596,6 +606,7 @@ const styles = StyleSheet.create({
   catName: { fontFamily: F.body, fontSize: 14, fontWeight: "700", color: P.ink } as TextStyle,
   catMeta: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 2 } as TextStyle,
   catErr: { fontFamily: F.body, fontSize: 11, color: P.red2, marginTop: 2 } as TextStyle,
+  iconBtn: { padding: 2 } as ViewStyle,
   reviewCard: { backgroundColor: P.glassHi, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, padding: 14, gap: 3, marginBottom: 4 } as ViewStyle,
   reviewTitle: { fontFamily: F.heading, fontSize: 16, color: P.ink } as TextStyle,
   reviewMeta: { fontFamily: F.body, fontSize: 12, color: P.ink3 } as TextStyle,
