@@ -1,6 +1,10 @@
 // ============================================================
-// Seção "Identidade" — nome, dojô, nascimento, CPF, RG + banner LGPD.
+// Seção "Identidade" — foto (slot), nome, dojô, nascimento, CPF, RG + banner LGPD.
 // Extraído de components/karate/PraticanteFichaModal.tsx (refactor puro).
+//
+// photoSlot: nó React renderizado logo após o SectionTitle "Identidade",
+// antes do campo Nome — preserva a ordem exata do original (P6 é o primeiro
+// elemento da seção de identidade, acima do nome).
 // ============================================================
 import React from "react";
 import { View, Text, TextInput } from "react-native";
@@ -8,8 +12,7 @@ import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { Dojo } from "@/services/karateApi";
 import { maskCpf } from "@/utils/masks";
-import { Form } from "./helpers";
-import { maskDate } from "./helpers";
+import { Form, maskDate } from "./helpers";
 import { SectionTitle, Row2, Field, styles } from "./shared-styles";
 import { DojoSelectSection } from "./DojoSelectSection";
 
@@ -29,16 +32,22 @@ interface DadosBasicosSectionProps {
   rgRef: React.RefObject<TextInput>;
   // callback submit Enter no último campo
   onRgSubmit: () => void;
+  // slot de foto — renderizado antes do campo Nome (ordem do original)
+  photoSlot?: React.ReactNode;
 }
 
 export function DadosBasicosSection({
   federationId, form, setField, lastDojoRef,
   dateBad, age, cpfBad,
   nameRef, birthRef, cpfRef, rgRef, onRgSubmit,
+  photoSlot,
 }: DadosBasicosSectionProps) {
   return (
     <>
       <SectionTitle>Identidade</SectionTitle>
+
+      {/* P6 — foto do praticante (acima do nome, como no original) */}
+      {photoSlot}
 
       <Field
         label="Nome completo" req value={form.full_name}
