@@ -11,8 +11,8 @@
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Modal, View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, useWindowDimensions, TextInput, Animated,
+  Modal, View, Text, ScrollView, TouchableOpacity, Pressable,
+  ActivityIndicator, useWindowDimensions, TextInput, Animated, StyleSheet,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
@@ -288,7 +288,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <TouchableOpacity style={{ ...StyleSheet.absoluteFillObject } as any} onPress={onClose} activeOpacity={1} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.card, { width: cardW }]}>
           {/* header */}
           <View style={styles.head}>
@@ -425,8 +425,5 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     </Modal>
   );
 }
-
-// Importação inline do StyleSheet para a linha do backdrop absoluteFill
-import { StyleSheet } from "react-native";
 
 export default PraticanteFichaModal;
