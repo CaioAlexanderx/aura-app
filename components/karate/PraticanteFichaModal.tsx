@@ -29,19 +29,36 @@
 //   ("Só o nome é obrigatório…") e o nudge "Completar quando quiser" lista
 //   APENAS campos realmente opcionais — nunca os obrigatórios (Nome/Dojô) —
 //   para não contradizer a mensagem.
+//
+// P6 — Foto do praticante:
+//   Campo de foto no topo da seção Identidade. Preview circular + botão
+//   "Adicionar foto"/"Trocar foto". Usa pickFileWeb (studioUploadApi) para
+//   abrir o file picker e gera uma blob URL local para preview imediato.
+//   TODO: backend ainda não tem endpoint de upload para karatê
+//   (POST /federation/:id/practitioners/:id/photo). Até lá, photo_url é
+//   enviado apenas se for uma URL http(s) já existente (edição) — URLs blob
+//   locais são descartadas no submit e o campo permanece neutro/opcional.
+//   Ver studioUploadApi.ts para o padrão de upload já usado no Studio.
+//
+// P7 — Responsável (LGPD):
+//   Seção "Responsável" com Nome, CPF, Telefone e Parentesco (chips).
+//   Obrigatório SOMENTE para menores de 18 anos (age < 18 calculada a
+//   partir de birth_date com parse local, sem UTC shift).
+//   Maior de 18 = seção opcional, nota neutra.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, FlatList,
-  Animated,
+  Animated, Image,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, Dojo } from "@/services/karateApi";
 import { request } from "@/services/api";
 import { parseBrDate } from "@/components/inputs/DateInput";
-import { maskCpf } from "@/utils/masks";
+import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
+import { pickFileWeb } from "@/services/studioUploadApi";
 
 interface Props {
   federationId: string;
@@ -51,12 +68,19 @@ interface Props {
   onSaved: () => void;
 }
 
+const GUARDIAN_RELATIONSHIPS = ["pai", "mãe", "avó/avô", "tio/tia", "responsável legal", "outro"] as const;
+type GuardianRelationship = typeof GUARDIAN_RELATIONSHIPS[number];
+
 const EMPTY = {
   full_name: "", cpf: "", rg: "", birth_date: "", email: "", phone: "",
   dojo_id: "", dojo_name: "",
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   is_arbiter: false, is_instructor: false, is_examiner: false,
   is_active: true,
+  // P6
+  photo_url: "",
+  // P7
+  guardian_name: "", guardian_cpf: "", guardian_phone: "", guardian_relationship: "" as GuardianRelationship | "",
 };
 type Form = typeof EMPTY;
 
@@ -78,16 +102,10 @@ let lastShared: SharedSnapshot | null = null;
 // ── máscaras BR ──────────────────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
 // maskCpf importado de @/utils/masks (shared util)
+// maskPhoneUtil importado de @/utils/masks (shared util)
 function maskCEP(v: string) {
   const d = onlyD(v).slice(0, 8);
   return d.length > 5 ? d.replace(/(\d{5})(\d+)/, "$1-$2") : d;
-}
-function maskPhone(v: string) {
-  const d = onlyD(v).slice(0, 11);
-  if (d.length > 10) return d.replace(/(\d{2})(\d{5})(\d+)/, "($1) $2-$3");
-  if (d.length > 6) return d.replace(/(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
-  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "($1) $2");
-  return d;
 }
 function maskDate(v: string) {
   const d = onlyD(v).slice(0, 8);
@@ -103,7 +121,24 @@ function cpfValido(c: string) {
   s = 0; for (let i = 0; i < 10; i++) s += +c[i] * (11 - i);
   d = 11 - (s % 11); if (d >= 10) d = 0; return d === +c[10];
 }
-// idade a partir do ISO validado (YYYY-MM-DD)
+// P7: calcula idade a partir de dd/mm/aaaa (parse LOCAL, sem UTC shift)
+function ageFromBrDate(brDate: string): number | null {
+  const d = onlyD(brDate);
+  if (d.length !== 8) return null;
+  const day = parseInt(d.slice(0, 2), 10);
+  const month = parseInt(d.slice(2, 4), 10);
+  const year = parseInt(d.slice(4, 8), 10);
+  // Cria a data no fuso local — sem UTC (evita o -1 dia clássico)
+  const born = new Date(year, month - 1, day);
+  if (isNaN(born.getTime())) return null;
+  if (born.getDate() !== day || born.getMonth() !== month - 1 || born.getFullYear() !== year) return null;
+  const today = new Date();
+  let age = today.getFullYear() - born.getFullYear();
+  const m = today.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < born.getDate())) age--;
+  return age;
+}
+// idade a partir do ISO validado (YYYY-MM-DD) — mantido para exibição no campo nascimento
 function ageFromISO(iso: string | null): number | null {
   if (!iso) return null;
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -138,6 +173,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [toast, setToast] = useState<string | null>(null);
   // "repetir dados do último cadastro" só faz sentido se já houve um nesta sessão
   const [canRepeat, setCanRepeat] = useState(false);
+  // P6: estado de carregamento do upload de foto
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
@@ -146,6 +183,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const rgRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
+  // P7: refs para campos do responsável
+  const guardianNameRef = useRef<TextInput>(null);
+  const guardianCpfRef = useRef<TextInput>(null);
+  const guardianPhoneRef = useRef<TextInput>(null);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -172,12 +213,19 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         if (p.dojo_id && dojoName) lastDojo = { id: p.dojo_id, name: dojoName };
         setForm({
           full_name: p.full_name || "", cpf: p.cpf ? maskCpf(p.cpf) : "", rg: p.rg || "",
-          birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhone(p.phone) : "",
+          birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhoneUtil(p.phone) : "",
           dojo_id: p.dojo_id || "", dojo_name: dojoName,
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
           is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
           is_active: p.is_active !== false, // default ativo
+          // P6: pré-preenche foto existente
+          photo_url: p.photo_url || p.karate_photo_url || "",
+          // P7: pré-preenche dados do responsável
+          guardian_name: p.guardian_name || "",
+          guardian_cpf: p.guardian_cpf ? maskCpf(p.guardian_cpf) : "",
+          guardian_phone: p.guardian_phone ? maskPhoneUtil(p.guardian_phone) : "",
+          guardian_relationship: (p.guardian_relationship as GuardianRelationship | "") || "",
         });
         setFpkt(p.karate_registration_number || null);
         setBeltName(p.current_belt?.belt_name || null);
@@ -250,6 +298,33 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const age = ageFromISO(birthIso);
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
 
+  // P7: calcula a idade a partir da string dd/mm/aaaa do form (parse LOCAL)
+  const ageFromForm = ageFromBrDate(form.birth_date);
+  const isMinor = ageFromForm !== null && ageFromForm < 18;
+
+  const guardianCpfBad = form.guardian_cpf.length > 0 && !cpfValido(form.guardian_cpf);
+
+  // P6: handler de foto — abre picker + gera preview local
+  const handlePickPhoto = useCallback(async () => {
+    setPhotoLoading(true);
+    try {
+      const file = await pickFileWeb("image/*");
+      if (!file) return;
+      // Gera uma blob URL local para preview imediato
+      // TODO: quando o backend de karatê tiver endpoint de upload
+      // (POST /federation/:id/practitioners/:id/photo), substituir pelo
+      // resultado da chamada de upload (URL permanente em R2/S3).
+      // Ver studioUploadApi.ts (pickFileWeb + fileToBase64Web + uploadStudioMockup)
+      // para o padrão já usado no Studio.
+      const blobUrl = URL.createObjectURL(file);
+      set("photo_url", blobUrl);
+    } catch {
+      // erro silencioso — usuário cancelou ou falha de leitura
+    } finally {
+      setPhotoLoading(false);
+    }
+  }, []);
+
   // campos vazios (neutro, opcional). D3.5.2: NÃO listamos os obrigatórios
   // (Nome, Dojô) aqui — o "Completar quando quiser" é só para opcionais, sem
   // contradizer o subtítulo "Só o nome é obrigatório".
@@ -266,7 +341,17 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (!form.dojo_id) { setErrorMsg("Selecione o dojô."); return; }
     if (dateBad) { setErrorMsg("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
     if (cpfBad) { setErrorMsg("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
+    // P7: menor de idade sem responsável nomeado → bloqueia
+    if (isMinor && !form.guardian_name.trim()) {
+      setErrorMsg("Para menores de 18 anos, o nome do responsável é obrigatório (LGPD Art. 14).");
+      return;
+    }
+    if (guardianCpfBad) { setErrorMsg("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
+    // P6: envia photo_url somente se for uma URL http(s) já persistida.
+    // Blob URLs locais (criadas pelo pickFileWeb) são ignoradas pois não existem
+    // no servidor — aguardar endpoint de upload no backend de karatê.
+    const photoUrlToSend = form.photo_url && form.photo_url.startsWith("http") ? form.photo_url : null;
     const body: any = {
       full_name: form.full_name.trim(),
       cpf: onlyD(form.cpf) || null,
@@ -281,6 +366,13 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       neighborhood: form.neighborhood || null, city: form.city || null,
       state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
       zip_code: onlyD(form.zip_code) || null,
+      // P6
+      photo_url: photoUrlToSend,
+      // P7
+      guardian_name: form.guardian_name.trim() || null,
+      guardian_cpf: onlyD(form.guardian_cpf) || null,
+      guardian_phone: onlyD(form.guardian_phone) || null,
+      guardian_relationship: form.guardian_relationship || null,
     };
     try {
       if (isEdit) await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
@@ -348,6 +440,48 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
               {/* IDENTIDADE */}
               <SectionTitle>Identidade</SectionTitle>
+
+              {/* P6 — Foto do praticante */}
+              <View style={styles.photoRow}>
+                <View style={styles.photoPreview}>
+                  {form.photo_url ? (
+                    <Image source={{ uri: form.photo_url }} style={styles.photoImg} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.photoPlaceholder}>
+                      <Icon name="user" size={28} color={P.ink4} />
+                    </View>
+                  )}
+                  {photoLoading && (
+                    <View style={styles.photoOverlay}>
+                      <ActivityIndicator color={P.red} size="small" />
+                    </View>
+                  )}
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={styles.label}>Foto</Text>
+                  <TouchableOpacity
+                    style={styles.photoBtn}
+                    onPress={handlePickPhoto}
+                    disabled={photoLoading}
+                    activeOpacity={0.7}
+                    accessibilityLabel={form.photo_url ? "Trocar foto" : "Adicionar foto"}
+                  >
+                    <Icon name="camera" size={14} color={P.ink2} />
+                    <Text style={styles.photoBtnTxt}>{form.photo_url ? "Trocar foto" : "Adicionar foto"}</Text>
+                  </TouchableOpacity>
+                  {form.photo_url && !form.photo_url.startsWith("http") && (
+                    <Text style={[styles.note, { color: P.ink3 }]}>
+                      Prévia local — será salva quando o upload de foto estiver disponível.
+                    </Text>
+                  )}
+                  {form.photo_url && (
+                    <TouchableOpacity onPress={() => set("photo_url", "")} hitSlop={8}>
+                      <Text style={[styles.note, { color: P.red }]}>Remover foto</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               <Field label="Nome completo" req value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Ex.: Maria Tanaka de Souza"
                 inputRef={nameRef} returnKeyType="next" onSubmitEditing={() => birthRef.current?.focus()} />
               <DojoSelect federationId={federationId} valueId={form.dojo_id} valueName={form.dojo_name}
@@ -368,14 +502,14 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {age != null && age < 18 && (
                 <View style={styles.lgpd}>
                   <Icon name="shield" size={14} color={P.ink2} />
-                  <Text style={styles.lgpdTxt}>Menor de idade — responsável legal exigido (LGPD Art. 14). O cadastro do responsável entra no próximo passo.</Text>
+                  <Text style={styles.lgpdTxt}>Menor de idade — preencha a seção Responsável abaixo (LGPD Art. 14).</Text>
                 </View>
               )}
 
               {/* CONTATO & ENDEREÇO — CEP em destaque */}
               <SectionTitle>Contato &amp; endereço</SectionTitle>
               <Row2>
-                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
+                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhoneUtil(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
                   inputRef={phoneRef} returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
                 <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="nome@exemplo.com"
                   inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
@@ -405,6 +539,63 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 <Field flex2 label="Cidade" value={form.city} onChangeText={(v) => set("city", v)} />
                 <Field flex label="UF" mono value={form.state} onChangeText={(v) => set("state", v.toUpperCase().slice(0, 2))} maxLength={2} placeholder="SP" />
               </Row2>
+
+              {/* P7 — RESPONSÁVEL (LGPD) */}
+              <SectionTitle>Responsável</SectionTitle>
+              <View style={styles.guardianNote}>
+                <Icon name="info" size={13} color={P.ink3} />
+                <Text style={styles.guardianNoteTxt}>
+                  {isMinor
+                    ? "Menor de 18 anos — nome do responsável obrigatório (LGPD Art. 14)."
+                    : "Dados do responsável — obrigatórios para menores de 18 anos."}
+                </Text>
+              </View>
+              <Field
+                label={isMinor ? "Nome do responsável" : "Nome do responsável"}
+                req={isMinor}
+                value={form.guardian_name}
+                onChangeText={(v) => set("guardian_name", v)}
+                placeholder="Nome completo do responsável"
+                inputRef={guardianNameRef}
+                returnKeyType="next"
+                onSubmitEditing={() => guardianCpfRef.current?.focus()}
+              />
+              <Row2>
+                <Field flex label="CPF do responsável" mono value={form.guardian_cpf}
+                  onChangeText={(v) => set("guardian_cpf", maskCpf(v))}
+                  keyboardType="numeric" placeholder="000.000.000-00" bad={guardianCpfBad}
+                  inputRef={guardianCpfRef} returnKeyType="next" onSubmitEditing={() => guardianPhoneRef.current?.focus()}
+                  note={guardianCpfBad ? "Dígitos não conferem" : form.guardian_cpf ? "CPF válido" : undefined}
+                  noteOk={!guardianCpfBad && !!form.guardian_cpf}
+                />
+                <Field flex label="Telefone do responsável" mono value={form.guardian_phone}
+                  onChangeText={(v) => set("guardian_phone", maskPhoneUtil(v))}
+                  keyboardType="numeric" placeholder="(00) 00000-0000"
+                  inputRef={guardianPhoneRef} returnKeyType="done"
+                />
+              </Row2>
+              {/* Parentesco — chips */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Parentesco</Text>
+                <View style={styles.chipsRow}>
+                  {GUARDIAN_RELATIONSHIPS.map((rel) => {
+                    const active = form.guardian_relationship === rel;
+                    return (
+                      <TouchableOpacity
+                        key={rel}
+                        style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => set("guardian_relationship", active ? "" : rel as GuardianRelationship)}
+                        activeOpacity={0.7}
+                        accessibilityLabel={rel}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: active }}
+                      >
+                        <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{rel}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
               {/* FUNÇÕES */}
               <SectionTitle>Funções na federação</SectionTitle>
@@ -644,6 +835,24 @@ const styles = StyleSheet.create({
 
   lgpd: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.paper3, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 4 } as ViewStyle,
   lgpdTxt: { fontFamily: F.body, fontSize: 11.5, color: P.ink2, flex: 1 } as TextStyle,
+
+  // P6 — foto
+  photoRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 14 } as ViewStyle,
+  photoPreview: { width: 72, height: 72, borderRadius: 36, overflow: "hidden", borderWidth: 1, borderColor: P.line2, position: "relative" } as ViewStyle,
+  photoImg: { width: 72, height: 72, borderRadius: 36 } as ViewStyle,
+  photoPlaceholder: { width: 72, height: 72, borderRadius: 36, backgroundColor: P.paper3, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  photoOverlay: { position: "absolute", inset: 0, backgroundColor: "rgba(253,248,242,0.7)", alignItems: "center", justifyContent: "center" } as ViewStyle,
+  photoBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13 } as ViewStyle,
+  photoBtnTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.ink } as TextStyle,
+
+  // P7 — responsável
+  guardianNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10 } as ViewStyle,
+  guardianNoteTxt: { fontFamily: F.body, fontSize: 12, color: P.ink2, flex: 1 } as TextStyle,
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 4 } as ViewStyle,
+  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glassHi } as ViewStyle,
+  chipActive: { borderColor: P.red, backgroundColor: P.glass } as ViewStyle,
+  chipTxt: { fontFamily: F.body, fontSize: 12.5, color: P.ink2 } as TextStyle,
+  chipTxtActive: { color: P.red, fontWeight: "600" } as TextStyle,
 
   toggle: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 9 } as ViewStyle,
   toggleOn: { borderColor: P.redLine } as ViewStyle,
