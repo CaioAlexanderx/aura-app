@@ -335,7 +335,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 </View>
               )}
 
-              {/* ── Seção: Identidade ── */}
+              {/* ── Seção: Identidade (foto via photoSlot preserva ordem original: P6 antes do Nome) ── */}
               <DadosBasicosSection
                 federationId={federationId}
                 form={form}
@@ -349,14 +349,14 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 cpfRef={cpfRef}
                 rgRef={rgRef}
                 onRgSubmit={() => phoneRef.current?.focus()}
-              />
-
-              {/* ── P6: Foto do praticante ── */}
-              <FotoSection
-                photoUrl={form.photo_url}
-                photoLoading={photoLoading}
-                onPickPhoto={handlePickPhoto}
-                onRemovePhoto={() => set("photo_url", "")}
+                photoSlot={
+                  <FotoSection
+                    photoUrl={form.photo_url}
+                    photoLoading={photoLoading}
+                    onPickPhoto={handlePickPhoto}
+                    onRemovePhoto={() => set("photo_url", "")}
+                  />
+                }
               />
 
               {/* ── Seção: Contato & endereço ── */}
