@@ -1181,7 +1181,7 @@ export const karateApi = {
   ): Promise<ExamCandidate> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates`, { method: "POST", body }),
 
-  /** Inscreve participante em curso (student_id -> practitioner_id; target_belt opcional). */
+  /** Inscreve participante em curso (student_id enviado diretamente; target_belt opcional). */
   addExamCandidate: (
     federationId: string,
     examId: string,
@@ -1189,7 +1189,7 @@ export const karateApi = {
   ): Promise<ExamCandidate> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates`, {
       method: "POST",
-      body: { practitioner_id: body.student_id, ...(body.target_belt ? { target_belt: body.target_belt } : {}) },
+      body: { student_id: body.student_id, ...(body.target_belt ? { target_belt: body.target_belt } : {}) },
     }),
 
   updateCandidateResult: (
