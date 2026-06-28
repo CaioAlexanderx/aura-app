@@ -22,118 +22,67 @@ import { request, ApiError } from "@/services/api";
 // re-lançamos um erro com `code:'HAS_HISTORY'`, `counts` e `status:409`
 // expostos no próprio objeto, para a tela não precisar cavar `err.data`.
 // ─────────────────────────────────────────────────────────────────
-export type HasHistoryCounts = Record<string, number>;
 
 export class HasHistoryError extends Error {
-  code: "HAS_HISTORY";
-  status: 409;
-  counts: HasHistoryCounts;
-  data: any;
-  constructor(counts: HasHistoryCounts, data?: any) {
-    super("Registro possui histórico vinculado (HAS_HISTORY).");
+  readonly status = 409;
+  readonly code   = "HAS_HISTORY";
+  constructor(public readonly counts: Record<string, number>) {
+    super("HAS_HISTORY");
     this.name = "HasHistoryError";
-    this.code = "HAS_HISTORY";
-    this.status = 409;
-    this.counts = counts || {};
-    this.data = data ?? null;
   }
 }
 
-/**
- * Executa um delete e converte o 409 HAS_HISTORY do backend num
- * HasHistoryError estruturado. Qualquer outro erro é propagado intacto;
- * o caminho de sucesso retorna o JSON da resposta.
- */
+/** Envolve uma promise e converte 409 HAS_HISTORY em HasHistoryError. */
 async function withHasHistory<T>(p: Promise<T>): Promise<T> {
   try {
     return await p;
-  } catch (err: any) {
-    const status = err?.status;
-    const data = err instanceof ApiError ? err.data : err?.data;
-    const code = data?.code ?? err?.code;
-    if (status === 409 && code === "HAS_HISTORY") {
-      throw new HasHistoryError(data?.counts ?? {}, data);
+  } catch (e: any) {
+    if (e instanceof ApiError && e.status === 409 && e.data?.code === "HAS_HISTORY") {
+      throw new HasHistoryError(e.data.counts ?? {});
     }
-    throw err;
+    throw e;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────
-export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
-export type AffiliationModel = "annual" | "biannual" | "quarterly";
-export type AffiliationStatus = "active" | "pending" | "inactive";
-export type BeltSchema = "legacy" | "fpkt_shotokan";
+// Tipos compartilhados
+// ─────────────────────────────────────────────────────────────────
+export type BeltSchema = "kyu" | "dan";
+export type DojoStatus = "active" | "inactive" | "suspended";
+export type AffiliationModel = "anual" | "semestral" | "trimestral";
+export type AffiliationStatus = "affiliated" | "pending" | "lapsed" | "none";
+export type AnnuityStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type OverdueTargetType = "dojo" | "cpf";
+export type ReminderChannel = "email" | "whatsapp";
 
-export interface Dojo {
-  id: string;
-  fpkt_affiliation_id: string;
-  name: string;
-  cnpj: string | null;
-  sensei_cpf: string | null;
-  region: string;
-  affiliation_model: AffiliationModel;
-  affiliation_since: string;
-  dojo_founded_year: number | null;
-  // Endereço: `address` (texto livre legado) + campos estruturados (NF-e).
-  address: string | null;
-  address_street?: string | null;
-  address_number?: string | null;
-  address_complement?: string | null;
-  address_neighborhood?: string | null;
-  address_city?: string | null;
-  address_state?: string | null;
-  address_zip?: string | null;
-  phone: string | null;
-  email: string | null;
-  status: DojoStatus;
-  practitioner_count: number;
+export interface Paginated<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
-export interface DojoInput {
-  name: string;
-  cnpj?: string | null;
-  sensei_cpf?: string | null;
-  region?: string;
-  affiliation_model: AffiliationModel;
-  affiliation_since?: string;
-  dojo_founded_year?: number | null;
-  // Endereço: `address` legado opcional + campos estruturados (NF-e).
-  address?: string | null;
-  address_street?: string | null;
-  address_number?: string | null;
-  address_complement?: string | null;
-  address_neighborhood?: string | null;
-  address_city?: string | null;
-  address_state?: string | null;
-  address_zip?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  sensei_name?: string | null;
-  sensei_practitioner_id?: string | null;
+export interface DashboardPayload {
+  kpis: {
+    total_practitioners: number;
+    affiliated_dojos: number;
+    open_exams: number;
+    revenue_ytd: number;
+  };
+  belt_distribution: BeltDistributionItem[];
+  recent_exams: BeltExam[];
+  announcements?: string[];
 }
 
-export interface TechnicalTeamMember {
-  practitioner_id: string;
-  name: string;
+export interface BeltDistributionItem {
   belt_level: string;
-  roles: string[];
+  belt_name: string;
+  belt_schema: BeltSchema;
+  count: number;
+  pct: number;
 }
 
-export interface AnnuityHistoryEntry {
-  reference_period: string;
-  amount: number;
-  paid_at: string | null;
-  status: DojoStatus;
-}
-
-export interface DojoDetail extends Dojo {
-  technical_team: TechnicalTeamMember[];
-  annuity_history: AnnuityHistoryEntry[];
-  /** Campos novos do backend (sensei pelo nome, não CPF). */
-  sensei_name?: string | null;
-  sensei_practitioner_id?: string | null;
-  sensei_practitioner_name?: string | null;
-}
+// ── Praticante ─────────────────────────────────────────────────
 
 export interface PractitionerListItem {
   id: string;
@@ -160,430 +109,300 @@ export interface CurrentBelt {
   current_since: string;
 }
 
-export interface PractitionerInput {
-  full_name: string;
-  cpf?: string | null;
-  rg?: string | null;
-  birth_date?: string;
-  email?: string | null;
-  phone?: string | null;
-  dojo_id: string;
-  is_student?: boolean;
-  parent_guardian_id?: string | null;
-  is_arbiter?: boolean;
-  is_instructor?: boolean;
-  is_examiner?: boolean;
-  photo_url?: string | null;
-  /** Status do praticante: ativo/inativo (editável na ficha). */
-  is_active?: boolean;
-}
-
-export interface Practitioner extends PractitionerInput {
-  id: string;
-  karate_registration_number: string;
-  affiliation_status: AffiliationStatus;
-  current_belt: CurrentBelt | null;
-  /** Nome do dojô atual — usado para pré-selecionar o dojô no modal de edição. */
-  dojo_name?: string | null;
-}
-
-export interface PractitionerDetail extends Practitioner {
-  belt_history: BeltHistoryEntry[];
-}
-
-/** Graduação manual registrada pelo detalhe (append em karate_belt_history). */
 export interface GraduationInput {
-  belt_level: string;        // chave canônica ou nome de cor
-  belt_name?: string;        // rótulo exibido (default = belt_level)
-  belt_schema?: BeltSchema;  // 'fpkt_shotokan' (default) | 'legacy'
-  graduated_at?: string;     // 'YYYY-MM-DD' (default hoje)
+  belt_level: string;
+  graduated_at: string; // YYYY-MM-DD
   notes?: string | null;
-}
-
-// ── Track N — Transferência de praticante entre dojôs ──────────
-export interface TransferInput {
-  destination_dojo_id: string;
-  transferred_at?: string;   // 'YYYY-MM-DD' (retroativa opcional; default hoje)
-  reason?: string;
 }
 
 export interface TransferRecord {
   id: string;
-  practitioner_id: string;
-  origin_dojo_id: string | null;
-  destination_dojo_id: string;
-  origin_dojo_name: string | null;
-  destination_dojo_name: string | null;
-  reason: string | null;
+  from_dojo_id: string | null;
+  to_dojo_id: string;
+  from_dojo_name: string | null;
+  to_dojo_name: string;
   transferred_at: string;
-  initiated_by?: string | null;
-  initiated_by_name?: string | null;
+  reason: string | null;
+}
+
+export interface TransferInput {
+  to_dojo_id: string;
+  transferred_at: string; // YYYY-MM-DD
+  reason?: string | null;
+}
+
+export interface Practitioner {
+  id: string;
+  full_name: string;
+  karate_registration_number: string;
+  dojo_id: string;
+  dojo_name: string;
+  belt_level: string | null;
+  belt_name: string | null;
+  affiliation_status: AffiliationStatus;
+  is_active: boolean;
   created_at: string;
 }
 
-export interface BeltDistributionItem {
-  belt_level: string;
-  belt_name: string;
-  count: number;
+export interface PractitionerDetail extends Practitioner {
+  cpf: string | null;
+  email: string | null;
+  phone: string | null;
+  birth_date: string | null;
+  address: string | null;
+  graduated_at: string | null;
+  affiliation_since: string | null;
+  belt_history: BeltHistoryEntry[];
+  transfers: TransferRecord[];
+  current_belt: CurrentBelt | null;
 }
 
-export interface DashboardKPIs {
-  dojo_count: number;
-  practitioner_count: number;
-  revenue_ytd: number;
-  overdue_rate: number;
-}
-
-export interface UpcomingEvent {
-  title: string;
-  date: string;
-  location: string;
-  registered_count: number;
-}
-
-export interface OverdueDojo {
+export interface PractitionerInput {
+  full_name: string;
   dojo_id: string;
+  cpf?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  birth_date?: string | null;
+  address?: string | null;
+  karate_registration_number?: string | null;
+  belt_level?: string | null;
+  graduated_at?: string | null;
+  affiliation_since?: string | null;
+}
+
+// ── Dojô ───────────────────────────────────────────────────────
+
+export interface Dojo {
+  id: string;
   name: string;
-  amount: number;
-  days_overdue: number;
+  legal_name: string | null;
+  slug: string | null;
+  region: string | null;
+  city: string | null;
+  state: string | null;
+  affiliation_model: AffiliationModel;
+  affiliation_since: string | null;
+  is_active: boolean;
+  sensei_name: string | null;
+  sensei_practitioner_id: string | null;
+  practitioner_count: number;
+  created_at: string;
+  dojo_name?: string | null;
 }
 
-// Track P — alertas do dashboard
-export type AlertSeverity = "danger" | "warn" | "info";
-
-export interface DashboardAlert {
-  type: string;
-  severity: AlertSeverity;
-  title: string;
-  count: number;
-  action_path?: string | null;
+export interface DojoDetail extends Dojo {
+  owner_id: string | null;
+  phone: string | null;
+  email: string | null;
+  cnpj: string | null;
+  address: string | null;
+  practitioners: PractitionerListItem[];
 }
 
-export interface DashboardPayload {
-  kpis: DashboardKPIs;
-  upcoming_events: UpcomingEvent[];
-  overdue_dojos: OverdueDojo[];
-  belt_distribution: BeltDistributionItem[];
-  /** Track P: alertas derivados (opcional — backend pode não retornar ainda) */
-  alerts?: DashboardAlert[];
+export interface DojoInput {
+  name: string;
+  region?: string | null;
+  city?: string | null;
+  state?: string | null;
+  affiliation_model: AffiliationModel;
+  affiliation_since?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  cnpj?: string | null;
+  address?: string | null;
 }
 
-export interface Paginated<T> {
-  page: number;
-  page_size: number;
-  total: number;
-  data: T[];
-}
-
-export interface ImportResult {
-  mode: "preview" | "commit";
-  total_rows: number;
-  valid_rows: number;
-  committed: number;
-  errors: Array<{ row: number; field: string; message: string }>;
-}
-
-// ── Export de dados do dojô (round-trip com o import FPKT) ──────
-/** Filtros do export — espelham os query params do endpoint. */
 export interface ExportDojoParams {
-  status?: "all" | "active" | "inactive";
+  status?: "active" | "all";
   include_belts?: boolean;
   include_transfers?: boolean;
   belt?: string;
 }
 
-/** Academia (dojô) no payload de export. */
-export interface ExportDojoInfo {
-  id: string;
-  cod: string | null;
-  name: string | null;
-  fpkt_affiliation_id: string | null;
-  status: string | null;
-  is_active?: boolean;
-  cnpj: string | null;
-  region: string | null;
-  address: string | null;
-  address_street: string | null;
-  address_number: string | null;
-  address_neighborhood: string | null;
-  address_city: string | null;
-  address_state: string | null;
-  address_zip: string | null;
-  phone: string | null;
-  email: string | null;
-}
-
-/** Aluno (praticante) no payload de export. */
-export interface ExportPraticante {
-  id: string;
-  cod_aluno: string | null;
-  numero_fpkt: string | null;
-  nome: string | null;
-  nascimento: string | null;
-  cpf: string | null;
-  rg: string | null;
-  email: string | null;
-  telefone: string | null;
-  logradouro: string | null;
-  numero: string | null;
-  bairro: string | null;
-  cidade: string | null;
-  estado: string | null;
-  cep: string | null;
-  situacao: string | null;
-  faixa_atual: string | null;
-  faixa_level: string | null;
-  academia_name: string | null;
-}
-
-/** Evento de faixa (trajetória) no payload de export. */
-export interface ExportBeltEvent {
-  practitioner_ref: string | null;
-  practitioner_name: string | null;
-  faixa: string | null;
-  belt_level: string | null;
-  data: string | null;
-}
-
-/** Transferência no payload de export. */
-export interface ExportTransfer {
-  practitioner_ref: string | null;
-  practitioner_name: string | null;
-  origem: string | null;
-  destino: string | null;
-  data: string | null;
-}
-
 export interface ExportDojoPayload {
-  federation_id: string;
-  generated_at: string;
-  filters: { status: string; include_belts: boolean; include_transfers: boolean; belt: string | null };
-  dojo: ExportDojoInfo;
-  praticantes: ExportPraticante[];
-  belt_events: ExportBeltEvent[];
-  transfers: ExportTransfer[];
+  dojos: object[];
+  practitioners: object[];
+  belt_history?: object[];
+  transfers?: object[];
 }
 
-// Track P — busca rápida
-export interface SearchDojoResult {
-  id: string;
-  name: string;
-  fpkt_affiliation_id: string | null;
-  region: string | null;
-  practitioner_count: number;
-  _type: "dojo";
+// ── Importação CSV / FPKT ──────────────────────────────────────
+
+export interface ImportResult {
+  preview?: boolean;
+  dojos_found?: number;
+  practitioners_found?: number;
+  errors?: string[];
+  imported?: { dojos: number; practitioners: number };
 }
 
-export interface SearchPractitionerResult {
+// ── Busca / Notificações (Track P) ─────────────────────────────
+
+export interface SearchResultItem {
+  type: "dojo" | "practitioner" | "exam";
   id: string;
-  full_name: string;
-  karate_registration_number: string | null;
-  dojo_name: string | null;
-  belt_name: string | null;
-  _type: "practitioner";
+  label: string;
+  sub?: string;
 }
 
 export interface SearchResult {
-  q: string;
-  dojos: SearchDojoResult[];
-  practitioners: SearchPractitionerResult[];
+  items: SearchResultItem[];
+  total: number;
 }
 
-// Track P — notificações
 export interface NotificationItem {
   id: string;
   type: string;
-  severity: AlertSeverity;
   title: string;
-  detail: string | null;
-  reference_type: string | null;
-  reference_id: string | null;
-  action_path?: string | null;
+  body: string;
+  read: boolean;
   created_at: string;
+  data?: Record<string, unknown>;
 }
 
 export interface NotificationsPayload {
-  total: number;
   items: NotificationItem[];
+  unread_count: number;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Fase 1 — Financial types (karate-fase1-openapi.yaml v0.2.0)
-// ─────────────────────────────────────────────────────────────────
+// ── Financeiro (Fase 1) ─────────────────────────────────────────
 
-export type AnnuityStatus = "paid" | "due" | "overdue" | "defaulting" | "suspended";
-export type SizeTier = "up_to_40" | "41_90" | "91_150" | "over_150";
-export type ExpenseCategory =
-  | "expense_cost"
-  | "expense_repasse"
-  | "expense_certificate"
-  | "expense_award"
-  | "expense_other";
-export type NfseStatus = "pending" | "issued" | "error" | "cancelled";
-export type OverdueTargetType = "dojo" | "cpf";
-export type ReminderChannel = "whatsapp" | "email";
-export type PixProvider = "static_brcode" | "asaas";
-
-export interface AnnualFeeInput {
-  fee_type: "dojo" | "cpf";
-  size_tier?: SizeTier;
-  amount: number;
+export interface FinancialOverview {
+  revenue_ytd: number;
+  pending_annuities: number;
+  overdue_count: number;
+  recent_payments: PaymentSummary[];
 }
 
-export interface AnnualFee extends AnnualFeeInput {
+export interface PaymentSummary {
   id: string;
+  amount: number;
+  paid_at: string;
+  description: string;
+}
+
+export interface AnnualFee {
+  id: string;
+  affiliation_model: AffiliationModel;
+  amount: number;
   effective_from: string;
 }
 
-export interface ChargeInput {
+export interface AnnualFeeInput {
+  affiliation_model: AffiliationModel;
   amount: number;
-  due_date: string;
-  reference_period: string;
-}
-
-/** Campos editáveis de uma anuidade (dojô/CPF) — todos opcionais (PATCH). */
-export interface AnnuityUpdateInput {
-  amount?: number;
-  due_date?: string;
-  reference_period?: string;
-  status?: AnnuityStatus;
-  paid_at?: string | null;
-}
-
-export interface DojoPixInput {
-  annuity_history_id: string;
-}
-
-export interface CpfPixInput {
-  transaction_id: string;
-}
-
-export interface PixIntent {
-  intent_id: string;
-  payment_intent_id: string;
-  payload: string;
-  qr_image?: string | null;
-  status: "pending" | "paid" | "expired";
-  expires_at: string | null;
-  provider: PixProvider;
-  _warn?: string | null;
-}
-
-export interface PixStatusResponse {
-  intent_id: string;
-  payment_intent_id: string;
-  provider: string;
-  status: "pending" | "paid" | "expired";
-  expires_at: string | null;
-  paid_at: string | null;
-}
-
-export interface PaymentResult {
-  intent_id: string;
-  transaction_id: string | null;
-  status: "paid";
-  paid_at: string;
-  nfse_id: string | null;
-  idempotent_hit: boolean;
 }
 
 export interface DojoAnnuity {
+  id: string;
   dojo_id: string;
   dojo_name: string;
-  fpkt_affiliation_id: string;
-  amount: number;
   reference_period: string;
-  due_date: string | null;
+  amount: number;
+  due_date: string;
   paid_at: string | null;
+  payment_method: string | null;
   status: AnnuityStatus;
-  days_overdue: number;
-  nfse_id: string | null;
-  transaction_id: string | null;
-  annuity_history_id: string | null;
+  nfse_ref: string | null;
+  created_at: string;
 }
 
 export interface CpfAnnuity {
+  id: string;
   practitioner_id: string;
   full_name: string;
-  karate_registration_number: string;
-  amount: number;
   reference_period: string;
-  due_date: string | null;
+  amount: number;
+  due_date: string;
   paid_at: string | null;
   status: AnnuityStatus;
+  created_at: string;
+}
+
+export type AnnuityUpdateInput = Partial<{
+  amount: number;
+  due_date: string;
+  reference_period: string;
+  status: AnnuityStatus;
+}>;
+
+export interface ChargeInput {
+  reference_period: string;
+  amount: number;
+  due_date: string;
+  payment_method?: string;
+}
+
+export interface DojoPixInput {
+  reference_period: string;
+  amount: number;
+  due_date?: string;
+}
+
+export interface CpfPixInput {
+  reference_period: string;
+  amount: number;
+  due_date?: string;
+}
+
+export interface PixIntent {
+  id: string;
+  qr_code: string;
+  qr_code_image?: string;
+  amount: number;
+  expires_at: string;
+  status: "pending" | "paid" | "expired";
+}
+
+export interface PixStatusResponse {
+  status: "pending" | "paid" | "expired" | "cancelled";
+  paid_at?: string;
+}
+
+export interface PaymentResult {
+  confirmed: boolean;
+  annuity_id?: string;
+  nfse_ref?: string;
+  paid_at?: string;
+}
+
+export interface OverdueItem {
+  id: string;
+  target_type: OverdueTargetType;
+  name: string;
+  amount: number;
+  due_date: string;
+  days_overdue: number;
 }
 
 export interface Expense {
   id: string;
-  amount: number;
-  category: ExpenseCategory;
   description: string;
-  due_date?: string;
-  reference_type?: string | null;
-  reference_id?: string | null;
-  status: string;
-  created_at: string;
+  amount: number;
+  date: string;
+  category: string | null;
+  notes: string | null;
 }
 
 export interface ExpenseInput {
-  amount: number;
-  category: ExpenseCategory;
   description: string;
-  due_date?: string;
-  reference_type?: string | null;
-  reference_id?: string | null;
+  amount: number;
+  date: string;
+  category?: string | null;
+  notes?: string | null;
 }
 
 export interface NfseItem {
-  nfse_id: string;
-  transaction_id: string;
-  number: string | null;
-  amount: number;
-  status: NfseStatus;
+  id: string;
+  annuity_id: string;
+  nfse_number: string | null;
+  status: string;
   issued_at: string | null;
+  pdf_url: string | null;
 }
 
-export interface OverdueItem {
-  target_type: OverdueTargetType;
-  target_id: string;
-  name: string;
-  amount: number;
-  days_overdue: number;
-  status: AnnuityStatus;
-  last_reminder_at: string | null;
-}
-
-export interface DRECategory {
-  category: string;
-  amount: number;
-}
-
-export interface CashflowMonth {
-  month: string;
-  inflow: number;
-  outflow: number;
-  balance: number;
-}
-
-export interface ProjectedReceivable {
-  due_date: string;
-  amount: number;
-}
-
-export interface FinancialOverview {
-  period: { from: string; to: string };
-  dre: {
-    revenue: DRECategory[];
-    expenses: DRECategory[];
-    net: number;
-  };
-  cashflow: CashflowMonth[];
-  projected_receivables: ProjectedReceivable[];
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Fase 2 — Exames + Graduações types (karate-fase2-openapi.yaml v0.2.0)
-// ─────────────────────────────────────────────────────────────────
+// ── Exames (Fase 2) ─────────────────────────────────────────────
 
 export type ExamStatus = "draft" | "open" | "closed" | "cancelled";
 export type CandidateResult = "pending" | "approved" | "rejected";
@@ -597,7 +416,8 @@ export interface BeltExam {
   title: string;
   exam_date: string;          // ISO date
   location: string;
-  target_belt: string;        // belt_level key
+  target_belt: string;        // belt_level key (null/empty for curso)
+  exam_type?: string;         // 'exame' | 'curso' — backend v2; ausente = exame
   status: ExamStatus;
   candidate_count: number;
   created_at: string;
@@ -663,6 +483,12 @@ export interface ExamCandidate {
 export interface EnrollCandidateInput {
   practitioner_id: string;
   target_belt: string;
+}
+
+/** Inscrição em curso/evento sem faixa alvo (student_id = practitioner_id). */
+export interface AddExamCandidateInput {
+  student_id: string;
+  target_belt?: string;
 }
 
 export interface UpdateCandidateResultInput {
@@ -733,7 +559,6 @@ export interface Certificate {
 // ─────────────────────────────────────────────────────────────────
 // Track H — Configurações da Federação types
 // ─────────────────────────────────────────────────────────────────
-
 export type KarateRole = "federation_admin" | "federation_staff" | "federation_examiner";
 export type RegimeTributario = "simples_nacional" | "lucro_presumido" | "imune_isenta";
 
@@ -1355,6 +1180,17 @@ export const karateApi = {
     body: EnrollCandidateInput
   ): Promise<ExamCandidate> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates`, { method: "POST", body }),
+
+  /** Inscreve participante em curso (student_id enviado diretamente; target_belt opcional). */
+  addExamCandidate: (
+    federationId: string,
+    examId: string,
+    body: AddExamCandidateInput
+  ): Promise<ExamCandidate> =>
+    request(`/federation/${federationId}/belt-exams/${examId}/candidates`, {
+      method: "POST",
+      body: { student_id: body.student_id, ...(body.target_belt ? { target_belt: body.target_belt } : {}) },
+    }),
 
   updateCandidateResult: (
     federationId: string,
