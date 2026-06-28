@@ -712,6 +712,20 @@ export interface BatchStatusResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// P6 — Upload de foto do praticante
+// ─────────────────────────────────────────────────────────────────
+
+export interface UploadPhotoInput {
+  /** Base64 puro, sem prefixo "data:<type>;base64,". */
+  content: string;
+  content_type?: "image/jpeg" | "image/png" | "image/webp";
+}
+
+export interface UploadPhotoResult {
+  photo_url: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // API calls — Fase 0 + 1 + 2 + Track H + Track J
 // ─────────────────────────────────────────────────────────────────
 export const karateApi = {
@@ -829,6 +843,26 @@ export const karateApi = {
     body: Partial<PractitionerInput> & { is_active?: boolean }
   ): Promise<PractitionerDetail> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body }),
+
+  /**
+   * Faz upload da foto do praticante.
+   *
+   * POST /federation/:federationId/practitioners/:practitionerId/photo
+   * Body: { content: "<base64 puro>", content_type?: "image/jpeg"|"image/png"|"image/webp" }
+   * Resposta: { photo_url: "https://r2..." }
+   *
+   * O backend grava karate_photo_url no banco — não é necessário enviar
+   * photo_url no PATCH do praticante após esta chamada.
+   */
+  uploadPractitionerPhoto: (
+    federationId: string,
+    practitionerId: string,
+    body: UploadPhotoInput
+  ): Promise<UploadPhotoResult> =>
+    request(`/federation/${federationId}/practitioners/${practitionerId}/photo`, {
+      method: "POST",
+      body,
+    }),
 
   /** Registra uma graduação manual (faixa + data) no histórico do praticante. */
   addBeltGraduation: (

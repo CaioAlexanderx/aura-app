@@ -7,6 +7,10 @@
 // Cadastro:  POST  /federation/:id/practitioners
 // Edição:    PATCH /federation/:id/practitioners/:practitionerId  (Aura-backend#226)
 //
+// Upload de foto (feat/karate-foto-upload-real):
+//   POST /federation/:id/practitioners/:practitionerId/photo
+//   → ocorre APÓS o create/patch; falha no upload não reverte o cadastro.
+//
 // Princípios (decisões Caio): ver praticante-ficha/helpers.ts + seções.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -28,7 +32,7 @@ import {
 } from "./praticante-ficha/helpers";
 import { styles } from "./praticante-ficha/shared-styles";
 import { DadosBasicosSection } from "./praticante-ficha/DadosBasicosSection";
-import { FotoSection } from "./praticante-ficha/FotoSection";
+import { FotoSection, fileToBase64 } from "./praticante-ficha/FotoSection";
 import { EnderecoSection } from "./praticante-ficha/EnderecoSection";
 import { ResponsavelSection } from "./praticante-ficha/ResponsavelSection";
 import { PapeisSection } from "./praticante-ficha/PapeisSection";
@@ -68,6 +72,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [canRepeat, setCanRepeat] = useState(false);
   // P6: estado de carregamento do upload de foto
   const [photoLoading, setPhotoLoading] = useState(false);
+  // P6: File escolhido pelo usuário (web); null = nenhuma foto nova nesta sessão de edição
+  const pendingPhotoFile = useRef<File | null>(null);
 
   // ref mutável para lastDojo — passado para DojoSelectSection
   const lastDojoRef = useRef<{ id: string; name: string } | null>(lastDojo);
@@ -95,6 +101,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   useEffect(() => {
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null); setToast(null);
+    pendingPhotoFile.current = null; // limpa foto pendente ao abrir
     if (!practitionerId) {
       // cadastro novo: pré-seleciona o último dojô da sessão (se houver)
       setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
@@ -117,8 +124,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
           is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
           is_active: p.is_active !== false,
-          // P6
-          photo_url: p.photo_url || p.karate_photo_url || "",
+          // P6: usa karate_photo_url (campo permanente do R2) se disponível
+          photo_url: p.karate_photo_url || p.photo_url || "",
           // P7
           guardian_name: p.guardian_name || "",
           guardian_cpf: p.guardian_cpf ? maskCpf(p.guardian_cpf) : "",
@@ -202,14 +209,15 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
   const guardianCpfBad = form.guardian_cpf.length > 0 && !cpfValido(form.guardian_cpf);
 
-  // P6: handler de foto — abre picker + gera preview local
+  // P6: handler de foto — abre picker, gera preview local, guarda File no ref
   const handlePickPhoto = useCallback(async () => {
     setPhotoLoading(true);
     try {
       const file = await pickFileWeb("image/*");
       if (!file) return;
-      // Gera uma blob URL local para preview imediato.
-      // TODO: quando o backend tiver endpoint de upload, substituir pela URL permanente.
+      // Guarda o File para upload no handleSave
+      pendingPhotoFile.current = file;
+      // Preview imediato via blob URL — substituído pela URL permanente após upload
       const blobUrl = URL.createObjectURL(file);
       set("photo_url", blobUrl);
     } catch {
@@ -240,8 +248,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     }
     if (guardianCpfBad) { setErrorMsg("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
-    // P6: envia photo_url somente se for uma URL http(s) já persistida.
-    const photoUrlToSend = form.photo_url && form.photo_url.startsWith("http") ? form.photo_url : null;
+
+    // P6: nunca envia blob URL no body do praticante.
+    // A foto é vinculada exclusivamente via o endpoint dedicado /photo (após o save).
     const body: any = {
       full_name: form.full_name.trim(),
       cpf: onlyD(form.cpf) || null,
@@ -256,33 +265,75 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       neighborhood: form.neighborhood || null, city: form.city || null,
       state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
       zip_code: onlyD(form.zip_code) || null,
-      // P6
-      photo_url: photoUrlToSend,
       // P7
       guardian_name: form.guardian_name.trim() || null,
       guardian_cpf: onlyD(form.guardian_cpf) || null,
       guardian_phone: onlyD(form.guardian_phone) || null,
       guardian_relationship: form.guardian_relationship || null,
+      // P6: photo_url deliberadamente AUSENTE do body (blob inútil; URL permanente vem do /photo)
     };
+
+    let savedId: string | null = practitionerId ?? null;
+
     try {
-      if (isEdit) await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
-      else await request(`/federation/${federationId}/practitioners`, { method: "POST", body });
-      // guarda os campos compartilháveis p/ "repetir dados do último" (só cadastro novo)
-      if (!isEdit) {
-        lastShared = {
-          dojo_id: form.dojo_id, dojo_name: form.dojo_name || (lastDojo?.id === form.dojo_id ? lastDojo.name : ""),
-          zip_code: form.zip_code, street: form.street, number: form.number, complement: form.complement,
-          neighborhood: form.neighborhood, city: form.city, state: form.state,
-        };
+      if (isEdit) {
+        await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
+      } else {
+        // create retorna o praticante com o id atribuído pelo backend
+        const created: any = await request(`/federation/${federationId}/practitioners`, { method: "POST", body });
+        savedId = created?.id ?? null;
       }
-      setSaving(false);
-      showToast(isEdit ? "Alterações salvas" : "Praticante salvo");
-      onSaved();
-      // dá um instante p/ o toast aparecer antes de fechar
-      setTimeout(() => onClose(), 480);
     } catch (e: any) {
-      setSaving(false); setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
+      setSaving(false);
+      setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
+      return;
     }
+
+    // guarda os campos compartilháveis p/ "repetir dados do último" (só cadastro novo)
+    if (!isEdit) {
+      lastShared = {
+        dojo_id: form.dojo_id, dojo_name: form.dojo_name || (lastDojo?.id === form.dojo_id ? lastDojo.name : ""),
+        zip_code: form.zip_code, street: form.street, number: form.number, complement: form.complement,
+        neighborhood: form.neighborhood, city: form.city, state: form.state,
+      };
+    }
+
+    // ── P6: Upload da foto (se o usuário escolheu uma nova) ──────────────
+    // Ocorre APÓS o create/patch para garantir que o practitionerId exista.
+    // Falha no upload não reverte o cadastro — aviso discreto ao usuário.
+    const fileToUpload = pendingPhotoFile.current;
+    if (fileToUpload && savedId) {
+      try {
+        const { content, content_type } = await fileToBase64(fileToUpload);
+        const result = await karateApi.uploadPractitionerPhoto(federationId, savedId, { content, content_type });
+        // Atualiza o preview com a URL permanente do R2
+        set("photo_url", result.photo_url);
+        pendingPhotoFile.current = null;
+      } catch {
+        // Cadastro salvo com sucesso; apenas a foto falhou → aviso sem reverter
+        setSaving(false);
+        showToast(isEdit ? "Alterações salvas" : "Praticante salvo");
+        setErrorMsg("Praticante salvo, mas a foto não pôde ser enviada. Tente trocar a foto novamente.");
+        onSaved();
+        setTimeout(() => onClose(), 480);
+        return;
+      }
+    } else if (fileToUpload && !savedId) {
+      // Praticante criado mas o backend não retornou id — pula o upload
+      setSaving(false);
+      showToast("Praticante salvo");
+      setErrorMsg("Praticante salvo, mas a foto não pôde ser enviada (id não retornado pelo servidor).");
+      onSaved();
+      setTimeout(() => onClose(), 480);
+      return;
+    }
+
+    // ── Fluxo normal: tudo ok ────────────────────────────────────────────
+    setSaving(false);
+    showToast(isEdit ? "Alterações salvas" : "Praticante salvo");
+    onSaved();
+    // dá um instante p/ o toast aparecer antes de fechar
+    setTimeout(() => onClose(), 480);
   }
 
   return (
@@ -354,7 +405,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                     photoUrl={form.photo_url}
                     photoLoading={photoLoading}
                     onPickPhoto={handlePickPhoto}
-                    onRemovePhoto={() => set("photo_url", "")}
+                    onRemovePhoto={() => {
+                      set("photo_url", "");
+                      pendingPhotoFile.current = null;
+                    }}
                   />
                 }
               />
