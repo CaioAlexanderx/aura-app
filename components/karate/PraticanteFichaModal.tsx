@@ -29,12 +29,26 @@
 //   ("Só o nome é obrigatório…") e o nudge "Completar quando quiser" lista
 //   APENAS campos realmente opcionais — nunca os obrigatórios (Nome/Dojô) —
 //   para não contradizer a mensagem.
+//
+// P6 — Foto do praticante:
+//   Upload via file picker web (base64 → POST /federation/:fid/practitioners/:pid/photo).
+//   Preview circular + botão "Adicionar/Trocar foto". A URL resultante é enviada
+//   no body do save em photo_url. Em cadastro novo o upload ocorre após o save
+//   inicial (necessário para ter o practitionerId); em edição pode ocorrer a
+//   qualquer momento. Fallback: se a foto já existe, pré-preenche o preview.
+//
+// P7 — Responsável (LGPD):
+//   Seção "Responsável" com Nome, CPF, Telefone e Parentesco.
+//   Obrigatório SOMENTE para menores de 18 anos (calculado a partir da birth_date
+//   parseada como data local, sem shift UTC). Se menor e guardian_name vazio →
+//   bloqueia salvar. Se maior, campos opcionais.
+//   Envia guardian_name/guardian_cpf/guardian_phone/guardian_relationship no body.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, FlatList,
-  Animated,
+  Animated, Image, Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
@@ -57,6 +71,10 @@ const EMPTY = {
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   is_arbiter: false, is_instructor: false, is_examiner: false,
   is_active: true,
+  // P6 — foto
+  photo_url: "" as string,
+  // P7 — responsável
+  guardian_name: "", guardian_cpf: "", guardian_phone: "", guardian_relationship: "",
 };
 type Form = typeof EMPTY;
 
@@ -103,7 +121,7 @@ function cpfValido(c: string) {
   s = 0; for (let i = 0; i < 10; i++) s += +c[i] * (11 - i);
   d = 11 - (s % 11); if (d >= 10) d = 0; return d === +c[10];
 }
-// idade a partir do ISO validado (YYYY-MM-DD)
+// idade a partir do ISO validado (YYYY-MM-DD) — parse local, sem shift UTC
 function ageFromISO(iso: string | null): number | null {
   if (!iso) return null;
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -122,6 +140,11 @@ function fromISO(v: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
+// Opções de parentesco para o responsável
+const RELATIONSHIP_OPTIONS = [
+  "pai", "mãe", "avô", "avó", "tio", "tia", "responsável legal", "outro",
+];
+
 export function PraticanteFichaModal({ federationId, visible, practitionerId, onClose, onSaved }: Props) {
   const { width } = useWindowDimensions();
   const cardW = Math.min(720, width - 24);
@@ -139,6 +162,14 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   // "repetir dados do último cadastro" só faz sentido se já houve um nesta sessão
   const [canRepeat, setCanRepeat] = useState(false);
 
+  // P6 — foto upload state
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  // ID do praticante recém-criado (cadastro novo: upload acontece após o save)
+  const [newPractitionerId, setNewPractitionerId] = useState<string | null>(null);
+  // base64 pendente para upload após create (cadastro novo sem id ainda)
+  const pendingPhotoRef = useRef<{ base64: string; contentType: string } | null>(null);
+
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
   const birthRef = useRef<TextInput>(null);
@@ -146,6 +177,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const rgRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
+  const guardianNameRef = useRef<TextInput>(null);
+  const guardianCpfRef = useRef<TextInput>(null);
+  const guardianPhoneRef = useRef<TextInput>(null);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -153,6 +187,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   useEffect(() => {
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null); setToast(null);
+    setPhotoPreview(null); setNewPractitionerId(null); pendingPhotoRef.current = null;
     if (!practitionerId) {
       // cadastro novo: pré-seleciona o último dojô da sessão (se houver)
       setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
@@ -170,6 +205,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         // selector exiba o rótulo mesmo se o backend só devolver o id.
         const dojoName = p.dojo_name || "";
         if (p.dojo_id && dojoName) lastDojo = { id: p.dojo_id, name: dojoName };
+        // P6: pré-carrega a foto existente
+        if (p.karate_photo_url || p.photo_url) setPhotoPreview(p.karate_photo_url || p.photo_url);
         setForm({
           full_name: p.full_name || "", cpf: p.cpf ? maskCpf(p.cpf) : "", rg: p.rg || "",
           birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhone(p.phone) : "",
@@ -178,6 +215,13 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
           is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
           is_active: p.is_active !== false, // default ativo
+          // P6
+          photo_url: p.karate_photo_url || p.photo_url || "",
+          // P7 — responsável
+          guardian_name: p.guardian_name || "",
+          guardian_cpf: p.guardian_cpf ? maskCpf(p.guardian_cpf) : "",
+          guardian_phone: p.guardian_phone ? maskPhone(p.guardian_phone) : "",
+          guardian_relationship: p.guardian_relationship || "",
         });
         setFpkt(p.karate_registration_number || null);
         setBeltName(p.current_belt?.belt_name || null);
@@ -248,7 +292,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const dateComplete = form.birth_date.length === 10;
   const dateBad = dateComplete && birthIso === null;
   const age = ageFromISO(birthIso);
+  const isMinor = age !== null && age < 18;
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
+  const guardianCpfBad = form.guardian_cpf.length > 0 && !cpfValido(form.guardian_cpf);
 
   // campos vazios (neutro, opcional). D3.5.2: NÃO listamos os obrigatórios
   // (Nome, Dojô) aqui — o "Completar quando quiser" é só para opcionais, sem
@@ -261,11 +307,71 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     return e;
   }, [form]);
 
+  // P6 — upload de foto do praticante
+  // Usa o padrão ProductImageUpload: file picker web, base64, POST /photo
+  function handlePickPhoto() {
+    if (Platform.OS !== "web") return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = function () {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMsg("Foto muito grande (máx. 5 MB).");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function () {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1];
+        const contentType = file.type || "image/jpeg";
+        setPhotoPreview(dataUrl);
+        // Se já temos um id (edição ou após save do cadastro novo), sobe imediatamente
+        const targetId = practitionerId || newPractitionerId;
+        if (targetId) {
+          doUploadPhoto(targetId, base64, contentType);
+        } else {
+          // Cadastro novo: guarda pendente — upload depois do save
+          pendingPhotoRef.current = { base64, contentType };
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  async function doUploadPhoto(pid: string, base64: string, contentType: string) {
+    setPhotoUploading(true);
+    try {
+      const res = await request(`/federation/${federationId}/practitioners/${pid}/photo`, {
+        method: "POST",
+        body: { content: base64, content_type: contentType },
+        timeout: 60000,
+      }) as any;
+      const url = res?.photo_url || res?.karate_photo_url || res?.url || "";
+      if (url) {
+        setPhotoPreview(url);
+        set("photo_url", url);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Falha ao enviar a foto.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
   async function handleSave() {
     if (!form.full_name.trim()) { setErrorMsg("Informe o nome completo."); return; }
     if (!form.dojo_id) { setErrorMsg("Selecione o dojô."); return; }
     if (dateBad) { setErrorMsg("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
     if (cpfBad) { setErrorMsg("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
+    // P7 — validação responsável para menores
+    if (isMinor && !form.guardian_name.trim()) {
+      setErrorMsg("Nome do responsável é obrigatório para menores de 18 anos (LGPD Art. 14).");
+      return;
+    }
+    if (guardianCpfBad) { setErrorMsg("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
     const body: any = {
       full_name: form.full_name.trim(),
@@ -281,10 +387,30 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       neighborhood: form.neighborhood || null, city: form.city || null,
       state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
       zip_code: onlyD(form.zip_code) || null,
+      // P6 — foto (URL já resolvida pelo upload, se houver)
+      photo_url: form.photo_url || null,
+      // P7 — responsável
+      guardian_name: form.guardian_name.trim() || null,
+      guardian_cpf: onlyD(form.guardian_cpf) || null,
+      guardian_phone: onlyD(form.guardian_phone) || null,
+      guardian_relationship: form.guardian_relationship || null,
     };
     try {
-      if (isEdit) await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
-      else await request(`/federation/${federationId}/practitioners`, { method: "POST", body });
+      if (isEdit) {
+        await request(`/federation/${federationId}/practitioners/${practitionerId}`, { method: "PATCH", body });
+      } else {
+        const created: any = await request(`/federation/${federationId}/practitioners`, { method: "POST", body });
+        // P6 — upload pendente para cadastro novo (agora temos o id)
+        const createdId = created?.id;
+        if (createdId) {
+          setNewPractitionerId(createdId);
+          if (pendingPhotoRef.current) {
+            const { base64, contentType } = pendingPhotoRef.current;
+            pendingPhotoRef.current = null;
+            await doUploadPhoto(createdId, base64, contentType);
+          }
+        }
+      }
       // guarda os campos compartilháveis p/ "repetir dados do último" (só cadastro novo)
       if (!isEdit) {
         lastShared = {
@@ -327,7 +453,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           {loading ? (
             <ActivityIndicator style={{ paddingVertical: 48 }} color={P.red} />
           ) : (
-            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 20, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
+            <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ padding: 20, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
               {/* repetir dados do último cadastro (opt-in, discreto, só cadastro novo) */}
               {!isEdit && canRepeat && (
                 <TouchableOpacity style={styles.repeat} onPress={repeatLast} activeOpacity={0.7} accessibilityLabel="Repetir dados do último cadastro">
@@ -346,6 +472,41 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 </View>
               )}
 
+              {/* P6 — FOTO DO PRATICANTE */}
+              <SectionTitle>Foto</SectionTitle>
+              <View style={styles.photoRow}>
+                <TouchableOpacity
+                  style={styles.photoCircle}
+                  onPress={handlePickPhoto}
+                  activeOpacity={0.8}
+                  accessibilityLabel={photoPreview ? "Trocar foto" : "Adicionar foto"}
+                  disabled={photoUploading}
+                >
+                  {photoUploading ? (
+                    <ActivityIndicator color={P.red} />
+                  ) : photoPreview ? (
+                    <Image source={{ uri: photoPreview }} style={styles.photoImg} />
+                  ) : (
+                    <View style={styles.photoPlaceholder}>
+                      <Icon name="camera" size={22} color={P.ink3} />
+                    </View>
+                  )}
+                  {/* badge de câmera no canto */}
+                  {!photoUploading && (
+                    <View style={styles.photoBadge}>
+                      <Icon name="camera" size={11} color="#fff" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.photoLabel}>{photoPreview ? "Trocar foto" : "Adicionar foto"}</Text>
+                  <Text style={styles.photoHint}>JPEG, PNG ou WebP · máx. 5 MB</Text>
+                  {Platform.OS !== "web" && (
+                    <Text style={styles.photoHint}>Upload disponível apenas no navegador.</Text>
+                  )}
+                </View>
+              </View>
+
               {/* IDENTIDADE */}
               <SectionTitle>Identidade</SectionTitle>
               <Field label="Nome completo" req value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Ex.: Maria Tanaka de Souza"
@@ -357,7 +518,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   onChangeText={(v) => set("birth_date", maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa"
                   inputRef={birthRef} returnKeyType="next" onSubmitEditing={() => cpfRef.current?.focus()}
                   bad={dateBad}
-                  note={dateBad ? "Data inválida" : (age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined)} />
+                  note={dateBad ? "Data inválida" : (age != null ? `${age} anos${isMinor ? " · menor de idade" : ""}` : undefined)} />
                 <Field flex label="CPF" mono value={form.cpf} onChangeText={(v) => set("cpf", maskCpf(v))}
                   keyboardType="numeric" placeholder="000.000.000-00" bad={cpfBad}
                   inputRef={cpfRef} returnKeyType="next" onSubmitEditing={() => rgRef.current?.focus()}
@@ -365,12 +526,6 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               </Row2>
               <Field label="RG" mono value={form.rg} onChangeText={(v) => set("rg", v)} placeholder="00.000.000-0"
                 inputRef={rgRef} returnKeyType="next" onSubmitEditing={() => phoneRef.current?.focus()} />
-              {age != null && age < 18 && (
-                <View style={styles.lgpd}>
-                  <Icon name="shield" size={14} color={P.ink2} />
-                  <Text style={styles.lgpdTxt}>Menor de idade — responsável legal exigido (LGPD Art. 14). O cadastro do responsável entra no próximo passo.</Text>
-                </View>
-              )}
 
               {/* CONTATO & ENDEREÇO — CEP em destaque */}
               <SectionTitle>Contato &amp; endereço</SectionTitle>
@@ -405,6 +560,51 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 <Field flex2 label="Cidade" value={form.city} onChangeText={(v) => set("city", v)} />
                 <Field flex label="UF" mono value={form.state} onChangeText={(v) => set("state", v.toUpperCase().slice(0, 2))} maxLength={2} placeholder="SP" />
               </Row2>
+
+              {/* P7 — RESPONSÁVEL (LGPD) */}
+              <SectionTitle>Responsável</SectionTitle>
+              <View style={styles.lgpdNote}>
+                <Icon name="shield" size={14} color={P.ink2} />
+                <Text style={styles.lgpdNoteTxt}>
+                  {isMinor
+                    ? "Menor de idade — nome do responsável obrigatório (LGPD Art. 14)."
+                    : "Dados do responsável — obrigatórios para menores de 18 anos."}
+                </Text>
+              </View>
+              <Field label="Nome do responsável" req={isMinor} value={form.guardian_name}
+                onChangeText={(v) => set("guardian_name", v)} placeholder="Nome completo do responsável"
+                inputRef={guardianNameRef} returnKeyType="next" onSubmitEditing={() => guardianCpfRef.current?.focus()} />
+              <Row2>
+                <Field flex label="CPF do responsável" mono value={form.guardian_cpf}
+                  onChangeText={(v) => set("guardian_cpf", maskCpf(v))} keyboardType="numeric" placeholder="000.000.000-00"
+                  bad={guardianCpfBad}
+                  inputRef={guardianCpfRef} returnKeyType="next" onSubmitEditing={() => guardianPhoneRef.current?.focus()}
+                  note={guardianCpfBad ? "Dígitos não conferem" : form.guardian_cpf ? "CPF válido" : undefined}
+                  noteOk={!guardianCpfBad && !!form.guardian_cpf} />
+                <Field flex label="Telefone do responsável" mono value={form.guardian_phone}
+                  onChangeText={(v) => set("guardian_phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
+                  inputRef={guardianPhoneRef} returnKeyType="next" />
+              </Row2>
+              {/* Parentesco — select simples via chips */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Parentesco</Text>
+                <View style={styles.relRow}>
+                  {RELATIONSHIP_OPTIONS.map((opt) => {
+                    const active = form.guardian_relationship === opt;
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[styles.relChip, active && styles.relChipActive]}
+                        onPress={() => set("guardian_relationship", active ? "" : opt)}
+                        activeOpacity={0.7}
+                        accessibilityLabel={opt}
+                      >
+                        <Text style={[styles.relChipTxt, active && styles.relChipTxtActive]}>{opt}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
               {/* FUNÇÕES */}
               <SectionTitle>Funções na federação</SectionTitle>
@@ -614,6 +814,15 @@ const styles = StyleSheet.create({
   subMono: { fontFamily: F.mono, fontSize: 12, color: P.red, marginTop: 4 } as TextStyle,
   close: { padding: 4, borderRadius: 999 } as ViewStyle,
 
+  // P6 — foto
+  photoRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 12 } as ViewStyle,
+  photoCircle: { width: 72, height: 72, borderRadius: 36, overflow: "hidden", backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line2, alignItems: "center", justifyContent: "center", position: "relative" } as ViewStyle,
+  photoImg: { width: 72, height: 72, borderRadius: 36 } as any,
+  photoPlaceholder: { alignItems: "center", justifyContent: "center", width: 72, height: 72 } as ViewStyle,
+  photoBadge: { position: "absolute", bottom: 2, right: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: P.red, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  photoLabel: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.ink } as TextStyle,
+  photoHint: { fontFamily: F.body, fontSize: 11, color: P.ink3 } as TextStyle,
+
   repeat: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13, marginBottom: 10 } as ViewStyle,
   repeatTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.ink } as TextStyle,
   repeatHint: { fontFamily: F.body, fontSize: 11, color: P.ink3 } as TextStyle,
@@ -642,8 +851,14 @@ const styles = StyleSheet.create({
   cepHint: { fontWeight: "500", color: P.ink3 } as TextStyle,
   cepRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
 
-  lgpd: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.paper3, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 4 } as ViewStyle,
-  lgpdTxt: { fontFamily: F.body, fontSize: 11.5, color: P.ink2, flex: 1 } as TextStyle,
+  // P7 — responsável
+  lgpdNote: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.paper3, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10 } as ViewStyle,
+  lgpdNoteTxt: { fontFamily: F.body, fontSize: 11.5, color: P.ink2, flex: 1 } as TextStyle,
+  relRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 2 } as ViewStyle,
+  relChip: { paddingVertical: 6, paddingHorizontal: 11, borderRadius: 999, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line2 } as ViewStyle,
+  relChipActive: { backgroundColor: P.ink, borderColor: P.ink } as ViewStyle,
+  relChipTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: P.ink2 } as TextStyle,
+  relChipTxtActive: { color: "#fdf8f2" } as TextStyle,
 
   toggle: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 9 } as ViewStyle,
   toggleOn: { borderColor: P.redLine } as ViewStyle,
