@@ -45,7 +45,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Alert, Platform,
   StyleSheet, ViewStyle, TextStyle, ActivityIndicator,
-  Modal, TextInput, Pressable,
+  Modal, TextInput, Pressable, Image,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -140,6 +140,29 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
   const a = p as any;
   const hasAddress = !!(a.zip_code || a.street || a.number || a.complement || a.neighborhood || a.city || a.state);
 
+  // Campos novos (27/06): photo, responsável, atividade — lemos via `any`.
+  const photoUrl: string | null = a.photo_url ?? a.karate_photo_url ?? null;
+  const guardianName: string | null = a.guardian_name ?? null;
+  const guardianCpf: string | null = a.guardian_cpf ?? null;
+  const guardianPhone: string | null = a.guardian_phone ?? null;
+  const guardianRelationship: string | null = a.guardian_relationship ?? null;
+  const hasGuardian = !!(guardianName || guardianCpf || guardianPhone || guardianRelationship);
+  const lastExam: { date?: string | null; belt_name?: string | null; exam_name?: string | null; event_date?: string | null } | null = a.last_exam ?? null;
+  const courseCountLastYear: number | null = (a.course_count_last_year != null) ? Number(a.course_count_last_year) : null;
+
+  // Iniciais para o avatar placeholder (até 2 letras do nome completo).
+  const initials = p.full_name
+    ? p.full_name.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0].toUpperCase()).join("")
+    : null;
+
+  // Formata data-only tz-safe (parse local dd/mm/yyyy, sem conversão UTC).
+  function formatDateOnly(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
   function Row({ icon, label, val }: { icon: string; label: string; val: string | null }) {
     if (!val) return null;
     return (
@@ -150,8 +173,45 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       </View>
     );
   }
+
+  // Formata o label do último exame: "dd/mm/aaaa · exam_name / belt_name"
+  const lastExamLabel: string | null = (() => {
+    if (!lastExam) return null;
+    const rawDate = lastExam.event_date ?? lastExam.date ?? null;
+    const datePart = formatDateOnly(rawDate);
+    const namePart = lastExam.exam_name ?? lastExam.belt_name ?? null;
+    if (!datePart && !namePart) return null;
+    if (datePart && namePart) return `${datePart} · ${namePart}`;
+    return datePart ?? namePart;
+  })();
+
+  const courseLabel: string | null = courseCountLastYear == null
+    ? null
+    : courseCountLastYear === 0
+      ? "Nenhum curso no último ano"
+      : `${courseCountLastYear} ${courseCountLastYear === 1 ? "curso" : "cursos"}`;
+
   return (
     <View style={tabStyles.tab}>
+      {/* ── Foto do praticante ── */}
+      <View style={tabStyles.avatarBlock}>
+        {photoUrl ? (
+          <Image
+            source={{ uri: photoUrl }}
+            style={tabStyles.avatarPhoto}
+            accessibilityLabel={`Foto de ${p.full_name}`}
+          />
+        ) : (
+          <View style={tabStyles.avatarPlaceholder}>
+            {initials ? (
+              <Text style={tabStyles.avatarInitials}>{initials}</Text>
+            ) : (
+              <Icon name="users" size={28} color={KarateColors.ink3} />
+            )}
+          </View>
+        )}
+      </View>
+
       <Row icon="person-outline"   label="Nome"         val={p.full_name} />
       <Row icon="id-card-outline"  label="CPF"          val={formatCpfDisplay(p.cpf)} />
       <Row icon="document-outline" label="RG"           val={p.rg ?? null} />
@@ -165,6 +225,18 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
       <Row icon="call-outline"     label="Telefone"     val={formatPhoneDisplay(p.phone)} />
       <Row icon="ribbon-outline"   label="Registro"     val={p.karate_registration_number} />
 
+      {/* ── Responsável (ocultado se nenhum campo presente) ── */}
+      {hasGuardian && (
+        <>
+          <View style={tabStyles.sectionDivider} />
+          <Text style={tabStyles.sectionLabel}>Responsável</Text>
+          <Row icon="person-outline"   label="Nome"     val={guardianName} />
+          <Row icon="id-card-outline"  label="CPF"      val={formatCpfDisplay(guardianCpf)} />
+          <Row icon="call-outline"     label="Telefone" val={formatPhoneDisplay(guardianPhone)} />
+          <Row icon="people-outline"   label="Vínculo"  val={guardianRelationship} />
+        </>
+      )}
+
       {/* Endereço (só-leitura; campos vazios são ocultados) */}
       {hasAddress && (
         <>
@@ -177,6 +249,20 @@ function CadastroTab({ p }: { p: PractitionerDetail }) {
           <Row icon="location-outline" label="Bairro"       val={a.neighborhood ?? null} />
           <Row icon="map-outline"      label="Cidade"       val={a.city ?? null} />
           <Row icon="flag-outline"     label="UF"           val={a.state ?? null} />
+        </>
+      )}
+
+      {/* ── Atividade (último exame + cursos) ── */}
+      {(lastExamLabel != null || courseLabel != null) && (
+        <>
+          <View style={tabStyles.sectionDivider} />
+          <Text style={tabStyles.sectionLabel}>Atividade</Text>
+          {lastExamLabel != null && (
+            <Row icon="ribbon-outline"   label="Último exame"       val={lastExamLabel} />
+          )}
+          {courseLabel != null && (
+            <Row icon="calendar-outline" label="Cursos / últ. ano"  val={courseLabel} />
+          )}
         </>
       )}
 
@@ -254,7 +340,7 @@ function TrajetoriaTab({
         <EmptyState
           icon="ribbon-outline"
           title="Sem histórico de faixas"
-          subtitle={allowed ? "Use “Registrar graduação” para adicionar a primeira faixa." : undefined}
+          subtitle={allowed ? "Use "Registrar graduação" para adicionar a primeira faixa." : undefined}
           style={{ paddingVertical: 32 }}
         />
       ) : (
@@ -1332,6 +1418,11 @@ const styles = StyleSheet.create({
 
 const tabStyles = StyleSheet.create({
   tab:              { padding: 16, gap: 10 } as ViewStyle,
+  // Foto / avatar do praticante (topo da aba Cadastro)
+  avatarBlock:      { alignItems: "center", paddingBottom: 8 } as ViewStyle,
+  avatarPhoto:      { width: 88, height: 88, borderRadius: 44, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  avatarPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  avatarInitials:   { fontFamily: KarateFonts.heading, fontSize: 32, color: KarateColors.ink2 } as TextStyle,
   // Ações da aba (CTA primário sumi em tamanho normal, alinhado à direita).
   tabActions:       { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8 } as ViewStyle,
   infoRow:          { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
