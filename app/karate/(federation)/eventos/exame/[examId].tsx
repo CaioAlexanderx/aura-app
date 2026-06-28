@@ -1,25 +1,27 @@
 // ============================================================
-// Detalhe do Exame — Aura Karatê (federação)
+// Detalhe do Exame / Curso — Aura Karate (federacao)
 //
-// Dados do exame, banca e candidatos com resultado. Lançar
-// resultados (modal por candidato), fechar exame (confirmação),
-// e solicitar certificado (sob demanda — Decisão FPKT #3).
-// Dados reais via karateApi.getBeltExam. Sem mock: loading →
-// spinner, falha → ErrorState; close/cert não fingem sucesso.
+// Para EXAME (exam_type != 'curso'):
+//   Dados do exame, banca e candidatos com resultado. Lancar
+//   resultados (modal por candidato), fechar exame (confirmacao),
+//   e solicitar certificado (sob demanda — Decisao FPKT #3).
 //
-// Nav P2: sem candidatos inscritos, a tela usa o KarateEmptyState padrão
-//   do kit (mesmo componente das outras telas karatê) com a ação
-//   "Compartilhar link de inscrição" — copia o link público da federação
-//   (microsite). A ação só aparece se o slug público resolver; caso
-//   contrário o empty state fica só com a mensagem (sem link fantasma).
+// Para CURSO (exam_type == 'curso'):
+//   Secao "Participantes" com lista de inscritos + campo de
+//   busca/autocomplete para inscrever praticantes via
+//   POST /belt-exams/:examId/candidates { student_id }.
+//   Sem remocao de participante (backend nao tem DELETE candidate).
+//
+// Dados reais via karateApi.getBeltExam. Sem mock: loading ->
+// spinner, falha -> ErrorState.
 // ============================================================
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
-  StyleSheet, RefreshControl, ViewStyle, TextStyle, Linking,
+  StyleSheet, RefreshControl, ViewStyle, TextStyle, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -27,7 +29,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { LancarResultadosModal } from "@/components/karate/LancarResultadosModal";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { karateApi, ExamCandidate, BeltExam } from "@/services/karateApi";
+import { karateApi, ExamCandidate, BeltExam, PractitionerListItem } from "@/services/karateApi";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
 
@@ -51,6 +53,209 @@ function fmtDate(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
+// ── Secao de Participantes (apenas para curso) ──────────────────
+interface ParticipantesSectionProps {
+  candidates: ExamCandidate[];
+  setCandidates: React.Dispatch<React.SetStateAction<ExamCandidate[]>>;
+  federationId: string;
+  examId: string;
+}
+
+function ParticipantesSection({ candidates, setCandidates, federationId, examId }: ParticipantesSectionProps) {
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<PractitionerListItem[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  // IDs dos ja inscritos para evitar duplicata visual
+  const enrolledIds = new Set(candidates.map((c) => c.practitioner_id));
+
+  const onQueryChange = (text: string) => {
+    setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await karateApi.listPractitioners(federationId, { q: text.trim(), pageSize: 8 });
+        setSuggestions(res.data ?? []);
+        setSuggestionsOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  };
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
+
+  const handleSelect = async (item: PractitionerListItem) => {
+    setSuggestionsOpen(false);
+    setQuery("");
+    setSuggestions([]);
+    if (enrolledIds.has(item.id)) {
+      Alert.alert("Ja inscrito", `${item.full_name} ja e participante deste curso.`);
+      return;
+    }
+    setEnrolling(true);
+    try {
+      const candidate = await karateApi.addExamCandidate(federationId, examId, { student_id: item.id });
+      setCandidates((prev) => [...prev, candidate]);
+    } catch (e: any) {
+      Alert.alert("Nao foi possivel inscrever", e?.message ?? "Tente novamente.");
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  return (
+    <View style={ps.container}>
+      <Text style={ps.sectionTitle}>Participantes ({candidates.length})</Text>
+
+      {/* Campo de busca */}
+      <View style={ps.searchWrap}>
+        <View style={[ps.inputRow, enrolling && ps.inputDisabled]}>
+          <TextInput
+            ref={inputRef}
+            style={ps.textInput}
+            value={query}
+            onChangeText={onQueryChange}
+            onFocus={() => { if (suggestions.length > 0) setSuggestionsOpen(true); }}
+            onBlur={() => { setTimeout(() => setSuggestionsOpen(false), 160); }}
+            placeholder="Buscar praticante para inscrever…"
+            placeholderTextColor={KarateColors.ink3}
+            autoCorrect={false}
+            editable={!enrolling}
+            accessibilityLabel="Buscar praticante"
+          />
+          {searching || enrolling ? (
+            <ActivityIndicator size="small" color={KarateColors.primary} style={ps.icon} />
+          ) : (
+            <Icon name={"search" as any} size={15} color={KarateColors.ink3} style={ps.icon} />
+          )}
+        </View>
+
+        {/* Dropdown de sugestoes */}
+        {suggestionsOpen && suggestions.length > 0 && (
+          <View style={ps.dropdown}>
+            {suggestions.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[ps.dropItem, enrolledIds.has(item.id) && ps.dropItemDim]}
+                onPress={() => handleSelect(item)}
+                activeOpacity={0.75}
+                accessibilityRole="menuitem"
+                accessibilityLabel={item.full_name}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={ps.dropName}>{item.full_name}</Text>
+                  {(item.dojo_name || item.karate_registration_number) ? (
+                    <Text style={ps.dropSub} numberOfLines={1}>
+                      {[item.dojo_name, item.karate_registration_number].filter(Boolean).join("  ·  ")}
+                    </Text>
+                  ) : null}
+                </View>
+                {enrolledIds.has(item.id) ? (
+                  <Icon name={"check" as any} size={13} color={KarateColors.ok} />
+                ) : (
+                  <Icon name={"person-add-outline" as any} size={14} color={KarateColors.ink3} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Nenhuma sugestao */}
+        {suggestionsOpen && !searching && suggestions.length === 0 && query.trim().length >= 2 && (
+          <View style={ps.dropdown}>
+            <Text style={ps.dropEmpty}>Nenhum praticante encontrado para "{query}".</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Lista de inscritos */}
+      {candidates.length === 0 ? (
+        <KarateEmptyState
+          icon="people-outline"
+          title="Nenhum participante inscrito"
+          subtitle="Use o campo acima para buscar e inscrever praticantes neste curso."
+          style={{ paddingVertical: 32 }}
+        />
+      ) : (
+        candidates.map((c) => (
+          <View key={c.id} style={ps.card}>
+            <View style={ps.cardRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={ps.cardName}>{c.full_name}</Text>
+                <Text style={ps.cardMeta}>
+                  {[c.karate_registration_number, (c as any).dojo_name].filter(Boolean).join("  ·  ") || "—"}
+                </Text>
+              </View>
+              <Badge status="ok" label="Inscrito" />
+            </View>
+          </View>
+        ))
+      )}
+
+      {/* TODO: remocao de participante quando o backend expuser DELETE /candidates/:id */}
+    </View>
+  );
+}
+
+const ps = StyleSheet.create({
+  container: { gap: 12 } as ViewStyle,
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink2, marginTop: 4 } as TextStyle,
+  searchWrap: { zIndex: 10 } as ViewStyle,
+  inputRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: KarateColors.bg2,
+    borderWidth: 1, borderColor: KarateColors.border,
+    borderRadius: KarateRadius.md,
+    paddingHorizontal: 10, paddingVertical: 8,
+    gap: 8,
+  } as ViewStyle,
+  inputDisabled: { opacity: 0.6 } as ViewStyle,
+  textInput: { flex: 1, fontSize: 13, color: KarateColors.ink, outlineWidth: 0 } as any,
+  icon: { flexShrink: 0 } as ViewStyle,
+  dropdown: {
+    position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+    backgroundColor: KarateColors.bg2,
+    borderWidth: 1, borderColor: KarateColors.border,
+    borderRadius: KarateRadius.md,
+    marginTop: 4,
+    shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  } as ViewStyle,
+  dropItem: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderBottomWidth: 1, borderBottomColor: KarateColors.border,
+    gap: 8,
+  } as ViewStyle,
+  dropItemDim: { opacity: 0.5 } as ViewStyle,
+  dropName: { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  dropSub: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  dropEmpty: { fontSize: 12, color: KarateColors.ink3, padding: 12, textAlign: "center" } as TextStyle,
+  card: {
+    backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md,
+    borderWidth: 1, borderColor: KarateColors.border, padding: 12,
+  } as ViewStyle,
+  cardRow: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  cardName: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  cardMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+});
+
+// ── Tela principal ──────────────────────────────────────────────
 export default function ExameDetalhe() {
   const { examId } = useLocalSearchParams<{ examId: string }>();
   const router = useRouter();
@@ -64,8 +269,10 @@ export default function ExameDetalhe() {
   const [showResultados, setShowResultados] = useState(false);
   const [closingExam, setClosingExam] = useState(false);
   const [issuingCert, setIssuingCert] = useState<string | null>(null);
-  // Nav P2: slug público da federação para o link de inscrição (empty state).
+  // Nav P2: slug publico da federacao para o link de inscricao (empty state).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
+
+  const isCurso = exam?.exam_type === "curso";
 
   const load = useCallback(async (isRefresh = false) => {
     if (!examId) return;
@@ -84,7 +291,7 @@ export default function ExameDetalhe() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Resolve o slug público da federação (best-effort, sem bloquear a tela).
+  // Resolve o slug publico da federacao (best-effort, sem bloquear a tela).
   useEffect(() => {
     let alive = true;
     const fromHost = getMicrositeSlug();
@@ -92,19 +299,19 @@ export default function ExameDetalhe() {
     if (!federationId) return;
     karateApi.getFederationIdentity(federationId)
       .then((id) => { if (alive && id?.slug) setPubSlug(id.slug); })
-      .catch(() => { /* sem slug → empty state sem ação de link */ });
+      .catch(() => { /* sem slug -> empty state sem acao de link */ });
     return () => { alive = false; };
   }, [federationId]);
 
-  // Link público da federação (microsite) — usado pela ação do empty state.
+  // Link publico da federacao (microsite) — usado pela acao do empty state.
   const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/") : null;
 
   const shareInscription = async () => {
     if (!publicUrl) return;
     const ok = await copyToClipboard(publicUrl);
     Alert.alert(
-      ok ? "Link copiado" : "Não foi possível copiar",
-      ok ? `Compartilhe a página pública da federação:\n${publicUrl}` : "Copie manualmente: " + publicUrl
+      ok ? "Link copiado" : "Nao foi possivel copiar",
+      ok ? `Compartilhe a pagina publica da federacao:\n${publicUrl}` : "Copie manualmente: " + publicUrl
     );
   };
 
@@ -117,7 +324,7 @@ export default function ExameDetalhe() {
     const pendingCount = candidates.filter((c) => c.result === "pending").length;
     Alert.alert(
       "Fechar exame?",
-      `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)`,
+      `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtencao: certificados NAO sao gerados automaticamente. (Decisao FPKT #3)`,
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Fechar exame", style: "destructive", onPress: confirmCloseExam },
@@ -133,7 +340,7 @@ export default function ExameDetalhe() {
       await karateApi.closeBeltExam(federationId, exam.id);
       setExam((prev) => (prev ? { ...prev, status: "closed" } : prev));
     } catch (e: any) {
-      Alert.alert("Não foi possível fechar o exame", e?.message ?? "Tente novamente.");
+      Alert.alert("Nao foi possivel fechar o exame", e?.message ?? "Tente novamente.");
     } finally {
       setClosingExam(false);
     }
@@ -146,9 +353,9 @@ export default function ExameDetalhe() {
       setCandidates((prev) => prev.map((c) =>
         c.id === candidateId ? { ...c, certificate_status: cert.status, certificate_url: cert.pdf_url } : c
       ));
-      Alert.alert("Solicitação enviada", `Emissão do certificado solicitada. Status: ${cert.status}.`);
+      Alert.alert("Solicitacao enviada", `Emissao do certificado solicitada. Status: ${cert.status}.`);
     } catch (e: any) {
-      Alert.alert("Não foi possível solicitar", e?.message ?? "Tente novamente.");
+      Alert.alert("Nao foi possivel solicitar", e?.message ?? "Tente novamente.");
     } finally {
       setIssuingCert(null);
     }
@@ -171,100 +378,122 @@ export default function ExameDetalhe() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}
       >
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Voltar">
-          <Ionicons name="arrow-back" size={20} color={KarateColors.primary} />
+          <Icon name={"arrow-back-outline" as any} size={20} color={KarateColors.primary} />
           <Text style={styles.backText}>Eventos</Text>
         </TouchableOpacity>
 
         <View style={styles.examHeader}>
           <View style={styles.examTitleRow}>
             <Text style={styles.examTitle}>{exam.title}</Text>
-            <Badge
-              status={exam.status === "open" ? "ok" : exam.status === "closed" ? "warn" : "neutral"}
-              label={exam.status === "open" ? "Aberto" : exam.status === "closed" ? "Encerrado" : "Rascunho"}
-            />
+            {isCurso ? (
+              <Badge status="neutral" label="Curso" />
+            ) : (
+              <Badge
+                status={exam.status === "open" ? "ok" : exam.status === "closed" ? "warn" : "neutral"}
+                label={exam.status === "open" ? "Aberto" : exam.status === "closed" ? "Encerrado" : "Rascunho"}
+              />
+            )}
           </View>
           <View style={styles.metaRow}>
-            <Ionicons name="calendar-outline" size={13} color={KarateColors.ink3} />
+            <Icon name={"calendar-outline" as any} size={13} color={KarateColors.ink3} />
             <Text style={styles.metaText}>{fmtDate(exam.exam_date)}</Text>
             {!!exam.location && (
               <>
-                <Ionicons name="location-outline" size={13} color={KarateColors.ink3} />
+                <Icon name={"location-outline" as any} size={13} color={KarateColors.ink3} />
                 <Text style={styles.metaText}>{exam.location}</Text>
               </>
             )}
           </View>
-          <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>
+          {!isCurso && <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>}
         </View>
 
-        {exam.status === "open" && (
-          <View style={styles.actions}>
-            <KarateButton label="Lançar Resultados" variant="primary" size="sm" onPress={() => setShowResultados(true)} style={{ flex: 1 }} />
-            <KarateButton label={closingExam ? "Fechando..." : "Fechar Exame"} variant="secondary" size="sm" loading={closingExam} onPress={handleCloseExam} style={{ flex: 1 }} />
-          </View>
-        )}
-
-        <Text style={styles.sectionTitle}>Candidatos ({candidates.length})</Text>
-        {candidates.length === 0 ? (
-          <KarateEmptyState
-            icon="people-outline"
-            title="Nenhum candidato inscrito"
-            subtitle="Assim que houver inscrições neste exame, os candidatos aparecem aqui para lançar resultados."
-            style={{ paddingVertical: 40 }}
-            action={
-              publicUrl ? (
-                <KarateButton
-                  label="Compartilhar link de inscrição"
-                  variant="secondary"
-                  size="sm"
-                  onPress={shareInscription}
-                />
-              ) : undefined
-            }
-          />
-        ) : (
-          candidates.map((c) => (
-            <View key={c.id} style={styles.candidateCard}>
-              <View style={styles.candidateRow}>
-                <View style={styles.candidateInfo}>
-                  <Text style={styles.candidateName}>{c.full_name}</Text>
-                  <Text style={styles.candidateMeta}>{c.karate_registration_number ?? "—"} · Faixa atual: {c.current_belt ?? "—"}</Text>
-                </View>
-                <Badge status={RESULT_BADGE[c.result]} label={RESULT_LABEL[c.result]} />
+        {/* ── Secao especifica de EXAME ─────────────────────────── */}
+        {!isCurso && (
+          <>
+            {exam.status === "open" && (
+              <View style={styles.actions}>
+                <KarateButton label="Lancar Resultados" variant="primary" size="sm" onPress={() => setShowResultados(true)} style={{ flex: 1 }} />
+                <KarateButton label={closingExam ? "Fechando..." : "Fechar Exame"} variant="secondary" size="sm" loading={closingExam} onPress={handleCloseExam} style={{ flex: 1 }} />
               </View>
-              {c.notes && <Text style={styles.notes}>Obs: {c.notes}</Text>}
+            )}
 
-              {c.result === "approved" && (
-                <View style={styles.certSection}>
-                  <Text style={styles.certLabel}>Certificado:</Text>
-                  {c.certificate_status ? (
-                    <>
-                      <Badge status={certStatusBadge[c.certificate_status]} label={certStatusLabel[c.certificate_status]} />
-                      {c.certificate_url && <Text style={styles.certUrl} numberOfLines={1}>{c.certificate_url}</Text>}
-                    </>
-                  ) : (
+            <Text style={styles.sectionTitle}>Candidatos ({candidates.length})</Text>
+            {candidates.length === 0 ? (
+              <KarateEmptyState
+                icon="people-outline"
+                title="Nenhum candidato inscrito"
+                subtitle="Assim que houver inscricoes neste exame, os candidatos aparecem aqui para lancar resultados."
+                style={{ paddingVertical: 40 }}
+                action={
+                  publicUrl ? (
                     <KarateButton
-                      label={issuingCert === c.id ? "Solicitando..." : "Solicitar emissão do certificado"}
+                      label="Compartilhar link de inscricao"
                       variant="secondary"
                       size="sm"
-                      loading={issuingCert === c.id}
-                      onPress={() => handleIssueCertificate(c.id)}
+                      onPress={shareInscription}
                     />
+                  ) : undefined
+                }
+              />
+            ) : (
+              candidates.map((c) => (
+                <View key={c.id} style={styles.candidateCard}>
+                  <View style={styles.candidateRow}>
+                    <View style={styles.candidateInfo}>
+                      <Text style={styles.candidateName}>{c.full_name}</Text>
+                      <Text style={styles.candidateMeta}>{c.karate_registration_number ?? "—"} · Faixa atual: {c.current_belt ?? "—"}</Text>
+                    </View>
+                    <Badge status={RESULT_BADGE[c.result]} label={RESULT_LABEL[c.result]} />
+                  </View>
+                  {c.notes && <Text style={styles.notes}>Obs: {c.notes}</Text>}
+
+                  {c.result === "approved" && (
+                    <View style={styles.certSection}>
+                      <Text style={styles.certLabel}>Certificado:</Text>
+                      {c.certificate_status ? (
+                        <>
+                          <Badge status={certStatusBadge[c.certificate_status]} label={certStatusLabel[c.certificate_status]} />
+                          {c.certificate_url && <Text style={styles.certUrl} numberOfLines={1}>{c.certificate_url}</Text>}
+                        </>
+                      ) : (
+                        <KarateButton
+                          label={issuingCert === c.id ? "Solicitando..." : "Solicitar emissao do certificado"}
+                          variant="secondary"
+                          size="sm"
+                          loading={issuingCert === c.id}
+                          onPress={() => handleIssueCertificate(c.id)}
+                        />
+                      )}
+                    </View>
                   )}
                 </View>
-              )}
-            </View>
-          ))
+              ))
+            )}
+          </>
+        )}
+
+        {/* ── Secao especifica de CURSO ─────────────────────────── */}
+        {isCurso && (
+          <ParticipantesSection
+            candidates={candidates}
+            setCandidates={setCandidates}
+            federationId={federationId}
+            examId={exam.id}
+          />
         )}
       </ScrollView>
 
-      <LancarResultadosModal
-        visible={showResultados}
-        candidates={candidates}
-        onClose={() => setShowResultados(false)}
-        onUpdateCandidate={handleCandidateUpdate}
-        federationId={federationId}
-        examId={exam.id}
-      />
+      {/* Modal de resultados — apenas para exame */}
+      {!isCurso && (
+        <LancarResultadosModal
+          visible={showResultados}
+          candidates={candidates}
+          onClose={() => setShowResultados(false)}
+          onUpdateCandidate={handleCandidateUpdate}
+          federationId={federationId}
+          examId={exam.id}
+        />
+      )}
     </>
   );
 }
