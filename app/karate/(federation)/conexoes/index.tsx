@@ -1,1 +1,126 @@
-Ly8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Ci8vIENvbmV4w7VlcyDigJQgQXVyYSBLYXJhdMOqIChmZWRlcmHDp8OjbykgwrcgU2hvamkKLy8gQ29tbyBjYWRhIGRvasO0IHNlIGNvbmVjdGEgw6AgZmVkZXJhw6fDo28uIERhZG9zIHJlYWlzOyBlc3RhZG9zIGhvbmVzdG9zLgovLyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KaW1wb3J0IFJlYWN0LCB7IHVzZUNhbGxiYWNrLCB1c2VFZmZlY3QsIHVzZVN0YXRlIH0gZnJvbSAicmVhY3QiOwppbXBvcnQgewogIFZpZXcsIFRleHQsIFNjcm9sbFZpZXcsIFRvdWNoYWJsZU9wYWNpdHksIFJlZnJlc2hDb250cm9sLCBBY3Rpdml0eUluZGljYXRvciwgQWxlcnQgYXMgUk5BbGVydCwKICBTdHlsZVNoZWV0LCBWaWV3U3R5bGUsIFRleHRTdHlsZSwKfSBmcm9tICJyZWFjdC1uYXRpdmUiOwppbXBvcnQgeyB1c2VSb3V0ZXIgfSBmcm9tICJleHBvLXJvdXRlciI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IEthcmF0ZUNvbG9ycyBhcyBDLCBTaG9qaVBhbGV0dGUgYXMgUCwgS2FyYXRlUmFkaXVzIGFzIFIsIEthcmF0ZUZvbnRzIGFzIEYsIEthcmF0ZVNwYWNpbmcgYXMgU1AgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IEthcmF0ZUVtcHR5U3RhdGUgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0VtcHR5U3RhdGUiOwppbXBvcnQgeyBLYXJhdGVFcnJvclN0YXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9FcnJvclN0YXRlIjsKaW1wb3J0IHsKICBTaG9qaUJhY2tncm91bmQsIFBhZ2VIZWFkLCBTZWN0aW9uSGVhZCwgQ2FyZCwgU2hvamlCYWRnZSwgU2hvamlCdXR0b24sIEF2YXRhciwgTW9ubywgQm9keSwKfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL3Nob2ppIjsKaW1wb3J0IHsgQ29uZWN0YXJEb2pvTW9kYWwgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0NvbmVjdGFyRG9qb01vZGFsIjsKaW1wb3J0IHsga2FyYXRlQ29ubmVjdGlvbnNBcGksIENvbm5lY3Rpb24gfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUNvbm5lY3Rpb25zQXBpIjsKaW1wb3J0IHsgdXNlS2FyYXRlRmVkZXJhdGlvbiB9IGZyb20gIkAvY29udGV4dHMvS2FyYXRlRmVkZXJhdGlvbiI7CgpleHBvcnQgZnVuY3Rpb24gY29ublZpZXcoYzogQ29ubmVjdGlvbik6IHsgbGFiZWw6IHN0cmluZzsgdG9uZTogIm9rIiB8ICJ3YXJuIiB8ICJkYW5nZXIiIHwgIm5ldXRyYWwiIH0gewogIGlmIChjLnN0YXR1cyA9PT0gImNvbm5lY3RlZCIgJiYgYy52aWEgPT09ICJuYXRpdmUiKSByZXR1cm4geyBsYWJlbDogIkNvbmVjdGFkbyDCtyBhdHVhbGl6YSBzb3ppbmhvIiwgdG9uZTogIm9rIiB9OwogIGlmIChjLnN0YXR1cyA9PT0gImNvbm5lY3RlZCIgJiYgYy52aWEgPT09ICJtYW51YWwiKSByZXR1cm4geyBsYWJlbDogIkEgZmVkZXJhw6fDo28gY3VpZGEiLCB0b25lOiAibmV1dHJhbCIgfTsKICBpZiAoYy5zdGF0dXMgPT09ICJwZW5kaW5nIikgcmV0dXJuIHsgbGFiZWw6ICJFc3BlcmFuZG8gbyBkb2rDtCBhY2VpdGFyIiwgdG9uZTogIndhcm4iIH07CiAgaWYgKGMuc3RhdHVzID09PSAiZXJyb3IiKSByZXR1cm4geyBsYWJlbDogIkNvbmV4w6NvIGNhaXUiLCB0b25lOiAiZGFuZ2VyIiB9OwogIHJldHVybiB7IGxhYmVsOiAiRGVzbGlnYWRvIiwgdG9uZTogIm5ldXRyYWwiIH07Cn0KCmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIENvbmV4b2VzSW5kZXgoKSB7CiAgY29uc3Qgcm91dGVyID0gdXNlUm91dGVyKCk7CiAgY29uc3QgeyBmZWRlcmF0aW9uSWQgfSA9IHVzZUthcmF0ZUZlZGVyYXRpb24oKTsKICBjb25zdCBbcmVxdWVzdHMsIHNldFJlcXVlc3RzXSA9IHVzZVN0YXRlPENvbm5lY3Rpb25bXT4oW10pOwogIGNvbnN0IFtjb25ucywgc2V0Q29ubnNdID0gdXNlU3RhdGU8Q29ubmVjdGlvbltdPihbXSk7CiAgY29uc3QgW2xvYWRpbmcsIHNldExvYWRpbmddID0gdXNlU3RhdGUodHJ1ZSk7CiAgY29uc3QgW2Vycm9yLCBzZXRFcnJvcl0gPSB1c2VTdGF0ZShmYWxzZSk7CiAgY29uc3QgW3JlZnJlc2hpbmcsIHNldFJlZnJlc2hpbmddID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtzaG93Q29ubmVjdCwgc2V0U2hvd0Nvbm5lY3RdID0gdXNlU3RhdGUoZmFsc2UpOwoKICBjb25zdCBsb2FkID0gdXNlQ2FsbGJhY2soYXN5bmMgKGlzUmVmcmVzaCA9IGZhbHNlKSA9PiB7CiAgICBpc1JlZnJlc2ggPyBzZXRSZWZyZXNoaW5nKHRydWUpIDogc2V0TG9hZGluZyh0cnVlKTsKICAgIHNldEVycm9yKGZhbHNlKTsKICAgIHRyeSB7CiAgICAgIGNvbnN0IFtsaXN0LCByZXFzXSA9IGF3YWl0IFByb21pc2UuYWxsKFtrYXJhdGVDb25uZWN0aW9uc0FwaS5saXN0Q29ubmVjdGlvbnMoZmVkZXJhdGlvbklkKSwga2FyYXRlQ29ubmVjdGlvbnNBcGkubGlzdFJlcXVlc3RzKGZlZGVyYXRpb25JZCldKTsKICAgICAgc2V0Q29ubnMoKGxpc3Q/LmRhdGEgPz8gW10pLmZpbHRlcigoYykgPT4gYy5zdGF0dXMgIT09ICJwZW5kaW5nIikpOyBzZXRSZXF1ZXN0cyhyZXFzID8/IFtdKTsKICAgIH0gY2F0Y2ggeyBzZXRFcnJvcih0cnVlKTsgfQogICAgZmluYWxseSB7IGlzUmVmcmVzaCA/IHNldFJlZnJlc2hpbmcoZmFsc2UpIDogc2V0TG9hZGluZyhmYWxzZSk7IH0KICB9LCBbZmVkZXJhdGlvbklkXSk7CiAgdXNlRWZmZWN0KCgpID0+IHsgbG9hZCgpOyB9LCBbbG9hZF0pOwoKICBjb25zdCBhY2NlcHQgPSBhc3luYyAoYzogQ29ubmVjdGlvbikgPT4geyB0cnkgeyBhd2FpdCBrYXJhdGVDb25uZWN0aW9uc0FwaS5hcHByb3ZlKGZlZGVyYXRpb25JZCwgYy5pZCk7IGxvYWQodHJ1ZSk7IH0gY2F0Y2ggKGU6IGFueSkgeyBSTkFsZXJ0LmFsZXJ0KCJOw6NvIGZvaSBwb3Nzw612ZWwgYWNlaXRhciIsIGU/Lm1lc3NhZ2UgPz8gIlRlbnRlIG5vdmFtZW50ZS4iKTsgfSB9OwogIGNvbnN0IHJlZnVzZSA9IGFzeW5jIChjOiBDb25uZWN0aW9uKSA9PiB7IHRyeSB7IGF3YWl0IGthcmF0ZUNvbm5lY3Rpb25zQXBpLnJlamVjdChmZWRlcmF0aW9uSWQsIGMuaWQpOyBzZXRSZXF1ZXN0cygocCkgPT4gcC5maWx0ZXIoKHIpID0+IHIuaWQgIT09IGMuaWQpKTsgfSBjYXRjaCAoZTogYW55KSB7IFJOQWxlcnQuYWxlcnQoIk7Do28gZm9pIHBvc3PDrXZlbCByZWN1c2FyIiwgZT8ubWVzc2FnZSA/PyAiVGVudGUgbm92YW1lbnRlLiIpOyB9IH07CgogIGlmIChlcnJvcikgcmV0dXJuIDxTaG9qaUJhY2tncm91bmQ+PEthcmF0ZUVycm9yU3RhdGUgb25SZXRyeT17KCkgPT4gbG9hZCgpfSAvPjwvU2hvamlCYWNrZ3JvdW5kPjsKICBjb25zdCBjb25uZWN0ZWQgPSBjb25ucy5maWx0ZXIoKGMpID0+IGMuc3RhdHVzID09PSAiY29ubmVjdGVkIikubGVuZ3RoOwogIGNvbnN0IHByb2JsZW1zID0gY29ubnMuZmlsdGVyKChjKSA9PiBjLnN0YXR1cyA9PT0gImVycm9yIikubGVuZ3RoOwoKICByZXR1cm4gKAogICAgPFNob2ppQmFja2dyb3VuZD4KICAgICAgPFNjcm9sbFZpZXcgY29udGVudENvbnRhaW5lclN0eWxlPXtzdHlsZXMuY29udGVudH0gcmVmcmVzaENvbnRyb2w9ezxSZWZyZXNoQ29udHJvbCByZWZyZXNoaW5nPXtyZWZyZXNoaW5nfSBvblJlZnJlc2g9eygpID0+IGxvYWQodHJ1ZSl9IHRpbnRDb2xvcj17UC5yZWR9IC8+fT4KICAgICAgICA8UGFnZUhlYWQKICAgICAgICAgIGV5ZWJyb3c9IkRvasO0cyBkYSBmZWRlcmHDp8OjbyIKICAgICAgICAgIHRpdGxlPSJDb25leMO1ZXMiCiAgICAgICAgICBzdWI9IkNhZGEgZG9qw7Qgc2UgY29uZWN0YSBkZSB1bSBqZWl0bzogb3UgdXNhIG8gQXVyYSBLYXJhdMOqIGUgdHVkbyBzZSBhdHVhbGl6YSBzb3ppbmhvLCBvdSBhIGZlZGVyYcOnw6NvIGN1aWRhIGRlIHR1ZG8uIgogICAgICAgICAgYWN0aW9ucz17PFNob2ppQnV0dG9uIGxhYmVsPSJDb25lY3RhciBkb2rDtCIgaWNvbj0ibGluay1vdXRsaW5lIiB2YXJpYW50PSJzdW1pIiBvblByZXNzPXsoKSA9PiBzZXRTaG93Q29ubmVjdCh0cnVlKX0gLz59CiAgICAgICAgLz4KCiAgICAgICAge3Byb2JsZW1zID4gMCAmJiAoCiAgICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLndhcm59PgogICAgICAgICAgICA8SWNvbiBuYW1lPSJ3YXJuaW5nIiBzaXplPXsxOH0gY29sb3I9e1AucmVkfSAvPgogICAgICAgICAgICA8Qm9keSBzdHlsZT17eyBmbGV4OiAxLCBjb2xvcjogQy5pbmsgfX0+e3Byb2JsZW1zID09PSAxID8gIjEgZG9qw7QgcGFyb3UgZGUgZW52aWFyIGF0dWFsaXphw6fDtWVzIiA6IGAke3Byb2JsZW1zfSBkb2rDtHMgcGFyYXJhbSBkZSBlbnZpYXIgYXR1YWxpemHDp8O1ZXNgfS4gQWJyYSBvIGRvasO0IGUgdG9xdWUgZW0gUmVjb25lY3Rhci48L0JvZHk+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgKX0KCiAgICAgICAge3JlcXVlc3RzLmxlbmd0aCA+IDAgJiYgKAogICAgICAgICAgPENhcmQgc3R5bGU9e3sgbWFyZ2luVG9wOiBTUFs0XSB9fT4KICAgICAgICAgICAgPFNlY3Rpb25IZWFkIHRpdGxlPSJEb2rDtHMgcXVlcmVuZG8gZW50cmFyIiBzdWI9IkVzcGVyYW5kbyB2b2PDqiBhY2VpdGFyLiIgLz4KICAgICAgICAgICAge3JlcXVlc3RzLm1hcCgocikgPT4gKAogICAgICAgICAgICAgIDxWaWV3IGtleT17ci5pZH0gc3R5bGU9e3N0eWxlcy5yZXFSb3d9PgogICAgICAgICAgICAgICAgPEF2YXRhciBuYW1lPXtyLmRvam9fbmFtZSA/PyAiRG9qw7QifSBzaXplPXszNH0gLz4KICAgICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXt7IGZsZXg6IDEgfX0+CiAgICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuZG9qb05hbWV9PntyLmRvam9fbmFtZX08L1RleHQ+CiAgICAgICAgICAgICAgICAgIDxCb2R5IG11dGVkIHN0eWxlPXt7IGZvbnRTaXplOiAxMS41IH19PntyLmZwa3RfYWZmaWxpYXRpb25faWR9e3Iubm90ZXMgPyBgIMK3ICR7ci5ub3Rlc31gIDogIiJ9PC9Cb2R5PgogICAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgICAgPFNob2ppQnV0dG9uIGxhYmVsPSJBY2VpdGFyIiB2YXJpYW50PSJzdW1pIiBvblByZXNzPXsoKSA9PiBhY2NlcHQocil9IC8+CiAgICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBvblByZXNzPXsoKSA9PiByZWZ1c2Uocil9IHN0eWxlPXt7IHBhZGRpbmdIb3Jpem9udGFsOiA2LCBwYWRkaW5nVmVydGljYWw6IDggfX0+PFRleHQgc3R5bGU9e3N0eWxlcy5yZWZ1c2V9PlJlY3VzYXI8L1RleHQ+PC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgKSl9CiAgICAgICAgICA8L0NhcmQ+CiAgICAgICAgKX0KCiAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5zZWN0aW9ufT4KICAgICAgICAgIDxTZWN0aW9uSGVhZCB0aXRsZT0iRG9qw7RzIGNvbmVjdGFkb3MiIHN1Yj17YCR7Y29ubmVjdGVkfSBjb25lY3RhZG8ocylgfSAvPgogICAgICAgICAge2xvYWRpbmcgPyA8QWN0aXZpdHlJbmRpY2F0b3Igc3R5bGU9e3sgbWFyZ2luVG9wOiAyNCB9fSBzaXplPSJsYXJnZSIgY29sb3I9e1AucmVkfSAvPgogICAgICAgICAgICA6IGNvbm5zLmxlbmd0aCA9PT0gMCA/IDxDYXJkPjxLYXJhdGVFbXB0eVN0YXRlIGljb249Imxpbmstb3V0bGluZSIgdGl0bGU9Ik5lbmh1bSBkb2rDtCBjb25lY3RhZG8gYWluZGEiIHN1YnRpdGxlPSJVc2Ug4oCcQ29uZWN0YXIgZG9qw7TigJ0gcGFyYSBjb21lw6dhci4iIHN0eWxlPXt7IHBhZGRpbmdWZXJ0aWNhbDogMjggfX0gLz48L0NhcmQ+CiAgICAgICAgICAgIDogY29ubnMubWFwKChjKSA9PiB7CiAgICAgICAgICAgICAgY29uc3QgdiA9IGNvbm5WaWV3KGMpOwogICAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBrZXk9e2MuaWR9IG9uUHJlc3M9eygpID0+IHJvdXRlci5wdXNoKGAva2FyYXRlL2NvbmV4b2VzLyR7Yy5pZH1gIGFzIGFueSkgfSBhY3RpdmVPcGFjaXR5PXswLjg1fT4KICAgICAgICAgICAgICAgICAgPENhcmQgc3R5bGU9e3sgbWFyZ2luQm90dG9tOiAxMCwgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEyIH19PgogICAgICAgICAgICAgICAgICAgIDxBdmF0YXIgbmFtZT17Yy5kb2pvX25hbWUgPz8gIkRvasO0In0gc2l6ZT17MzZ9IC8+CiAgICAgICAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3sgZmxleDogMSB9fT4KICAgICAgICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuZG9qb05hbWV9PntjLmRvam9fbmFtZX08L1RleHQ+CiAgICAgICAgICAgICAgICAgICAgICA8TW9ubyBzdHlsZT17eyBmb250U2l6ZTogMTAsIGNvbG9yOiBQLnJlZCwgbWFyZ2luVG9wOiAxIH19PntjLmZwa3RfYWZmaWxpYXRpb25faWR9PC9Nb25vPgogICAgICAgICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgICAgICAgICA8U2hvamlCYWRnZSBzdGF0dXM9e3YudG9uZX0gbGFiZWw9e3YubGFiZWx9IC8+CiAgICAgICAgICAgICAgICAgICAgPEljb24gbmFtZT0iY2hldnJvbi1mb3J3YXJkIiBzaXplPXsxNn0gY29sb3I9e0MuaW5rNH0gLz4KICAgICAgICAgICAgICAgICAgPC9DYXJkPgogICAgICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgICAgICk7CiAgICAgICAgICAgIH0pfQogICAgICAgIDwvVmlldz4KICAgICAgPC9TY3JvbGxWaWV3PgogICAgICA8Q29uZWN0YXJEb2pvTW9kYWwgdmlzaWJsZT17c2hvd0Nvbm5lY3R9IG9uQ2xvc2U9eygpID0+IHNldFNob3dDb25uZWN0KGZhbHNlKX0gZmVkZXJhdGlvbklkPXtmZWRlcmF0aW9uSWR9IG9uRG9uZT17KCkgPT4gbG9hZCh0cnVlKX0gLz4KICAgIDwvU2hvamlCYWNrZ3JvdW5kPgogICk7Cn0KCmNvbnN0IHN0eWxlcyA9IFN0eWxlU2hlZXQuY3JlYXRlKHsKICBjb250ZW50OiB7IHBhZGRpbmc6IDQwLCBwYWRkaW5nVG9wOiA0OCwgcGFkZGluZ0JvdHRvbTogNzIsIG1heFdpZHRoOiAxMDAwLCB3aWR0aDogIjEwMCUiLCBhbGlnblNlbGY6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIHdhcm46IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEwLCBiYWNrZ3JvdW5kQ29sb3I6IFAucmVkV2FzaCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBQLnJlZExpbmUsIGJvcmRlclJhZGl1czogUi5tZCwgcGFkZGluZzogMTQsIG1hcmdpblRvcDogU1BbNF0gfSBhcyBWaWV3U3R5bGUsCiAgc2VjdGlvbjogeyBtYXJnaW5Ub3A6IFNQWzhdIH0gYXMgVmlld1N0eWxlLAogIHJlcVJvdzogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogMTIsIHBhZGRpbmdWZXJ0aWNhbDogMTIsIGJvcmRlclRvcFdpZHRoOiAxLCBib3JkZXJUb3BDb2xvcjogQy5saW5lIH0gYXMgVmlld1N0eWxlLAogIGRvam9OYW1lOiB7IGZvbnRGYW1pbHk6IEYuYm9keSwgZm9udFNpemU6IDE0LCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEMuaW5rIH0gYXMgVGV4dFN0eWxlLAogIHJlZnVzZTogeyBmb250RmFtaWx5OiBGLmJvZHksIGZvbnRTaXplOiAxMywgZm9udFdlaWdodDogIjYwMCIsIGNvbG9yOiBDLmluazMgfSBhcyBUZXh0U3R5bGUsCn0pOwo=
+// ============================================================
+// Conexões — Aura Karatê (federação) · Shoji
+// Como cada dojô se conecta à federação. Dados reais; estados honestos.
+// ============================================================
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert as RNAlert,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Icon } from "@/components/Icon";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
+import {
+  ShojiBackground, PageHead, SectionHead, Card, ShojiBadge, ShojiButton, Avatar, Mono, Body,
+} from "@/components/karate/shoji";
+import { ConectarDojoModal } from "@/components/karate/ConectarDojoModal";
+import { karateConnectionsApi, Connection } from "@/services/karateConnectionsApi";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+
+export function connView(c: Connection): { label: string; tone: "ok" | "warn" | "danger" | "neutral" } {
+  if (c.status === "connected" && c.via === "native") return { label: "Conectado · atualiza sozinho", tone: "ok" };
+  if (c.status === "connected" && c.via === "manual") return { label: "A federação cuida", tone: "neutral" };
+  if (c.status === "pending") return { label: "Esperando o dojô aceitar", tone: "warn" };
+  if (c.status === "error") return { label: "Conexão caiu", tone: "danger" };
+  return { label: "Desligado", tone: "neutral" };
+}
+
+export default function ConexoesIndex() {
+  const router = useRouter();
+  const { federationId } = useKarateFederation();
+  const [requests, setRequests] = useState<Connection[]>([]);
+  const [conns, setConns] = useState<Connection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showConnect, setShowConnect] = useState(false);
+
+  const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
+    try {
+      const [list, reqs] = await Promise.all([karateConnectionsApi.listConnections(federationId), karateConnectionsApi.listRequests(federationId)]);
+      setConns((list?.data ?? []).filter((c) => c.status !== "pending")); setRequests(reqs ?? []);
+    } catch { setError(true); }
+    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
+  }, [federationId]);
+  useEffect(() => { load(); }, [load]);
+
+  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { RNAlert.alert("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
+  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { RNAlert.alert("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
+
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
+  const connected = conns.filter((c) => c.status === "connected").length;
+  const problems = conns.filter((c) => c.status === "error").length;
+
+  return (
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
+        <PageHead
+          eyebrow="Dojôs da federação"
+          title="Conexões"
+          sub="Cada dojô se conecta de um jeito: ou usa o Aura Karatê e tudo se atualiza sozinho, ou a federação cuida de tudo."
+          actions={<ShojiButton label="Conectar dojô" icon="link-outline" variant="sumi" onPress={() => setShowConnect(true)} />}
+        />
+
+        {problems > 0 && (
+          <View style={styles.warn}>
+            <Icon name="warning" size={18} color={P.red} />
+            <Body style={{ flex: 1, color: C.ink }}>{problems === 1 ? "1 dojô parou de enviar atualizações" : `${problems} dojôs pararam de enviar atualizações`}. Abra o dojô e toque em Reconectar.</Body>
+          </View>
+        )}
+
+        {requests.length > 0 && (
+          <Card style={{ marginTop: SP[4] }}>
+            <SectionHead title="Dojôs querendo entrar" sub="Esperando você aceitar." />
+            {requests.map((r) => (
+              <View key={r.id} style={styles.reqRow}>
+                <Avatar name={r.dojo_name ?? "Dojô"} size={34} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dojoName}>{r.dojo_name}</Text>
+                  <Body muted style={{ fontSize: 11.5 }}>{r.fpkt_affiliation_id}{r.notes ? ` · ${r.notes}` : ""}</Body>
+                </View>
+                <ShojiButton label="Aceitar" variant="sumi" onPress={() => accept(r)} />
+                <TouchableOpacity onPress={() => refuse(r)} style={{ paddingHorizontal: 6, paddingVertical: 8 }}><Text style={styles.refuse}>Recusar</Text></TouchableOpacity>
+              </View>
+            ))}
+          </Card>
+        )}
+
+        <View style={styles.section}>
+          <SectionHead title="Dojôs conectados" sub={`${connected} conectado(s)`} />
+          {loading ? <ActivityIndicator style={{ marginTop: 24 }} size="large" color={P.red} />
+            : conns.length === 0 ? <Card><KarateEmptyState icon="link-outline" title="Nenhum dojô conectado ainda" subtitle="Use “Conectar dojô” para começar." style={{ paddingVertical: 28 }} /></Card>
+            : conns.map((c) => {
+              const v = connView(c);
+              return (
+                <TouchableOpacity key={c.id} onPress={() => router.push(`/karate/conexoes/${c.id}` as any) } activeOpacity={0.85}>
+                  <Card style={{ marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <Avatar name={c.dojo_name ?? "Dojô"} size={36} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dojoName}>{c.dojo_name}</Text>
+                      <Mono style={{ fontSize: 10, color: P.red, marginTop: 1 }}>{c.fpkt_affiliation_id}</Mono>
+                    </View>
+                    <ShojiBadge status={v.tone} label={v.label} />
+                    <Icon name="chevron-forward" size={16} color={C.ink4} />
+                  </Card>
+                </TouchableOpacity>
+              );
+            })}
+        </View>
+      </ScrollView>
+      <ConectarDojoModal visible={showConnect} onClose={() => setShowConnect(false)} federationId={federationId} onDone={() => load(true)} />
+    </ShojiBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 1000, width: "100%", alignSelf: "center" } as ViewStyle,
+  warn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.md, padding: 14, marginTop: SP[4] } as ViewStyle,
+  section: { marginTop: SP[8] } as ViewStyle,
+  reqRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
+  dojoName: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
+  refuse: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink3 } as TextStyle,
+});
