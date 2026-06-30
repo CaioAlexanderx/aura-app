@@ -103,6 +103,11 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
         res.renewed ? "Carteirinha renovada" : "Carteirinha emitida",
         warns.length ? `Atenção:\n• ${warns.join("\n• ")}` : "Processada com sucesso."
       );
+      // Fix campos brancos (25/06): a resposta do POST /issue-card já vem com
+      // birth_date/cpf/federation_logo (backend corrigido), mas refazemos o
+      // fetch para garantir paridade total com o shape do GET .../card —
+      // evita qualquer campo divergente sem precisar trocar de aba.
+      fetchCard();
     } catch (e: any) {
       notify("Não foi possível emitir", e?.message || "Tente novamente.");
     } finally {

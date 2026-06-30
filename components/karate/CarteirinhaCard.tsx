@@ -19,6 +19,24 @@ import { FpktLogo } from "@/components/karate/FpktLogo";
 import { KarateFonts } from "@/constants/karateTheme";
 import { MembershipCard } from "@/services/karateCardApi";
 
+// Logo da carteirinha: usa a logo REAL da federação (card.federation_logo,
+// vindo de companies.karate_logo_url/logo_url) quando disponível. Antes a
+// carteirinha sempre renderizava o bitmap fixo da FPKT (FpktLogo),
+// independente de qual federação emitiu o cartão — bug de "logo errada"
+// reportado pela cliente (multi-federação).
+function CardLogo({ card, size }: { card: MembershipCard; size: number }) {
+  if (card.federation_logo) {
+    return (
+      <Image
+        source={{ uri: card.federation_logo }}
+        accessibilityLabel={card.federation_name || "Logo da federação"}
+        style={{ width: size, height: Math.round(size * 0.95), resizeMode: "contain" }}
+      />
+    );
+  }
+  return <FpktLogo size={size} />;
+}
+
 const CARD_W = 1012;
 const CARD_H = 638;
 const RATIO = CARD_H / CARD_W; // 0.6304
@@ -126,7 +144,7 @@ function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number;
       <Watermark f={f} size={560} x={470} y={140} opacity={0.045} />
       {/* header */}
       <View style={{ height: f(124), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(22), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <FpktLogo size={f(88)} />
+        <CardLogo card={card} size={f(88)} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: f(13.5), fontWeight: "700", letterSpacing: f(2.4), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
           <Text style={{ fontSize: f(29), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>
@@ -189,7 +207,7 @@ function Back({ card, f, H, verifyUrl }: { card: MembershipCard; f: (n: number) 
       <Watermark f={f} size={520} x={150} y={250} opacity={0.035} />
       {/* header */}
       <View style={{ height: f(104), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(18), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <FpktLogo size={f(66)} />
+        <CardLogo card={card} size={f(66)} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: f(11.5), fontWeight: "700", letterSpacing: f(2.2), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
           <Text style={{ fontSize: f(21), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>

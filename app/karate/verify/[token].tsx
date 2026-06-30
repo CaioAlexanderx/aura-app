@@ -25,9 +25,22 @@ import { karateCardApi, CardVerification, VerifyStatus } from "@/services/karate
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 // ── helpers ──────────────────────────────────────────────
+// tz-safe date formatter (mesmo padrão de CarteirinhaPanel/CarteirinhaCard).
+//
+// new Date("YYYY-MM-DD") é interpretado como UTC midnight pelo spec do JS, o
+// que no Brasil (UTC-3) exibe o dia anterior. Datas date-only são parseadas
+// manualmente e construídas em hora LOCAL para preservar o dia correto.
 function fmtDate(iso?: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const datePart = iso.split("T")[0];
+  const parts = datePart.split("-");
+  let d: Date;
+  if (parts.length === 3) {
+    const [y, m, day] = parts.map(Number);
+    d = new Date(y, m - 1, day);
+  } else {
+    d = new Date(iso);
+  }
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
@@ -221,12 +234,9 @@ function VerifiedCard({ v }: { v: CardVerification }) {
           </View>
         </View>
 
-        {/* data grid */}
+        {/* data grid — carteirinha SEM validade por tempo (decisão Caio 08/06) */}
         <View style={styles.grid}>
-          <View style={styles.gridRow}>
-            <Cell k="Validade" v={fmtDate(v.validade)} />
-            <Cell k="Situação" v={sit.txt} valueColor={sit.color} />
-          </View>
+          <Cell k="Situação" v={sit.txt} valueColor={sit.color} full />
           <Cell k="Dojo / academia" v={v.dojo_name || "—"} full />
           {v.card_number ? <Cell k="Nº de registro FPKT" v={v.card_number} mono full /> : null}
         </View>

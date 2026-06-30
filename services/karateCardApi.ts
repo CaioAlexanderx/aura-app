@@ -32,6 +32,9 @@ export interface MembershipCard {
   issued_at: string;
   verify_token: string;
   status: CardStatus;          // carteirinha SEM validade por tempo: active | revoked
+  /** Logo/nome da federação emissora (companies.karate_logo_url/logo_url). Usado no header da carteirinha. */
+  federation_name?: string | null;
+  federation_logo?: string | null;
 }
 
 export interface IssueCardResult extends MembershipCard {
