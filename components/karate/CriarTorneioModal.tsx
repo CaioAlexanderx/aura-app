@@ -429,7 +429,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                     ))}
                   </ScrollView>
 
-                  <Field flex label="Vagas" mono value={draft.maxEntries}
+                  <Field label="Vagas" mono value={draft.maxEntries}
                     onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
                   <Field label="Taxa da categoria" hint="usa a taxa padrão se vazio" mono value={draft.fee}
                     onChangeText={(v) => setDraft((d) => ({ ...d, fee: maskMoney(v) }))} placeholder="0,00" keyboardType="numeric" prefix="R$" />
