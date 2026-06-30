@@ -43,7 +43,7 @@ import { request } from "@/services/api";
 type EventKind = "exame" | "curso";
 
 // Passos por tipo: Exame monta banca + candidatos; Curso é só Dados.
-const STEPS_EXAME = ["Dados", "Banca", "Candidatos"];
+const STEPS_EXAME = ["Dados"];
 const STEPS_CURSO = ["Dados"];
 
 // Faixa-alvo default da inscrição de candidato no Exame amplo. Não é exposta
@@ -161,13 +161,10 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
         },
       });
       setCreatedExamId(exam?.id ?? null);
-      if (kind === "curso") {
-        // Curso não gradua: não há banca nem candidatos. Conclui direto.
-        handleFinish();
-        return;
-      }
-      setStep(1);
-      searchPool("");
+      // Passo único: banca e candidatos saem da criação — a inscrição já
+      // passa pelo filtro da federação/senseis (decisão Caio 30/06).
+      handleFinish();
+      return;
     } catch (e: any) {
       setError(e?.message ?? "Não foi possível criar o evento. Tente novamente.");
     } finally {
@@ -211,9 +208,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
   const handleFinish = () => {
     onCreated?.();
     const what = kind === "curso" ? "Curso" : "Exame";
-    const detail = kind === "curso"
-      ? `"${title}" criado.`
-      : `"${title}" criado com ${selected.length} candidato(s) e ${examiners.length} examinador(es).`;
+    const detail = `"${title}" criado.`;
     Alert.alert(`${what} criado!`, detail, [{ text: "OK", onPress: resetAndClose }]);
   };
 
@@ -305,7 +300,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
                 <View style={styles.kindRow}>
                   <KindOption
                     label="Exame"
-                    desc="Avaliação com banca e candidatos"
+                    desc="Avaliação de graduação"
                     icon="ribbon"
                     active={kind === "exame"}
                     onPress={() => { setKind("exame"); setStep(0); }}
