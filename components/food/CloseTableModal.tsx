@@ -354,7 +354,7 @@ export function CloseTableModal({ table, comanda, onClose, onForceFree }: Props)
                 <View style={{ flex: 1 }} />
                 {step === "review" && (
                   <Pressable onPress={() => setStep("payment")} style={primaryBtn}>
-                    <Text style={primaryBtnText}>Pagamento -></Text>
+                    <Text style={primaryBtnText}>{"Pagamento ->"}</Text>
                   </Pressable>
                 )}
                 {step === "payment" && (
