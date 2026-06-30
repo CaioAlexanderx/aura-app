@@ -32,6 +32,8 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateApi, ExamCandidate, BeltExam, PractitionerListItem } from "@/services/karateApi";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
+import { request } from "@/services/api";
+import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 
 const RESULT_BADGE: Record<string, "ok" | "alert" | "neutral"> = {
   approved: "ok", rejected: "alert", pending: "neutral",
@@ -53,15 +55,50 @@ function fmtDate(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
+// Formata o valor de uma resposta (checkbox -> Sim/Não; array de select
+// múltiplo -> join; o resto vira string direta).
+function formatResponseValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  return String(value);
+}
+
+// Bloco A (item 4) — lista legível das registration_responses de um inscrito,
+// usando registration_fields do evento para resolver label a partir da key.
+// Não é dump de JSON: cada resposta vira "Label: valor".
+function RegistrationResponsesList({
+  responses, fields,
+}: {
+  responses?: Record<string, unknown> | null;
+  fields?: RegistrationField[] | null;
+}) {
+  if (!responses || Object.keys(responses).length === 0) return null;
+  const fieldByKey = new Map((fields ?? []).map((f) => [f.key, f]));
+  const entries = Object.entries(responses).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return null;
+  return (
+    <View style={styles.responsesBox}>
+      {entries.map(([key, value]) => (
+        <View key={key} style={styles.responseRow}>
+          <Text style={styles.responseLabel}>{fieldByKey.get(key)?.label ?? key}</Text>
+          <Text style={styles.responseValue}>{formatResponseValue(value)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ── Seção de Participantes (apenas para curso) ──────────────────
 interface ParticipantesSectionProps {
   candidates: ExamCandidate[];
   setCandidates: React.Dispatch<React.SetStateAction<ExamCandidate[]>>;
   federationId: string;
   examId: string;
+  registrationFields?: RegistrationField[];
 }
 
-function ParticipantesSection({ candidates, setCandidates, federationId, examId }: ParticipantesSectionProps) {
+function ParticipantesSection({ candidates, setCandidates, federationId, examId, registrationFields }: ParticipantesSectionProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PractitionerListItem[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -203,6 +240,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
               </View>
               <Badge status="ok" label="Inscrito" />
             </View>
+            <RegistrationResponsesList responses={c.registration_responses} fields={registrationFields} />
           </View>
         ))
       )}
@@ -271,6 +309,11 @@ export default function ExameDetalhe() {
   const [issuingCert, setIssuingCert] = useState<string | null>(null);
   // Nav P2: slug público da federação para o link de inscrição (empty state).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
+  // Bloco A: publicar inscrições (draft -> open) e copiar link direto do evento.
+  const [publishing, setPublishing] = useState(false);
+  const [copyingLink, setCopyingLink] = useState(false);
+  // Bloco A: formulário de inscrição configurável (registration_fields).
+  const [savingFields, setSavingFields] = useState(false);
 
   const isCurso = exam?.exam_type === "curso";
 
@@ -313,6 +356,62 @@ export default function ExameDetalhe() {
       ok ? "Link copiado" : "Não foi possível copiar",
       ok ? `Compartilhe a página pública da federação:\n${publicUrl}` : "Copie manualmente: " + publicUrl
     );
+  };
+
+  // Link público da INSCRIÇÃO deste evento (não a home da federação).
+  // Usa o slug amigável quando disponível; cai para federationId (UUID) —
+  // resolveFederation no backend aceita slug OU UUID.
+  const inscriptionUrl = exam
+    ? (pubSlug ? buildMicrositeUrl(pubSlug, `/inscricao/${exam.id}`) : buildMicrositeUrl(federationId, `/inscricao/${exam.id}`))
+    : null;
+
+  const copyInscriptionLink = async () => {
+    if (!inscriptionUrl) return;
+    setCopyingLink(true);
+    try {
+      const ok = await copyToClipboard(inscriptionUrl);
+      Alert.alert(
+        ok ? "Link copiado" : "Não foi possível copiar",
+        ok ? `Link de inscrição copiado:\n${inscriptionUrl}` : "Copie manualmente: " + inscriptionUrl
+      );
+    } finally {
+      setCopyingLink(false);
+    }
+  };
+
+  // Publica o evento (draft -> open). PATCH já aceita status; sem rota nova.
+  const handlePublish = async () => {
+    if (!exam) return;
+    setPublishing(true);
+    try {
+      await request(`/federation/${federationId}/belt-exams/${exam.id}`, {
+        method: "PATCH",
+        body: { status: "open" },
+      });
+      setExam((prev) => (prev ? { ...prev, status: "open" } : prev));
+    } catch (e: any) {
+      Alert.alert("Não foi possível publicar", e?.message ?? "Tente novamente.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // Salva os campos do formulário de inscrição configurável (Bloco A).
+  const handleSaveRegistrationFields = async (fields: RegistrationField[]) => {
+    if (!exam) return;
+    setSavingFields(true);
+    try {
+      await request(`/federation/${federationId}/belt-exams/${exam.id}`, {
+        method: "PATCH",
+        body: { registration_fields: fields },
+      });
+      setExam((prev) => (prev ? { ...prev, registration_fields: fields } : prev));
+      Alert.alert("Campos salvos", "O formulário de inscrição foi atualizado.");
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente.");
+    } finally {
+      setSavingFields(false);
+    }
   };
 
   const handleCandidateUpdate = (updated: ExamCandidate) => {
@@ -385,14 +484,13 @@ export default function ExameDetalhe() {
         <View style={styles.examHeader}>
           <View style={styles.examTitleRow}>
             <Text style={styles.examTitle}>{exam.title}</Text>
-            {isCurso ? (
-              <Badge status="neutral" label="Curso" />
-            ) : (
+            <View style={styles.headerBadges}>
+              {isCurso && <Badge status="neutral" label="Curso" />}
               <Badge
                 status={exam.status === "open" ? "ok" : exam.status === "closed" ? "warn" : "neutral"}
                 label={exam.status === "open" ? "Aberto" : exam.status === "closed" ? "Encerrado" : "Rascunho"}
               />
-            )}
+            </View>
           </View>
           <View style={styles.metaRow}>
             <Icon name={"calendar-outline" as any} size={13} color={KarateColors.ink3} />
@@ -405,6 +503,37 @@ export default function ExameDetalhe() {
             )}
           </View>
           {!isCurso && <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>}
+
+          {/* Bloco A: publicar inscrições (draft -> open) + copiar link direto do evento. */}
+          <View style={styles.headerActions}>
+            {exam.status === "draft" && (
+              <KarateButton
+                label={publishing ? "Publicando..." : "Publicar / Ativar inscrições"}
+                variant="sumi"
+                size="sm"
+                loading={publishing}
+                onPress={handlePublish}
+                style={{ flex: 1 }}
+              />
+            )}
+            <KarateButton
+              label={copyingLink ? "Copiando..." : "Copiar link de inscrição"}
+              variant="secondary"
+              size="sm"
+              loading={copyingLink}
+              onPress={copyInscriptionLink}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+
+        {/* Bloco A: formulário de inscrição configurável (exame e curso). */}
+        <View style={styles.fieldsSection}>
+          <RegistrationFieldsEditor
+            fields={exam.registration_fields ?? []}
+            onSave={handleSaveRegistrationFields}
+            saving={savingFields}
+          />
         </View>
 
         {/* ── Seção específica de EXAME ─────────────────────────── */}
@@ -446,6 +575,7 @@ export default function ExameDetalhe() {
                     <Badge status={RESULT_BADGE[c.result]} label={RESULT_LABEL[c.result]} />
                   </View>
                   {c.notes && <Text style={styles.notes}>Obs: {c.notes}</Text>}
+                  <RegistrationResponsesList responses={c.registration_responses} fields={exam.registration_fields} />
 
                   {c.result === "approved" && (
                     <View style={styles.certSection}>
@@ -479,6 +609,7 @@ export default function ExameDetalhe() {
             setCandidates={setCandidates}
             federationId={federationId}
             examId={exam.id}
+            registrationFields={exam.registration_fields}
           />
         )}
       </ScrollView>
@@ -505,10 +636,13 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, color: KarateColors.primary, fontWeight: "600" } as TextStyle,
   examHeader: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 6 } as ViewStyle,
   examTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 } as ViewStyle,
+  headerBadges: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  headerActions: { flexDirection: "row", gap: 8, marginTop: 8 } as ViewStyle,
   examTitle: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" } as ViewStyle,
   metaText: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   actions: { flexDirection: "row", gap: 8 } as ViewStyle,
+  fieldsSection: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink2, marginTop: 4 } as TextStyle,
   emptyTxt: { fontSize: 13, color: KarateColors.ink3, paddingVertical: 8 } as TextStyle,
   candidateCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 6 } as ViewStyle,
@@ -517,6 +651,10 @@ const styles = StyleSheet.create({
   candidateName: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   candidateMeta: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   notes: { fontSize: 12, color: KarateColors.warn, fontStyle: "italic" } as TextStyle,
+  responsesBox: { marginTop: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: KarateColors.border, gap: 4 } as ViewStyle,
+  responseRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 } as ViewStyle,
+  responseLabel: { fontSize: 11.5, color: KarateColors.ink3, flexShrink: 0 } as TextStyle,
+  responseValue: { fontSize: 11.5, color: KarateColors.ink, fontWeight: "600", flex: 1, textAlign: "right" } as TextStyle,
   certSection: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 6, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   certLabel: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   certUrl: { fontSize: 11, color: KarateColors.primary, flex: 1 } as TextStyle,
