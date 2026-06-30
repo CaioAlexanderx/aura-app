@@ -314,7 +314,7 @@ export function RelacaoFaixasCard({
     <View style={st.card}>
       <SectionRow
         title="Relação de faixas"
-        sub="Distribuição atual de praticantes por graduação · snapshot da rede"
+        sub="Distribuição atual de praticantes por graduação"
         onDetail={onDetail}
         csvData={{
           filename: "relacao-faixas",
