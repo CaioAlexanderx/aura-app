@@ -6,7 +6,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { PractitionerDetail } from "@/services/karateApi";
-import { formatIsoToBr, formatIsoToBrVariant } from "@/components/inputs/DateInput";
+import { formatIsoToBr } from "@/components/inputs/DateInput";
 import { formatCpfDisplay, formatPhoneDisplay, formatCepDisplay, ageFromBirthDate } from "./helpers";
 
 interface Props {
@@ -64,7 +64,7 @@ export function CadastroTab({ practitioner }: Props) {
         label="Nascimento"
         value={
           p.birth_date
-            ? `${formatIsoToBrVariant(p.birth_date)}${age !== null ? ` (${age} anos)` : ""}`
+            ? `${formatIsoToBr(p.birth_date)}${age !== null ? ` (${age} anos)` : ""}`
             : null
         }
       />
