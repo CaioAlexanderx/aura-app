@@ -612,6 +612,50 @@ export default function ExameDetalhe() {
             registrationFields={exam.registration_fields}
           />
         )}
+
+        {/* ── Bloco C — Certificados (evento fechado) ───────────────
+            Apenas lista quem está elegível: curso = todos os participantes;
+            exame/graus = apenas aprovados. SEM geração de arte — só
+            status de elegibilidade (workflow de certificados, fase futura
+            cuida da emissão em si). Checa 'closed' (valor canônico) e
+            'done' (valor legado que o backend gravava antes deste bloco). */}
+        {(exam.status === "closed" || (exam.status as string) === "done") && (
+          <View style={styles.certsSection}>
+            <View style={styles.certsHeader}>
+              <Icon name="ribbon" size={16} color={KarateColors.primary} />
+              <Text style={styles.sectionTitle}>Certificados</Text>
+            </View>
+            {candidates.filter((c) => c.certificate_eligible).length === 0 ? (
+              <KarateEmptyState
+                icon="ribbon-outline"
+                title="Nenhum elegível"
+                subtitle={
+                  isCurso
+                    ? "Nenhum participante ficou elegível ao fechar este curso."
+                    : "Nenhum candidato aprovado ficou elegível ao fechar este exame."
+                }
+                style={{ paddingVertical: 28 }}
+              />
+            ) : (
+              <View style={{ gap: 8 }}>
+                <Text style={styles.certsHint}>
+                  {isCurso
+                    ? "Todos os participantes do curso ficaram elegíveis."
+                    : "Candidatos aprovados ficaram elegíveis."}
+                </Text>
+                {candidates.filter((c) => c.certificate_eligible).map((c) => (
+                  <View key={c.id} style={styles.certEligibleRow}>
+                    <Icon name="checkmark-circle" size={16} color={KarateColors.ok ?? KarateColors.primary} />
+                    <Text style={styles.certEligibleName}>{c.full_name}</Text>
+                    {c.karate_registration_number && (
+                      <Text style={styles.candidateMeta}>{c.karate_registration_number}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal de resultados — apenas para exame */}
@@ -658,4 +702,10 @@ const styles = StyleSheet.create({
   certSection: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 6, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   certLabel: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   certUrl: { fontSize: 11, color: KarateColors.primary, flex: 1 } as TextStyle,
+  // ── Bloco C — Certificados (elegibilidade pós-fechamento) ──────
+  certsSection: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10 } as ViewStyle,
+  certsHeader: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  certsHint: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  certEligibleRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: KarateColors.bg, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
+  certEligibleName: { flex: 1, fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
 });
