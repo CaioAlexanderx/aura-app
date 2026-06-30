@@ -1,6 +1,11 @@
 import { Platform, Text } from "react-native";
 
 const PATHS: Record<string, string> = {
+  // Migrados de Feather (Studio ficha tecnica)
+  layers:         "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5",
+  inbox:          "M22 12h-6l-2 3h-4l-2-3H2 M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z",
+  save:           "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z M17 21v-8H7v8 M7 3v5h8",
+  plus_circle:    "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v8 M8 12h8",
   // Migrados de Ionicons (fix/karate-icons-svg)
   check_circle:   "M22 11.08V12a10 10 0 11-5.93-9.14 M22 4L12 14.01l-3-3",
   mail:           "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6",
@@ -143,6 +148,9 @@ const PATHS: Record<string, string> = {
 // influencia de lucide-react. Sem aliases, retornavam null e quebravam UI.
 // Mantemos snake_case como canonico mas resolvemos kebab tambem.
 const ALIASES: Record<string, string> = {
+  "trash-2": "trash",
+  "alert-triangle": "alert",
+  "plus-circle": "plus_circle",
   // Variantes Ionicons -> glifos SVG (fix/karate-icons-svg)
   "arrow-forward": "arrow_right",
   "copy-outline": "copy",

@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { type StudioPalette } from "@/constants/studio-tokens";
@@ -483,7 +483,7 @@ export default function StudioFichaTecnicaPanel({
             <Text style={styles.headerSubtitle}>Ficha tecnica</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: t.bgSoft }]}>
-            <Feather name="layers" size={12} color={t.ink2} />
+            <Icon name="layers" size={12} color={t.ink2} />
             <Text style={[styles.badgeText, { color: t.ink2 }]}>
               {items.length} {items.length === 1 ? "item" : "itens"}
             </Text>
@@ -502,7 +502,7 @@ export default function StudioFichaTecnicaPanel({
           {/* Margem: só exibe se a ficha tem itens reais; caso contrário mostra callout */}
           {fichaVazia ? (
             <View style={[styles.kpiBox, styles.kpiMargin, styles.kpiMarginEmpty]}>
-              <Feather name="info" size={13} color={t.ink3} />
+              <Icon name="info" size={13} color={t.ink3} />
               <Text style={[styles.kpiEmptyMsg, { color: t.ink3 }]}>
                 Defina a ficha tecnica para ver custo e margem
               </Text>
@@ -526,7 +526,7 @@ export default function StudioFichaTecnicaPanel({
 
         {items.length === 0 ? (
           <View style={styles.emptyRowsBox}>
-            <Feather name="inbox" size={20} color={t.ink3} />
+            <Icon name="inbox" size={20} color={t.ink3} />
             <Text style={styles.emptyRowsText}>Nenhum insumo adicionado ainda</Text>
           </View>
         ) : (
@@ -560,7 +560,7 @@ export default function StudioFichaTecnicaPanel({
                       setPickerQuery("");
                     }}
                   >
-                    <Feather name="package" size={14} color={t.ink2} />
+                    <Icon name="package" size={14} color={t.ink2} />
                     <Text
                       style={[
                         styles.inputSelectText,
@@ -570,7 +570,7 @@ export default function StudioFichaTecnicaPanel({
                     >
                       {displayName}
                     </Text>
-                    <Feather
+                    <Icon
                       name={isOpen ? "chevron-up" : "chevron-down"}
                       size={14}
                       color={t.ink3}
@@ -581,14 +581,14 @@ export default function StudioFichaTecnicaPanel({
                     style={styles.removeBtn}
                     hitSlop={8}
                   >
-                    <Feather name="trash-2" size={16} color={t.dangerInk} />
+                    <Icon name="trash-2" size={16} color={t.dangerInk} />
                   </Pressable>
                 </View>
 
                 {isOpen ? (
                   <View style={styles.pickerBox}>
                     <View style={styles.pickerSearch}>
-                      <Feather name="search" size={14} color={t.ink3} />
+                      <Icon name="search" size={14} color={t.ink3} />
                       <TextInput
                         value={pickerQuery}
                         onChangeText={setPickerQuery}
@@ -715,7 +715,7 @@ export default function StudioFichaTecnicaPanel({
                   </View>
                   {isVariantMode && activeVariant ? (
                     <View style={[styles.variantTag, { backgroundColor: t.warningSoft }]}>
-                      <Feather name="layers" size={11} color={t.warningInk} />
+                      <Icon name="layers" size={11} color={t.warningInk} />
                       <Text style={[styles.variantTagText, { color: t.warningInk }]}>
                         Varia por: {activeVariant.fieldLabel}
                       </Text>
@@ -738,7 +738,7 @@ export default function StudioFichaTecnicaPanel({
                           <Text style={styles.variantPickerBtnText}>
                             {activeVariant.fieldLabel}
                           </Text>
-                          <Feather
+                          <Icon
                             name={variantPickerOpen ? "chevron-up" : "chevron-down"}
                             size={14}
                             color={t.ink3}
@@ -825,7 +825,7 @@ export default function StudioFichaTecnicaPanel({
 
                 {isVariantMode && !hasVariants ? (
                   <View style={[styles.hintBox, { backgroundColor: t.warningSoft }]}>
-                    <Feather name="alert-triangle" size={14} color={t.warningInk} />
+                    <Icon name="alert-triangle" size={14} color={t.warningInk} />
                     <Text style={[styles.hintText, { color: t.warningInk }]}>
                       Produto sem variantes. Cadastre options em Personalizacao.
                     </Text>
@@ -842,14 +842,14 @@ export default function StudioFichaTecnicaPanel({
             style={[styles.addRowBtn, { flex: 1 }]}
             disabled={inputs.length === 0}
           >
-            <Feather name="plus" size={16} color={t.primary} />
+            <Icon name="plus" size={16} color={t.primary} />
             <Text style={[styles.addRowText, { color: t.primary }]}>Adicionar insumo</Text>
           </Pressable>
           <Pressable
             onPress={() => setNovoInsumoOpen(true)}
             style={[styles.addRowBtn, styles.btnSec, { flex: 1 }]}
           >
-            <Feather name="plus-circle" size={16} color={t.ink2} />
+            <Icon name="plus-circle" size={16} color={t.ink2} />
             <Text style={[styles.addRowText, styles.btnSecTxt, { color: t.ink2 }]}>
               Cadastrar insumo
             </Text>
@@ -861,7 +861,7 @@ export default function StudioFichaTecnicaPanel({
             onPress={() => router.push("/studio/insumos")}
             style={styles.hintBox}
           >
-            <Feather name="info" size={14} color={t.infoInk} />
+            <Icon name="info" size={14} color={t.infoInk} />
             <Text style={[styles.hintText, { color: t.infoInk }]}>
               Cadastre insumos pra liberar a edicao da ficha.
             </Text>
@@ -892,7 +892,7 @@ export default function StudioFichaTecnicaPanel({
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <Feather name="save" size={16} color="#fff" />
+              <Icon name="save" size={16} color="#fff" />
               <Text style={styles.saveBtnText}>Salvar ficha tecnica</Text>
             </>
           )}
