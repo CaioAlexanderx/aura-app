@@ -125,7 +125,7 @@ export default function PraticantesScreen() {
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
-  // Sincroniza busca quando o param `q` muda (ex.(�nova busca do shell).
+  // Sincroniza busca quando o param `q` muda (ex.: nova busca vinda do shell).
   // Atualiza tanto o texto visível quanto o termo debounced (sem esperar).
   useEffect(() => { setQ(qParam); setDebouncedQ(qParam); }, [qParam]);
 

@@ -1,5 +1,5 @@
 // ============================================================
-// Eventos — Visão Geral ℔ Aura Karatê (federação) · Shoji
+// Eventos — Visão Geral · Aura Karatê (federação) · Shoji
 // Fiel ao pane "graduacoes" do standalone v5. Dados reais.
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
