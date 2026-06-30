@@ -28,20 +28,23 @@ const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; co
 export default function CompeticoesIndex() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
-  const year = new Date().getFullYear();
   const [items, setItems] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
+  // NOTA (fix campeonato "some" sem erro): a listagem NÃO filtra por season.
+  // Antes filtrava implicitamente pelo ano corrente (sem seletor visível na UI),
+  // então um campeonato criado com outra temporada (ex.: planejamento do ano
+  // seguinte) era salvo com sucesso mas sumia da lista sem nenhum aviso.
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
-    try { const res = await karateCompetitionsApi.listCompetitions(federationId, { season: year }); setItems(res?.data ?? []); }
+    try { const res = await karateCompetitionsApi.listCompetitions(federationId, { pageSize: 200 }); setItems(res?.data ?? []); }
     catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
-  }, [federationId, year]);
+  }, [federationId]);
   useEffect(() => { load(); }, [load]);
 
   if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
@@ -53,7 +56,7 @@ export default function CompeticoesIndex() {
     <ShojiBackground>
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
         <PageHead
-          eyebrow={`Campeonatos ${year} · ${items.length} ${items.length === 1 ? "campeonato" : "campeonatos"}`}
+          eyebrow={`${items.length} ${items.length === 1 ? "campeonato" : "campeonatos"} · todas as temporadas`}
           title="Competições"
           sub="Campeonato, etapas do circuito estadual e ranking acumulado."
           actions={<ShojiButton label="Novo campeonato" icon="add" variant="sumi" onPress={() => setShowCreate(true)} />}
@@ -77,6 +80,7 @@ export default function CompeticoesIndex() {
                     </View>
                     <View style={styles.metaRow}>
                       <Meta icon="calendar-outline" text={fmtDate(c.event_date)} />
+                      <Meta icon="flag-outline" text={`Temporada ${c.season}`} />
                       {c.circuit_round ? <Meta icon="flag-outline" text={`${c.circuit_round}ª etapa`} /> : null}
                       {!!c.location && <Meta icon="location-outline" text={c.location} />}
                     </View>
