@@ -1508,3 +1508,66 @@ export const karateSettingsApi = {
   ): Promise<{ updated: boolean; configured: boolean }> =>
     karateApi.updateFederationPayments(federationId, body),
 };
+
+// =================================================================
+// Banners / Divulgacoes — Track Admin Banners
+// =================================================================
+
+export type BannerFormat = "square" | "story" | "landscape";
+export type BannerPlacement = "hub" | "inscricao" | "ambos";
+
+export interface Banner {
+  id: string;
+  federation_id: string;
+  title: string | null;
+  image_url: string;
+  format: BannerFormat;
+  placement: BannerPlacement;
+  event_id: string | null;
+  event_name: string | null;
+  active: boolean;
+  sort_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+}
+
+export interface BannerCreateInput {
+  image_base64: string;
+  image_content_type: string;
+  format: BannerFormat;
+  title?: string | null;
+  placement?: BannerPlacement;
+  event_id?: string | null;
+  sort_order?: number;
+  active?: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+}
+
+export interface BannerPatchInput {
+  active?: boolean;
+  sort_order?: number;
+  title?: string | null;
+  format?: BannerFormat;
+  event_id?: string | null;
+  placement?: BannerPlacement;
+}
+
+export const bannerApi = {
+  /** GET /federation/:fedId/banners */
+  listBanners: (fedId: string): Promise<{ banners: Banner[] }> =>
+    request(`/federation/${fedId}/banners`),
+
+  /** POST /federation/:fedId/banners — JSON base64 variant */
+  createBanner: (fedId: string, body: BannerCreateInput): Promise<{ banner: Banner }> =>
+    request(`/federation/${fedId}/banners`, { method: "POST", body, timeout: 60000 }),
+
+  /** PATCH /federation/:fedId/banners/:id */
+  updateBanner: (fedId: string, id: string, patch: BannerPatchInput): Promise<{ banner: Banner }> =>
+    request(`/federation/${fedId}/banners/${id}`, { method: "PATCH", body: patch }),
+
+  /** DELETE /federation/:fedId/banners/:id */
+  deleteBanner: (fedId: string, id: string): Promise<{ ok: boolean }> =>
+    request(`/federation/${fedId}/banners/${id}`, { method: "DELETE" }),
+};
