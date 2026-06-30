@@ -41,7 +41,7 @@ type FormatOption = { value: BannerFormat; label: string; ratio: number };
 type PlacementOption = { value: BannerPlacement; label: string };
 
 const FORMAT_OPTIONS: FormatOption[] = [
-  { value: "1:1",       label: "Quadrado 1:1",              ratio: 1 },
+  { value: "square",       label: "Quadrado 1:1",              ratio: 1 },
   { value: "story",     label: "Story 1080x1920",           ratio: 9 / 16 },
   { value: "landscape", label: "Paisagem 1920x1080",        ratio: 16 / 9 },
 ];
@@ -103,7 +103,7 @@ const EMPTY_FORM: FormState = {
   base64: "",
   contentType: "image/jpeg",
   previewUrl: "",
-  format: "1:1",
+  format: "square",
   title: "",
   placement: "ambos",
   eventId: "",

@@ -1513,7 +1513,7 @@ export const karateSettingsApi = {
 // Banners / Divulgacoes — Track Admin Banners
 // =================================================================
 
-export type BannerFormat = "1:1" | "story" | "landscape";
+export type BannerFormat = "square" | "story" | "landscape";
 export type BannerPlacement = "hub" | "inscricao" | "ambos";
 
 export interface Banner {
