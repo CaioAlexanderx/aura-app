@@ -28,7 +28,20 @@ export function fmtN(v: number): string {
 }
 export function dateSlice(s: string | null | undefined): string {
   if (!s) return "";
-  return s.slice(0, 10).split("-").reverse().join("/");
+  const str = String(s);
+  // ISO yyyy-mm-dd (com ou sem hora) -> dd/mm/yyyy
+  const iso = str.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return iso.split("-").reverse().join("/");
+  }
+  // Qualquer outra string de data parseavel (ex.: "Sun Feb 01 2026...") -> dd/mm/yyyy
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  }
+  return "";
 }
 export function fmtMesAno(mes: string, ano: string | number): string {
   // mes pode ser "Jan","Feb","fev" etc — monta uma data e formata em pt-BR curto

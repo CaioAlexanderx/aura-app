@@ -96,7 +96,7 @@ export function CadastroTab({ practitioner }: Props) {
       )}
 
       <SectionHeader title="ATIVIDADE" />
-      <Field label="Afiliado em" value={p.affiliation_since ? formatIsoToBr(p.affiliation_since) : null} />
+      <Field label="Filiado em" value={p.affiliation_since ? formatIsoToBr(p.affiliation_since) : null} />
       <Field label="Dojô" value={p.dojo_name} />
       <Field label="Anuidade" value={p.membership_status} />
     </View>

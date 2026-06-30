@@ -127,7 +127,7 @@ export default function DojosScreen() {
     <PageHead
       eyebrow={`${total} ${total === 1 ? "dojô filiado" : "dojôs filiados"} · ${allRegions.length || "—"} regiões`}
       title="Dojôs filiados"
-      sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada afiliado."
+      sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada filiado."
       actions={<ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />}
     />
   );

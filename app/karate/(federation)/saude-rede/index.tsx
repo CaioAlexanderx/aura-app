@@ -2,12 +2,12 @@
 // Saúde da Rede — Aura Karatê (Track L) · Shoji
 //
 // Painel de inteligência institucional da federação:
-//   Afiliação · Cobertura · Inadimplência · Projeção de Receita
+//   Filiação · Cobertura · Inadimplência · Projeção de Receita
 //   Graduações · Relação de Faixas + drawers de detalhe + CSV.
 //
 // Design: Shoji (papel de arroz opaco, sumi, vermelhão raro).
 // Indicadores derivados de dados INSTITUCIONAIS da federação:
-//   afiliações, anuidades, exames registrados, competições, geografia.
+//   filiações, anuidades, exames registrados, competições, geografia.
 // NÃO inclui métricas internas de dojô (presença, churn local).
 //
 // Orquestrador slim: mantém todo o data-fetching e a montagem dos
@@ -103,13 +103,13 @@ export default function SaudeRedeScreen() {
   function drawerProps(): { title: string; sub: string; cols: DrawerCol[]; rows: DrawerRow[] } {
     if (drawerKey === "afiliacao" && afiliacao) {
       return {
-        title: "Afiliação da rede",
-        sub: "Dojôs afiliados · situação de afiliação " + afiliacao.season,
+        title: "Filiação da rede",
+        sub: "Dojôs filiados · situação de filiação " + afiliacao.season,
         cols: [
           { key: "name", label: "Dojô" },
           { key: "city", label: "Cidade" },
           { key: "region", label: "Região" },
-          { key: "affiliated_since", label: "Afiliado desde", align: "right" },
+          { key: "affiliated_since", label: "Filiado desde", align: "right" },
           { key: "annuity_status", label: "Anuidade" },
         ],
         rows: afiliacao.dojos.map((d) => ({
@@ -148,7 +148,7 @@ export default function SaudeRedeScreen() {
     if (drawerKey === "inadimplencia" && inad) {
       return {
         title: "Inadimplência da rede",
-        sub: "Anuidades de afiliação dos dojôs · status de pagamento",
+        sub: "Anuidades de filiação dos dojôs · status de pagamento",
         cols: [
           { key: "dojo_name", label: "Dojô" },
           { key: "city", label: "Cidade" },
@@ -247,7 +247,7 @@ export default function SaudeRedeScreen() {
         {/* Page head */}
         <PageHead
           title="Saúde da Rede"
-          sub="Visão institucional da rede de afiliados. Indicadores numéricos derivados de dados que a federação possui — afiliação de dojôs, anuidades, graduações registradas e cobertura geográfica. Cada número abre os registros por trás dele e exporta em CSV."
+          sub="Visão institucional da rede de filiados. Indicadores numéricos derivados de dados que a federação possui — filiação de dojôs, anuidades, graduações registradas e cobertura geográfica. Cada número abre os registros por trás dele e exporta em CSV."
         />
 
         {/* KPI strip */}

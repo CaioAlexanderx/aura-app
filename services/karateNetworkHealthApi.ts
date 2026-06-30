@@ -24,7 +24,7 @@ export interface NetworkSummary {
   kpis: NetworkKpi[];
 }
 
-// Afiliação
+// Filiação
 export interface AfiliacaoDojo {
   id: string;
   name: string;
