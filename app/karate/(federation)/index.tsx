@@ -186,7 +186,7 @@ export default function KaratePainel() {
           <SectionHead title="Praticantes por graduação" sub={practitionerTotal > 0 ? `${practitionerTotal.toLocaleString("pt-BR")} praticantes` : undefined} />
           <Card>
             {loading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
-              : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes graduados" style={{ paddingVertical: 24 }} />
+              : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes" style={{ paddingVertical: 24 }} />
               : belts.map((b) => <BarRow key={b.belt_level} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
           </Card>
         </View>
