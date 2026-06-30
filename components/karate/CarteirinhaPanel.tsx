@@ -128,7 +128,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       await karateApi.revokeCard(federationId, practitionerId);
       // refetch para refletir o novo status (chip vira "Revogada")
       fetchCard();
-      notify("Carteirinha revogada", "A carteirinha foi revogada. Use "Emitir" para gerar uma nova.");
+      notify("Carteirinha revogada", "A carteirinha foi revogada. Use “Emitir” para gerar uma nova.");
     } catch (e: any) {
       notify("Não foi possível revogar", e?.message || "Tente novamente.");
     } finally {
