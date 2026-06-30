@@ -118,6 +118,18 @@ export interface PublicProfile {
   belt_path: Array<{ belt_name: string; year: number }>;
 }
 
+// Bloco A — formulário de inscrição configurável por evento (migration 200).
+// Espelha o tipo equivalente em services/karateApi.ts (lado admin).
+export type RegistrationFieldType = "text" | "number" | "select" | "checkbox" | "date" | "phone";
+
+export interface RegistrationField {
+  key: string;
+  label: string;
+  type: RegistrationFieldType;
+  required: boolean;
+  options?: string[];
+}
+
 export interface PublicEvent {
   federation: { name: string; logo: string | null };
   event: {
@@ -129,6 +141,8 @@ export interface PublicEvent {
     location: string | null;
     fee_amount: number | null;
     capacity: { max: number | null; filled: number } | null;
+    /** Bloco A — campos extras do formulário de inscrição (migration 200). Vazio = sem campos extras. */
+    registration_fields: RegistrationField[];
   };
   requires: string[];
 }
@@ -155,6 +169,17 @@ export interface InscricaoResult {
   practitioner: { id: string; name: string };
   fee_amount: number;
   payment: InscricaoPayment | null;
+}
+
+/**
+ * Corpo do 422 quando faltam campos obrigatórios do formulário de inscrição
+ * (registration_fields). `missingFields` traz os LABELS dos campos faltantes
+ * (o backend já resolve key -> label antes de responder).
+ */
+export interface MissingFieldsError {
+  error: string;
+  code: "VALIDATION_ERROR";
+  missingFields: string[];
 }
 
 export interface AgendaEvent {
@@ -206,6 +231,15 @@ export const karatePortalApi = {
   lookup: (slug: string, eventId: string, cpf: string): Promise<LookupResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, { method: "POST", body: { cpf } }),
 
-  submitInscricao: (slug: string, eventId: string, cpf: string): Promise<InscricaoResult> =>
-    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, { method: "POST", body: { cpf } }),
+  /** `responses` é opcional — só é exigido quando o evento tem registration_fields obrigatórios. */
+  submitInscricao: (
+    slug: string,
+    eventId: string,
+    cpf: string,
+    responses?: Record<string, unknown>
+  ): Promise<InscricaoResult> =>
+    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
+      method: "POST",
+      body: { cpf, ...(responses ? { responses } : {}) },
+    }),
 };

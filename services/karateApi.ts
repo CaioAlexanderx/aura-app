@@ -466,6 +466,17 @@ export type CandidateResult = "pending" | "approved" | "rejected";
 export type CertificateStatus = "pending" | "generated" | "sent" | "error";
 export type CourseType = "seminar" | "technical" | "referee" | "other";
 
+// Bloco A — formulário de inscrição configurável por evento (migration 200).
+export type RegistrationFieldType = "text" | "number" | "select" | "checkbox" | "date" | "phone";
+
+export interface RegistrationField {
+  key: string;
+  label: string;
+  type: RegistrationFieldType;
+  required: boolean;
+  options?: string[];
+}
+
 /** Exame de faixa — karate_belt_exams */
 export interface BeltExam {
   id: string;
@@ -478,6 +489,8 @@ export interface BeltExam {
   status: ExamStatus;
   candidate_count: number;
   created_at: string;
+  /** Bloco A — campos extras do formulário de inscrição pública (migration 200). */
+  registration_fields?: RegistrationField[];
 }
 
 export interface BeltExamInput {
@@ -535,6 +548,8 @@ export interface ExamCandidate {
   eligibility: EligibilityResult | null;  // anexado na inscrição
   certificate_status: CertificateStatus | null;
   certificate_url: string | null;
+  /** Bloco A — respostas do inscrito aos registration_fields do evento (migration 200). */
+  registration_responses?: Record<string, unknown>;
 }
 
 export interface EnrollCandidateInput {

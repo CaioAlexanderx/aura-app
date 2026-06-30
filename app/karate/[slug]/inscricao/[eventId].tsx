@@ -12,7 +12,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
-  StyleSheet, ViewStyle, TextStyle, Platform,
+  StyleSheet, ViewStyle, TextStyle, Platform, Switch,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -21,7 +21,7 @@ import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
-import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult } from "@/services/karatePortalApi";
+import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult, RegistrationField } from "@/services/karatePortalApi";
 
 function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
 function maskCpf(s: string) {
@@ -78,6 +78,13 @@ export default function InscricaoScreen() {
   const [payment, setPayment] = useState<InscricaoResult["payment"]>(null);
   const [copied, setCopied] = useState(false);
 
+  // Bloco A — campos extras do formulário de inscrição (registration_fields).
+  const registrationFields: RegistrationField[] = event?.registration_fields ?? [];
+  const [responses, setResponses] = useState<Record<string, string | boolean>>({});
+  const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
+  const setResponse = (key: string, value: string | boolean) =>
+    setResponses((prev) => ({ ...prev, [key]: value }));
+
   useEffect(() => {
     let alive = true;
     karatePortalApi.getEvent(slugStr, eventIdStr)
@@ -97,8 +104,23 @@ export default function InscricaoScreen() {
     else if (code === "PRACTITIONER_NOT_FOUND" || e?.status === 404) setErr("nao");
     else if (code === "CONFLICT" || (e?.status === 409 && code !== "CLOSED")) setErr("ja");
     else if (code === "CLOSED" || e?.status === 409) setErr("fim");
-    else { setErr("generic"); setErrMsg(e?.message || "Não foi possível continuar."); }
+    else if (code === "VALIDATION_ERROR" && Array.isArray(e?.data?.missingFields)) {
+      // Backend já resolve key -> label antes de responder (ver karatePublic.js).
+      setMissingFieldLabels(e.data.missingFields);
+      setErrMsg("Preencha os campos obrigatórios destacados abaixo antes de continuar.");
+    } else { setErr("generic"); setErrMsg(e?.message || "Não foi possível continuar."); }
   };
+
+  // Validação client-side (sóbria, espelha a regra do backend): só sinaliza
+  // quais campos obrigatórios estão vazios — a validação final é sempre do
+  // servidor (422 + missingFields), isto é só feedback antecipado.
+  const clientMissingFields = registrationFields
+    .filter((f) => f.required)
+    .filter((f) => {
+      const v = responses[f.key];
+      return v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+    })
+    .map((f) => f.label);
 
   const doLookup = async () => {
     if (onlyDigits(cpf).length < 11) { setErr("generic"); setErrMsg("Informe um CPF válido."); return; }
@@ -113,16 +135,25 @@ export default function InscricaoScreen() {
   };
 
   const doSubmit = async () => {
+    setMissingFieldLabels([]);
+    if (clientMissingFields.length > 0) {
+      setMissingFieldLabels(clientMissingFields);
+      setErrMsg("Preencha os campos obrigatórios destacados abaixo antes de continuar.");
+      return;
+    }
     setBusy(true); setErr(null);
     try {
-      const r = await karatePortalApi.submitInscricao(slugStr, eventIdStr, cpf);
+      const r = await karatePortalApi.submitInscricao(slugStr, eventIdStr, cpf, responses);
       setPayment(r.payment);
       setStep("pix");
     } catch (e) { handleErr(e); }
     finally { setBusy(false); }
   };
 
-  const resetToEvent = () => { setErr(null); setStep("evento"); setCpf(""); setPract(null); };
+  const resetToEvent = () => {
+    setErr(null); setStep("evento"); setCpf(""); setPract(null);
+    setResponses({}); setMissingFieldLabels([]);
+  };
 
   // ── progress ──
   const Progress = () => (
@@ -233,6 +264,25 @@ export default function InscricaoScreen() {
                   <Text style={styles.confTotalV}>{fmtBRL(event?.fee_amount)}</Text>
                 </View>
               </View>
+
+              {registrationFields.length > 0 && (
+                <View style={styles.extraFields}>
+                  <Text style={styles.extraFieldsTitle}>Informações adicionais</Text>
+                  {registrationFields.map((f) => (
+                    <RegistrationFieldInput
+                      key={f.key}
+                      field={f}
+                      value={responses[f.key]}
+                      onChange={(v) => setResponse(f.key, v)}
+                    />
+                  ))}
+                </View>
+              )}
+              {missingFieldLabels.length > 0 ? (
+                <Text style={styles.inlineErr}>
+                  {errMsg} {"\n"}Faltando: {missingFieldLabels.join(", ")}.
+                </Text>
+              ) : null}
             </>
           ) : (
             // PIX / sucesso
@@ -317,6 +367,77 @@ function ConfRow({ k, v }: { k: string; v: string }) {
     </View>
   );
 }
+
+// Bloco A — input dinâmico para um registration_field, conforme o `type`.
+// checkbox usa Switch (Sim/Não); select usa pílulas (sem dependência de
+// Picker nativo); os demais (text/number/date/phone) usam TextInput com
+// keyboardType/placeholder apropriados.
+function RegistrationFieldInput({
+  field, value, onChange,
+}: {
+  field: RegistrationField;
+  value: string | boolean | undefined;
+  onChange: (v: string | boolean) => void;
+}) {
+  const label = field.label + (field.required ? " *" : "");
+
+  if (field.type === "checkbox") {
+    return (
+      <View style={styles.extraFieldRow}>
+        <Text style={styles.extraFieldLabel}>{label}</Text>
+        <Switch
+          value={value === true}
+          onValueChange={(v) => onChange(v)}
+          trackColor={{ false: KarateColors.border, true: KarateColors.primaryLine }}
+          thumbColor={value === true ? KarateColors.primary : "#fff"}
+        />
+      </View>
+    );
+  }
+
+  if (field.type === "select") {
+    const opts = (field.options ?? []).map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+    return (
+      <View style={{ marginBottom: 12 }}>
+        <Text style={styles.extraFieldLabel}>{label}</Text>
+        <View style={styles.selectRow}>
+          {opts.map((o) => {
+            const active = value === o.value;
+            return (
+              <TouchableOpacity
+                key={o.value}
+                onPress={() => onChange(o.value)}
+                style={[styles.selectPill, active && styles.selectPillActive]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.selectPillText, active && styles.selectPillTextActive]}>{o.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  const keyboardType = field.type === "number" ? "numeric" : field.type === "phone" ? "phone-pad" : "default";
+  const placeholder = field.type === "date" ? "dd/mm/aaaa" : undefined;
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={styles.extraFieldLabel}>{label}</Text>
+      <TextInput
+        style={styles.extraFieldInput}
+        value={typeof value === "string" ? value : ""}
+        onChangeText={(v) => onChange(v)}
+        placeholder={placeholder}
+        placeholderTextColor={KarateColors.ink4}
+        keyboardType={keyboardType as any}
+      />
+    </View>
+  );
+}
+
 function Card({ fed, children }: { fed: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
@@ -380,6 +501,24 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, paddingVertical: 12, paddingHorizontal: 14, fontSize: 15, color: KarateColors.ink, fontFamily: KarateFonts.mono, backgroundColor: KarateColors.glass } as TextStyle,
   hint: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 7 } as TextStyle,
   inlineErr: { fontSize: 12.5, color: KarateColors.danger, marginTop: 8 } as TextStyle,
+
+  extraFields: { marginTop: 18 } as ViewStyle,
+  extraFieldsTitle: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, marginBottom: 10 } as TextStyle,
+  extraFieldRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } as ViewStyle,
+  extraFieldLabel: { fontSize: 12.5, color: KarateColors.ink2, marginBottom: 6, fontWeight: "600" } as TextStyle,
+  extraFieldInput: {
+    borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md,
+    paddingVertical: 11, paddingHorizontal: 14, fontSize: 14, color: KarateColors.ink,
+    backgroundColor: KarateColors.glass,
+  } as TextStyle,
+  selectRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  selectPill: {
+    borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.pill,
+    paddingVertical: 7, paddingHorizontal: 14, backgroundColor: KarateColors.glass,
+  } as ViewStyle,
+  selectPillActive: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  selectPillText: { fontSize: 12.5, fontWeight: "600", color: KarateColors.ink2 } as TextStyle,
+  selectPillTextActive: { color: KarateColors.primary } as TextStyle,
 
   conf: { marginTop: 18, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, overflow: "hidden" } as ViewStyle,
   confRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, padding: 13, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
