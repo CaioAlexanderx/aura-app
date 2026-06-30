@@ -8,7 +8,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { SENSEI_DOJO } from "./_layout";
 
@@ -33,7 +33,7 @@ export default function SenseiAnuidade() {
       {/* Situação */}
       <View style={[styles.statusCard, styles.okCard]}>
         <View style={[styles.statusIco, { borderColor: KarateColors.ok }]}>
-          <Ionicons name="checkmark-circle" size={24} color={KarateColors.ok} />
+          <Icon name="checkmark-circle" size={24} color={KarateColors.ok} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusT, { color: KarateColors.ok }]}>Anuidade {new Date().getFullYear()} · {STATUS.label}</Text>
@@ -52,7 +52,7 @@ export default function SenseiAnuidade() {
             <Text style={styles.pixVal}>{PIX}</Text>
           </View>
           <TouchableOpacity style={styles.copyBtn} accessibilityLabel="Copiar chave Pix">
-            <Ionicons name="copy-outline" size={15} color={KarateColors.primary} />
+            <Icon name="copy-outline" size={15} color={KarateColors.primary} />
             <Text style={styles.copyTxt}>Copiar</Text>
           </TouchableOpacity>
         </View>
@@ -64,7 +64,7 @@ export default function SenseiAnuidade() {
         <Text style={styles.cardSub}>Últimas renovações</Text>
         {HISTORICO.map((h) => (
           <View key={h.ano} style={styles.histRow}>
-            <View style={styles.histIco}><Ionicons name="checkmark" size={14} color={KarateColors.ok} /></View>
+            <View style={styles.histIco}><Icon name="checkmark" size={14} color={KarateColors.ok} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.histAno}>Anuidade {h.ano}</Text>
               <Text style={styles.histQuando}>Pago em {h.quando}</Text>

@@ -11,12 +11,12 @@ import {
   ScrollView, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
 
-const LINKS: { key: string; title: string; sub: string; icon: keyof typeof Ionicons.glyphMap; path: string }[] = [
+const LINKS: { key: string; title: string; sub: string; icon: string; path: string }[] = [
   { key: "ranking",     title: "Ranking",            sub: "Classificação por temporada e categoria", icon: "podium-outline",       path: "ranking" },
   { key: "praticante",  title: "Portal do praticante", sub: "Carteirinha digital e histórico",        icon: "person-circle-outline", path: "praticante" },
   { key: "dojo",        title: "Portal do dojô",     sub: "Filiação, anuidade e praticantes",        icon: "business-outline",      path: "dojo" },
@@ -55,13 +55,13 @@ export default function MicrositeHub() {
               accessibilityLabel={l.title}
             >
               <View style={styles.cardIcon}>
-                <Ionicons name={l.icon} size={22} color={KarateColors.primary} />
+                <Icon name={l.icon} size={22} color={KarateColors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>{l.title}</Text>
                 <Text style={styles.cardSub}>{l.sub}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={KarateColors.ink3} />
+              <Icon name="chevron-forward" size={18} color={KarateColors.ink3} />
             </TouchableOpacity>
           ))}
         </View>

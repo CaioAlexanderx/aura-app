@@ -19,7 +19,7 @@ import {
   Switch, Linking, Platform, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
@@ -222,7 +222,7 @@ export default function PortalPraticanteScreen() {
         <View style={{ flex: 1 }} />
         <Text style={styles.topName}>{(p?.name || "").split(" ")[0]}</Text>
         <TouchableOpacity onPress={logout} style={styles.outBtn}>
-          <Ionicons name="log-out-outline" size={16} color={KarateColors.ink3} />
+          <Icon name="log-out-outline" size={16} color={KarateColors.ink3} />
           <Text style={styles.outTxt}>Sair</Text>
         </TouchableOpacity>
       </View>
@@ -259,7 +259,7 @@ export default function PortalPraticanteScreen() {
                 <TouchableOpacity style={styles.pubrow} onPress={() => router.push(`/karate/verify/${card.verify_token}` as any)}>
                   <Text style={styles.pubrowHint}>Documento oficial verificável por QR.</Text>
                   <View style={styles.pubrowLink}>
-                    <Ionicons name="eye-outline" size={14} color={KarateColors.primary} />
+                    <Icon name="eye-outline" size={14} color={KarateColors.primary} />
                     <Text style={styles.pubrowLinkTxt}>Ver verificação pública</Text>
                   </View>
                 </TouchableOpacity>
@@ -269,7 +269,7 @@ export default function PortalPraticanteScreen() {
             {/* trajetória */}
             <View style={styles.sec}>
               <View style={styles.secH}>
-                <Ionicons name="ribbon-outline" size={18} color={KarateColors.ink2} />
+                <Icon name="ribbon-outline" size={18} color={KarateColors.ink2} />
                 <Text style={styles.secTitle}>Linha do tempo de faixas</Text>
                 <Text style={styles.secCnt}>{timeline.length} graduações</Text>
               </View>
@@ -303,7 +303,7 @@ export default function PortalPraticanteScreen() {
                 return (
                   <View key={i} style={styles.listRow}>
                     <View style={[styles.listIc, { backgroundColor: ok ? KarateColors.okSoft : KarateColors.neutralSoft }]}>
-                      <Ionicons name={ok ? "checkmark" : "time-outline"} size={16} color={ok ? KarateColors.ok : KarateColors.ink3} />
+                      <Icon name={ok ? "checkmark" : "time-outline"} size={16} color={ok ? KarateColors.ok : KarateColors.ink3} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.listA}>{e.target_belt_name ? `Exame ${e.target_belt_name}` : "Exame de faixa"}</Text>
@@ -322,7 +322,7 @@ export default function PortalPraticanteScreen() {
               ) : portal.certificates.map((c, i) => (
                 <View key={i} style={styles.listRow}>
                   <View style={[styles.listIc, { backgroundColor: KarateColors.primarySoft }]}>
-                    <Ionicons name="document-text-outline" size={16} color={KarateColors.primary} />
+                    <Icon name="document-text-outline" size={16} color={KarateColors.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.listA}>Certificado{c.target_belt ? ` · ${c.target_belt}` : ""}</Text>
@@ -330,7 +330,7 @@ export default function PortalPraticanteScreen() {
                   </View>
                   {c.certificate_url ? (
                     <TouchableOpacity onPress={() => Linking.openURL(c.certificate_url!)}>
-                      <Ionicons name="download-outline" size={18} color={KarateColors.ink3} />
+                      <Icon name="download-outline" size={18} color={KarateColors.ink3} />
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -345,7 +345,7 @@ export default function PortalPraticanteScreen() {
               <View style={styles.optHead}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.optTitleRow}>
-                    <Ionicons name="globe-outline" size={16} color={KarateColors.ink2} />
+                    <Icon name="globe-outline" size={16} color={KarateColors.ink2} />
                     <Text style={styles.optTitle}>Perfil público</Text>
                   </View>
                   <Text style={styles.optDesc}>
@@ -365,7 +365,7 @@ export default function PortalPraticanteScreen() {
               </View>
               {minor ? (
                 <View style={styles.minorLock}>
-                  <Ionicons name="lock-closed" size={15} color={KarateColors.warn} />
+                  <Icon name="lock-closed" size={15} color={KarateColors.warn} />
                   <Text style={styles.minorLockTxt}>Bloqueado por proteção de dados de menores (LGPD Art. 14).</Text>
                 </View>
               ) : optIn && publicUrl ? (
@@ -375,7 +375,7 @@ export default function PortalPraticanteScreen() {
                     style={styles.copyBtn}
                     onPress={() => { copyText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
                   >
-                    <Ionicons name={copied ? "checkmark" : "copy-outline"} size={15} color={KarateColors.primary} />
+                    <Icon name={copied ? "checkmark" : "copy-outline"} size={15} color={KarateColors.primary} />
                     <Text style={styles.copyBtnTxt}>{copied ? "Copiado" : "Copiar"}</Text>
                   </TouchableOpacity>
                 </View>
@@ -400,7 +400,7 @@ function Notice({ kind, text }: { kind: "info" | "err"; text: string }) {
   const isErr = kind === "err";
   return (
     <View style={[styles.notice, { backgroundColor: isErr ? KarateColors.dangerSoft : KarateColors.bg2, borderColor: isErr ? KarateColors.danger : KarateColors.border }]}>
-      <Ionicons name={isErr ? "alert-circle" : "information-circle-outline"} size={16} color={isErr ? KarateColors.danger : KarateColors.ink3} />
+      <Icon name={isErr ? "alert-circle" : "information-circle-outline"} size={16} color={isErr ? KarateColors.danger : KarateColors.ink3} />
       <Text style={[styles.noticeTxt, isErr ? { color: KarateColors.danger } : null]}>{text}</Text>
     </View>
   );

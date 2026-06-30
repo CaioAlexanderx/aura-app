@@ -22,7 +22,7 @@ import {
   SafeAreaView, ActivityIndicator, ViewStyle, TextStyle,
 } from "react-native";
 import { Slot, usePathname, useRouter, Redirect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { KarateFederationProvider, useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
@@ -64,7 +64,7 @@ function SenseiShell() {
           )}
         </View>
         <View style={styles.roPill}>
-          <Ionicons name="eye-outline" size={12} color={KarateColors.ink3} />
+          <Icon name="eye-outline" size={12} color={KarateColors.ink3} />
           <Text style={styles.roText}>Somente leitura</Text>
         </View>
       </View>

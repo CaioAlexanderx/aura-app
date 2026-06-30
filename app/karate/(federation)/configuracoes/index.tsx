@@ -42,7 +42,7 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
@@ -159,7 +159,7 @@ function SaveToast({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
     <View style={st.toast}>
-      <Ionicons name="checkmark-circle" size={14} color={KarateColors.ok} />
+      <Icon name="checkmark-circle" size={14} color={KarateColors.ok} />
       <Text style={st.toastText}>Salvo com sucesso.</Text>
     </View>
   );
@@ -896,7 +896,7 @@ function EquipeTab({ federationId }: { federationId: string }) {
                   accessibilityLabel={`Papel de ${m.name}: ${getRoleLabel(m.role)}`}
                 >
                   <Text style={st.roleSelectText}>{getRoleLabel(m.role)}</Text>
-                  <Ionicons name="chevron-down" size={12} color={KarateColors.ink3} />
+                  <Icon name="chevron-down" size={12} color={KarateColors.ink3} />
                 </TouchableOpacity>
 
                 <View style={{ flex: 1 }}>
@@ -1157,7 +1157,7 @@ export default function ConfiguracoesFederacao() {
   if (karateRole && karateRole !== "federation_admin") {
     return (
       <View style={st.gateWrap}>
-        <Ionicons name="lock-closed" size={32} color={KarateColors.ink4} />
+        <Icon name="lock-closed" size={32} color={KarateColors.ink4} />
         <Text style={st.gateText}>Acesso restrito a administradores da federação.</Text>
       </View>
     );

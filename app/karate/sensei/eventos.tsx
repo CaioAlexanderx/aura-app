@@ -8,7 +8,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Modal,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 
 const EVENTOS = [
@@ -30,11 +30,11 @@ export default function SenseiEventos() {
       {EVENTOS.map((e) => (
         <View key={e.id} style={styles.card}>
           <Text style={styles.evTipo}>{e.tipo}</Text>
-          <View style={styles.metaRow}><Ionicons name="calendar-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{e.data}</Text></View>
-          <View style={styles.metaRow}><Ionicons name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.local}</Text></View>
-          <View style={styles.metaRow}><Ionicons name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>Taxa: {e.taxa} por aluno</Text></View>
+          <View style={styles.metaRow}><Icon name="calendar-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{e.data}</Text></View>
+          <View style={styles.metaRow}><Icon name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.local}</Text></View>
+          <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>Taxa: {e.taxa} por aluno</Text></View>
           <TouchableOpacity style={styles.askBtn} onPress={() => setShowHow(true)} accessibilityRole="button">
-            <Ionicons name="paper-plane-outline" size={14} color={KarateColors.primary} />
+            <Icon name="paper-plane-outline" size={14} color={KarateColors.primary} />
             <Text style={styles.askTxt}>Solicitar inscrição</Text>
           </TouchableOpacity>
         </View>
@@ -45,11 +45,11 @@ export default function SenseiEventos() {
           <View style={styles.sheet}>
             <View style={styles.sheetHead}>
               <Text style={styles.sheetTitle}>Como inscrever seus alunos</Text>
-              <TouchableOpacity onPress={() => setShowHow(false)} accessibilityLabel="Fechar"><Ionicons name="close" size={22} color={KarateColors.ink} /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowHow(false)} accessibilityLabel="Fechar"><Icon name="close" size={22} color={KarateColors.ink} /></TouchableOpacity>
             </View>
             <Text style={styles.sheetBody}>Envie a lista de alunos que vão participar para a federação. Ela confirma as vagas e a taxa, e faz a inscrição para você.</Text>
-            <View style={styles.contactRow}><Ionicons name="mail-outline" size={16} color={KarateColors.primary} /><Text style={styles.contact}>eventos@fpkt.org.br</Text></View>
-            <View style={styles.contactRow}><Ionicons name="logo-whatsapp" size={16} color={KarateColors.ok} /><Text style={styles.contact}>(12) 99000-0000</Text></View>
+            <View style={styles.contactRow}><Icon name="mail-outline" size={16} color={KarateColors.primary} /><Text style={styles.contact}>eventos@fpkt.org.br</Text></View>
+            <View style={styles.contactRow}><Icon name="logo-whatsapp" size={16} color={KarateColors.ok} /><Text style={styles.contact}>(12) 99000-0000</Text></View>
           </View>
         </View>
       </Modal>

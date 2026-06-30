@@ -25,7 +25,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Platform, Alert,
   ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import * as XLSX from "xlsx";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
@@ -302,7 +302,7 @@ export default function ImportacaoScreen() {
 
         {error ? (
           <Card style={styles.errCard}>
-            <Ionicons name="warning" size={16} color={P.red} />
+            <Icon name="warning" size={16} color={P.red} />
             <Body style={{ flex: 1, color: P.red }}>{error}</Body>
           </Card>
         ) : null}
@@ -311,7 +311,7 @@ export default function ImportacaoScreen() {
         {step === 0 && (
           <Card>
             <TouchableOpacity style={styles.drop} onPress={handlePick} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Selecionar planilha xlsx">
-              {parsing ? <ActivityIndicator size="large" color={P.red} /> : <Ionicons name="cloud-upload-outline" size={40} color={C.ink2} />}
+              {parsing ? <ActivityIndicator size="large" color={P.red} /> : <Icon name="cloud-upload-outline" size={40} color={C.ink2} />}
               <Text style={styles.dropLabel}>{parsing ? "Lendo a planilha…" : "Clique para escolher o arquivo .xlsx"}</Text>
               <Body muted style={{ fontSize: 12 }}>Abas esperadas: Academias, Alunos e Histórico</Body>
             </TouchableOpacity>
@@ -322,7 +322,7 @@ export default function ImportacaoScreen() {
         {step === 1 && parsed && (
           <View style={{ gap: 14 }}>
             <Card>
-              <Text style={styles.fileRow}><Ionicons name="document-text-outline" size={14} color={C.ink3} /> <Mono style={{ fontSize: 12 }}>{parsed.fileName}</Mono></Text>
+              <Text style={styles.fileRow}><Icon name="document-text-outline" size={14} color={C.ink3} /> <Mono style={{ fontSize: 12 }}>{parsed.fileName}</Mono></Text>
               <View style={styles.statRow}>
                 <Stat n={parsed.dojos.length} label="academias" />
                 <Stat n={importableStudents.length} label="alunos" />
@@ -361,7 +361,7 @@ export default function ImportacaoScreen() {
         {step === 3 && summary && (
           <View style={{ gap: 14 }}>
             <Card style={{ alignItems: "center", gap: 8, paddingVertical: 24 }}>
-              <Ionicons name="checkmark-circle" size={56} color={C.ok} />
+              <Icon name="checkmark-circle" size={56} color={C.ok} />
               <Text style={styles.doneTitle}>Importação concluída</Text>
             </Card>
             <Card style={{ gap: 10 }}>
@@ -400,7 +400,7 @@ export default function ImportacaoScreen() {
 function TermNote() {
   return (
     <View style={styles.termNote}>
-      <Ionicons name="information-circle-outline" size={13} color={C.ink3} />
+      <Icon name="information-circle-outline" size={13} color={C.ink3} />
       <Body muted style={{ fontSize: 11.5, flex: 1 }}>
         Academias = Dojôs · Alunos = Praticantes — termos da planilha FPKT; no app aparecem como dojôs e praticantes.
       </Body>

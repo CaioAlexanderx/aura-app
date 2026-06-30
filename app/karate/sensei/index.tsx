@@ -9,7 +9,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { SENSEI_DOJO } from "./_layout";
 
@@ -80,7 +80,7 @@ export default function SenseiPraticantes() {
 
       {/* Busca + lista */}
       <View style={styles.search}>
-        <Ionicons name="search" size={16} color={KarateColors.ink3} />
+        <Icon name="search" size={16} color={KarateColors.ink3} />
         <TextInput style={styles.searchInput} value={q} onChangeText={setQ} placeholder="Buscar aluno por nome ou registro" placeholderTextColor={KarateColors.ink4} />
       </View>
 
@@ -92,7 +92,7 @@ export default function SenseiPraticantes() {
           </View>
           <Chip belt={a.belt} />
           <View style={[styles.anuidade, a.emDia ? styles.anuOk : styles.anuPend]}>
-            <Ionicons name={a.emDia ? "checkmark-circle" : "time"} size={13} color={a.emDia ? KarateColors.ok : KarateColors.warn} />
+            <Icon name={a.emDia ? "checkmark-circle" : "time"} size={13} color={a.emDia ? KarateColors.ok : KarateColors.warn} />
             <Text style={[styles.anuTxt, { color: a.emDia ? KarateColors.ok : KarateColors.warn }]}>{a.emDia ? "Em dia" : "Pendente"}</Text>
           </View>
         </TouchableOpacity>
@@ -106,7 +106,7 @@ export default function SenseiPraticantes() {
         </View>
         <TouchableOpacity style={styles.acqBtn} accessibilityRole="button">
           <Text style={styles.acqBtnTxt}>Conhecer</Text>
-          <Ionicons name="arrow-forward" size={14} color="#fff" />
+          <Icon name="arrow-forward" size={14} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -119,7 +119,7 @@ export default function SenseiPraticantes() {
                 <Text style={styles.sheetName}>{sel?.nome}</Text>
                 <Text style={styles.sheetReg}>{sel?.reg}</Text>
               </View>
-              <TouchableOpacity onPress={() => setSel(null)} accessibilityLabel="Fechar"><Ionicons name="close" size={22} color={KarateColors.ink} /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setSel(null)} accessibilityLabel="Fechar"><Icon name="close" size={22} color={KarateColors.ink} /></TouchableOpacity>
             </View>
             <Text style={styles.sheetTitle}>Trajetória de faixas</Text>
             <View style={{ gap: 8, marginTop: 8 }}>

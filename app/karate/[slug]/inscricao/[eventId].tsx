@@ -15,7 +15,7 @@ import {
   StyleSheet, ViewStyle, TextStyle, Platform,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
@@ -149,7 +149,7 @@ export default function InscricaoScreen() {
         <Card fed={fedName}>
           <View style={styles.errBlock}>
             <View style={[styles.errGlyph, { backgroundColor: toneSoft }]}>
-              <Ionicons name={cfg.icon as any} size={30} color={toneColor} />
+              <Icon name={cfg.icon as any} size={30} color={toneColor} />
             </View>
             <Text style={styles.errTitle}>{cfg.title}</Text>
             <Text style={styles.errMsg}>{cfg.msg}</Text>
@@ -244,7 +244,7 @@ export default function InscricaoScreen() {
                   <PixQRCode payload={payment.payload} qrImage={payment.qr_image || undefined} size={196} style={{ marginTop: 14 }} />
                   <Text style={styles.amt}>{fmtBRL(payment.amount ?? event?.fee_amount)}</Text>
                   <View style={styles.expire}>
-                    <Ionicons name="time-outline" size={14} color={KarateColors.warn} />
+                    <Icon name="time-outline" size={14} color={KarateColors.warn} />
                     <Text style={styles.expireTxt}>Aguardando confirmação do pagamento</Text>
                   </View>
                   <View style={styles.copyBox}>
@@ -252,7 +252,7 @@ export default function InscricaoScreen() {
                     <View style={styles.copyRow}>
                       <Text style={styles.copyCode} numberOfLines={1} selectable>{payment.payload}</Text>
                       <TouchableOpacity style={styles.copyBtn} onPress={() => { copyText(payment.payload!); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
-                        <Ionicons name={copied ? "checkmark" : "copy-outline"} size={16} color={KarateColors.primary} />
+                        <Icon name={copied ? "checkmark" : "copy-outline"} size={16} color={KarateColors.primary} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -260,7 +260,7 @@ export default function InscricaoScreen() {
               ) : (
                 <>
                   <View style={[styles.errGlyph, { backgroundColor: KarateColors.okSoft }]}>
-                    <Ionicons name="checkmark-circle" size={30} color={KarateColors.ok} />
+                    <Icon name="checkmark-circle" size={30} color={KarateColors.ok} />
                   </View>
                   <Text style={styles.h2}>Inscrição registrada</Text>
                   <Text style={styles.sub}>
@@ -303,7 +303,7 @@ export default function InscricaoScreen() {
 function SumRow({ icon, k, v, price }: { icon: string; k: string; v: string; price?: boolean }) {
   return (
     <View style={styles.sumRow}>
-      <Ionicons name={icon as any} size={16} color={KarateColors.ink4} />
+      <Icon name={icon as any} size={16} color={KarateColors.ink4} />
       <Text style={styles.sumK}>{k}</Text>
       <Text style={[styles.sumV, price && styles.sumPrice]}>{v}</Text>
     </View>

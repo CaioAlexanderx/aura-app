@@ -18,7 +18,7 @@ import {
   StyleSheet, ViewStyle, TextStyle, Platform, Linking, TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karateCardApi, CardVerification, VerifyStatus } from "@/services/karateCardApi";
@@ -73,7 +73,7 @@ function situacaoLabel(s: VerifyStatus): { txt: string; color: string } {
 function MinorBadge() {
   return (
     <View style={styles.minorBadge} accessibilityLabel="Dados reduzidos por se tratar de menor">
-      <Ionicons name="lock-closed" size={12} color={KarateColors.ink3} />
+      <Icon name="lock-closed" size={12} color={KarateColors.ink3} />
       <Text style={styles.minorBadgeTxt}>Dados reduzidos · menor</Text>
     </View>
   );
@@ -180,7 +180,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
       {/* status bar */}
       <View style={[styles.statusBar, { backgroundColor: tone.soft }]}>
         <View style={[styles.ring, { borderColor: tone.fg }]}>
-          <Ionicons name={cfg.icon as any} size={24} color={tone.fg} />
+          <Icon name={cfg.icon as any} size={24} color={tone.fg} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.stL, { color: tone.fg }]}>{cfg.label}</Text>
@@ -193,7 +193,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
         <View style={styles.who}>
           {v.is_minor ? (
             <View style={[styles.avatar, styles.avatarHidden]}>
-              <Ionicons name="person" size={30} color={KarateColors.ink3} />
+              <Icon name="person" size={30} color={KarateColors.ink3} />
             </View>
           ) : (
             <View style={styles.avatar}>
@@ -233,7 +233,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
 
         {/* privacy note */}
         <View style={styles.privacy}>
-          <Ionicons name="lock-closed" size={14} color={KarateColors.ink4} />
+          <Icon name="lock-closed" size={14} color={KarateColors.ink4} />
           <Text style={styles.privacyTxt}>
             Por proteção de dados, este documento não exibe CPF, data de nascimento nem histórico de graduações.
           </Text>
@@ -243,7 +243,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
       {/* foot */}
       <View style={styles.cardFoot}>
         <View style={styles.footItem}>
-          <Ionicons name="lock-closed" size={13} color={KarateColors.ink3} />
+          <Icon name="lock-closed" size={13} color={KarateColors.ink3} />
           <Text style={styles.footTxt}>Verificação oficial FPKT</Text>
         </View>
       </View>
@@ -256,7 +256,7 @@ function NotFound({ token, isError }: { token: string; isError: boolean }) {
   return (
     <View style={[styles.card, styles.nf]}>
       <View style={styles.nfGlyph}>
-        <Ionicons name={isError ? "cloud-offline" : "search"} size={32} color={KarateColors.danger} />
+        <Icon name={isError ? "cloud-offline" : "search"} size={32} color={KarateColors.danger} />
       </View>
       <Text style={styles.nfH2}>{isError ? "Não foi possível verificar" : "Registro não encontrado"}</Text>
       <Text style={styles.nfP}>
@@ -277,7 +277,7 @@ function NotFound({ token, isError }: { token: string; isError: boolean }) {
             { i: "chatbubble-ellipses", t: "Em caso de dúvida, fale com a sua federação." },
           ].map((row) => (
             <View key={row.i} style={styles.nfLi}>
-              <Ionicons name={row.i as any} size={16} color={KarateColors.ink4} />
+              <Icon name={row.i as any} size={16} color={KarateColors.ink4} />
               <Text style={styles.nfLiTxt}>{row.t}</Text>
             </View>
           ))}
