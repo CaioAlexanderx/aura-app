@@ -2,18 +2,22 @@
 // Cadastrar Dojô — Aura Karatê
 //
 // Wired ao endpoint POST /federation/{id}/dojos.
+// Campo "Região" é dropdown das regiões canônicas (KARATE_REGIONS),
+// com opção "Outra…" para texto livre — mesmo contrato que DojoFichaModal.
 // ============================================================
 import React, { useState } from "react";
 import {
-  ScrollView, View, Text, Alert,
+  ScrollView, View, Text, Alert, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette as P, KarateFonts as F } from "@/constants/karateTheme";
 import { FormField } from "@/components/karate/FormField";
 import { KarateButton } from "@/components/karate/KarateButton";
+import { Icon } from "@/components/Icon";
 import { karateApi, DojoInput } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { KARATE_REGIONS, KARATE_REGIONS_VALUES, REGION_OTHER } from "@/constants/karateRegions";
 
 export default function NovoDojo() {
   const router = useRouter();
@@ -22,6 +26,23 @@ export default function NovoDojo() {
   const [form, setForm] = useState<Partial<DojoInput>>({
     affiliation_model: "annual",
   });
+
+  // Região: valor do picker (uma das KARATE_REGIONS ou REGION_OTHER)
+  // e texto livre de fallback quando "Outra…" está selecionado.
+  const [regionPick, setRegionPick] = useState("");
+  const [regionCustom, setRegionCustom] = useState("");
+  const [regionOpen, setRegionOpen] = useState(false);
+
+  const regionLabel = regionPick === REGION_OTHER
+    ? (regionCustom.trim() || REGION_OTHER)
+    : (regionPick || "Selecionar região…");
+
+  // Resolve o valor final de região para envio
+  function resolveRegion(): string | undefined {
+    if (!regionPick) return undefined;
+    if (regionPick === REGION_OTHER) return regionCustom.trim() || undefined;
+    return regionPick;
+  }
 
   const set = (key: keyof DojoInput, val: string) =>
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -33,7 +54,11 @@ export default function NovoDojo() {
     }
     setSaving(true);
     try {
-      await karateApi.createDojo(federationId, form as DojoInput);
+      const body: DojoInput & { region?: string } = {
+        ...(form as DojoInput),
+        region: resolveRegion(),
+      };
+      await karateApi.createDojo(federationId, body as DojoInput);
       router.back();
     } catch (e: any) {
       Alert.alert("Erro ao salvar", e?.message ?? "Tente novamente.");
@@ -43,7 +68,11 @@ export default function NovoDojo() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.pageTitle}>Novo Dojô</Text>
 
       <View style={styles.card}>
@@ -54,12 +83,61 @@ export default function NovoDojo() {
           onChangeText={(v) => set("name", v)}
           placeholder="Ex: Dojô Shotokan"
         />
-        <FormField
-          label="Região"
-          value={form.region ?? ""}
-          onChangeText={(v) => set("region", v)}
-          placeholder="Ex: São Paulo"
-        />
+
+        {/* Região — dropdown canônico (mesmo padrão do DojoFichaModal) */}
+        <View style={styles.fieldWrapper}>
+          <Text style={styles.fieldLabel}>Região</Text>
+          <TouchableOpacity
+            style={styles.dropBtn}
+            onPress={() => setRegionOpen((o) => !o)}
+            activeOpacity={0.8}
+            accessibilityLabel="Selecionar região"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.dropBtnTxt, !regionPick && styles.dropBtnPlaceholder]} numberOfLines={1}>
+              {regionLabel}
+            </Text>
+            <Icon name={regionOpen ? "chevron-up" : "chevron-down"} size={16} color={KarateColors.ink3} />
+          </TouchableOpacity>
+
+          {/* Lista de opções inline */}
+          {regionOpen && (
+            <View style={styles.dropList}>
+              {KARATE_REGIONS.map((r) => {
+                const selected = regionPick === r;
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.dropItem, selected && styles.dropItemOn]}
+                    onPress={() => {
+                      setRegionPick(r);
+                      setRegionOpen(false);
+                      if (r !== REGION_OTHER) setRegionCustom("");
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="menuitem"
+                    accessibilityLabel={r}
+                  >
+                    <Text style={[styles.dropItemTxt, selected && styles.dropItemTxtOn]}>{r}</Text>
+                    {selected && <Icon name="check" size={14} color={KarateColors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Campo de texto livre — só visível quando "Outra…" selecionado */}
+          {regionPick === REGION_OTHER && (
+            <FormField
+              label=""
+              value={regionCustom}
+              onChangeText={setRegionCustom}
+              placeholder="Digite a região…"
+              style={{ marginTop: 8 }}
+            />
+          )}
+        </View>
+
         <FormField
           label="Ano de Fundação"
           value={form.dojo_founded_year ? String(form.dojo_founded_year) : ""}
@@ -124,10 +202,22 @@ export default function NovoDojo() {
 }
 
 const styles = StyleSheet.create({
-  screen:       { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content:      { padding: 16, gap: 12, paddingBottom: 32 } as ViewStyle,
-  pageTitle:    { fontSize: 20, fontWeight: "800", color: KarateColors.ink, marginBottom: 4 } as TextStyle,
-  card:         { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 12 } as ViewStyle,
-  sectionLabel: { fontSize: 10, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase" } as TextStyle,
-  saveBtn:      { marginTop: 8 } as ViewStyle,
+  screen:        { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  content:       { padding: 16, gap: 12, paddingBottom: 32 } as ViewStyle,
+  pageTitle:     { fontSize: 20, fontWeight: "800", color: KarateColors.ink, marginBottom: 4 } as TextStyle,
+  card:          { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 12 } as ViewStyle,
+  sectionLabel:  { fontSize: 10, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase" } as TextStyle,
+  saveBtn:       { marginTop: 8 } as ViewStyle,
+
+  // Região — dropdown
+  fieldWrapper:     { gap: 4 } as ViewStyle,
+  fieldLabel:       { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, letterSpacing: 0.2 } as TextStyle,
+  dropBtn:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", borderWidth: 1.5, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, paddingHorizontal: 12, paddingVertical: 11, minHeight: 44 } as ViewStyle,
+  dropBtnTxt:       { fontFamily: F.body, fontSize: 14, color: KarateColors.ink, flex: 1 } as TextStyle,
+  dropBtnPlaceholder: { color: KarateColors.ink4 } as TextStyle,
+  dropList:         { marginTop: 4, backgroundColor: "#fff", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, overflow: "hidden", zIndex: 100 } as ViewStyle,
+  dropItem:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 11, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
+  dropItemOn:       { backgroundColor: P.redWash } as ViewStyle,
+  dropItemTxt:      { fontFamily: F.body, fontSize: 14, color: KarateColors.ink2 } as TextStyle,
+  dropItemTxtOn:    { color: KarateColors.ink, fontWeight: "600" } as TextStyle,
 });
