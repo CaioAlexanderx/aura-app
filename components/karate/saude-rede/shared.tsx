@@ -13,6 +13,8 @@ import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
 } from "@/constants/karateTheme";
+import { useAuthStore } from "@/stores/auth";
+import { karateNetworkHealthApi } from "@/services/karateNetworkHealthApi";
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -89,6 +91,36 @@ export function exportRowsToCsv(
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ── CSV export server-side (download autenticado) ───────────────
+// Usado pelos botões "CSV" e "ver detalhes" do painel: baixa o CSV
+// do indicador direto do backend (?export=csv), que já traz o dataset
+// completo (não só a página carregada na tela). Mesmo padrão de
+// ExportButton.tsx / FiscalPdfButton.tsx: fetch manual com o Bearer
+// token do auth store (a rota é autenticada, não dá pra usar
+// window.open/Linking direto) + download via Blob.
+
+export async function downloadCsv(federationId: string, indicator: string): Promise<void> {
+  if (Platform.OS !== "web") return; // nativo: sem-op (não há filesystem público)
+  const token = useAuthStore.getState().token;
+  if (!token) return;
+  const url = karateNetworkHealthApi.csvUrl(federationId, indicator);
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Erro ${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `saude-rede_${indicator}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("[saude-rede] downloadCsv error:", err);
+  }
 }
 
 // ── Skeleton placeholder ────────────────────────────────────────

@@ -60,6 +60,13 @@ export const STATUS_COLORS: Record<ObligationStatus, string> = {
   done: Colors.green, progress: Colors.violet, pending: Colors.amber, overdue: Colors.red, future: Colors.ink3,
 };
 
+// Badge de filtro (CheckpointCard / PriorityStrip): distingue obrigacoes que
+// a Aura resolve automaticamente das que exigem acao do usuario no portal.
+export const FILTER_CONFIG: Record<FilterLabel, { bg: string; color: string; label: string }> = {
+  aura_resolve: { bg: Colors.violetD, color: Colors.violet3, label: "Aura resolve" },
+  voce_faz: { bg: Colors.amberD, color: Colors.amber, label: "Voce faz" },
+};
+
 function nextDay(day: number): string {
   const now = new Date();
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
