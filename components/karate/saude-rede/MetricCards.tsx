@@ -1,7 +1,7 @@
 // ============================================================
 // Saúde da Rede — Cards de indicadores · Shoji
 //
-// Afiliação · Cobertura · Inadimplência · Projeção de receita
+// Filiação · Cobertura · Inadimplência · Projeção de receita
 // Graduações · Relação de faixas.
 // Cada card recebe data/loading + callbacks de CSV/detalhe por props.
 //
@@ -22,19 +22,19 @@ import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart } from ".
 
 type CardCallbacks = { onDetail: () => void };
 
-// ── Afiliação ──────────────────────────────────────────
+// ── Filiação ──────────────────────────────────────────
 export function AfiliacaoCard({
   data, loading, onDetail,
 }: { data: AfiliacaoPayload | null; loading: boolean } & CardCallbacks) {
   return (
     <View style={st.card}>
       <SectionRow
-        title="Afiliação da rede"
-        sub="Dojôs afiliados · evolução anual"
+        title="Filiação da rede"
+        sub="Dojôs filiados · evolução anual"
         onDetail={onDetail}
         csvData={{
           filename: "afiliacao-rede",
-          headers: ["Ano", "Novas afiliações"],
+          headers: ["Ano", "Novas filiações"],
           rows: (data?.yearly || []).map((y) => [String(y.ano), String(y.new_affiliations)]),
         }}
       />
@@ -44,7 +44,7 @@ export function AfiliacaoCard({
         <>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>{data.total_now}</Text>
-            <Text style={st.heroSub}>dojôs afiliados em {data.season}</Text>
+            <Text style={st.heroSub}>dojôs filiados em {data.season}</Text>
           </View>
           <View style={{ marginTop: 8 }}>
             <BarChart
@@ -56,7 +56,7 @@ export function AfiliacaoCard({
           <View style={st.twinBoxRow}>
             <View style={[st.twinBox, st.twinBoxOk]}>
               <Text style={st.twinBoxNum}>+{data.novas_affiliacoes}</Text>
-              <Text style={st.twinBoxLabel}>novas afiliações · {data.season}</Text>
+              <Text style={st.twinBoxLabel}>novas filiações · {data.season}</Text>
             </View>
             <View style={[st.twinBox, st.twinBoxDanger]}>
               <Text style={[st.twinBoxNum, { color: C.danger }]}>{data.nao_renovaram}</Text>
@@ -123,7 +123,7 @@ export function InadimplenciaCard({
     <View style={st.card}>
       <SectionRow
         title="Inadimplência da rede"
-        sub="Status das anuidades de afiliação dos dojôs"
+        sub="Status das anuidades de filiação dos dojôs"
         onDetail={onDetail}
         csvData={{
           filename: "inadimplencia-rede",
@@ -143,7 +143,7 @@ export function InadimplenciaCard({
             <Text style={[st.heroNum, { color: C.danger }]}>
               {fmtPct(data.inad_pct)}
             </Text>
-            <Text style={st.heroSub}>das anuidades de afiliação vencidas</Text>
+            <Text style={st.heroSub}>das anuidades de filiação vencidas</Text>
           </View>
           {/* Stack bar */}
           <View style={st.stackBarWrap}>

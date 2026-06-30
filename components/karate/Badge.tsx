@@ -22,7 +22,7 @@ interface BadgeProps {
   status?: KarateStatusKey;
   /** Ou status do dojô direto da API */
   dojoStatus?: DojoStatus;
-  /** Ou status de afiliação direto da API */
+  /** Ou status de filiação direto da API */
   affiliationStatus?: AffiliationStatus;
   /** Override do label (usa o do status se não passado) */
   label?: string;

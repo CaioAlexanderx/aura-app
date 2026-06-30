@@ -1,6 +1,6 @@
 // ============================================================
 // Saúde da Rede — KPI strip · Shoji
-// Faixa de indicadores-chave da rede (afiliação, inadimplência, etc.).
+// Faixa de indicadores-chave da rede (filiação, inadimplência, etc.).
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
