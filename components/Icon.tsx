@@ -1,6 +1,17 @@
 import { Platform, Text } from "react-native";
 
 const PATHS: Record<string, string> = {
+  // Migrados de Feather (Studio ficha tecnica)
+  layers:         "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5",
+  inbox:          "M22 12h-6l-2 3h-4l-2-3H2 M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z",
+  save:           "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z M17 21v-8H7v8 M7 3v5h8",
+  plus_circle:    "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v8 M8 12h8",
+  // Migrados de Ionicons (fix/karate-icons-svg)
+  check_circle:   "M22 11.08V12a10 10 0 11-5.93-9.14 M22 4L12 14.01l-3-3",
+  mail:           "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6",
+  user:           "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z",
+  link:           "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71 M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
+  send:           "M22 2L11 13 M22 2l-7 20-4-9-9-4 22 2z",
   // ── Layout ──────────────────────────────────────────────────
   dashboard:      "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M9 22V12h6v10",
   settings:       "M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
@@ -137,6 +148,23 @@ const PATHS: Record<string, string> = {
 // influencia de lucide-react. Sem aliases, retornavam null e quebravam UI.
 // Mantemos snake_case como canonico mas resolvemos kebab tambem.
 const ALIASES: Record<string, string> = {
+  "trash-2": "trash",
+  "alert-triangle": "alert",
+  "plus-circle": "plus_circle",
+  // Variantes Ionicons -> glifos SVG (fix/karate-icons-svg)
+  "arrow-forward": "arrow_right",
+  "copy-outline": "copy",
+  "download-outline": "download",
+  "eye-off-outline": "eye_off",
+  "eye-outline": "eye",
+  "globe-outline": "globe",
+  "link-outline": "link",
+  "lock-closed": "lock",
+  "lock-closed-outline": "lock",
+  "logo-whatsapp": "whatsapp",
+  "paper-plane-outline": "send",
+  "podium-outline": "trophy",
+  "pricetag-outline": "tag",
   "shopping-bag":    "shopping_bag",
   "shopping-cart":   "shopping_cart",
   "credit-card":     "credit_card",
@@ -203,7 +231,7 @@ const ALIASES: Record<string, string> = {
   "power-off":            "power",
   // ── Ionicons karate status maps (fix/karate-icon-aliases) ───
   // checkmark / check variants
-  "checkmark-circle":         "check",
+  "checkmark-circle":         "check_circle",
   "checkmark":                "check",
   "checkmark-outline":        "check",
   "checkmark-circle-outline": "check",
@@ -227,10 +255,10 @@ const ALIASES: Record<string, string> = {
   "ellipse":                  "info",
   "ellipse-outline":          "info",
   // person → users
-  "person":                   "users",
+  "person":                   "user",
   "person-outline":           "users",
   "person-circle":            "users",
-  "person-circle-outline":    "users",
+  "person-circle-outline":    "user",
   // pencil → edit
   "pencil":                   "edit",
   "pencil-outline":           "edit",
@@ -270,7 +298,7 @@ const ALIASES: Record<string, string> = {
   "pin":                      "location",
   // mail / chat → message
   "mail":                     "message",
-  "mail-outline":             "message",
+  "mail-outline":             "mail",
   "chatbubble-ellipses":      "message",
   "chatbubble-ellipses-outline": "message",
   // call → headset

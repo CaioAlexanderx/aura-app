@@ -12,7 +12,7 @@ import {
   StyleSheet, ViewStyle, TextStyle, Platform, TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karatePortalApi, PublicProfile } from "@/services/karatePortalApi";
@@ -44,7 +44,7 @@ export default function PublicProfileScreen() {
         <View style={{ paddingVertical: 60 }}><ActivityIndicator color={KarateColors.primary} /></View>
       ) : notFound || !data ? (
         <View style={styles.card}>
-          <View style={styles.nfGlyph}><Ionicons name="eye-off-outline" size={30} color={KarateColors.ink3} /></View>
+          <View style={styles.nfGlyph}><Icon name="eye-off-outline" size={30} color={KarateColors.ink3} /></View>
           <Text style={styles.nfH}>Perfil não disponível</Text>
           <Text style={styles.nfP}>Este perfil público não está ativo ou o link expirou.</Text>
         </View>
@@ -87,7 +87,7 @@ export default function PublicProfileScreen() {
 
           {/* foot */}
           <View style={styles.foot}>
-            <Ionicons name="checkmark-circle" size={14} color={KarateColors.ok} />
+            <Icon name="checkmark-circle" size={14} color={KarateColors.ok} />
             <Text style={styles.footTxt}>Perfil público verificado pela {data.federation?.name || "FPKT"}</Text>
           </View>
         </View>

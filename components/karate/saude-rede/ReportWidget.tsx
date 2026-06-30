@@ -4,7 +4,7 @@
 // ============================================================
 import React, { useCallback, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F,
 } from "@/constants/karateTheme";
@@ -43,7 +43,7 @@ export function ReportWidget({ federationId }: { federationId: string }) {
         disabled={sending}
         accessibilityLabel="Enviar relatório agora"
       >
-        <Ionicons name="mail-outline" size={15} color={P.paperWarm} />
+        <Icon name="mail-outline" size={15} color={P.paperWarm} />
         <Text style={rst.btnSendLabel}>{sending ? "Enviando…" : "Enviar agora"}</Text>
       </TouchableOpacity>
       {result && <Text style={rst.reportResult}>{result}</Text>}

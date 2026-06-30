@@ -8,7 +8,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput, FlatList,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F,
 } from "@/constants/karateTheme";
@@ -57,14 +57,14 @@ export function DetailDrawer({
               <Text style={dst.drawerSub}>{sub}</Text>
             </View>
             <TouchableOpacity onPress={onClose} accessibilityLabel="Fechar" style={dst.drawerClose}>
-              <Ionicons name="close" size={18} color={C.ink} />
+              <Icon name="close" size={18} color={C.ink} />
             </TouchableOpacity>
           </View>
 
           {/* Toolbar */}
           <View style={dst.drawerToolbar}>
             <View style={dst.searchBox}>
-              <Ionicons name="search" size={14} color={C.ink4} style={{ marginRight: 6 }} />
+              <Icon name="search" size={14} color={C.ink4} style={{ marginRight: 6 }} />
               <TextInput
                 style={dst.searchInput as any}
                 placeholder="Filtrar registros…"
@@ -77,7 +77,7 @@ export function DetailDrawer({
             </View>
             {onExportCsv && (
               <TouchableOpacity style={dst.btnExport} onPress={onExportCsv}>
-                <Ionicons name="download-outline" size={14} color={P.paperWarm} />
+                <Icon name="download-outline" size={14} color={P.paperWarm} />
                 <Text style={dst.btnExportLabel}>Exportar CSV</Text>
               </TouchableOpacity>
             )}
