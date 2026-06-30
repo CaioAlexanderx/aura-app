@@ -30,8 +30,11 @@ import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
 
-// Fallback de display (só usado se company.name não vier)
-const SENSEI_DOJO_FALLBACK = { name: "Dojô", code: "—" };
+// Fallback de display (só usado se company.name não vier).
+// Exportado como SENSEI_DOJO: consumido por index.tsx, anuidade.tsx e
+// certificados/index.tsx (name/code/total) como mock de eyebrow/contexto.
+export const SENSEI_DOJO = { name: "Dojô", code: "—", total: 0 };
+const SENSEI_DOJO_FALLBACK = SENSEI_DOJO;
 
 const TABS = [
   { label: "Praticantes", route: "/karate/sensei" },

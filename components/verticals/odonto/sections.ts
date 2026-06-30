@@ -6,7 +6,7 @@
 import type { ComponentType } from 'react';
 import { OdontoDashboard } from '@/components/verticals/odonto/OdontoDashboard';
 import { AgendaTab, PacientesTab, OdontogramaTab, ProntuarioTab } from '@/components/verticals/odonto/OdontoClinicTabs';
-import { OrcamentosTab, ConveniosTab, CheckinTab, EsperaTab, AgendaOnlineTab } from '@/components/verticals/odonto/OdontoAdminTabs';
+import { OrçamentosTab, ConvêniosTab, CheckinTab, EsperaTab, AgendaOnlineTab } from '@/components/verticals/odonto/OdontoAdminTabs';
 import { DentalFunnel } from '@/components/verticals/odonto/DentalFunnel';
 import { BillingDashboard } from '@/components/verticals/odonto/BillingDashboard';
 import { RepasseDentista } from '@/components/verticals/odonto/RepasseDentista';
@@ -78,12 +78,12 @@ export const SECTIONS: Section[] = [
     label: 'Financeiro',
     icon: '\uD83D\uDCB0',
     tabs: [
-      { id: 'orcamentos',  label: 'Orcamentos',         component: OrcamentosTab },
+      { id: 'orcamentos',  label: 'Orcamentos',         component: OrçamentosTab },
       { id: 'cobrancas',   label: 'Cobrancas',          component: BillingDashboard },
       { id: 'nfse',        label: 'NFS-e',              component: NfseTab, badge: 'novo' },
       { id: 'tiss',        label: 'TISS',               component: TissTab, badge: 'novo' },
       { id: 'repasses',    label: 'Repasses',           component: RepasseDentista },
-      { id: 'convenios',   label: 'Convenios (legado)', component: ConveniosTab },
+      { id: 'convenios',   label: 'Convenios (legado)', component: ConvêniosTab },
       { id: 'laboratorio', label: 'Laboratorio',        component: LabTab },
     ],
   },
