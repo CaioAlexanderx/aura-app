@@ -1,1 +1,90 @@
-aW1wb3J0IFJlYWN0LCB7IHVzZVN0YXRlIH0gZnJvbSAicmVhY3QiOwppbXBvcnQgewogIFZpZXcsIFRleHQsIFRvdWNoYWJsZU9wYWNpdHksIEFjdGl2aXR5SW5kaWNhdG9yLAogIFN0eWxlU2hlZXQsIFZpZXdTdHlsZSwgVGV4dFN0eWxlLAp9IGZyb20gInJlYWN0LW5hdGl2ZSI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IEthcmF0ZUNvbG9ycywgS2FyYXRlUmFkaXVzLCBLYXJhdGVGb250cyB9IGZyb20gIkAvY29uc3RhbnRzL2thcmF0ZVRoZW1lIjsKaW1wb3J0IHsgS2FyYXRlRW1wdHlTdGF0ZSBhcyBFbXB0eVN0YXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9FbXB0eVN0YXRlIjsKaW1wb3J0IHsga2FyYXRlQXBpLCBQcmFjdGl0aW9uZXJEZXRhaWwgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CgppbnRlcmZhY2UgUHJvcHMgewogIGNlcnRpZmljYXRlczogUHJhY3RpdGlvbmVyRGV0YWlsWyJjZXJ0aWZpY2F0ZXMiXTsKICBmZWRlcmF0aW9uSWQ6IHN0cmluZzsKICBwcmFjdGl0aW9uZXJJZDogc3RyaW5nOwp9CgovLyBUcmFjayBQOiBhYmEgZGUgY2VydGlmaWNhZG9zL2V4YW1lcyDigJQgZXhpYmUgbGlzdGEgKyBwZXJtaXRlIGVtaXRpciBub3ZvIGNlcnRpZmljYWRvCmV4cG9ydCBmdW5jdGlvbiBDZXJ0aWZpY2Fkb3NUYWIoeyBjZXJ0aWZpY2F0ZXMsIGZlZGVyYXRpb25JZCwgcHJhY3RpdGlvbmVySWQgfTogUHJvcHMpIHsKICBjb25zdCBbaXNzdWluZ0lkLCBzZXRJc3N1aW5nSWRdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZUlzc3VlKGNlcnRJZDogc3RyaW5nKSB7CiAgICBzZXRJc3N1aW5nSWQoY2VydElkKTsKICAgIHRyeSB7CiAgICAgIGF3YWl0IGthcmF0ZUFwaS5pc3N1ZUNlcnRpZmljYXRlKGZlZGVyYXRpb25JZCwgcHJhY3RpdGlvbmVySWQsIGNlcnRJZCk7CiAgICB9IGZpbmFsbHkgewogICAgICBzZXRJc3N1aW5nSWQobnVsbCk7CiAgICB9CiAgfQoKICBpZiAoIWNlcnRpZmljYXRlcyB8fCBjZXJ0aWZpY2F0ZXMubGVuZ3RoID09PSAwKSB7CiAgICByZXR1cm4gKAogICAgICA8RW1wdHlTdGF0ZQogICAgICAgIGljb249ImRvY3VtZW50LW91dGxpbmUiCiAgICAgICAgdGl0bGU9IlNlbSBjZXJ0aWZpY2Fkb3MiCiAgICAgICAgc3VidGl0bGU9IkNlcnRpZmljYWRvcyBzw6NvIGdlcmFkb3MgYXV0b21hdGljYW1lbnRlIGFww7NzIGV4YW1lcy4iCiAgICAgICAgc3R5bGU9e3sgcGFkZGluZzogMzIgfX0KICAgICAgLz4KICAgICk7CiAgfQoKICByZXR1cm4gKAogICAgPFZpZXcgc3R5bGU9e3RhYlN0eWxlcy50YWJ9PgogICAgICB7Y2VydGlmaWNhdGVzLm1hcCgoY2VydCkgPT4gKAogICAgICAgIDxWaWV3IGtleT17Y2VydC5pZH0gc3R5bGU9e3RhYlN0eWxlcy5jZXJ0Q2FyZH0+CiAgICAgICAgICA8VmlldyBzdHlsZT17dGFiU3R5bGVzLmNlcnRJY29uV3JhcH0+CiAgICAgICAgICAgIDxJY29uIG5hbWU9InJpYmJvbiIgc2l6ZT17MjB9IGNvbG9yPXtLYXJhdGVDb2xvcnMucHJpbWFyeX0gLz4KICAgICAgICAgIDwvVmlldz4KICAgICAgICAgIDxWaWV3IHN0eWxlPXt7IGZsZXg6IDEgfX0+CiAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt0YWJTdHlsZXMuY2VydFRpdGxlfT57Y2VydC5jZXJ0aWZpY2F0ZV90eXBlX25hbWUgfHwgY2VydC5jZXJ0aWZpY2F0ZV90eXBlfTwvVGV4dD4KICAgICAgICAgICAgPFRleHQgc3R5bGU9e3RhYlN0eWxlcy5jZXJ0TWV0YX0+CiAgICAgICAgICAgICAge2NlcnQuaXNzdWVkX2F0CiAgICAgICAgICAgICAgICA/IGBFbWl0aWRvIGVtICR7bmV3IERhdGUoY2VydC5pc3N1ZWRfYXQpLnRvTG9jYWxlRGF0ZVN0cmluZygicHQtQlIiKX1gCiAgICAgICAgICAgICAgICA6ICJOw6NvIGVtaXRpZG8ifQogICAgICAgICAgICA8L1RleHQ+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICB7IWNlcnQuaXNzdWVkX2F0ICYmICgKICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkKICAgICAgICAgICAgICBzdHlsZT17W3RhYlN0eWxlcy5pc3N1ZUJ0biwgaXNzdWluZ0lkID09PSBjZXJ0LmlkICYmIHsgb3BhY2l0eTogMC42IH1dfQogICAgICAgICAgICAgIG9uUHJlc3M9eygpID0+IGhhbmRsZUlzc3VlKGNlcnQuaWQpfQogICAgICAgICAgICAgIGRpc2FibGVkPXtpc3N1aW5nSWQgPT09IGNlcnQuaWR9CiAgICAgICAgICAgICAgYWNjZXNzaWJpbGl0eVJvbGU9ImJ1dHRvbiIKICAgICAgICAgICAgICBhY2Nlc3NpYmlsaXR5TGFiZWw9IkVtaXRpciBjZXJ0aWZpY2FkbyIKICAgICAgICAgICAgPgogICAgICAgICAgICAgIHtpc3N1aW5nSWQgPT09IGNlcnQuaWQKICAgICAgICAgICAgICAgID8gPEFjdGl2aXR5SW5kaWNhdG9yIHNpemU9InNtYWxsIiBjb2xvcj0iI2ZkZjhmMiIgLz4KICAgICAgICAgICAgICAgIDogPFRleHQgc3R5bGU9e3RhYlN0eWxlcy5pc3N1ZUJ0blR4dH0+RW1pdGlyPC9UZXh0Pn0KICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgKX0KICAgICAgICAgIHtjZXJ0Lmlzc3VlZF9hdCAmJiAoCiAgICAgICAgICAgIDxWaWV3IHN0eWxlPXt0YWJTdHlsZXMuaXNzdWVkQmFkZ2V9PgogICAgICAgICAgICAgIDxJY29uIG5hbWU9ImNoZWNrIiBzaXplPXsxNH0gY29sb3I9e0thcmF0ZUNvbG9ycy5wcmltYXJ5fSAvPgogICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICApfQogICAgICAgIDwvVmlldz4KICAgICAgKSl9CiAgICA8L1ZpZXc+CiAgKTsKfQoKY29uc3QgdGFiU3R5bGVzID0gU3R5bGVTaGVldC5jcmVhdGUoewogIHRhYjogICAgICAgICAgeyBwYWRkaW5nOiAxNiwgZ2FwOiAxMCB9IGFzIFZpZXdTdHlsZSwKICBjZXJ0Q2FyZDogICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5zdXJmYWNlLCBib3JkZXJSYWRpdXM6IEthcmF0ZVJhZGl1cy5tZCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBwYWRkaW5nOiAxMiB9IGFzIFZpZXdTdHlsZSwKICBjZXJ0SWNvbldyYXA6IHsgd2lkdGg6IDM2LCBoZWlnaHQ6IDM2LCBib3JkZXJSYWRpdXM6IDE4LCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5U29mdCwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiB9IGFzIFZpZXdTdHlsZSwKICBjZXJ0VGl0bGU6ICAgIHsgZm9udFNpemU6IDE0LCBmb250V2VpZ2h0OiAiNzAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsgfSBhcyBUZXh0U3R5bGUsCiAgY2VydE1ldGE6ICAgICB7IGZvbnRTaXplOiAxMiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmszLCBtYXJnaW5Ub3A6IDIgfSBhcyBUZXh0U3R5bGUsCiAgaXNzdWVCdG46ICAgICB7IHBhZGRpbmdWZXJ0aWNhbDogNywgcGFkZGluZ0hvcml6b250YWw6IDEyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5pbmssIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIGlzc3VlQnRuVHh0OiAgeyBmb250U2l6ZTogMTMsIGZvbnRXZWlnaHQ6ICI2MDAiLCBjb2xvcjogIiNmZGY4ZjIiIH0gYXMgVGV4dFN0eWxlLAogIGlzc3VlZEJhZGdlOiAgeyB3aWR0aDogMjgsIGhlaWdodDogMjgsIGJvcmRlclJhZGl1czogMTQsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnlTb2Z0LCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAp9KTsKCg==
+import React, { useState } from "react";
+import {
+  View, Text, TouchableOpacity, ActivityIndicator,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
+import { karateApi, PractitionerDetail } from "@/services/karateApi";
+
+interface Props {
+  certificates: PractitionerDetail["certificates"];
+  federationId: string;
+  practitionerId: string;
+}
+
+// Track P: aba de certificados/exames — exibe lista + permite emitir novo certificado
+export function CertificadosTab({ certificates, federationId, practitionerId }: Props) {
+  const [issuingId, setIssuingId] = useState<string | null>(null);
+
+  async function handleIssue(certId: string) {
+    setIssuingId(certId);
+    try {
+      await karateApi.issueCertificate(federationId, practitionerId, certId);
+    } finally {
+      setIssuingId(null);
+    }
+  }
+
+  if (!certificates || certificates.length === 0) {
+    return (
+      <EmptyState
+        icon="document-outline"
+        title="Sem certificados"
+        subtitle="Certificados são gerados automaticamente após exames."
+        style={{ padding: 32 }}
+      />
+    );
+  }
+
+  return (
+    <View style={tabStyles.tab}>
+      {certificates.map((cert) => (
+        <View key={cert.id} style={tabStyles.certCard}>
+          <View style={tabStyles.certIconWrap}>
+            <Icon name="ribbon" size={20} color={KarateColors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={tabStyles.certTitle}>{cert.certificate_type_name || cert.certificate_type}</Text>
+            <Text style={tabStyles.certMeta}>
+              {cert.issued_at
+                ? `Emitido em ${new Date(cert.issued_at).toLocaleDateString("pt-BR")}`
+                : "Não emitido"}
+            </Text>
+          </View>
+          {!cert.issued_at && (
+            <TouchableOpacity
+              style={[tabStyles.issueBtn, issuingId === cert.id && { opacity: 0.6 }]}
+              onPress={() => handleIssue(cert.id)}
+              disabled={issuingId === cert.id}
+              accessibilityRole="button"
+              accessibilityLabel="Emitir certificado"
+            >
+              {issuingId === cert.id
+                ? <ActivityIndicator size="small" color="#fdf8f2" />
+                : <Text style={tabStyles.issueBtnTxt}>Emitir</Text>}
+            </TouchableOpacity>
+          )}
+          {cert.issued_at && (
+            <View style={tabStyles.issuedBadge}>
+              <Icon name="check" size={14} color={KarateColors.primary} />
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  tab:          { padding: 16, gap: 10 } as ViewStyle,
+  certCard:     { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12 } as ViewStyle,
+  certIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  certTitle:    { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  certMeta:     { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  issueBtn:     { paddingVertical: 7, paddingHorizontal: 12, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.md, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  issueBtnTxt:  { fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+  issuedBadge:  { width: 28, height: 28, borderRadius: 14, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
+});
+

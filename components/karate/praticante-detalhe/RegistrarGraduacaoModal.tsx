@@ -1,1 +1,215 @@
-aW1wb3J0IFJlYWN0LCB7IHVzZUVmZmVjdCwgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7CiAgVmlldywgVGV4dCwgU2Nyb2xsVmlldywgVG91Y2hhYmxlT3BhY2l0eSwgQWN0aXZpdHlJbmRpY2F0b3IsCiAgTW9kYWwsIFRleHRJbnB1dCwgUHJlc3NhYmxlLCBTdHlsZVNoZWV0LCBWaWV3U3R5bGUsIFRleHRTdHlsZSwKfSBmcm9tICJyZWFjdC1uYXRpdmUiOwppbXBvcnQgeyBJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL0ljb24iOwppbXBvcnQgeyBLYXJhdGVDb2xvcnMsIEthcmF0ZVJhZGl1cywgS2FyYXRlRm9udHMsIEthcmF0ZUJlbHRzLCBCZWx0S2V5IH0gZnJvbSAiQC9jb25zdGFudHMva2FyYXRlVGhlbWUiOwppbXBvcnQgeyBrYXJhdGVBcGkgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CmltcG9ydCB7IG1hc2tCckRhdGUsIHBhcnNlQnJEYXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2lucHV0cy9EYXRlSW5wdXQiOwppbXBvcnQgeyBCRUxUX09QVElPTlMsIERBTl9PUFRJT05TLCBCRUxUX0tZVVMsIGJ1aWxkQmVsdE5hbWUgfSBmcm9tICIuL2hlbHBlcnMiOwoKaW50ZXJmYWNlIFByb3BzIHsKICB2aXNpYmxlOiBib29sZWFuOwogIG9uQ2xvc2U6ICgpID0+IHZvaWQ7CiAgZmVkZXJhdGlvbklkOiBzdHJpbmc7CiAgcHJhY3RpdGlvbmVySWQ6IHN0cmluZzsKICBvbkRvbmU6ICgpID0+IHZvaWQ7Cn0KCi8vIFRyYWNrIEEgKGZpeCAyMy8wNik6IHJlZ2lzdHJhciB1bWEgZ3JhZHVhw6fDo28gbWFudWFsIChmYWl4YSArIGRhdGEpIG5vCi8vIGhpc3TDs3JpY28gZG8gcHJhdGljYW50ZS4gQSBmYWl4YSBhdHVhbCDDqSBkZXJpdmFkYSBhdXRvbWF0aWNhbWVudGUKLy8gKHZpZXcga2FyYXRlX2N1cnJlbnRfYmVsdCkuCmV4cG9ydCBmdW5jdGlvbiBSZWdpc3RyYXJHcmFkdWFjYW9Nb2RhbCh7CiAgdmlzaWJsZSwgb25DbG9zZSwgZmVkZXJhdGlvbklkLCBwcmFjdGl0aW9uZXJJZCwgb25Eb25lLAp9OiBQcm9wcykgewogIGNvbnN0IFtiZWx0S2V5LCBzZXRCZWx0S2V5XSA9IHVzZVN0YXRlPEJlbHRLZXkgfCBudWxsPihudWxsKTsKICBjb25zdCBbZGFuRGVnLCBzZXREYW5EZWddID0gdXNlU3RhdGU8bnVtYmVyIHwgbnVsbD4obnVsbCk7CiAgY29uc3QgW2t5dURlZywgc2V0S3l1RGVnXSA9IHVzZVN0YXRlPG51bWJlciB8IG51bGw+KG51bGwpOwogIGNvbnN0IFtkYXRlQnIsIHNldERhdGVCcl0gPSB1c2VTdGF0ZSgiIik7CiAgY29uc3QgW2xlZ2FjeSwgc2V0TGVnYWN5XSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbc2F2aW5nLCBzZXRTYXZpbmddID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtlcnIsIHNldEVycl0gPSB1c2VTdGF0ZTxzdHJpbmcgfCBudWxsPihudWxsKTsKCiAgLy8gcmVzZXQgYW8gYWJyaXIKICB1c2VFZmZlY3QoKCkgPT4gewogICAgaWYgKHZpc2libGUpIHsgc2V0QmVsdEtleShudWxsKTsgc2V0RGFuRGVnKG51bGwpOyBzZXRLeXVEZWcobnVsbCk7IHNldERhdGVCcigiIik7IHNldExlZ2FjeShmYWxzZSk7IHNldEVycihudWxsKTsgc2V0U2F2aW5nKGZhbHNlKTsgfQogIH0sIFt2aXNpYmxlXSk7CgogIC8vIFJlc2V0IGdyYXUgYW8gdHJvY2FyIGZhaXhhCiAgZnVuY3Rpb24gaGFuZGxlQmVsdFNlbGVjdChrOiBCZWx0S2V5KSB7CiAgICBzZXRCZWx0S2V5KGspOwogICAgc2V0RGFuRGVnKG51bGwpOwogICAgc2V0S3l1RGVnKG51bGwpOwogIH0KCiAgY29uc3QgZGF0ZUNvbXBsZXRlID0gZGF0ZUJyLmxlbmd0aCA9PT0gMTA7CiAgY29uc3QgZGF0ZUlzbyA9IHBhcnNlQnJEYXRlKGRhdGVCcik7IC8vIG51bGwgc2UgaW5jb21wbGV0by8gaW52w6FsaWRvCiAgY29uc3QgZGF0ZUJhZCA9IGRhdGVDb21wbGV0ZSAmJiBkYXRlSXNvID09PSBudWxsOwoKICBhc3luYyBmdW5jdGlvbiBoYW5kbGVTYXZlKCkgewogICAgaWYgKCFiZWx0S2V5KSB7IHNldEVycigiU2VsZWNpb25lIGEgZmFpeGEuIik7IHJldHVybjsgfQogICAgaWYgKGRhdGVCYWQpIHsgc2V0RXJyKCJEYXRhIGludsOhbGlkYS4gVXNlIGRkL21tL2FhYWEgb3UgZGVpeGUgZW0gYnJhbmNvICh1c2EgaG9qZSkuIik7IHJldHVybjsgfQogICAgc2V0RXJyKG51bGwpOyBzZXRTYXZpbmcodHJ1ZSk7CiAgICB0cnkgewogICAgICBhd2FpdCBrYXJhdGVBcGkuYWRkQmVsdEdyYWR1YXRpb24oZmVkZXJhdGlvbklkLCBwcmFjdGl0aW9uZXJJZCwgewogICAgICAgIGJlbHRfbGV2ZWw6IGJlbHRLZXksCiAgICAgICAgYmVsdF9uYW1lOiBidWlsZEJlbHROYW1lKGJlbHRLZXksIGRhbkRlZyA/PyB1bmRlZmluZWQsIGt5dURlZyA/PyB1bmRlZmluZWQpLAogICAgICAgIGJlbHRfc2NoZW1hOiBsZWdhY3kgPyAibGVnYWN5IiA6ICJmcGt0X3Nob3Rva2FuIiwKICAgICAgICBncmFkdWF0ZWRfYXQ6IGRhdGVJc28gPz8gdW5kZWZpbmVkLCAvLyBzZW0gZGF0YSDihpIgYmFja2VuZCB1c2EgaG9qZQogICAgICB9KTsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgICAgb25Eb25lKCk7CiAgICB9IGNhdGNoIChlOiBhbnkpIHsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgICAgc2V0RXJyKGU/Lm1lc3NhZ2UgfHwgIk7Do28gZm9pIHBvc3PDrXZlbCByZWdpc3RyYXIgYSBncmFkdWHDp8Ojby4iKTsKICAgIH0KICB9CgogIHJldHVybiAoCiAgICA8TW9kYWwgdmlzaWJsZT17dmlzaWJsZX0gdHJhbnNwYXJlbnQgYW5pbWF0aW9uVHlwZT0iZmFkZSIgb25SZXF1ZXN0Q2xvc2U9e29uQ2xvc2V9PgogICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5iYWNrZHJvcH0+CiAgICAgICAgPFByZXNzYWJsZSBzdHlsZT17U3R5bGVTaGVldC5hYnNvbHV0ZUZpbGx9IG9uUHJlc3M9e29uQ2xvc2V9IC8+CiAgICAgICAgPFZpZXcgc3R5bGU9e2dyYWRTdHlsZXMuY2FyZH0+CiAgICAgICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5oZWFkfT4KICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMudGl0bGV9PlJlZ2lzdHJhciBncmFkdWHDp8OjbzwvVGV4dD4KICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgb25QcmVzcz17b25DbG9zZX0gaGl0U2xvcD17MTB9PgogICAgICAgICAgICAgIDxJY29uIG5hbWU9IngiIHNpemU9ezIwfSBjb2xvcj17S2FyYXRlQ29sb3JzLmluazN9IC8+CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgIDwvVmlldz4KCiAgICAgICAgICA8U2Nyb2xsVmlldyBzdHlsZT17eyBtYXhIZWlnaHQ6IDQyMCB9fSBjb250ZW50Q29udGFpbmVyU3R5bGU9e3sgcGFkZGluZzogMTYsIGdhcDogMTIgfX0ga2V5Ym9hcmRTaG91bGRQZXJzaXN0VGFwcz0iaGFuZGxlZCI+CiAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtncmFkU3R5bGVzLmhpbnR9PgogICAgICAgICAgICAgIEFkaWNpb25hIHVtYSBmYWl4YSBhbyBoaXN0w7NyaWNvIChyZWdpc3RybyBwZXJtYW5lbnRlKS4gQSBmYWl4YSBhdHVhbCBwYXNzYSBhIHNlciBhIG1haXMgcmVjZW50ZS4KICAgICAgICAgICAgPC9UZXh0PgoKICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMubGFiZWx9PkZhaXhhPC9UZXh0PgogICAgICAgICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5iZWx0R3JpZH0+CiAgICAgICAgICAgICAge0JFTFRfT1BUSU9OUy5tYXAoKG9wdCkgPT4gewogICAgICAgICAgICAgICAgY29uc3QgYWN0aXZlID0gYmVsdEtleSA9PT0gb3B0LmtleTsKICAgICAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICAgIDxUb3VjaGFibGVPcGFjaXR5CiAgICAgICAgICAgICAgICAgICAga2V5PXtvcHQua2V5fQogICAgICAgICAgICAgICAgICAgIG9uUHJlc3M9eygpID0+IGhhbmRsZUJlbHRTZWxlY3Qob3B0LmtleSl9CiAgICAgICAgICAgICAgICAgICAgYWN0aXZlT3BhY2l0eT17MC43fQogICAgICAgICAgICAgICAgICAgIHN0eWxlPXtbZ3JhZFN0eWxlcy5iZWx0Q2hpcCwgeyBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUJlbHRzW29wdC5rZXldLmNvbG9yIH0sIGFjdGl2ZSAmJiBncmFkU3R5bGVzLmJlbHRDaGlwQWN0aXZlXX0KICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtbZ3JhZFN0eWxlcy5iZWx0Q2hpcFR4dCwgeyBjb2xvcjogS2FyYXRlQmVsdHNbb3B0LmtleV0udGV4dENvbG9yIH1dfT57b3B0LmxhYmVsfTwvVGV4dD4KICAgICAgICAgICAgICAgICAgICB7YWN0aXZlICYmIDxJY29uIG5hbWU9ImNoZWNrIiBzaXplPXsxNH0gY29sb3I9e0thcmF0ZUJlbHRzW29wdC5rZXldLnRleHRDb2xvcn0gLz59CiAgICAgICAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgfSl9CiAgICAgICAgICAgIDwvVmlldz4KCiAgICAgICAgICAgIHsvKiBTdWItc2VsZXRvcjogRGFuIHBhcmEgUHJldGEgLyBLeXUgcGFyYSBhcyBkZW1haXMgKi99CiAgICAgICAgICAgIHtiZWx0S2V5ID09PSAicHJldGEiICYmICgKICAgICAgICAgICAgICA8PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMubGFiZWx9PkdyYXUgRGFuPC9UZXh0PgogICAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e2dyYWRTdHlsZXMuYmVsdEdyaWR9PgogICAgICAgICAgICAgICAgICB7REFOX09QVElPTlMubWFwKChkKSA9PiB7CiAgICAgICAgICAgICAgICAgICAgY29uc3QgYWN0aXZlID0gZGFuRGVnID09PSBkOwogICAgICAgICAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eQogICAgICAgICAgICAgICAgICAgICAgICBrZXk9e2R9CiAgICAgICAgICAgICAgICAgICAgICAgIG9uUHJlc3M9eygpID0+IHNldERhbkRlZyhhY3RpdmUgPyBudWxsIDogZCl9CiAgICAgICAgICAgICAgICAgICAgICAgIGFjdGl2ZU9wYWNpdHk9ezAuN30KICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU9e1tncmFkU3R5bGVzLmJlbHRDaGlwLCB7IGJhY2tncm91bmRDb2xvcjogYWN0aXZlID8gS2FyYXRlQ29sb3JzLmluayA6IEthcmF0ZUNvbG9ycy5iZzIgfSwgYWN0aXZlICYmIGdyYWRTdHlsZXMuYmVsdENoaXBBY3RpdmVdfQogICAgICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17W2dyYWRTdHlsZXMuYmVsdENoaXBUeHQsIHsgY29sb3I6IGFjdGl2ZSA/ICIjZmRmOGYyIiA6IEthcmF0ZUNvbG9ycy5pbmsyIH1dfT57ZH3CsDwvVGV4dD4KICAgICAgICAgICAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgICB9KX0KICAgICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgICA8Lz4KICAgICAgICAgICAgKX0KICAgICAgICAgICAge2JlbHRLZXkgJiYgYmVsdEtleSAhPT0gInByZXRhIiAmJiAoQkVMVF9LWVVTW2JlbHRLZXldPy5sZW5ndGggPz8gMCkgPiAxICYmICgKICAgICAgICAgICAgICA8PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMubGFiZWx9Pkt5dTwvVGV4dD4KICAgICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXtncmFkU3R5bGVzLmJlbHRHcmlkfT4KICAgICAgICAgICAgICAgICAgeyhCRUxUX0tZVVNbYmVsdEtleV0gPz8gW10pLm1hcCgoaykgPT4gewogICAgICAgICAgICAgICAgICAgIGNvbnN0IGFjdGl2ZSA9IGt5dURlZyA9PT0gazsKICAgICAgICAgICAgICAgICAgICByZXR1cm4gKAogICAgICAgICAgICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkKICAgICAgICAgICAgICAgICAgICAgICAga2V5PXtrfQogICAgICAgICAgICAgICAgICAgICAgICBvblByZXNzPXsoKSA9PiBzZXRLeXVEZWcoYWN0aXZlID8gbnVsbCA6IGspfQogICAgICAgICAgICAgICAgICAgICAgICBhY3RpdmVPcGFjaXR5PXswLjd9CiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlPXtbZ3JhZFN0eWxlcy5iZWx0Q2hpcCwgeyBiYWNrZ3JvdW5kQ29sb3I6IGFjdGl2ZSA/IEthcmF0ZUNvbG9ycy5pbmsgOiBLYXJhdGVDb2xvcnMuYmcyIH0sIGFjdGl2ZSAmJiBncmFkU3R5bGVzLmJlbHRDaGlwQWN0aXZlXX0KICAgICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e1tncmFkU3R5bGVzLmJlbHRDaGlwVHh0LCB7IGNvbG9yOiBhY3RpdmUgPyAiI2ZkZjhmMiIgOiBLYXJhdGVDb2xvcnMuaW5rMiB9XX0+e2t9wrBreXU8L1RleHQ+CiAgICAgICAgICAgICAgICAgICAgICA8L1RvdWNoYWJsZU9wYWNpdHk+CiAgICAgICAgICAgICAgICAgICAgKTsKICAgICAgICAgICAgICAgICAgfSl9CiAgICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgICAgPC8+CiAgICAgICAgICAgICl9CgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5sYWJlbH0+RGF0YSBkYSBncmFkdWHDp8OjbyDCtyBkZC9tbS9hYWFhIDxUZXh0IHN0eWxlPXtncmFkU3R5bGVzLmxhYmVsSGludH0+KHZhemlvID0gaG9qZSk8L1RleHQ+PC9UZXh0PgogICAgICAgICAgICA8VGV4dElucHV0CiAgICAgICAgICAgICAgc3R5bGU9e1tncmFkU3R5bGVzLmlucHV0LCBkYXRlQmFkICYmIGdyYWRTdHlsZXMuaW5wdXRCYWRdfQogICAgICAgICAgICAgIHZhbHVlPXtkYXRlQnJ9CiAgICAgICAgICAgICAgb25DaGFuZ2VUZXh0PXsodikgPT4gc2V0RGF0ZUJyKG1hc2tCckRhdGUodikpfQogICAgICAgICAgICAgIGtleWJvYXJkVHlwZT0ibnVtZXJpYyIKICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0iZGQvbW0vYWFhYSIKICAgICAgICAgICAgICBwbGFjZWhvbGRlclRleHRDb2xvcj17S2FyYXRlQ29sb3JzLmluazR9CiAgICAgICAgICAgICAgbWF4TGVuZ3RoPXsxMH0KICAgICAgICAgICAgICBhY2Nlc3NpYmlsaXR5TGFiZWw9IkRhdGEgZGEgZ3JhZHVhw6fDo28iCiAgICAgICAgICAgIC8+CiAgICAgICAgICAgIHtkYXRlQmFkID8gPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMuZXJySW5saW5lfT5EYXRhIGludsOhbGlkYTwvVGV4dD4gOiBudWxsfQoKICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgc3R5bGU9e2dyYWRTdHlsZXMubGVnYWN5Um93fSBvblByZXNzPXsoKSA9PiBzZXRMZWdhY3koKHYpID0+ICF2KX0gYWN0aXZlT3BhY2l0eT17MC43fT4KICAgICAgICAgICAgICA8VmlldyBzdHlsZT17W2dyYWRTdHlsZXMuY2hlY2tib3gsIGxlZ2FjeSAmJiBncmFkU3R5bGVzLmNoZWNrYm94T25dfT4KICAgICAgICAgICAgICAgIHtsZWdhY3kgJiYgPEljb24gbmFtZT0iY2hlY2siIHNpemU9ezEzfSBjb2xvcj0iI2ZmZiIgLz59CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtncmFkU3R5bGVzLmxlZ2FjeVR4dH0+UmVnaXN0cm8gaGlzdMOzcmljbyAoc2lzdGVtYSBsZWdhZG8pPC9UZXh0PgogICAgICAgICAgICA8L1RvdWNoYWJsZU9wYWNpdHk+CgogICAgICAgICAgICB7ZXJyID8gKAogICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXtncmFkU3R5bGVzLmVyckJveH0+CiAgICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJhbGVydF9jaXJjbGUiIHNpemU9ezE1fSBjb2xvcj17S2FyYXRlQ29sb3JzLnByaW1hcnl9IC8+CiAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5lcnJUeHR9PntlcnJ9PC9UZXh0PgogICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgKSA6IG51bGx9CiAgICAgICAgICA8L1Njcm9sbFZpZXc+CgogICAgICAgICAgPFZpZXcgc3R5bGU9e2dyYWRTdHlsZXMuZm9vdGVyfT4KICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgb25QcmVzcz17b25DbG9zZX0gc3R5bGU9e2dyYWRTdHlsZXMuYnRuR2hvc3R9PgogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtncmFkU3R5bGVzLmJ0bkdob3N0VHh0fT5DYW5jZWxhcjwvVGV4dD4KICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBvblByZXNzPXtoYW5kbGVTYXZlfSBkaXNhYmxlZD17c2F2aW5nfSBzdHlsZT17W2dyYWRTdHlsZXMuYnRuUHJpbWFyeSwgc2F2aW5nICYmIHsgb3BhY2l0eTogMC42IH1dfT4KICAgICAgICAgICAgICB7c2F2aW5nID8gPEFjdGl2aXR5SW5kaWNhdG9yIGNvbG9yPSIjZmRmOGYyIiBzaXplPSJzbWFsbCIgLz4gOiA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5idG5QcmltYXJ5VHh0fT5SZWdpc3RyYXI8L1RleHQ+fQogICAgICAgICAgICA8L1RvdWNoYWJsZU9wYWNpdHk+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgPC9WaWV3PgogICAgICA8L1ZpZXc+CiAgICA8L01vZGFsPgogICk7Cn0KCmNvbnN0IGdyYWRTdHlsZXMgPSBTdHlsZVNoZWV0LmNyZWF0ZSh7CiAgYmFja2Ryb3A6ICB7IGZsZXg6IDEsIGJhY2tncm91bmRDb2xvcjogInJnYmEoNDMsMzgsMzIsMC40NSkiLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiLCBwYWRkaW5nOiAxMiB9IGFzIFZpZXdTdHlsZSwKICBjYXJkOiAgICAgIHsgd2lkdGg6ICIxMDAlIiwgbWF4V2lkdGg6IDUyMCwgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMuc3VyZmFjZSwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMueGwsIG92ZXJmbG93OiAiaGlkZGVuIiwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyMiwgbWF4SGVpZ2h0OiAiOTIlIiB9IGFzIFZpZXdTdHlsZSwKICBoZWFkOiAgICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogInNwYWNlLWJldHdlZW4iLCBwYWRkaW5nSG9yaXpvbnRhbDogMTYsIHBhZGRpbmdWZXJ0aWNhbDogMTQsIGJvcmRlckJvdHRvbVdpZHRoOiAxLCBib3JkZXJCb3R0b21Db2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlciwgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMuZ2xhc3NIaSB9IGFzIFZpZXdTdHlsZSwKICB0aXRsZTogICAgIHsgZm9udEZhbWlseTogS2FyYXRlRm9udHMuaGVhZGluZywgZm9udFNpemU6IDE4LCBjb2xvcjogS2FyYXRlQ29sb3JzLmluayB9IGFzIFRleHRTdHlsZSwKICBoaW50OiAgICAgIHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMgfSBhcyBUZXh0U3R5bGUsCiAgbGFiZWw6ICAgICB7IGZvbnRTaXplOiAxMSwgZm9udFdlaWdodDogIjcwMCIsIGxldHRlclNwYWNpbmc6IDAuMywgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsyLCBtYXJnaW5Ub3A6IDQgfSBhcyBUZXh0U3R5bGUsCiAgbGFiZWxIaW50OiB7IGZvbnRXZWlnaHQ6ICI1MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazQgfSBhcyBUZXh0U3R5bGUsCiAgYmVsdEdyaWQ6ICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBmbGV4V3JhcDogIndyYXAiLCBnYXA6IDggfSBhcyBWaWV3U3R5bGUsCiAgYmVsdENoaXA6ICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiA1LCBwYWRkaW5nVmVydGljYWw6IDcsIHBhZGRpbmdIb3Jpem9udGFsOiAxMiwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMuc20sIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogInJnYmEoMCwwLDAsMC4xMikiIH0gYXMgVmlld1N0eWxlLAogIGJlbHRDaGlwQWN0aXZlOiB7IGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rLCBib3JkZXJXaWR0aDogMiB9IGFzIFZpZXdTdHlsZSwKICBiZWx0Q2hpcFR4dDogeyBmb250U2l6ZTogMTIsIGZvbnRXZWlnaHQ6ICI3MDAiLCBsZXR0ZXJTcGFjaW5nOiAwLjIgfSBhcyBUZXh0U3R5bGUsCiAgaW5wdXQ6ICAgICB7IGZvbnRGYW1pbHk6IEthcmF0ZUZvbnRzLm1vbm8sIGZvbnRTaXplOiAxNSwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmssIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmdsYXNzSGksIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlcjIsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBwYWRkaW5nSG9yaXpvbnRhbDogMTIsIHBhZGRpbmdWZXJ0aWNhbDogMTEsIGxldHRlclNwYWNpbmc6IDAuNSB9IGFzIFRleHRTdHlsZSwKICBpbnB1dEJhZDogIHsgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5IH0gYXMgVmlld1N0eWxlLAogIGVycklubGluZTogeyBmb250U2l6ZTogMTEsIGNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeSB9IGFzIFRleHRTdHlsZSwKICBsZWdhY3lSb3c6IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDksIG1hcmdpblRvcDogNCB9IGFzIFZpZXdTdHlsZSwKICBjaGVja2JveDogIHsgd2lkdGg6IDIwLCBoZWlnaHQ6IDIwLCBib3JkZXJSYWRpdXM6IDYsIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlcjIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogImNlbnRlciIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmdsYXNzSGkgfSBhcyBWaWV3U3R5bGUsCiAgY2hlY2tib3hPbjp7IGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnksIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeSB9IGFzIFZpZXdTdHlsZSwKICBsZWdhY3lUeHQ6IHsgZm9udFNpemU6IDEzLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazIsIGZsZXg6IDEgfSBhcyBUZXh0U3R5bGUsCiAgZXJyQm94OiAgICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiA4LCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5U29mdCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeUxpbmUsIGJvcmRlclJhZGl1czogMTIsIHBhZGRpbmc6IDExIH0gYXMgVmlld1N0eWxlLAogIGVyclR4dDogICAgeyBmb250U2l6ZTogMTIuNSwgY29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5MiwgZmxleDogMSB9IGFzIFRleHRTdHlsZSwKICBmb290ZXI6ICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGp1c3RpZnlDb250ZW50OiAiZmxleC1lbmQiLCBnYXA6IDEwLCBwYWRkaW5nOiAxNCwgYm9yZGVyVG9wV2lkdGg6IDEsIGJvcmRlclRvcENvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5nbGFzc0hpIH0gYXMgVmlld1N0eWxlLAogIGJ0bkdob3N0OiAgeyBwYWRkaW5nVmVydGljYWw6IDExLCBwYWRkaW5nSG9yaXpvbnRhbDogMTgsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIyIH0gYXMgVmlld1N0eWxlLAogIGJ0bkdob3N0VHh0OiB7IGZvbnRTaXplOiAxMy41LCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsgfSBhcyBUZXh0U3R5bGUsCiAgYnRuUHJpbWFyeTogeyBwYWRkaW5nVmVydGljYWw6IDExLCBwYWRkaW5nSG9yaXpvbnRhbDogMjIsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5pbmssIG1pbldpZHRoOiAxMzAsIGFsaWduSXRlbXM6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIGJ0blByaW1hcnlUeHQ6IHsgZm9udFNpemU6IDEzLjUsIGZvbnRXZWlnaHQ6ICI2MDAiLCBjb2xvcjogIiNmZGY4ZjIiIH0gYXMgVGV4dFN0eWxlLAp9KTsKCg==
+import React, { useEffect, useState } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  Modal, TextInput, Pressable, StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts, KarateBelts, BeltKey } from "@/constants/karateTheme";
+import { karateApi } from "@/services/karateApi";
+import { maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
+import { BELT_OPTIONS, DAN_OPTIONS, BELT_KYUS, buildBeltName } from "./helpers";
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+  federationId: string;
+  practitionerId: string;
+  onDone: () => void;
+}
+
+// Track A (fix 23/06): registrar uma graduação manual (faixa + data) no
+// histórico do praticante. A faixa atual é derivada automaticamente
+// (view karate_current_belt).
+export function RegistrarGraduacaoModal({
+  visible, onClose, federationId, practitionerId, onDone,
+}: Props) {
+  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [danDeg, setDanDeg] = useState<number | null>(null);
+  const [kyuDeg, setKyuDeg] = useState<number | null>(null);
+  const [dateBr, setDateBr] = useState("");
+  const [legacy, setLegacy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // reset ao abrir
+  useEffect(() => {
+    if (visible) { setBeltKey(null); setDanDeg(null); setKyuDeg(null); setDateBr(""); setLegacy(false); setErr(null); setSaving(false); }
+  }, [visible]);
+
+  // Reset grau ao trocar faixa
+  function handleBeltSelect(k: BeltKey) {
+    setBeltKey(k);
+    setDanDeg(null);
+    setKyuDeg(null);
+  }
+
+  const dateComplete = dateBr.length === 10;
+  const dateIso = parseBrDate(dateBr); // null se incompleto/ inválido
+  const dateBad = dateComplete && dateIso === null;
+
+  async function handleSave() {
+    if (!beltKey) { setErr("Selecione a faixa."); return; }
+    if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco (usa hoje)."); return; }
+    setErr(null); setSaving(true);
+    try {
+      await karateApi.addBeltGraduation(federationId, practitionerId, {
+        belt_level: beltKey,
+        belt_name: buildBeltName(beltKey, danDeg ?? undefined, kyuDeg ?? undefined),
+        belt_schema: legacy ? "legacy" : "fpkt_shotokan",
+        graduated_at: dateIso ?? undefined, // sem data → backend usa hoje
+      });
+      setSaving(false);
+      onDone();
+    } catch (e: any) {
+      setSaving(false);
+      setErr(e?.message || "Não foi possível registrar a graduação.");
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Registrar graduação</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Icon name="x" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={gradStyles.hint}>
+              Adiciona uma faixa ao histórico (registro permanente). A faixa atual passa a ser a mais recente.
+            </Text>
+
+            <Text style={gradStyles.label}>Faixa</Text>
+            <View style={gradStyles.beltGrid}>
+              {BELT_OPTIONS.map((opt) => {
+                const active = beltKey === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => handleBeltSelect(opt.key)}
+                    activeOpacity={0.7}
+                    style={[gradStyles.beltChip, { backgroundColor: KarateBelts[opt.key].color }, active && gradStyles.beltChipActive]}
+                  >
+                    <Text style={[gradStyles.beltChipTxt, { color: KarateBelts[opt.key].textColor }]}>{opt.label}</Text>
+                    {active && <Icon name="check" size={14} color={KarateBelts[opt.key].textColor} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Sub-seletor: Dan para Preta / Kyu para as demais */}
+            {beltKey === "preta" && (
+              <>
+                <Text style={gradStyles.label}>Grau Dan</Text>
+                <View style={gradStyles.beltGrid}>
+                  {DAN_OPTIONS.map((d) => {
+                    const active = danDeg === d;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => setDanDeg(active ? null : d)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{d}°</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+            {beltKey && beltKey !== "preta" && (BELT_KYUS[beltKey]?.length ?? 0) > 1 && (
+              <>
+                <Text style={gradStyles.label}>Kyu</Text>
+                <View style={gradStyles.beltGrid}>
+                  {(BELT_KYUS[beltKey] ?? []).map((k) => {
+                    const active = kyuDeg === k;
+                    return (
+                      <TouchableOpacity
+                        key={k}
+                        onPress={() => setKyuDeg(active ? null : k)}
+                        activeOpacity={0.7}
+                        style={[gradStyles.beltChip, { backgroundColor: active ? KarateColors.ink : KarateColors.bg2 }, active && gradStyles.beltChipActive]}
+                      >
+                        <Text style={[gradStyles.beltChipTxt, { color: active ? "#fdf8f2" : KarateColors.ink2 }]}>{k}°kyu</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            <Text style={gradStyles.label}>Data da graduação · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = hoje)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, dateBad && gradStyles.inputBad]}
+              value={dateBr}
+              onChangeText={(v) => setDateBr(maskBrDate(v))}
+              keyboardType="numeric"
+              placeholder="dd/mm/aaaa"
+              placeholderTextColor={KarateColors.ink4}
+              maxLength={10}
+              accessibilityLabel="Data da graduação"
+            />
+            {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            <TouchableOpacity style={gradStyles.legacyRow} onPress={() => setLegacy((v) => !v)} activeOpacity={0.7}>
+              <View style={[gradStyles.checkbox, legacy && gradStyles.checkboxOn]}>
+                {legacy && <Icon name="check" size={13} color="#fff" />}
+              </View>
+              <Text style={gradStyles.legacyTxt}>Registro histórico (sistema legado)</Text>
+            </TouchableOpacity>
+
+            {err ? (
+              <View style={gradStyles.errBox}>
+                <Icon name="alert_circle" size={15} color={KarateColors.primary} />
+                <Text style={gradStyles.errTxt}>{err}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSave} disabled={saving} style={[gradStyles.btnPrimary, saving && { opacity: 0.6 }]}>
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={gradStyles.btnPrimaryTxt}>Registrar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const gradStyles = StyleSheet.create({
+  backdrop:  { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 12 } as ViewStyle,
+  card:      { width: "100%", maxWidth: 520, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.xl, overflow: "hidden", borderWidth: 1, borderColor: KarateColors.border2, maxHeight: "92%" } as ViewStyle,
+  head:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  title:     { fontFamily: KarateFonts.heading, fontSize: 18, color: KarateColors.ink } as TextStyle,
+  hint:      { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  label:     { fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: KarateColors.ink2, marginTop: 4 } as TextStyle,
+  labelHint: { fontWeight: "500", color: KarateColors.ink4 } as TextStyle,
+  beltGrid:  { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  beltChip:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,
+  beltChipActive: { borderColor: KarateColors.ink, borderWidth: 2 } as ViewStyle,
+  beltChipTxt: { fontSize: 12, fontWeight: "700", letterSpacing: 0.2 } as TextStyle,
+  input:     { fontFamily: KarateFonts.mono, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.glassHi, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 11, letterSpacing: 0.5 } as TextStyle,
+  inputBad:  { borderColor: KarateColors.primary } as ViewStyle,
+  errInline: { fontSize: 11, color: KarateColors.primary } as TextStyle,
+  legacyRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 4 } as ViewStyle,
+  checkbox:  { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: KarateColors.border2, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.glassHi } as ViewStyle,
+  checkboxOn:{ backgroundColor: KarateColors.primary, borderColor: KarateColors.primary } as ViewStyle,
+  legacyTxt: { fontSize: 13, color: KarateColors.ink2, flex: 1 } as TextStyle,
+  errBox:    { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine, borderRadius: 12, padding: 11 } as ViewStyle,
+  errTxt:    { fontSize: 12.5, color: KarateColors.primary2, flex: 1 } as TextStyle,
+  footer:    { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  btnGhost:  { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border2 } as ViewStyle,
+  btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: KarateRadius.md, backgroundColor: KarateColors.ink, minWidth: 130, alignItems: "center" } as ViewStyle,
+  btnPrimaryTxt: { fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+});
+

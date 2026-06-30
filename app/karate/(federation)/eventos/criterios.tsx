@@ -1,1 +1,193 @@
-Ly8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Ci8vIENyaXTDqXJpb3MgZGUgR3JhZHVhw6fDo28g4oCUIEF1cmEgS2FyYXTDqiAoZmVkZXJhw6fDo28pCi8vCi8vIERFQ0lTw4NPIEZQS1QgIzI6IGNyaXTDqXJpb3MgcG9kZW0gc2VyIHByb3Zpc8OzcmlvcyAoY29uZmlybWVkPWZhbHNlKQovLyBhdMOpIGEgZmVkZXJhw6fDo28gY29uZmlybWFyLiBCYW5uZXIgZGUgYXZpc28gKyBlZGnDp8OjbyArIGNvbmZpcm1hci4KLy8gRGFkb3MgcmVhaXMgdmlhIGthcmF0ZUFwaS5saXN0QmVsdFJlcXVpcmVtZW50cyArIHVwZGF0ZUJlbHRSZXF1aXJlbWVudHMuCi8vIFNlbSBtb2NrOiBsb2FkaW5nIOKGkiBza2VsZXRvbiwgZmFsaGEg4oaSIEVycm9yU3RhdGUsIHNhdmUgaG9uZXN0by4KLy8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CmltcG9ydCBSZWFjdCwgeyB1c2VTdGF0ZSwgdXNlRWZmZWN0LCB1c2VDYWxsYmFjayB9IGZyb20gInJlYWN0IjsKaW1wb3J0IHsKICBWaWV3LCBUZXh0LCBTY3JvbGxWaWV3LCBBbGVydCwKICBTdHlsZVNoZWV0LCBSZWZyZXNoQ29udHJvbCwgU3dpdGNoLCBWaWV3U3R5bGUsIFRleHRTdHlsZSwKfSBmcm9tICJyZWFjdC1uYXRpdmUiOwppbXBvcnQgeyBJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL0ljb24iOwppbXBvcnQgeyBLYXJhdGVDb2xvcnMsIEthcmF0ZVJhZGl1cywgS2FyYXRlRm9udHMgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IEZvcm1GaWVsZCB9IGZyb20gIkAvY29tcG9uZW50cy9rYXJhdGUvRm9ybUZpZWxkIjsKaW1wb3J0IHsgS2FyYXRlQnV0dG9uIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9LYXJhdGVCdXR0b24iOwppbXBvcnQgeyBCZWx0QmFkZ2UgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0JlbHRCYWRnZSI7CmltcG9ydCB7IFNrZWxldG9uIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9Ta2VsZXRvbiI7CmltcG9ydCB7IEthcmF0ZUVycm9yU3RhdGUgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0Vycm9yU3RhdGUiOwppbXBvcnQgeyBLYXJhdGVFbXB0eVN0YXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9FbXB0eVN0YXRlIjsKaW1wb3J0IHsgdXNlS2FyYXRlRmVkZXJhdGlvbiB9IGZyb20gIkAvY29udGV4dHMvS2FyYXRlRmVkZXJhdGlvbiI7CmltcG9ydCB7IGthcmF0ZUFwaSwgQmVsdFJlcXVpcmVtZW50IH0gZnJvbSAiQC9zZXJ2aWNlcy9rYXJhdGVBcGkiOwoKdHlwZSBFZGl0RW50cnkgPSB7CiAgbWluX21vbnRoczogc3RyaW5nOwogIGthdGFfcmVxdWlyZWQ6IHN0cmluZzsgLy8gQ1NWCiAgY291cnNlX3JlcXVpcmVkOiBib29sZWFuOwogIG5vdGVzOiBzdHJpbmc7CiAgY29uZmlybWVkOiBib29sZWFuOwp9Owp0eXBlIEVkaXRTdGF0ZSA9IFJlY29yZDxzdHJpbmcsIEVkaXRFbnRyeT47CgpmdW5jdGlvbiBidWlsZEVkaXRTdGF0ZShyZXFzOiBCZWx0UmVxdWlyZW1lbnRbXSk6IEVkaXRTdGF0ZSB7CiAgcmV0dXJuIE9iamVjdC5mcm9tRW50cmllcyhyZXFzLm1hcCgocikgPT4gW3IuaWQsIHsKICAgIG1pbl9tb250aHM6IFN0cmluZyhyLm1pbl9tb250aHNfaW5fY3VycmVudCksCiAgICBrYXRhX3JlcXVpcmVkOiByLmthdGFfcmVxdWlyZWQuam9pbigiLCAiKSwKICAgIGNvdXJzZV9yZXF1aXJlZDogci5jb3Vyc2VfcmVxdWlyZWQsCiAgICBub3Rlczogci5ub3RlcyA/PyAiIiwKICAgIGNvbmZpcm1lZDogci5jb25maXJtZWQsCiAgfV0pKTsKfQoKZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gQ3JpdGVyaW9zU2NyZWVuKCkgewogIGNvbnN0IHsgZmVkZXJhdGlvbklkIH0gPSB1c2VLYXJhdGVGZWRlcmF0aW9uKCk7CiAgY29uc3QgW3JlcXVpcmVtZW50cywgc2V0UmVxdWlyZW1lbnRzXSA9IHVzZVN0YXRlPEJlbHRSZXF1aXJlbWVudFtdPihbXSk7CiAgY29uc3QgW2VkaXRTdGF0ZSwgc2V0RWRpdFN0YXRlXSA9IHVzZVN0YXRlPEVkaXRTdGF0ZT4oe30pOwogIGNvbnN0IFtsb2FkaW5nLCBzZXRMb2FkaW5nXSA9IHVzZVN0YXRlKHRydWUpOwogIGNvbnN0IFtlcnJvciwgc2V0RXJyb3JdID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtyZWZyZXNoaW5nLCBzZXRSZWZyZXNoaW5nXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbc2F2aW5nLCBzZXRTYXZpbmddID0gdXNlU3RhdGUoZmFsc2UpOwoKICBjb25zdCBsb2FkID0gdXNlQ2FsbGJhY2soYXN5bmMgKGlzUmVmcmVzaCA9IGZhbHNlKSA9PiB7CiAgICBpc1JlZnJlc2ggPyBzZXRSZWZyZXNoaW5nKHRydWUpIDogc2V0TG9hZGluZyh0cnVlKTsKICAgIHNldEVycm9yKGZhbHNlKTsKICAgIHRyeSB7CiAgICAgIGNvbnN0IHJlcXMgPSBhd2FpdCBrYXJhdGVBcGkubGlzdEJlbHRSZXF1aXJlbWVudHMoZmVkZXJhdGlvbklkKTsKICAgICAgc2V0UmVxdWlyZW1lbnRzKHJlcXMpOwogICAgICBzZXRFZGl0U3RhdGUoYnVpbGRFZGl0U3RhdGUocmVxcykpOwogICAgfSBjYXRjaCB7CiAgICAgIHNldEVycm9yKHRydWUpOwogICAgfSBmaW5hbGx5IHsKICAgICAgaXNSZWZyZXNoID8gc2V0UmVmcmVzaGluZyhmYWxzZSkgOiBzZXRMb2FkaW5nKGZhbHNlKTsKICAgIH0KICB9LCBbZmVkZXJhdGlvbklkXSk7CgogIHVzZUVmZmVjdCgoKSA9PiB7IGxvYWQoKTsgfSwgW2xvYWRdKTsKCiAgY29uc3QgYW55VW5jb25maXJtZWQgPSByZXF1aXJlbWVudHMuc29tZSgocikgPT4gIWVkaXRTdGF0ZVtyLmlkXT8uY29uZmlybWVkKTsKICBjb25zdCBzZXRGaWVsZCA9IChpZDogc3RyaW5nLCBmaWVsZDoga2V5b2YgRWRpdEVudHJ5LCB2YWx1ZTogYW55KSA9PgogICAgc2V0RWRpdFN0YXRlKChwcmV2KSA9PiAoeyAuLi5wcmV2LCBbaWRdOiB7IC4uLnByZXZbaWRdLCBbZmllbGRdOiB2YWx1ZSB9IH0pKTsKCiAgY29uc3QgaGFuZGxlU2F2ZSA9IGFzeW5jICgpID0+IHsKICAgIHNldFNhdmluZyh0cnVlKTsKICAgIHRyeSB7CiAgICAgIGNvbnN0IGJvZHkgPSB7CiAgICAgICAgcmVxdWlyZW1lbnRzOiByZXF1aXJlbWVudHMubWFwKChyKSA9PiAoewogICAgICAgICAgYmVsdF9sZXZlbDogci5iZWx0X2xldmVsLAogICAgICAgICAgbWluX21vbnRoc19pbl9jdXJyZW50OiBwYXJzZUludChlZGl0U3RhdGVbci5pZF0ubWluX21vbnRocykgfHwgMCwKICAgICAgICAgIGthdGFfcmVxdWlyZWQ6IGVkaXRTdGF0ZVtyLmlkXS5rYXRhX3JlcXVpcmVkLnNwbGl0KCIsIikubWFwKChzKSA9PiBzLnRyaW0oKSkuZmlsdGVyKEJvb2xlYW4pLAogICAgICAgICAgY291cnNlX3JlcXVpcmVkOiBlZGl0U3RhdGVbci5pZF0uY291cnNlX3JlcXVpcmVkLAogICAgICAgICAgbm90ZXM6IGVkaXRTdGF0ZVtyLmlkXS5ub3RlcyB8fCBudWxsLAogICAgICAgICAgY29uZmlybWVkOiBlZGl0U3RhdGVbci5pZF0uY29uZmlybWVkLAogICAgICAgIH0pKSwKICAgICAgfTsKICAgICAgY29uc3QgdXBkYXRlZCA9IGF3YWl0IGthcmF0ZUFwaS51cGRhdGVCZWx0UmVxdWlyZW1lbnRzKGZlZGVyYXRpb25JZCwgYm9keSk7CiAgICAgIHNldFJlcXVpcmVtZW50cyh1cGRhdGVkKTsKICAgICAgc2V0RWRpdFN0YXRlKGJ1aWxkRWRpdFN0YXRlKHVwZGF0ZWQpKTsKICAgICAgQWxlcnQuYWxlcnQoIlNhbHZvISIsICJDcml0w6lyaW9zIGF0dWFsaXphZG9zIGNvbSBzdWNlc3NvLiIpOwogICAgfSBjYXRjaCAoZTogYW55KSB7CiAgICAgIEFsZXJ0LmFsZXJ0KCJOw6NvIGZvaSBwb3Nzw612ZWwgc2FsdmFyIiwgZT8ubWVzc2FnZSA/PyAiVGVudGUgbm92YW1lbnRlLiIpOwogICAgfSBmaW5hbGx5IHsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgIH0KICB9OwoKICBpZiAobG9hZGluZykgewogICAgcmV0dXJuICgKICAgICAgPFZpZXcgc3R5bGU9e3sgZmxleDogMSwgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMuYmcsIHBhZGRpbmc6IDI0LCBnYXA6IDEyIH19PgogICAgICAgIHtbMSwgMiwgM10ubWFwKChrKSA9PiA8U2tlbGV0b24ga2V5PXtrfSBoZWlnaHQ9ezEyMH0gLz4pfQogICAgICA8L1ZpZXc+CiAgICApOwogIH0KICBpZiAoZXJyb3IpIHJldHVybiA8S2FyYXRlRXJyb3JTdGF0ZSBvblJldHJ5PXsoKSA9PiBsb2FkKCl9IC8+OwoKICByZXR1cm4gKAogICAgPFNjcm9sbFZpZXcKICAgICAgc3R5bGU9e3N0eWxlcy5zY3JvbGx9CiAgICAgIGNvbnRlbnRDb250YWluZXJTdHlsZT17c3R5bGVzLmNvbnRlbnR9CiAgICAgIHJlZnJlc2hDb250cm9sPXs8UmVmcmVzaENvbnRyb2wgcmVmcmVzaGluZz17cmVmcmVzaGluZ30gb25SZWZyZXNoPXsoKSA9PiBsb2FkKHRydWUpfSB0aW50Q29sb3I9e0thcmF0ZUNvbG9ycy5wcmltYXJ5fSAvPn0KICAgID4KICAgICAge2FueVVuY29uZmlybWVkICYmICgKICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLnByb3Zpc29yeUJhbm5lcn0+CiAgICAgICAgICA8SWNvbiBuYW1lPSJpbmZvcm1hdGlvbi1jaXJjbGUiIHNpemU9ezE2fSBjb2xvcj17S2FyYXRlQ29sb3JzLndhcm59IC8+CiAgICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLmJhbm5lclRleHRDb2x9PgogICAgICAgICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLmJhbm5lclRpdGxlfT5WYWxvcmVzIHByb3Zpc8OzcmlvczwvVGV4dD4KICAgICAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy5iYW5uZXJEZXNjfT4KICAgICAgICAgICAgICBVbSBvdSBtYWlzIGNyaXTDqXJpb3MgYWluZGEgbsOjbyBmb3JhbSBjb25maXJtYWRvcyBwZWxhIEZQS1QuIFZlcmlmaXF1ZSBlIG1hcnF1ZSBjYWRhIGNyaXTDqXJpbyBjb21vICJDb25maXJtYWRvIiBhcMOzcyB2YWxpZGHDp8Ojby4KICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgPC9WaWV3PgogICAgICAgIDwvVmlldz4KICAgICAgKX0KCiAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMucGFnZVRpdGxlfT5Dcml0w6lyaW9zIGRlIEdyYWR1YcOnw6NvPC9UZXh0PgogICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLnBhZ2VIaW50fT5EZWZpbmEgb3MgcmVxdWlzaXRvcyBtw61uaW1vcyBwb3IgZmFpeGEuIE11ZGFuw6dhcyBzYWx2YXMgY29tIG8gYm90w6NvIFNhbHZhci48L1RleHQ+CgogICAgICB7cmVxdWlyZW1lbnRzLmxlbmd0aCA9PT0gMCA/ICgKICAgICAgICA8S2FyYXRlRW1wdHlTdGF0ZSBpY29uPSJsaXN0LW91dGxpbmUiIHRpdGxlPSJOZW5odW0gY3JpdMOpcmlvIGRlZmluaWRvIiBzdWJ0aXRsZT0iT3MgcmVxdWlzaXRvcyBwb3IgZmFpeGEgYXBhcmVjZW0gYXF1aSBxdWFuZG8gY29uZmlndXJhZG9zLiIgc3R5bGU9e3sgcGFkZGluZ1ZlcnRpY2FsOiAzMiB9fSAvPgogICAgICApIDogKAogICAgICAgIHJlcXVpcmVtZW50cy5tYXAoKHIpID0+IHsKICAgICAgICAgIGNvbnN0IHN0YXRlID0gZWRpdFN0YXRlW3IuaWRdOwogICAgICAgICAgY29uc3QgaXNVbmNvbmZpcm1lZCA9ICFzdGF0ZT8uY29uZmlybWVkOwogICAgICAgICAgcmV0dXJuICgKICAgICAgICAgICAgPFZpZXcga2V5PXtyLmlkfSBzdHlsZT17W3N0eWxlcy5yZXFDYXJkLCBpc1VuY29uZmlybWVkICYmIHN0eWxlcy5yZXFDYXJkVW5jb25maXJtZWRdfT4KICAgICAgICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLnJlcUhlYWRlcn0+CiAgICAgICAgICAgICAgICA8QmVsdEJhZGdlIGJlbHRMZXZlbD17ci5iZWx0X2xldmVsfSBiZWx0TmFtZT17ci5iZWx0X25hbWV9IC8+CiAgICAgICAgICAgICAgICB7aXNVbmNvbmZpcm1lZCA/ICgKICAgICAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy51bmNvbmZpcm1lZFRhZ30+CiAgICAgICAgICAgICAgICAgICAgPEljb24gbmFtZT0iYWxlcnQtY2lyY2xlIiBzaXplPXsxM30gY29sb3I9e0thcmF0ZUNvbG9ycy53YXJufSAvPgogICAgICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMudW5jb25maXJtZWRUZXh0fT5Qcm92aXPDs3JpbzwvVGV4dD4KICAgICAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgICAgKSA6ICgKICAgICAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5jb25maXJtZWRUYWd9PgogICAgICAgICAgICAgICAgICAgIDxJY29uIG5hbWU9ImNoZWNrbWFyay1jaXJjbGUiIHNpemU9ezEzfSBjb2xvcj17S2FyYXRlQ29sb3JzLm9rfSAvPgogICAgICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuY29uZmlybWVkVGV4dH0+Q29uZmlybWFkbzwvVGV4dD4KICAgICAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgICA8L1ZpZXc+CgogICAgICAgICAgICAgIDxGb3JtRmllbGQgbGFiZWw9Ik1lc2VzIG3DrW5pbW9zIG5hIGZhaXhhIGF0dWFsIiB2YWx1ZT17c3RhdGU/Lm1pbl9tb250aHMgPz8gIiJ9IG9uQ2hhbmdlVGV4dD17KHYpID0+IHNldEZpZWxkKHIuaWQsICJtaW5fbW9udGhzIiwgdil9IGtleWJvYXJkVHlwZT0ibnVtZXJpYyIgcGxhY2Vob2xkZXI9IkV4OiA2IiAvPgogICAgICAgICAgICAgIDxGb3JtRmllbGQgbGFiZWw9IkthYXRhcyBvYnJpZ2F0w7NyaW9zIChzZXBhcmFkb3MgcG9yIHbDrXJndWxhKSIgdmFsdWU9e3N0YXRlPy5rYXRhX3JlcXVpcmVkID8/ICIifSBvbkNoYW5nZVRleHQ9eyh2KSA9PiBzZXRGaWVsZChyLmlkLCAia2F0YV9yZXF1aXJlZCIsIHYpfSBwbGFjZWhvbGRlcj0iRXg6IEhlaWFuIFNob2RhbiwgSGVpYW4gTmlkYW4iIC8+CiAgICAgICAgICAgICAgPEZvcm1GaWVsZCBsYWJlbD0iT2JzZXJ2YcOnw7VlcyIgdmFsdWU9e3N0YXRlPy5ub3RlcyA/PyAiIn0gb25DaGFuZ2VUZXh0PXsodikgPT4gc2V0RmllbGQoci5pZCwgIm5vdGVzIiwgdil9IHBsYWNlaG9sZGVyPSJPcGNpb25hbCIgLz4KCiAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5zd2l0Y2hSb3d9PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy5zd2l0Y2hMYWJlbH0+Q3Vyc28gb2JyaWdhdMOzcmlvPC9UZXh0PgogICAgICAgICAgICAgICAgPFN3aXRjaCB2YWx1ZT17c3RhdGU/LmNvdXJzZV9yZXF1aXJlZCA/PyBmYWxzZX0gb25WYWx1ZUNoYW5nZT17KHYpID0+IHNldEZpZWxkKHIuaWQsICJjb3Vyc2VfcmVxdWlyZWQiLCB2KX0gdHJhY2tDb2xvcj17eyB0cnVlOiBLYXJhdGVDb2xvcnMucHJpbWFyeSwgZmFsc2U6IEthcmF0ZUNvbG9ycy5ib3JkZXIgfX0gYWNjZXNzaWJpbGl0eUxhYmVsPSJDdXJzbyBvYnJpZ2F0w7NyaW8iIC8+CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXtzdHlsZXMuc3dpdGNoUm93fT4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuc3dpdGNoTGFiZWx9Pk1hcmNhciBjb21vIENvbmZpcm1hZG8gcGVsYSBGUEtUPC9UZXh0PgogICAgICAgICAgICAgICAgPFN3aXRjaCB2YWx1ZT17c3RhdGU/LmNvbmZpcm1lZCA/PyBmYWxzZX0gb25WYWx1ZUNoYW5nZT17KHYpID0+IHNldEZpZWxkKHIuaWQsICJjb25maXJtZWQiLCB2KX0gdHJhY2tDb2xvcj17eyB0cnVlOiBLYXJhdGVDb2xvcnMub2ssIGZhbHNlOiBLYXJhdGVDb2xvcnMud2FybiB9fSBhY2Nlc3NpYmlsaXR5TGFiZWw9IkNyaXTDqXJpbyBjb25maXJtYWRvIHBlbGEgRlBLVCIgLz4KICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICk7CiAgICAgICAgfSkKICAgICAgKX0KCiAgICAgIHtyZXF1aXJlbWVudHMubGVuZ3RoID4gMCAmJiAoCiAgICAgICAgPEthcmF0ZUJ1dHRvbiBsYWJlbD17c2F2aW5nID8gIlNhbHZhbmRvLi4uIiA6ICJTYWx2YXIgY3JpdMOpcmlvcyJ9IHZhcmlhbnQ9InByaW1hcnkiIHNpemU9ImxnIiBsb2FkaW5nPXtzYXZpbmd9IG9uUHJlc3M9e2hhbmRsZVNhdmV9IHN0eWxlPXtzdHlsZXMuc2F2ZUJ0bn0gLz4KICAgICAgKX0KICAgIDwvU2Nyb2xsVmlldz4KICApOwp9Cgpjb25zdCBzdHlsZXMgPSBTdHlsZVNoZWV0LmNyZWF0ZSh7CiAgc2Nyb2xsOiB7IGZsZXg6IDEsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmJnIH0gYXMgVmlld1N0eWxlLAogIGNvbnRlbnQ6IHsgcGFkZGluZzogMjQsIGdhcDogMTIsIHBhZGRpbmdCb3R0b206IDQwLCBtYXhXaWR0aDogODYwLCB3aWR0aDogIjEwMCUiLCBhbGlnblNlbGY6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIHByb3Zpc29yeUJhbm5lcjogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImZsZXgtc3RhcnQiLCBnYXA6IDEwLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy53YXJuU29mdCwgcGFkZGluZzogMTIsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy53YXJuIH0gYXMgVmlld1N0eWxlLAogIGJhbm5lclRleHRDb2w6IHsgZmxleDogMSwgZ2FwOiAyIH0gYXMgVmlld1N0eWxlLAogIGJhbm5lclRpdGxlOiB7IGZvbnRTaXplOiAxMywgZm9udFdlaWdodDogIjgwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMud2FybiB9IGFzIFRleHRTdHlsZSwKICBiYW5uZXJEZXNjOiB7IGZvbnRTaXplOiAxMiwgY29sb3I6IEthcmF0ZUNvbG9ycy53YXJuIH0gYXMgVGV4dFN0eWxlLAogIHBhZ2VUaXRsZTogeyBmb250RmFtaWx5OiBLYXJhdGVGb250cy5oZWFkaW5nLCBmb250U2l6ZTogMjQsIGZvbnRXZWlnaHQ6ICI0MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluayB9IGFzIFRleHRTdHlsZSwKICBwYWdlSGludDogeyBmb250U2l6ZTogMTIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMywgbWFyZ2luVG9wOiAtNCB9IGFzIFRleHRTdHlsZSwKICByZXFDYXJkOiB7IGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmJnMiwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubWQsIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlciwgcGFkZGluZzogMTQsIGdhcDogMTAgfSBhcyBWaWV3U3R5bGUsCiAgcmVxQ2FyZFVuY29uZmlybWVkOiB7IGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMud2FybiB9IGFzIFZpZXdTdHlsZSwKICByZXFIZWFkZXI6IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogInNwYWNlLWJldHdlZW4iIH0gYXMgVmlld1N0eWxlLAogIHVuY29uZmlybWVkVGFnOiB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiA0LCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy53YXJuU29mdCwgcGFkZGluZ0hvcml6b250YWw6IDgsIHBhZGRpbmdWZXJ0aWNhbDogMywgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMuc20gfSBhcyBWaWV3U3R5bGUsCiAgdW5jb25maXJtZWRUZXh0OiB7IGZvbnRTaXplOiAxMSwgZm9udFdlaWdodDogIjcwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMud2FybiB9IGFzIFRleHRTdHlsZSwKICBjb25maXJtZWRUYWc6IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDQsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLm9rU29mdCwgcGFkZGluZ0hvcml6b250YWw6IDgsIHBhZGRpbmdWZXJ0aWNhbDogMywgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMuc20gfSBhcyBWaWV3U3R5bGUsCiAgY29uZmlybWVkVGV4dDogeyBmb250U2l6ZTogMTEsIGZvbnRXZWlnaHQ6ICI3MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLm9rIH0gYXMgVGV4dFN0eWxlLAogIHN3aXRjaFJvdzogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAic3BhY2UtYmV0d2VlbiIgfSBhcyBWaWV3U3R5bGUsCiAgc3dpdGNoTGFiZWw6IHsgZm9udFNpemU6IDEzLCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsyLCBmbGV4OiAxIH0gYXMgVGV4dFN0eWxlLAogIHNhdmVCdG46IHsgbWFyZ2luVG9wOiA4IH0gYXMgVmlld1N0eWxlLAp9KTsK
+// ============================================================
+// Critérios de Graduação — Aura Karatê (federação)
+//
+// DECISÃO FPKT #2: critérios podem ser provisórios (confirmed=false)
+// até a federação confirmar. Banner de aviso + edição + confirmar.
+// Dados reais via karateApi.listBeltRequirements + updateBeltRequirements.
+// Sem mock: loading → skeleton, falha → ErrorState, save honesto.
+// ============================================================
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, ScrollView, Alert,
+  StyleSheet, RefreshControl, Switch, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { FormField } from "@/components/karate/FormField";
+import { KarateButton } from "@/components/karate/KarateButton";
+import { BeltBadge } from "@/components/karate/BeltBadge";
+import { Skeleton } from "@/components/karate/Skeleton";
+import { KarateErrorState } from "@/components/karate/ErrorState";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+import { karateApi, BeltRequirement } from "@/services/karateApi";
+
+type EditEntry = {
+  min_months: string;
+  kata_required: string; // CSV
+  course_required: boolean;
+  notes: string;
+  confirmed: boolean;
+};
+type EditState = Record<string, EditEntry>;
+
+function buildEditState(reqs: BeltRequirement[]): EditState {
+  return Object.fromEntries(reqs.map((r) => [r.id, {
+    min_months: String(r.min_months_in_current),
+    kata_required: r.kata_required.join(", "),
+    course_required: r.course_required,
+    notes: r.notes ?? "",
+    confirmed: r.confirmed,
+  }]));
+}
+
+export default function CriteriosScreen() {
+  const { federationId } = useKarateFederation();
+  const [requirements, setRequirements] = useState<BeltRequirement[]>([]);
+  const [editState, setEditState] = useState<EditState>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
+    try {
+      const reqs = await karateApi.listBeltRequirements(federationId);
+      setRequirements(reqs);
+      setEditState(buildEditState(reqs));
+    } catch {
+      setError(true);
+    } finally {
+      isRefresh ? setRefreshing(false) : setLoading(false);
+    }
+  }, [federationId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const anyUnconfirmed = requirements.some((r) => !editState[r.id]?.confirmed);
+  const setField = (id: string, field: keyof EditEntry, value: any) =>
+    setEditState((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        requirements: requirements.map((r) => ({
+          belt_level: r.belt_level,
+          min_months_in_current: parseInt(editState[r.id].min_months) || 0,
+          kata_required: editState[r.id].kata_required.split(",").map((s) => s.trim()).filter(Boolean),
+          course_required: editState[r.id].course_required,
+          notes: editState[r.id].notes || null,
+          confirmed: editState[r.id].confirmed,
+        })),
+      };
+      const updated = await karateApi.updateBeltRequirements(federationId, body);
+      setRequirements(updated);
+      setEditState(buildEditState(updated));
+      Alert.alert("Salvo!", "Critérios atualizados com sucesso.");
+    } catch (e: any) {
+      Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: KarateColors.bg, padding: 24, gap: 12 }}>
+        {[1, 2, 3].map((k) => <Skeleton key={k} height={120} />)}
+      </View>
+    );
+  }
+  if (error) return <KarateErrorState onRetry={() => load()} />;
+
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />}
+    >
+      {anyUnconfirmed && (
+        <View style={styles.provisoryBanner}>
+          <Icon name="information-circle" size={16} color={KarateColors.warn} />
+          <View style={styles.bannerTextCol}>
+            <Text style={styles.bannerTitle}>Valores provisórios</Text>
+            <Text style={styles.bannerDesc}>
+              Um ou mais critérios ainda não foram confirmados pela FPKT. Verifique e marque cada critério como "Confirmado" após validação.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <Text style={styles.pageTitle}>Critérios de Graduação</Text>
+      <Text style={styles.pageHint}>Defina os requisitos mínimos por faixa. Mudanças salvas com o botão Salvar.</Text>
+
+      {requirements.length === 0 ? (
+        <KarateEmptyState icon="list-outline" title="Nenhum critério definido" subtitle="Os requisitos por faixa aparecem aqui quando configurados." style={{ paddingVertical: 32 }} />
+      ) : (
+        requirements.map((r) => {
+          const state = editState[r.id];
+          const isUnconfirmed = !state?.confirmed;
+          return (
+            <View key={r.id} style={[styles.reqCard, isUnconfirmed && styles.reqCardUnconfirmed]}>
+              <View style={styles.reqHeader}>
+                <BeltBadge beltLevel={r.belt_level} beltName={r.belt_name} />
+                {isUnconfirmed ? (
+                  <View style={styles.unconfirmedTag}>
+                    <Icon name="alert-circle" size={13} color={KarateColors.warn} />
+                    <Text style={styles.unconfirmedText}>Provisório</Text>
+                  </View>
+                ) : (
+                  <View style={styles.confirmedTag}>
+                    <Icon name="checkmark-circle" size={13} color={KarateColors.ok} />
+                    <Text style={styles.confirmedText}>Confirmado</Text>
+                  </View>
+                )}
+              </View>
+
+              <FormField label="Meses mínimos na faixa atual" value={state?.min_months ?? ""} onChangeText={(v) => setField(r.id, "min_months", v)} keyboardType="numeric" placeholder="Ex: 6" />
+              <FormField label="Kaatas obrigatórios (separados por vírgula)" value={state?.kata_required ?? ""} onChangeText={(v) => setField(r.id, "kata_required", v)} placeholder="Ex: Heian Shodan, Heian Nidan" />
+              <FormField label="Observações" value={state?.notes ?? ""} onChangeText={(v) => setField(r.id, "notes", v)} placeholder="Opcional" />
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Curso obrigatório</Text>
+                <Switch value={state?.course_required ?? false} onValueChange={(v) => setField(r.id, "course_required", v)} trackColor={{ true: KarateColors.primary, false: KarateColors.border }} accessibilityLabel="Curso obrigatório" />
+              </View>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Marcar como Confirmado pela FPKT</Text>
+                <Switch value={state?.confirmed ?? false} onValueChange={(v) => setField(r.id, "confirmed", v)} trackColor={{ true: KarateColors.ok, false: KarateColors.warn }} accessibilityLabel="Critério confirmado pela FPKT" />
+              </View>
+            </View>
+          );
+        })
+      )}
+
+      {requirements.length > 0 && (
+        <KarateButton label={saving ? "Salvando..." : "Salvar critérios"} variant="primary" size="lg" loading={saving} onPress={handleSave} style={styles.saveBtn} />
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  content: { padding: 24, gap: 12, paddingBottom: 40, maxWidth: 860, width: "100%", alignSelf: "center" } as ViewStyle,
+  provisoryBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: KarateColors.warnSoft, padding: 12, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.warn } as ViewStyle,
+  bannerTextCol: { flex: 1, gap: 2 } as ViewStyle,
+  bannerTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.warn } as TextStyle,
+  bannerDesc: { fontSize: 12, color: KarateColors.warn } as TextStyle,
+  pageTitle: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  pageHint: { fontSize: 12, color: KarateColors.ink3, marginTop: -4 } as TextStyle,
+  reqCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 10 } as ViewStyle,
+  reqCardUnconfirmed: { borderColor: KarateColors.warn } as ViewStyle,
+  reqHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
+  unconfirmedTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.warnSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: KarateRadius.sm } as ViewStyle,
+  unconfirmedText: { fontSize: 11, fontWeight: "700", color: KarateColors.warn } as TextStyle,
+  confirmedTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.okSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: KarateRadius.sm } as ViewStyle,
+  confirmedText: { fontSize: 11, fontWeight: "700", color: KarateColors.ok } as TextStyle,
+  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
+  switchLabel: { fontSize: 13, fontWeight: "600", color: KarateColors.ink2, flex: 1 } as TextStyle,
+  saveBtn: { marginTop: 8 } as ViewStyle,
+});

@@ -1,1 +1,168 @@
-aW1wb3J0IFJlYWN0LCB7IHVzZUNhbGxiYWNrLCB1c2VFZmZlY3QsIHVzZVN0YXRlIH0gZnJvbSAicmVhY3QiOwppbXBvcnQgewogIFZpZXcsIFRleHQsIFRvdWNoYWJsZU9wYWNpdHksIEFjdGl2aXR5SW5kaWNhdG9yLAogIFN0eWxlU2hlZXQsIFZpZXdTdHlsZSwgVGV4dFN0eWxlLAp9IGZyb20gInJlYWN0LW5hdGl2ZSI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IEthcmF0ZUNvbG9ycywgS2FyYXRlUmFkaXVzIH0gZnJvbSAiQC9jb25zdGFudHMva2FyYXRlVGhlbWUiOwppbXBvcnQgeyBLYXJhdGVFbXB0eVN0YXRlIGFzIEVtcHR5U3RhdGUgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0VtcHR5U3RhdGUiOwppbXBvcnQgeyBLYXJhdGVCdXR0b24gfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0thcmF0ZUJ1dHRvbiI7CmltcG9ydCB7IFRyYW5zZmVyaXJQcmF0aWNhbnRlTW9kYWwgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL1RyYW5zZmVyaXJQcmF0aWNhbnRlTW9kYWwiOwppbXBvcnQgeyBrYXJhdGVBcGksIFByYWN0aXRpb25lckRldGFpbCwgVHJhbnNmZXJSZWNvcmQgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CmltcG9ydCB7IGNhblRyYW5zZmVyLCB3ZWJDb25maXJtLCB3ZWJBbGVydCB9IGZyb20gIi4vaGVscGVycyI7CmltcG9ydCB7IEVkaXRhclRyYW5zZmVyZW5jaWFNb2RhbCB9IGZyb20gIi4vRWRpdGFyVHJhbnNmZXJlbmNpYU1vZGFsIjsKCmludGVyZmFjZSBQcm9wcyB7CiAgZmVkZXJhdGlvbklkOiBzdHJpbmc7CiAgcHJhY3RpdGlvbmVyOiBQcmFjdGl0aW9uZXJEZXRhaWw7CiAga2FyYXRlUm9sZTogc3RyaW5nIHwgbnVsbDsKICBvblRyYW5zZmVycmVkOiAoKSA9PiB2b2lkOwp9CgovLyBUcmFjayBOOiBhYmEgZGUgdHJhbnNmZXLDqm5jaWFzIOKAlCBoaXN0w7NyaWNvICsgYcOnw6NvIGRlIHRyYW5zZmVyaXIvZWRpdGFyL2V4Y2x1aXIKZXhwb3J0IGZ1bmN0aW9uIFRyYW5zZmVyZW5jaWFUYWIoewogIGZlZGVyYXRpb25JZCwKICBwcmFjdGl0aW9uZXIsCiAga2FyYXRlUm9sZSwKICBvblRyYW5zZmVycmVkLAp9OiBQcm9wcykgewogIGNvbnN0IFt0cmFuc2ZlcnMsIHNldFRyYW5zZmVyc10gPSB1c2VTdGF0ZTxUcmFuc2ZlclJlY29yZFtdIHwgbnVsbD4obnVsbCk7CiAgY29uc3QgW2xvYWRpbmcsIHNldExvYWRpbmddID0gdXNlU3RhdGUodHJ1ZSk7CiAgY29uc3QgW21vZGFsT3Blbiwgc2V0TW9kYWxPcGVuXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbZWRpdFRyYW5zZmVyLCBzZXRFZGl0VHJhbnNmZXJdID0gdXNlU3RhdGU8VHJhbnNmZXJSZWNvcmQgfCBudWxsPihudWxsKTsKICBjb25zdCBbYnVzeUlkLCBzZXRCdXN5SWRdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7CgogIGNvbnN0IGxvYWQgPSB1c2VDYWxsYmFjaygoKSA9PiB7CiAgICBzZXRMb2FkaW5nKHRydWUpOwogICAga2FyYXRlQXBpLmxpc3RUcmFuc2ZlcnMoZmVkZXJhdGlvbklkLCBwcmFjdGl0aW9uZXIuaWQpCiAgICAgIC50aGVuKChyZXM6IGFueSkgPT4gc2V0VHJhbnNmZXJzKEFycmF5LmlzQXJyYXkocmVzPy5kYXRhKSA/IHJlcy5kYXRhIDogKHJlcz8uZGF0YSA/PyBbXSkpKQogICAgICAuY2F0Y2goKCkgPT4gc2V0VHJhbnNmZXJzKFtdKSkKICAgICAgLmZpbmFsbHkoKCkgPT4gc2V0TG9hZGluZyhmYWxzZSkpOwogIH0sIFtmZWRlcmF0aW9uSWQsIHByYWN0aXRpb25lci5pZF0pOwoKICB1c2VFZmZlY3QoKCkgPT4geyBsb2FkKCk7IH0sIFtsb2FkXSk7CgogIGNvbnN0IGhhbmRsZURvbmUgPSAoKSA9PiB7IGxvYWQoKTsgb25UcmFuc2ZlcnJlZCgpOyB9OwoKICBjb25zdCBhbGxvd2VkID0gY2FuVHJhbnNmZXIoa2FyYXRlUm9sZSk7CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZURlbGV0ZSh0OiBUcmFuc2ZlclJlY29yZCkgewogICAgaWYgKCF3ZWJDb25maXJtKCJFeGNsdWlyIGVzdGUgcmVnaXN0cm8/IElzc28gTsODTyBtb3ZlIG8gcHJhdGljYW50ZSBkZSB2b2x0YS4iKSkgcmV0dXJuOwogICAgc2V0QnVzeUlkKHQuaWQpOwogICAgdHJ5IHsKICAgICAgYXdhaXQga2FyYXRlQXBpLmRlbGV0ZVRyYW5zZmVyKGZlZGVyYXRpb25JZCwgcHJhY3RpdGlvbmVyLmlkLCB0LmlkKTsKICAgICAgbG9hZCgpOwogICAgfSBjYXRjaCAoZTogYW55KSB7CiAgICAgIHdlYkFsZXJ0KGU/Lm1lc3NhZ2UgfHwgIk7Do28gZm9pIHBvc3PDrXZlbCBleGNsdWlyIGEgdHJhbnNmZXLDqm5jaWEuIik7CiAgICB9IGZpbmFsbHkgewogICAgICBzZXRCdXN5SWQobnVsbCk7CiAgICB9CiAgfQoKICByZXR1cm4gKAogICAgPFZpZXcgc3R5bGU9e3RhYlN0eWxlcy50YWJ9PgogICAgICB7YWxsb3dlZCAmJiAoCiAgICAgICAgLy8gQ1RBIHByaW3DoXJpbyBlbSBzdW1pLCB0YW1hbmhvIG5vcm1hbCwgYWxpbmhhZG8gw6AgZGlyZWl0YSAoYcOnw6NvIGRhIGFiYSkuCiAgICAgICAgPFZpZXcgc3R5bGU9e3RhYlN0eWxlcy50YWJBY3Rpb25zfT4KICAgICAgICAgIDxLYXJhdGVCdXR0b24KICAgICAgICAgICAgbGFiZWw9IlRyYW5zZmVyaXIgcGFyYSBvdXRybyBkb2rDtCIKICAgICAgICAgICAgdmFyaWFudD0ic3VtaSIKICAgICAgICAgICAgc2l6ZT0ibWQiCiAgICAgICAgICAgIG9uUHJlc3M9eygpID0+IHNldE1vZGFsT3Blbih0cnVlKX0KICAgICAgICAgIC8+CiAgICAgICAgPC9WaWV3PgogICAgICApfQoKICAgICAge2xvYWRpbmcgPyAoCiAgICAgICAgPEFjdGl2aXR5SW5kaWNhdG9yIHN0eWxlPXt7IG1hcmdpblZlcnRpY2FsOiAyMCB9fSBjb2xvcj17S2FyYXRlQ29sb3JzLnByaW1hcnl9IC8+CiAgICAgICkgOiAhdHJhbnNmZXJzIHx8IHRyYW5zZmVycy5sZW5ndGggPT09IDAgPyAoCiAgICAgICAgPEVtcHR5U3RhdGUKICAgICAgICAgIGljb249InN3YXAtaG9yaXpvbnRhbC1vdXRsaW5lIgogICAgICAgICAgdGl0bGU9IlNlbSB0cmFuc2ZlcsOqbmNpYXMiCiAgICAgICAgICBzdWJ0aXRsZT0iRXN0ZSBwcmF0aWNhbnRlIG51bmNhIGZvaSB0cmFuc2ZlcmlkbyBkZSBkb2rDtC4iCiAgICAgICAgICBzdHlsZT17eyBwYWRkaW5nVmVydGljYWw6IDMyIH19CiAgICAgICAgLz4KICAgICAgKSA6ICgKICAgICAgICA8VmlldyBzdHlsZT17eyBnYXA6IDEwLCBtYXJnaW5Ub3A6IDQgfX0+CiAgICAgICAgICA8VGV4dCBzdHlsZT17dGFiU3R5bGVzLnRyYW5zZmVySGludH0+CiAgICAgICAgICAgIEhpc3TDs3JpY28gZGUgdHJhbnNmZXLDqm5jaWFzIGVudHJlIGRvasO0cy4KICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgIHt0cmFuc2ZlcnMubWFwKCh0KSA9PiAoCiAgICAgICAgICAgIDxWaWV3IGtleT17dC5pZH0gc3R5bGU9e3RhYlN0eWxlcy50cmFuc2ZlckNhcmR9PgogICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXt0YWJTdHlsZXMudHJhbnNmZXJSb3d9PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3RhYlN0eWxlcy50cmFuc2ZlckRvam99IG51bWJlck9mTGluZXM9ezF9Pnt0Lm9yaWdpbl9kb2pvX25hbWUgfHwgIlNlbSBkb2rDtCJ9PC9UZXh0PgogICAgICAgICAgICAgICAgPEljb24gbmFtZT0iYXJyb3dfcmlnaHQiIHNpemU9ezE1fSBjb2xvcj17S2FyYXRlQ29sb3JzLnByaW1hcnl9IC8+CiAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17W3RhYlN0eWxlcy50cmFuc2ZlckRvam8sIHsgY29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5IH1dfSBudW1iZXJPZkxpbmVzPXsxfT4KICAgICAgICAgICAgICAgICAge3QuZGVzdGluYXRpb25fZG9qb19uYW1lIHx8ICLigJQifQogICAgICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgICAgICAge2FsbG93ZWQgJiYgKAogICAgICAgICAgICAgICAgICA8VmlldyBzdHlsZT17dGFiU3R5bGVzLml0ZW1BY3Rpb25zfT4KICAgICAgICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eQogICAgICAgICAgICAgICAgICAgICAgc3R5bGU9e3RhYlN0eWxlcy5pY29uQnRufQogICAgICAgICAgICAgICAgICAgICAgb25QcmVzcz17KCkgPT4gc2V0RWRpdFRyYW5zZmVyKHQpfQogICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e2J1c3lJZCA9PT0gdC5pZH0KICAgICAgICAgICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlSb2xlPSJidXR0b24iCiAgICAgICAgICAgICAgICAgICAgICBhY2Nlc3NpYmlsaXR5TGFiZWw9IkVkaXRhciB0cmFuc2ZlcsOqbmNpYSIKICAgICAgICAgICAgICAgICAgICA+CiAgICAgICAgICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJlZGl0IiBzaXplPXsxNX0gY29sb3I9e0thcmF0ZUNvbG9ycy5pbmsyfSAvPgogICAgICAgICAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eQogICAgICAgICAgICAgICAgICAgICAgc3R5bGU9e1t0YWJTdHlsZXMuaWNvbkJ0biwgdGFiU3R5bGVzLmljb25CdG5EYW5nZXJdfQogICAgICAgICAgICAgICAgICAgICAgb25QcmVzcz17KCkgPT4gaGFuZGxlRGVsZXRlKHQpfQogICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e2J1c3lJZCA9PT0gdC5pZH0KICAgICAgICAgICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlSb2xlPSJidXR0b24iCiAgICAgICAgICAgICAgICAgICAgICBhY2Nlc3NpYmlsaXR5TGFiZWw9IkV4Y2x1aXIgdHJhbnNmZXLDqm5jaWEiCiAgICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgICAge2J1c3lJZCA9PT0gdC5pZAogICAgICAgICAgICAgICAgICAgICAgICA/IDxBY3Rpdml0eUluZGljYXRvciBzaXplPSJzbWFsbCIgY29sb3I9e0thcmF0ZUNvbG9ycy5wcmltYXJ5fSAvPgogICAgICAgICAgICAgICAgICAgICAgICA6IDxJY29uIG5hbWU9InRyYXNoIiBzaXplPXsxNX0gY29sb3I9e0thcmF0ZUNvbG9ycy5wcmltYXJ5fSAvPn0KICAgICAgICAgICAgICAgICAgICA8L1RvdWNoYWJsZU9wYWNpdHk+CiAgICAgICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXt0YWJTdHlsZXMudHJhbnNmZXJNZXRhfT4KICAgICAgICAgICAgICAgIHtuZXcgRGF0ZSh0LnRyYW5zZmVycmVkX2F0KS50b0xvY2FsZURhdGVTdHJpbmcoInB0LUJSIil9CiAgICAgICAgICAgICAgICB7dC5pbml0aWF0ZWRfYnlfbmFtZSA/IGAgwrcgcG9yICR7dC5pbml0aWF0ZWRfYnlfbmFtZX1gIDogIiJ9CiAgICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgICAgIHt0LnJlYXNvbiA/IDxUZXh0IHN0eWxlPXt0YWJTdHlsZXMudHJhbnNmZXJSZWFzb259Pnt0LnJlYXNvbn08L1RleHQ+IDogbnVsbH0KICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgKSl9CiAgICAgICAgPC9WaWV3PgogICAgICApfQoKICAgICAgPFRyYW5zZmVyaXJQcmF0aWNhbnRlTW9kYWwKICAgICAgICB2aXNpYmxlPXttb2RhbE9wZW59CiAgICAgICAgb25DbG9zZT17KCkgPT4gc2V0TW9kYWxPcGVuKGZhbHNlKX0KICAgICAgICBmZWRlcmF0aW9uSWQ9e2ZlZGVyYXRpb25JZH0KICAgICAgICBwcmFjdGl0aW9uZXJJZD17cHJhY3RpdGlvbmVyLmlkfQogICAgICAgIHByYWN0aXRpb25lck5hbWU9e3ByYWN0aXRpb25lci5mdWxsX25hbWV9CiAgICAgICAgb3JpZ2luRG9qb0lkPXtwcmFjdGl0aW9uZXIuZG9qb19pZCA/PyBudWxsfQogICAgICAgIG9yaWdpbkRvam9OYW1lPXt0cmFuc2ZlcnMgJiYgdHJhbnNmZXJzWzBdPy5kZXN0aW5hdGlvbl9kb2pvX25hbWUgPyB0cmFuc2ZlcnNbMF0uZGVzdGluYXRpb25fZG9qb19uYW1lIDogbnVsbH0KICAgICAgICBvbkRvbmU9e2hhbmRsZURvbmV9CiAgICAgIC8+CgogICAgICA8RWRpdGFyVHJhbnNmZXJlbmNpYU1vZGFsCiAgICAgICAgdHJhbnNmZXI9e2VkaXRUcmFuc2Zlcn0KICAgICAgICBvbkNsb3NlPXsoKSA9PiBzZXRFZGl0VHJhbnNmZXIobnVsbCl9CiAgICAgICAgZmVkZXJhdGlvbklkPXtmZWRlcmF0aW9uSWR9CiAgICAgICAgcHJhY3RpdGlvbmVySWQ9e3ByYWN0aXRpb25lci5pZH0KICAgICAgICBvbkRvbmU9eygpID0+IHsgc2V0RWRpdFRyYW5zZmVyKG51bGwpOyBsb2FkKCk7IH19CiAgICAgIC8+CiAgICA8L1ZpZXc+CiAgKTsKfQoKY29uc3QgdGFiU3R5bGVzID0gU3R5bGVTaGVldC5jcmVhdGUoewogIHRhYjogICAgICAgICAgICAgIHsgcGFkZGluZzogMTYsIGdhcDogMTAgfSBhcyBWaWV3U3R5bGUsCiAgdGFiQWN0aW9uczogICAgICAgeyBmbGV4RGlyZWN0aW9uOiAicm93IiwganVzdGlmeUNvbnRlbnQ6ICJmbGV4LWVuZCIsIGZsZXhXcmFwOiAid3JhcCIsIGdhcDogOCB9IGFzIFZpZXdTdHlsZSwKICBpdGVtQWN0aW9uczogICAgICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiA2IH0gYXMgVmlld1N0eWxlLAogIGljb25CdG46ICAgICAgICAgIHsgd2lkdGg6IDMyLCBoZWlnaHQ6IDMyLCBib3JkZXJSYWRpdXM6IEthcmF0ZVJhZGl1cy5zbSwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBiYWNrZ3JvdW5kQ29sb3I6ICIjZmZmIiwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiB9IGFzIFZpZXdTdHlsZSwKICBpY29uQnRuRGFuZ2VyOiAgICB7IGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeUxpbmUsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnlTb2Z0IH0gYXMgVmlld1N0eWxlLAogIHRyYW5zZmVySGludDogICAgIHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsIG1hcmdpbkJvdHRvbTogMiB9IGFzIFRleHRTdHlsZSwKICB0cmFuc2ZlckNhcmQ6ICAgICB7IGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnN1cmZhY2UsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIsIHBhZGRpbmc6IDEyLCBnYXA6IDYgfSBhcyBWaWV3U3R5bGUsCiAgdHJhbnNmZXJSb3c6ICAgICAgeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogOCB9IGFzIFZpZXdTdHlsZSwKICB0cmFuc2ZlckRvam86ICAgICB7IGZsZXg6IDEsIGZvbnRTaXplOiAxNCwgZm9udFdlaWdodDogIjcwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rIH0gYXMgVGV4dFN0eWxlLAogIHRyYW5zZmVyTWV0YTogICAgIHsgZm9udFNpemU6IDExLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMgfSBhcyBUZXh0U3R5bGUsCiAgdHJhbnNmZXJSZWFzb246ICAgeyBmb250U2l6ZTogMTIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMiwgZm9udFN0eWxlOiAiaXRhbGljIiB9IGFzIFRleHRTdHlsZSwKfSk7Cgo=
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View, Text, TouchableOpacity, ActivityIndicator,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
+import { KarateButton } from "@/components/karate/KarateButton";
+import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
+import { karateApi, PractitionerDetail, TransferRecord } from "@/services/karateApi";
+import { canTransfer, webConfirm, webAlert } from "./helpers";
+import { EditarTransferenciaModal } from "./EditarTransferenciaModal";
+
+interface Props {
+  federationId: string;
+  practitioner: PractitionerDetail;
+  karateRole: string | null;
+  onTransferred: () => void;
+}
+
+// Track N: aba de transferências — histórico + ação de transferir/editar/excluir
+export function TransferenciaTab({
+  federationId,
+  practitioner,
+  karateRole,
+  onTransferred,
+}: Props) {
+  const [transfers, setTransfers] = useState<TransferRecord[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editTransfer, setEditTransfer] = useState<TransferRecord | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    karateApi.listTransfers(federationId, practitioner.id)
+      .then((res: any) => setTransfers(Array.isArray(res?.data) ? res.data : (res?.data ?? [])))
+      .catch(() => setTransfers([]))
+      .finally(() => setLoading(false));
+  }, [federationId, practitioner.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDone = () => { load(); onTransferred(); };
+
+  const allowed = canTransfer(karateRole);
+
+  async function handleDelete(t: TransferRecord) {
+    if (!webConfirm("Excluir este registro? Isso NÃO move o praticante de volta.")) return;
+    setBusyId(t.id);
+    try {
+      await karateApi.deleteTransfer(federationId, practitioner.id, t.id);
+      load();
+    } catch (e: any) {
+      webAlert(e?.message || "Não foi possível excluir a transferência.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <View style={tabStyles.tab}>
+      {allowed && (
+        // CTA primário em sumi, tamanho normal, alinhado à direita (ação da aba).
+        <View style={tabStyles.tabActions}>
+          <KarateButton
+            label="Transferir para outro dojô"
+            variant="sumi"
+            size="md"
+            onPress={() => setModalOpen(true)}
+          />
+        </View>
+      )}
+
+      {loading ? (
+        <ActivityIndicator style={{ marginVertical: 20 }} color={KarateColors.primary} />
+      ) : !transfers || transfers.length === 0 ? (
+        <EmptyState
+          icon="swap-horizontal-outline"
+          title="Sem transferências"
+          subtitle="Este praticante nunca foi transferido de dojô."
+          style={{ paddingVertical: 32 }}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 4 }}>
+          <Text style={tabStyles.transferHint}>
+            Histórico de transferências entre dojôs.
+          </Text>
+          {transfers.map((t) => (
+            <View key={t.id} style={tabStyles.transferCard}>
+              <View style={tabStyles.transferRow}>
+                <Text style={tabStyles.transferDojo} numberOfLines={1}>{t.origin_dojo_name || "Sem dojô"}</Text>
+                <Icon name="arrow_right" size={15} color={KarateColors.primary} />
+                <Text style={[tabStyles.transferDojo, { color: KarateColors.primary }]} numberOfLines={1}>
+                  {t.destination_dojo_name || "—"}
+                </Text>
+                {allowed && (
+                  <View style={tabStyles.itemActions}>
+                    <TouchableOpacity
+                      style={tabStyles.iconBtn}
+                      onPress={() => setEditTransfer(t)}
+                      disabled={busyId === t.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Editar transferência"
+                    >
+                      <Icon name="edit" size={15} color={KarateColors.ink2} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[tabStyles.iconBtn, tabStyles.iconBtnDanger]}
+                      onPress={() => handleDelete(t)}
+                      disabled={busyId === t.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Excluir transferência"
+                    >
+                      {busyId === t.id
+                        ? <ActivityIndicator size="small" color={KarateColors.primary} />
+                        : <Icon name="trash" size={15} color={KarateColors.primary} />}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+              <Text style={tabStyles.transferMeta}>
+                {new Date(t.transferred_at).toLocaleDateString("pt-BR")}
+                {t.initiated_by_name ? ` · por ${t.initiated_by_name}` : ""}
+              </Text>
+              {t.reason ? <Text style={tabStyles.transferReason}>{t.reason}</Text> : null}
+            </View>
+          ))}
+        </View>
+      )}
+
+      <TransferirPraticanteModal
+        visible={modalOpen}
+        onClose={() => setModalOpen(false)}
+        federationId={federationId}
+        practitionerId={practitioner.id}
+        practitionerName={practitioner.full_name}
+        originDojoId={practitioner.dojo_id ?? null}
+        originDojoName={transfers && transfers[0]?.destination_dojo_name ? transfers[0].destination_dojo_name : null}
+        onDone={handleDone}
+      />
+
+      <EditarTransferenciaModal
+        transfer={editTransfer}
+        onClose={() => setEditTransfer(null)}
+        federationId={federationId}
+        practitionerId={practitioner.id}
+        onDone={() => { setEditTransfer(null); load(); }}
+      />
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  tab:              { padding: 16, gap: 10 } as ViewStyle,
+  tabActions:       { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  itemActions:      { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  iconBtn:          { width: 32, height: 32, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" } as ViewStyle,
+  iconBtnDanger:    { borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  transferHint:     { fontSize: 12, color: KarateColors.ink3, marginBottom: 2 } as TextStyle,
+  transferCard:     { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 6 } as ViewStyle,
+  transferRow:      { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  transferDojo:     { flex: 1, fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  transferMeta:     { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  transferReason:   { fontSize: 12, color: KarateColors.ink2, fontStyle: "italic" } as TextStyle,
+});
+

@@ -1,1 +1,289 @@
-Ly8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Ci8vIEV4YW1lcyDigJQgRmVkZXJhw6fDo28gKFRyYWNrIEopIMK3IFNob2ppCi8vCi8vIEJyZWFkY3J1bWI6IEZQS1QgLyBFeGFtZXMgLyBDZXJ0aWZpY2Fkb3MKLy8gU3ViLXRhYnM6IEdyYWR1YcOnw7VlcyB8IENlcnRpZmljYWRvcyAgIChCYW5jYXMgcmVtb3ZpZGEg4oCUIGZvcmEgZGUgZXNjb3BvKQovLwovLyBBYmEgQ2VydGlmaWNhZG9zIChUcmFjayBKKToKLy8gICDigJQgQ2FpeGEgZGUgY2VydGlmaWNhZG9zOiB0b2RvcyBvcyBwZWRpZG9zIGRvcyBkb2rDtHMKLy8gICDigJQgRmlsdHJvcyBwb3IgZXN0YWRvIChjaGlwcykKLy8gICDigJQgQnVzY2EgcG9yIHByYXRpY2FudGUvZG9qw7QKLy8gICDigJQgU2VsZcOnw6NvIGVtIGxvdGUgKyAiQXZhbsOnYXIgcGFyYSBbZXN0YWRvXSIgKyAiQXBsaWNhciIKLy8gICDigJQgU2VsZXRvciBkZSBlc3RhZG8gcG9yIGxpbmhhIChqdW1wIHRvIGFueSBzdGF0ZSkKLy8gICDigJQgRHJhd2VyIGRldGFsaGUgY29tIHRpbWVsaW5lICsgcHJvY2Vzc2FyCi8vICAgLSBNb2RhbCByZWN1c2FyIChjb20gbW90aXZvKQovLwovLyBBYmEgR3JhZHVhw6fDtWVzOiBubyBlc2NvcG8sIGFpbmRhIHNlbSBmbHV4byBkZWRpY2FkbyBuZXN0YSB0ZWxhIOKGkiBtb3N0cmEgdW0KLy8gICBlbXB0eSBzdGF0ZSBsaW1wbyAoc2VtIHBsYWNlaG9sZGVyIHBvbHXDrWRvKS4gTyBsYW7Dp2FtZW50byBkZSBncmFkdWHDp8O1ZXMKLy8gICBhY29udGVjZSBob2plIG5hIGZpY2hhIGRvIHByYXRpY2FudGUuCi8vCi8vIEUtbWFpbCBkaXNwYXJhIG5vIGJhY2tlbmQgKGJlc3QtZWZmb3J0IHBvc3QtY29tbWl0KSwgbsOjbyBubyBGRS4KLy8gT3JxdWVzdHJhZG9yIHNsaW06IGRhdGEtZmV0Y2hpbmcvc3RhdGUvaGFuZGxlcnMgcHJlc2VydmFkb3M7IFVJIGUKLS8vIHN1YmNvbXBvbmVudGVzIHZpdmVtIGVtIGNvbXBvbmVudHMva2FyYXRlL2NlcnRpZmljYWRvcy8qIChTaG9qaSkuCi8vIFNlbSBkZXBzIG5vdmFzLiBNb2NrLWZhbGxiYWNrIHNlIG1pZ3JhdGlvbiAxODIgcGVuZGVudGUgKDUwMykuCi8vCi8vIEY0LjI6IG8gdMOtdHVsbyBkYSBww6FnaW5hIMOpICJDZXJ0aWZpY2Fkb3MiIHBhcmEgY2FzYXIgY29tIG8gaXRlbSBkZSBtZW51Ci8vICAgIkNlcnRpZmljYWRvcyIgcXVlIG8gdXN1w6FyaW8gY2xpY291IChhIHJvdGEgw6kgL2thcmF0ZS9leGFtZXM7IGFzIGFiYXMKLy8gICBHcmFkdWHDp8O1ZXMvQ2VydGlmaWNhZG9zIGNvbnRpbnVhbSBkZW50cm8gZGEgcMOhZ2luYSkuCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQppbXBvcnQgUmVhY3QsIHsgdXNlU3RhdGUsIHVzZUNhbGxiYWNrLCB1c2VFZmZlY3QgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7CiAgVmlldywgVGV4dCwgU2Nyb2xsVmlldywgVG91Y2hhYmxlT3BhY2l0eSwgQWN0aXZpdHlJbmRpY2F0b3IsCiAgU3R5bGVTaGVldCwgVmlld1N0eWxlLCBUZXh0U3R5bGUsCn0gZnJvbSAicmVhY3QtbmF0aXZlIjsKaW1wb3J0IHsgSWNvbiB9IGZyb20gIkAvY29tcG9uZW50cy9JY29uIjsKaW1wb3J0IHsgS2FyYXRlQ29sb3JzIGFzIEMsIFNob2ppUGFsZXR0ZSBhcyBQLCBLYXJhdGVGb250cyBhcyBGLCBLYXJhdGVTcGFjaW5nIGFzIFNQIH0gZnJvbSAiQC9jb25zdGFudHMva2FyYXRlVGhlbWUiOwppbXBvcnQgeyBub3JtYWxpemVDZXJ0U3RhdHVzLCBDZXJ0T3JkZXJTdGF0dXMgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0VzdGFkb1NlbG8iOwppbXBvcnQgewogIFNob2ppQmFja2dyb3VuZCwgUGFnZUhlYWQsIFNlY3Rpb25IZWFkLCBTZWFyY2hGaWVsZCwgQ2hpcCwKfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL3Nob2ppIjsKaW1wb3J0IHsga2FyYXRlQXBpLCBDZXJ0T3JkZXIgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CmltcG9ydCB7IHVzZUthcmF0ZUZlZGVyYXRpb24gfSBmcm9tICJAL2NvbnRleHRzL0thcmF0ZUZlZGVyYXRpb24iOwppbXBvcnQgewogIFN1YlRhYiwgU1VCX1RBQlMsIFNUQVRVU19GSUxURVJTLCBjcywKfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL2NlcnRpZmljYWRvcy9zaGFyZWQiOwppbXBvcnQgeyBSZWN1c2FyTW9kYWwgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL2NlcnRpZmljYWRvcy9SZWN1c2FyTW9kYWwiOwppbXBvcnQgeyBEZXRhbGhlRHJhd2VyIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9jZXJ0aWZpY2Fkb3MvRGV0YWxoZURyYXdlciI7CmltcG9ydCB7IE9yZGVyUm93IH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9jZXJ0aWZpY2Fkb3MvT3JkZXJSb3ciOwppbXBvcnQgeyBCYXRjaEJhciB9IGZyb20gIkAvY29tcG9uZW50cy9rYXJhdGUvY2VydGlmaWNhZG9zL0JhdGNoQmFyIjsKCi8vIOKUgOKUgCBNYWluIFNjcmVlbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gRXhhbWVzU2NyZWVuKCkgewogIGNvbnN0IHsgZmVkZXJhdGlvbklkIH0gPSB1c2VLYXJhdGVGZWRlcmF0aW9uKCk7CiAgY29uc3QgW3N1Yiwgc2V0U3ViXSA9IHVzZVN0YXRlPFN1YlRhYj4oImNlcnRpZmljYWRvcyIpOwoKICAvLyBDZXJ0aWZpY2Fkb3Mgc3RhdGUKICBjb25zdCBbb3JkZXJzLCBzZXRPcmRlcnNdID0gdXNlU3RhdGU8Q2VydE9yZGVyW10+KFtdKTsKICBjb25zdCBbbG9hZGluZywgc2V0TG9hZGluZ10gPSB1c2VTdGF0ZShmYWxzZSk7CiAgY29uc3QgW2ZpbHRlclN0YXR1cywgc2V0RmlsdGVyU3RhdHVzXSA9IHVzZVN0YXRlPENlcnRPcmRlclN0YXR1cyB8ICJhbGwiPigiYWxsIik7CiAgY29uc3QgW3NlYXJjaCwgc2V0U2VhcmNoXSA9IHVzZVN0YXRlKCIiKTsKICBjb25zdCBbc2VsZWN0ZWQsIHNldFNlbGVjdGVkXSA9IHVzZVN0YXRlPFNldDxzdHJpbmc+PihuZXcgU2V0KCkpOwogIGNvbnN0IFtiYXRjaFRhcmdldCwgc2V0QmF0Y2hUYXJnZXRdID0gdXNlU3RhdGU8Q2VydE9yZGVyU3RhdHVzPigiaW5fcHJvZHVjdGlvbiIpOwogIGNvbnN0IFtkZXRhaWxPcmRlciwgc2V0RGV0YWlsT3JkZXJdID0gdXNlU3RhdGU8Q2VydE9yZGVyIHwgbnVsbD4obnVsbCk7CiAgY29uc3QgW2RyYXdlck9wZW4sIHNldERyYXdlck9wZW5dID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtyZWN1c2FyT3Blbiwgc2V0UmVjdXNhck9wZW5dID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtyZWN1c2FyVGFyZ2V0LCBzZXRSZWN1c2FyVGFyZ2V0XSA9IHVzZVN0YXRlPHN0cmluZyB8ICJiYXRjaCIgfCBudWxsPihudWxsKTsKCiAgY29uc3QgbG9hZCA9IHVzZUNhbGxiYWNrKGFzeW5jICgpID0+IHsKICAgIHNldExvYWRpbmcodHJ1ZSk7CiAgICB0cnkgewogICAgICBjb25zdCBwYXJhbXM6IGFueSA9IHt9OwogICAgICBpZiAoZmlsdGVyU3RhdHVzICE9PSAiYWxsIikgcGFyYW1zLnN0YXR1cyA9IGZpbHRlclN0YXR1czsKICAgICAgaWYgKHNlYXJjaC50cmltKCkpIHBhcmFtcy5xID0gc2VhcmNoLnRyaW0oKTsKICAgICAgY29uc3QgcmVzID0gYXdhaXQga2FyYXRlQXBpLmxpc3RDZXJ0T3JkZXJzKGZlZGVyYXRpb25JZCwgcGFyYW1zKTsKICAgICAgc2V0T3JkZXJzKHJlcy5kYXRhIHx8IFtdKTsKICAgIH0gY2F0Y2ggewogICAgICAvLyBtaWdyYXRpb24gcGVuZGVudGUgb3Ugc2VtIGNvbmV4w6NvIOKAkyBtYW50w6ltIHZhemlvCiAgICB9IGZpbmFsbHkgewogICAgICBzZXRMb2FkaW5nKGZhbHNlKTsKICAgIH0KICB9LCBbZmVkZXJhdGlvbklkLCBmaWx0ZXJTdGF0dXMsIHNlYXJjaF0pOwoKICB1c2VFZmZlY3QoKCkgPT4gewogICAgaWYgKHN1YiA9PT0gImNlcnRpZmljYWRvcyIpIGxvYWQoKTsKICB9LCBbc3ViLCBsb2FkXSk7CgogIC8vIC0tLS0gQWR2YW5jZSBzaW5nbGUgLS0tLQogIGNvbnN0IGFkdmFuY2VPcmRlciA9IHVzZUNhbGxiYWNrKGFzeW5jIChvcmRlcklkOiBzdHJpbmcsIHN0YXR1czogQ2VydE9yZGVyU3RhdHVzIHwgInJlZnVzZWRfdHJpZ2dlciIpID0+IHsKICAgIGlmIChzdGF0dXMgPT09ICJyZWZ1c2VkX3RyaWdnZXIiKSB7IHNldFJlY3VzYXJUYXJnZXQob3JkZXJJZCk7IHNldFJlY3VzYXJPcGVuKHRydWUpOyByZXR1cm47IH0KICAgIHRyeSB7CiAgICAgIGNvbnN0IHVwZGF0ZWQgPSBhd2FpdCBrYXJhdGVBcGkuYWR2YW5jZUNlcnRPcmRlclN0YXR1cyhmZWRlcmF0aW9uSWQsIG9yZGVySWQsIHN0YXR1cyk7CiAgICAgIHNldE9yZGVycygocHJldikgPT4gcHJldi5tYXAoKG8pID0+IG8uaWQgPT09IG9yZGVySWQgPyB1cGRhdGVkIDogbykpOwogICAgICBpZiAoZGV0YWlsT3JkZXI/LmlkID09PSBvcmRlcklkKSBzZXREZXRhaWxPcmRlcih1cGRhdGVkKTsKICAgIH0gY2F0Y2ggeyAvKiBiZXN0LWVmZm9ydCAqLyB9CiAgfSwgW2ZlZGVyYXRpb25JZCwgZGV0YWlsT3JkZXJdKTsKCiAgLy8gLS0tLSBCYXRjaCBhZHZhbmNlIC0tLS0KICBjb25zdCBiYXRjaEFwcGx5ID0gdXNlQ2FsbGJhY2soYXN5bmMgKCkgPT4gewogICAgaWYgKCFzZWxlY3RlZC5zaXplKSByZXR1cm47CiAgICB0cnkgewogICAgICBjb25zdCByZXMgPSBhd2FpdCBrYXJhdGVBcGkuYmF0Y2hDZXJ0T3JkZXJTdGF0dXMoZmVkZXJhdGlvbklkLCB7CiAgICAgICAgb3JkZXJfaWRzOiBBcnJheS5mcm9tKHNlbGVjdGVkKSwKICAgICAgICBzdGF0dXM6IGJhdGNoVGFyZ2V0LAogICAgICB9KTsKICAgICAgY29uc3QgdXBkYXRlZE1hcCA9IG5ldyBNYXAocmVzLnVwZGF0ZWQubWFwKChvKSA9PiBbby5pZCwgb10pKTsKICAgICAgc2V0T3JkZXJzKChwcmV2KSA9PiBwcmV2Lm1hcCgobykgPT4gdXBkYXRlZE1hcC5nZXQoby5pZCkgPz8gbykpOwogICAgICBzZXRTZWxlY3RlZChuZXcgU2V0KCkpOwogICAgfSBjYXRjaCB7IC8qIGJlc3QtZWZmb3J0ICovIH0KICB9LCBbZmVkZXJhdGlvbklkLCBzZWxlY3RlZCwgYmF0Y2hUYXJnZXRdKTsKCiAgLy8gLS0tLSBSZWZ1c2UgLS0tLQogIGNvbnN0IGNvbmZpcm1SZWN1c2FyID0gdXNlQ2FsbGJhY2soYXN5bmMgKHJlYXNvbjogc3RyaW5nKSA9PiB7CiAgICBpZiAoIXJlY3VzYXJUYXJnZXQpIHJldHVybjsKICAgIHNldFJlY3VzYXJPcGVuKGZhbHNlKTsKICAgIGlmIChyZWN1c2FyVGFyZ2V0ID09PSAiYmF0Y2giKSB7CiAgICAgIGNvbnN0IGlkcyA9IEFycmF5LmZyb20oc2VsZWN0ZWQpOwogICAgICBhd2FpdCBQcm9taXNlLmFsbFNldHRsZWQoCiAgICAgICAgaWRzLm1hcCgoaWQpID0+IGthcmF0ZUFwaS5yZWZ1c2VDZXJ0T3JkZXIoZmVkZXJhdGlvbklkLCBpZCwgcmVhc29uKQogICAgICAgICAgLnRoZW4oKHVwZCkgPT4gc2V0T3JkZXJzKChwcmV2KSA9PiBwcmV2Lm1hcCgobykgPT4gby5pZCA9PT0gaWQgPyB1cGQgOiBvKSkpCiAgICAgICAgKQogICAgICApOwogICAgICBzZXRTZWxlY3RlZChuZXcgU2V0KCkpOwogICAgfSBlbHNlIHsKICAgICAgdHJ5IHsKICAgICAgICBjb25zdCB1cGQgPSBhd2FpdCBrYXJhdGVBcGkucmVmdXNlQ2VydE9yZGVyKGZlZGVyYXRpb25JZCwgcmVjdXNhclRhcmdldCwgcmVhc29uKTsKICAgICAgICBzZXRPcmRlcnMoKHByZXYpID0+IHByZXYubWFwKChvKSA9PiBvLmlkID09PSByZWN1c2FyVGFyZ2V0ID8gdXBkIDogbykpOwogICAgICAgIGlmIChkZXRhaWxPcmRlcj8uaWQgPT09IHJlY3VzYXJUYXJnZXQpIHNldERldGFpbE9yZGVyKHVwZCk7CiAgICAgIH0gY2F0Y2ggeyAvKiBiZXN0LWVmZm9ydCAqLyB9CiAgICB9CiAgICBzZXRSZWN1c2FyVGFyZ2V0KG51bGwpOwogIH0sIFtmZWRlcmF0aW9uSWQsIHJlY3VzYXJUYXJnZXQsIHNlbGVjdGVkLCBkZXRhaWxPcmRlcl0pOwoKICBjb25zdCBvcGVuRGV0YWlsID0gdXNlQ2FsbGJhY2soYXN5bmMgKG9yZGVyOiBDZXJ0T3JkZXIpID0+IHsKICAgIHNldERldGFpbE9yZGVyKG9yZGVyKTsKICAgIHNldERyYXdlck9wZW4odHJ1ZSk7CiAgICAvLyB0ZW50YSBidXNjYXIgZGV0YWxoZSBjb20gdGltZWxpbmUKICAgIHRyeSB7CiAgICAgIGNvbnN0IGZ1bGwgPSBhd2FpdCBrYXJhdGVBcGkuZ2V0Q2VydE9yZGVyKGZlZGVyYXRpb25JZCwgb3JkZXIuaWQpOwogICAgICBzZXREZXRhaWxPcmRlcihmdWxsKTsKICAgIH0gY2F0Y2ggeyAvKiBtYW50w6ltIG8gcXVlIHRlbSAqLyB9CiAgfSwgW2ZlZGVyYXRpb25JZF0pOwoKICBjb25zdCB0b2dnbGVTZWwgPSAoaWQ6IHN0cmluZykgPT4gewogICAgc2V0U2VsZWN0ZWQoKHByZXYpID0+IHsKICAgICAgY29uc3QgbiA9IG5ldyBTZXQocHJldik7CiAgICAgIGlmIChuLmhhcyhpZCkpIG4uZGVsZXRlKGlkKTsgZWxzZSBuLmFkZChpZCk7CiAgICAgIHJldHVybiBuOwogICAgfSk7CiAgfTsKCiAgY29uc3QgdmlzaWJsZU9yZGVycyA9IG9yZGVyczsKICBjb25zdCBwZW5kZW50ZXNDb3VudCA9IG9yZGVycy5maWx0ZXIoKG8pID0+IFsicmVxdWVzdGVkIiwiaW5fcHJvZHVjdGlvbiIsInByaW50ZWQiXS5pbmNsdWRlcyhvLnN0YXR1cykpLmxlbmd0aDsKCiAgY29uc3QgY291bnRzQnlTdGF0dXMgPSBTVEFUVVNfRklMVEVSUy5yZWR1Y2UoKGFjYywgZikgPT4gewogICAgYWNjW2YuaWRdID0gZi5pZCA9PT0gImFsbCIgPyBvcmRlcnMubGVuZ3RoIDogb3JkZXJzLmZpbHRlcigobykkID0+IG8uc3RhdHVzID09PSBmLmlkKS5sZW5ndGg7CiAgICByZXR1cm4gYWNjOwogIH0sIHt9IGFzIFJlY29yZDxzdHJpbmcsIG51bWJlcj4pOwoKICByZXR1cm4gKAogICAgPFNob2ppQmFja2dyb3VuZD4KICAgICAgPFNjcm9sbFZpZXcgY29udGVudENvbnRhaW5lclN0eWxlPXtzdHlsZXMuY29udGVudH0ga2V5Ym9hcmRTaG91bGRQZXJzaXN0VGFwcz0iaGFuZGxlZCI+CiAgICAgICAgey8qIFBhZ2UgaGVhZCAqL30KICAgICAgICA8UGFnZUhlYWQKICAgICAgICAgIGV5ZWJyb3c9IkZlZGVyYcOnw6NvIMK3IE9wZXJhw6fDo28iCiAgICAgICAgICB0aXRsZT0iQ2VydGlmaWNhZG9zIgogICAgICAgICAgc3ViPSJMYW7Dp2FtZW50byBkZSBjZXJ0aWZpY2Fkb3MgZGUgZ3JhZHVhw6fDtWVzIgogICAgICAgIC8+CgogICAgICAgIHsvKiBTdWItdGFicyAqL30KICAgICAgICA8VmlldyBzdHlsZT17Y3Muc3ViVGFiQmFyfT4KICAgICAgICAgIDxTY3JvbGxWaWV3IGhvcml6b250YWwgc2hvd3NIb3Jpem9udGFsU2Nyb2xsSW5kaWNhdG9yPXtmYWxzZX0gY29udGVudENvbnRhaW5lclN0eWxlPXt7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBnYXA6IDQgfX0+CiAgICAgICAgICAgIHtTVUJfVEFCUy5tYXAoKHQpID0+ICgKICAgICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBrZXk9e3QuaWR9IHN0eWxlPXtbY3Muc3ViVGFiLCBzdWIgPT09IHQuaWQgJiYgY3Muc3ViVGFiQWN0aXZlXX0gb25QcmVzcz17KCkgPT4gc2V0U3ViKHQuaWQpfQogICAgICAgICAgICAgICAgYWNjZXNzaWJpbGl0eVJvbGU9InRhYiIgYWNjZXNzaWJpbGl0eVN0YXRlPXt7IHNlbGVjdGVkOiBzdWIgPT09IHQuaWQgfX0+CiAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17W2NzLnN1YlRhYlRleHQsIHN1YiA9PT0gdC5pZCAmJiBjcy5zdWJUYWJUZXh0QWN0aXZlXX0+e3QubGFiZWx9PC9UZXh0PgogICAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICAgKSl9CiAgICAgICAgICA8L1Njcm9sbFZpZXc+CiAgICAgICAgPC9WaWV3PgoKICAgICAgICB7LyogR3JhZHVhw6fDtWVzOiBlbXB0eSBzdGF0ZSBsaW1wbyAoc2VtIHBsYWNlaG9sZGVyIHBvbHXDrWRvKSAqL30KICAgICAgICB7c3ViICE9PSAiY2VydGlmaWNhZG9zIiA/ICgKICAgICAgICAgIDxWaWV3IHN0eWxlPXtjcy5lbXB0eVN0YXRlfT4KICAgICAgICAgICAgPEljb24gbmFtZT0ic2Nob29sLW91dGxpbmUiIHNpemU9ezM0fSBjb2xvcj17Qy5pbms0fSAvPgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Y3MuZW1wdHlTdGF0ZVRpdGxlfT5HcmFkdWHDp8O1ZXM8L1RleHQ+CiAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtjcy5lbXB0eVN0YXRlVGV4dH0+CiAgICAgICAgICAgICAgTyBsYW7Dp2FtZW50byBkZSBncmFkdWHDp8O1ZXMgw6kgZmVpdG8gaG9qZSBuYSBmaWNoYSBkZSBjYWRhIHByYXRpY2FudGUuCiAgICAgICAgICAgICAgRW0gYnJldmUsIG8gaGlzdMOzcmljbyBkZSBncmFkdWHDp8O1ZXMgZGEgcmVkZSBhcGFyZWNlcsOhIGFxdWkuCiAgICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgIDwvVmlldz4KICAgICAgICApIDogKAogICAgICAgICAgPD4KICAgICAgICAgICAgey8qIFNlY3Rpb24gaGVhZGVyICovfQogICAgICAgICAgICA8U2VjdGlvbkhlYWQKICAgICAgICAgICAgICB0aXRsZT0iQ2FpeGEgZGUgY2VydGlmaWNhZG9zIgogICAgICAgICAgICAgIHN1Yj0iUGVkaWRvcyBkZSB0b2RvcyBvcyBkb2rDtHMg4oCUIHByb2R1w6fDo28gZSBleHBlZGnDp8OjbyIKICAgICAgICAgICAgICBhY3Rpb25zPXtwZW5kZW50ZXNDb3VudCA+IDAgPyAoCiAgICAgICAgICAgICAgICA8VmlldyBzdHlsZT17Y3MuYWxlcnRCYWRnZX0+CiAgICAgICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXtjcy5hbGVydERvdH0gLz4KICAgICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e2NzLmFsZXJ0QmFkZ2VUZXh0fT57cGVuZGVudGVzQ291bnR9IGFndWFyZGFuZG88L1RleHQ+CiAgICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgICAgKSA6IHVuZGVmaW5lZH0KICAgICAgICAgICAgLz4KCiAgICAgICAgICAgIHsvKiBTZWFyY2ggKi99CiAgICAgICAgICAgIDxTZWFyY2hGaWVsZAogICAgICAgICAgICAgIHZhbHVlPXtzZWFyY2h9CiAgICAgICAgICAgICAgb25DaGFuZ2VUZXh0PXsodikgPT4geyBzZXRTZWFyY2godik7IH19CiAgICAgICAgICAgICAgcGxhY2Vob2xkZXI9IkJ1c2NhciBwcmF0aWNhbnRlIG91IGRvasO0Li4uIgogICAgICAgICAgICAgIG9uU3VibWl0PXtsb2FkfQogICAgICAgICAgICAgIHN0eWxlPXt7IG1hcmdpbkJvdHRvbTogMTIgfX0KICAgICAgICAgICAgLz4KCiAgICAgICAgICAgIHsvKiBGaWx0ZXIgY2hpcHMgKi99CiAgICAgICAgICAgIDxTY3JvbGxWaWV3IGhvcml6b250YWwgc2hvd3NIb3Jpem9udGFsU2Nyb2xsSW5kaWNhdG9yPXtmYWxzZX0gc3R5bGU9e3sgbWFyZ2luQm90dG9tOiAxNCB9fSBjb250ZW50Q29udGFpbmVyU3R5bGU9e3sgZmxleERpcmVjdGlvbjogInJvdyIsIGdhcDogNiB9fT4KICAgICAgICAgICAgICB7U1RBVFVTX0ZJTFRFUlMubWFwKChmKSA9PiAoCiAgICAgICAgICAgICAgICA8Q2hpcCBrZXk9e2YuaWR9CiAgICAgICAgICAgICAgICAgIGxhYmVsPXtgJHtmLmxhYmVsfSAke2NvdW50c0J5U3RhdHVzW2YuaWRdID4gMCA/IGNvdW50c0J5U3RhdHVzW2YuaWRdIDogIiJ9YC50cmltKCl9CiAgICAgICAgICAgICAgICAgIGFjdGl2ZT17ZmlsdGVyU3RhdHVzID09PSBmLmlkfQogICAgICAgICAgICAgICAgICBvblByZXNzPXsoKSA9PiBzZXRGaWx0ZXJTdGF0dXMoZi5pZCl9CiAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICkpfQogICAgICAgICAgICA8L1Njcm9sbFZpZXc+CgogICAgICAgICAgICB7LyogQmF0Y2ggdG9vbGJhciAqL30KICAgICAgICAgICAge3NlbGVjdGVkLnNpemUgPiAwID8gKAogICAgICAgICAgICAgIDxCYXRjaEJhcgogICAgICAgICAgICAgICAgY291bnQ9e3NlbGVjdGVkLnNpemV9CiAgICAgICAgICAgICAgICBiYXRjaFRhcmdldD17YmF0Y2hUYXJnZXR9CiAgICAgICAgICAgICAgICBvblNldFRhcmdldD17c2V0QmF0Y2hUYXJnZXR9CiAgICAgICAgICAgICAgICBvbkFwcGx5PXtiYXRjaEFwcGx5fQogICAgICAgICAgICAgICAgb25SZWZ1c2U9eygpID0+IHsgc2V0UmVjdXNhclRhcmdldCgiYmF0Y2giKTsgc2V0UmVjdXNhck9wZW4odHJ1ZSk7IH19CiAgICAgICAgICAgICAgICBvbkNsZWFyPXsoKSA9PiBzZXRTZWxlY3RlZChuZXcgU2V0KCkpfQogICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICkgOiBudWxsfQoKICAgICAgICAgICAgey8qIE9yZGVycyBsaXN0ICovfQogICAgICAgICAgICB7bG9hZGluZyA/ICgKICAgICAgICAgICAgICA8QWN0aXZpdHlJbmRpY2F0b3IgY29sb3I9e1AucmVkfSBzdHlsZT17eyBtYXJnaW5WZXJ0aWNhbDogMzIgfX0gLz4KICAgICAgICAgICAgKSA6IHZpc2libGVPcmRlcnMubGVuZ3RoID09PSAwID8gKAogICAgICAgICAgICAgIDxWaWV3IHN0eWxlPXtjcy5lbXB0eX0+CiAgICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJyaWJib24tb3V0bGluZSIgc2l6ZT17MzJ9IGNvbG9yPXtDLmluazR9IC8+CiAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17Y3MuZW1wdHlUZXh0fT5OZW5odW0gcGVkaWRvIGVuY29udHJhZG88L1RleHQ+CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICApIDogKAogICAgICAgICAgICAgIHZpc2libGVPcmRlcnMubWFwKChvKSA9PiAoCiAgICAgICAgICAgICAgICA8T3JkZXJSb3cKICAgICAgICAgICAgICAgICAga2V5PXtvLmlkfQogICAgICAgICAgICAgICAgICBvcmRlcj17b30KICAgICAgICAgICAgICAgICAgc2VsZWN0ZWQ9e3NlbGVjdGVkLmhhcyhvLmlkKX0KICAgICAgICAgICAgICAgICAgb25Ub2dnbGU9e3RvZ2dsZVNlbH0KICAgICAgICAgICAgICAgICAgb25EZXRhaWw9e29wZW5EZXRhaWx9CiAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICkpCiAgICAgICAgICAgICl9CgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Y3MuaGludH0+CiAgICAgICAgICAgICAgPEljb24gbmFtZT0iaW5mb3JtYXRpb24tY2lyY2xlLW91dGxpbmUiIHNpemU9ezEyfSBjb2xvcj17Qy5pbms0fSAvPgogICAgICAgICAgICAgIHsiICJ9TXVkYW7Dp2FzIGRlIGVzdGFkbyBkaXNwYXJhbSB1bSBlLW1haWwgYW8gZG9qw7QgKFRyYWNrIEkpLiBPIHNlbGV0b3Igbm8gZGV0YWxoZSBwZXJtaXRlIHNhbHRhciBwYXJhIHF1YWxxdWVyIGVzdGFkby4KICAgICAgICAgICAgPC9UZXh0PgogICAgICAgICAgPC8+CiAgICAgICAgKX0KCiAgICAgICAgey8qIE1vZGFscyAqL30KICAgICAgICA8UmVjdXNhck1vZGFsCiAgICAgICAgICB2aXNpYmxlPXtyZWN1c2FyT3Blbn0KICAgICAgICAgIHN1YnRpdGxlPXsKICAgICAgICAgICAgcmVjdXNhclRhcmdldCA9PT0gImJhdGNoIgogICAgICAgICAgICAgID8gYCR7c2VsZWN0ZWQuc2l6ZX0gcGVkaWRvKHMpIHNlcsOjbyByZWN1c2Fkb3MgY29tIG8gbWVzbW8gbW90aXZvLmAKICAgICAgICAgICAgICA6ICJPIHBlZGlkbyBzZXLDoSBlbmNlcnJhZG8gZSBvIGRvasO0IG5vdGlmaWNhZG8uIgogICAgICAgICAgfQogICAgICAgICAgb25DbG9zZT17KCkgPT4geyBzZXRSZWN1c2FyT3BlbihmYWxzZSk7IHNldFJlY3VzYXJUYXJnZXQobnVsbCk7IH19CiAgICAgICAgICBvbkNvbmZpcm09e2NvbmZpcm1SZWN1c2FyfQogICAgICAgIC8+CgogICAgICAgIDxEZXRhbGhlRHJhd2VyCiAgICAgICAgICBvcmRlcj17ZGV0YWlsT3JkZXJ9CiAgICAgICAgICB2aXNpYmxlPXtkcmF3ZXJPcGVufQogICAgICAgICAgb25DbG9zZT17KCkgPT4gc2V0RHJhd2VyT3BlbihmYWxzZSl9CiAgICAgICAgICBvbkFkdmFuY2U9e2FkdmFuY2VPcmRlcn0KICAgICAgICAgIG9uUmVjdXNhcj17KGlkKSA9PiB7IHNldFJlY3VzYXJUYXJnZXQoaWQpOyBzZXRSZWN1c2FyT3Blbih0cnVlKTsgfX0KICAgICAgICAvPgogICAgICA8L1Njcm9sbFZpZXc+CiAgICA8L1Nob2ppQmFja2dyb3VuZD4KICApOwp9Cgpjb25zdCBzdHlsZXMgPSBTdHlsZVNoZWV0LmNyZWF0ZSh7CiAgY29udGVudDogeyBwYWRkaW5nOiA0MCwgcGFkZGluZ1RvcDogNDAsIHBhZGRpbmdCb3R0b206IDcyLCBtYXhXaWR0aDogU1AuY29udGVudE1heCwgd2lkdGg6ICIxMDAlIiwgYWxpZ25TZWxmOiAiY2VudGVyIiB9IGFzIFZpZXdTdHlsZSwKfSk7Cg==
+// ============================================================
+// Exames — Federação (Track J) · Shoji
+//
+// Breadcrumb: FPKT / Exames / Certificados
+// Sub-tabs: Graduações | Certificados   (Bancas removida — fora de escopo)
+//
+// Aba Certificados (Track J):
+//   — Caixa de certificados: todos os pedidos dos dojôs
+//   — Filtros por estado (chips)
+//   — Busca por praticante/dojô
+//   — Seleção em lote + "Avançar para [estado]" + "Aplicar"
+//   — Seletor de estado por linha (jump to any state)
+//   — Drawer detalhe com timeline + processar
+//   - Modal recusar (com motivo)
+//
+// Aba Graduações: no escopo, ainda sem fluxo dedicado nesta tela → mostra um
+//   empty state limpo (sem placeholder poluído). O lançamento de graduações
+//   acontece hoje na ficha do praticante.
+//
+// E-mail dispara no backend (best-effort post-commit), não no FE.
+// Orquestrador slim: data-fetching/state/handlers preservados; UI e
+// subcomponentes vivem em components/karate/certificados/* (Shoji).
+// Sem deps novas. Mock-fallback se migration 182 pendente (503).
+//
+// F4.2: o título da página é "Certificados" para casar com o item de menu
+//   "Certificados" que o usuário clicou (a rota é /karate/exames; as abas
+//   Graduações/Certificados continuam dentro da página).
+// ============================================================
+import React, { useState, useCallback, useEffect } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors as C, ShojiPalette as P, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
+import { normalizeCertStatus, CertOrderStatus } from "@/components/karate/EstadoSelo";
+import {
+  ShojiBackground, PageHead, SectionHead, SearchField, Chip,
+} from "@/components/karate/shoji";
+import { karateApi, CertOrder } from "@/services/karateApi";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+import {
+  SubTab, SUB_TABS, STATUS_FILTERS, cs,
+} from "@/components/karate/certificados/shared";
+import { RecusarModal } from "@/components/karate/certificados/RecusarModal";
+import { DetalheDrawer } from "@/components/karate/certificados/DetalheDrawer";
+import { OrderRow } from "@/components/karate/certificados/OrderRow";
+import { BatchBar } from "@/components/karate/certificados/BatchBar";
+
+// ── Main Screen ───────────────────────────────────────────────
+export default function ExamesScreen() {
+  const { federationId } = useKarateFederation();
+  const [sub, setSub] = useState<SubTab>("certificados");
+
+  // Certificados state
+  const [orders, setOrders] = useState<CertOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<CertOrderStatus | "all">("all");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchTarget, setBatchTarget] = useState<CertOrderStatus>("in_production");
+  const [detailOrder, setDetailOrder] = useState<CertOrder | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [recusarOpen, setRecusarOpen] = useState(false);
+  const [recusarTarget, setRecusarTarget] = useState<string | "batch" | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (search.trim()) params.q = search.trim();
+      const res = await karateApi.listCertOrders(federationId, params);
+      setOrders(res.data || []);
+    } catch {
+      // migration pendente ou sem conexão – mantém vazio
+    } finally {
+      setLoading(false);
+    }
+  }, [federationId, filterStatus, search]);
+
+  useEffect(() => {
+    if (sub === "certificados") load();
+  }, [sub, load]);
+
+  // ---- Advance single ----
+  const advanceOrder = useCallback(async (orderId: string, status: CertOrderStatus | "refused_trigger") => {
+    if (status === "refused_trigger") { setRecusarTarget(orderId); setRecusarOpen(true); return; }
+    try {
+      const updated = await karateApi.advanceCertOrderStatus(federationId, orderId, status);
+      setOrders((prev) => prev.map((o) => o.id === orderId ? updated : o));
+      if (detailOrder?.id === orderId) setDetailOrder(updated);
+    } catch { /* best-effort */ }
+  }, [federationId, detailOrder]);
+
+  // ---- Batch advance ----
+  const batchApply = useCallback(async () => {
+    if (!selected.size) return;
+    try {
+      const res = await karateApi.batchCertOrderStatus(federationId, {
+        order_ids: Array.from(selected),
+        status: batchTarget,
+      });
+      const updatedMap = new Map(res.updated.map((o) => [o.id, o]));
+      setOrders((prev) => prev.map((o) => updatedMap.get(o.id) ?? o));
+      setSelected(new Set());
+    } catch { /* best-effort */ }
+  }, [federationId, selected, batchTarget]);
+
+  // ---- Refuse ----
+  const confirmRecusar = useCallback(async (reason: string) => {
+    if (!recusarTarget) return;
+    setRecusarOpen(false);
+    if (recusarTarget === "batch") {
+      const ids = Array.from(selected);
+      await Promise.allSettled(
+        ids.map((id) => karateApi.refuseCertOrder(federationId, id, reason)
+          .then((upd) => setOrders((prev) => prev.map((o) => o.id === id ? upd : o)))
+        )
+      );
+      setSelected(new Set());
+    } else {
+      try {
+        const upd = await karateApi.refuseCertOrder(federationId, recusarTarget, reason);
+        setOrders((prev) => prev.map((o) => o.id === recusarTarget ? upd : o));
+        if (detailOrder?.id === recusarTarget) setDetailOrder(upd);
+      } catch { /* best-effort */ }
+    }
+    setRecusarTarget(null);
+  }, [federationId, recusarTarget, selected, detailOrder]);
+
+  const openDetail = useCallback(async (order: CertOrder) => {
+    setDetailOrder(order);
+    setDrawerOpen(true);
+    // tenta buscar detalhe com timeline
+    try {
+      const full = await karateApi.getCertOrder(federationId, order.id);
+      setDetailOrder(full);
+    } catch { /* mantém o que tem */ }
+  }, [federationId]);
+
+  const toggleSel = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const visibleOrders = orders;
+  const pendentesCount = orders.filter((o) => ["requested","in_production","printed"].includes(o.status)).length;
+
+  const countsByStatus = STATUS_FILTERS.reduce((acc, f) => {
+    acc[f.id] = f.id === "all" ? orders.length : orders.filter((o) => o.status === f.id).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return (
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Page head */}
+        <PageHead
+          eyebrow="Federação · Operação"
+          title="Certificados"
+          sub="Lançamento de certificados de graduações"
+        />
+
+        {/* Sub-tabs */}
+        <View style={cs.subTabBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
+            {SUB_TABS.map((t) => (
+              <TouchableOpacity key={t.id} style={[cs.subTab, sub === t.id && cs.subTabActive]} onPress={() => setSub(t.id)}
+                accessibilityRole="tab" accessibilityState={{ selected: sub === t.id }}>
+                <Text style={[cs.subTabText, sub === t.id && cs.subTabTextActive]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Graduações: empty state limpo (sem placeholder poluído) */}
+        {sub !== "certificados" ? (
+          <View style={cs.emptyState}>
+            <Icon name="school-outline" size={34} color={C.ink4} />
+            <Text style={cs.emptyStateTitle}>Graduações</Text>
+            <Text style={cs.emptyStateText}>
+              O lançamento de graduações é feito hoje na ficha de cada praticante.
+              Em breve, o histórico de graduações da rede aparecerá aqui.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Section header */}
+            <SectionHead
+              title="Caixa de certificados"
+              sub="Pedidos de todos os dojôs — produção e expedição"
+              actions={pendentesCount > 0 ? (
+                <View style={cs.alertBadge}>
+                  <View style={cs.alertDot} />
+                  <Text style={cs.alertBadgeText}>{pendentesCount} aguardando</Text>
+                </View>
+              ) : undefined}
+            />
+
+            {/* Search */}
+            <SearchField
+              value={search}
+              onChangeText={(v) => { setSearch(v); }}
+              placeholder="Buscar praticante ou dojô..."
+              onSubmit={load}
+              style={{ marginBottom: 12 }}
+            />
+
+            {/* Filter chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
+              {STATUS_FILTERS.map((f) => (
+                <Chip key={f.id}
+                  label={`${f.label} ${countsByStatus[f.id] > 0 ? countsByStatus[f.id] : ""}`.trim()}
+                  active={filterStatus === f.id}
+                  onPress={() => setFilterStatus(f.id)}
+                />
+              ))}
+            </ScrollView>
+
+            {/* Batch toolbar */}
+            {selected.size > 0 ? (
+              <BatchBar
+                count={selected.size}
+                batchTarget={batchTarget}
+                onSetTarget={setBatchTarget}
+                onApply={batchApply}
+                onRefuse={() => { setRecusarTarget("batch"); setRecusarOpen(true); }}
+                onClear={() => setSelected(new Set())}
+              />
+            ) : null}
+
+            {/* Orders list */}
+            {loading ? (
+              <ActivityIndicator color={P.red} style={{ marginVertical: 32 }} />
+            ) : visibleOrders.length === 0 ? (
+              <View style={cs.empty}>
+                <Icon name="ribbon-outline" size={32} color={C.ink4} />
+                <Text style={cs.emptyText}>Nenhum pedido encontrado</Text>
+              </View>
+            ) : (
+              visibleOrders.map((o) => (
+                <OrderRow
+                  key={o.id}
+                  order={o}
+                  selected={selected.has(o.id)}
+                  onToggle={toggleSel}
+                  onDetail={openDetail}
+                />
+              ))
+            )}
+
+            <Text style={cs.hint}>
+              <Icon name="information-circle-outline" size={12} color={C.ink4} />
+              {" "}Mudanças de estado disparam um e-mail ao dojô (Track I). O seletor no detalhe permite saltar para qualquer estado.
+            </Text>
+          </>
+        )}
+
+        {/* Modals */}
+        <RecusarModal
+          visible={recusarOpen}
+          subtitle={
+            recusarTarget === "batch"
+              ? `${selected.size} pedido(s) serão recusados com o mesmo motivo.`
+              : "O pedido será encerrado e o dojô notificado."
+          }
+          onClose={() => { setRecusarOpen(false); setRecusarTarget(null); }}
+          onConfirm={confirmRecusar}
+        />
+
+        <DetalheDrawer
+          order={detailOrder}
+          visible={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onAdvance={advanceOrder}
+          onRecusar={(id) => { setRecusarTarget(id); setRecusarOpen(true); }}
+        />
+      </ScrollView>
+    </ShojiBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: 40, paddingTop: 40, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+});

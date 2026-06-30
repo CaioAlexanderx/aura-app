@@ -1,1 +1,122 @@
-aW1wb3J0IFJlYWN0IGZyb20gInJlYWN0IjsKaW1wb3J0IHsKICBWaWV3LCBUZXh0LCBJbWFnZSwKICBTdHlsZVNoZWV0LCBWaWV3U3R5bGUsIFRleHRTdHlsZSwKfSBmcm9tICJyZWFjdC1uYXRpdmUiOwppbXBvcnQgeyBJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL0ljb24iOwppbXBvcnQgeyBLYXJhdGVDb2xvcnMsIEthcmF0ZVJhZGl1cywgS2FyYXRlRm9udHMgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IFByYWN0aXRpb25lckRldGFpbCB9IGZyb20gIkAvc2VydmljZXMva2FyYXRlQXBpIjsKaW1wb3J0IHsgZm9ybWF0SXNvVG9CciwgZm9ybWF0SXNvVG9CclZhcmlhbnQgfSBmcm9tICJAL2NvbXBvbmVudHMvaW5wdXRzL0RhdGVJbnB1dCI7CmltcG9ydCB7IGZvcm1hdENwZkRpc3BsYXksIGZvcm1hdFBob25lRGlzcGxheSwgZm9ybWF0Q2VwRGlzcGxheSwgYWdlRnJvbUJpcnRoRGF0ZSB9IGZyb20gIi4vaGVscGVycyI7CgppbnRlcmZhY2UgUHJvcHMgewogIHByYWN0aXRpb25lcjogUHJhY3RpdGlvbmVyRGV0YWlsOwp9CgovLyBGNC4xOiByb3R1bG8gc2VtcHJlIHZpc8OtdmVsOyB2YWxvciBhdXNlbnRlIHJlbmRlcml6YSB1bSB0cmHDp29kZWlvcm8gbGV2ZSAo4oCc4oCd*).Ci8vIEFsaW5oYW1lbnRvOiBsYWJlbCBmaXhvIDExMHB4LCB2YWxvciBhbyBsYWRvLCBhbWJvcyBuYSBtZXNtYSBsaW5oYS4KZnVuY3Rpb24gRmllbGQoeyBsYWJlbCwgdmFsdWUgfTogeyBsYWJlbDogc3RyaW5nOyB2YWx1ZTogc3RyaW5nIHwgbnVsbCB8IHVuZGVmaW5lZCB9KSB7CiAgcmV0dXJuICgKICAgIDxWaWV3IHN0eWxlPXtmaWVsZFN0eWxlcy5yb3d9PgogICAgICA8VGV4dCBzdHlsZT17ZmllbGRTdHlsZXMubGFiZWx9PntsYWJlbH08L1RleHQ+CiAgICAgIDxUZXh0IHN0eWxlPXt2YWx1ZSA/IGZpZWxkU3R5bGVzLnZhbHVlIDogZmllbGRTdHlsZXMuZW1wdHl9IG51bWJlck9mTGluZXM9ezJ9PgogICAgICAgIHt2YWx1ZSB8fCAi4oCcIn0KICAgICAgPC9UZXh0PgogICAgPC9WaWV3PgogICk7Cn0KCmZ1bmN0aW9uIFNlY3Rpb25IZWFkZXIoeyB0aXRsZSB9OiB7IHRpdGxlOiBzdHJpbmcgfSkgewogIHJldHVybiA8VGV4dCBzdHlsZT17ZmllbGRTdHlsZXMuc2VjdGlvbkhlYWR9Pnt0aXRsZX08L1RleHQ+Owp9CgpleHBvcnQgZnVuY3Rpb24gQ2FkYXN0cm9UYWIoeyBwcmFjdGl0aW9uZXIgfTogUHJvcHMpIHsKICBjb25zdCBwID0gcHJhY3RpdGlvbmVyOwogIGNvbnN0IGFnZSA9IGFnZUZyb21CaXJ0aERhdGUocC5iaXJ0aF9kYXRlKTsKICBjb25zdCBuZWVkc0d1YXJkaWFuID0gYWdlICE9PSBudWxsICYmIGFnZSA8IDE4OwoKICByZXR1cm4gKAogICAgPFZpZXcgc3R5bGU9e3RhYlN0eWxlcy50YWJ9PgogICAgICB7Ly8gRm90byAvIGF2YXRhcgogICAgICAgIHAucGhvdG9fdXJsID8gKAogICAgICAgICAgPFZpZXcgc3R5bGU9e3RhYlN0eWxlcy5waG90b1dyYXB9PgogICAgICAgICAgICA8SW1hZ2UKICAgICAgICAgICAgICBzb3VyY2U9e3sgdXJpOiBwLnBob3RvX3VybCB9fQogICAgICAgICAgICAgIHN0eWxlPXt0YWJTdHlsZXMucGhvdG99CiAgICAgICAgICAgICAgYWNjZXNzaWJpbGl0eUxhYmVsPXtgRm90byBkZSAke3AuZnVsbF9uYW1lfWB9CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgKSA6ICgKICAgICAgICAgIDxWaWV3IHN0eWxlPXt0YWJTdHlsZXMuYXZhdGFyV3JhcH0+CiAgICAgICAgICAgIDxWaWV3IHN0eWxlPXt0YWJTdHlsZXMuYXZhdGFyfT4KICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17dGFiU3R5bGVzLmF2YXRhclR4dH0+CiAgICAgICAgICAgICAgICB7cC5mdWxsX25hbWVbMF0/LnRvVXBwZXJDYXNlKCkgfHwgIj8ifQogICAgICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgPC9WaWV3PgogICAgICAgICl9CgogICAgICA8U2VjdGlvbkhlYWRlciB0aXRsZT0iREFET1MgUEVTU09BSVMiIC8+CiAgICAgIDxGaWVsZCBsYWJlbD0iTm9tZSBjb21wbGV0byIgdmFsdWU9e3AuZnVsbF9uYW1lfSAvPgogICAgICA8RmllbGQgbGFiZWw9IkNQRiIgdmFsdWU9e2Zvcm1hdENwZkRpc3BsYXkocC5jcGYpfSAvPgogICAgICA8RmllbGQgbGFiZWw9IlJHIiB2YWx1ZT17cC5yaWd9IC8+CiAgICAgIDxGaWVsZAogICAgICAgIGxhYmVsPSJOYXNjaW1lbnRvIgogICAgICAgIHZhbHVlPXsKICAgICAgICAgIHAuYmlydGhfZGF0ZQogICAgICAgICAgICA/IGAke2Zvcm1hdElzb1RvQnJWYXJpYW50KHAuYmlydGhfZGF0ZSl9JHthZ2UgIT09IG51bGwgPyBgICgke2FnZX0gYW5vcylgIDogIiJ9YAogICAgICAgICAgICA6IG51bGwKICAgICAgICB9CiAgICAgIC8+CiAgICAgIDxGaWVsZCBsYWJlbD0iU2V4byIgdmFsdWU9e3AuZ2VuZGVyID09PSAiTSIgPyAiTWFzY3VsaW5vIiA6IHAuZ2VuZGVyID09PSAiRiIgPyAiRmVtaW5pbm8iIDogcC5nZW5kZXJ9IC8+CiAgICAgIDxGaWVsZCBsYWJlbD0iRS1tYWlsIiB2YWx1ZT17cC5lbWFpbH0gLz4KICAgICAgPEZpZWxkIGxhYmVsPSJUZWxlZm9uZSIgdmFsdWU9e2Zvcm1hdFBob25lRGlzcGxheShwLnBob25lKX0gLz4KCiAgICAgIHsvKiBFbmRlcmXDp28g4oCUIEY0LjQ6IG1vc3RyYSBxdWFuZG8gcGVsbyBtZW5vcyAxIGNhbXBvIGVzdMOhIHByZWVuY2hpZG8gKi99CiAgICAgIHtbcC5hZGRyZXNzX3N0cmVldCwgcC5hZGRyZXNzX25laWdoYm9yaG9vZCwgcC5hZGRyZXNzX2NpdHksIHAuYWRkcmVzc19zdGF0ZSwgcC5hZGRyZXNzX3ppcF0uc29tZShCb29sZWFuKSAmJiAoCiAgICAgICAgPD4KICAgICAgICAgIDxTZWN0aW9uSGVhZGVyIHRpdGxlPSJFTkRFUkXDh08iIC8+CiAgICAgICAgICA8RmllbGQgbGFiZWw9IkNFUCIgdmFsdWU9e2Zvcm1hdENlcERpc3BsYXkocC5hZGRyZXNzX3ppcCl9IC8+CiAgICAgICAgICA8RmllbGQgbGFiZWw9IkVuZGVyZcOnbyIgdmFsdWU9e3AuYWRkcmVzc19zdHJlZXR9IC8+CiAgICAgICAgICA8RmllbGQgbGFiZWw9IkJhaXJybyIgdmFsdWU9e3AuYWRkcmVzc19uZWlnaGJvcmhvb2R9IC8+CiAgICAgICAgICA8RmllbGQKICAgICAgICAgICAgbGFiZWw9Ik11bmljw61waW8iCiAgICAgICAgICAgIHZhbHVlPXtbcC5hZGRyZXNzX2NpdHksIHAuYWRkcmVzc19zdGF0ZV0uZmlsdGVyKEJvb2xlYW4pLmpvaW4oIiAvICIpIHx8IG51bGx9CiAgICAgICAgICAvPgogICAgICAgIDwvPgogICAgICApfQoKICAgICAge25lZWRzR3VhcmRpYW4gJiYgKAogICAgICAgIDw+CiAgICAgICAgICA8U2VjdGlvbkhlYWRlciB0aXRsZT0iUkVTUE9OU8OBVkVMIExFR0FMIiAvPgogICAgICAgICAgPEZpZWxkIGxhYmVsPSJOb21lIiB2YWx1ZT17cC5ndWFyZGlhbl9uYW1lfSAvPgogICAgICAgICAgPEZpZWxkIGxhYmVsPSJUZWxlZm9uZSIgdmFsdWU9e2Zvcm1hdFBob25lRGlzcGxheShwLmd1YXJkaWFuX3Bob25lKX0gLz4KICAgICAgICAgIDxGaWVsZCBsYWJlbD0iQ1BGIiB2YWx1ZT17Zm9ybWF0Q3BmRGlzcGxheShwLmd1YXJkaWFuX2NwZil9IC8+CiAgICAgICAgPC8+CiAgICAgICl9CgogICAgICA8U2VjdGlvbkhlYWRlciB0aXRsZT0iQVRJVklEQURFIiAvPgogICAgICA8RmllbGQgbGFiZWw9IkFmaWxpYWRvIGVtIiB2YWx1ZT17cC5hZmZpbGlhdGlvbl9zaW5jZSA/IGZvcm1hdElzb1RvQnIocC5hZmZpbGlhdGlvbl9zaW5jZSkgOiBudWxsfSAvPgogICAgICA8RmllbGQgbGFiZWw9IkRvasO0IiB2YWx1ZT17cC5kb2pvX25hbWV9IC8+CiAgICAgIDxGaWVsZCBsYWJlbD0iQW51aWRhZGUiIHZhbHVlPXtwLm1lbWJlcnNoaXBfc3RhdHVzfSAvPgogICAgPC9WaWV3PgogICk7Cn0KCmNvbnN0IGZpZWxkU3R5bGVzID0gU3R5bGVTaGVldC5jcmVhdGUoewogIHJvdzogICAgICAgICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiZmxleC1zdGFydCIsIG1pbkhlaWdodDogMjggfSBhcyBWaWV3U3R5bGUsCiAgbGFiZWw6ICAgICAgIHsgd2lkdGg6IDExMCwgZm9udFNpemU6IDEyLCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsyLCBwYWRkaW5nVG9wOiAzIH0gYXMgVGV4dFN0eWxlLAogIHZhbHVlOiAgICAgICB7IGZsZXg6IDEsIGZvbnRTaXplOiAxMywgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmssIHBhZGRpbmdUb3A6IDIgfSBhcyBUZXh0U3R5bGUsCiAgZW1wdHk6ICAgICAgIHsgZmxleDogMSwgZm9udFNpemU6IDEzLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazQsIHBhZGRpbmdUb3A6IDIgfSBhcyBUZXh0U3R5bGUsCiAgc2VjdGlvbkhlYWQ6IHsgZm9udFNpemU6IDEwLCBmb250V2VpZ2h0OiAiODAwIiwgbGV0dGVyU3BhY2luZzogMC43LCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsIG1hcmdpblRvcDogOCwgbWFyZ2luQm90dG9tOiA0LCB0ZXh0VHJhbnNmb3JtOiAidXBwZXJjYXNlIiB9IGFzIFRleHRTdHlsZSwKfSk7Cgpjb25zdCB0YWJTdHlsZXMgPSBTdHlsZVNoZWV0LmNyZWF0ZSh7CiAgdGFiOiAgICAgICB7IHBhZGRpbmc6IDE2LCBnYXA6IDYgfSBhcyBWaWV3U3R5bGUsCiAgcGhvdG9XcmFwOiB7IGFsaWduSXRlbXM6ICJjZW50ZXIiLCBtYXJnaW5Cb3R0b206IDggfSBhcyBWaWV3U3R5bGUsCiAgcGhvdG86ICAgICB7IHdpZHRoOiA4MCwgaGVpZ2h0OiA4MCwgYm9yZGVyUmFkaXVzOiA0MCwgYm9yZGVyV2lkdGg6IDIsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyMiB9IGFzIGFueSwKICBhdmF0YXJXcmFwOiB7IGFsaWduSXRlbXM6ICJjZW50ZXIiLCBtYXJnaW5Cb3R0b206IDggfSBhcyBWaWV3U3R5bGUsCiAgYXZhdGFyOiAgIHsgd2lkdGg6IDgwLCBoZWlnaHQ6IDgwLCBib3JkZXJSYWRpdXM6IDQwLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5U29mdCwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiB9IGFzIFZpZXdTdHlsZSwKICBhdmF0YXJUeHQ6IHsgZm9udEZhbWlseTogS2FyYXRlRm9udHMuaGVhZGluZywgZm9udFNpemU6IDMyLCBjb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnkgfSBhcyBUZXh0U3R5bGUsCn0pOwoK
+import React from "react";
+import {
+  View, Text, Image,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { PractitionerDetail } from "@/services/karateApi";
+import { formatIsoToBr, formatIsoToBrVariant } from "@/components/inputs/DateInput";
+import { formatCpfDisplay, formatPhoneDisplay, formatCepDisplay, ageFromBirthDate } from "./helpers";
+
+interface Props {
+  practitioner: PractitionerDetail;
+}
+
+// F4.1: rotulo sempre visível; valor ausente renderiza um traçodeioro leve (“”
+// Alinhamento: label fixo 110px, valor ao lado, ambos na mesma linha.
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <View style={fieldStyles.row}>
+      <Text style={fieldStyles.label}>{label}</Text>
+      <Text style={value ? fieldStyles.value : fieldStyles.empty} numberOfLines={2}>
+        {value || "“"}
+      </Text>
+    </View>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return <Text style={fieldStyles.sectionHead}>{title}</Text>;
+}
+
+export function CadastroTab({ practitioner }: Props) {
+  const p = practitioner;
+  const age = ageFromBirthDate(p.birth_date);
+  const needsGuardian = age !== null && age < 18;
+
+  return (
+    <View style={tabStyles.tab}>
+      {// Foto / avatar
+        p.photo_url ? (
+          <View style={tabStyles.photoWrap}>
+            <Image
+              source={{ uri: p.photo_url }}
+              style={tabStyles.photo}
+              accessibilityLabel={`Foto de ${p.full_name}`}
+            />
+          </View>
+        ) : (
+          <View style={tabStyles.avatarWrap}>
+            <View style={tabStyles.avatar}>
+              <Text style={tabStyles.avatarTxt}>
+                {p.full_name[0]?.toUpperCase() || "?"}
+              </Text>
+            </View>
+          </View>
+        )}
+
+      <SectionHeader title="DADOS PESSOAIS" />
+      <Field label="Nome completo" value={p.full_name} />
+      <Field label="CPF" value={formatCpfDisplay(p.cpf)} />
+      <Field label="RG" value={p.rig} />
+      <Field
+        label="Nascimento"
+        value={
+          p.birth_date
+            ? `${formatIsoToBrVariant(p.birth_date)}${age !== null ? ` (${age} anos)` : ""}`
+            : null
+        }
+      />
+      <Field label="Sexo" value={p.gender === "M" ? "Masculino" : p.gender === "F" ? "Feminino" : p.gender} />
+      <Field label="E-mail" value={p.email} />
+      <Field label="Telefone" value={formatPhoneDisplay(p.phone)} />
+
+      {/* Endereço — F4.4: mostra quando pelo menos 1 campo está preenchido */}
+      {[p.address_street, p.address_neighborhood, p.address_city, p.address_state, p.address_zip].some(Boolean) && (
+        <>
+          <SectionHeader title="ENDEREÇO" />
+          <Field label="CEP" value={formatCepDisplay(p.address_zip)} />
+          <Field label="Endereço" value={p.address_street} />
+          <Field label="Bairro" value={p.address_neighborhood} />
+          <Field
+            label="Município"
+            value={[p.address_city, p.address_state].filter(Boolean).join(" / ") || null}
+          />
+        </>
+      )}
+
+      {needsGuardian && (
+        <>
+          <SectionHeader title="RESPONSÁVEL LEGAL" />
+          <Field label="Nome" value={p.guardian_name} />
+          <Field label="Telefone" value={formatPhoneDisplay(p.guardian_phone)} />
+          <Field label="CPF" value={formatCpfDisplay(p.guardian_cpf)} />
+        </>
+      )}
+
+      <SectionHeader title="ATIVIDADE" />
+      <Field label="Afiliado em" value={p.affiliation_since ? formatIsoToBr(p.affiliation_since) : null} />
+      <Field label="Dojô" value={p.dojo_name} />
+      <Field label="Anuidade" value={p.membership_status} />
+    </View>
+  );
+}
+
+const fieldStyles = StyleSheet.create({
+  row:         { flexDirection: "row", alignItems: "flex-start", minHeight: 28 } as ViewStyle,
+  label:       { width: 110, fontSize: 12, fontWeight: "600", color: KarateColors.ink2, paddingTop: 3 } as TextStyle,
+  value:       { flex: 1, fontSize: 13, color: KarateColors.ink, paddingTop: 2 } as TextStyle,
+  empty:       { flex: 1, fontSize: 13, color: KarateColors.ink4, paddingTop: 2 } as TextStyle,
+  sectionHead: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7, color: KarateColors.ink3, marginTop: 8, marginBottom: 4, textTransform: "uppercase" } as TextStyle,
+});
+
+const tabStyles = StyleSheet.create({
+  tab:       { padding: 16, gap: 6 } as ViewStyle,
+  photoWrap: { alignItems: "center", marginBottom: 8 } as ViewStyle,
+  photo:     { width: 80, height: 80, borderRadius: 40, borderWidth: 2, borderColor: KarateColors.border2 } as any,
+  avatarWrap: { alignItems: "center", marginBottom: 8 } as ViewStyle,
+  avatar:   { width: 80, height: 80, borderRadius: 40, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  avatarTxt: { fontFamily: KarateFonts.heading, fontSize: 32, color: KarateColors.primary } as TextStyle,
+});
+
