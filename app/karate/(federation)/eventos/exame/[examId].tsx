@@ -1,16 +1,16 @@
 // ============================================================
-// Detalhe do Exame / Curso — Aura Karate (federacao)
+// Detalhe do Exame / Curso — Aura Karatê (federação)
 //
 // Para EXAME (exam_type != 'curso'):
-//   Dados do exame, banca e candidatos com resultado. Lancar
-//   resultados (modal por candidato), fechar exame (confirmacao),
-//   e solicitar certificado (sob demanda — Decisao FPKT #3).
+//   Dados do exame, banca e candidatos com resultado. Lançar
+//   resultados (modal por candidato), fechar exame (confirmação),
+//   e solicitar certificado (sob demanda — Decisão FPKT #3).
 //
 // Para CURSO (exam_type == 'curso'):
-//   Secao "Participantes" com lista de inscritos + campo de
+//   Seção "Participantes" com lista de inscritos + campo de
 //   busca/autocomplete para inscrever praticantes via
 //   POST /belt-exams/:examId/candidates { student_id }.
-//   Sem remocao de participante (backend nao tem DELETE candidate).
+//   Sem remoção de participante (backend não tem DELETE candidate).
 //
 // Dados reais via karateApi.getBeltExam. Sem mock: loading ->
 // spinner, falha -> ErrorState.
@@ -53,7 +53,7 @@ function fmtDate(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
-// ── Secao de Participantes (apenas para curso) ──────────────────
+// ── Seção de Participantes (apenas para curso) ──────────────────
 interface ParticipantesSectionProps {
   candidates: ExamCandidate[];
   setCandidates: React.Dispatch<React.SetStateAction<ExamCandidate[]>>;
@@ -70,7 +70,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // IDs dos ja inscritos para evitar duplicata visual
+  // IDs dos já inscritos para evitar duplicata visual
   const enrolledIds = new Set(candidates.map((c) => c.practitioner_id));
 
   const onQueryChange = (text: string) => {
@@ -104,7 +104,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
     setQuery("");
     setSuggestions([]);
     if (enrolledIds.has(item.id)) {
-      Alert.alert("Ja inscrito", `${item.full_name} ja e participante deste curso.`);
+      Alert.alert("Já inscrito", `${item.full_name} já é participante deste curso.`);
       return;
     }
     setEnrolling(true);
@@ -112,7 +112,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
       const candidate = await karateApi.addExamCandidate(federationId, examId, { student_id: item.id });
       setCandidates((prev) => [...prev, candidate]);
     } catch (e: any) {
-      Alert.alert("Nao foi possivel inscrever", e?.message ?? "Tente novamente.");
+      Alert.alert("Não foi possível inscrever", e?.message ?? "Tente novamente.");
     } finally {
       setEnrolling(false);
     }
@@ -145,7 +145,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
           )}
         </View>
 
-        {/* Dropdown de sugestoes */}
+        {/* Dropdown de sugestões */}
         {suggestionsOpen && suggestions.length > 0 && (
           <View style={ps.dropdown}>
             {suggestions.map((item) => (
@@ -175,7 +175,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
           </View>
         )}
 
-        {/* Nenhuma sugestao */}
+        {/* Nenhuma sugestão */}
         {suggestionsOpen && !searching && suggestions.length === 0 && query.trim().length >= 2 && (
           <View style={ps.dropdown}>
             <Text style={ps.dropEmpty}>Nenhum praticante encontrado para "{query}".</Text>
@@ -207,7 +207,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId 
         ))
       )}
 
-      {/* TODO: remocao de participante quando o backend expuser DELETE /candidates/:id */}
+      {/* TODO: remoção de participante quando o backend expuser DELETE /candidates/:id */}
     </View>
   );
 }
@@ -269,7 +269,7 @@ export default function ExameDetalhe() {
   const [showResultados, setShowResultados] = useState(false);
   const [closingExam, setClosingExam] = useState(false);
   const [issuingCert, setIssuingCert] = useState<string | null>(null);
-  // Nav P2: slug publico da federacao para o link de inscricao (empty state).
+  // Nav P2: slug público da federação para o link de inscrição (empty state).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
 
   const isCurso = exam?.exam_type === "curso";
@@ -291,7 +291,7 @@ export default function ExameDetalhe() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Resolve o slug publico da federacao (best-effort, sem bloquear a tela).
+  // Resolve o slug público da federação (best-effort, sem bloquear a tela).
   useEffect(() => {
     let alive = true;
     const fromHost = getMicrositeSlug();
@@ -299,19 +299,19 @@ export default function ExameDetalhe() {
     if (!federationId) return;
     karateApi.getFederationIdentity(federationId)
       .then((id) => { if (alive && id?.slug) setPubSlug(id.slug); })
-      .catch(() => { /* sem slug -> empty state sem acao de link */ });
+      .catch(() => { /* sem slug -> empty state sem ação de link */ });
     return () => { alive = false; };
   }, [federationId]);
 
-  // Link publico da federacao (microsite) — usado pela acao do empty state.
+  // Link público da federação (microsite) — usado pela ação do empty state.
   const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/") : null;
 
   const shareInscription = async () => {
     if (!publicUrl) return;
     const ok = await copyToClipboard(publicUrl);
     Alert.alert(
-      ok ? "Link copiado" : "Nao foi possivel copiar",
-      ok ? `Compartilhe a pagina publica da federacao:\n${publicUrl}` : "Copie manualmente: " + publicUrl
+      ok ? "Link copiado" : "Não foi possível copiar",
+      ok ? `Compartilhe a página pública da federação:\n${publicUrl}` : "Copie manualmente: " + publicUrl
     );
   };
 
@@ -324,7 +324,7 @@ export default function ExameDetalhe() {
     const pendingCount = candidates.filter((c) => c.result === "pending").length;
     Alert.alert(
       "Fechar exame?",
-      `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtencao: certificados NAO sao gerados automaticamente. (Decisao FPKT #3)`,
+      `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)`,
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Fechar exame", style: "destructive", onPress: confirmCloseExam },
@@ -340,7 +340,7 @@ export default function ExameDetalhe() {
       await karateApi.closeBeltExam(federationId, exam.id);
       setExam((prev) => (prev ? { ...prev, status: "closed" } : prev));
     } catch (e: any) {
-      Alert.alert("Nao foi possivel fechar o exame", e?.message ?? "Tente novamente.");
+      Alert.alert("Não foi possível fechar o exame", e?.message ?? "Tente novamente.");
     } finally {
       setClosingExam(false);
     }
@@ -353,9 +353,9 @@ export default function ExameDetalhe() {
       setCandidates((prev) => prev.map((c) =>
         c.id === candidateId ? { ...c, certificate_status: cert.status, certificate_url: cert.pdf_url } : c
       ));
-      Alert.alert("Solicitacao enviada", `Emissao do certificado solicitada. Status: ${cert.status}.`);
+      Alert.alert("Solicitação enviada", `Emissão do certificado solicitada. Status: ${cert.status}.`);
     } catch (e: any) {
-      Alert.alert("Nao foi possivel solicitar", e?.message ?? "Tente novamente.");
+      Alert.alert("Não foi possível solicitar", e?.message ?? "Tente novamente.");
     } finally {
       setIssuingCert(null);
     }
@@ -407,12 +407,12 @@ export default function ExameDetalhe() {
           {!isCurso && <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>}
         </View>
 
-        {/* ── Secao especifica de EXAME ─────────────────────────── */}
+        {/* ── Seção específica de EXAME ─────────────────────────── */}
         {!isCurso && (
           <>
             {exam.status === "open" && (
               <View style={styles.actions}>
-                <KarateButton label="Lancar Resultados" variant="primary" size="sm" onPress={() => setShowResultados(true)} style={{ flex: 1 }} />
+                <KarateButton label="Lançar Resultados" variant="primary" size="sm" onPress={() => setShowResultados(true)} style={{ flex: 1 }} />
                 <KarateButton label={closingExam ? "Fechando..." : "Fechar Exame"} variant="secondary" size="sm" loading={closingExam} onPress={handleCloseExam} style={{ flex: 1 }} />
               </View>
             )}
@@ -422,12 +422,12 @@ export default function ExameDetalhe() {
               <KarateEmptyState
                 icon="people-outline"
                 title="Nenhum candidato inscrito"
-                subtitle="Assim que houver inscricoes neste exame, os candidatos aparecem aqui para lancar resultados."
+                subtitle="Assim que houver inscrições neste exame, os candidatos aparecem aqui para lançar resultados."
                 style={{ paddingVertical: 40 }}
                 action={
                   publicUrl ? (
                     <KarateButton
-                      label="Compartilhar link de inscricao"
+                      label="Compartilhar link de inscrição"
                       variant="secondary"
                       size="sm"
                       onPress={shareInscription}
@@ -457,7 +457,7 @@ export default function ExameDetalhe() {
                         </>
                       ) : (
                         <KarateButton
-                          label={issuingCert === c.id ? "Solicitando..." : "Solicitar emissao do certificado"}
+                          label={issuingCert === c.id ? "Solicitando..." : "Solicitar emissão do certificado"}
                           variant="secondary"
                           size="sm"
                           loading={issuingCert === c.id}
@@ -472,7 +472,7 @@ export default function ExameDetalhe() {
           </>
         )}
 
-        {/* ── Secao especifica de CURSO ─────────────────────────── */}
+        {/* ── Seção específica de CURSO ─────────────────────────── */}
         {isCurso && (
           <ParticipantesSection
             candidates={candidates}
