@@ -1,1 +1,100 @@
-aW1wb3J0IHsgS2FyYXRlQmVsdHMsIEJlbHRLZXkgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IFBsYXRmb3JtLCBBbGVydCB9IGZyb20gInJlYWN0LW5hdGl2ZSI7CgovLyBQYXDDqWlzIHF1ZSBwb2RlbSB0cmFuc2ZlcmlyIChmZWRlcmHDp8OjbyBhZG1pbi9zdGFmZikuCmNvbnN0IFRSQU5TRkVSX1JPTEVTID0gWyJmZWRlcmF0aW9uX2FkbWluIiwgImZlZGVyYXRpb25fc3RhZmYiXTsKZXhwb3J0IGZ1bmN0aW9uIGNhblRyYW5zZmVyKHJvbGU6IHN0cmluZyB8IG51bGwpOiBib29sZWFuIHsKICByZXR1cm4gcm9sZSA9PSBudWxsIHx8IFRSQU5TRkVSX1JPTEVTLmluY2x1ZGVzKHJvbGUpOwp9CgovLyBGaXggQzQ6IGRhdGEtc2VudGluZWxhIHVzYWRhIHBlbG8gYmFja2ZpbGwgcGFyYSBmYWl4YXMgc2VtIGRhdGEgY29uaGVjaWRhLgovLyBQb2RlIHZpciBjb21vICcxOTAwLTAxLTAxJyAoZGF0ZSkgb3UgJzE5MDAtMDEtMDFUMDA6MDA6MDAuLi4nICh0aW1lc3RhbXApOwovLyBjb21wYXJhbW9zIHBlbG9zIDEwIHByaW1laXJvcyBjaGFycyAobWFpcyByb2J1c3RvIHF1ZSBpZ3VhbGRhZGUgZXhhdGEpLgpleHBvcnQgY29uc3QgQkVMVF9EQVRFX1VOS05PV04gPSAiMTkwMC0wMS0wMSI7CmV4cG9ydCBmdW5jdGlvbiBpc1Vua25vd25CZWx0RGF0ZSh2OiBzdHJpbmcgfCBudWxsIHwgdW5kZWZpbmVkKTogYm9vbGVhbiB7CiAgaWYgKCF2KSByZXR1cm4gdHJ1ZTsKICByZXR1cm4gU3RyaW5nKHYpLnNsaWNlKDAsIDEwKSA9PT0gQkVMVF9EQVRFX1VOS05PV047Cn0KCi8vIEY0LjM6IG3DoXNjYXJhcyBzw7MgZGUgRVhJQknDh8ODTyAobsOjbyBhbHRlcmFtIG8gZGFkbyBzYWx2bykuIFNlIG8gdmFsb3IgbsOjbwovLyB0aXZlciBkw61naXRvcyBzdWZpY2llbnRlcyAoZGFkbyBydWltIGRhIHBsYW5pbGhhKSwgZXhpYmUgY29tbyB2ZWlvLgpleHBvcnQgZnVuY3Rpb24gZm9ybWF0Q3BmRGlzcGxheSh2OiBzdHJpbmcgfCBudWxsIHwgdW5kZWZpbmVkKTogc3RyaW5nIHwgbnVsbCB7CiAgaWYgKCF2KSByZXR1cm4gbnVsbDsKICBjb25zdCBkID0gU3RyaW5nKHYpLnJlcGxhY2UoL1xEL2csICIiKTsKICBpZiAoZC5sZW5ndGggIT09IDExKSByZXR1cm4gU3RyaW5nKHYpOyAvLyBkYWRvIGluY29tcGxldG8vZXN0cmFuaG86IG1vc3RyYSBjcnUKICByZXR1cm4gZC5yZXBsYWNlKC8oXGR7M30pKFxkezN9KShcZHszfSkoXGR7Mn0pLywgIiQxLiQyLiQzLSQ0Iik7Cn0KZXhwb3J0IGZ1bmN0aW9uIGZvcm1hdFBob25lRGlzcGxheSh2OiBzdHJpbmcgfCBudWxsIHwgdW5kZWZpbmVkKTogc3RyaW5nIHwgbnVsbCB7CiAgaWYgKCF2KSByZXR1cm4gbnVsbDsKICBjb25zdCBkID0gU3RyaW5nKHYpLnJlcGxhY2UoL1xEL2csICIiKTsKICBpZiAoZC5sZW5ndGggPT09IDExKSByZXR1cm4gZC5yZXBsYWNlKC8oXGR7Mn0pKFxkezV9KShcZHs0fSkvLCAiKCQxKSAkMi0kMyIpOwogIGlmIChkLmxlbmd0aCA9PT0gMTApIHJldHVybiBkLnJlcGxhY2UoLyhcZHsyfSkoXGR7NH0pKFxkezR9KS8sICIoJDEpICQyLSQzIik7CiAgcmV0dXJuIFN0cmluZyh2KTsgLy8gZm9yYSBkbyBwYWRyw6NvIEJSOiBtb3N0cmEgY29tbyB2ZWlvCn0KZXhwb3J0IGZ1bmN0aW9uIGZvcm1hdENlcERpc3BsYXkodjogc3RyaW5nIHwgbnVsbCB8IHVuZGVmaW5lZCk6IHN0cmluZyB8IG51bGwgewogIGlmICghdikgcmV0dXJuIG51bGw7CiAgY29uc3QgZCA9IFN0cmluZyh2KS5yZXBsYWNlKC9cRC9nLCAiIik7CiAgaWYgKGQubGVuZ3RoICE9PSA4KSByZXR1cm4gU3RyaW5nKHYpOwogIHJldHVybiBkLnJlcGxhY2UoLyhcZHs1fSkoXGR7M30pLywgIiQxLSQyIik7Cn0KCi8vIFA4OiBpZGFkZSBlbSBhbm9zIGNvbXBsZXRvcyBhIHBhcnRpciBkZSAiWVlZWS1NTS1ERCIuIFBhcnNlYW1vcyBjb21vIGRhdGEKLy8gbG9jYWwgKG5ldyBEYXRlKHllYXIsIG1vbnRoLTEsIGRheSkpIHBhcmEgZXZpdGFyIG8gc2hpZnQgVVRDIHF1ZSBhY29udGVjZQovLyBjb20gbmV3IERhdGUoIllZWVktTU0tREQiKSAoSVNPIHN0cmluZyA9IG1laWEtbm9pdGUgVVRDIOKGkiBwb2RlIHZpcmFyIGRpYQovLyBhbnRlcmlvciBhbSBmdXNvcyBuZWdhdGl2b3MpLgpleHBvcnQgZnVuY3Rpb24gYWdlRnJvbUJpcnRoRGF0ZShpc286IHN0cmluZyB8IG51bGwgfCB1bmRlZmluZWQpOiBudW1iZXIgfCBudWxsIHsKICBpZiAoIWlzbykgcmV0dXJuIG51bGw7CiAgY29uc3QgbSA9IFN0cmluZyhpc28pLm1hdGNoKC9eKFxkezR9KS0oXGR7Mn0pLShcZHsyfSkvKTsKICBpZiAoIW0pIHJldHVybiBudWxsOwogIGNvbnN0IGJpcnRoID0gbmV3IERhdGUoK21bMV0sICttWzJdIC0gMSwgK21bM10pOwogIGlmIChpc05hTihiaXJ0aC5nZXRUaW1lKCkpKSByZXR1cm4gbnVsbDsKICBjb25zdCB0b2RheSA9IG5ldyBEYXRlKCk7CiAgbGV0IGFnZSA9IHRvZGF5LmdldEZ1bGxZZWFyKCkgLSBiaXJ0aC5nZXRGdWxsWWVhcigpOwogIGNvbnN0IG1tID0gdG9kYXkuZ2V0TW9udGgoKSAtIGJpcnRoLmdldE1vbnRoKCk7CiAgaWYgKG1tIDwgMCB8fCAobW0gPT09IDAgJiYgdG9kYXkuZ2V0RGF0ZSgpIDwgYmlydGguZ2V0RGF0ZSgpKSkgYWdlLS07CiAgcmV0dXJuIGFnZTsKfQoKLy8gQ29uZmlybWHDp8OjbyBjcm9zcy1wbGF0YWZvcm1hLiBOYSB3ZWIgbyBBbGVydC5hbGVydCBjb20gYm90w7VlcyDDqSB1bSBuby1vcAovLyAobyBvblByZXNzIG51bmNhIGRpc3BhcmEpIOKGkiB1c2Ftb3Mgd2luZG93LmNvbmZpcm0uIEVtIG5hdGl2bywgQWxlcnQuYWxlcnQuCmV4cG9ydCBmdW5jdGlvbiB3ZWJDb25maXJtKG1lc3NhZ2U6IHN0cmluZyk6IGJvb2xlYW4gewogIGlmIChQbGF0Zm9ybS5PUyA9PT0gIndlYiIgJiYgdHlwZW9mIHdpbmRvdyAhPT0gInVuZGVmaW5lZCIpIHsKICAgIHJldHVybiB3aW5kb3cuY29uZmlybShtZXNzYWdlKTsKICB9CiAgLy8gRW0gbmF0aXZvIG7Do28gaMOhIGNvbmZpcm1hw6fDo28gc8OtbmNyb25hOyBhc3N1bWltb3MgY29uZmlybWFkbyBlIGRlaXhhbW9zIGEKICAvLyBhw6fDo28gcGFyYSBvcyBmbHV4b3MgbmF0aXZvcyAoZXN0YSB0ZWxhIMOpIHdlYi1maXJzdCBuYSBmZWRlcmHDp8OjbykuCiAgcmV0dXJuIHRydWU7Cn0KZXhwb3J0IGZ1bmN0aW9uIHdlYkFsZXJ0KG1lc3NhZ2U6IHN0cmluZykgewogIGlmIChQbGF0Zm9ybS5PUyA9PT0gIndlYiIgJiYgdHlwZW9mIHdpbmRvdyAhPT0gInVuZGVmaW5lZCIpIHdpbmRvdy5hbGVydChtZXNzYWdlKTsKICBlbHNlIEFsZXJ0LmFsZXJ0KCJBdmlzbyIsIG1lc3NhZ2UpOwp9CgovLyBPcMOnw7VlcyBkZSBmYWl4YSBwYXJhIGEgZ3JhZHVhw6fDo28gbWFudWFsIChkZXJpdmEgZG8gbWFwYSBjYW7DtG5pY28gZGUgY29yZXMpLgpleHBvcnQgY29uc3QgQkVMVF9PUFRJT05TOiBBcnJheTx7IGtleTogQmVsdEtleTsgbGFiZWw6IHN0cmluZyB9PiA9IChPYmplY3Qua2V5cyhLYXJhdGVCZWx0cykgYXMgQmVsdEtleVtdKQogIC5tYXAoKGspID0+ICh7IGtleTogaywgbGFiZWw6IEthcmF0ZUJlbHRzW2tdLmxhYmVsIH0pKTsKCi8vIEdyYXVzIERhbiAoUHJldGEpOiAxwrogYSAxMMK6CmV4cG9ydCBjb25zdCBEQU5fT1BUSU9OUyA9IFsxLCAyLCAzLCA0LCA1LCA2LCA3LCA4LCA5LCAxMF07CgovLyBLeXUgcG9yIGZhaXhhIChGUEtUIFNob3Rva2FuKTogbGlzdGEgZGUga3l1cyBxdWUgYSBmYWl4YSBwb2RlIHJlcHJlc2VudGFyLgovLyBFeC46IE1hcnJvbSBwb2RlIHNlciAza3l1LCAya3l1IG91IDFreXUuCmV4cG9ydCBjb25zdCBCRUxUX0tZVVM6IFBhcnRpYWw8UmVjb3JkPEJlbHRLZXksIG51bWJlcltdPj4gPSB7CiAgYnJhbmNhOiAgICAgIFsxMCwgOV0sCiAgYW1hcmVsYTogICAgIFs4XSwKICBsYXJhbmphOiAgICAgWzddLAogIHZlcmRlOiAgICAgICBbNl0sCiAgYXp1bF9jbGFybzogIFs1XSwKICByb3hvOiAgICAgICAgWzRdLAogIGF6dWxfZXNjdXJvOiBbM10sCiAgbWFycm9tOiAgICAgIFszLCAyLCAxXSwKfTsKCi8qKiBNb250YSBvIGJlbHRfbmFtZSBsZWfDrXZlbCBwYXJhIHVtYSBmYWl4YSArIGdyYXUgb3BjaW9uYWwuICovCmV4cG9ydCBmdW5jdGlvbiBidWlsZEJlbHROYW1lKGtleTogQmVsdEtleSwgZGFuPzogbnVtYmVyLCBreXU/OiBudW1iZXIpOiBzdHJpbmcgewogIGNvbnN0IGxhYmVsID0gS2FyYXRlQmVsdHNba2V5XS5sYWJlbDsKICBpZiAoa2V5ID09PSAicHJldGEiICYmIGRhbikgcmV0dXJuIGAke2xhYmVsfSAke2Rhbn3CsGA7CiAgaWYgKGt5dSkgcmV0dXJuIGAke2xhYmVsfSAke2t5dX3CsGt5dWA7CiAgcmV0dXJuIGxhYmVsOwp9Cgo=
+import { KarateBelts, BeltKey } from "@/constants/karateTheme";
+import { Platform, Alert } from "react-native";
+
+// Papéis que podem transferir (federação admin/staff).
+const TRANSFER_ROLES = ["federation_admin", "federation_staff"];
+export function canTransfer(role: string | null): boolean {
+  return role == null || TRANSFER_ROLES.includes(role);
+}
+
+// Fix C4: data-sentinela usada pelo backfill para faixas sem data conhecida.
+// Pode vir como '1900-01-01' (date) ou '1900-01-01T00:00:00...' (timestamp);
+// comparamos pelos 10 primeiros chars (mais robusto que igualdade exata).
+export const BELT_DATE_UNKNOWN = "1900-01-01";
+export function isUnknownBeltDate(v: string | null | undefined): boolean {
+  if (!v) return true;
+  return String(v).slice(0, 10) === BELT_DATE_UNKNOWN;
+}
+
+// F4.3: máscaras só de EXIBIÇÃO (não alteram o dado salvo). Se o valor não
+// tiver dígitos suficientes (dado ruim da planilha), exibe como veio.
+export function formatCpfDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length !== 11) return String(v); // dado incompleto/estranho: mostra cru
+  return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+export function formatPhoneDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  return String(v); // fora do padrão BR: mostra como veio
+}
+export function formatCepDisplay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length !== 8) return String(v);
+  return d.replace(/(\d{5})(\d{3})/, "$1-$2");
+}
+
+// P8: idade em anos completos a partir de "YYYY-MM-DD". Parseamos como data
+// local (new Date(year, month-1, day)) para evitar o shift UTC que acontece
+// com new Date("YYYY-MM-DD") (ISO string = meia-noite UTC → pode virar dia
+// anterior am fusos negativos).
+export function ageFromBirthDate(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const birth = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const mm = today.getMonth() - birth.getMonth();
+  if (mm < 0 || (mm === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+// Confirmação cross-plataforma. Na web o Alert.alert com botões é um no-op
+// (o onPress nunca dispara) → usamos window.confirm. Em nativo, Alert.alert.
+export function webConfirm(message: string): boolean {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return window.confirm(message);
+  }
+  // Em nativo não há confirmação síncrona; assumimos confirmado e deixamos a
+  // ação para os fluxos nativos (esta tela é web-first na federação).
+  return true;
+}
+export function webAlert(message: string) {
+  if (Platform.OS === "web" && typeof window !== "undefined") window.alert(message);
+  else Alert.alert("Aviso", message);
+}
+
+// Opções de faixa para a graduação manual (deriva do mapa canônico de cores).
+export const BELT_OPTIONS: Array<{ key: BeltKey; label: string }> = (Object.keys(KarateBelts) as BeltKey[])
+  .map((k) => ({ key: k, label: KarateBelts[k].label }));
+
+// Graus Dan (Preta): 1º a 10º
+export const DAN_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+// Kyu por faixa (FPKT Shotokan): lista de kyus que a faixa pode representar.
+// Ex.: Marrom pode ser 3kyu, 2kyu ou 1kyu.
+export const BELT_KYUS: Partial<Record<BeltKey, number[]>> = {
+  branca:      [10, 9],
+  amarela:     [8],
+  laranja:     [7],
+  verde:       [6],
+  azul_claro:  [5],
+  roxo:        [4],
+  azul_escuro: [3],
+  marrom:      [3, 2, 1],
+};
+
+/** Monta o belt_name legível para uma faixa + grau opcional. */
+export function buildBeltName(key: BeltKey, dan?: number, kyu?: number): string {
+  const label = KarateBelts[key].label;
+  if (key === "preta" && dan) return `${label} ${dan}°`;
+  if (kyu) return `${label} ${kyu}°kyu`;
+  return label;
+}
+

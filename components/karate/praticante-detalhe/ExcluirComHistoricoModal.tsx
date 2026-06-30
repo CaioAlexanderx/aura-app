@@ -1,1 +1,109 @@
-Ly8gRXhjbHVpckNvbUhpc3Rvcmljb01vZGFsIOKAlCBtb2RhbCBpbi1hcHAgcXVhbmRvIG8gcHJhdGljYW50ZSB0ZW0gaGlzdMOzcmljbyB2aW5jdWxhZG8uCi8vIE9mZXJlY2UgRGVzYXRpdmFyIChzb2Z0KSB8IEV4Y2x1aXIgZGVmaW5pdGl2YW1lbnRlIChjYXNjYXRhKSB8IENhbmNlbGFyLgppbXBvcnQgUmVhY3QgZnJvbSAicmVhY3QiOwppbXBvcnQgewogIFZpZXcsIFRleHQsIFRvdWNoYWJsZU9wYWNpdHksIEFjdGl2aXR5SW5kaWNhdG9yLAogIE1vZGFsLCBQcmVzc2FibGUsIFN0eWxlU2hlZXQsIFZpZXdTdHlsZSwgVGV4dFN0eWxlLAp9IGZyb20gInJlYWN0LW5hdGl2ZSI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IEthcmF0ZUNvbG9ycywgS2FyYXRlUmFkaXVzLCBLYXJhdGVGb250cyB9IGZyb20gIkAvY29uc3RhbnRzL2thcmF0ZVRoZW1lIjsKCmludGVyZmFjZSBQcm9wcyB7CiAgdmlzaWJsZTogYm9vbGVhbjsKICBjb3VudHM6IFJlY29yZDxzdHJpbmcsIG51bWJlcj4gfCBudWxsOwogIGJ1c3k6ICJkZWFjdGl2YXRlIiB8ICJkZWxldGUiIHwgbnVsbDsKICBvbkRlc2F0aXZhcjogKCkgPT4gdm9pZDsKICBvbkV4Y2x1aXI6ICgpID0+IHZvaWQ7CiAgb25DbG9zZTogKCkgPT4gdm9pZDsKfQoKZXhwb3J0IGZ1bmN0aW9uIEV4Y2x1aXJDb21IaXN0b3JpY29Nb2RhbCh7CiAgdmlzaWJsZSwgY291bnRzLCBidXN5LCBvbkRlc2F0aXZhciwgb25FeGNsdWlyLCBvbkNsb3NlLAp9OiBQcm9wcykgewogIGNvbnN0IGxhYmVsczogUmVjb3JkPHN0cmluZywgc3RyaW5nPiA9IHsKICAgIGdyYWR1YXRpb25zOiAiZ3JhZHVhw6fDtWVzIiwgdHJhbnNmZXJzOiAidHJhbnNmZXLDqm5jaWFzIiwKICAgIGNhcmRzOiAiY2FydGVpcmluaGFzIiwgdHJhbnNhY3Rpb25zOiAibGFuw6dhbWVudG9zIGZpbmFuY2Vpcm9zIiwKICB9OwogIGNvbnN0IHBhcnRzID0gT2JqZWN0LmVudHJpZXMoY291bnRzIHx8IHt9KQogICAgLmZpbHRlcigoWywgbl0pID0+IG4gPiAwKQogICAgLm1hcCgoW2ssIG5dKSA9PiBgJHtufSAke2xhYmVsc1trXSB8fCBrfWApOwoKICByZXR1cm4gKAogICAgPE1vZGFsIHZpc2libGU9e3Zpc2libGV9IHRyYW5zcGFyZW50IGFuaW1hdGlvblR5cGU9ImZhZGUiIG9uUmVxdWVzdENsb3NlPXtvbkNsb3NlfT4KICAgICAgPFZpZXcgc3R5bGU9e2dyYWRTdHlsZXMuYmFja2Ryb3B9PgogICAgICAgIDxQcmVzc2FibGUgc3R5bGU9e1N0eWxlU2hlZXQuYWJzb2x1dGVGaWxsfSBvblByZXNzPXtidXN5ID8gdW5kZWZpbmVkIDogb25DbG9zZX0gLz4KICAgICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5jYXJkfT4KICAgICAgICAgIDxWaWV3IHN0eWxlPXtncmFkU3R5bGVzLmhlYWR9PgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy50aXRsZX0+RXhjbHVpciBwcmF0aWNhbnRlPC9UZXh0PgogICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBvblByZXNzPXtvbkNsb3NlfSBoaXRTbG9wPXsxMH0gZGlzYWJsZWQ9eyEhYnVzeX0+CiAgICAgICAgICAgICAgPEljb24gbmFtZT0ieCIgc2l6ZT17MjB9IGNvbG9yPXtLYXJhdGVDb2xvcnMuaW5rM30gLz4KICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgPC9WaWV3PgoKICAgICAgICAgIDxWaWV3IHN0eWxlPXt7IHBhZGRpbmc6IDE2LCBnYXA6IDE0IH19PgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5oaW50fT4KICAgICAgICAgICAgICBFc3RlIHByYXRpY2FudGUgcG9zc3VpIGhpc3TDs3JpY28gdmluY3VsYWRve3BhcnRzLmxlbmd0aCA/IGAgKCR7cGFydHMuam9pbigiLCAiKX0pYCA6ICIifS4KICAgICAgICAgICAgICBFc2NvbGhhIGNvbW8gcHJvY2VkZXIuCiAgICAgICAgICAgIDwvVGV4dD4KCiAgICAgICAgICAgIHsvKiBQcmltw6FyaW86IERlc2F0aXZhciAoc29mdCkgKi99CiAgICAgICAgICAgIDxUb3VjaGFibGVPcGFjaXR5CiAgICAgICAgICAgICAgb25QcmVzcz17b25EZXNhdGl2YXJ9CiAgICAgICAgICAgICAgZGlzYWJsZWQ9eyEhYnVzeX0KICAgICAgICAgICAgICBzdHlsZT17W2RlbFN0eWxlcy5vcHRQcmltYXJ5LCBidXN5ICYmIHsgb3BhY2l0eTogMC42IH1dfQogICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlSb2xlPSJidXR0b24iCiAgICAgICAgICAgID4KICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJsb2NrIiBzaXplPXsxNn0gY29sb3I9IiNmZGY4ZjIiIC8+CiAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3sgZmxleDogMSB9fT4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtkZWxTdHlsZXMub3B0UHJpbWFyeVRpdGxlfT5EZXNhdGl2YXIgcHJhdGljYW50ZTwvVGV4dD4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtkZWxTdHlsZXMub3B0UHJpbWFyeVN1Yn0+UHJlc2VydmEgbyBoaXN0w7NyaWNvLiBQb2RlIHJlYXRpdmFyIGRlcG9pcy48L1RleHQ+CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgIHtidXN5ID09PSAiZGVhY3RpdmF0ZSIgPyA8QWN0aXZpdHlJbmRpY2F0b3IgY29sb3I9IiNmZGY4ZjIiIHNpemU9InNtYWxsIiAvPiA6IG51bGx9CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KCiAgICAgICAgICAgIHsvKiBEZXN0cnV0aXZvOiBFeGNsdWlyIGRlZmluaXRpdmFtZW50ZSAoY2FzY2F0YSkgKi99CiAgICAgICAgICAgIDxUb3VjaGFibGVPcGFjaXR5CiAgICAgICAgICAgICAgb25QcmVzcz17b25FeGNsdWlyfQogICAgICAgICAgICAgIGRpc2FibGVkPXshIWJ1c3l9CiAgICAgICAgICAgICAgc3R5bGU9e1tkZWxTdHlsZXMub3B0RGFuZ2VyLCBidXN5ICYmIHsgb3BhY2l0eTogMC42IH1dfQogICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlSb2xlPSJidXR0b24iCiAgICAgICAgICAgID4KICAgICAgICAgICAgICA8SWNvbiBuYW1lPSJ0cmFzaCIgc2l6ZT17MTZ9IGNvbG9yPXtLYXJhdGVDb2xvcnMucHJpbWFyeX0gLz4KICAgICAgICAgICAgICA8VmlldyBzdHlsZT17eyBmbGV4OiAxIH19PgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e2RlbFN0eWxlcy5vcHREYW5nZXJUaXRsZX0+RXhjbHVpciBkZWZpbml0aXZhbWVudGU8L1RleHQ+CiAgICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17ZGVsU3R5bGVzLm9wdERhbmdlclN1Yn0+UmVtb3ZlIG8gcHJhdGljYW50ZSBlIHRvZG8gbyBoaXN0w7NyaWNvLiBOw6NvIHBvZGUgc2VyIGRlc2ZlaXRvLjwvVGV4dD4KICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgICAge2J1c3kgPT09ICJkZWxldGUiID8gPEFjdGl2aXR5SW5kaWNhdG9yIGNvbG9yPXtLYXJhdGVDb2xvcnMucHJpbWFyeX0gc2l6ZT0ic21hbGwiIC8+IDogbnVsbH0KICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgPC9WaWV3PgoKICAgICAgICAgIDxWaWV3IHN0eWxlPXtncmFkU3R5bGVzLmZvb3Rlcn0+CiAgICAgICAgICAgIDxUb3VjaGFibGVPcGFjaXR5IG9uUHJlc3M9e29uQ2xvc2V9IHN0eWxlPXtncmFkU3R5bGVzLmJ0bkdob3N0fSBkaXNhYmxlZD17ISFidXN5fT4KICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5idG5HaG9zdFR4dH0+Q2FuY2VsYXI8L1RleHQ+CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgIDwvVmlldz4KICAgICAgICA8L1ZpZXc+CiAgICAgIDwvVmlldz4KICAgIDwvTW9kYWw+CiAgKTsKfQoKY29uc3QgZ3JhZFN0eWxlcyA9IFN0eWxlU2hlZXQuY3JlYXRlKHsKICBiYWNrZHJvcDogIHsgZmxleDogMSwgYmFja2dyb3VuZENvbG9yOiAicmdiYSg0MywzOCwzMiwwLjQ1KSIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogImNlbnRlciIsIHBhZGRpbmc6IDEyIH0gYXMgVmlld1N0eWxlLAogIGNhcmQ6ICAgICAgeyB3aWR0aDogIjEwMCUiLCBtYXhXaWR0aDogNTIwLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5zdXJmYWNlLCBib3JkZXJSYWRpdXM6IEthcmF0ZVJhZGl1cy54bCwgb3ZlcmZsb3c6ICJoaWRkZW4iLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIyLCBtYXhIZWlnaHQ6ICI5MiUiIH0gYXMgVmlld1N0eWxlLAogIGhlYWQ6ICAgICAgeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAic3BhY2UtYmV0d2VlbiIsIHBhZGRpbmdIb3Jpem9udGFsOiAxNiwgcGFkZGluZ1ZlcnRpY2FsOiAxNCwgYm9yZGVyQm90dG9tV2lkdGg6IDEsIGJvcmRlckJvdHRvbUNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5nbGFzc0hpIH0gYXMgVmlld1N0eWxlLAogIHRpdGxlOiAgICAgeyBmb250RmFtaWx5OiBLYXJhdGVGb250cy5oZWFkaW5nLCBmb250U2l6ZTogMTgsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rIH0gYXMgVGV4dFN0eWxlLAogIGhpbnQ6ICAgICAgeyBmb250U2l6ZTogMTIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMyB9IGFzIFRleHRTdHlsZSwKICBmb290ZXI6ICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGp1c3RpZnlDb250ZW50OiAiZmxleC1lbmQiLCBnYXA6IDEwLCBwYWRkaW5nOiAxNCwgYm9yZGVyVG9wV2lkdGg6IDEsIGJvcmRlclRvcENvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5nbGFzc0hpIH0gYXMgVmlld1N0eWxlLAogIGJ0bkdob3N0OiAgeyBwYWRkaW5nVmVydGljYWw6IDExLCBwYWRkaW5nSG9yaXpvbnRhbDogMTgsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIyIH0gYXMgVmlld1N0eWxlLAogIGJ0bkdob3N0VHh0OiB7IGZvbnRTaXplOiAxMy41LCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsgfSBhcyBUZXh0U3R5bGUsCn0pOwoKY29uc3QgZGVsU3R5bGVzID0gU3R5bGVTaGVldC5jcmVhdGUoewogIG9wdFByaW1hcnk6ICAgICAgeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogMTIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmluaywgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubWQsIHBhZGRpbmc6IDE0IH0gYXMgVmlld1N0eWxlLAogIG9wdFByaW1hcnlUaXRsZTogeyBmb250U2l6ZTogMTQsIGZvbnRXZWlnaHQ6ICI3MDAiLCBjb2xvcjogIiNmZGY4ZjIiIH0gYXMgVGV4dFN0eWxlLAogIG9wdFByaW1hcnlTdWI6ICAgeyBmb250U2l6ZTogMTIsIGNvbG9yOiAicmdiYSgyNTMsMjQ4LDI0MiwwLjc1KSIsIG1hcmdpblRvcDogMiB9IGFzIFRleHRTdHlsZSwKICBvcHREYW5nZXI6ICAgICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEyLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5U29mdCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeUxpbmUsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBwYWRkaW5nOiAxNCB9IGFzIFZpZXdTdHlsZSwKICBvcHREYW5nZXJUaXRsZTogIHsgZm9udFNpemU6IDE0LCBmb250V2VpZ2h0OiAiNzAwIiwgY29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5IH0gYXMgVGV4dFN0eWxlLAogIG9wdERhbmdlclN1YjogICAgeyBmb250U2l6ZTogMTIsIGNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeTIsIG1hcmdpblRvcDogMiB9IGFzIFRleHRTdHlsZSwKfSk7Cg==
+// ExcluirComHistoricoModal — modal in-app quando o praticante tem histórico vinculado.
+// Oferece Desativar (soft) | Excluir definitivamente (cascata) | Cancelar.
+import React from "react";
+import {
+  View, Text, TouchableOpacity, ActivityIndicator,
+  Modal, Pressable, StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+
+interface Props {
+  visible: boolean;
+  counts: Record<string, number> | null;
+  busy: "deactivate" | "delete" | null;
+  onDesativar: () => void;
+  onExcluir: () => void;
+  onClose: () => void;
+}
+
+export function ExcluirComHistoricoModal({
+  visible, counts, busy, onDesativar, onExcluir, onClose,
+}: Props) {
+  const labels: Record<string, string> = {
+    graduations: "graduações", transfers: "transferências",
+    cards: "carteirinhas", transactions: "lançamentos financeiros",
+  };
+  const parts = Object.entries(counts || {})
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${labels[k] || k}`);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Excluir praticante</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10} disabled={!!busy}>
+              <Icon name="x" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: 16, gap: 14 }}>
+            <Text style={gradStyles.hint}>
+              Este praticante possui histórico vinculado{parts.length ? ` (${parts.join(", ")})` : ""}.
+              Escolha como proceder.
+            </Text>
+
+            {/* Primário: Desativar (soft) */}
+            <TouchableOpacity
+              onPress={onDesativar}
+              disabled={!!busy}
+              style={[delStyles.optPrimary, busy && { opacity: 0.6 }]}
+              accessibilityRole="button"
+            >
+              <Icon name="lock" size={16} color="#fdf8f2" />
+              <View style={{ flex: 1 }}>
+                <Text style={delStyles.optPrimaryTitle}>Desativar praticante</Text>
+                <Text style={delStyles.optPrimarySub}>Preserva o histórico. Pode reativar depois.</Text>
+              </View>
+              {busy === "deactivate" ? <ActivityIndicator color="#fdf8f2" size="small" /> : null}
+            </TouchableOpacity>
+
+            {/* Destrutivo: Excluir definitivamente (cascata) */}
+            <TouchableOpacity
+              onPress={onExcluir}
+              disabled={!!busy}
+              style={[delStyles.optDanger, busy && { opacity: 0.6 }]}
+              accessibilityRole="button"
+            >
+              <Icon name="trash" size={16} color={KarateColors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={delStyles.optDangerTitle}>Excluir definitivamente</Text>
+                <Text style={delStyles.optDangerSub}>Remove o praticante e todo o histórico. Não pode ser desfeito.</Text>
+              </View>
+              {busy === "delete" ? <ActivityIndicator color={KarateColors.primary} size="small" /> : null}
+            </TouchableOpacity>
+          </View>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost} disabled={!!busy}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const gradStyles = StyleSheet.create({
+  backdrop:  { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 12 } as ViewStyle,
+  card:      { width: "100%", maxWidth: 520, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.xl, overflow: "hidden", borderWidth: 1, borderColor: KarateColors.border2, maxHeight: "92%" } as ViewStyle,
+  head:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  title:     { fontFamily: KarateFonts.heading, fontSize: 18, color: KarateColors.ink } as TextStyle,
+  hint:      { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  footer:    { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  btnGhost:  { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border2 } as ViewStyle,
+  btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+});
+
+const delStyles = StyleSheet.create({
+  optPrimary:      { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.md, padding: 14 } as ViewStyle,
+  optPrimaryTitle: { fontSize: 14, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
+  optPrimarySub:   { fontSize: 12, color: "rgba(253,248,242,0.75)", marginTop: 2 } as TextStyle,
+  optDanger:       { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine, borderRadius: KarateRadius.md, padding: 14 } as ViewStyle,
+  optDangerTitle:  { fontSize: 14, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  optDangerSub:    { fontSize: 12, color: KarateColors.primary2, marginTop: 2 } as TextStyle,
+});

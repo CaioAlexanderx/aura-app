@@ -1,1 +1,134 @@
-aW1wb3J0IFJlYWN0LCB7IHVzZUVmZmVjdCwgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7CiAgVmlldywgVGV4dCwgU2Nyb2xsVmlldywgVG91Y2hhYmxlT3BhY2l0eSwgQWN0aXZpdHlJbmRpY2F0b3IsCiAgTW9kYWwsIFRleHRJbnB1dCwgUHJlc3NhYmxlLCBTdHlsZVNoZWV0LCBWaWV3U3R5bGUsIFRleHRTdHlsZSwKfSBmcm9tICJyZWFjdC1uYXRpdmUiOwppbXBvcnQgeyBJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL0ljb24iOwppbXBvcnQgeyBLYXJhdGVDb2xvcnMsIEthcmF0ZVJhZGl1cywgS2FyYXRlRm9udHMgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IGthcmF0ZUFwaSwgVHJhbnNmZXJSZWNvcmQgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CmltcG9ydCB7IGZvcm1hdElzb1RvQnIsIG1hc2tCckRhdGUsIHBhcnNlQnJEYXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2lucHV0cy9EYXRlSW5wdXQiOwoKaW50ZXJmYWNlIFByb3BzIHsKICB0cmFuc2ZlcjogVHJhbnNmZXJSZWNvcmQgfCBudWxsOwogIG9uQ2xvc2U6ICgpID0+IHZvaWQ7CiAgZmVkZXJhdGlvbklkOiBzdHJpbmc7CiAgcHJhY3RpdGlvbmVySWQ6IHN0cmluZzsKICBvbkRvbmU6ICgpID0+IHZvaWQ7Cn0KCi8vIEVkaXRhIHVtYSB0cmFuc2ZlcsOqbmNpYSByZWdpc3RyYWRhIChtb3Rpdm8gKyBkYXRhKS4KZXhwb3J0IGZ1bmN0aW9uIEVkaXRhclRyYW5zZmVyZW5jaWFNb2RhbCh7CiAgdHJhbnNmZXIsIG9uQ2xvc2UsIGZlZGVyYXRpb25JZCwgcHJhY3RpdGlvbmVySWQsIG9uRG9uZSwKfTogUHJvcHMpIHsKICBjb25zdCB2aXNpYmxlID0gISF0cmFuc2ZlcjsKICBjb25zdCBbcmVhc29uLCBzZXRSZWFzb25dID0gdXNlU3RhdGUoIiIpOwogIGNvbnN0IFtkYXRlQnIsIHNldERhdGVCcl0gPSB1c2VTdGF0ZSgiIik7CiAgY29uc3QgW3NhdmluZywgc2V0U2F2aW5nXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbZXJyLCBzZXRFcnJdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7CgogIHVzZUVmZmVjdCgoKSA9PiB7CiAgICBpZiAoIXRyYW5zZmVyKSByZXR1cm47CiAgICBzZXRSZWFzb24odHJhbnNmZXIucmVhc29uIHx8ICIiKTsKICAgIHNldERhdGVCcih0cmFuc2Zlci50cmFuc2ZlcnJlZF9hdCA/IChmb3JtYXRJc29Ub0JyKHRyYW5zZmVyLnRyYW5zZmVycmVkX2F0KSB8fCAiIikgOiAiIik7CiAgICBzZXRFcnIobnVsbCk7IHNldFNhdmluZyhmYWxzZSk7CiAgfSwgW3RyYW5zZmVyXSk7CgogIGNvbnN0IGRhdGVDb21wbGV0ZSA9IGRhdGVCci5sZW5ndGggPT09IDEwOwogIGNvbnN0IGRhdGVJc28gPSBwYXJzZUJyRGF0ZShkYXRlQnIpOwogIGNvbnN0IGRhdGVCYWQgPSBkYXRlQ29tcGxldGUgJiYgZGF0ZUlzbyA9PT0gbnVsbDsKCiAgYXN5bmMgZnVuY3Rpb24gaGFuZGxlU2F2ZSgpIHsKICAgIGlmICghdHJhbnNmZXIpIHJldHVybjsKICAgIGlmIChkYXRlQmFkKSB7IHNldEVycigiRGF0YSBpbnbDoWxpZGEuIFVzZSBkZC9tbS9hYWFhIG91IGRlaXhlIGVtIGJyYW5jby4iKTsgcmV0dXJuOyB9CiAgICBzZXRFcnIobnVsbCk7IHNldFNhdmluZyh0cnVlKTsKICAgIHRyeSB7CiAgICAgIGF3YWl0IGthcmF0ZUFwaS51cGRhdGVUcmFuc2ZlcihmZWRlcmF0aW9uSWQsIHByYWN0aXRpb25lcklkLCB0cmFuc2Zlci5pZCwgewogICAgICAgIHJlYXNvbjogcmVhc29uLnRyaW0oKSB8fCB1bmRlZmluZWQsCiAgICAgICAgdHJhbnNmZXJyZWRfYXQ6IGRhdGVJc28gfHwgdW5kZWZpbmVkLAogICAgICB9KTsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgICAgb25Eb25lKCk7CiAgICB9IGNhdGNoIChlOiBhbnkpIHsKICAgICAgc2V0U2F2aW5nKGZhbHNlKTsKICAgICAgc2V0RXJyKGU/Lm1lc3NhZ2UgfHwgIk7Do28gZm9pIHBvc3PDrXZlbCBzYWx2YXIgYSB0cmFuc2ZlcsOqbmNpYS4iKTsKICAgIH0KICB9CgogIHJldHVybiAoCiAgICA8TW9kYWwgdmlzaWJsZT17dmlzaWJsZX0gdHJhbnNwYXJlbnQgYW5pbWF0aW9uVHlwZT0iZmFkZSIgb25SZXF1ZXN0Q2xvc2U9e29uQ2xvc2V9PgogICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5iYWNrZHJvcH0+CiAgICAgICAgPFByZXNzYWJsZSBzdHlsZT17U3R5bGVTaGVldC5hYnNvbHV0ZUZpbGx9IG9uUHJlc3M9e29uQ2xvc2V9IC8+CiAgICAgICAgPFZpZXcgc3R5bGU9e2dyYWRTdHlsZXMuY2FyZH0+CiAgICAgICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5oZWFkfT4KICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMudGl0bGV9PkVkaXRhciB0cmFuc2ZlcsOqbmNpYTwvVGV4dD4KICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgb25QcmVzcz17b25DbG9zZX0gaGl0U2xvcD17MTB9PgogICAgICAgICAgICAgIDxJY29uIG5hbWU9IngiIHNpemU9ezIwfSBjb2xvcj17S2FyYXRlQ29sb3JzLmluazN9IC8+CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgIDwvVmlldz4KCiAgICAgICAgICA8U2Nyb2xsVmlldyBzdHlsZT17eyBtYXhIZWlnaHQ6IDQyMCB9fSBjb250ZW50Q29udGFpbmVyU3R5bGU9e3sgcGFkZGluZzogMTYsIGdhcDogMTIgfX0ga2V5Ym9hcmRTaG91bGRQZXJzaXN0VGFwcz0iaGFuZGxlZCI+CiAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtncmFkU3R5bGVzLmxhYmVsfT5EYXRhIGRhIHRyYW5zZmVyw6puY2lhIMK3IGRkL21tL2FhYWEgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMubGFiZWxIaW50fT4odmF6aW8gPSBtYW50w6ltKTwvVGV4dD48L1RleHQ+CiAgICAgICAgICAgIDxUZXh0SW5wdXQKICAgICAgICAgICAgICBzdHlsZT17W2dyYWRTdHlsZXMuaW5wdXQsIGRhdGVCYWQgJiYgZ3JhZFN0eWxlcy5pbnB1dEJhZF19CiAgICAgICAgICAgICAgdmFsdWU9e2RhdGVCcn0KICAgICAgICAgICAgICBvbkNoYW5nZVRleHQ9eyh2KSA9PiBzZXREYXRlQnIobWFza0JyRGF0ZSh2KSl9CiAgICAgICAgICAgICAga2V5Ym9hcmRUeXBlPSJudW1lcmljIgogICAgICAgICAgICAgIHBsYWNlaG9sZGVyPSJkZC9tbS9hYWFhIgogICAgICAgICAgICAgIHBsYWNlaG9sZGVyVGV4dENvbG9yPXtLYXJhdGVDb2xvcnMuaW5rNH0KICAgICAgICAgICAgICBtYXhMZW5ndGg9ezEwfQogICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlMYWJlbD0iRGF0YSBkYSB0cmFuc2ZlcsOqbmNpYSIKICAgICAgICAgICAgLz4KICAgICAgICAgICAge2RhdGVCYWQgPyA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5lcnJJbmxpbmV9PkRhdGEgaW52w6FsaWRhPC9UZXh0PiA6IG51bGx9CgogICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5sYWJlbH0+TW90aXZvPC9UZXh0PgogICAgICAgICAgICA8VGV4dElucHV0CiAgICAgICAgICAgICAgc3R5bGU9e1tncmFkU3R5bGVzLmlucHV0LCB7IGZvbnRGYW1pbHk6IHVuZGVmaW5lZCwgbGV0dGVyU3BhY2luZzogdW5kZWZpbmVkLCBtaW5IZWlnaHQ6IDY0LCB0ZXh0QWxpZ25WZXJ0aWNhbDogInRvcCIgfV19CiAgICAgICAgICAgICAgdmFsdWU9e3JlYXNvbn0KICAgICAgICAgICAgICBvbkNoYW5nZVRleHQ9e3NldFJlYXNvbn0KICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0iTW90aXZvIGRhIHRyYW5zZmVyw6puY2lhIChvcGNpb25hbCkiCiAgICAgICAgICAgICAgcGxhY2Vob2xkZXJUZXh0Q29sb3I9e0thcmF0ZUNvbG9ycy5pbms0fQogICAgICAgICAgICAgIG11bHRpbGluZQogICAgICAgICAgICAgIGFjY2Vzc2liaWxpdHlMYWJlbD0iTW90aXZvIGRhIHRyYW5zZmVyw6puY2lhIgogICAgICAgICAgICAvPgoKICAgICAgICAgICAge2VyciA/ICgKICAgICAgICAgICAgICA8VmlldyBzdHlsZT17Z3JhZFN0eWxlcy5lcnJCb3h9PgogICAgICAgICAgICAgICAgPEljb24gbmFtZT0iYWxlcnRfY2lyY2xlIiBzaXplPXsxNX0gY29sb3I9e0thcmF0ZUNvbG9ycy5wcmltYXJ5fSAvPgogICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMuZXJyVHh0fT57ZXJyfTwvVGV4dD4KICAgICAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICAgICkgOiBudWxsfQogICAgICAgICAgPC9TY3JvbGxWaWV3PgoKICAgICAgICAgIDxWaWV3IHN0eWxlPXtncmFkU3R5bGVzLmZvb3Rlcn0+CiAgICAgICAgICAgIDxUb3VjaGFibGVPcGFjaXR5IG9uUHJlc3M9e29uQ2xvc2V9IHN0eWxlPXtncmFkU3R5bGVzLmJ0bkdob3N0fT4KICAgICAgICAgICAgICA8VGV4dCBzdHlsZT17Z3JhZFN0eWxlcy5idG5HaG9zdFR4dH0+Q2FuY2VsYXI8L1RleHQ+CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgb25QcmVzcz17aGFuZGxlU2F2ZX0gZGlzYWJsZWQ9e3NhdmluZ30gc3R5bGU9e1tncmFkU3R5bGVzLmJ0blByaW1hcnksIHNhdmluZyAmJiB7IG9wYWNpdHk6IDAuNiB9XX0+CiAgICAgICAgICAgICAge3NhdmluZyA/IDxBY3Rpdml0eUluZGljYXRvciBjb2xvcj0iI2ZkZjhmMiIgc2l6ZT0ic21hbGwiIC8+IDogPFRleHQgc3R5bGU9e2dyYWRTdHlsZXMuYnRuUHJpbWFyeVR4dH0+U2FsdmFyPC9UZXh0Pn0KICAgICAgICAgICAgPC9Ub3VjaGFibGVPcGFjaXR5PgogICAgICAgICAgPC9WaWV3PgogICAgICAgIDwvVmlldz4KICAgICAgPC9WaWV3PgogICAgPC9Nb2RhbD4KICApOwp9Cgpjb25zdCBncmFkU3R5bGVzID0gU3R5bGVTaGVldC5jcmVhdGUoewogIGJhY2tkcm9wOiAgeyBmbGV4OiAxLCBiYWNrZ3JvdW5kQ29sb3I6ICJyZ2JhKDQzLDM4LDMyLDAuNDUpIiwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAiY2VudGVyIiwgcGFkZGluZzogMTIgfSBhcyBWaWV3U3R5bGUsCiAgY2FyZDogICAgICB7IHdpZHRoOiAiMTAwJSIsIG1heFdpZHRoOiA1MjAsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnN1cmZhY2UsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLnhsLCBvdmVyZmxvdzogImhpZGRlbiIsIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlcjIsIG1heEhlaWdodDogIjkyJSIgfSBhcyBWaWV3U3R5bGUsCiAgaGVhZDogICAgICB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJzcGFjZS1iZXR3ZWVuIiwgcGFkZGluZ0hvcml6b250YWw6IDE2LCBwYWRkaW5nVmVydGljYWw6IDE0LCBib3JkZXJCb3R0b21XaWR0aDogMSwgYm9yZGVyQm90dG9tQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmdsYXNzSGkgfSBhcyBWaWV3U3R5bGUsCiAgdGl0bGU6ICAgICB7IGZvbnRGYW1pbHk6IEthcmF0ZUZvbnRzLmhlYWRpbmcsIGZvbnRTaXplOiAxOCwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsgfSBhcyBUZXh0U3R5bGUsCiAgbGFiZWw6ICAgICB7IGZvbnRTaXplOiAxMSwgZm9udFdlaWdodDogIjcwMCIsIGxldHRlclNwYWNpbmc6IDAuMywgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmsyLCBtYXJnaW5Ub3A6IDQgfSBhcyBUZXh0U3R5bGUsCiAgbGFiZWxIaW50OiB7IGZvbnRXZWlnaHQ6ICI1MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazQgfSBhcyBUZXh0U3R5bGUsCiAgaW5wdXQ6ICAgICB7IGZvbnRGYW1pbHk6IEthcmF0ZUZvbnRzLm1vbm8sIGZvbnRTaXplOiAxNSwgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmssIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmdsYXNzSGksIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlcjIsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBwYWRkaW5nSG9yaXpvbnRhbDogMTIsIHBhZGRpbmdWZXJ0aWNhbDogMTEsIGxldHRlclNwYWNpbmc6IDAuNSB9IGFzIFRleHRTdHlsZSwKICBpbnB1dEJhZDogIHsgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5IH0gYXMgVmlld1N0eWxlLAogIGVycklubGluZTogeyBmb250U2l6ZTogMTEsIGNvbG9yOiBLYXJhdGVDb2xvcnMucHJpbWFyeSB9IGFzIFRleHRTdHlsZSwKICBlcnJCb3g6ICAgIHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDgsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnlTb2Z0LCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5wcmltYXJ5TGluZSwgYm9yZGVyUmFkaXVzOiAxMiwgcGFkZGluZzogMTEgfSBhcyBWaWV3U3R5bGUsCiAgZXJyVHh0OiAgICB7IGZvbnRTaXplOiAxMi41LCBjb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnkyLCBmbGV4OiAxIH0gYXMgVGV4dFN0eWxlLAogIGZvb3RlcjogICAgeyBmbGV4RGlyZWN0aW9uOiAicm93IiwganVzdGlmeUNvbnRlbnQ6ICJmbGV4LWVuZCIsIGdhcDogMTAsIHBhZGRpbmc6IDE0LCBib3JkZXJUb3BXaWR0aDogMSwgYm9yZGVyVG9wQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmdsYXNzSGkgfSBhcyBWaWV3U3R5bGUsCiAgYnRuR2hvc3Q6ICB7IHBhZGRpbmdWZXJ0aWNhbDogMTEsIHBhZGRpbmdIb3Jpem9udGFsOiAxOCwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubWQsIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlcjIgfSBhcyBWaWV3U3R5bGUsCiAgYnRuR2hvc3RUeHQ6IHsgZm9udFNpemU6IDEzLjUsIGZvbnRXZWlnaHQ6ICI2MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluayB9IGFzIFRleHRTdHlsZSwKICBidG5QcmltYXJ5OiB7IHBhZGRpbmdWZXJ0aWNhbDogMTEsIHBhZGRpbmdIb3Jpem9udGFsOiAyMiwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubWQsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmluaywgbWluV2lkdGg6IDEzMCwgYWxpZ25JdGVtczogImNlbnRlciIgfSBhcyBWaWV3U3R5bGUsCiAgYnRuUHJpbWFyeVR4dDogeyBmb250U2l6ZTogMTMuNSwgZm9udFdlaWdodDogIjYwMCIsIGNvbG9yOiAiI2ZkZjhmMiIgfSBhcyBUZXh0U3R5bGUsCn0pOwoK
+import React, { useEffect, useState } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  Modal, TextInput, Pressable, StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { karateApi, TransferRecord } from "@/services/karateApi";
+import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
+
+interface Props {
+  transfer: TransferRecord | null;
+  onClose: () => void;
+  federationId: string;
+  practitionerId: string;
+  onDone: () => void;
+}
+
+// Edita uma transferência registrada (motivo + data).
+export function EditarTransferenciaModal({
+  transfer, onClose, federationId, practitionerId, onDone,
+}: Props) {
+  const visible = !!transfer;
+  const [reason, setReason] = useState("");
+  const [dateBr, setDateBr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!transfer) return;
+    setReason(transfer.reason || "");
+    setDateBr(transfer.transferred_at ? (formatIsoToBr(transfer.transferred_at) || "") : "");
+    setErr(null); setSaving(false);
+  }, [transfer]);
+
+  const dateComplete = dateBr.length === 10;
+  const dateIso = parseBrDate(dateBr);
+  const dateBad = dateComplete && dateIso === null;
+
+  async function handleSave() {
+    if (!transfer) return;
+    if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco."); return; }
+    setErr(null); setSaving(true);
+    try {
+      await karateApi.updateTransfer(federationId, practitionerId, transfer.id, {
+        reason: reason.trim() || undefined,
+        transferred_at: dateIso || undefined,
+      });
+      setSaving(false);
+      onDone();
+    } catch (e: any) {
+      setSaving(false);
+      setErr(e?.message || "Não foi possível salvar a transferência.");
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={gradStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={gradStyles.card}>
+          <View style={gradStyles.head}>
+            <Text style={gradStyles.title}>Editar transferência</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Icon name="x" size={20} color={KarateColors.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={gradStyles.label}>Data da transferência · dd/mm/aaaa <Text style={gradStyles.labelHint}>(vazio = mantém)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, dateBad && gradStyles.inputBad]}
+              value={dateBr}
+              onChangeText={(v) => setDateBr(maskBrDate(v))}
+              keyboardType="numeric"
+              placeholder="dd/mm/aaaa"
+              placeholderTextColor={KarateColors.ink4}
+              maxLength={10}
+              accessibilityLabel="Data da transferência"
+            />
+            {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            <Text style={gradStyles.label}>Motivo</Text>
+            <TextInput
+              style={[gradStyles.input, { fontFamily: undefined, letterSpacing: undefined, minHeight: 64, textAlignVertical: "top" }]}
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Motivo da transferência (opcional)"
+              placeholderTextColor={KarateColors.ink4}
+              multiline
+              accessibilityLabel="Motivo da transferência"
+            />
+
+            {err ? (
+              <View style={gradStyles.errBox}>
+                <Icon name="alert_circle" size={15} color={KarateColors.primary} />
+                <Text style={gradStyles.errTxt}>{err}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={gradStyles.footer}>
+            <TouchableOpacity onPress={onClose} style={gradStyles.btnGhost}>
+              <Text style={gradStyles.btnGhostTxt}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSave} disabled={saving} style={[gradStyles.btnPrimary, saving && { opacity: 0.6 }]}>
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={gradStyles.btnPrimaryTxt}>Salvar</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const gradStyles = StyleSheet.create({
+  backdrop:  { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 12 } as ViewStyle,
+  card:      { width: "100%", maxWidth: 520, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.xl, overflow: "hidden", borderWidth: 1, borderColor: KarateColors.border2, maxHeight: "92%" } as ViewStyle,
+  head:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  title:     { fontFamily: KarateFonts.heading, fontSize: 18, color: KarateColors.ink } as TextStyle,
+  label:     { fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: KarateColors.ink2, marginTop: 4 } as TextStyle,
+  labelHint: { fontWeight: "500", color: KarateColors.ink4 } as TextStyle,
+  input:     { fontFamily: KarateFonts.mono, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.glassHi, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 11, letterSpacing: 0.5 } as TextStyle,
+  inputBad:  { borderColor: KarateColors.primary } as ViewStyle,
+  errInline: { fontSize: 11, color: KarateColors.primary } as TextStyle,
+  errBox:    { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine, borderRadius: 12, padding: 11 } as ViewStyle,
+  errTxt:    { fontSize: 12.5, color: KarateColors.primary2, flex: 1 } as TextStyle,
+  footer:    { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
+  btnGhost:  { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border2 } as ViewStyle,
+  btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: KarateRadius.md, backgroundColor: KarateColors.ink, minWidth: 130, alignItems: "center" } as ViewStyle,
+  btnPrimaryTxt: { fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+});
+

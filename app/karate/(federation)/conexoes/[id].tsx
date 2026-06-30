@@ -1,1 +1,246 @@
-Ly8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Ci8vIENvbmV4w6NvIGRvIGRvasO0IOKAlCBBdXJhIEthcmF0w6ogKGZlZGVyYcOnw6NvKQovLwovLyBTZWxvIGRlIHNpdHVhw6fDo28gKyBhdmlzbyBxdWFuZG8gcHJlY2lzYSArICJvIHF1ZSBjaGVnb3UgZG8gZG9qw7QiCi8vIGVtIGxpbmd1YWdlbSBodW1hbmEsIGEgcGFydGlyIGRvcyBldmVudG9zIFJFQUlTIGRlIHN5bmMuIE8gYmxvY28KLy8gdMOpY25pY28gZmljYSByZWNvbGhpZG8gKHN1cG9ydGUpLiBTZW0gbW9jazogbG9hZGluZyDihpIgc3Bpbm5lciwKLy8gZmFsaGEg4oaSIEVycm9yU3RhdGUuCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQppbXBvcnQgUmVhY3QsIHsgdXNlQ2FsbGJhY2ssIHVzZUVmZmVjdCwgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7CiAgVmlldywgVGV4dCwgU2Nyb2xsVmlldywgVG91Y2hhYmxlT3BhY2l0eSwgQWN0aXZpdHlJbmRpY2F0b3IsIEFsZXJ0LAogIFN0eWxlU2hlZXQsIFZpZXdTdHlsZSwgVGV4dFN0eWxlLAp9IGZyb20gInJlYWN0LW5hdGl2ZSI7CmltcG9ydCB7IHVzZUxvY2FsU2VhcmNoUGFyYW1zLCB1c2VSb3V0ZXIgfSBmcm9tICJleHBvLXJvdXRlciI7CmltcG9ydCB7IEljb24gfSBmcm9tICJAL2NvbXBvbmVudHMvSWNvbiI7CmltcG9ydCB7IEthcmF0ZUNvbG9ycywgS2FyYXRlUmFkaXVzLCBLYXJhdGVGb250cyB9IGZyb20gIkAvY29uc3RhbnRzL2thcmF0ZVRoZW1lIjsKaW1wb3J0IHsgS2FyYXRlQnV0dG9uIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9LYXJhdGVCdXR0b24iOwppbXBvcnQgeyBLYXJhdGVFcnJvclN0YXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9FcnJvclN0YXRlIjsKaW1wb3J0IHsgdXNlS2FyYXRlRmVkZXJhdGlvbiB9IGZyb20gIkAvY29udGV4dHMvS2FyYXRlRmVkZXJhdGlvbiI7CmltcG9ydCB7IGthcmF0ZUNvbm5lY3Rpb25zQXBpLCBDb25uZWN0aW9uRGV0YWlsLCBTeW5jRXZlbnQgfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUNvbm5lY3Rpb25zQXBpIjsKCnR5cGUgVmliZSA9ICJvayIgfCAibWFudWFsIiB8ICJkb3duIiB8ICJlbXB0eSI7CgovLyBSw7N0dWxvcyBhbWlnw6F2ZWlzIHBhcmEgb3MgdGlwb3MgZGUgZXZlbnRvIGRlIHN5bmMgY29uaGVjaWRvcy4KY29uc3QgRVZFTlRfTEFCRUw6IFJlY29yZDxzdHJpbmcsIHsgbGFiZWw6IHN0cmluZzsgaWNvbjogc3RyaW5nIH0+ID0gewogICJwcmFjdGl0aW9uZXIuY3JlYXRlZCI6ICB7IGxhYmVsOiAiTm92byBhbHVubyBjYWRhc3RyYWRvIG5vIGRvasO0IiwgaWNvbjogInBlb3BsZSIgfSwKICAicHJhY3RpdGlvbmVyLnVwZGF0ZWQiOiAgeyBsYWJlbDogIkNhZGFzdHJvIGRlIGFsdW5vIGF0dWFsaXphZG8iLCBpY29uOiAicGVyc29uIiB9LAogICJhdHRlbmRhbmNlLnJlY29yZGVkIjogICB7IGxhYmVsOiAiUHJlc2Vuw6dhcyByZWdpc3RyYWRhcyBubyB0cmVpbm8iLCBpY29uOiAiY2hlY2ttYXJrLWNpcmNsZSIgfSwKICAiYmVsdC51cGRhdGVkIjogICAgICAgICAgeyBsYWJlbDogIkZhaXhhIGRlIGFsdW5vIGF0dWFsaXphZGEiLCBpY29uOiAicmliYm9uIiB9LAogICJhbm51aXR5LnBhaWQiOiAgICAgICAgICB7IGxhYmVsOiAiQW51aWRhZGUgZG8gZG9qw7QgcGFnYSIsIGljb246ICJ3YWxsZXQiIH0sCiAgImV4YW0uZW5yb2xsZWQiOiAgICAgICAgIHsgbGFiZWw6ICJJbnNjcmnDp8OjbyBlbSBleGFtZSBkZSBmYWl4YSIsIGljb246ICJ0cm9waHkiIH0sCn07CmZ1bmN0aW9uIGh1bWFuaXplKGV2OiBTeW5jRXZlbnQpOiB7IGljb246IHN0cmluZzsgdGV4dDogc3RyaW5nOyB3YXJuOiBib29sZWFuIH0gewogIGNvbnN0IGtub3duID0gRVZFTlRfTEFCRUxbZXYuZXZlbnRfdHlwZV07CiAgcmV0dXJuIHsKICAgIGljb246IGV2LnN0YXR1cyA9PT0gImZhaWxlZCIgPyAiYWxlcnQtY2lyY2xlIiA6IChrbm93bj8uaWNvbiA/PyAic3luYyIpLAogICAgdGV4dDoga25vd24/LmxhYmVsID8/IGV2LmV2ZW50X3R5cGUucmVwbGFjZSgvWy5fXS9nLCAiICIpLAogICAgd2FybjogZXYuc3RhdHVzID09PSAiZmFpbGVkIiwKICB9Owp9CgpmdW5jdGlvbiBmbXRBZ28oaXNvPzogc3RyaW5nIHwgbnVsbCk6IHN0cmluZyB7CiAgaWYgKCFpc28pIHJldHVybiAi4oCUIjsKICBjb25zdCBkID0gbmV3IERhdGUoaXNvKTsKICBpZiAoaXNOYU4oZC5nZXRUaW1lKCkpKSByZXR1cm4gU3RyaW5nKGlzbyk7CiAgY29uc3QgbWlucyA9IE1hdGgucm91bmQoKERhdGUubm93KCkgLSBkLmdldFRpbWUoKSkgLyA2MDAwMCk7CiAgaWYgKG1pbnMgPCAyKSByZXR1cm4gImFnb3JhIG1lc21vIjsKICBpZiAobWlucyA8IDYwKSByZXR1cm4gYGjDoSAke21pbnN9IG1pbnV0b3NgOwogIGNvbnN0IGggPSBNYXRoLnJvdW5kKG1pbnMgLyA2MCk7CiAgaWYgKGggPCAyNCkgcmV0dXJuIGBow6EgJHtofSAke2ggPT09IDEgPyAiaG9yYSIgOiAiaG9yYXMifWA7CiAgY29uc3QgZGlhcyA9IE1hdGgucm91bmQoaCAvIDI0KTsKICByZXR1cm4gYGjDoSAke2RpYXN9ICR7ZGlhcyA9PT0gMSA/ICJkaWEiIDogImRpYXMifWA7Cn0KCmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIENvbmV4YW9Eb2pvRGV0YWxoZSgpIHsKICBjb25zdCB7IGlkIH0gPSB1c2VMb2NhbFNlYXJjaFBhcmFtczx7IGlkOiBzdHJpbmcgfT4oKTsKICBjb25zdCByb3V0ZXIgPSB1c2VSb3V0ZXIoKTsKICBjb25zdCB7IGZlZGVyYXRpb25JZCB9ID0gdXNlS2FyYXRlRmVkZXJhdGlvbigpOwogIGNvbnN0IGNvbm5JZCA9IFN0cmluZyhpZCB8fCAiIik7CgogIGNvbnN0IFtjb25uLCBzZXRDb25uXSA9IHVzZVN0YXRlPENvbm5lY3Rpb25EZXRhaWwgfCBudWxsPihudWxsKTsKICBjb25zdCBbbG9hZGluZywgc2V0TG9hZGluZ10gPSB1c2VTdGF0ZSh0cnVlKTsKICBjb25zdCBbZXJyb3IsIHNldEVycm9yXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbc2hvd1RlY2gsIHNldFNob3dUZWNoXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbYnVzeSwgc2V0QnVzeV0gPSB1c2VTdGF0ZShmYWxzZSk7CgogIGNvbnN0IGxvYWQgPSB1c2VDYWxsYmFjaygoKSA9PiB7CiAgICBpZiAoIWNvbm5JZCkgcmV0dXJuOwogICAgc2V0TG9hZGluZyh0cnVlKTsKICAgIHNldEVycm9yKGZhbHNlKTsKICAgIGthcmF0ZUNvbm5lY3Rpb25zQXBpLmdldENvbm5lY3Rpb24oZmVkZXJhdGlvbklkLCBjb25uSWQpCiAgICAgIC50aGVuKHNldENvbm4pCiAgICAgIC5jYXRjaCgoKSA9PiBzZXRFcnJvcih0cnVlKSkKICAgICAgLmZpbmFsbHkoKCkgPT4gc2V0TG9hZGluZyhmYWxzZSkpOwogIH0sIFtmZWRlcmF0aW9uSWQsIGNvbm5JZF0pOwogIHVzZUVmZmVjdCgoKSA9PiB7IGxvYWQoKTsgfSwgW2xvYWRdKTsKCiAgY29uc3QgcmVjb25uZWN0ID0gYXN5bmMgKCkgPT4gewogICAgc2V0QnVzeSh0cnVlKTsKICAgIHRyeSB7CiAgICAgIGF3YWl0IGthcmF0ZUNvbm5lY3Rpb25zQXBpLnJlY29ubmVjdChmZWRlcmF0aW9uSWQsIGNvbm5JZCk7CiAgICAgIHNldFNob3dUZWNoKGZhbHNlKTsKICAgICAgbG9hZCgpOwogICAgfSBjYXRjaCAoZTogYW55KSB7CiAgICAgIEFsZXJ0LmFsZXJ0KCJOw6NvIGZvaSBwb3Nzw612ZWwgcmVjb25lY3RhciIsIGU/Lm1lc3NhZ2UgPz8gIlRlbnRlIG5vdmFtZW50ZS4iKTsKICAgIH0gZmluYWxseSB7CiAgICAgIHNldEJ1c3koZmFsc2UpOwogICAgfQogIH07CiAgY29uc3Qgcm90YXRlS2V5ID0gYXN5bmMgKCkgPT4gewogICAgdHJ5IHsKICAgICAgYXdhaXQga2FyYXRlQ29ubmVjdGlvbnNBcGkucm90YXRlS2V5KGZlZGVyYXRpb25JZCwgY29ubklkKTsKICAgICAgQWxlcnQuYWxlcnQoIk5vdmEgY2hhdmUgZ2VyYWRhIiwgIkEgY29uZXjDo28gZm9pIHByb3RlZ2lkYSBjb20gdW1hIG5vdmEgY2hhdmUuIik7CiAgICB9IGNhdGNoIChlOiBhbnkpIHsKICAgICAgQWxlcnQuYWxlcnQoIk7Do28gZm9pIHBvc3PDrXZlbCBnZXJhciBhIGNoYXZlIiwgZT8ubWVzc2FnZSA/PyAiVGVudGUgbm92YW1lbnRlLiIpOwogICAgfQogIH07CgogIGlmIChsb2FkaW5nKSB7CiAgICByZXR1cm4gKAogICAgICA8VmlldyBzdHlsZT17eyBmbGV4OiAxLCBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5iZyB9fT4KICAgICAgICA8QWN0aXZpdHlJbmRpY2F0b3Igc2l6ZT0ibGFyZ2UiIGNvbG9yPXtLYXJhdGVDb2xvcnMucHJpbWFyeX0gc3R5bGU9e3sgbWFyZ2luVG9wOiA0OCB9fSAvPgogICAgICA8L1ZpZXc+CiAgICApOwogIH0KICBpZiAoZXJyb3IgfHwgIWNvbm4pIHJldHVybiA8S2FyYXRlRXJyb3JTdGF0ZSBvblJldHJ5PXtsb2FkfSAvPjsKCiAgY29uc3QgdmliZTogVmliZSA9CiAgICBjb25uLnN0YXR1cyA9PT0gImVycm9yIiA/ICJkb3duIiA6CiAgICBjb25uLnZpYSA9PT0gIm1hbnVhbCIgPyAibWFudWFsIiA6CiAgICBjb25uLmxhc3Rfc3luY19hdCA9PSBudWxsICYmIGNvbm4udmlhID09PSAibmF0aXZlIiA/ICJlbXB0eSIgOiAib2siOwoKICBjb25zdCBldmVudHMgPSBjb25uLnJlY2VudF9ldmVudHMgPz8gW107CgogIGNvbnN0IEhFUk86IFJlY29yZDxWaWJlLCB7IHRvbmU6IFZpZXdTdHlsZTsgaWNvbjogYW55OyBjb2xvcjogc3RyaW5nOyB0OiBzdHJpbmc7IHN1Yjogc3RyaW5nIH0+ID0gewogICAgb2s6ICAgICB7IHRvbmU6IHN0eWxlcy5oZXJvT2ssICAgaWNvbjogImNoZWNrbWFyay1jaXJjbGUiLCBjb2xvcjogS2FyYXRlQ29sb3JzLm9rLCAgICAgdDogYENvbmVjdGFkbyDCtyBhdHVhbGl6YWRvICR7Zm10QWdvKGNvbm4ubGFzdF9zeW5jX2F0KX1gLCBzdWI6ICJUdWRvIGNoZWdhIHNvemluaG8uIFZvY8OqIG7Do28gcHJlY2lzYSBmYXplciBuYWRhIGFxdWkuIiB9LAogICAgbWFudWFsOiB7IHRvbmU6IHN0eWxlcy5oZXJvTmV1LCAgaWNvbjogInNoaWVsZC1jaGVja21hcmsiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsICAgdDogIkEgZmVkZXJhw6fDo28gY3VpZGEgZGVzdGUgZG9qw7QiLCBzdWI6ICJPIGRvasO0IG7Do28gdXNhIHNpc3RlbWEuIE9zIGNhZGFzdHJvcyBlIGxhbsOnYW1lbnRvcyBzw6NvIGZlaXRvcyBwZWxhIGZlZGVyYcOnw6NvLiIgfSwKICAgIGRvd246ICAgeyB0b25lOiBzdHlsZXMuaGVyb0JhZCwgIGljb246ICJhbGVydC1jaXJjbGUiLCAgICAgY29sb3I6IEthcmF0ZUNvbG9ycy5kYW5nZXIsICB0OiAiQ29uZXjDo28gY2FpdSIsIHN1YjogIk8gZG9qw7QgcGFyb3UgZGUgY29udmVyc2FyIGNvbSBhIGZlZGVyYcOnw6NvLiBWZWphIG8gYXZpc28gYWJhaXhvIHBhcmEgcmVjb25lY3Rhci4iIH0sCiAgICBlbXB0eTogIHsgdG9uZTogc3R5bGVzLmhlcm9OZXUsICBpY29uOiAidGltZSIsICAgICAgICAgICAgIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMywgICB0OiAiQ29uZXjDo28gbGlnYWRhIiwgc3ViOiAiRXNwZXJhbmRvIG8gZG9qw7QgZW52aWFyIGFzIHByaW1laXJhcyBpbmZvcm1hw6fDtWVzLiBOw6NvIHByZWNpc2EgZmF6ZXIgbmFkYS4iIH0sCiAgfTsKICBjb25zdCBoID0gSEVST1t2aWJlXTsKCiAgcmV0dXJuICgKICAgIDxTY3JvbGxWaWV3IHN0eWxlPXtzdHlsZXMuc2Nyb2xsfSBjb250ZW50Q29udGFpbmVyU3R5bGU9e3N0eWxlcy5jb250ZW50fT4KICAgICAgPFRvdWNoYWJsZU9wYWNpdHkgc3R5bGU9e3N0eWxlcy5iYWNrfSBvblByZXNzPXsoKSA9PiByb3V0ZXIuYmFjaygpfSBhY2Nlc3NpYmlsaXR5Um9sZT0iYnV0dG9uIj4KICAgICAgICA8SWNvbiBuYW1lPSJjaGV2cm9uLWJhY2siIHNpemU9ezE4fSBjb2xvcj17S2FyYXRlQ29sb3JzLnByaW1hcnl9IC8+CiAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy5iYWNrVGV4dH0+Q29uZXjDtWVzPC9UZXh0PgogICAgICA8L1RvdWNoYWJsZU9wYWNpdHk+CgogICAgICA8Vmlldz4KICAgICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLmV5ZWJyb3d9Pntjb25uLmRvam9fbmFtZX0gwrcge2Nvbm4uZnBrdF9hZmZpbGlhdGlvbl9pZH08L1RleHQ+CiAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy50aXRsZX0+Q29uZXjDo28gZG8gZG9qw7Q8L1RleHQ+CiAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy5sZWFkfT5BcyBpbmZvcm1hw6fDtWVzIGRvIGRvasO0IGNoZWdhbSBzb3ppbmhhcy4gVm9jw6ogc8OzIHByZWNpc2Egb2xoYXIgYXF1aSBzZSBhbGdvIHByZWNpc2FyIGRlIGF0ZW7Dp8Ojby48L1RleHQ+CiAgICAgIDwvVmlldz4KCiAgICAgIHsvKiBBdmlzbyBwcm9hdGl2byAoc8OzIHF1YW5kbyBjYWl1KSAqL30KICAgICAge3ZpYmUgPT09ICJkb3duIiAmJiAoCiAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5hbGVydENhcmR9PgogICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5hbGVydEhlYWR9PgogICAgICAgICAgICA8SWNvbiBuYW1lPSJ3YXJuaW5nIiBzaXplPXsxOH0gY29sb3I9e0thcmF0ZUNvbG9ycy5kYW5nZXJ9IC8+CiAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuYWxlcnRUaXRsZX0+QSBjb25leMOjbyBjb20gbyB7Y29ubi5kb2pvX25hbWV9IGNhaXU8L1RleHQ+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLmFsZXJ0Qm9keX0+RW5xdWFudG8gaXNzbywgbyBxdWUgbyBkb2rDtCByZWdpc3RyYSAoYWx1bm9zIG5vdm9zLCBwcmVzZW7Dp2FzLCBwYWdhbWVudG9zKSBuw6NvIGVzdMOhIGNoZWdhbmRvIMOgIGZlZGVyYcOnw6NvLiBSZWNvbmVjdGFyIGNvc3R1bWEgcmVzb2x2ZXIgbmEgaG9yYS48L1RleHQ+CiAgICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLmFsZXJ0QWN0aW9uc30+CiAgICAgICAgICAgIDxLYXJhdGVCdXR0b24gbGFiZWw9IlJlY29uZWN0YXIiIHZhcmlhbnQ9InByaW1hcnkiIHNpemU9InNtIiBvblByZXNzPXtyZWNvbm5lY3R9IGxvYWRpbmc9e2J1c3l9IC8+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgPC9WaWV3PgogICAgICApfQoKICAgICAgey8qIFNlbG8gKi99CiAgICAgIDxWaWV3IHN0eWxlPXtbc3R5bGVzLmhlcm8sIGgudG9uZV19PgogICAgICAgIDxWaWV3IHN0eWxlPXtbc3R5bGVzLmhlcm9JY28sIHsgYm9yZGVyQ29sb3I6IGguY29sb3IgfV19PgogICAgICAgICAgPEljb24gbmFtZT17aC5pY29ufSBzaXplPXsyNH0gY29sb3I9e2guY29sb3J9IC8+CiAgICAgICAgPC9WaWV3PgogICAgICAgIDxWaWV3IHN0eWxlPXt7IGZsZXg6IDEgfX0+CiAgICAgICAgICA8VGV4dCBzdHlsZT17W3N0eWxlcy5oZXJvVCwgeyBjb2xvcjogaC5jb2xvciB9XX0+e2gudH08L1RleHQ+CiAgICAgICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLmhlcm9TdWJ9PntoLnN1Yn08L1RleHQ+CiAgICAgICAgPC9WaWV3PgogICAgICA8L1ZpZXc+CgogICAgICB7LyogTyBxdWUgY2hlZ291IGRvIGRvasO0IChldmVudG9zIHJlYWlzKSAqL30KICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy5jYXJkfT4KICAgICAgICA8VGV4dCBzdHlsZT17c3R5bGVzLmNhcmRUaXRsZX0+TyBxdWUgY2hlZ291IGRvIGRvasO0PC9UZXh0PgogICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuY2FyZFN1Yn0+QXRpdmlkYWRlIHJlY2VudGUgwrcgbWFpcyBub3ZvIHByaW1laXJvPC9UZXh0PgogICAgICAgIHtldmVudHMubGVuZ3RoID09PSAwID8gKAogICAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy5lbXB0eVR4dH0+QWluZGEgbsOjbyBjaGVnb3UgbmFkYS4gQXNzaW0gcXVlIG8gZG9qw7QgcmVnaXN0cmFyIGFsdW5vcywgcHJlc2Vuw6dhcyBvdSBwYWdhbWVudG9zLCBlbGVzIGFwYXJlY2VtIGFxdWkgYXV0b21hdGljYW1lbnRlLjwvVGV4dD4KICAgICAgICApIDogKAogICAgICAgICAgZXZlbnRzLm1hcCgoZXYpID0+IHsKICAgICAgICAgICAgY29uc3QgZSA9IGh1bWFuaXplKGV2KTsKICAgICAgICAgICAgcmV0dXJuICgKICAgICAgICAgICAgICA8VmlldyBrZXk9e2V2LmlkfSBzdHlsZT17c3R5bGVzLmFjdFJvd30+CiAgICAgICAgICAgICAgICA8VmlldyBzdHlsZT17W3N0eWxlcy5hY3RJY28sIGUud2FybiAmJiBzdHlsZXMuYWN0SWNvV2Fybl19PgogICAgICAgICAgICAgICAgICA8SWNvbiBuYW1lPXtlLmljb24gYXMgYW55fSBzaXplPXsxNn0gY29sb3I9e2Uud2FybiA/IEthcmF0ZUNvbG9ycy5kYW5nZXIgOiBLYXJhdGVDb2xvcnMuaW5rM30gLz4KICAgICAgICAgICAgICAgIDwvVmlldz4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuYWN0VH0+CiAgICAgICAgICAgICAgICAgIHtlLnRleHR9e2Uud2FybiA/IDxUZXh0IHN0eWxlPXtzdHlsZXMuYWN0RmxhZ30+ICBmYWxob3U8L1RleHQ+IDogbnVsbH0KICAgICAgICAgICAgICAgIDwvVGV4dD4KICAgICAgICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMuYWN0V2hlbn0+e2ZtdEFnbyhldi5jcmVhdGVkX2F0KX08L1RleHQ+CiAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICApOwogICAgICAgICAgfSkKICAgICAgICApfQogICAgICA8L1ZpZXc+CgogICAgICB7LyogVmVyIGRldGFsaGVzIHTDqWNuaWNvcyAocmVjb2xoaWRvIMK3IHN1cG9ydGUpICovfQogICAgICA8VG91Y2hhYmxlT3BhY2l0eSBzdHlsZT17c3R5bGVzLnRlY2hUb2dnbGV9IG9uUHJlc3M9eygpID0+IHNldFNob3dUZWNoKCh2KSA9PiAhdil9IGFjY2Vzc2liaWxpdHlSb2xlPSJidXR0b24iPgogICAgICAgIDxWaWV3IHN0eWxlPXt7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiA4IH19PgogICAgICAgICAgPEljb24gbmFtZT0ic2V0dGluZ3Mtb3V0bGluZSIgc2l6ZT17MTV9IGNvbG9yPXtLYXJhdGVDb2xvcnMuaW5rM30gLz4KICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMudGVjaFRvZ2dsZVRleHR9PlZlciBkZXRhbGhlcyB0w6ljbmljb3M8L1RleHQ+CiAgICAgICAgPC9WaWV3PgogICAgICAgIDxJY29uIG5hbWU9e3Nob3dUZWNoID8gImNoZXZyb24tdXAiIDogImNoZXZyb24tZG93biJ9IHNpemU9ezE2fSBjb2xvcj17S2FyYXRlQ29sb3JzLmluazN9IC8+CiAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAge3Nob3dUZWNoICYmICgKICAgICAgICA8VmlldyBzdHlsZT17c3R5bGVzLnRlY2hCb2R5fT4KICAgICAgICAgIDxUZXh0IHN0eWxlPXtzdHlsZXMudGVjaE5vdGV9PkVzdGEgw6FyZWEgw6kgcGFyYSBvIHN1cG9ydGUgZGEgQXVyYS4gTm8gZGlhIGEgZGlhIHZvY8OqIG7Do28gcHJlY2lzYSBtZXhlciBhcXVpIOKAlCBhIGNvbmV4w6NvIHNlIGN1aWRhIHNvemluaGEuPC9UZXh0PgogICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy50ZWNoUm93fT48VGV4dCBzdHlsZT17c3R5bGVzLnRlY2hLfT5DaGF2ZSBkZSBjb25leMOjbzwvVGV4dD48VGV4dCBzdHlsZT17c3R5bGVzLnRlY2hWfT57Y29ubi5zeW5jX3Rva2VuX21hc2tlZCA/PyAi4oCUIn08L1RleHQ+PC9WaWV3PgogICAgICAgICAgPFZpZXcgc3R5bGU9e3N0eWxlcy50ZWNoUm93fT48VGV4dCBzdHlsZT17c3R5bGVzLnRlY2hLfT7Dmmx0aW1hIHZlcmlmaWNhw6fDo288L1RleHQ+PFRleHQgc3R5bGU9e3N0eWxlcy50ZWNoVn0+e2ZtdEFnbyhjb25uLmxhc3Rfc3luY19hdCl9PC9UZXh0PjwvVmlldz4KICAgICAgICAgIDxWaWV3IHN0eWxlPXtzdHlsZXMudGVjaEFjdGlvbnN9PgogICAgICAgICAgICA8S2FyYXRlQnV0dG9uIGxhYmVsPSJUZW50YXIgYXR1YWxpemFyIGFnb3JhIiB2YXJpYW50PSJnaG9zdCIgc2l6ZT0ic20iIG9uUHJlc3M9e3JlY29ubmVjdH0gbG9hZGluZz17YnVzeX0gLz4KICAgICAgICAgICAgPEthcmF0ZUJ1dHRvbiBsYWJlbD0iR2VyYXIgbm92YSBjaGF2ZSIgdmFyaWFudD0iZ2hvc3QiIHNpemU9InNtIiBvblByZXNzPXtyb3RhdGVLZXl9IC8+CiAgICAgICAgICA8L1ZpZXc+CiAgICAgICAgPC9WaWV3PgogICAgICApfQogICAgPC9TY3JvbGxWaWV3PgogICk7Cn0KCmNvbnN0IHN0eWxlcyA9IFN0eWxlU2hlZXQuY3JlYXRlKHsKICBzY3JvbGw6IHsgZmxleDogMSwgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMuYmcgfSBhcyBWaWV3U3R5bGUsCiAgY29udGVudDogeyBwYWRkaW5nOiAxNiwgZ2FwOiAxNCwgcGFkZGluZ0JvdHRvbTogNDAsIG1heFdpZHRoOiA3NjAsIHdpZHRoOiAiMTAwJSIsIGFsaWduU2VsZjogImNlbnRlciIgfSBhcyBWaWV3U3R5bGUsCiAgYmFjazogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogMiB9IGFzIFZpZXdTdHlsZSwKICBiYWNrVGV4dDogeyBmb250U2l6ZTogMTMsIGZvbnRXZWlnaHQ6ICI3MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLnByaW1hcnkgfSBhcyBUZXh0U3R5bGUsCiAgZXllYnJvdzogeyBmb250U2l6ZTogMTEsIGZvbnRXZWlnaHQ6ICI3MDAiLCBsZXR0ZXJTcGFjaW5nOiAwLjUsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMywgZm9udEZhbWlseTogS2FyYXRlRm9udHMubW9ubyB9IGFzIFRleHRTdHlsZSwKICB0aXRsZTogeyBmb250RmFtaWx5OiBLYXJhdGVGb250cy5oZWFkaW5nLCBmb250U2l6ZTogMjMsIGZvbnRXZWlnaHQ6ICI0MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluaywgbWFyZ2luVG9wOiAyIH0gYXMgVGV4dFN0eWxlLAogIGxlYWQ6IHsgZm9udFNpemU6IDEzLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsIG1hcmdpblRvcDogNCwgbGluZUhlaWdodDogMTgsIG1heFdpZHRoOiA0NjAgfSBhcyBUZXh0U3R5bGUsCiAgYWxlcnRDYXJkOiB7IGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmRhbmdlclNvZnQsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBwYWRkaW5nOiAxNCB9IGFzIFZpZXdTdHlsZSwKICBhbGVydEhlYWQ6IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDggfSBhcyBWaWV3U3R5bGUsCiAgYWxlcnRUaXRsZTogeyBmb250U2l6ZTogMTUsIGZvbnRXZWlnaHQ6ICI4MDAiLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluaywgZmxleDogMSB9IGFzIFRleHRTdHlsZSwKICBhbGVydEJvZHk6IHsgZm9udFNpemU6IDEzLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazIsIGxpbmVIZWlnaHQ6IDE5LCBtYXJnaW5Ub3A6IDYgfSBhcyBUZXh0U3R5bGUsCiAgYWxlcnRBY3Rpb25zOiB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiAxMiwgbWFyZ2luVG9wOiAxMiB9IGFzIFZpZXdTdHlsZSwKICBoZXJvOiB7IGZsZXhEaXJlY3Rpb246ICJyb3ciLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwgZ2FwOiAxNCwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubGcsIGJvcmRlcldpZHRoOiAxLCBwYWRkaW5nOiAxOCB9IGFzIFZpZXdTdHlsZSwKICBoZXJvT2s6IHsgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMub2tTb2Z0LCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLm9rIH0gYXMgVmlld1N0eWxlLAogIGhlcm9OZXU6IHsgYmFja2dyb3VuZENvbG9yOiBLYXJhdGVDb2xvcnMuc3VyZmFjZSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIgfSBhcyBWaWV3U3R5bGUsCiAgaGVyb0JhZDogeyBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5kYW5nZXJTb2Z0LCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmRhbmdlciB9IGFzIFZpZXdTdHlsZSwKICBoZXJvSWNvOiB7IHdpZHRoOiA0NiwgaGVpZ2h0OiA0NiwgYm9yZGVyUmFkaXVzOiAyMywgYmFja2dyb3VuZENvbG9yOiAiI2ZmZiIsIGJvcmRlcldpZHRoOiAxLCBhbGlnbkl0ZW1zOiAiY2VudGVyIiwganVzdGlmeUNvbnRlbnQ6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIGhlcm9UOiB7IGZvbnRTaXplOiAxNiwgZm9udFdlaWdodDogIjgwMCIgfSBhcyBUZXh0U3R5bGUsCiAgaGVyb1N1YjogeyBmb250U2l6ZTogMTMsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMiwgbWFyZ2luVG9wOiAzLCBsaW5lSGVpZ2h0OiAxOCB9IGFzIFRleHRTdHlsZSwKICBjYXJkOiB7IGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLmJnMiwgYm9yZGVyUmFkaXVzOiBLYXJhdGVSYWRpdXMubWQsIGJvcmRlcldpZHRoOiAxLCBib3JkZXJDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlciwgcGFkZGluZzogMTQgfSBhcyBWaWV3U3R5bGUsCiAgY2FyZFRpdGxlOiB7IGZvbnRTaXplOiAxNCwgZm9udFdlaWdodDogIjgwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rIH0gYXMgVGV4dFN0eWxlLAogIGNhcmRTdWI6IHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsIG1hcmdpblRvcDogMiwgbWFyZ2luQm90dG9tOiA2IH0gYXMgVGV4dFN0eWxlLAogIGVtcHR5VHh0OiB7IGZvbnRTaXplOiAxMywgY29sb3I6IEthcmF0ZUNvbG9ycy5pbmszLCBsaW5lSGVpZ2h0OiAxOSwgcGFkZGluZ1ZlcnRpY2FsOiA4IH0gYXMgVGV4dFN0eWxlLAogIGFjdFJvdzogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGdhcDogMTIsIHBhZGRpbmdWZXJ0aWNhbDogMTEsIGJvcmRlclRvcFdpZHRoOiAxLCBib3JkZXJUb3BDb2xvcjogS2FyYXRlQ29sb3JzLmJvcmRlciB9IGFzIFZpZXdTdHlsZSwKICBhY3RJY286IHsgd2lkdGg6IDMwLCBoZWlnaHQ6IDMwLCBib3JkZXJSYWRpdXM6IDgsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBqdXN0aWZ5Q29udGVudDogImNlbnRlciIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnN1cmZhY2UgfSBhcyBWaWV3U3R5bGUsCiAgYWN0SWNvV2FybjogeyBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5kYW5nZXJTb2Z0IH0gYXMgVmlld1N0eWxlLAogIGFjdFQ6IHsgZmxleDogMSwgZm9udFNpemU6IDE0LCBjb2xvcjogS2FyYXRlQ29sb3JzLmluayB9IGFzIFRleHRTdHlsZSwKICBhY3RGbGFnOiB7IGZvbnRTaXplOiAxMiwgZm9udFdlaWdodDogIjcwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuZGFuZ2VyIH0gYXMgVGV4dFN0eWxlLAogIGFjdFdoZW46IHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazQsIG1hcmdpbkxlZnQ6IDYgfSBhcyBUZXh0U3R5bGUsCiAgdGVjaFRvZ2dsZTogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwgYWxpZ25JdGVtczogImNlbnRlciIsIGp1c3RpZnlDb250ZW50OiAic3BhY2UtYmV0d2VlbiIsIGJhY2tncm91bmRDb2xvcjogS2FyYXRlQ29sb3JzLnN1cmZhY2UsIGJvcmRlclJhZGl1czogS2FyYXRlUmFkaXVzLm1kLCBib3JkZXJXaWR0aDogMSwgYm9yZGVyQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIsIHBhZGRpbmc6IDE0IH0gYXMgVmlld1N0eWxlLAogIHRlY2hUb2dnbGVUZXh0OiB7IGZvbnRTaXplOiAxMywgZm9udFdlaWdodDogIjYwMCIsIGNvbG9yOiBLYXJhdGVDb2xvcnMuaW5rMyB9IGFzIFRleHRTdHlsZSwKICB0ZWNoQm9keTogeyBiYWNrZ3JvdW5kQ29sb3I6IEthcmF0ZUNvbG9ycy5zdXJmYWNlLCBib3JkZXJSYWRpdXM6IEthcmF0ZVJhZGl1cy5tZCwgYm9yZGVyV2lkdGg6IDEsIGJvcmRlckNvbG9yOiBLYXJhdGVDb2xvcnMuYm9yZGVyLCBwYWRkaW5nOiAxNCwgbWFyZ2luVG9wOiAtNiwgZ2FwOiA4IH0gYXMgVmlld1N0eWxlLAogIHRlY2hOb3RlOiB7IGZvbnRTaXplOiAxMi41LCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMsIGxpbmVIZWlnaHQ6IDE4LCBtYXJnaW5Cb3R0b206IDQgfSBhcyBUZXh0U3R5bGUsCiAgdGVjaFJvdzogeyBmbGV4RGlyZWN0aW9uOiAicm93IiwganVzdGlmeUNvbnRlbnQ6ICJzcGFjZS1iZXR3ZWVuIiwgcGFkZGluZ1ZlcnRpY2FsOiA2LCBib3JkZXJUb3BXaWR0aDogMSwgYm9yZGVyVG9wQ29sb3I6IEthcmF0ZUNvbG9ycy5ib3JkZXIgfSBhcyBWaWV3U3R5bGUsCiAgdGVjaEs6IHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazMgfSBhcyBUZXh0U3R5bGUsCiAgdGVjaFY6IHsgZm9udFNpemU6IDEyLCBjb2xvcjogS2FyYXRlQ29sb3JzLmluazIsIGZvbnRGYW1pbHk6IEthcmF0ZUZvbnRzLm1vbm8gfSBhcyBUZXh0U3R5bGUsCiAgdGVjaEFjdGlvbnM6IHsgZmxleERpcmVjdGlvbjogInJvdyIsIGdhcDogOCwgbWFyZ2luVG9wOiA4LCBmbGV4V3JhcDogIndyYXAiIH0gYXMgVmlld1N0eWxlLAp9KTsK
+// ============================================================
+// Conexão do dojô — Aura Karatê (federação)
+//
+// Selo de situação + aviso quando precisa + "o que chegou do dojô"
+// em linguagem humana, a partir dos eventos REAIS de sync. O bloco
+// técnico fica recolhido (suporte). Sem mock: loading → spinner,
+// falha → ErrorState.
+// ============================================================
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateButton } from "@/components/karate/KarateButton";
+import { KarateErrorState } from "@/components/karate/ErrorState";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+import { karateConnectionsApi, ConnectionDetail, SyncEvent } from "@/services/karateConnectionsApi";
+
+type Vibe = "ok" | "manual" | "down" | "empty";
+
+// Rótulos amigáveis para os tipos de evento de sync conhecidos.
+const EVENT_LABEL: Record<string, { label: string; icon: string }> = {
+  "practitioner.created":  { label: "Novo aluno cadastrado no dojô", icon: "people" },
+  "practitioner.updated":  { label: "Cadastro de aluno atualizado", icon: "person" },
+  "attendance.recorded":   { label: "Presenças registradas no treino", icon: "checkmark-circle" },
+  "belt.updated":          { label: "Faixa de aluno atualizada", icon: "ribbon" },
+  "annuity.paid":          { label: "Anuidade do dojô paga", icon: "wallet" },
+  "exam.enrolled":         { label: "Inscrição em exame de faixa", icon: "trophy" },
+};
+function humanize(ev: SyncEvent): { icon: string; text: string; warn: boolean } {
+  const known = EVENT_LABEL[ev.event_type];
+  return {
+    icon: ev.status === "failed" ? "alert-circle" : (known?.icon ?? "sync"),
+    text: known?.label ?? ev.event_type.replace(/[._]/g, " "),
+    warn: ev.status === "failed",
+  };
+}
+
+function fmtAgo(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 2) return "agora mesmo";
+  if (mins < 60) return `há ${mins} minutos`;
+  const h = Math.round(mins / 60);
+  if (h < 24) return `há ${h} ${h === 1 ? "hora" : "horas"}`;
+  const dias = Math.round(h / 24);
+  return `há ${dias} ${dias === 1 ? "dia" : "dias"}`;
+}
+
+export default function ConexaoDojoDetalhe() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { federationId } = useKarateFederation();
+  const connId = String(id || "");
+
+  const [conn, setConn] = useState<ConnectionDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [showTech, setShowTech] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    if (!connId) return;
+    setLoading(true);
+    setError(false);
+    karateConnectionsApi.getConnection(federationId, connId)
+      .then(setConn)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [federationId, connId]);
+  useEffect(() => { load(); }, [load]);
+
+  const reconnect = async () => {
+    setBusy(true);
+    try {
+      await karateConnectionsApi.reconnect(federationId, connId);
+      setShowTech(false);
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível reconectar", e?.message ?? "Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const rotateKey = async () => {
+    try {
+      await karateConnectionsApi.rotateKey(federationId, connId);
+      Alert.alert("Nova chave gerada", "A conexão foi protegida com uma nova chave.");
+    } catch (e: any) {
+      Alert.alert("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: KarateColors.bg }}>
+        <ActivityIndicator size="large" color={KarateColors.primary} style={{ marginTop: 48 }} />
+      </View>
+    );
+  }
+  if (error || !conn) return <KarateErrorState onRetry={load} />;
+
+  const vibe: Vibe =
+    conn.status === "error" ? "down" :
+    conn.via === "manual" ? "manual" :
+    conn.last_sync_at == null && conn.via === "native" ? "empty" : "ok";
+
+  const events = conn.recent_events ?? [];
+
+  const HERO: Record<Vibe, { tone: ViewStyle; icon: any; color: string; t: string; sub: string }> = {
+    ok:     { tone: styles.heroOk,   icon: "checkmark-circle", color: KarateColors.ok,     t: `Conectado · atualizado ${fmtAgo(conn.last_sync_at)}`, sub: "Tudo chega sozinho. Você não precisa fazer nada aqui." },
+    manual: { tone: styles.heroNeu,  icon: "shield-checkmark", color: KarateColors.ink3,   t: "A federação cuida deste dojô", sub: "O dojô não usa sistema. Os cadastros e lançamentos são feitos pela federação." },
+    down:   { tone: styles.heroBad,  icon: "alert-circle",     color: KarateColors.danger,  t: "Conexão caiu", sub: "O dojô parou de conversar com a federação. Veja o aviso abaixo para reconectar." },
+    empty:  { tone: styles.heroNeu,  icon: "time",             color: KarateColors.ink3,   t: "Conexão ligada", sub: "Esperando o dojô enviar as primeiras informações. Não precisa fazer nada." },
+  };
+  const h = HERO[vibe];
+
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <TouchableOpacity style={styles.back} onPress={() => router.back()} accessibilityRole="button">
+        <Icon name="chevron-back" size={18} color={KarateColors.primary} />
+        <Text style={styles.backText}>Conexões</Text>
+      </TouchableOpacity>
+
+      <View>
+        <Text style={styles.eyebrow}>{conn.dojo_name} · {conn.fpkt_affiliation_id}</Text>
+        <Text style={styles.title}>Conexão do dojô</Text>
+        <Text style={styles.lead}>As informações do dojô chegam sozinhas. Você só precisa olhar aqui se algo precisar de atenção.</Text>
+      </View>
+
+      {/* Aviso proativo (só quando caiu) */}
+      {vibe === "down" && (
+        <View style={styles.alertCard}>
+          <View style={styles.alertHead}>
+            <Icon name="warning" size={18} color={KarateColors.danger} />
+            <Text style={styles.alertTitle}>A conexão com o {conn.dojo_name} caiu</Text>
+          </View>
+          <Text style={styles.alertBody}>Enquanto isso, o que o dojô registra (alunos novos, presenças, pagamentos) não está chegando à federação. Reconectar costuma resolver na hora.</Text>
+          <View style={styles.alertActions}>
+            <KarateButton label="Reconectar" variant="primary" size="sm" onPress={reconnect} loading={busy} />
+          </View>
+        </View>
+      )}
+
+      {/* Selo */}
+      <View style={[styles.hero, h.tone]}>
+        <View style={[styles.heroIco, { borderColor: h.color }]}>
+          <Icon name={h.icon} size={24} color={h.color} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.heroT, { color: h.color }]}>{h.t}</Text>
+          <Text style={styles.heroSub}>{h.sub}</Text>
+        </View>
+      </View>
+
+      {/* O que chegou do dojô (eventos reais) */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>O que chegou do dojô</Text>
+        <Text style={styles.cardSub}>Atividade recente · mais novo primeiro</Text>
+        {events.length === 0 ? (
+          <Text style={styles.emptyTxt}>Ainda não chegou nada. Assim que o dojô registrar alunos, presenças ou pagamentos, eles aparecem aqui automaticamente.</Text>
+        ) : (
+          events.map((ev) => {
+            const e = humanize(ev);
+            return (
+              <View key={ev.id} style={styles.actRow}>
+                <View style={[styles.actIco, e.warn && styles.actIcoWarn]}>
+                  <Icon name={e.icon as any} size={16} color={e.warn ? KarateColors.danger : KarateColors.ink3} />
+                </View>
+                <Text style={styles.actT}>
+                  {e.text}{e.warn ? <Text style={styles.actFlag}>  falhou</Text> : null}
+                </Text>
+                <Text style={styles.actWhen}>{fmtAgo(ev.created_at)}</Text>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      {/* Ver detalhes técnicos (recolhido · suporte) */}
+      <TouchableOpacity style={styles.techToggle} onPress={() => setShowTech((v) => !v)} accessibilityRole="button">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Icon name="settings-outline" size={15} color={KarateColors.ink3} />
+          <Text style={styles.techToggleText}>Ver detalhes técnicos</Text>
+        </View>
+        <Icon name={showTech ? "chevron-up" : "chevron-down"} size={16} color={KarateColors.ink3} />
+      </TouchableOpacity>
+      {showTech && (
+        <View style={styles.techBody}>
+          <Text style={styles.techNote}>Esta área é para o suporte da Aura. No dia a dia você não precisa mexer aqui — a conexão se cuida sozinha.</Text>
+          <View style={styles.techRow}><Text style={styles.techK}>Chave de conexão</Text><Text style={styles.techV}>{conn.sync_token_masked ?? "—"}</Text></View>
+          <View style={styles.techRow}><Text style={styles.techK}>Última verificação</Text><Text style={styles.techV}>{fmtAgo(conn.last_sync_at)}</Text></View>
+          <View style={styles.techActions}>
+            <KarateButton label="Tentar atualizar agora" variant="ghost" size="sm" onPress={reconnect} loading={busy} />
+            <KarateButton label="Gerar nova chave" variant="ghost" size="sm" onPress={rotateKey} />
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  content: { padding: 16, gap: 14, paddingBottom: 40, maxWidth: 760, width: "100%", alignSelf: "center" } as ViewStyle,
+  back: { flexDirection: "row", alignItems: "center", gap: 2 } as ViewStyle,
+  backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
+  title: { fontFamily: KarateFonts.heading, fontSize: 23, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
+  alertCard: { backgroundColor: KarateColors.dangerSoft, borderRadius: KarateRadius.md, padding: 14 } as ViewStyle,
+  alertHead: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  alertTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink, flex: 1 } as TextStyle,
+  alertBody: { fontSize: 13, color: KarateColors.ink2, lineHeight: 19, marginTop: 6 } as TextStyle,
+  alertActions: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 } as ViewStyle,
+  hero: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: KarateRadius.lg, borderWidth: 1, padding: 18 } as ViewStyle,
+  heroOk: { backgroundColor: KarateColors.okSoft, borderColor: KarateColors.ok } as ViewStyle,
+  heroNeu: { backgroundColor: KarateColors.surface, borderColor: KarateColors.border } as ViewStyle,
+  heroBad: { backgroundColor: KarateColors.dangerSoft, borderColor: KarateColors.danger } as ViewStyle,
+  heroIco: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  heroT: { fontSize: 16, fontWeight: "800" } as TextStyle,
+  heroSub: { fontSize: 13, color: KarateColors.ink2, marginTop: 3, lineHeight: 18 } as TextStyle,
+  card: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
+  cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  cardSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 2, marginBottom: 6 } as TextStyle,
+  emptyTxt: { fontSize: 13, color: KarateColors.ink3, lineHeight: 19, paddingVertical: 8 } as TextStyle,
+  actRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  actIco: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
+  actIcoWarn: { backgroundColor: KarateColors.dangerSoft } as ViewStyle,
+  actT: { flex: 1, fontSize: 14, color: KarateColors.ink } as TextStyle,
+  actFlag: { fontSize: 12, fontWeight: "700", color: KarateColors.danger } as TextStyle,
+  actWhen: { fontSize: 12, color: KarateColors.ink4, marginLeft: 6 } as TextStyle,
+  techToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
+  techToggleText: { fontSize: 13, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
+  techBody: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, marginTop: -6, gap: 8 } as ViewStyle,
+  techNote: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18, marginBottom: 4 } as TextStyle,
+  techRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  techK: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  techV: { fontSize: 12, color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
+  techActions: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" } as ViewStyle,
+});

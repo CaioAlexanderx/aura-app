@@ -1,1 +1,66 @@
-Ly8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Ci8vIEV2ZW50b3Mg4oCUIFJlc3VsdGFkb3Mg4oCUIEF1cmEgS2FyYXTDqiAoZmVkZXJhw6fDo28pIMK3IFNob2ppCi8vIFNlbSBlbmRwb2ludCBkZSByZXN1bHRhZG9zIGVtIG1hc3NhOiBsaXN0YSBleGFtZXMg4oaSIGFicmUgbyBkZXRhbGhlCi8vIHBhcmEgdmVyL2xhbsOnYXIgcmVzdWx0YWRvcyBwb3IgY2FuZGlkYXRvLiBEYWRvcyByZWFpcy4KLy8gPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CmltcG9ydCBSZWFjdCwgeyB1c2VTdGF0ZSwgdXNlRWZmZWN0LCB1c2VDYWxsYmFjayB9IGZyb20gInJlYWN0IjsKaW1wb3J0IHsKICBWaWV3LCBUZXh0LCBTY3JvbGxWaWV3LCBUb3VjaGFibGVPcGFjaXR5LCBSZWZyZXNoQ29udHJvbCwgQWN0aXZpdHlJbmRpY2F0b3IsCiAgU3R5bGVTaGVldCwgVmlld1N0eWxlLCBUZXh0U3R5bGUsCn0gZnJvbSAicmVhY3QtbmF0aXZlIjsKaW1wb3J0IHsgdXNlUm91dGVyIH0gZnJvbSAiZXhwby1yb3V0ZXIiOwppbXBvcnQgeyBJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL0ljb24iOwppbXBvcnQgeyBLYXJhdGVDb2xvcnMgYXMgQywgU2hvamlQYWxldHRlIGFzIFAsIEthcmF0ZUZvbnRzIGFzIEYgfSBmcm9tICJAL2NvbnN0YW50cy9rYXJhdGVUaGVtZSI7CmltcG9ydCB7IEthcmF0ZUVtcHR5U3RhdGUgfSBmcm9tICJAL2NvbXBvbmVudHMva2FyYXRlL0VtcHR5U3RhdGUiOwppbXBvcnQgeyBLYXJhdGVFcnJvclN0YXRlIH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9FcnJvclN0YXRlIjsKaW1wb3J0IHsgU2hvamlCYWNrZ3JvdW5kLCBDYXJkLCBCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2thcmF0ZS9zaG9qaSI7CmltcG9ydCB7IGthcmF0ZUFwaSwgQmVsdEV4YW0gfSBmcm9tICJAL3NlcnZpY2VzL2thcmF0ZUFwaSI7CmltcG9ydCB7IHVzZUthcmF0ZUZlZGVyYXRpb24gfSBmcm9tICJAL2NvbnRleHRzL0thcmF0ZUZlZGVyYXRpb24iOwoKY29uc3QgZm10ID0gKGlzbz86IHN0cmluZyB8IG51bGwpID0+IHsgaWYgKCFpc28pIHJldHVybiAi4oCUIjsgY29uc3QgZCA9IG5ldyBEYXRlKGlzbyk7IHJldHVybiBpc05hTihkLmdldFRpbWUoKSkgPyBTdHJpbmcoaXNvKSA6IGQudG9Mb2NhbGVEYXRlU3RyaW5nKCJwdC1CUiIpOyB9OwoKZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gRXZlbnRvc1Jlc3VsdGFkb3MoKSB7CiAgY29uc3Qgcm91dGVyID0gdXNlUm91dGVyKCk7CiAgY29uc3QgeyBmZWRlcmF0aW9uSWQgfSA9IHVzZUthcmF0ZUZlZGVyYXRpb24oKTsKICBjb25zdCBbZXhhbXMsIHNldEV4YW1zXSA9IHVzZVN0YXRlPEJlbHRFeGFtW10+KFtdKTsKICBjb25zdCBbbG9hZGluZywgc2V0TG9hZGluZ10gPSB1c2VTdGF0ZSh0cnVlKTsKICBjb25zdCBbZXJyb3IsIHNldEVycm9yXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbcmVmcmVzaGluZywgc2V0UmVmcmVzaGluZ10gPSB1c2VTdGF0ZShmYWxzZSk7CgogIGNvbnN0IGxvYWQgPSB1c2VDYWxsYmFjayhhc3luYyAoaXNSZWZyZXNoID0gZmFsc2UpID0+IHsKICAgIGlzUmVmcmVzaCA/IHNldFJlZnJlc2hpbmcodHJ1ZSkgOiBzZXRMb2FkaW5nKHRydWUpOwogICAgc2V0RXJyb3IoZmFsc2UpOwogICAgdHJ5IHsgY29uc3QgcmVzID0gYXdhaXQga2FyYXRlQXBpLmxpc3RCZWx0RXhhbXMoZmVkZXJhdGlvbklkKTsgc2V0RXhhbXMoKHJlcy5kYXRhID8/IFtdKS5maWx0ZXIoKGUpID0+IGUuc3RhdHVzID09PSAiY2xvc2VkIiB8fCBlLnN0YXR1cyA9PT0gIm9wZW4iKS5zb3J0KChhLCBiKSA9PiAoYi5leGFtX2RhdGUgPz8gIiIpLmxvY2FsZUNvbXBhcmUoYS5leGFtX2RhdGUgPz8gIiIpKSk7IH0KICAgIGNhdGNoIHsgc2V0RXJyb3IodHJ1ZSk7IH0KICAgIGZpbmFsbHkgeyBpc1JlZnJlc2ggPyBzZXRSZWZyZXNoaW5nKGZhbHNlKSA6IHNldExvYWRpbmcoZmFsc2UpOyB9CiAgfSwgW2ZlZGVyYXRpb25JZF0pOwogIHVzZUVmZmVjdCgoKSA9PiB7IGxvYWQoKTsgfSwgW2xvYWRdKTsKCiAgaWYgKGVycm9yKSByZXR1cm4gPFNob2ppQmFja2dyb3VuZD48S2FyYXRlRXJyb3JTdGF0ZSBvblJldHJ5PXsoKSA9PiBsb2FkKCl9IC8+PC9TaG9qaUJhY2tncm91bmQ+OwoKICByZXR1cm4gKAogICAgPFNob2ppQmFja2dyb3VuZD4KICAgICAgPFNjcm9sbFZpZXcgY29udGVudENvbnRhaW5lclN0eWxlPXtzdHlsZXMuY29udGVudH0gcmVmcmVzaENvbnRyb2w9ezxSZWZyZXNoQ29udHJvbCByZWZyZXNoaW5nPXtyZWZyZXNoaW5nfSBvblJlZnJlc2g9eygpID0+IGxvYWQodHJ1ZSl9IHRpbnRDb2xvcj17UC5yZWR9IC8+fT4KICAgICAgICA8Qm9keSBtdXRlZCBzdHlsZT17eyBtYXJnaW5Cb3R0b206IDE0IH19PlNlbGVjaW9uZSB1bSBleGFtZSBwYXJhIHZlciBvdSBsYW7Dp2FyIG9zIHJlc3VsdGFkb3MgcG9yIGNhbmRpZGF0by48L0JvZHk+CiAgICAgICAge2xvYWRpbmcgPyA8QWN0aXZpdHlJbmRpY2F0b3Igc3R5bGU9e3sgbWFyZ2luVG9wOiAzMiB9fSBzaXplPSJsYXJnZSIgY29sb3I9e1AucmVkfSAvPgogICAgICAgICAgOiBleGFtcy5sZW5ndGggPT09IDAgPyA8S2FyYXRlRW1wdHlTdGF0ZSBpY29uPSJ0cm9waHktb3V0bGluZSIgdGl0bGU9Ik5lbmh1bSBleGFtZSBwYXJhIHJlc3VsdGFkb3MiIHN1YnRpdGxlPSJFeGFtZXMgYWJlcnRvcyBvdSBlbmNlcnJhZG9zIGFwYXJlY2VtIGFxdWkuIiBzdHlsZT17eyBwYWRkaW5nVmVydGljYWw6IDI4IH19IC8+CiAgICAgICAgICA6IGV4YW1zLm1hcCgoZXhhbSkgPT4gKAogICAgICAgICAgICA8VG91Y2hhYmxlT3BhY2l0eSBrZXk9e2V4YW0uaWR9IG9uUHJlc3M9eygpID0+IHJvdXRlci5wdXNoKGAva2FyYXRlL2V2ZW50b3MvZXhhbWUvJHtleGFtLmlkfWAgYXMgYW55KX0gYWN0aXZlT3BhY2l0eT17MC44NX0+CiAgICAgICAgICAgICAgPENhcmQgc3R5bGU9e3sgbWFyZ2luQm90dG9tOiAxMCwgZmxleERpcmVjdGlvbjogInJvdyIsIGFsaWduSXRlbXM6ICJjZW50ZXIiLCBnYXA6IDEyIH19PgogICAgICAgICAgICAgICAgPFZpZXcgc3R5bGU9e3sgZmxleDogMSB9fT4KICAgICAgICAgICAgICAgICAgPFRleHQgc3R5bGU9e3N0eWxlcy50aXRsZX0+e2V4YW0udGl0bGV9PC9UZXh0PgogICAgICAgICAgICAgICAgICA8Qm9keSBtdXRlZCBzdHlsZT17eyBmb250U2l6ZTogMTIsIG1hcmdpblRvcDogMiB9fT57Zm10KGV4YW0uZXhhbV9kYXRlKX17ZXhhbS5sb2NhdGlvbiA/IGAgwrcgJHtleGFtLmxvY2F0aW9ufWAgOiAiIn0gwrcge2V4YW0uY2FuZGlkYXRlX2NvdW50fSBjYW5kaWRhdG9zPC9Cb2R5PgogICAgICAgICAgICAgICAgPC9WaWV3PgogICAgICAgICAgICAgICAgPEljb24gbmFtZT0iY2hldnJvbi1mb3J3YXJkIiBzaXplPXsxOH0gY29sb3I9e0MuaW5rNH0gLz4KICAgICAgICAgICAgICA8L0NhcmQ+CiAgICAgICAgICAgIDwvVG91Y2hhYmxlT3BhY2l0eT4KICAgICAgICAgICkpfQogICAgICA8L1Njcm9sbFZpZXc+CiAgICA8L1Nob2ppQmFja2dyb3VuZD4KICApOwp9Cgpjb25zdCBzdHlsZXMgPSBTdHlsZVNoZWV0LmNyZWF0ZSh7CiAgY29udGVudDogeyBwYWRkaW5nOiA0MCwgcGFkZGluZ1RvcDogMzIsIHBhZGRpbmdCb3R0b206IDcyLCBtYXhXaWR0aDogOTgwLCB3aWR0aDogIjEwMCUiLCBhbGlnblNlbGY6ICJjZW50ZXIiIH0gYXMgVmlld1N0eWxlLAogIHRpdGxlOiB7IGZvbnRGYW1pbHk6IEYuYm9keSwgZm9udFNpemU6IDE0LCBmb250V2VpZ2h0OiAiNjAwIiwgY29sb3I6IEMuaW5rIH0gYXMgVGV4dFN0eWxlLAp9KTsK
+// ============================================================
+// Eventos — Resultados — Aura Karatê (federação) · Shoji
+// Sem endpoint de resultados em massa: lista exames → abre o detalhe
+// para ver/lançar resultados por candidato. Dados reais.
+// ============================================================
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
+  StyleSheet, ViewStyle, TextStyle,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Icon } from "@/components/Icon";
+import { KarateColors as C, ShojiPalette as P, KarateFonts as F } from "@/constants/karateTheme";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { KarateErrorState } from "@/components/karate/ErrorState";
+import { ShojiBackground, Card, Body } from "@/components/karate/shoji";
+import { karateApi, BeltExam } from "@/services/karateApi";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+
+const fmt = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR"); };
+
+export default function EventosResultados() {
+  const router = useRouter();
+  const { federationId } = useKarateFederation();
+  const [exams, setExams] = useState<BeltExam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (isRefresh = false) => {
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    setError(false);
+    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "closed" || e.status === "open").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
+    catch { setError(true); }
+    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
+  }, [federationId]);
+  useEffect(() => { load(); }, [load]);
+
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
+
+  return (
+    <ShojiBackground>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
+        <Body muted style={{ marginBottom: 14 }}>Selecione um exame para ver ou lançar os resultados por candidato.</Body>
+        {loading ? <ActivityIndicator style={{ marginTop: 32 }} size="large" color={P.red} />
+          : exams.length === 0 ? <KarateEmptyState icon="trophy-outline" title="Nenhum exame para resultados" subtitle="Exames abertos ou encerrados aparecem aqui." style={{ paddingVertical: 28 }} />
+          : exams.map((exam) => (
+            <TouchableOpacity key={exam.id} onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)} activeOpacity={0.85}>
+              <Card style={{ marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title}>{exam.title}</Text>
+                  <Body muted style={{ fontSize: 12, marginTop: 2 }}>{fmt(exam.exam_date)}{exam.location ? ` · ${exam.location}` : ""} · {exam.candidate_count} candidatos</Body>
+                </View>
+                <Icon name="chevron-forward" size={18} color={C.ink4} />
+              </Card>
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
+    </ShojiBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: 40, paddingTop: 32, paddingBottom: 72, maxWidth: 980, width: "100%", alignSelf: "center" } as ViewStyle,
+  title: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
+});
