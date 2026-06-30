@@ -208,6 +208,19 @@ export const karateCompetitionsApi = {
   ): Promise<Category> =>
     request(`/federation/${federationId}/competitions/${cid}/categories`, { method: "POST", body }),
 
+  // Edita categoria existente — PATCH /federation/:id/competitions/:cid/categories/:catId
+  updateCategory: (
+    federationId: string,
+    cid: string,
+    catId: string,
+    body: Partial<{
+      name: string; modality: Modality; min_age: number | null; max_age: number | null;
+      belt_min: string | null; belt_max: string | null; sex: Sex;
+      weight_class: string | null; max_entries: number | null; fee_amount: number | null;
+    }>
+  ): Promise<Category> =>
+    request(`/federation/${federationId}/competitions/${cid}/categories/${catId}`, { method: "PATCH", body }),
+
   // ── Inscrições / Resultados ─────────────────────────────
   listEntries: (federationId: string, cid: string, categoryId?: string): Promise<Entry[]> => {
     const query = categoryId ? `?category_id=${encodeURIComponent(categoryId)}` : "";

@@ -71,6 +71,7 @@ export default function TorneioDetalhe() {
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [resultFor, setResultFor] = useState<Entry | null>(null);
   const [copyFor, setCopyFor] = useState<Category | null>(null);
+  const [editFor, setEditFor] = useState<Category | null>(null);
 
   const load = useCallback(() => {
     if (!cid) return;
@@ -162,6 +163,14 @@ export default function TorneioDetalhe() {
                   <Text style={styles.catMeta}>{MODALITY_LABEL[cat.modality]} · {cat.entry_count ?? entries.length} inscritos</Text>
                 </View>
                 <TouchableOpacity
+                  onPress={() => setEditFor(cat)}
+                  style={styles.copyBtn}
+                  accessibilityLabel={`Editar categoria ${cat.name}`}
+                  hitSlop={8}
+                >
+                  <Icon name="edit" size={15} color={KarateColors.ink3} />
+                </TouchableOpacity>
+                <TouchableOpacity
                   onPress={() => setCopyFor(cat)}
                   style={styles.copyBtn}
                   accessibilityLabel={`Copiar categoria ${cat.name}`}
@@ -201,14 +210,28 @@ export default function TorneioDetalhe() {
       )}
 
       <ResultadoModal entry={resultFor} onClose={() => setResultFor(null)} onSave={saveResult} />
-      <CopiarCategoriaModal
+      <CategoriaFormModal
+        mode="copy"
         category={copyFor}
         federationId={federationId}
         competitionId={cid}
         onClose={() => setCopyFor(null)}
-        onCreated={(newCat) => {
+        onSaved={(newCat) => {
           setCopyFor(null);
           setComp((prev) => prev ? { ...prev, categories: [...prev.categories, newCat] } : prev);
+        }}
+      />
+      <CategoriaFormModal
+        mode="edit"
+        category={editFor}
+        federationId={federationId}
+        competitionId={cid}
+        onClose={() => setEditFor(null)}
+        onSaved={(updatedCat) => {
+          setEditFor(null);
+          setComp((prev) => prev
+            ? { ...prev, categories: prev.categories.map((c) => (c.id === updatedCat.id ? { ...c, ...updatedCat } : c)) }
+            : prev);
         }}
       />
     </ScrollView>
@@ -248,13 +271,18 @@ function ResultadoModal({ entry, onClose, onSave }: {
   );
 }
 
-// ── Modal: Copiar categoria ──────────────────────────────────
-function CopiarCategoriaModal({ category, federationId, competitionId, onClose, onCreated }: {
+// ── Modal: Copiar / Editar categoria ──────────────────────────
+// Form único para os dois fluxos: "copy" cria uma categoria nova a partir dos
+// dados de outra (sufixo "(cópia)", POST /categories); "edit" altera a própria
+// categoria existente (sem sufixo, PATCH /categories/:catId). A rota de PATCH
+// já existia no backend (karateCompetitions.js) — só faltava o front chamá-la.
+function CategoriaFormModal({ mode, category, federationId, competitionId, onClose, onSaved }: {
+  mode: "copy" | "edit";
   category: Category | null;
   federationId: string;
   competitionId: string;
   onClose: () => void;
-  onCreated: (cat: Category) => void;
+  onSaved: (cat: Category) => void;
 }) {
   const [name, setName] = useState("");
   const [modality, setModality] = useState<Modality>("kata");
@@ -268,10 +296,10 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Preenche o formulário com os dados da categoria a ser copiada
+  // Preenche o formulário com os dados da categoria (copiar adiciona sufixo; editar não)
   useEffect(() => {
     if (!category) return;
-    setName(`${category.name} (cópia)`);
+    setName(mode === "copy" ? `${category.name} (cópia)` : category.name);
     setModality(category.modality);
     setSex(category.sex);
     setAgeMin(category.min_age != null ? String(category.min_age) : "");
@@ -283,7 +311,7 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
     setFee(cents ? maskMoney(String(cents)) : "");
     setError(null);
     setSaving(false);
-  }, [category]);
+  }, [category, mode]);
 
   if (!category) return null;
 
@@ -292,7 +320,7 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
     setError(null);
     setSaving(true);
     try {
-      const created = await karateCompetitionsApi.createCategory(federationId, competitionId, {
+      const payload = {
         name: name.trim(),
         modality,
         min_age: ageMin ? parseInt(ageMin, 10) : null,
@@ -303,10 +331,14 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
         weight_class: null,
         max_entries: maxEntries ? parseInt(maxEntries, 10) : null,
         fee_amount: fee ? moneyToNumber(fee) : null,
-      });
-      onCreated(created);
+      };
+      const saved = mode === "edit"
+        ? await karateCompetitionsApi.updateCategory(federationId, competitionId, category.id, payload)
+        : await karateCompetitionsApi.createCategory(federationId, competitionId, payload);
+      onSaved(saved);
     } catch (e: any) {
-      setError(e?.message ?? "Não foi possível criar a categoria. Tente novamente.");
+      const fallback = mode === "edit" ? "Não foi possível salvar a categoria. Tente novamente." : "Não foi possível criar a categoria. Tente novamente.";
+      setError(e?.message ?? fallback);
     } finally {
       setSaving(false);
     }
@@ -316,8 +348,8 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={[styles.sheet, styles.sheetLarge]}>
-          <Text style={styles.sheetTitle}>Copiar categoria</Text>
-          <Text style={styles.sheetSub}>Ajuste os campos e salve como nova categoria.</Text>
+          <Text style={styles.sheetTitle}>{mode === "edit" ? "Editar categoria" : "Copiar categoria"}</Text>
+          <Text style={styles.sheetSub}>{mode === "edit" ? "Altere os campos e salve." : "Ajuste os campos e salve como nova categoria."}</Text>
 
           {error ? (
             <View style={styles.errorBanner}>
@@ -420,7 +452,10 @@ function CopiarCategoriaModal({ category, federationId, competitionId, onClose, 
 
           <View style={styles.sheetActions}>
             <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} style={{ flex: 1 }} disabled={saving} />
-            <KarateButton label={saving ? "Criando…" : "Criar cópia"} variant="primary" size="md" loading={saving} onPress={handleSave} style={{ flex: 1 }} />
+            <KarateButton
+              label={saving ? (mode === "edit" ? "Salvando…" : "Criando…") : (mode === "edit" ? "Salvar alterações" : "Criar cópia")}
+              variant="primary" size="md" loading={saving} onPress={handleSave} style={{ flex: 1 }}
+            />
           </View>
         </View>
       </View>
