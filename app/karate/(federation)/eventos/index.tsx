@@ -16,21 +16,20 @@ import {
   ShojiBackground, PageHead, SectionHead, Card, KpiBand, ShojiBadge, ShojiButton, Mono, Body,
 } from "@/components/karate/shoji";
 import { CriarExameModal } from "@/components/karate/CriarExameModal";
-import { karateApi, BeltExam, CourseEvent } from "@/services/karateApi";
+import { karateApi, BeltExam } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const EXAM_STATUS: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
   done: { label: "Encerrado", badge: "warn" }, closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
-const COURSE_LABEL: Record<string, string> = { seminar: "Seminário", course: "Curso", clinic: "Clínica" };
 const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }); };
 
 export default function EventosOverview() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const [exams, setExams] = useState<BeltExam[]>([]);
-  const [courses, setCourses] = useState<CourseEvent[]>([]);
+  const [courses, setCourses] = useState<BeltExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,8 +39,10 @@ export default function EventosOverview() {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      const [e, c] = await Promise.all([karateApi.listBeltExams(federationId), karateApi.listCourses(federationId)]);
-      setExams(e.data ?? []); setCourses(c.data ?? []);
+      const { data } = await karateApi.listBeltExams(federationId);
+      const all = data ?? [];
+      setExams(all.filter((item) => item.exam_type !== "curso"));
+      setCourses(all.filter((item) => item.exam_type === "curso"));
     } catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
@@ -94,15 +95,15 @@ export default function EventosOverview() {
               : courses.map((course) => (
                 <TouchableOpacity key={course.id} onPress={() => router.push(`/karate/eventos/exame/${course.id}` as any)} activeOpacity={0.85}>
                   <Card style={{ marginBottom: 12 }}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.cardTitle}>{course.title}</Text>
-                    <ShojiBadge status="neutral" label={COURSE_LABEL[course.event_type] ?? course.event_type} />
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Meta icon="calendar-outline" text={fmtDate(course.event_date)} />
-                    <Meta icon="person-outline" text={course.instructor ?? "Instrutor a definir"} />
-                    <Meta icon="people-outline" text={`${course.enrolled_count} inscritos`} />
-                  </View>
+                    <View style={styles.cardTop}>
+                      <Text style={styles.cardTitle}>{course.title}</Text>
+                      <ShojiBadge status={EXAM_STATUS[course.status]?.badge ?? "neutral"} label={EXAM_STATUS[course.status]?.label ?? course.status} />
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Meta icon="calendar-outline" text={fmtDate(course.exam_date)} />
+                      {!!course.location && <Meta icon="location-outline" text={course.location} />}
+                      <Meta icon="people-outline" text={`${course.candidate_count} candidatos`} />
+                    </View>
                   </Card>
                 </TouchableOpacity>
               ))}

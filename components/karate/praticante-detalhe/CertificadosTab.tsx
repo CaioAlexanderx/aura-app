@@ -1,12 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
-  StyleSheet, ViewStyle, TextStyle,
+  View, Text, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
-import { karateApi, PractitionerDetail } from "@/services/karateApi";
+import { PractitionerDetail } from "@/services/karateApi";
 
 interface Props {
   certificates: PractitionerDetail["certificates"];
@@ -14,19 +13,8 @@ interface Props {
   practitionerId: string;
 }
 
-// Track P: aba de certificados/exames — exibe lista + permite emitir novo certificado
-export function CertificadosTab({ certificates, federationId, practitionerId }: Props) {
-  const [issuingId, setIssuingId] = useState<string | null>(null);
-
-  async function handleIssue(certId: string) {
-    setIssuingId(certId);
-    try {
-      await karateApi.issueCertificate(federationId, practitionerId, certId);
-    } finally {
-      setIssuingId(null);
-    }
-  }
-
+// Track P: aba de certificados/exames — exibe lista (emissão sob demanda removida no MVP; certificado = só workflow)
+export function CertificadosTab({ certificates }: Props) {
   if (!certificates || certificates.length === 0) {
     return (
       <EmptyState
@@ -53,19 +41,6 @@ export function CertificadosTab({ certificates, federationId, practitionerId }: 
                 : "Não emitido"}
             </Text>
           </View>
-          {!cert.issued_at && (
-            <TouchableOpacity
-              style={[tabStyles.issueBtn, issuingId === cert.id && { opacity: 0.6 }]}
-              onPress={() => handleIssue(cert.id)}
-              disabled={issuingId === cert.id}
-              accessibilityRole="button"
-              accessibilityLabel="Emitir certificado"
-            >
-              {issuingId === cert.id
-                ? <ActivityIndicator size="small" color="#fdf8f2" />
-                : <Text style={tabStyles.issueBtnTxt}>Emitir</Text>}
-            </TouchableOpacity>
-          )}
           {cert.issued_at && (
             <View style={tabStyles.issuedBadge}>
               <Icon name="check" size={14} color={KarateColors.primary} />
@@ -83,8 +58,5 @@ const tabStyles = StyleSheet.create({
   certIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
   certTitle:    { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   certMeta:     { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
-  issueBtn:     { paddingVertical: 7, paddingHorizontal: 12, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.md, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  issueBtnTxt:  { fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
   issuedBadge:  { width: 28, height: 28, borderRadius: 14, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
 });
-
