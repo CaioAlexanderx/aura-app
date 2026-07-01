@@ -12,12 +12,14 @@ import {
 import { CertOrderStatus } from "@/components/karate/EstadoSelo";
 
 // ── Sub-tabs ──────────────────────────────────────────────────
-// "Bancas" foi removida (fora do escopo atual). Restam Graduações e Certificados.
-export type SubTab = "graduacoes" | "certificados";
+// "Bancas" foi removida (fora do escopo atual). Restam Graduações,
+// Certificados e Carteirinhas (F5: impressão em lote, 30/06/2026).
+export type SubTab = "graduacoes" | "certificados" | "carteirinhas";
 
 export const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: "graduacoes",   label: "Graduações" },
   { id: "certificados", label: "Certificados" },
+  { id: "carteirinhas", label: "Carteirinhas" },
 ];
 
 // ── Estado filter pills ───────────────────────────────────────

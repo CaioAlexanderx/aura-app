@@ -46,6 +46,7 @@ import { RecusarModal } from "@/components/karate/certificados/RecusarModal";
 import { DetalheDrawer } from "@/components/karate/certificados/DetalheDrawer";
 import { OrderRow } from "@/components/karate/certificados/OrderRow";
 import { BatchBar } from "@/components/karate/certificados/BatchBar";
+import { CarteirinhaBatchTab } from "@/components/karate/carteirinha/CarteirinhaBatchTab";
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function ExamesScreen() {
@@ -178,7 +179,7 @@ export default function ExamesScreen() {
         </View>
 
         {/* Graduações: empty state limpo (sem placeholder poluído) */}
-        {sub !== "certificados" ? (
+        {sub === "graduacoes" ? (
           <View style={cs.emptyState}>
             <Icon name="school-outline" size={34} color={C.ink4} />
             <Text style={cs.emptyStateTitle}>Graduações</Text>
@@ -187,6 +188,8 @@ export default function ExamesScreen() {
               Em breve, o histórico de graduações da rede aparecerá aqui.
             </Text>
           </View>
+        ) : sub === "carteirinhas" ? (
+          <CarteirinhaBatchTab />
         ) : (
           <>
             {/* Section header */}
