@@ -79,6 +79,11 @@ export default function TorneioDetalhe() {
   const [showEditInfo, setShowEditInfo] = useState(false);
   // F6.3: publicar campeonato (draft -> open) para abrir inscrições.
   const [publishing, setPublishing] = useState(false);
+  // F7.4: encerrar (open -> done) e cancelar (draft/open -> cancelled) o campeonato.
+  const [closing, setClosing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = useCallback(() => {
     if (!cid) return;
@@ -118,6 +123,38 @@ export default function TorneioDetalhe() {
       notify("Não foi possível publicar", e?.message ?? "Tente novamente.");
     } finally {
       setPublishing(false);
+    }
+  };
+
+  // F7.4: encerra o campeonato (open -> done). Rota dedicada /close.
+  const handleClose = async () => {
+    if (!comp) return;
+    setClosing(true);
+    try {
+      await karateCompetitionsApi.closeCompetition(federationId, cid);
+      setComp((prev) => (prev ? { ...prev, status: "done" } : prev));
+      notify("Campeonato encerrado", "O campeonato foi marcado como concluído.");
+    } catch (e: any) {
+      notify("Não foi possível encerrar", e?.message ?? "Tente novamente.");
+    } finally {
+      setClosing(false);
+      setConfirmClose(false);
+    }
+  };
+
+  // F7.4: cancela o campeonato (draft/open -> cancelled).
+  const handleCancel = async () => {
+    if (!comp) return;
+    setCancelling(true);
+    try {
+      await karateCompetitionsApi.patchCompetition(federationId, cid, { status: "cancelled" });
+      setComp((prev) => (prev ? { ...prev, status: "cancelled" } : prev));
+      notify("Campeonato cancelado", "O campeonato foi cancelado.");
+    } catch (e: any) {
+      notify("Não foi possível cancelar", e?.message ?? "Tente novamente.");
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
     }
   };
 
@@ -168,7 +205,8 @@ export default function TorneioDetalhe() {
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> categorias</Text>
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count}</Text> inscritos</Text>
         </View>
-        {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa. */}
+        {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa.
+            F7.4: Chaves (sempre que houver categoria), Encerrar (open) e Cancelar (draft/open). */}
         <View style={styles.headerActions}>
           {comp.status === "draft" && (
             <KarateButton
@@ -180,6 +218,15 @@ export default function TorneioDetalhe() {
               style={{ flex: 1 }}
             />
           )}
+          {comp.categories.length > 0 && (
+            <KarateButton
+              label="Chaves"
+              variant="secondary"
+              size="sm"
+              onPress={() => router.push(`/karate/competicoes/torneio/chaves?id=${cid}`)}
+              style={{ flex: 1 }}
+            />
+          )}
           <KarateButton
             label="Editar informações"
             variant="secondary"
@@ -187,6 +234,28 @@ export default function TorneioDetalhe() {
             onPress={() => setShowEditInfo(true)}
             style={{ flex: 1 }}
           />
+          {comp.status === "open" && (
+            <KarateButton
+              label={closing ? "Encerrando..." : "Encerrar"}
+              variant="secondary"
+              size="sm"
+              loading={closing}
+              disabled={closing || cancelling}
+              onPress={() => setConfirmClose(true)}
+              style={{ flex: 1 }}
+            />
+          )}
+          {(comp.status === "draft" || comp.status === "open") && (
+            <KarateButton
+              label={cancelling ? "Cancelando..." : "Cancelar"}
+              variant="primary"
+              size="sm"
+              loading={cancelling}
+              disabled={closing || cancelling}
+              onPress={() => setConfirmCancel(true)}
+              style={{ flex: 1 }}
+            />
+          )}
         </View>
       </View>
 
@@ -291,7 +360,67 @@ export default function TorneioDetalhe() {
           setComp((prev) => (prev ? { ...prev, ...updated } : prev));
         }}
       />
+
+      {/* F7.4: confirmacoes inline (Modal in-app) para encerrar/cancelar o campeonato. */}
+      <ConfirmModal
+        visible={confirmClose}
+        title="Encerrar campeonato?"
+        message="O campeonato sera marcado como concluido. Nenhum novo resultado podera ser lancado depois disso."
+        confirmLabel="Encerrar"
+        loading={closing}
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={handleClose}
+      />
+      <ConfirmModal
+        visible={confirmCancel}
+        title="Cancelar campeonato?"
+        message="O campeonato sera marcado como cancelado. Essa acao nao pode ser desfeita pelo app."
+        confirmLabel="Cancelar campeonato"
+        destructive
+        loading={cancelling}
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={handleCancel}
+      />
     </ScrollView>
+  );
+}
+
+// -- Modal: Confirmacao inline (encerrar/cancelar) ------------------
+// Substitui window.confirm/Alert.alert: no react-native-web o Alert.alert
+// nao dispara onPress dos botoes (ver utils/webAlert.ts), entao usamos um
+// Modal in-app no mesmo padrao visual do ResultadoModal/CategoriaFormModal.
+function ConfirmModal({ visible, title, message, confirmLabel, destructive, loading, onCancel, onConfirm }: {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  loading?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.overlay}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <Text style={styles.sheetSub}>{message}</Text>
+          <View style={styles.sheetActions}>
+            <KarateButton label="Voltar" variant="ghost" size="md" onPress={onCancel} disabled={loading} style={{ flex: 1 }} />
+            <KarateButton
+              label={confirmLabel}
+              variant={destructive ? "primary" : "sumi"}
+              size="md"
+              loading={loading}
+              disabled={loading}
+              onPress={onConfirm}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -530,7 +659,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,
-  headerActions: { flexDirection: "row", gap: 8, marginTop: 10 } as ViewStyle,
+  headerActions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" } as ViewStyle,
   stat: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, marginTop: 4 } as TextStyle,

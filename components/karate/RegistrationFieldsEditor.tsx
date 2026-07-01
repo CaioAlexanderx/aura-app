@@ -32,6 +32,16 @@ const TYPE_OPTIONS: { value: RegistrationFieldType; label: string }[] = [
   { value: "phone", label: "Telefone" },
 ];
 
+// Microcopy curta por tipo — ajuda quem não é tech a escolher sem adivinhar.
+const TYPE_HINTS: Record<RegistrationFieldType, string> = {
+  text: "Resposta livre, em texto. Ex.: nome do responsável.",
+  number: "Só números. Ex.: idade, peso.",
+  select: "Quem se inscreve escolhe uma opção de uma lista que você define.",
+  checkbox: "Pergunta de sim ou não, com uma caixinha para marcar.",
+  date: "Quem se inscreve escolhe uma data no calendário.",
+  phone: "Número de telefone, com máscara de formatação.",
+};
+
 function slugifyKey(label: string): string {
   return label
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -122,13 +132,22 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
         </TouchableOpacity>
       </View>
       <Text style={styles.hint}>
-        Campos extras exibidos no formulário público de inscrição, além do CPF (sempre obrigatório).
+        Peça informações extras de quem se inscreve, além do CPF (sempre pedido). Ex.: tamanho do
+        quimono, contato de emergência, categoria. Os campos aparecem no formulário público de
+        inscrição do evento.
       </Text>
 
       {draft.length === 0 ? (
-        <Text style={styles.empty}>Nenhum campo extra configurado. A inscrição pede só o CPF.</Text>
+        <Text style={styles.empty}>
+          Nenhum campo extra ainda. A inscrição pede só o CPF. Toque em "Adicionar campo" para pedir mais informações.
+        </Text>
       ) : (
-        draft.map((field, index) => (
+        <>
+          <Text style={styles.subHint}>
+            Cada campo tem um rótulo (o que aparece para quem se inscreve), um tipo (como a resposta é
+            preenchida) e se é obrigatório (impede enviar a inscrição sem responder).
+          </Text>
+          {draft.map((field, index) => (
           <View key={index} style={styles.fieldCard}>
             <View style={styles.fieldRow}>
               <View style={{ flex: 1 }}>
@@ -168,6 +187,7 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
                 );
               })}
             </View>
+            <Text style={styles.typeHint}>{TYPE_HINTS[field.type]}</Text>
 
             {field.type === "select" && (
               <View style={{ marginTop: 8 }}>
@@ -179,11 +199,15 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
                   placeholder="Ex.: P, M, G, GG"
                   placeholderTextColor={KarateColors.ink4}
                 />
+                <Text style={styles.optionsHint}>Essas opções aparecem como uma lista para quem se inscreve escolher.</Text>
               </View>
             )}
 
             <View style={styles.requiredRow}>
-              <Text style={styles.fieldLabel}>Obrigatório</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Obrigatório</Text>
+                <Text style={styles.requiredHint}>Impede enviar a inscrição sem preencher este campo.</Text>
+              </View>
               <Switch
                 value={field.required}
                 onValueChange={(v) => update(index, { required: v })}
@@ -192,7 +216,8 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
               />
             </View>
           </View>
-        ))
+          ))}
+        </>
       )}
 
       <KarateButton
@@ -215,6 +240,7 @@ const styles = StyleSheet.create({
   addBtnText: { fontSize: 12.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   hint: { fontSize: 11.5, color: KarateColors.ink3 } as TextStyle,
   empty: { fontSize: 12.5, color: KarateColors.ink3, fontStyle: "italic", paddingVertical: 6 } as TextStyle,
+  subHint: { fontSize: 11, color: KarateColors.ink3, marginBottom: 2 } as TextStyle,
 
   fieldCard: {
     backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md,
@@ -238,5 +264,8 @@ const styles = StyleSheet.create({
   typePillText: { fontSize: 11.5, fontWeight: "600", color: KarateColors.ink2 } as TextStyle,
   typePillTextActive: { color: KarateColors.primary } as TextStyle,
 
-  requiredRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 } as ViewStyle,
+  requiredRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2, gap: 8 } as ViewStyle,
+  typeHint: { fontSize: 11, color: KarateColors.ink3, marginTop: 4 } as TextStyle,
+  optionsHint: { fontSize: 11, color: KarateColors.ink3, marginTop: 4 } as TextStyle,
+  requiredHint: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
 });

@@ -19,14 +19,41 @@ const MEDAL = ["#b8463a", "#9b9180", "#7a4e30"]; // ouro(vermelhão)/prata/bronz
 export default function CompeticoesRanking() {
   const { federationId } = useKarateFederation();
   const thisYear = new Date().getFullYear();
-  const SEASONS = [thisYear, thisYear - 1, thisYear - 2];
 
+  // F7.5: temporadas derivadas das competicoes reais (nao hardcoded).
+  // Enquanto carrega, usa so o ano atual como fallback seguro.
+  const [seasons, setSeasons] = useState<number[]>([thisYear]);
+  const [seasonsLoading, setSeasonsLoading] = useState(true);
   const [season, setSeason] = useState(thisYear);
+  const [seasonInitialized, setSeasonInitialized] = useState(false);
+
   const [category, setCategory] = useState<string | null>(null);
   const [rows, setRows] = useState<RankingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setSeasonsLoading(true);
+      try {
+        const res = await karateCompetitionsApi.listCompetitions(federationId);
+        if (cancelled) return;
+        const distinct = Array.from(new Set((res?.data ?? []).map((c) => c.season).filter((s): s is number => !!s)));
+        distinct.sort((a, b) => b - a);
+        const list = distinct.length > 0 ? distinct : [thisYear];
+        setSeasons(list);
+        setSeason(list[0]);
+      } catch {
+        if (!cancelled) setSeasons([thisYear]);
+      } finally {
+        if (!cancelled) { setSeasonsLoading(false); setSeasonInitialized(true); }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [federationId]);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -35,7 +62,7 @@ export default function CompeticoesRanking() {
     catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId, season]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (seasonInitialized) load(); }, [load, seasonInitialized]);
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))), [rows]);
   const active = category && categories.includes(category) ? category : categories[0] ?? null;
@@ -48,7 +75,9 @@ export default function CompeticoesRanking() {
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
         <Body muted style={{ marginBottom: 14 }}>Pontuação acumulada do circuito por temporada e categoria.</Body>
         <View style={styles.chips}>
-          {SEASONS.map((s) => <Chip key={s} label={String(s)} active={season === s} onPress={() => setSeason(s)} />)}
+          {seasonsLoading
+            ? <ActivityIndicator size="small" color={P.red} />
+            : seasons.map((s) => <Chip key={s} label={String(s)} active={season === s} onPress={() => setSeason(s)} />)}
         </View>
         {categories.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.chips, { paddingBottom: 16 }]}>
