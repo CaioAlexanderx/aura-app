@@ -31,7 +31,7 @@
 //   a parte da data manualmente e construir Date em hora local.
 // ============================================================
 import React, { useEffect, useState } from "react";
-import { Platform, View, Text, TouchableOpacity, Alert, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Platform, View, Text, TouchableOpacity, Alert, Modal, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
@@ -48,18 +48,6 @@ interface CarteirinhaPanelProps {
   practitionerId: string;
 }
 
-// Confirmação cross-plataforma. Na web o Alert.alert com botões é um no-op
-// (o onPress nunca dispara) → usamos window.confirm. Em nativo, Alert.alert.
-function confirm(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
-  } else {
-    Alert.alert(title, message, [
-      { text: "Cancelar", style: "cancel" },
-      { text: confirmLabel, onPress: onConfirm },
-    ]);
-  }
-}
 
 export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPanelProps) {
   const [card, setCard] = useState<MembershipCard | null>(null);
@@ -67,6 +55,10 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   const [issuing, setIssuing] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [face, setFace] = useState<"front" | "back">("front");
+  // Confirmação inline (modal in-app) — evita window.confirm, que trava a aba no web.
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (title: string, message: string, confirmLabel: string, onConfirm: () => void) =>
+    setConfirmDialog({ title, message, confirmLabel, onConfirm });
 
   const fetchCard = () => {
     let alive = true;
@@ -108,7 +100,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
 
   const confirmIssue = () => {
     const renew = !!card && card.status !== "revoked";
-    confirm(
+    askConfirm(
       renew ? "Renovar carteirinha?" : "Emitir carteirinha?",
       renew
         ? "A carteirinha atual será substituída por uma nova (a anterior é arquivada)."
@@ -133,7 +125,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   };
 
   const confirmRevoke = () => {
-    confirm(
+    askConfirm(
       "Revogar carteirinha?",
       "A carteirinha ativa será marcada como revogada. Esta ação é registrada. Você pode emitir uma nova depois.",
       "Revogar",
@@ -250,6 +242,25 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
           </>
         )}
       </View>
+
+      <Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <View style={{ width: "100%", maxWidth: 380, backgroundColor: "#fdf8f2", borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: KarateColors.ink, marginBottom: 8 }}>{confirmDialog?.title}</Text>
+            <Text style={{ fontSize: 13, color: KarateColors.ink3, lineHeight: 19, marginBottom: 16 }}>{confirmDialog?.message}</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <KarateButton label="Cancelar" variant="ghost" size="md" onPress={() => setConfirmDialog(null)} style={{ flex: 1 }} />
+              <KarateButton
+                label={confirmDialog?.confirmLabel || "Confirmar"}
+                variant="primary"
+                size="md"
+                onPress={() => { const cb = confirmDialog?.onConfirm; setConfirmDialog(null); cb && cb(); }}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
