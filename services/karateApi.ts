@@ -621,7 +621,6 @@ export interface CourseEnrollInput {
   practitioner_id: string;
 }
 
-/** Certificado — DECISÃO FPKT #3: emissão sob demanda via /issue */
 export interface Certificate {
   id: string;
   candidate_id: string;
@@ -1391,12 +1390,6 @@ export const karateApi = {
     body: CourseEnrollInput
   ): Promise<{ enrolled: true }> =>
     request(`/federation/${federationId}/courses/${eventId}/enroll`, { method: "POST", body }),
-
-  issueCertificate: (
-    federationId: string,
-    candidateId: string
-  ): Promise<Certificate> =>
-    request(`/federation/${federationId}/certificates/${candidateId}/issue`, { method: "POST", body: {} }),
 
   getCertificate: (federationId: string, candidateId: string): Promise<Certificate> =>
     request(`/federation/${federationId}/certificates/${candidateId}`),

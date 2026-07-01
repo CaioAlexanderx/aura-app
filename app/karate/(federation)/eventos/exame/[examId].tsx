@@ -308,7 +308,6 @@ export default function ExameDetalhe() {
   const [refreshing, setRefreshing] = useState(false);
   const [showResultados, setShowResultados] = useState(false);
   const [closingExam, setClosingExam] = useState(false);
-  const [issuingCert, setIssuingCert] = useState<string | null>(null);
   // Nav P2: slug público da federação para o link de inscrição (empty state).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
   // Bloco A: publicar inscrições (draft -> open) e copiar link direto do evento.
@@ -455,21 +454,6 @@ export default function ExameDetalhe() {
     }
   };
 
-  const handleIssueCertificate = async (candidateId: string) => {
-    setIssuingCert(candidateId);
-    try {
-      const cert = await karateApi.issueCertificate(federationId, candidateId);
-      setCandidates((prev) => prev.map((c) =>
-        c.id === candidateId ? { ...c, certificate_status: cert.status, certificate_url: cert.pdf_url } : c
-      ));
-      Alert.alert("Solicitação enviada", `Emissão do certificado solicitada. Status: ${cert.status}.`);
-    } catch (e: any) {
-      Alert.alert("Não foi possível solicitar", e?.message ?? "Tente novamente.");
-    } finally {
-      setIssuingCert(null);
-    }
-  };
-
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: KarateColors.bg }}>
@@ -598,23 +582,11 @@ export default function ExameDetalhe() {
                   {c.notes && <Text style={styles.notes}>Obs: {c.notes}</Text>}
                   <RegistrationResponsesList responses={c.registration_responses} fields={exam.registration_fields} />
 
-                  {c.result === "approved" && (
+                  {c.result === "approved" && c.certificate_status && (
                     <View style={styles.certSection}>
                       <Text style={styles.certLabel}>Certificado:</Text>
-                      {c.certificate_status ? (
-                        <>
-                          <Badge status={certStatusBadge[c.certificate_status]} label={certStatusLabel[c.certificate_status]} />
-                          {c.certificate_url && <Text style={styles.certUrl} numberOfLines={1}>{c.certificate_url}</Text>}
-                        </>
-                      ) : (
-                        <KarateButton
-                          label={issuingCert === c.id ? "Solicitando..." : "Solicitar emissão do certificado"}
-                          variant="secondary"
-                          size="sm"
-                          loading={issuingCert === c.id}
-                          onPress={() => handleIssueCertificate(c.id)}
-                        />
-                      )}
+                      <Badge status={certStatusBadge[c.certificate_status]} label={certStatusLabel[c.certificate_status]} />
+                      {c.certificate_url && <Text style={styles.certUrl} numberOfLines={1}>{c.certificate_url}</Text>}
                     </View>
                   )}
                 </View>
