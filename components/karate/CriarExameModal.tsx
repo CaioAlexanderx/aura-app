@@ -26,7 +26,7 @@
 import React, { useState, useCallback } from "react";
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, TextInput, Pressable,
-  StyleSheet, ActivityIndicator, Alert, useWindowDimensions, ViewStyle, TextStyle,
+  StyleSheet, ActivityIndicator, useWindowDimensions, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
@@ -38,6 +38,7 @@ import {
   karateApi, Examiner, EligibilityResult, PractitionerListItem,
 } from "@/services/karateApi";
 import { request } from "@/services/api";
+import { notify } from "@/utils/webAlert";
 
 // Tipo de evento amplo (sem grau). Mapeia 1:1 para exam_type do backend.
 type EventKind = "exame" | "curso";
@@ -180,7 +181,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
       const ex = await karateApi.addExaminer(federationId, createdExamId, { practitioner_id: p.id, role });
       setExaminers((prev) => [...prev, ex]);
     } catch (e: any) {
-      Alert.alert("Não foi possível adicionar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível adicionar", e?.message ?? "Tente novamente.");
     } finally {
       setBusyId(null);
     }
@@ -199,7 +200,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
         setEligibilityMap((prev) => ({ ...prev, [p.id]: candidate.eligibility! }));
       }
     } catch (e: any) {
-      Alert.alert("Não foi possível inscrever", e?.message ?? "Tente novamente.");
+      notify("Não foi possível inscrever", e?.message ?? "Tente novamente.");
     } finally {
       setBusyId(null);
     }
@@ -209,7 +210,11 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
     onCreated?.();
     const what = kind === "curso" ? "Curso" : "Exame";
     const detail = `"${title}" criado.`;
-    Alert.alert(`${what} criado!`, detail, [{ text: "OK", onPress: resetAndClose }]);
+    // Fecha e reseta primeiro: no web o Alert.alert com botão é um no-op
+    // (onPress nunca dispara), então o fechamento NÃO pode depender dele —
+    // senão o modal fica aberto e o usuário clica de novo, duplicando o evento.
+    resetAndClose();
+    notify(`${what} criado!`, detail);
   };
 
   const PoolList = ({ mode }: { mode: "examiner" | "candidate" }) => (
@@ -277,7 +282,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
             <View style={{ flex: 1 }}>
               <Text style={styles.eyebrow}>空  FPKT · Novo evento</Text>
               <Text style={styles.title}>Criar evento<Text style={{ color: P.red }}>.</Text></Text>
-              <Text style={styles.sub}>Escolha o tipo, preencha os dados{kind === "exame" ? " e monte a banca" : ""}.</Text>
+              <Text style={styles.sub}>Escolha o tipo e preencha os dados.</Text>
             </View>
             <TouchableOpacity onPress={resetAndClose} hitSlop={10} style={styles.close} accessibilityLabel="Fechar modal">
               <Icon name="x" size={20} color={P.ink2} />
@@ -363,7 +368,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
               <KarateButton label="Próximo" variant="sumi" size="md" onPress={() => setStep(2)} style={{ flex: 1 }} />
             )}
             {kind === "exame" && step === 2 && (
-              <KarateButton label="Concluir" variant="sumi" size="md" onPress={handleFinish} style={{ flex: 1 }} />
+              <KarateButton label="Concluir" variant="sumi" size="md" disabled={loading} onPress={handleFinish} style={{ flex: 1 }} />
             )}
           </View>
         </View>
