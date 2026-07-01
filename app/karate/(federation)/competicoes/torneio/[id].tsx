@@ -24,6 +24,7 @@ import {
 } from "@/services/karateCompetitionsApi";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
 import { EditarTorneioInfoModal } from "@/components/karate/EditarTorneioInfoModal";
+import { notify } from "@/utils/webAlert";
 
 const MODALITY_LABEL: Record<Modality, string> = {
   kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
@@ -76,6 +77,8 @@ export default function TorneioDetalhe() {
   const [editFor, setEditFor] = useState<Category | null>(null);
   // Tornar evento editável: modal "Editar informações" do torneio (nome, data, local...).
   const [showEditInfo, setShowEditInfo] = useState(false);
+  // F6.3: publicar campeonato (draft -> open) para abrir inscrições.
+  const [publishing, setPublishing] = useState(false);
 
   const load = useCallback(() => {
     if (!cid) return;
@@ -101,6 +104,21 @@ export default function TorneioDetalhe() {
     const next = openCat === categoryId ? null : categoryId;
     setOpenCat(next);
     if (next) loadEntries(next);
+  };
+
+  // F6.3: publica o campeonato (draft -> open). PATCH já valida status; sem rota nova.
+  const handlePublish = async () => {
+    if (!comp) return;
+    setPublishing(true);
+    try {
+      await karateCompetitionsApi.patchCompetition(federationId, cid, { status: "open" });
+      setComp((prev) => (prev ? { ...prev, status: "open" } : prev));
+      notify("Inscrições abertas", "O campeonato foi publicado e já aceita inscrições.");
+    } catch (e: any) {
+      notify("Não foi possível publicar", e?.message ?? "Tente novamente.");
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const saveResult = async (entry: Entry, placement: string, points: string) => {
@@ -150,8 +168,18 @@ export default function TorneioDetalhe() {
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> categorias</Text>
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count}</Text> inscritos</Text>
         </View>
-        {/* Todos os eventos são editáveis: nome, data, local, etapa, taxa. */}
+        {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa. */}
         <View style={styles.headerActions}>
+          {comp.status === "draft" && (
+            <KarateButton
+              label={publishing ? "Publicando..." : "Publicar / Abrir inscrições"}
+              variant="sumi"
+              size="sm"
+              loading={publishing}
+              onPress={handlePublish}
+              style={{ flex: 1 }}
+            />
+          )}
           <KarateButton
             label="Editar informações"
             variant="secondary"
