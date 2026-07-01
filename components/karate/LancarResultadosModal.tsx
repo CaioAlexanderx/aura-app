@@ -75,7 +75,7 @@ export function LancarResultadosModal({
         </View>
 
         <Text style={styles.hint}>
-          Lance o resultado de cada candidato individualmente. RBAC examResults aplicado no backend.
+          Lance o resultado de cada candidato individualmente.
         </Text>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
