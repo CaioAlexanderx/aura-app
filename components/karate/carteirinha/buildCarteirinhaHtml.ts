@@ -6,11 +6,20 @@
 // components/screens/estoque/labels/buildLabelHtml.ts (mesmo padrão de
 // botão flutuante "Imprimir" + @media print escondendo controles).
 //
-// Reconstrói em HTML/CSS o layout de components/karate/CarteirinhaCard.tsx
-// (frente apenas — verso/Dojo Kun fica fora do lote por ora, o objetivo é
-// identificação rápida em lote). Mantém fidelidade nos campos: logo/nome da
-// federação, nome do aluno, nº carteirinha, faixa com cor (KarateBelts),
-// dojô, foto (se houver) e QR de verificação.
+// Reconstrói em HTML/CSS o layout de components/karate/CarteirinhaCard.tsx —
+// FRENTE e VERSO de cada carteirinha. Mantém fidelidade nos campos:
+// frente: logo/nome da federação, nome do aluno, nº carteirinha, faixa com
+// cor (KarateBelts), dojô, foto (se houver) e emissão; verso: Dojo Kun (os
+// cinco princípios, espelhando CarteirinhaCard.Back), QR de verificação e
+// nº de registro/data de emissão.
+//
+// Layout de impressão: para cada praticante, a FRENTE e o VERSO são
+// emitidos em sequência no mesmo grid 2 colunas (frente, depois verso logo
+// a seguir), cada um rotulado ("Frente"/"Verso") no card. Isso mantém a
+// leitura simples em tela e permite impressão frente-e-verso manual
+// (imprimir todas, virar a pilha, reimprimir nas costas) sem exigir duplex
+// automático do navegador — o pareamento frente/verso fica visualmente
+// adjacente na grade para facilitar o corte e a conferência.
 //
 // QR: reutiliza o MESMO serviço público que buildLabelHtml.ts já usa em
 // produção (api.qrserver.com) — não há gerador de QR "RN-only" reaproveitável
@@ -26,6 +35,15 @@ import type { MembershipCard } from "@/services/karateCardApi";
 const ACCENT = "#D4121B";
 const CARD_W_MM = 80;
 const CARD_H_MM = 50;
+
+// Dojo Kun — os cinco princípios (espelha DOJO_KUN em CarteirinhaCard.tsx)
+const DOJO_KUN = [
+  "Esforçar-se para a formação do caráter",
+  "Criar intuito de esforço",
+  "Respeitar acima de tudo",
+  "Conter o espírito de agressão",
+  "Fidelidade para com o verdadeiro caminho da razão",
+];
 
 function esc(s: string | null | undefined): string {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -66,60 +84,105 @@ export type CarteirinhaBatchOptions = {
   federationName?: string;
 };
 
+function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): string {
+  const belt = beltColor(card);
+  const federationLabel = esc(card.federation_name || options?.federationName || "Federação de Karatê");
+  const logo = card.federation_logo
+    ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
+    : '<div class="logo-fallback">空</div>';
+  const photo = card.photo_url
+    ? '<img class="photo" src="' + esc(card.photo_url) + '" alt="">'
+    : '<div class="photo photo-empty">Foto</div>';
+
+  return (
+    '<div class="card">' +
+      '<div class="card-head">' +
+        '<div class="logo">' + logo + '</div>' +
+        '<div class="head-text">' +
+          '<div class="fed-name">' + federationLabel + '</div>' +
+          '<div class="doc-title">Carteira do Atleta</div>' +
+        '</div>' +
+        '<div class="face-tag">Frente</div>' +
+      '</div>' +
+      '<div class="card-body">' +
+        photo +
+        '<div class="fields">' +
+          '<div class="field">' +
+            '<div class="flabel">Nome</div>' +
+            '<div class="fvalue name">' + esc(card.student_name) + '</div>' +
+          '</div>' +
+          '<div class="field-row">' +
+            '<div class="field">' +
+              '<div class="flabel">Nº registro</div>' +
+              '<div class="fvalue mono accent">' + esc(card.card_number || "—") + '</div>' +
+            '</div>' +
+            '<div class="field">' +
+              '<div class="flabel">Dojô</div>' +
+              '<div class="fvalue">' + esc(card.dojo_name || "—") + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="belt-row">' +
+            '<span class="belt-tag" style="background:' + belt.bg + ';color:' + belt.text + '">' + esc(belt.label) + '</span>' +
+            '<span class="issued">Emissão: ' + fmtBR(card.issued_at) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="qr-col">' +
+          '<img class="qr" src="' + qrImgUrl(verifyUrlFor(card), 150) + '" alt="QR de verificação">' +
+          '<div class="qr-hint">verificar</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cut-hint"></div>' +
+    '</div>'
+  );
+}
+
+// Verso — espelha CarteirinhaCard.Back: Dojo Kun (os cinco princípios) à
+// esquerda, QR de verificação + nº de registro + data de emissão à direita.
+function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): string {
+  const federationLabel = esc(card.federation_name || options?.federationName || "Federação de Karatê");
+  const logo = card.federation_logo
+    ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
+    : '<div class="logo-fallback">空</div>';
+  const verifyUrl = verifyUrlFor(card);
+  const qr = qrImgUrl(verifyUrl, 150);
+  const kunList = DOJO_KUN.map(function (line, i) {
+    return '<li class="kun-item">' +
+      '<span class="kun-dot"></span>' +
+      '<span class="kun-text">' + esc(line) + '</span>' +
+      '</li>';
+  }).join("");
+
+  return (
+    '<div class="card">' +
+      '<div class="card-head">' +
+        '<div class="logo">' + logo + '</div>' +
+        '<div class="head-text">' +
+          '<div class="fed-name">' + federationLabel + '</div>' +
+          '<div class="doc-title">Carteira do Atleta</div>' +
+        '</div>' +
+        '<div class="face-tag">Verso</div>' +
+      '</div>' +
+      '<div class="card-body back-body">' +
+        '<div class="kun-col">' +
+          '<div class="kun-title">Dojo Kun · os cinco princípios</div>' +
+          '<ul class="kun-list">' + kunList + '</ul>' +
+        '</div>' +
+        '<div class="verify-col">' +
+          '<img class="qr" src="' + qr + '" alt="QR de verificação">' +
+          '<div class="fvalue mono accent verify-num">' + esc(card.card_number || "—") + '</div>' +
+          '<div class="issued">Emissão: ' + fmtBR(card.issued_at) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cut-hint"></div>' +
+    '</div>'
+  );
+}
+
 export function buildCarteirinhaHtml(cards: MembershipCard[], options?: CarteirinhaBatchOptions): string {
   const total = cards.length;
 
   const cells = cards.map(function (card) {
-    const belt = beltColor(card);
-    const verifyUrl = verifyUrlFor(card);
-    const qr = qrImgUrl(verifyUrl, 150);
-    const logo = card.federation_logo
-      ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
-      : '<div class="logo-fallback">空</div>';
-    const federationLabel = esc(card.federation_name || options?.federationName || "Federação de Karatê");
-    const photo = card.photo_url
-      ? '<img class="photo" src="' + esc(card.photo_url) + '" alt="">'
-      : '<div class="photo photo-empty">Foto</div>';
-
-    return (
-      '<div class="card">' +
-        '<div class="card-head">' +
-          '<div class="logo">' + logo + '</div>' +
-          '<div class="head-text">' +
-            '<div class="fed-name">' + federationLabel + '</div>' +
-            '<div class="doc-title">Carteira do Atleta</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card-body">' +
-          photo +
-          '<div class="fields">' +
-            '<div class="field">' +
-              '<div class="flabel">Nome</div>' +
-              '<div class="fvalue name">' + esc(card.student_name) + '</div>' +
-            '</div>' +
-            '<div class="field-row">' +
-              '<div class="field">' +
-                '<div class="flabel">Nº registro</div>' +
-                '<div class="fvalue mono accent">' + esc(card.card_number || "—") + '</div>' +
-              '</div>' +
-              '<div class="field">' +
-                '<div class="flabel">Dojô</div>' +
-                '<div class="fvalue">' + esc(card.dojo_name || "—") + '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="belt-row">' +
-              '<span class="belt-tag" style="background:' + belt.bg + ';color:' + belt.text + '">' + esc(belt.label) + '</span>' +
-              '<span class="issued">Emissão: ' + fmtBR(card.issued_at) + '</span>' +
-            '</div>' +
-          '</div>' +
-          '<div class="qr-col">' +
-            '<img class="qr" src="' + qr + '" alt="QR de verificação">' +
-            '<div class="qr-hint">verificar</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="cut-hint"></div>' +
-      '</div>'
-    );
+    return renderFront(card, options) + "\n" + renderBack(card, options);
   }).join("\n");
 
   let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
@@ -156,6 +219,16 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.qr{width:11mm;height:11mm;image-rendering:pixelated}';
   html += '.qr-hint{font-size:4pt;color:#9a9a9a;text-transform:uppercase;letter-spacing:0.3pt}';
   html += '.cut-hint{position:absolute;inset:0;border:0.15mm dashed rgba(0,0,0,0.15);border-radius:2.2mm;pointer-events:none}';
+  html += '.face-tag{font-size:4.6pt;font-weight:700;letter-spacing:0.4pt;text-transform:uppercase;color:#bdbdbd;flex-shrink:0}';
+  html += '.back-body{padding:1.8mm 3mm;gap:2.6mm}';
+  html += '.kun-col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.8mm}';
+  html += '.kun-title{font-size:5.2pt;font-weight:700;color:' + ACCENT + ';text-transform:uppercase;letter-spacing:0.2pt;margin-bottom:0.6mm}';
+  html += '.kun-list{list-style:none;display:flex;flex-direction:column;gap:0.6mm}';
+  html += '.kun-item{display:flex;align-items:flex-start;gap:1mm}';
+  html += '.kun-dot{width:0.9mm;height:0.9mm;border-radius:0.5mm;background:' + ACCENT + ';margin-top:0.8mm;flex-shrink:0}';
+  html += '.kun-text{font-size:4.8pt;line-height:1.35;color:#1f1f1f}';
+  html += '.verify-col{width:15mm;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.8mm;border-left:0.2mm solid rgba(17,17,17,0.10);padding-left:2.4mm}';
+  html += '.verify-num{font-size:5.6pt}';
 
   // ── Controles de tela (escondidos na impressão) ──
   html += '.print-fab{position:fixed;bottom:20px;right:20px;z-index:999;background:#7c3aed;color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.35);font-family:-apple-system,"Segoe UI",sans-serif}';
@@ -165,8 +238,8 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.grid{padding-top:0;padding-bottom:0}body{background:#fff}}';
   html += '</style></head><body>';
 
-  html += '<div class="top-bar"><div><span>Carteirinhas Aura — A4, ' + CARD_W_MM + 'mm x ' + CARD_H_MM + 'mm</span><br>';
-  html += '<b>' + total + ' carteirinha' + (total > 1 ? 's' : '') + ' selecionada' + (total > 1 ? 's' : '') + '</b></div></div>';
+  html += '<div class="top-bar"><div><span>Carteirinhas Aura — A4, ' + CARD_W_MM + 'mm x ' + CARD_H_MM + 'mm · frente e verso</span><br>';
+  html += '<b>' + total + ' carteirinha' + (total > 1 ? 's' : '') + ' selecionada' + (total > 1 ? 's' : '') + ' (' + (total * 2) + ' cartões p/ impressão)</b></div></div>';
 
   html += '<div class="grid">' + cells + '</div>';
 

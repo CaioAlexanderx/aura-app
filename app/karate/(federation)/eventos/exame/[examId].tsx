@@ -37,6 +37,7 @@ import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
 import { EditarExameInfoModal } from "@/components/karate/EditarExameInfoModal";
+import { formatEventDateNumeric } from "@/utils/eventDate";
 
 const RESULT_BADGE: Record<string, "ok" | "alert" | "neutral"> = {
   approved: "ok", rejected: "alert", pending: "neutral",
@@ -52,10 +53,7 @@ const certStatusBadge: Record<string, "neutral" | "ok" | "warn" | "alert"> = {
 };
 
 function fmtDate(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("pt-BR");
+  return formatEventDateNumeric(iso, "—");
 }
 
 // Formata o valor de uma resposta (checkbox -> Sim/Não; array de select

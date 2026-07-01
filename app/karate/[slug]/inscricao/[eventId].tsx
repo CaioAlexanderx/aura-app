@@ -22,6 +22,7 @@ import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
 import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult, RegistrationField } from "@/services/karatePortalApi";
+import { formatEventDateShort } from "@/utils/eventDate";
 
 function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
 function maskCpf(s: string) {
@@ -32,10 +33,7 @@ function maskCpf(s: string) {
     .replace(/\.(\d{3})(\d)/, ".$1-$2");
 }
 function fmtDate(iso?: string | null): string {
-  if (!iso) return "a definir";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  return formatEventDateShort(iso, "a definir");
 }
 function fmtBRL(v?: number | null): string {
   if (v == null) return "—";
