@@ -37,6 +37,7 @@ import { KarateColors } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
+import { notify } from "@/utils/webAlert";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
 import { karateCardApi, MembershipCard } from "@/services/karateCardApi";
@@ -45,16 +46,6 @@ import { karateApi } from "@/services/karateApi";
 interface CarteirinhaPanelProps {
   federationId: string;
   practitionerId: string;
-}
-
-// Feedback simples cross-plataforma. Na web o Alert.alert do RN só mostra o
-// título (sem corpo, sem botões com callback), então usamos window.alert.
-function notify(title: string, message?: string) {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    window.alert(message ? `${title}\n\n${message}` : title);
-  } else {
-    Alert.alert(title, message);
-  }
 }
 
 // Confirmação cross-plataforma. Na web o Alert.alert com botões é um no-op
