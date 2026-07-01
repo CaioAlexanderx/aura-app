@@ -22,6 +22,8 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateCompetitionsApi, Entry, CompetitionDetail, Modality, CompetitionStatus, Category, Sex,
 } from "@/services/karateCompetitionsApi";
+import { EventBannerManager } from "@/components/karate/EventBannerManager";
+import { EditarTorneioInfoModal } from "@/components/karate/EditarTorneioInfoModal";
 
 const MODALITY_LABEL: Record<Modality, string> = {
   kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
@@ -72,6 +74,8 @@ export default function TorneioDetalhe() {
   const [resultFor, setResultFor] = useState<Entry | null>(null);
   const [copyFor, setCopyFor] = useState<Category | null>(null);
   const [editFor, setEditFor] = useState<Category | null>(null);
+  // Tornar evento editável: modal "Editar informações" do torneio (nome, data, local...).
+  const [showEditInfo, setShowEditInfo] = useState(false);
 
   const load = useCallback(() => {
     if (!cid) return;
@@ -146,7 +150,20 @@ export default function TorneioDetalhe() {
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> categorias</Text>
           <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count}</Text> inscritos</Text>
         </View>
+        {/* Todos os eventos são editáveis: nome, data, local, etapa, taxa. */}
+        <View style={styles.headerActions}>
+          <KarateButton
+            label="Editar informações"
+            variant="secondary"
+            size="sm"
+            onPress={() => setShowEditInfo(true)}
+            style={{ flex: 1 }}
+          />
+        </View>
       </View>
+
+      {/* Banner deixou de ser tela própria: agora é anexo do evento. */}
+      <EventBannerManager federationId={federationId} eventId={cid} />
 
       <Text style={styles.sectionTitle}>Categorias</Text>
       {comp.categories.length === 0 ? (
@@ -232,6 +249,18 @@ export default function TorneioDetalhe() {
           setComp((prev) => prev
             ? { ...prev, categories: prev.categories.map((c) => (c.id === updatedCat.id ? { ...c, ...updatedCat } : c)) }
             : prev);
+        }}
+      />
+
+      <EditarTorneioInfoModal
+        visible={showEditInfo}
+        competition={comp}
+        federationId={federationId}
+        competitionId={cid}
+        onClose={() => setShowEditInfo(false)}
+        onSaved={(updated) => {
+          setShowEditInfo(false);
+          setComp((prev) => (prev ? { ...prev, ...updated } : prev));
         }}
       />
     </ScrollView>
@@ -473,6 +502,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,
+  headerActions: { flexDirection: "row", gap: 8, marginTop: 10 } as ViewStyle,
   stat: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   sectionTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, marginTop: 4 } as TextStyle,
