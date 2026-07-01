@@ -17,7 +17,7 @@
 // ============================================================
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, RefreshControl, ViewStyle, TextStyle, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -32,6 +32,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateApi, ExamCandidate, BeltExam, PractitionerListItem } from "@/services/karateApi";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
+import { notify, confirmAlert } from "@/utils/webAlert";
 import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
@@ -143,7 +144,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId,
     setQuery("");
     setSuggestions([]);
     if (enrolledIds.has(item.id)) {
-      Alert.alert("Já inscrito", `${item.full_name} já é participante deste curso.`);
+      notify("Já inscrito", `${item.full_name} já é participante deste curso.`);
       return;
     }
     setEnrolling(true);
@@ -151,7 +152,7 @@ function ParticipantesSection({ candidates, setCandidates, federationId, examId,
       const candidate = await karateApi.addExamCandidate(federationId, examId, { student_id: item.id });
       setCandidates((prev) => [...prev, candidate]);
     } catch (e: any) {
-      Alert.alert("Não foi possível inscrever", e?.message ?? "Tente novamente.");
+      notify("Não foi possível inscrever", e?.message ?? "Tente novamente.");
     } finally {
       setEnrolling(false);
     }
@@ -355,7 +356,7 @@ export default function ExameDetalhe() {
   const shareInscription = async () => {
     if (!publicUrl) return;
     const ok = await copyToClipboard(publicUrl);
-    Alert.alert(
+    notify(
       ok ? "Link copiado" : "Não foi possível copiar",
       ok ? `Compartilhe a página pública da federação:\n${publicUrl}` : "Copie manualmente: " + publicUrl
     );
@@ -373,7 +374,7 @@ export default function ExameDetalhe() {
     setCopyingLink(true);
     try {
       const ok = await copyToClipboard(inscriptionUrl);
-      Alert.alert(
+      notify(
         ok ? "Link copiado" : "Não foi possível copiar",
         ok ? `Link de inscrição copiado:\n${inscriptionUrl}` : "Copie manualmente: " + inscriptionUrl
       );
@@ -393,7 +394,7 @@ export default function ExameDetalhe() {
       });
       setExam((prev) => (prev ? { ...prev, status: "open" } : prev));
     } catch (e: any) {
-      Alert.alert("Não foi possível publicar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível publicar", e?.message ?? "Tente novamente.");
     } finally {
       setPublishing(false);
     }
@@ -409,9 +410,9 @@ export default function ExameDetalhe() {
         body: { registration_fields: fields },
       });
       setExam((prev) => (prev ? { ...prev, registration_fields: fields } : prev));
-      Alert.alert("Campos salvos", "O formulário de inscrição foi atualizado.");
+      notify("Campos salvos", "O formulário de inscrição foi atualizado.");
     } catch (e: any) {
-      Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível salvar", e?.message ?? "Tente novamente.");
     } finally {
       setSavingFields(false);
     }
@@ -430,14 +431,12 @@ export default function ExameDetalhe() {
   const handleCloseExam = () => {
     if (!exam) return;
     const pendingCount = candidates.filter((c) => c.result === "pending").length;
-    Alert.alert(
+    confirmAlert(
       "Fechar exame?",
       `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Fechar exame", style: "destructive", onPress: confirmCloseExam },
-      ],
-      { cancelable: true }
+      "Fechar exame",
+      confirmCloseExam,
+      { destructive: true }
     );
   };
 
@@ -448,7 +447,7 @@ export default function ExameDetalhe() {
       await karateApi.closeBeltExam(federationId, exam.id);
       setExam((prev) => (prev ? { ...prev, status: "done" } : prev));
     } catch (e: any) {
-      Alert.alert("Não foi possível fechar o exame", e?.message ?? "Tente novamente.");
+      notify("Não foi possível fechar o exame", e?.message ?? "Tente novamente.");
     } finally {
       setClosingExam(false);
     }

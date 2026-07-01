@@ -60,6 +60,9 @@ interface Props {
 export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
   const [draft, setDraft] = useState<RegistrationField[]>(fields);
   const [dirty, setDirty] = useState(false);
+  // Buffer do texto cru do campo "Opções" por índice. Sem isso, o value
+  // reconstruído do array (join) come as vírgulas enquanto o usuário digita.
+  const [optionsText, setOptionsText] = useState<Record<number, string>>({});
 
   // Ressincroniza o rascunho quando o evento recarrega (ex.: após save bem-sucedido
   // em outro lugar) e ainda não há edição local pendente.
@@ -99,6 +102,7 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
   };
 
   const handleOptionsChange = (index: number, text: string) => {
+    setOptionsText((prev) => ({ ...prev, [index]: text }));
     const options = text.split(",").map((s) => s.trim()).filter(Boolean);
     update(index, { options });
   };
@@ -170,7 +174,7 @@ export function RegistrationFieldsEditor({ fields, onSave, saving }: Props) {
                 <Text style={styles.fieldLabel}>Opções (separadas por vírgula)</Text>
                 <TextInput
                   style={styles.input}
-                  value={(field.options ?? []).join(", ")}
+                  value={optionsText[index] ?? (field.options ?? []).join(", ")}
                   onChangeText={(v) => handleOptionsChange(index, v)}
                   placeholder="Ex.: P, M, G, GG"
                   placeholderTextColor={KarateColors.ink4}
