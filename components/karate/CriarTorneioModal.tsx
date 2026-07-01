@@ -35,10 +35,10 @@
 //     a competição já criada (sem re-criar, sem duplicar as que já entraram).
 //   - a competição criada é preservada (sem rollback no front).
 // ============================================================
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Modal, View, Text, TextInput, ScrollView, TouchableOpacity, Pressable,
-  StyleSheet, useWindowDimensions, ViewStyle, TextStyle, ActivityIndicator,
+  StyleSheet, useWindowDimensions, ViewStyle, TextStyle, ActivityIndicator, Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey } from "@/constants/karateTheme";
@@ -411,23 +411,17 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                   </Row2>
 
                   <Text style={styles.fieldLabel}>Graduação mínima</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.beltPicker}>
-                    {BELT_KEYS.map((k) => (
-                      <TouchableOpacity key={`min-${k}`} onPress={() => setDraft((d) => ({ ...d, beltMin: k }))}
-                        style={[styles.beltChip, { backgroundColor: KarateBelts[k].color }, draft.beltMin === k && styles.beltChipSelected]}>
-                        <Text style={[styles.beltChipText, { color: KarateBelts[k].textColor }]}>{KarateBelts[k].label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  <BeltPickerRow
+                    selected={draft.beltMin}
+                    onSelect={(k) => setDraft((d) => ({ ...d, beltMin: k }))}
+                    keyPrefix="min"
+                  />
                   <Text style={styles.fieldLabel}>Graduação máxima</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.beltPicker}>
-                    {BELT_KEYS.map((k) => (
-                      <TouchableOpacity key={`max-${k}`} onPress={() => setDraft((d) => ({ ...d, beltMax: k }))}
-                        style={[styles.beltChip, { backgroundColor: KarateBelts[k].color }, draft.beltMax === k && styles.beltChipSelected]}>
-                        <Text style={[styles.beltChipText, { color: KarateBelts[k].textColor }]}>{KarateBelts[k].label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  <BeltPickerRow
+                    selected={draft.beltMax}
+                    onSelect={(k) => setDraft((d) => ({ ...d, beltMax: k }))}
+                    keyPrefix="max"
+                  />
 
                   <Field label="Vagas" mono value={draft.maxEntries}
                     onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
@@ -533,6 +527,66 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
 }
 
 // ── subcomponentes (padrão das fichas) ───────────────────────
+// BeltPickerRow — chips de faixa em ScrollView horizontal, com setas
+// laterais (‹ ›) só no web: sem toque/scrollbar, o ScrollView é difícil
+// de rolar com mouse. No mobile o toque já rola, então as setas somem.
+const BELT_SCROLL_STEP = 120;
+
+function BeltPickerRow({
+  selected, onSelect, keyPrefix,
+}: {
+  selected: BeltKey | "";
+  onSelect: (k: BeltKey) => void;
+  keyPrefix: string;
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const offsetRef = useRef(0);
+
+  const scrollBy = (delta: number) => {
+    const next = Math.max(0, offsetRef.current + delta);
+    offsetRef.current = next;
+    scrollRef.current?.scrollTo({ x: next, animated: true });
+  };
+
+  return (
+    <View style={styles.beltPickerRow}>
+      {Platform.OS === "web" ? (
+        <TouchableOpacity
+          onPress={() => scrollBy(-BELT_SCROLL_STEP)}
+          style={styles.beltArrow}
+          accessibilityLabel="Rolar faixas para a esquerda"
+        >
+          <Icon name="chevron-back" size={16} color={P.ink3} />
+        </TouchableOpacity>
+      ) : null}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.beltPicker}
+        onScroll={(e) => { offsetRef.current = e.nativeEvent.contentOffset.x; }}
+        scrollEventThrottle={16}
+      >
+        {BELT_KEYS.map((k) => (
+          <TouchableOpacity key={`${keyPrefix}-${k}`} onPress={() => onSelect(k)}
+            style={[styles.beltChip, { backgroundColor: KarateBelts[k].color }, selected === k && styles.beltChipSelected]}>
+            <Text style={[styles.beltChipText, { color: KarateBelts[k].textColor }]}>{KarateBelts[k].label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      {Platform.OS === "web" ? (
+        <TouchableOpacity
+          onPress={() => scrollBy(BELT_SCROLL_STEP)}
+          style={styles.beltArrow}
+          accessibilityLabel="Rolar faixas para a direita"
+        >
+          <Icon name="chevron-forward" size={16} color={P.ink3} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
 function Row2({ children }: { children: React.ReactNode }) {
   return <View style={styles.row2}>{children}</View>;
 }
@@ -594,7 +648,9 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: P.redWash, borderColor: P.red } as ViewStyle,
   chipText: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: P.ink3 } as TextStyle,
   chipTextActive: { color: P.red, fontWeight: "700" } as TextStyle,
-  beltPicker: { marginBottom: 8 } as ViewStyle,
+  beltPickerRow: { flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 4 } as ViewStyle,
+  beltPicker: { flex: 1 } as ViewStyle,
+  beltArrow: { padding: 4, borderRadius: 999, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2 } as ViewStyle,
   beltChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: "transparent" } as ViewStyle,
   beltChipSelected: { borderColor: P.ink } as ViewStyle,
   beltChipText: { fontFamily: F.body, fontSize: 12, fontWeight: "700" } as TextStyle,
