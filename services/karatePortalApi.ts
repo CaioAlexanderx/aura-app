@@ -191,6 +191,16 @@ export interface AgendaEvent {
   fee_amount: number | null;
 }
 
+/** Bloco B — eventos ABERTOS (karate_belt_exams status='open') para o hub público. */
+export interface OpenEvent {
+  id: string;
+  name: string;
+  exam_type: string | null;
+  event_date: string | null;
+  location: string | null;
+  fee_amount: number | null;
+}
+
 const enc = encodeURIComponent;
 
 // ─────────────────────────────────────────────────────────────
@@ -223,6 +233,11 @@ export const karatePortalApi = {
   // ── Agenda pública (para o botão "Inscrever-me no próximo exame") ──
   getEvents: (slug: string): Promise<{ federation: { name: string; logo: string | null }; events: AgendaEvent[] }> =>
     pub(`/public/karate/${enc(slug)}/events`),
+
+  // ── Bloco B — eventos ABERTOS (karate_belt_exams status='open') para os
+  // cards do hub público e o seletor de evento do admin de banners. ──
+  getOpenEvents: (slug: string): Promise<{ federation: { name: string; logo: string | null }; events: OpenEvent[] }> =>
+    pub(`/public/karate/${enc(slug)}/eventos`),
 
   // ── Inscrição ──
   getEvent: (slug: string, eventId: string): Promise<PublicEvent> =>

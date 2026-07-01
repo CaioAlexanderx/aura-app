@@ -21,6 +21,7 @@ import { FpktLogo } from "@/components/karate/FpktLogo";
 import { ShojiBackground } from "@/components/karate/shoji";
 import { BannerCarousel } from "@/components/karate/portal/BannerCarousel";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
+import { karatePortalApi, OpenEvent } from "@/services/karatePortalApi";
 
 const C = KarateColors;
 const F = KarateFonts;
@@ -216,6 +217,51 @@ function HubCard({
   );
 }
 
+// ─── Eventos abertos (Bloco B) ─────────────────────────────────
+function fmtEventDate(iso?: string | null): string {
+  if (!iso) return "Data a definir";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+function fmtEventFee(v?: number | null): string {
+  if (v == null) return "Gratuito";
+  const n = Number(v);
+  if (!n) return "Gratuito";
+  return `R$ ${n.toFixed(2).replace(".", ",")}`;
+}
+
+function EventCard({ event, onPress }: { event: OpenEvent; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={styles.eventCard}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`Inscrever-se em ${event.name}`}
+    >
+      <View style={styles.eventCardIco}>
+        <Icon name="calendar" size={20} color={P.red} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.eventCardTitle} numberOfLines={1}>{event.name}</Text>
+        <View style={styles.eventCardMetaRow}>
+          <Text style={styles.eventCardMeta}>{fmtEventDate(event.event_date)}</Text>
+          {!!event.location && (
+            <>
+              <Text style={styles.eventCardDot}>•</Text>
+              <Text style={styles.eventCardMeta} numberOfLines={1}>{event.location}</Text>
+            </>
+          )}
+          <Text style={styles.eventCardDot}>•</Text>
+          <Text style={styles.eventCardMeta}>{fmtEventFee(event.fee_amount)}</Text>
+        </View>
+      </View>
+      <Icon name="arrow_right" size={16} color={P.red2} />
+    </TouchableOpacity>
+  );
+}
+
 // ─── Tela principal ──────────────────────────────────────────
 export default function KarateHubScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -225,6 +271,9 @@ export default function KarateHubScreen() {
   const [fedName, setFedName] = useState("");
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("home");
+  // Bloco B — eventos abertos (karate_belt_exams status='open') exibidos
+  // como cards no hub; tocar leva direto pra inscrição daquele evento.
+  const [openEvents, setOpenEvents] = useState<OpenEvent[]>([]);
 
   // Carrega nome da federação
   useEffect(() => {
@@ -232,6 +281,16 @@ export default function KarateHubScreen() {
     karateCompetitionsApi
       .getPublicSeasons(fedSlug)
       .then((s) => { if (alive && s?.federation?.name) setFedName(s.federation.name); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [fedSlug]);
+
+  // Bloco B — carrega eventos abertos para os cards do hub
+  useEffect(() => {
+    let alive = true;
+    karatePortalApi
+      .getOpenEvents(fedSlug)
+      .then((r) => { if (alive) setOpenEvents(r.events || []); })
       .catch(() => {});
     return () => { alive = false; };
   }, [fedSlug]);
@@ -337,6 +396,22 @@ export default function KarateHubScreen() {
 
             {/* Banners carrossel */}
             <BannerCarousel slug={fedSlug} />
+
+            {/* Bloco B — eventos abertos (cards) */}
+            {openEvents.length > 0 && (
+              <View style={styles.eventsSection}>
+                <Text style={styles.eventsSectionTitle}>Inscrições abertas</Text>
+                <View style={styles.eventsList}>
+                  {openEvents.map((ev) => (
+                    <EventCard
+                      key={ev.id}
+                      event={ev}
+                      onPress={() => router.push(`/karate/${fedSlug}/inscricao/${ev.id}` as any)}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Divisor kanji */}
             <View style={styles.kanjiDiv}>
@@ -547,6 +622,63 @@ const styles = StyleSheet.create({
     marginTop: 10,
     maxWidth: 560,
     lineHeight: 14 * 1.6,
+  } as TextStyle,
+
+  // ── Bloco B — eventos abertos ──────────────────────────────
+  eventsSection: {
+    marginTop: 24,
+    gap: 10,
+  } as ViewStyle,
+  eventsSectionTitle: {
+    fontFamily: F.heading,
+    fontSize: 15,
+    fontWeight: "500",
+    color: C.ink,
+  } as TextStyle,
+  eventsList: {
+    gap: 8,
+  } as ViewStyle,
+  eventCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "rgba(252,250,245,0.92)",
+    borderWidth: 1,
+    borderColor: P.line,
+    borderRadius: 14,
+    padding: 14,
+    ...(Platform.OS === "web" ? { cursor: "pointer" as any } : {}),
+  } as ViewStyle,
+  eventCardIco: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: P.redWash,
+    flexShrink: 0,
+  } as ViewStyle,
+  eventCardTitle: {
+    fontFamily: F.heading,
+    fontSize: 14,
+    fontWeight: "500",
+    color: C.ink,
+  } as TextStyle,
+  eventCardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 3,
+    flexWrap: "wrap",
+  } as ViewStyle,
+  eventCardMeta: {
+    fontFamily: F.body,
+    fontSize: 11.5,
+    color: C.ink3,
+  } as TextStyle,
+  eventCardDot: {
+    fontSize: 11.5,
+    color: C.ink4,
   } as TextStyle,
 
   kanjiDiv: {

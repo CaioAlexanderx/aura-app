@@ -550,6 +550,12 @@ export interface ExamCandidate {
   certificate_url: string | null;
   /** Bloco A — respostas do inscrito aos registration_fields do evento (migration 200). */
   registration_responses?: Record<string, unknown>;
+  /**
+   * Bloco C — elegibilidade a certificado (migration 202), calculada no
+   * fechamento do evento (POST /belt-exams/:examId/close): curso -> todos;
+   * exame/graus -> apenas aprovados. false até o evento fechar.
+   */
+  certificate_eligible?: boolean;
 }
 
 export interface EnrollCandidateInput {

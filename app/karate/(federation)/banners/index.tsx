@@ -5,7 +5,7 @@
 //   - Lista banners existentes com thumbnail (proporcao por formato)
 //   - Upload via base64 (expo-image-picker web / file input)
 //   - Seletor de formato: 1:1 / Story 1080x1920 / Paisagem 1920x1080
-//   - Campo de titulo, seletor de evento (listCourses), placement, toggle ativo
+//   - Campo de titulo, seletor de evento (listBeltExams status=open), placement, toggle ativo
 //   - Reordenacao simples via sort_order
 //   - Design Shoji / KarateColors
 //
@@ -120,13 +120,15 @@ interface FormularioBannerProps {
 function FormularioBanner({ federationId, onSuccess, onCancel }: FormularioBannerProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-  // Busca eventos (cursos) para o seletor de evento
-  const { data: coursesData } = useQuery({
-    queryKey: ["karate-courses", federationId],
-    queryFn: () => karateApi.listCourses(federationId, { pageSize: 100 }),
+  // Busca eventos ABERTOS (karate_belt_exams status='open') para o seletor
+  // de evento — Bloco B: banners apontam para eventos reais da federação
+  // (exame/curso/graus), não mais para a tabela legada karate_events.
+  const { data: examsData } = useQuery({
+    queryKey: ["karate-belt-exams-open", federationId],
+    queryFn: () => karateApi.listBeltExams(federationId, { status: "open", pageSize: 100 }),
     staleTime: 2 * 60000,
   });
-  const events = coursesData?.items ?? [];
+  const events = (examsData?.data ?? []).map((ev) => ({ id: ev.id, title: ev.title }));
 
   const qc = useQueryClient();
   const createMut = useMutation({
