@@ -310,12 +310,12 @@ export default function KarateHubScreen() {
   // /karate/:slug/inscricao (só /inscricao/:eventId), então em vez de navegar
   // pra uma rota quebrada, rolamos até a seção "Inscrições abertas" já
   // renderizada na página, onde cada evento tem seu próprio link funcional
-  // (EventCard -> /karate/:slug/inscricao/:eventId). Se não houver nenhum
-  // evento aberto no momento, não há destino válido — não navegamos.
+  // (EventCard -> /karate/:slug/inscricao/:eventId). F6.4: a seção é sempre
+  // renderizada (mesmo com 0 eventos, mostrando estado vazio claro), então
+  // sempre rolamos até ela — nada de navegar pra rota inexistente nem de
+  // ficar em silêncio quando não há eventos abertos.
   const scrollToEvents = () => {
-    if (openEvents.length > 0) {
-      scrollRef.current?.scrollTo({ y: eventsSectionY.current, animated: true });
-    }
+    scrollRef.current?.scrollTo({ y: eventsSectionY.current, animated: true });
   };
 
   const handleCardPress = (key: string) => {
@@ -415,13 +415,15 @@ export default function KarateHubScreen() {
             {/* Banners carrossel */}
             <BannerCarousel slug={fedSlug} />
 
-            {/* Bloco B — eventos abertos (cards) */}
-            {openEvents.length > 0 && (
-              <View
-                style={styles.eventsSection}
-                onLayout={(e) => { eventsSectionY.current = e.nativeEvent.layout.y; }}
-              >
-                <Text style={styles.eventsSectionTitle}>Inscrições abertas</Text>
+            {/* Bloco B — eventos abertos (cards). F6.4: seção sempre renderizada
+                (mesmo com 0 eventos) para que o CTA "Inscrições" tenha destino
+                e mostre um estado vazio claro em vez de silêncio. */}
+            <View
+              style={styles.eventsSection}
+              onLayout={(e) => { eventsSectionY.current = e.nativeEvent.layout.y; }}
+            >
+              <Text style={styles.eventsSectionTitle}>Inscrições abertas</Text>
+              {openEvents.length > 0 ? (
                 <View style={styles.eventsList}>
                   {openEvents.map((ev) => (
                     <EventCard
@@ -431,8 +433,16 @@ export default function KarateHubScreen() {
                     />
                   ))}
                 </View>
-              </View>
-            )}
+              ) : (
+                <View style={styles.eventsEmpty}>
+                  <Icon name="calendar" size={22} color={C.ink4} />
+                  <Text style={styles.eventsEmptyTitle}>Nenhuma inscrição aberta no momento</Text>
+                  <Text style={styles.eventsEmptySub}>
+                    Quando a federação abrir inscrições, elas aparecem aqui.
+                  </Text>
+                </View>
+              )}
+            </View>
 
             {/* Divisor kanji */}
             <View style={styles.kanjiDiv}>
@@ -659,6 +669,31 @@ const styles = StyleSheet.create({
   eventsList: {
     gap: 8,
   } as ViewStyle,
+  eventsEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(252,250,245,0.92)",
+    borderWidth: 1,
+    borderColor: P.line,
+    borderRadius: 14,
+  } as ViewStyle,
+  eventsEmptyTitle: {
+    fontFamily: F.heading,
+    fontSize: 14,
+    fontWeight: "500",
+    color: C.ink2,
+    textAlign: "center",
+  } as TextStyle,
+  eventsEmptySub: {
+    fontFamily: F.body,
+    fontSize: 12,
+    color: C.ink3,
+    textAlign: "center",
+    maxWidth: 320,
+  } as TextStyle,
   eventCard: {
     flexDirection: "row",
     alignItems: "center",

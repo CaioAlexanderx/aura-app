@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StyleSheet, RefreshControl, ViewStyle, TextStyle, TextInput,
+  StyleSheet, RefreshControl, ViewStyle, TextStyle, TextInput, Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -32,7 +32,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateApi, ExamCandidate, BeltExam, PractitionerListItem } from "@/services/karateApi";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
-import { notify, confirmAlert } from "@/utils/webAlert";
+import { notify } from "@/utils/webAlert";
 import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
@@ -307,6 +307,9 @@ export default function ExameDetalhe() {
   const [refreshing, setRefreshing] = useState(false);
   const [showResultados, setShowResultados] = useState(false);
   const [closingExam, setClosingExam] = useState(false);
+  // F6.2: confirmação inline (Modal) para fechar exame — window.confirm trava a aba no web.
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [closePendingCount, setClosePendingCount] = useState(0);
   // Nav P2: slug público da federação para o link de inscrição (empty state).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
   // Bloco A: publicar inscrições (draft -> open) e copiar link direto do evento.
@@ -428,14 +431,8 @@ export default function ExameDetalhe() {
 
   const handleCloseExam = () => {
     if (!exam) return;
-    const pendingCount = candidates.filter((c) => c.result === "pending").length;
-    confirmAlert(
-      "Fechar exame?",
-      `Tem certeza que deseja fechar "${exam.title}"?${pendingCount > 0 ? `\n\n${pendingCount} candidato(s) ainda com resultado pendente.` : ""}\n\nAtenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)`,
-      "Fechar exame",
-      confirmCloseExam,
-      { destructive: true }
-    );
+    setClosePendingCount(candidates.filter((c) => c.result === "pending").length);
+    setShowCloseConfirm(true);
   };
 
   const confirmCloseExam = async () => {
@@ -668,6 +665,42 @@ export default function ExameDetalhe() {
         onClose={() => setShowEditInfo(false)}
         onSaved={handleExamInfoUpdated}
       />
+
+      {/* F6.2 — confirmação inline de "Fechar exame" (window.confirm trava a aba no web) */}
+      <Modal transparent visible={showCloseConfirm} animationType="fade" onRequestClose={() => setShowCloseConfirm(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.confirmSheet}>
+            <Text style={styles.confirmTitle}>Fechar exame?</Text>
+            <Text style={styles.confirmMessage}>
+              Tem certeza que deseja fechar "{exam.title}"?
+              {closePendingCount > 0 ? `\n\n${closePendingCount} candidato(s) ainda com resultado pendente.` : ""}
+              {"\n\n"}Atenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)
+            </Text>
+            <View style={styles.confirmActions}>
+              <KarateButton
+                label="Cancelar"
+                variant="secondary"
+                size="sm"
+                onPress={() => setShowCloseConfirm(false)}
+                disabled={closingExam}
+                style={{ flex: 1 }}
+              />
+              <KarateButton
+                label={closingExam ? "Fechando..." : "Fechar exame"}
+                variant="primary"
+                size="sm"
+                loading={closingExam}
+                disabled={closingExam}
+                onPress={() => {
+                  setShowCloseConfirm(false);
+                  confirmCloseExam();
+                }}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -707,4 +740,10 @@ const styles = StyleSheet.create({
   certsHint: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   certEligibleRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: KarateColors.bg, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
   certEligibleName: { flex: 1, fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  // F6.2 — confirmação inline de "Fechar exame" (Modal in-app)
+  overlay: { flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
+  confirmSheet: { width: "100%", maxWidth: 380, backgroundColor: KarateColors.bg, borderRadius: KarateRadius.lg, padding: 20, gap: 10 } as ViewStyle,
+  confirmTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  confirmMessage: { fontSize: 13, color: KarateColors.ink2, lineHeight: 19 } as TextStyle,
+  confirmActions: { flexDirection: "row", gap: 8, marginTop: 8 } as ViewStyle,
 });
