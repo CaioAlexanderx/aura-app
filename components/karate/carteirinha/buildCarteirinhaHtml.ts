@@ -17,16 +17,15 @@
 // fora de contexto React (PixQRCode/QrCode dependem de libs RN). Mesma URL de
 // verificação do CarteirinhaCard: https://app.getaura.com.br/karate/verify/<token>.
 //
-// Tamanho do cartão: ~85,6mm x 54mm (CR80, padrão internacional de cartão de
-// identificação — mesma proporção do CarteirinhaCard, RATIO ~0.6304 do mock
-// 1012x638 é próxima o bastante; usamos o padrão CR80 pedido).
+// Tamanho do cartão: 80mm x 50mm — padrão da carteirinha emitida pela
+// federação. O layout de impressão preserva exatamente essa dimensão.
 // ============================================================
 import { resolveBeltKey, KarateBelts } from "@/constants/karateTheme";
 import type { MembershipCard } from "@/services/karateCardApi";
 
 const ACCENT = "#D4121B";
-const CARD_W_MM = 85.6;
-const CARD_H_MM = 54;
+const CARD_W_MM = 80;
+const CARD_H_MM = 50;
 
 function esc(s: string | null | undefined): string {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -166,7 +165,7 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.grid{padding-top:0;padding-bottom:0}body{background:#fff}}';
   html += '</style></head><body>';
 
-  html += '<div class="top-bar"><div><span>Carteirinhas Aura — A4, ' + CARD_W_MM + 'mm x ' + CARD_H_MM + 'mm (CR80)</span><br>';
+  html += '<div class="top-bar"><div><span>Carteirinhas Aura — A4, ' + CARD_W_MM + 'mm x ' + CARD_H_MM + 'mm</span><br>';
   html += '<b>' + total + ' carteirinha' + (total > 1 ? 's' : '') + ' selecionada' + (total > 1 ? 's' : '') + '</b></div></div>';
 
   html += '<div class="grid">' + cells + '</div>';
