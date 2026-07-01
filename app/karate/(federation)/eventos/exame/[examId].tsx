@@ -34,6 +34,8 @@ import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
 import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
+import { EventBannerManager } from "@/components/karate/EventBannerManager";
+import { EditarExameInfoModal } from "@/components/karate/EditarExameInfoModal";
 
 const RESULT_BADGE: Record<string, "ok" | "alert" | "neutral"> = {
   approved: "ok", rejected: "alert", pending: "neutral",
@@ -314,6 +316,8 @@ export default function ExameDetalhe() {
   const [copyingLink, setCopyingLink] = useState(false);
   // Bloco A: formulário de inscrição configurável (registration_fields).
   const [savingFields, setSavingFields] = useState(false);
+  // Tornar evento editável: modal "Editar informações" (título, data, local, faixa/curso).
+  const [showEditInfo, setShowEditInfo] = useState(false);
 
   const isCurso = exam?.exam_type === "curso";
 
@@ -416,6 +420,12 @@ export default function ExameDetalhe() {
 
   const handleCandidateUpdate = (updated: ExamCandidate) => {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  };
+
+  // Tornar evento editável: após salvar via karateApi.updateBeltExam, atualiza o estado local do exam.
+  const handleExamInfoUpdated = (updated: BeltExam) => {
+    setExam((prev) => (prev ? { ...prev, ...updated } : updated));
+    setShowEditInfo(false);
   };
 
   const handleCloseExam = () => {
@@ -524,6 +534,14 @@ export default function ExameDetalhe() {
               onPress={copyInscriptionLink}
               style={{ flex: 1 }}
             />
+            {/* Todos os eventos são editáveis: título, data, local, faixa/tipo. */}
+            <KarateButton
+              label="Editar informações"
+              variant="secondary"
+              size="sm"
+              onPress={() => setShowEditInfo(true)}
+              style={{ flex: 1 }}
+            />
           </View>
         </View>
 
@@ -535,6 +553,9 @@ export default function ExameDetalhe() {
             saving={savingFields}
           />
         </View>
+
+        {/* Banner deixou de ser tela própria: agora é anexo do evento. */}
+        <EventBannerManager federationId={federationId} eventId={exam.id} />
 
         {/* ── Seção específica de EXAME ─────────────────────────── */}
         {!isCurso && (
@@ -669,6 +690,15 @@ export default function ExameDetalhe() {
           examId={exam.id}
         />
       )}
+
+      {/* Editar informações — disponível para exame e curso */}
+      <EditarExameInfoModal
+        visible={showEditInfo}
+        exam={exam}
+        federationId={federationId}
+        onClose={() => setShowEditInfo(false)}
+        onSaved={handleExamInfoUpdated}
+      />
     </>
   );
 }

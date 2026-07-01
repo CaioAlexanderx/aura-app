@@ -38,8 +38,6 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'food.delivery': 'expansao',
   'food.nfce':     'expansao',
   'food.config':   'essencial',
-  // Karate: Banners admin (vertical karate_federation, plan essencial — gating real via karateRole no shell)
-  'karate.banners': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -65,8 +63,6 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // novas aqui. Owners sempre veem (filtro de permission so se aplica a
   // membros).
   'food.access': ['food.mesas','food.pedidos','food.cardapio','food.kds','food.delivery','food.nfce','food.config'],
-  // Karate admin banners — acesso por karate_role no shell; aqui so espelha a chave
-  'karate.banners': ['karate.banners'],
 };
 
 export function useVisibleModules(): Set<string> {

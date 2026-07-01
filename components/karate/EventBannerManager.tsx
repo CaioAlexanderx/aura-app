@@ -1,23 +1,27 @@
 // ============================================================
-// Banners / Divulgacoes — Aura Karate (Admin)
+// EventBannerManager — Aura Karatê (federação)
 //
-// Tela de gerenciamento de banners da federacao:
-//   - Lista banners existentes com thumbnail (proporcao por formato)
-//   - Upload via base64 (expo-image-picker web / file input)
+// Componente reutilizável de gestão de banners/divulgação, ESCOPADO a
+// um único evento (exame, curso ou torneio/campeonato). Substitui a
+// antiga tela standalone /karate/banners: banner deixou de ser uma
+// seção própria da sidebar e passou a ser um anexo do evento — o erro
+// da tela antiga era expor um seletor de evento dentro do form de
+// banner; aqui o event_id já vem fixado via prop, sem seletor.
+//
+// Reaproveita integralmente a lógica de upload/preview/formatos da
+// tela antiga (app/karate/(federation)/banners/index.tsx, removida):
+//   - Upload via base64 (file input na web)
 //   - Seletor de formato: 1:1 / Story 1080x1920 / Paisagem 1920x1080
-//   - Campo de titulo, seletor de evento (listBeltExams status=open), placement, toggle ativo
-//   - Reordenacao simples via sort_order
-//   - Design Shoji / KarateColors
+//   - Placement (hub/inscrição/ambos), toggle ativo, reordenação, exclusão
 //
-// Acesso: federation_admin (gateado em NAV_ITEMS do KarateShell)
-// mod: karate.banners (registrado em MODULE_PLAN_MAP e PERM_TO_MODULES)
+// A API bannerApi.listBanners não filtra por evento — o filtro é feito
+// no cliente a partir de banner.event_id === eventId.
 // ============================================================
 import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   Image,
@@ -30,9 +34,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
-import { useKarateFederation } from "@/contexts/KarateFederation";
 import { bannerApi, Banner, BannerFormat, BannerPlacement, BannerCreateInput } from "@/services/karateApi";
-import { karateApi } from "@/services/karateApi";
 import { Icon } from "@/components/Icon";
 
 // ── Tipos ────────────────────────────────────────────────────
@@ -41,14 +43,14 @@ type FormatOption = { value: BannerFormat; label: string; ratio: number };
 type PlacementOption = { value: BannerPlacement; label: string };
 
 const FORMAT_OPTIONS: FormatOption[] = [
-  { value: "square",       label: "Quadrado 1:1",              ratio: 1 },
-  { value: "story",     label: "Story 1080x1920",           ratio: 9 / 16 },
-  { value: "landscape", label: "Paisagem 1920x1080",        ratio: 16 / 9 },
+  { value: "square",    label: "Quadrado 1:1",       ratio: 1 },
+  { value: "story",     label: "Story 1080x1920",    ratio: 9 / 16 },
+  { value: "landscape", label: "Paisagem 1920x1080", ratio: 16 / 9 },
 ];
 
 const PLACEMENT_OPTIONS: PlacementOption[] = [
   { value: "hub",       label: "Hub" },
-  { value: "inscricao", label: "Inscricao" },
+  { value: "inscricao", label: "Inscrição" },
   { value: "ambos",     label: "Ambos" },
 ];
 
@@ -86,7 +88,7 @@ function pickImageWeb(): Promise<{ base64: string; contentType: string; previewU
   });
 }
 
-// ── FormularioBanner — criacao de novo banner ─────────────────
+// ── Formulário — criação de novo banner (event_id fixo, sem seletor) ──
 interface FormState {
   base64: string;
   contentType: string;
@@ -94,7 +96,6 @@ interface FormState {
   format: BannerFormat;
   title: string;
   placement: BannerPlacement;
-  eventId: string;
   sortOrder: string;
   active: boolean;
 }
@@ -106,29 +107,19 @@ const EMPTY_FORM: FormState = {
   format: "square",
   title: "",
   placement: "ambos",
-  eventId: "",
   sortOrder: "0",
   active: true,
 };
 
 interface FormularioBannerProps {
   federationId: string;
+  eventId: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function FormularioBanner({ federationId, onSuccess, onCancel }: FormularioBannerProps) {
+function FormularioBanner({ federationId, eventId, onSuccess, onCancel }: FormularioBannerProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-
-  // Busca eventos ABERTOS (karate_belt_exams status='open') para o seletor
-  // de evento — Bloco B: banners apontam para eventos reais da federação
-  // (exame/curso/graus), não mais para a tabela legada karate_events.
-  const { data: examsData } = useQuery({
-    queryKey: ["karate-belt-exams-open", federationId],
-    queryFn: () => karateApi.listBeltExams(federationId, { status: "open", pageSize: 100 }),
-    staleTime: 2 * 60000,
-  });
-  const events = (examsData?.data ?? []).map((ev) => ({ id: ev.id, title: ev.title }));
 
   const qc = useQueryClient();
   const createMut = useMutation({
@@ -154,7 +145,7 @@ function FormularioBanner({ federationId, onSuccess, onCancel }: FormularioBanne
       format: form.format,
       title: form.title.trim() || null,
       placement: form.placement,
-      event_id: form.eventId || null,
+      event_id: eventId,
       sort_order: parseInt(form.sortOrder, 10) || 0,
       active: form.active,
     };
@@ -195,8 +186,8 @@ function FormularioBanner({ federationId, onSuccess, onCancel }: FormularioBanne
         ))}
       </View>
 
-      {/* Titulo */}
-      <Text style={styles.fieldLabel}>Titulo (opcional)</Text>
+      {/* Título */}
+      <Text style={styles.fieldLabel}>Título (opcional)</Text>
       <TextInput
         style={styles.input as any}
         value={form.title}
@@ -221,42 +212,8 @@ function FormularioBanner({ federationId, onSuccess, onCancel }: FormularioBanne
         ))}
       </View>
 
-      {/* Evento (opcional) */}
-      <Text style={styles.fieldLabel}>Evento vinculado (opcional)</Text>
-      {events.length > 0 ? (
-        <View style={styles.selectWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={[styles.chip, !form.eventId && styles.chipActive]}
-              onPress={() => setForm((f) => ({ ...f, eventId: "" }))}
-            >
-              <Text style={[styles.chipLabel, !form.eventId && styles.chipLabelActive]}>Nenhum</Text>
-            </TouchableOpacity>
-            {events.map((ev) => (
-              <TouchableOpacity
-                key={ev.id}
-                style={[styles.chip, form.eventId === ev.id && styles.chipActive]}
-                onPress={() => setForm((f) => ({ ...f, eventId: ev.id }))}
-              >
-                <Text style={[styles.chipLabel, form.eventId === ev.id && styles.chipLabelActive]} numberOfLines={1}>
-                  {ev.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      ) : (
-        <TextInput
-          style={styles.input as any}
-          value={form.eventId}
-          onChangeText={(v) => setForm((f) => ({ ...f, eventId: v }))}
-          placeholder="ID do evento (opcional)"
-          placeholderTextColor={KarateColors.ink4}
-        />
-      )}
-
       {/* Sort order */}
-      <Text style={styles.fieldLabel}>Ordem de exibicao</Text>
+      <Text style={styles.fieldLabel}>Ordem de exibição</Text>
       <TextInput
         style={styles.input as any}
         value={form.sortOrder}
@@ -355,16 +312,13 @@ function BannerCard({ banner, federationId }: BannerCardProps) {
       {/* Info */}
       <View style={styles.cardInfo}>
         <Text style={styles.cardTitle} numberOfLines={1}>
-          {banner.title || "(sem titulo)"}
+          {banner.title || "(sem título)"}
         </Text>
         <Text style={styles.cardMeta}>{formatLabel} • {placementLabel}</Text>
-        {banner.event_name && (
-          <Text style={styles.cardMeta} numberOfLines={1}>Evento: {banner.event_name}</Text>
-        )}
         <Text style={styles.cardMeta}>Ordem: {banner.sort_order}</Text>
       </View>
 
-      {/* Acoes */}
+      {/* Ações */}
       <View style={styles.cardActions}>
         {/* Toggle ativo */}
         <Switch
@@ -392,9 +346,15 @@ function BannerCard({ banner, federationId }: BannerCardProps) {
   );
 }
 
-// ── Tela principal ────────────────────────────────────────────
-export default function BannersScreen() {
-  const { federationId } = useKarateFederation();
+// ── Componente principal ────────────────────────────────────────
+export interface EventBannerManagerProps {
+  federationId: string;
+  eventId: string;
+  /** Título da seção — default "Divulgação / Banners". */
+  title?: string;
+}
+
+export function EventBannerManager({ federationId, eventId, title = "Divulgação / Banners" }: EventBannerManagerProps) {
   const [showForm, setShowForm] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -404,7 +364,11 @@ export default function BannersScreen() {
     staleTime: 60000,
   });
 
-  const banners = (data?.banners ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
+  // A API não filtra por evento — filtra no cliente.
+  const banners = (data?.banners ?? [])
+    .filter((b) => b.event_id === eventId)
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   const handleFormSuccess = useCallback(() => {
     setShowForm(false);
@@ -415,12 +379,12 @@ export default function BannersScreen() {
   }, []);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.section}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Icon name="image" size={20} color={KarateColors.primary} />
-          <Text style={styles.headerTitle}>Banners / Divulgacoes</Text>
+          <Icon name="image" size={18} color={KarateColors.primary} />
+          <Text style={styles.headerTitle}>{title}</Text>
         </View>
         {!showForm && (
           <TouchableOpacity
@@ -435,11 +399,12 @@ export default function BannersScreen() {
         )}
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Formulario de criacao */}
+      <View style={styles.content}>
+        {/* Formulário de criação */}
         {showForm && (
           <FormularioBanner
             federationId={federationId}
+            eventId={eventId}
             onSuccess={handleFormSuccess}
             onCancel={handleFormCancel}
           />
@@ -466,25 +431,28 @@ export default function BannersScreen() {
         {/* Lista de banners */}
         {!isLoading && !error && banners.length === 0 && !showForm && (
           <View style={styles.centeredMessage}>
-            <Icon name="image" size={36} color={KarateColors.ink4} />
+            <Icon name="image" size={32} color={KarateColors.ink4} />
             <Text style={styles.emptyTitle}>Nenhum banner cadastrado</Text>
-            <Text style={styles.emptyHint}>Clique em &quot;Novo Banner&quot; para adicionar o primeiro banner da federacao.</Text>
+            <Text style={styles.emptyHint}>Clique em &quot;Novo Banner&quot; para anexar o primeiro banner deste evento.</Text>
           </View>
         )}
 
         {!isLoading && banners.map((banner) => (
           <BannerCard key={banner.id} banner={banner} federationId={federationId} />
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
 
 // ── Estilos Shoji ─────────────────────────────────────────────
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: KarateColors.bg,
+  section: {
+    backgroundColor: KarateColors.bg2,
+    borderRadius: KarateRadius.md,
+    borderWidth: 1,
+    borderColor: KarateColors.border,
+    overflow: "hidden",
   } as ViewStyle,
 
   // Header
@@ -492,45 +460,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: KarateColors.bg2,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: KarateColors.border,
   } as ViewStyle,
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   } as ViewStyle,
   headerTitle: {
     fontFamily: KarateFonts.heading,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "600",
     color: KarateColors.ink,
   } as TextStyle,
 
-  // Scroll
-  scroll: { flex: 1 } as ViewStyle,
-  scrollContent: {
-    padding: 16,
+  content: {
+    padding: 14,
     gap: 12,
-    paddingBottom: 40,
   } as ViewStyle,
 
   // Formulario
   form: {
-    backgroundColor: KarateColors.bg2,
+    backgroundColor: KarateColors.bg,
     borderRadius: KarateRadius.lg,
     borderWidth: 1,
     borderColor: KarateColors.border,
-    padding: 20,
-    marginBottom: 8,
+    padding: 16,
     gap: 10,
   } as ViewStyle,
   formTitle: {
     fontFamily: KarateFonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: KarateColors.ink,
     marginBottom: 4,
@@ -616,12 +579,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   } as TextStyle,
 
-  // Select wrapper (eventos)
-  selectWrap: {
-    flexDirection: "row",
-    gap: 8,
-  } as ViewStyle,
-
   // Toggle
   toggleRow: {
     flexDirection: "row",
@@ -685,7 +642,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: KarateColors.bg2,
+    backgroundColor: KarateColors.bg,
     borderRadius: KarateRadius.lg,
     borderWidth: 1,
     borderColor: KarateColors.border,
@@ -735,8 +692,8 @@ const styles = StyleSheet.create({
   centeredMessage: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 14,
-    paddingVertical: 60,
+    gap: 12,
+    paddingVertical: 40,
   } as ViewStyle,
   centeredText: {
     fontFamily: KarateFonts.body,
@@ -745,7 +702,7 @@ const styles = StyleSheet.create({
   } as TextStyle,
   emptyTitle: {
     fontFamily: KarateFonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: KarateColors.ink,
   } as TextStyle,

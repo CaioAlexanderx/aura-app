@@ -17,7 +17,6 @@
 //   (rota /karate/exames = tela de Certificados/Selo; exames de faixa
 //    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
-// Admin Banners: adicionado item Banners (só federation_admin, só sidebar).
 //
 // IA/Nav P1:
 //   • isActive — o item índice (Dashboard, route "/karate/") casa por
@@ -93,8 +92,6 @@ const NAV_ITEMS = [
   { label: "Eventos",         icon: "calendar",  route: "/karate/eventos",       roles: null,          sidebarOnly: false },
   { label: "Competições",    icon: "trophy",    route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
   { label: "Importar",        icon: "upload",    route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  // Admin Banners: só federation_admin, sidebar-only
-  { label: "Banners",          icon: "image",     route: "/karate/banners",        roles: ["federation_admin"], sidebarOnly: true },
   // Track H: Configurações — só federation_admin, posicionado no rodapé da sidebar
   { label: "Configurações",   icon: "settings",  route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
 ] as const;
