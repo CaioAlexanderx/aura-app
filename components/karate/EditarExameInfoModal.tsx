@@ -56,6 +56,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
   const [title, setTitle] = useState("");
   const [examDate, setExamDate] = useState("");
   const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
   const [targetBelt, setTargetBelt] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
     setTitle(exam.title ?? "");
     setExamDate(isoToBr(exam.exam_date));
     setLocation(exam.location ?? "");
+    setDescription((exam as any).description ?? "");
     setTargetBelt(exam.target_belt ?? "");
     setError(null);
     setSaving(false);
@@ -90,6 +92,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
         title: title.trim(),
         exam_date: iso,
         location: location.trim(),
+        description: description.trim() || null,
       };
       if (!isCurso) body.target_belt = targetBelt.trim();
       const updated = await karateApi.updateBeltExam(federationId, exam.id, body as any);
@@ -179,6 +182,20 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
                   onChangeText={setLocation}
                   placeholder="Ex.: Dojô Central"
                   placeholderTextColor={P.ink4}
+                />
+              </View>
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Descrição / regras (opcional)</Text>
+              <View style={styles.inputWrap}>
+                <TextInput
+                  style={[styles.input, { minHeight: 88, textAlignVertical: "top" }]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Ex.: horários, o que levar, regras, categorias, contato..."
+                  placeholderTextColor={P.ink4}
+                  multiline
                 />
               </View>
             </View>

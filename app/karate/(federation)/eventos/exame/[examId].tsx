@@ -491,6 +491,9 @@ export default function ExameDetalhe() {
             )}
           </View>
           {!isCurso && <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>}
+          {!!exam.description && (
+            <Text style={{ fontSize: 13, color: KarateColors.ink2, lineHeight: 19, marginTop: 8 }}>{exam.description}</Text>
+          )}
 
           {/* Bloco A: publicar inscrições (draft -> open) + copiar link direto do evento. */}
           <View style={styles.headerActions}>

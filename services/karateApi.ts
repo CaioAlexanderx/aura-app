@@ -491,6 +491,8 @@ export interface BeltExam {
   created_at: string;
   /** Bloco A — campos extras do formulário de inscrição pública (migration 200). */
   registration_fields?: RegistrationField[];
+  /** Descrição/regras do evento (migration 203) — editável e exibida no portal. */
+  description?: string | null;
 }
 
 export interface BeltExamInput {
@@ -499,6 +501,7 @@ export interface BeltExamInput {
   location: string;
   target_belt: string;
   notes?: string | null;
+  description?: string | null;
 }
 
 /** Examinador na banca — karate_exam_examiners */

@@ -221,6 +221,9 @@ export default function InscricaoScreen() {
                 ) : null}
                 <SumRow icon="pricetag-outline" k="Inscrição" v={fmtBRL(event?.fee_amount)} price />
               </View>
+              {!!(event as any)?.description && (
+                <Text style={{ fontSize: 13, color: KarateColors.ink2, lineHeight: 20, marginTop: 14 }}>{(event as any).description}</Text>
+              )}
             </>
           ) : step === "cpf" ? (
             <>
