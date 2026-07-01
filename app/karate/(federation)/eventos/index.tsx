@@ -17,13 +17,14 @@ import {
 } from "@/components/karate/shoji";
 import { CriarExameModal } from "@/components/karate/CriarExameModal";
 import { karateApi, BeltExam } from "@/services/karateApi";
+import { formatEventDateShort } from "@/utils/eventDate";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const EXAM_STATUS: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
   done: { label: "Encerrado", badge: "warn" }, closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
-const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }); };
+const fmtDate = (iso?: string | null) => formatEventDateShort(iso, "Data a definir");
 
 export default function EventosOverview() {
   const router = useRouter();
