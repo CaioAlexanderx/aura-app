@@ -9,7 +9,7 @@
 // Footer "Desenvolvido por Aura Karatê" linkando getaura.com.br/dojo.
 // Ícones via wrapper components/Icon.tsx (nunca @expo/vector-icons).
 // ============================================================
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
   ViewStyle, TextStyle, Platform, Linking, Dimensions,
@@ -275,6 +275,11 @@ export default function KarateHubScreen() {
   // como cards no hub; tocar leva direto pra inscrição daquele evento.
   const [openEvents, setOpenEvents] = useState<OpenEvent[]>([]);
 
+  // Ref do ScrollView principal + offset Y da seção de eventos abertos,
+  // usados pelo CTA "Inscrições" para rolar até lá (ver scrollToEvents).
+  const scrollRef = useRef<ScrollView>(null);
+  const eventsSectionY = useRef(0);
+
   // Carrega nome da federação
   useEffect(() => {
     let alive = true;
@@ -301,10 +306,22 @@ export default function KarateHubScreen() {
     if (w < 700) setSideCollapsed(true);
   }, []);
 
+  // CTA "Inscrições" (card do grid + item de sidebar): não existe rota
+  // /karate/:slug/inscricao (só /inscricao/:eventId), então em vez de navegar
+  // pra uma rota quebrada, rolamos até a seção "Inscrições abertas" já
+  // renderizada na página, onde cada evento tem seu próprio link funcional
+  // (EventCard -> /karate/:slug/inscricao/:eventId). Se não houver nenhum
+  // evento aberto no momento, não há destino válido — não navegamos.
+  const scrollToEvents = () => {
+    if (openEvents.length > 0) {
+      scrollRef.current?.scrollTo({ y: eventsSectionY.current, animated: true });
+    }
+  };
+
   const handleCardPress = (key: string) => {
     switch (key) {
       case "inscricoes":
-        router.push(`/karate/${fedSlug}/inscricao` as any);
+        scrollToEvents();
         break;
       case "consulta":
         router.push(`/karate/${fedSlug}/consulta` as any);
@@ -324,7 +341,7 @@ export default function KarateHubScreen() {
     setActiveNav(item.key);
     switch (item.action) {
       case "card_inscricoes":
-        router.push(`/karate/${fedSlug}/inscricao` as any);
+        scrollToEvents();
         break;
       case "card_consulta":
         router.push(`/karate/${fedSlug}/consulta` as any);
@@ -369,6 +386,7 @@ export default function KarateHubScreen() {
         {/* Conteúdo principal */}
         <View style={styles.main}>
           <ScrollView
+            ref={scrollRef}
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -399,7 +417,10 @@ export default function KarateHubScreen() {
 
             {/* Bloco B — eventos abertos (cards) */}
             {openEvents.length > 0 && (
-              <View style={styles.eventsSection}>
+              <View
+                style={styles.eventsSection}
+                onLayout={(e) => { eventsSectionY.current = e.nativeEvent.layout.y; }}
+              >
                 <Text style={styles.eventsSectionTitle}>Inscrições abertas</Text>
                 <View style={styles.eventsList}>
                   {openEvents.map((ev) => (
