@@ -27,3 +27,7 @@ export function isMicrositeHost(): boolean {
 export function buildMicrositeUrl(slug: string, path = "/"): string {
   return core.buildMicrositeUrl(slug, path);
 }
+
+export function micrositeTargetPath(slug: string, pathname: string): string {
+  return core.micrositeTargetPath(slug, pathname);
+}

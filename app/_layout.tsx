@@ -7,7 +7,7 @@ import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
-import { isMicrositeHost } from "@/utils/microsite";
+import { isMicrositeHost, getMicrositeSlug, micrositeTargetPath } from "@/utils/microsite";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
@@ -65,7 +65,17 @@ function AuthGuard() {
     // rota de login/admin sai do subdomínio para o app principal — redirect de
     // página inteira (não router.replace, que é mesmo host). Gateado por
     // isMicrositeHost() → no domínio principal e no nativo este bloco é inerte.
-    if (isMicrositeHost() && segments.length > 0) {
+    if (isMicrositeHost()) {
+      // Backstop de roteamento: o replaceState do micrositeBootstrap nem sempre
+      // é lido pelo Expo Router no bundle web, então a raiz ("fpkt.getaura.com.br")
+      // e links limpos ("/inscricao/x") caiam no app. Aqui reescrevemos para a
+      // forma interna /karate/{slug}/... via router.replace (confiável).
+      const micrositeSlug = getMicrositeSlug();
+      if (micrositeSlug && segments[0] !== "karate") {
+        const cleanPath = typeof window !== "undefined" ? window.location.pathname : "/";
+        router.replace(micrositeTargetPath(micrositeSlug, cleanPath) as any);
+        return;
+      }
       const onPublicMicrosite = segments[0] === "karate" && (
         segments.length <= 2 ||                 // hub: /karate/{slug}
         segments[1] === "verify" ||             // carteirinha pública
