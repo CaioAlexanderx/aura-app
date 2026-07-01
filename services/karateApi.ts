@@ -820,6 +820,32 @@ export interface SenseiEventsResponse {
   federation: { name: string | null; email: string | null; phone: string | null } | null;
 }
 
+export interface SenseiPractitioner {
+  practitioner_id: string;
+  name: string;
+  is_active: boolean;
+  belt_level: string | null;
+  belt_name: string | null;
+}
+export interface SenseiPractitionersResponse {
+  practitioners: SenseiPractitioner[];
+  count: number;
+}
+
+export interface SenseiAnnuity {
+  annuity_history_id: string;
+  reference_period: string;
+  amount: number | null;
+  status: string;
+  paid_at?: string | null;
+  due_date: string | null;
+}
+export interface SenseiAnnuityResponse {
+  pending: SenseiAnnuity | null;
+  history: SenseiAnnuity[];
+  pix: { key: string; key_type: string | null; holder_name: string | null } | null;
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -1513,6 +1539,14 @@ export const karateApi = {
   /** Painel do sensei: eventos abertos da federação (read-only). */
   listSenseiEvents: (federationId: string): Promise<SenseiEventsResponse> =>
     request(`/federation/${federationId}/dojo/events`),
+
+  /** Painel do sensei: praticantes do dojô (read-only). */
+  listSenseiPractitioners: (federationId: string): Promise<SenseiPractitionersResponse> =>
+    request(`/federation/${federationId}/dojo/practitioners`),
+
+  /** Painel do sensei: anuidade do dojô (pendência, histórico e Pix). */
+  getSenseiAnnuity: (federationId: string): Promise<SenseiAnnuityResponse> =>
+    request(`/federation/${federationId}/dojo/annuity`),
 
   /** Lista todos os pedidos de certificado da federação (visão admin). */
   listCertOrders: (
