@@ -674,7 +674,6 @@ export default function ExameDetalhe() {
             <Text style={styles.confirmMessage}>
               Tem certeza que deseja fechar "{exam.title}"?
               {closePendingCount > 0 ? `\n\n${closePendingCount} candidato(s) ainda com resultado pendente.` : ""}
-              {"\n\n"}Atenção: certificados NÃO são gerados automaticamente. (Decisão FPKT #3)
             </Text>
             <View style={styles.confirmActions}>
               <KarateButton

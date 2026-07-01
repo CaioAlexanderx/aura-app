@@ -349,7 +349,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
 
             {kind === "exame" && step === 2 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepHint}>Inscreva os candidatos. A elegibilidade é só um aviso — não impede a inscrição (Decisão FPKT #1).</Text>
+                <Text style={styles.stepHint}>Inscreva os candidatos. A elegibilidade é só um aviso — não impede a inscrição.</Text>
                 <PoolList mode="candidate" />
               </View>
             )}

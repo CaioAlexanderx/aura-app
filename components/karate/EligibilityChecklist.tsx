@@ -31,7 +31,7 @@ export function EligibilityChecklist({ eligibility, showEnrollAnyway, onEnrollAn
         <View style={styles.advisoryBanner}>
           <Icon name="info" size={14} color={KarateColors.warn} />
           <Text style={styles.advisoryText}>
-            Elegibilidade com ressalvas — inscrição NÃO é bloqueada (Decisão FPKT #1).
+            Elegibilidade com ressalvas — a inscrição não é bloqueada.
           </Text>
         </View>
       )}
