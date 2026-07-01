@@ -30,6 +30,7 @@
 // federação. O layout de impressão preserva exatamente essa dimensão.
 // ============================================================
 import { resolveBeltKey, KarateBelts } from "@/constants/karateTheme";
+import { formatBeltLabel } from "@/utils/beltDisplay";
 import type { MembershipCard } from "@/services/karateCardApi";
 
 const ACCENT = "#D4121B";
@@ -66,9 +67,9 @@ function beltColor(card: MembershipCard): { bg: string; text: string; label: str
   const key = resolveBeltKey(card.belt_name || card.belt || "");
   if (key && KarateBelts[key]) {
     const b = KarateBelts[key];
-    return { bg: b.color, text: b.textColor, label: card.belt_name || b.label };
+    return { bg: b.color, text: b.textColor, label: formatBeltLabel(card.belt, card.belt_name) || b.label };
   }
-  return { bg: "#e0d8c6", text: "#2b2620", label: card.belt_name || card.belt || "—" };
+  return { bg: "#e0d8c6", text: "#2b2620", label: formatBeltLabel(card.belt, card.belt_name) };
 }
 
 function verifyUrlFor(card: MembershipCard): string {

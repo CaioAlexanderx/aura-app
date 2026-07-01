@@ -18,6 +18,7 @@ import { PixQRCode } from "@/components/karate/PixQRCode";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { KarateFonts } from "@/constants/karateTheme";
 import { MembershipCard } from "@/services/karateCardApi";
+import { formatBeltLabel, beltColorHex } from "@/utils/beltDisplay";
 
 // Logo da carteirinha: usa a logo REAL da federação (card.federation_logo,
 // vindo de companies.karate_logo_url/logo_url) quando disponível. Antes a
@@ -138,6 +139,20 @@ function Field({ label, value, f, mono, big, accent }: { label: string; value?: 
   );
 }
 
+function BeltField({ card, f }: { card: MembershipCard; f: (n: number) => number }) {
+  const label = formatBeltLabel(card.belt, card.belt_name);
+  const color = beltColorHex(card.belt, card.belt_name);
+  return (
+    <View style={{ marginBottom: f(4) }}>
+      <Text style={{ fontSize: f(13), fontWeight: "700", letterSpacing: f(1.4), textTransform: "uppercase", color: "#8a8a8a", marginBottom: f(3) }}>Faixa</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: f(11) }}>
+        <View style={{ width: f(20), height: f(20), borderRadius: f(5), backgroundColor: color, borderWidth: 1, borderColor: "rgba(0,0,0,0.14)" }} />
+        <Text numberOfLines={1} style={{ fontSize: f(25), fontWeight: "700", color: "#161616" }}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
 function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number; H: number }) {
   return (
     <View style={{ flex: 1 }}>
@@ -168,16 +183,17 @@ function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number;
               </View>
             )}
           </View>
-          <View style={{ flex: 1, justifyContent: "center", gap: f(20) }}>
+          <View style={{ flex: 1, justifyContent: "center", gap: f(16) }}>
             <Field label="Nome" value={card.student_name} f={f} />
             <View style={{ flexDirection: "row", gap: f(36) }}>
               <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
               <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
             </View>
-            <View style={{ flexDirection: "row", gap: f(36), alignItems: "flex-end" }}>
-              <View style={{ flex: 1 }}><Field label="Nº de registro FPKT" value={card.card_number} f={f} mono big accent /></View>
+            <View style={{ flexDirection: "row", gap: f(36) }}>
+              <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
               <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
             </View>
+            <Field label="Nº de registro FPKT" value={card.card_number} f={f} mono big accent />
           </View>
         </View>
 
