@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
+import { DateInput } from "@/components/inputs/DateInput";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -49,13 +50,15 @@ import type { SalesListItem, SalesFilters } from "@/services/api";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
 
-type PeriodKey = "today" | "week" | "month" | "all";
+type PeriodKey = "today" | "week" | "month" | "lastmonth" | "custom" | "all";
 type StatusKey = "all" | "active" | "cancelled";
 
 const PERIOD_OPTIONS: Array<{ key: PeriodKey; label: string }> = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
   { key: "month", label: "Mes" },
+  { key: "lastmonth", label: "Mes anterior" },
+  { key: "custom", label: "Personalizado" },
   { key: "all", label: "Tudo" },
 ];
 
@@ -83,7 +86,7 @@ var fmtDate = function(iso: string) {
   } catch { return ""; }
 };
 
-function periodToRange(period: PeriodKey): { from?: string; to?: string } {
+function periodToRange(period: PeriodKey, customFromIso?: string | null, customToIso?: string | null): { from?: string; to?: string } {
   if (period === "all") return {};
   // SP = UTC-3 fixo (DST abolido em 2019). Subtrai 3h de "agora" e le
   // a data em UTC — funciona independente do fuso do navegador.
@@ -108,6 +111,29 @@ function periodToRange(period: PeriodKey): { from?: string; to?: string } {
   if (period === "month") {
     return { from: spMidnightUTC(y, m, 1) };
   }
+  if (period === "lastmonth") {
+    // Mes-calendario anterior COMPLETO: 1o dia 00:00 SP -> ultimo instante do mes.
+    // Date.UTC normaliza m-1 (janeiro -> dezembro do ano anterior).
+    return {
+      from: spMidnightUTC(y, m - 1, 1),
+      to: new Date(Date.UTC(y, m, 1, 3, 0, 0) - 1).toISOString(),
+    };
+  }
+  if (period === "custom") {
+    // customFromIso / customToIso: "YYYY-MM-DD" (data SP) vindas do DateInput.
+    // from = meia-noite SP do dia inicial; to = ultimo instante SP do dia final
+    // (inclusivo: meia-noite SP do dia seguinte menos 1ms).
+    var out: { from?: string; to?: string } = {};
+    if (customFromIso) {
+      var pf = customFromIso.split("-");
+      out.from = spMidnightUTC(parseInt(pf[0], 10), parseInt(pf[1], 10) - 1, parseInt(pf[2], 10));
+    }
+    if (customToIso) {
+      var pt = customToIso.split("-");
+      out.to = new Date(Date.UTC(parseInt(pt[0], 10), parseInt(pt[1], 10) - 1, parseInt(pt[2], 10) + 1, 3, 0, 0) - 1).toISOString();
+    }
+    return out;
+  }
   return {};
 }
 
@@ -121,6 +147,11 @@ type SaleListRow = SalesListItem & {
 export default function VendasScreen() {
   const { company, consolidatedView } = useAuthStore();
   const [period, setPeriod] = useState<PeriodKey>("month");
+  // Periodo personalizado: BR (dd/mm/aaaa) pro input + ISO (YYYY-MM-DD) pra logica.
+  const [customFromBr, setCustomFromBr] = useState("");
+  const [customToBr, setCustomToBr] = useState("");
+  const [customFromIso, setCustomFromIso] = useState<string | null>(null);
+  const [customToIso, setCustomToIso] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
@@ -128,7 +159,7 @@ export default function VendasScreen() {
   // 09/05/2026: aba Fechamentos de Caixa (KPIs+lista) ao lado da listagem de Vendas
   const [activeTab, setActiveTab] = useState<"vendas" | "fechamentos">("vendas");
 
-  const range = useMemo(function() { return periodToRange(period); }, [period]);
+  const range = useMemo(function() { return periodToRange(period, customFromIso, customToIso); }, [period, customFromIso, customToIso]);
 
   const filters: SalesFilters = {
     date_from: range.from,
@@ -294,6 +325,28 @@ export default function VendasScreen() {
               );
             })}
           </View>
+          {period === "custom" && (
+            <View style={s.customRow}>
+              <View style={s.customField}>
+                <Text style={s.customLabel}>De</Text>
+                <DateInput
+                  value={customFromBr}
+                  onChangeText={setCustomFromBr}
+                  onValidChange={setCustomFromIso}
+                  style={s.customInput}
+                />
+              </View>
+              <View style={s.customField}>
+                <Text style={s.customLabel}>Ate</Text>
+                <DateInput
+                  value={customToBr}
+                  onChangeText={setCustomToBr}
+                  onValidChange={setCustomToIso}
+                  style={s.customInput}
+                />
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={s.filterGroup}>
@@ -525,6 +578,10 @@ const s = StyleSheet.create({
   chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   chipText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "700" },
+  customRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  customField: { flex: 1, gap: 4 },
+  customLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  customInput: { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, color: Colors.ink, fontSize: 12 },
 
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   searchInput: { flex: 1, fontSize: 12, color: Colors.ink, paddingVertical: 4 },
