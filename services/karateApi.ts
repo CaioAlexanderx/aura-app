@@ -805,6 +805,21 @@ export interface UploadPhotoResult {
 // ─────────────────────────────────────────────────────────────────
 // API calls — Fase 0 + 1 + 2 + Track H + Track J
 // ─────────────────────────────────────────────────────────────────
+export interface SenseiEvent {
+  id: string;
+  name: string;
+  exam_type: string;        // 'exame' | 'curso'
+  event_date: string | null;
+  location: string | null;
+  fee_amount: number | null;
+  status: ExamStatus;
+}
+export interface SenseiEventsResponse {
+  events: SenseiEvent[];
+  count: number;
+  federation: { name: string | null; email: string | null; phone: string | null } | null;
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -1494,6 +1509,10 @@ export const karateApi = {
   /** Lista pedidos de certificado do praticante logado (portal praticante). */
   listMyCertOrders: (federationId: string): Promise<{ orders: CertOrder[] }> =>
     request(`/federation/${federationId}/cert-orders/mine`),
+
+  /** Painel do sensei: eventos abertos da federação (read-only). */
+  listSenseiEvents: (federationId: string): Promise<SenseiEventsResponse> =>
+    request(`/federation/${federationId}/dojo/events`),
 
   /** Lista todos os pedidos de certificado da federação (visão admin). */
   listCertOrders: (
