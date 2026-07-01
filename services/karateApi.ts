@@ -461,7 +461,7 @@ export interface NfseItem {
 
 // ── Exames (Fase 2) ─────────────────────────────────────────────
 
-export type ExamStatus = "draft" | "open" | "closed" | "cancelled";
+export type ExamStatus = "draft" | "open" | "done" | "closed" | "cancelled";
 export type CandidateResult = "pending" | "approved" | "rejected";
 export type CertificateStatus = "pending" | "generated" | "sent" | "error";
 export type CourseType = "seminar" | "technical" | "referee" | "other";

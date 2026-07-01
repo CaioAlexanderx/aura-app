@@ -30,7 +30,7 @@ export default function EventosResultados() {
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
-    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "closed" || e.status === "open").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
+    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "done" || e.status === "closed" || e.status === "open").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
     catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
