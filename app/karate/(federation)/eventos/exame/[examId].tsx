@@ -437,7 +437,7 @@ export default function ExameDetalhe() {
     setClosingExam(true);
     try {
       await karateApi.closeBeltExam(federationId, exam.id);
-      setExam((prev) => (prev ? { ...prev, status: "closed" } : prev));
+      setExam((prev) => (prev ? { ...prev, status: "done" } : prev));
     } catch (e: any) {
       Alert.alert("Não foi possível fechar o exame", e?.message ?? "Tente novamente.");
     } finally {
@@ -487,8 +487,8 @@ export default function ExameDetalhe() {
             <View style={styles.headerBadges}>
               {isCurso && <Badge status="neutral" label="Curso" />}
               <Badge
-                status={exam.status === "open" ? "ok" : exam.status === "closed" ? "warn" : "neutral"}
-                label={exam.status === "open" ? "Aberto" : exam.status === "closed" ? "Encerrado" : "Rascunho"}
+                status={exam.status === "open" ? "ok" : (exam.status === "done" || exam.status === "closed") ? "warn" : "neutral"}
+                label={exam.status === "open" ? "Aberto" : (exam.status === "done" || exam.status === "closed") ? "Encerrado" : "Rascunho"}
               />
             </View>
           </View>

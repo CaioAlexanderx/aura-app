@@ -21,7 +21,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const EXAM_STATUS: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
-  closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
+  done: { label: "Encerrado", badge: "warn" }, closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
 const COURSE_LABEL: Record<string, string> = { seminar: "Seminário", course: "Curso", clinic: "Clínica" };
 const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }); };
