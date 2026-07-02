@@ -59,6 +59,8 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
+import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
+import { DocumentosSection } from "@/components/karate/DocumentosSection";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
@@ -147,7 +149,13 @@ const PM_LABELS: { value: PaymentMethod; label: string }[] = [
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
   const router = useRouter();
-  const { federationId } = useKarateFederation();
+  const { federationId, karateRole } = useKarateFederation();
+  // Fase 2: mesmo gate de papel usado no praticante (canTransfer) — só
+  // federation_admin/federation_staff podem anexar/excluir documentos do dojô.
+  // As demais ações desta tela (editar/excluir/suspender dojô) já assumem que
+  // só a federação chega aqui; não havia uma variável canEdit/allowed préexistente
+  // nesta tela, então reaproveitamos o mesmo helper de papel do praticante.
+  const canManage = canTransfer(karateRole);
   const [data, setData] = useState<DojoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -430,6 +438,17 @@ export default function DojoDetailScreen() {
                 <BeltTag level={m.belt_level} />
               </View>
             ))}
+        </Card>
+
+        {/* Fase 2: seção Documentos (anexos) — mesmo gate de edição das ações da federação */}
+        <Card style={{ marginTop: SP[6] }}>
+          <SectionHead title="Documentos" sub="Anexos do dojô (contratos, comprovantes, etc.)" />
+          <DocumentosSection
+            federationId={federationId}
+            ownerType="dojos"
+            ownerId={dojoId!}
+            canEdit={canManage}
+          />
         </Card>
 
         {/* DJ4: seção Anuidades com "Lançar pagamento" no topo */}
