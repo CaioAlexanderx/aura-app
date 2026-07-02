@@ -25,6 +25,7 @@ import { request } from "@/services/api";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
 import { pickFileWeb } from "@/services/studioUploadApi";
+import { toast as toastGlobal } from "@/components/Toast";
 
 import {
   EMPTY, Form, SharedSnapshot,
@@ -291,7 +292,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       }
     } catch (e: any) {
       setSaving(false);
-      setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
+      const msg = e?.message || "Não foi possível salvar. Tente novamente.";
+      setErrorMsg(msg);
+      toastGlobal.error(msg);
       return;
     }
 

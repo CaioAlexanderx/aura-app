@@ -40,6 +40,14 @@ const STATUS_MAP: Record<AnnuityStatus, { label: string; icon: string; color: st
   cancelled: { label: "Cancelado", icon: "close-circle",      color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
 };
 
+// Fallback neutro para status fora do STATUS_MAP (ex.: "Suspenso" ou qualquer
+// valor não mapeado) — evita crash (Cannot read properties of undefined
+// (reading 'bg')) que derrubava a ficha inteira pro error boundary.
+const STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+function sm(status: string) {
+  return (STATUS_MAP as any)[status] || { ...STATUS_FALLBACK, label: status || "\u2014" };
+}
+
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -106,9 +114,9 @@ export function AnuidadeCard({ federationId, practitionerId, practitionerName, c
           <View style={st.currentRow}>
             <Text style={st.currentLabel}>Status atual</Text>
             {current ? (
-              <View style={[st.badge, { backgroundColor: STATUS_MAP[current.status].bg }]} accessibilityLabel={STATUS_MAP[current.status].label}>
-                <Icon name={STATUS_MAP[current.status].icon as any} size={11} color={STATUS_MAP[current.status].color} />
-                <Text style={[st.badgeText, { color: STATUS_MAP[current.status].color }]}>{STATUS_MAP[current.status].label}</Text>
+              <View style={[st.badge, { backgroundColor: sm(current.status).bg }]} accessibilityLabel={sm(current.status).label}>
+                <Icon name={sm(current.status).icon as any} size={11} color={sm(current.status).color} />
+                <Text style={[st.badgeText, { color: sm(current.status).color }]}>{sm(current.status).label}</Text>
               </View>
             ) : (
               <Text style={st.emptyLabel}>Sem anuidade lançada</Text>
@@ -122,9 +130,9 @@ export function AnuidadeCard({ federationId, practitionerId, practitionerName, c
                 <View key={a.id} style={st.histRow}>
                   <Text style={st.histPeriod}>{a.reference_period}</Text>
                   <Text style={st.histAmount}>{formatCurrency(a.amount)}</Text>
-                  <View style={[st.badge, { backgroundColor: STATUS_MAP[a.status].bg }]} accessibilityLabel={STATUS_MAP[a.status].label}>
-                    <Icon name={STATUS_MAP[a.status].icon as any} size={10} color={STATUS_MAP[a.status].color} />
-                    <Text style={[st.badgeText, { color: STATUS_MAP[a.status].color }]}>{STATUS_MAP[a.status].label}</Text>
+                  <View style={[st.badge, { backgroundColor: sm(a.status).bg }]} accessibilityLabel={sm(a.status).label}>
+                    <Icon name={sm(a.status).icon as any} size={10} color={sm(a.status).color} />
+                    <Text style={[st.badgeText, { color: sm(a.status).color }]}>{sm(a.status).label}</Text>
                   </View>
                 </View>
               ))}
