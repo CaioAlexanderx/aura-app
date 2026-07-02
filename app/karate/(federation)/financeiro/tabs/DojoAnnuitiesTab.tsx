@@ -58,6 +58,7 @@ const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
   { key: "due",        label: "A vencer" },
   { key: "overdue",    label: "Vencido" },
   { key: "defaulting", label: "Inadimplente" },
+  { key: "no_charge",  label: "Sem cobrança" },
 ];
 
 const SIZE_TIER_LABELS: Record<SizeTier, string> = {
@@ -67,16 +68,27 @@ const SIZE_TIER_LABELS: Record<SizeTier, string> = {
   over_150: "Acima 150",
 };
 
-const ANNUITY_STATUS_MAP: Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }> = {
+const ANNUITY_STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
   paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,     bg: ShojiPalette.okSoft },
   due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,   bg: ShojiPalette.warnSoft },
   overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,  bg: ShojiPalette.alertSoft },
   defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger, bg: ShojiPalette.dangerSoft },
   suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral,bg: ShojiPalette.neutralSoft },
+  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
 };
 
+// Fallback neutro para qualquer status fora do ANNUITY_STATUS_MAP — evita que
+// um status desconhecido (ex.: novo valor do enum ainda não mapeado aqui)
+// derrube a linha inteira do card (Cannot read properties of undefined
+// (reading 'bg')), o que blanqueava a lista inteira em vez de só o badge.
+// Mesmo padrão defensivo do `sm()` em AnuidadeCard.tsx.
+const ANNUITY_STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+function annuityStatusMeta(status: string) {
+  return ANNUITY_STATUS_MAP[status as AnnuityStatus] || { ...ANNUITY_STATUS_FALLBACK, label: status || "\u2014" };
+}
+
 function AnnuityStatusBadge({ status }: { status: AnnuityStatus }) {
-  const s = ANNUITY_STATUS_MAP[status];
+  const s = annuityStatusMeta(status);
   return (
     <View
       style={[st.badge, { backgroundColor: s.bg }]}
@@ -92,8 +104,8 @@ function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-const STATUS_CSV_LABEL: Record<AnnuityStatus, string> = {
-  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso",
+const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso", no_charge: "Sem cobrança",
 };
 
 interface Props { federationId: string; }
