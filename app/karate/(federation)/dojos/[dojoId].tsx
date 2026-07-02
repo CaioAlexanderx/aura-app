@@ -53,6 +53,7 @@ import {
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
+import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
 import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
@@ -154,6 +155,8 @@ export default function DojoDetailScreen() {
   const [editOpen, setEditOpen] = useState(false);
   // Modal de exportação (round-trip com o import)
   const [exportOpen, setExportOpen] = useState(false);
+  // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
+  const [teamOpen, setTeamOpen] = useState(false);
   // Nav P2: slug público da federação (para montar o link do microsite).
   const [pubSlug, setPubSlug] = useState<string | null>(null);
 
@@ -412,7 +415,11 @@ export default function DojoDetailScreen() {
         </Card>
 
         <Card style={{ marginTop: SP[6] }}>
-          <SectionHead title="Equipe técnica" sub="Sensei responsável + corpo de auxiliares" />
+          <SectionHead
+            title="Equipe técnica"
+            sub="Sensei responsável + corpo de auxiliares"
+            actions={<ShojiButton label="Gerir equipe" icon="settings-outline" variant="ghost" onPress={() => setTeamOpen(true)} />}
+          />
           {data.technical_team.length === 0 ? <Body muted>Nenhum membro técnico cadastrado.</Body>
             : data.technical_team.map((m, i) => (
               <View key={m.practitioner_id} style={[styles.teamRow, i === data.technical_team.length - 1 && styles.noBorder]}>
@@ -499,6 +506,17 @@ export default function DojoDetailScreen() {
         dojoName={data.name}
         fpktId={data.fpkt_affiliation_id}
         onClose={() => setExportOpen(false)}
+      />
+
+      {/* F9: Modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant) */}
+      <GerirEquipeTecnicaModal
+        visible={teamOpen}
+        onClose={() => setTeamOpen(false)}
+        federationId={federationId}
+        dojoId={dojoId!}
+        dojoName={data.name}
+        currentTeamIds={data.technical_team.map((m) => m.practitioner_id)}
+        onSaved={() => { load(); }}
       />
 
       {/* Modal HAS_HISTORY */}

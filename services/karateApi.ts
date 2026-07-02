@@ -88,9 +88,15 @@ export interface PractitionerListItem {
   id: string;
   full_name: string;
   karate_registration_number: string;
+  dojo_id?: string;
   dojo_name: string;
   belt_name: string | null;
   affiliation_status: AffiliationStatus;
+  // Papéis na federação (equipe técnica do dojô)
+  is_arbiter?: boolean;
+  is_instructor?: boolean;
+  is_examiner?: boolean;
+  is_assistant?: boolean;
 }
 
 export interface BeltHistoryEntry {
@@ -142,6 +148,11 @@ export interface Practitioner {
   affiliation_status: AffiliationStatus;
   is_active: boolean;
   created_at: string;
+  // Papéis na federação (equipe técnica do dojô)
+  is_arbiter?: boolean;
+  is_instructor?: boolean;
+  is_examiner?: boolean;
+  is_assistant?: boolean;
 }
 
 export interface PractitionerDetail extends Practitioner {
@@ -173,6 +184,11 @@ export interface PractitionerInput {
   affiliation_since?: string | null;
   // F9: 'masculino' | 'feminino' | 'outro' ou null
   sex?: string | null;
+  // Papéis na federação (equipe técnica do dojô)
+  is_arbiter?: boolean;
+  is_instructor?: boolean;
+  is_examiner?: boolean;
+  is_assistant?: boolean;
 }
 
 // ── Dojô ───────────────────────────────────────────────────────
@@ -195,6 +211,15 @@ export interface Dojo {
   dojo_name?: string | null;
 }
 
+// Membro da equipe técnica do dojô (Sensei + corpo de auxiliares).
+// `roles` vem do backend como chaves canônicas: instructor | arbiter | examiner | sensei | senpai | assistant.
+export interface TechnicalTeamMember {
+  practitioner_id: string;
+  name: string;
+  roles: string[];
+  belt_level: string | null;
+}
+
 export interface DojoDetail extends Dojo {
   owner_id: string | null;
   phone: string | null;
@@ -202,6 +227,9 @@ export interface DojoDetail extends Dojo {
   cnpj: string | null;
   address: string | null;
   practitioners: PractitionerListItem[];
+  // Campos adicionais consumidos por app/karate/(federation)/dojos/[dojoId].tsx
+  // (tipo historicamente incompleto — resto do shape segue implícito/any).
+  technical_team: TechnicalTeamMember[];
 }
 
 export interface DojoInput {
