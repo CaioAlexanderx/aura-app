@@ -262,7 +262,10 @@ export function ShojiBadge({ status, dojoStatus, affiliationStatus, label }: {
   status?: KarateStatusKey; dojoStatus?: DojoStatus; affiliationStatus?: AffiliationStatus; label?: string;
 }) {
   let color: string, bg: string, icon: string, txt: string;
-  if (dojoStatus) { const s = KarateDojoStatus[dojoStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
+  // b1: fallback defensivo — se `dojoStatus` vier com um valor que a UI ainda
+  // não conhece (ex.: novo status do backend), cai em "Inativo" em vez de
+  // quebrar o render.
+  if (dojoStatus) { const s = KarateDojoStatus[dojoStatus] ?? KarateDojoStatus.inactive; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
   else if (affiliationStatus) { const s = KarateAffiliationStatus[affiliationStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
   else { const s = KarateStatus[status ?? "neutral"]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? (status ?? ""); }
   return (

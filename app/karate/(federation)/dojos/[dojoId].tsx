@@ -44,6 +44,7 @@ import {
   Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as XLSX from "xlsx";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -54,7 +55,7 @@ import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
-import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts } from "@/services/karateApi";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, PractitionerListItem } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -64,6 +65,15 @@ import { DocumentosSection } from "@/components/karate/DocumentosSection";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
+// b4: rótulo do status do praticante na exportação. Fallback defensivo para
+// qualquer valor que a UI ainda não conheça (mesmo espírito do b1).
+const PRACT_STATUS_LABEL: Record<string, string> = { active: "Ativo", pending: "Pendente", inactive: "Inativo" };
+const practStatusLabel = (s?: string | null) => (s && PRACT_STATUS_LABEL[s]) || "Inativo";
+
+// b4: slug simples de arquivo (mesmo padrão do DojoExportModal).
+const slugFile = (s: string) =>
+  (s || "praticantes").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "praticantes";
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -163,6 +173,10 @@ export default function DojoDetailScreen() {
   const [editOpen, setEditOpen] = useState(false);
   // Modal de exportação (round-trip com o import)
   const [exportOpen, setExportOpen] = useState(false);
+  // b4: exportação rápida da lista de praticantes deste dojô (.xlsx), botão
+  // dedicado ao lado de "Ver praticantes" — separado do DojoExportModal
+  // (que exporta o dojô inteiro no formato de reimportação).
+  const [exportingPractitioners, setExportingPractitioners] = useState(false);
   // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
   const [teamOpen, setTeamOpen] = useState(false);
   // Nav P2: slug público da federação (para montar o link do microsite).
@@ -227,7 +241,12 @@ export default function DojoDetailScreen() {
   };
 
   // ── Suspender / Reativar ─────────────────────────────────────────
-  const isSuspended = data?.status === "suspended";
+  // b1: o backend agora manda status "inactive" (baseado em is_active) em vez
+  // de "suspended". Aceitamos os dois valores aqui por compatibilidade
+  // retroativa, e is_active tem precedência quando presente.
+  const isSuspended = data
+    ? (data.is_active !== undefined ? !data.is_active : (data.status === "suspended" || data.status === "inactive"))
+    : false;
   const toggleSuspend = useCallback(async () => {
     if (!data || busy) return;
     const next = isSuspended;
@@ -315,6 +334,51 @@ export default function DojoDetailScreen() {
     } finally { setBusy(false); }
   }, [busy, federationId, dojoId, load, showToast]);
 
+  // ── b4: Exportar praticantes deste dojô em .xlsx ─────────────────
+  // Busca só os praticantes DESTE dojô (dojo_id) e monta uma planilha de
+  // 1 aba ("Praticantes") com Nome, Nº FPKT, Faixa, Status. Web-only, mesmo
+  // padrão (SheetJS + download via Blob) do DojoExportModal.
+  const exportPractitioners = useCallback(async () => {
+    if (!dojoId || exportingPractitioners) return;
+    setExportingPractitioners(true);
+    try {
+      const res = await karateApi.listPractitioners(federationId, { dojo_id: dojoId, pageSize: 500 });
+      const rows: PractitionerListItem[] = res.data || [];
+
+      const headers = ["Nome", "Nº FPKT", "Faixa", "Status"];
+      const aoa: (string | null)[][] = [
+        headers,
+        ...rows.map((p) => [
+          p.full_name || "",
+          p.karate_registration_number || "",
+          p.belt_name || "",
+          practStatusLabel(p.affiliation_status as any),
+        ]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Praticantes");
+
+      const today = new Date().toISOString().slice(0, 10);
+      const fname = `praticantes_${slugFile(data?.name || "dojo")}_${today}.xlsx`;
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      showToast("Planilha de praticantes exportada");
+    } catch (e: any) {
+      Alert.alert("Não foi possível exportar", e?.message || "Tente novamente.");
+    } finally {
+      setExportingPractitioners(false);
+    }
+  }, [dojoId, federationId, data, exportingPractitioners, showToast]);
+
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
 
@@ -328,9 +392,22 @@ export default function DojoDetailScreen() {
   const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
   const senseiIsPractitioner = !!(data as any).sensei_practitioner_id;
 
+  // b6: voltar para a lista de dojôs. router.back() quando há histórico de
+  // navegação (ex.: veio da lista); fallback para a rota da lista quando a
+  // tela foi aberta direto (deep link / refresh).
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.push("/karate/dojos" as any);
+  };
+
   return (
     <ShojiBackground>
       <ScrollView contentContainerStyle={styles.content}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Voltar para dojôs">
+          <Icon name="chevron-back" size={16} color={C.ink2} />
+          <Text style={styles.backBtnTxt}>Dojôs</Text>
+        </TouchableOpacity>
+
         <View style={styles.head}>
           <View style={{ flex: 1, minWidth: 240 }}>
             <Eyebrow>Detalhe · {data.fpkt_affiliation_id}</Eyebrow>
@@ -351,6 +428,12 @@ export default function DojoDetailScreen() {
                 icon="people-outline"
                 variant="ghost"
                 onPress={() => router.push(("/karate/praticantes?dojo_id=" + encodeURIComponent(dojoId!)) as any)}
+              />
+              <ShojiButton
+                label={exportingPractitioners ? "Exportando..." : "Exportar Excel"}
+                icon="grid-outline"
+                variant="ghost"
+                onPress={exportPractitioners}
               />
               <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
@@ -905,6 +988,9 @@ function RegisterPaymentModal({ visible, busy, onClose, onSave }: {
 
 const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
+  // b6: botão de voltar Shoji (icon + texto), acima do head.
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginBottom: 18, paddingVertical: 4, paddingRight: 8 } as ViewStyle,
+  backBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink2 } as TextStyle,
   head: { flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" } as ViewStyle,
   headActions: { alignItems: "flex-end", gap: 10 } as ViewStyle,
   headBtns: { flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" } as ViewStyle,

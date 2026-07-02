@@ -195,7 +195,11 @@ export const KarateSpacing = {
 // ─────────────────────────────────────────────────────────────
 // Status do Dojô — label + ícone + cor (sempre icon+texto)
 // ─────────────────────────────────────────────────────────────
-export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
+// b1: o backend agora manda 'inactive' (baseado em is_active) em vez de
+// 'suspended'. Mantemos 'suspended' no union por compatibilidade retroativa
+// (registros/telas antigas ainda podem referenciá-lo), mas ambos exibem o
+// mesmo rótulo "Inativo" na UI.
+export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended" | "inactive";
 
 export const KarateDojoStatus: Record<DojoStatus, {
   label: string; icon: string; color: string; bg: string;
@@ -204,7 +208,10 @@ export const KarateDojoStatus: Record<DojoStatus, {
   expiring:   { label: "A vencer",     icon: "alert-circle",     color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
   overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,   bg: ShojiPalette.alertWash },
   defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger,  bg: ShojiPalette.dangerWash },
-  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  // 'inactive' é o valor atual do backend; 'suspended' fica mapeado igual
+  // para compatibilidade retroativa (b1).
+  inactive:   { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  suspended:  { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
 } as const;
 
 // ─────────────────────────────────────────────────────────────
