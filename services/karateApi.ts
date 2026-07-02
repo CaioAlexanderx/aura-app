@@ -160,6 +160,18 @@ export interface PractitionerDetail extends Practitioner {
   email: string | null;
   phone: string | null;
   birth_date: string | null;
+  rg: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  guardian_name: string | null;
+  guardian_cpf: string | null;
+  guardian_phone: string | null;
+  guardian_relationship: string | null;
   address: string | null;
   graduated_at: string | null;
   affiliation_since: string | null;

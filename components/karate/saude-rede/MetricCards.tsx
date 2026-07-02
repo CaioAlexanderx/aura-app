@@ -46,13 +46,6 @@ export function AfiliacaoCard({
             <Text style={st.heroNum}>{data.total_now}</Text>
             <Text style={st.heroSub}>dojôs filiados em {data.season}</Text>
           </View>
-          <View style={{ marginTop: 8 }}>
-            <BarChart
-              items={data.yearly.map((y) => ({ label: String(y.ano), value: y.new_affiliations }))}
-              maxVal={Math.max(...data.yearly.map((y) => y.new_affiliations), 1)}
-              barColor={C.ink2}
-            />
-          </View>
           <View style={st.twinBoxRow}>
             <View style={[st.twinBox, st.twinBoxOk]}>
               <Text style={st.twinBoxNum}>+{data.novas_affiliacoes}</Text>
@@ -105,7 +98,7 @@ export function CoberturaCard({
                     ]}
                   />
                 </View>
-                <Text style={st.covCount}>{r.dojos}</Text>
+                <Text style={st.covCount} numberOfLines={1}>{r.dojos}</Text>
               </View>
             ))}
           </View>
