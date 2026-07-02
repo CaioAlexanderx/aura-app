@@ -26,15 +26,12 @@ import {
   LookupEnrollment,
   ApiError,
 } from "@/services/karatePublicApi";
+import { formatEventDateShort } from "@/utils/eventDate";
 
 type Phase = "form" | "loading" | "result" | "error";
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-  } catch { return iso; }
+  return formatEventDateShort(iso, "—");
 }
 
 function kindLabel(kind: string): string {

@@ -26,6 +26,7 @@ import { beltHex } from "@/constants/karateBelts";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karatePortalApi, PortalData } from "@/services/karatePortalApi";
+import { formatEventDateShort } from "@/utils/eventDate";
 
 const APP_ORIGIN = "https://app.getaura.com.br";
 
@@ -42,6 +43,12 @@ function fmtDate(iso?: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+// e.event_date é DATA pura (YYYY-MM-DD); usa o formatter tz-safe para não
+// exibir um dia a menos (graduated_at/issued_at acima seguem timestamps
+// normais e continuam com fmtDate).
+function fmtEventDate(iso?: string | null): string {
+  return formatEventDateShort(iso, "—");
 }
 function beltLabel(name?: string | null, level?: string | null): string {
   if (!name) return "—";
@@ -307,7 +314,7 @@ export default function PortalPraticanteScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.listA}>{e.target_belt_name ? `Exame ${e.target_belt_name}` : "Exame de faixa"}</Text>
-                      <Text style={styles.listB}>{statusLabel(e.status)}{e.event_date ? ` · ${fmtDate(e.event_date)}` : ""}</Text>
+                      <Text style={styles.listB}>{statusLabel(e.status)}{e.event_date ? ` · ${fmtEventDate(e.event_date)}` : ""}</Text>
                     </View>
                   </View>
                 );

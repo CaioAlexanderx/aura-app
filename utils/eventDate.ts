@@ -57,3 +57,14 @@ export function formatEventDateNumeric(iso?: string | null, fallback = "—"): s
   if (!parts) return String(iso);
   return `${parts.d}/${parts.mo}/${parts.y}`;
 }
+
+// "20 de set." (sem ano — equivalente tz-safe de toLocaleDateString com
+// { day: "2-digit", month: "short" }, para exibições compactas como o
+// dateBox de "próximo evento" no painel da federação)
+export function formatEventDateCompact(iso?: string | null, fallback = "—"): string {
+  if (!iso) return fallback;
+  const parts = parseDateParts(iso);
+  if (!parts) return String(iso);
+  const mi = parseInt(parts.mo, 10) - 1;
+  return `${parseInt(parts.d, 10)} de ${MESES_ABREV[mi]}`;
+}
