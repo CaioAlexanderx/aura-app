@@ -327,6 +327,12 @@ const STATUS_FILTERS: Array<{ key: RelacaoFaixasStatus; label: string }> = [
   { key: "inactive", label: "Inativos" },
 ];
 
+// Kyu por faixa (rótulo) — FPKT Shotokan. Dan (preta) não tem kyu.
+const KYU_BY_FAIXA: Record<string, string> = {
+  "Branca": "10º kyu", "Amarela": "9º kyu", "Laranja": "8º kyu", "Verde": "7º kyu",
+  "Azul Claro": "6º kyu", "Roxa": "5º kyu", "Azul Escuro": "4º kyu", "Marrom": "3º–1º kyu",
+};
+
 export function RelacaoFaixasCard({
   data, loading, onDetail,
 }: { data: RelacaoFaixasPayload | null; loading: boolean } & CardCallbacks) {
@@ -402,7 +408,12 @@ export function RelacaoFaixasCard({
           <View style={{ flex: 1, gap: 10 }}>
             {effectiveData.buckets.map((b) => (
               <View key={b.faixa} style={st.beltRow}>
-                <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
+                <View style={{ width: 110 }}>
+                  <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
+                  {KYU_BY_FAIXA[b.faixa] ? (
+                    <Text style={{ fontFamily: F.body, fontSize: 10, color: C.ink3, marginTop: 1 }} numberOfLines={1}>{KYU_BY_FAIXA[b.faixa]}</Text>
+                  ) : null}
+                </View>
                 <View style={st.beltBarTrack}>
                   <View
                     style={[
