@@ -864,6 +864,39 @@ export interface UploadPhotoResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Fase 2 — Anexos/Documentos (dojô e praticante)
+// ─────────────────────────────────────────────────────────────────
+
+export type DocumentOwnerType = "dojos" | "practitioners";
+
+export interface KarateDocument {
+  id: string;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number;
+  note: string | null;
+  created_at: string;
+  download_url: string;
+  /** true quando o R2 não está configurado (armazenamento simulado/temporário). */
+  storage_mock?: boolean;
+}
+
+export interface UploadDocumentInput {
+  /** Base64 puro, sem prefixo "data:<type>;base64,". */
+  content: string;
+  filename: string;
+  content_type?: string;
+  note?: string;
+}
+
+export interface DocumentDownloadResult {
+  url: string;
+  expires_in?: number;
+  filename?: string;
+  content_type?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // API calls — Fase 0 + 1 + 2 + Track H + Track J
 // ─────────────────────────────────────────────────────────────────
 export interface SenseiEvent {
@@ -1653,6 +1686,53 @@ export const karateApi = {
     request(`/federation/${federationId}/cert-orders/${orderId}/refuse`, {
       method: "POST",
       body: body ?? {},
+    }),
+
+  // ── Fase 2 — Anexos/Documentos (dojô e praticante) ──────────────
+  /** GET /federation/:fedId/:ownerType/:ownerId/documents */
+  listDocuments: (
+    federationId: string,
+    ownerType: DocumentOwnerType,
+    ownerId: string
+  ): Promise<{ data: KarateDocument[] }> =>
+    request(`/federation/${federationId}/${ownerType}/${ownerId}/documents`),
+
+  /**
+   * POST /federation/:fedId/:ownerType/:ownerId/documents
+   * Body: { content: "<base64 puro>", filename, content_type?, note? }
+   * Resposta 201 traz o documento criado; `storage_mock:true` indica que
+   * o R2 não está configurado (armazenamento simulado/temporário).
+   */
+  uploadDocument: (
+    federationId: string,
+    ownerType: DocumentOwnerType,
+    ownerId: string,
+    body: UploadDocumentInput
+  ): Promise<KarateDocument> =>
+    request(`/federation/${federationId}/${ownerType}/${ownerId}/documents`, {
+      method: "POST",
+      body,
+      timeout: 60000,
+    }),
+
+  /** GET /federation/:fedId/:ownerType/:ownerId/documents/:docId/download */
+  getDocumentDownload: (
+    federationId: string,
+    ownerType: DocumentOwnerType,
+    ownerId: string,
+    docId: string
+  ): Promise<DocumentDownloadResult> =>
+    request(`/federation/${federationId}/${ownerType}/${ownerId}/documents/${docId}/download`),
+
+  /** DELETE /federation/:fedId/:ownerType/:ownerId/documents/:docId */
+  deleteDocument: (
+    federationId: string,
+    ownerType: DocumentOwnerType,
+    ownerId: string,
+    docId: string
+  ): Promise<{ deleted: boolean }> =>
+    request(`/federation/${federationId}/${ownerType}/${ownerId}/documents/${docId}`, {
+      method: "DELETE",
     }),
 };
 

@@ -27,6 +27,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 
 // Componentes extraídos
 import { canTransfer, webAlert } from "@/components/karate/praticante-detalhe/helpers";
+import { DocumentosSection } from "@/components/karate/DocumentosSection";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { CadastroTab } from "@/components/karate/praticante-detalhe/CadastroTab";
 import { TrajetoriaTab } from "@/components/karate/praticante-detalhe/TrajetoriaTab";
@@ -222,7 +223,14 @@ export default function FichaPraticanteScreen() {
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
-        {activeTab === "Documentos"     && <PlaceholderTab label="Documentos" />}
+        {activeTab === "Documentos"     && (
+          <DocumentosSection
+            federationId={federationId}
+            ownerType="practitioners"
+            ownerId={practitionerId!}
+            canEdit={allowed}
+          />
+        )}
       </ScrollView>
 
       {/* Modal de edição da ficha (reusa o cadastro com o id atual) */}
