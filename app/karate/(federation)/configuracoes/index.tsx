@@ -73,7 +73,6 @@ const KARATE_FLAGS_DEFS = [
   { key: "competicoes", label: "Competições",       desc: "Módulo de torneios: chaveamento, lançamento de resultados e ranking." },
   { key: "carteirinha", label: "Carteirinha digital", desc: "Carteirinha do praticante com QR, graduação e validade da anuidade." },
   { key: "conexao",     label: "Conexão de dojôs",   desc: "Dojôs gerenciam seus praticantes e enviam inscrições direto pelo painel." },
-  { key: "portal",      label: "Portal público",      desc: "Página pública da federação com agenda de eventos e lista de dojôs." },
 ] as const;
 
 const ROLE_OPTS = [
@@ -1075,15 +1074,16 @@ function RecursosTab({ federationId }: { federationId: string }) {
             <TextInput style={st.field} value={f.name || ""} onChangeText={(v) => updateField("name", v)} accessibilityLabel="Nome da federação" />
             <Text style={[st.fieldLabel, { marginTop: 12 }]}>Slug público</Text>
             <View style={st.slugRow}>
-              <View style={st.slugPrefix}><Text style={st.slugPrefixText}>aura.app/</Text></View>
               <TextInput
-                style={[st.field, { flex: 1, borderLeftWidth: 0, borderRadius: 0, borderTopRightRadius: KarateRadius.sm, borderBottomRightRadius: KarateRadius.sm }]}
+                style={[st.field, { flex: 1, borderWidth: 0, borderRadius: 0 }]}
                 value={f.slug || ""}
                 onChangeText={(v) => updateField("slug", v.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
                 autoCapitalize="none"
                 accessibilityLabel="Slug público"
               />
+              <View style={st.slugSuffix}><Text style={st.slugPrefixText}>.getaura.com.br</Text></View>
             </View>
+            <Text style={st.slugHint}>Endereço público: {(f.slug || "seu-slug")}.getaura.com.br</Text>
           </Card>
 
           {/* Contato */}
@@ -1360,6 +1360,8 @@ const st = StyleSheet.create({
   slugRow:      { flexDirection: "row", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, overflow: "hidden", marginTop: 4 } as ViewStyle,
   slugPrefix:   { backgroundColor: KarateColors.bg2, borderRightWidth: 1, borderRightColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
   slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
+  slugSuffix:   { backgroundColor: KarateColors.bg2, borderLeftWidth: 1, borderLeftColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
+  slugHint:     { fontSize: 11.5, color: KarateColors.ink3, marginTop: 6, fontFamily: KarateFonts.mono } as TextStyle,
 
   // Regime
   regimeRow:          { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 } as ViewStyle,
