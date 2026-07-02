@@ -33,6 +33,7 @@ import { TrajetoriaTab } from "@/components/karate/praticante-detalhe/Trajetoria
 import { CertificadosTab } from "@/components/karate/praticante-detalhe/CertificadosTab";
 import { TransferenciaTab } from "@/components/karate/praticante-detalhe/TransferenciaTab";
 import { ExcluirComHistoricoModal } from "@/components/karate/praticante-detalhe/ExcluirComHistoricoModal";
+import { AnuidadeCard } from "@/components/karate/praticante-detalhe/AnuidadeCard";
 
 const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
 type Tab = typeof TABS[number];
@@ -205,7 +206,18 @@ export default function FichaPraticanteScreen() {
 
       {/* Tab Content */}
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
-        {activeTab === "Cadastro"       && <CadastroTab practitioner={data} />}
+        {activeTab === "Cadastro"       && (
+          <>
+            <CadastroTab practitioner={data} />
+            <AnuidadeCard
+              federationId={federationId}
+              practitionerId={practitionerId!}
+              practitionerName={data.full_name}
+              cpf={data.cpf}
+              allowed={allowed}
+            />
+          </>
+        )}
         {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onChanged={reload} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
