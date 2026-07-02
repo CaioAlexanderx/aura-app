@@ -59,7 +59,7 @@ export function CadastroTab({ practitioner }: Props) {
       <SectionHeader title="DADOS PESSOAIS" />
       <Field label="Nome completo" value={p.full_name} />
       <Field label="CPF" value={formatCpfDisplay(p.cpf)} />
-      <Field label="RG" value={p.rig} />
+      <Field label="RG" value={p.rg} />
       <Field
         label="Nascimento"
         value={
@@ -68,20 +68,20 @@ export function CadastroTab({ practitioner }: Props) {
             : null
         }
       />
-      <Field label="Sexo" value={p.gender === "M" ? "Masculino" : p.gender === "F" ? "Feminino" : p.gender} />
+      <Field label="Sexo" value={p.sex === "masculino" ? "Masculino" : p.sex === "feminino" ? "Feminino" : p.sex === "outro" ? "Outro" : null} />
       <Field label="E-mail" value={p.email} />
       <Field label="Telefone" value={formatPhoneDisplay(p.phone)} />
 
       {/* Endereço — F4.4: mostra quando pelo menos 1 campo está preenchido */}
-      {[p.address_street, p.address_neighborhood, p.address_city, p.address_state, p.address_zip].some(Boolean) && (
+      {[p.street, p.neighborhood, p.city, p.state, p.zip_code].some(Boolean) && (
         <>
           <SectionHeader title="ENDEREÇO" />
-          <Field label="CEP" value={formatCepDisplay(p.address_zip)} />
-          <Field label="Endereço" value={p.address_street} />
-          <Field label="Bairro" value={p.address_neighborhood} />
+          <Field label="CEP" value={formatCepDisplay(p.zip_code)} />
+          <Field label="Endereço" value={p.street} />
+          <Field label="Bairro" value={p.neighborhood} />
           <Field
             label="Município"
-            value={[p.address_city, p.address_state].filter(Boolean).join(" / ") || null}
+            value={[p.city, p.state].filter(Boolean).join(" / ") || null}
           />
         </>
       )}
@@ -98,7 +98,6 @@ export function CadastroTab({ practitioner }: Props) {
       <SectionHeader title="ATIVIDADE" />
       <Field label="Filiado em" value={p.affiliation_since ? formatIsoToBr(p.affiliation_since) : null} />
       <Field label="Dojô" value={p.dojo_name} />
-      <Field label="Anuidade" value={p.membership_status} />
     </View>
   );
 }
