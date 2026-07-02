@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  ViewStyle, TextStyle, Platform, Linking, Dimensions,
+  ViewStyle, TextStyle, Platform, Linking, Dimensions, Animated, Easing,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -173,6 +173,38 @@ function Sidebar({
         </TouchableOpacity>
       </View>
     </View>
+  );
+}
+
+// ─── CascadeIn ──────────────────────────────────────────────
+// Entrada em cascata: opacity 0→1 + translateY 8→0, delay incremental
+// por índice (~70ms). Usado nos cards do grid (HUB_CARDS) e nos
+// EventCard de "Inscrições abertas". useNativeDriver:false (web-safe;
+// anima opacity + transform juntos no mesmo driver).
+function CascadeIn({ index, style, children }: { index: number; style?: any; children: React.ReactNode }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    const delay = Math.min(index, 20) * 70;
+    const timer = Animated.timing(anim, {
+      toValue: 1,
+      duration: 360,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+
+  return (
+    <Animated.View style={[style, { opacity: anim, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
   );
 }
 
@@ -432,12 +464,13 @@ export default function KarateHubScreen() {
               <Text style={styles.eventsSectionTitle}>Inscrições abertas</Text>
               {openEvents.length > 0 ? (
                 <View style={styles.eventsList}>
-                  {openEvents.map((ev) => (
-                    <EventCard
-                      key={ev.id}
-                      event={ev}
-                      onPress={() => router.push(`/karate/${fedSlug}/inscricao/${ev.id}` as any)}
-                    />
+                  {openEvents.map((ev, i) => (
+                    <CascadeIn key={ev.id} index={i}>
+                      <EventCard
+                        event={ev}
+                        onPress={() => router.push(`/karate/${fedSlug}/inscricao/${ev.id}` as any)}
+                      />
+                    </CascadeIn>
                   ))}
                 </View>
               ) : (
@@ -460,12 +493,13 @@ export default function KarateHubScreen() {
 
             {/* Grade de cards */}
             <View style={styles.grid}>
-              {HUB_CARDS.map((card) => (
-                <HubCard
-                  key={card.key}
-                  card={card}
-                  onPress={() => handleCardPress(card.key)}
-                />
+              {HUB_CARDS.map((card, i) => (
+                <CascadeIn key={card.key} index={i} style={{ flexBasis: 248, flexGrow: 1 }}>
+                  <HubCard
+                    card={card}
+                    onPress={() => handleCardPress(card.key)}
+                  />
+                </CascadeIn>
               ))}
             </View>
           </ScrollView>

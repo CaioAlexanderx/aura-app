@@ -188,7 +188,7 @@ export default function KaratePainel() {
           <Card>
             {loading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
               : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes" style={{ paddingVertical: 24 }} />
-              : belts.map((b) => <BarRow key={b.belt_level} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
+              : belts.map((b, i) => <BarRow key={b.belt_level} index={i} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
           </Card>
         </View>
 
