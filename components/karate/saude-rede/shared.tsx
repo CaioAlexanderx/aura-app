@@ -46,17 +46,21 @@ export function dateSlice(s: string | null | undefined): string {
   return "";
 }
 export function fmtMesAno(mes: string, ano: string | number): string {
-  // mes pode ser "Jan","Feb","fev" etc — monta uma data e formata em pt-BR curto
-  // Fallback: se não parsear, retorna mes+"/"+ano
-  try {
-    // tenta parsear "Jan 2026" → Date
-    const d = new Date(`${mes} 1, ${ano}`);
-    if (isNaN(d.getTime())) return `${mes}/${ano}`;
-    const m = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(d).replace(".", "");
-    return `${m}/${ano}`;
-  } catch {
-    return `${mes}/${ano}`;
-  }
+  // NUNCA usar new Date aqui: `new Date("fev 1, 26")` NÃO é inválido no V8 —
+  // ele vira silenciosamente uma data de JANEIRO, transformando "fev" em "jan"
+  // (raiz do bug recorrente das Graduações). Mapeamento puro por string, tz-safe.
+  const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const EN: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  let m = String(mes ?? "").trim().toLowerCase().replace(/\./g, "");
+  let yy = String(ano ?? "");
+  if (yy.length > 2) yy = yy.slice(2);
+  const iso = m.match(/^(\d{4})-(\d{2})$/); // "YYYY-MM"
+  if (iso) return `${MESES[parseInt(iso[2], 10) - 1] ?? iso[2]}/${iso[1].slice(2)}`;
+  const num = m.match(/^\d{1,2}$/); // "2" ou "02"
+  if (num) return `${MESES[parseInt(m, 10) - 1] ?? m}/${yy}`;
+  const en3 = EN[m.slice(0, 3)]; // "Feb" (inglês) → pt
+  if (en3) m = MESES[en3 - 1];
+  return `${m}/${yy}`;
 }
 
 // ── CSV export client-side ─────────────────────────────────────
