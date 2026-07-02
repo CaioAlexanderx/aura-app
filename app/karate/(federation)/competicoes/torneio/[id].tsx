@@ -477,7 +477,6 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
   const [ageMax, setAgeMax] = useState("");
   const [beltMin, setBeltMin] = useState<BeltKey | "">("");
   const [beltMax, setBeltMax] = useState<BeltKey | "">("");
-  const [weightClass, setWeightClass] = useState("");
   const [maxEntries, setMaxEntries] = useState("");
   const [fee, setFee] = useState("");
   const [saving, setSaving] = useState(false);
@@ -493,7 +492,6 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
     setAgeMax(category.max_age != null ? String(category.max_age) : "");
     setBeltMin((category.belt_min as BeltKey | null) ?? "");
     setBeltMax((category.belt_max as BeltKey | null) ?? "");
-    setWeightClass(category.weight_class ?? "");
     setMaxEntries(category.max_entries != null ? String(category.max_entries) : "");
     const cents = category.fee_amount != null ? Math.round(category.fee_amount * 100) : 0;
     setFee(cents ? maskMoney(String(cents)) : "");
@@ -516,7 +514,6 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
         belt_min: beltMin || null,
         belt_max: beltMax || null,
         sex,
-        weight_class: weightClass.trim() || null,
         max_entries: maxEntries ? parseInt(maxEntries, 10) : null,
         fee_amount: fee ? moneyToNumber(fee) : null,
       };
@@ -625,9 +622,6 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
-            <Text style={styles.inputLabel}>Peso / categoria de peso <Text style={{ color: KarateColors.ink4 }}>(opcional)</Text></Text>
-            <TextInput style={styles.input} value={weightClass} onChangeText={setWeightClass} placeholder="Ex: -60kg" placeholderTextColor={KarateColors.ink4} autoCapitalize="none" />
 
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>

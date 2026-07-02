@@ -97,7 +97,6 @@ interface DraftCategory {
   beltMin: BeltKey | "";
   beltMax: BeltKey | "";
   sex: Sex;
-  weightClass: string;
   maxEntries: string;
   fee: string;
   // estado de envio (transacional no front) — não enviado ao backend
@@ -111,7 +110,7 @@ let __k = 0;
 const newKey = () => `cat-${Date.now()}-${++__k}`;
 const emptyDraft = (): DraftCategory => ({
   key: newKey(), name: "", modality: "kata", ageMin: "", ageMax: "",
-  beltMin: "", beltMax: "", sex: "mixed", weightClass: "", maxEntries: "", fee: "",
+  beltMin: "", beltMax: "", sex: "mixed", maxEntries: "", fee: "",
 });
 
 interface Props {
@@ -206,7 +205,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           min_age: c.ageMin ? parseInt(c.ageMin, 10) : null,
           max_age: c.ageMax ? parseInt(c.ageMax, 10) : null,
           belt_min: c.beltMin || null, belt_max: c.beltMax || null,
-          sex: c.sex, weight_class: c.weightClass.trim() || null,
+          sex: c.sex,
           max_entries: c.maxEntries ? parseInt(c.maxEntries, 10) : null,
           fee_amount: c.fee ? moneyToNumber(c.fee) : null,
         });
@@ -423,9 +422,6 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                     onSelect={(k) => setDraft((d) => ({ ...d, beltMax: k }))}
                     keyPrefix="max"
                   />
-
-                  <Field label="Peso / categoria de peso" hint="opcional" value={draft.weightClass}
-                    onChangeText={(v) => setDraft((d) => ({ ...d, weightClass: v }))} placeholder="Ex: -60kg" autoCapitalize="none" />
 
                   <Field label="Vagas" mono value={draft.maxEntries}
                     onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
