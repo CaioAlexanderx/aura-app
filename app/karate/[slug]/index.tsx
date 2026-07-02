@@ -22,6 +22,7 @@ import { ShojiBackground } from "@/components/karate/shoji";
 import { BannerCarousel } from "@/components/karate/portal/BannerCarousel";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
 import { karatePortalApi, OpenEvent } from "@/services/karatePortalApi";
+import { toast } from "@/components/Toast";
 
 const C = KarateColors;
 const F = KarateFonts;
@@ -37,11 +38,11 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "home",      label: "Início",            icon: "shield",    action: "card_inscricoes" },
-  { key: "inscricao", label: "Inscrições",         icon: "calendar",  action: "card_inscricoes" },
-  { key: "consulta",  label: "Buscar praticante",  icon: "search",    action: "card_consulta"   },
-  { key: "ranking",   label: "Ranking",            icon: "trophy",    action: "card_ranking"    },
-  { key: "anuidade",  label: "Anuidade",           icon: "wallet",    action: "card_anuidade"   },
+  { key: "home",       label: "Início",            icon: "shield",    action: "card_inscricoes" },
+  { key: "inscricoes", label: "Inscrições",         icon: "calendar",  action: "card_inscricoes" },
+  { key: "consulta",   label: "Buscar praticante",  icon: "search",    action: "card_consulta"   },
+  { key: "ranking",    label: "Ranking",            icon: "trophy",    action: "card_ranking"    },
+  { key: "anuidade",   label: "Anuidade",           icon: "wallet",    action: "card_anuidade"   },
 ];
 
 // ─── Cards do hub ─────────────────────────────────────────────
@@ -330,7 +331,9 @@ export default function KarateHubScreen() {
         router.push(`/karate/${fedSlug}/ranking` as any);
         break;
       case "anuidade":
-        // Link privado — informa usuário sem redirecionar
+        // Link privado — nunca deixar o clique morto: feedback claro em vez
+        // de no-op silencioso.
+        toast.info("Anuidade do dojô: disponível no painel do dojô, pelo link exclusivo enviado pela federação.");
         break;
       default:
         break;
@@ -350,6 +353,9 @@ export default function KarateHubScreen() {
         router.push(`/karate/${fedSlug}/ranking` as any);
         break;
       case "card_anuidade":
+        // Link privado — nunca deixar o clique morto: feedback claro em vez
+        // de no-op silencioso.
+        toast.info("Anuidade do dojô: disponível no painel do dojô, pelo link exclusivo enviado pela federação.");
         break;
       default:
         break;
