@@ -188,6 +188,12 @@ export interface PractitionerDetail extends Practitioner {
   belt_history: BeltHistoryEntry[];
   transfers: TransferRecord[];
   current_belt: CurrentBelt | null;
+  // F5cd: último exame de faixa do praticante (para exibição na ficha).
+  last_exam?: { date: string; belt_name: string | null; exam_name: string | null; event_date: string | null } | null;
+  // F5cd: quantidade de cursos concluídos nos últimos 2 anos.
+  course_count_2y?: number;
+  // Mantido por compat — pode não existir no shape atual do backend.
+  course_count_last_year?: number;
 }
 
 export interface PractitionerInput {
