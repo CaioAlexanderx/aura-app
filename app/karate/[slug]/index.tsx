@@ -232,6 +232,9 @@ function fmtEventFee(v?: number | null): string {
 }
 
 function EventCard({ event, onPress }: { event: OpenEvent; onPress: () => void }) {
+  // Track E / P0-0.4 — campeonato usa ícone de troféu pra se diferenciar do
+  // exame/curso no mesmo grid de "Inscrições abertas".
+  const isCompetition = event.kind === "competition";
   return (
     <TouchableOpacity
       style={styles.eventCard}
@@ -241,7 +244,7 @@ function EventCard({ event, onPress }: { event: OpenEvent; onPress: () => void }
       accessibilityLabel={`Inscrever-se em ${event.name}`}
     >
       <View style={styles.eventCardIco}>
-        <Icon name="calendar" size={20} color={P.red} />
+        <Icon name={isCompetition ? "trophy" : "calendar"} size={20} color={P.red} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.eventCardTitle} numberOfLines={1}>{event.name}</Text>

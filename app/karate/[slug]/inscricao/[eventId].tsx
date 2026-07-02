@@ -2,12 +2,14 @@
 // Inscrição Pública em Evento — Aura Karatê (DESIGN-17)
 // Rota: /karate/[slug]/inscricao/[eventId]  (PÚBLICA, sem login)
 //
-// Wizard: evento → cpf → confirma → pix (sem etapa de faixa pretendida —
-// decisão Caio 08/06; a banca define depois). Bypass AuthGuard:
+// Wizard exame/curso: evento → cpf → confirma → pix (sem etapa de faixa
+// pretendida — decisão Caio 08/06; a banca define depois).
+// Wizard campeonato (Track E / P0-0.4): evento → categoria → cpf → confirma
+// → pix — o praticante escolhe uma categoria (kata/kumite etc.) em vez de
+// preencher registration_fields. Bypass AuthGuard:
 // segments[0]==="karate" && segments[2]==="inscricao".
 //
-// Erros: praticante não localizado (404), já inscrito (409), encerrado (409),
-// competição (501 — fluxo não habilitado, inscrição via academia).
+// Erros: praticante não localizado (404), já inscrito (409), encerrado (409).
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -21,7 +23,7 @@ import { FpktLogo } from "@/components/karate/FpktLogo";
 import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
-import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult, RegistrationField } from "@/services/karatePortalApi";
+import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult, RegistrationField, CompetitionCategory } from "@/services/karatePortalApi";
 import { formatEventDateShort } from "@/utils/eventDate";
 
 function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
@@ -46,6 +48,29 @@ function beltLabel(name?: string | null, level?: string | null): string {
   if (dan) return `Faixa ${lower} · ${dan[1]}º dan`;
   return `Faixa ${lower}`;
 }
+const MODALITY_LABEL: Record<string, string> = {
+  kata: "Kata", kumite: "Kumitê", kihon_ippon: "Kihon Ippon",
+  team_kata: "Kata em equipe", team_kumite: "Kumitê em equipe",
+};
+function modalityLabel(m?: string | null): string {
+  if (!m) return "—";
+  return MODALITY_LABEL[m] || m;
+}
+function categorySummary(c: CompetitionCategory): string {
+  const parts: string[] = [];
+  if (c.min_age != null || c.max_age != null) {
+    if (c.min_age != null && c.max_age != null) parts.push(`${c.min_age}–${c.max_age} anos`);
+    else if (c.min_age != null) parts.push(`a partir de ${c.min_age} anos`);
+    else parts.push(`até ${c.max_age} anos`);
+  }
+  if (c.belt_min || c.belt_max) {
+    if (c.belt_min && c.belt_max) parts.push(`${c.belt_min}–${c.belt_max}`);
+    else parts.push(c.belt_min || c.belt_max || "");
+  }
+  if (c.sex && c.sex !== "mixed") parts.push(c.sex === "M" ? "Masculino" : "Feminino");
+  if (c.weight_class) parts.push(c.weight_class);
+  return parts.join(" · ");
+}
 function copyText(t: string) {
   try {
     if (Platform.OS === "web" && typeof navigator !== "undefined" && (navigator as any).clipboard) {
@@ -54,9 +79,13 @@ function copyText(t: string) {
   } catch { /* noop */ }
 }
 
-type Step = "evento" | "cpf" | "confirma" | "pix";
-type Err = "nao" | "ja" | "fim" | "comp" | "evento" | "generic" | null;
-const STEP_IDX: Record<Step, number> = { evento: 0, cpf: 1, confirma: 2, pix: 3 };
+// "categoria" só é usado quando o evento é kind==='competition' (Track E).
+type Step = "evento" | "categoria" | "cpf" | "confirma" | "pix";
+type Err = "nao" | "ja" | "fim" | "evento" | "generic" | null;
+// Índices do progresso: exame/curso tem 3 passos visíveis (evento/cpf/confirma);
+// campeonato tem 4 (evento/categoria/cpf/confirma). getProgressSteps() abaixo
+// decide quantos segmentos desenhar conforme o kind do evento.
+const STEP_IDX: Record<Step, number> = { evento: 0, categoria: 1, cpf: 2, confirma: 3, pix: 4 };
 
 export default function InscricaoScreen() {
   const { slug, eventId } = useLocalSearchParams<{ slug: string; eventId: string }>();
@@ -77,11 +106,18 @@ export default function InscricaoScreen() {
   const [copied, setCopied] = useState(false);
 
   // Bloco A — campos extras do formulário de inscrição (registration_fields).
+  // Vazio para campeonato (o "formulário" da competição é a escolha da categoria).
   const registrationFields: RegistrationField[] = event?.registration_fields ?? [];
   const [responses, setResponses] = useState<Record<string, string | boolean>>({});
   const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
   const setResponse = (key: string, value: string | boolean) =>
     setResponses((prev) => ({ ...prev, [key]: value }));
+
+  // Track E / P0-0.4 — categoria escolhida quando o evento é campeonato.
+  const isCompetition = event?.kind === "competition";
+  const categories: CompetitionCategory[] = event?.categories ?? [];
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
 
   useEffect(() => {
     let alive = true;
@@ -98,8 +134,7 @@ export default function InscricaoScreen() {
 
   const handleErr = (e: any) => {
     const code = e?.code;
-    if (e?.status === 501) setErr("comp");
-    else if (code === "PRACTITIONER_NOT_FOUND" || e?.status === 404) setErr("nao");
+    if (code === "PRACTITIONER_NOT_FOUND" || e?.status === 404) setErr("nao");
     else if (code === "CONFLICT" || (e?.status === 409 && code !== "CLOSED")) setErr("ja");
     else if (code === "CLOSED" || e?.status === 409) setErr("fim");
     else if (code === "VALIDATION_ERROR" && Array.isArray(e?.data?.missingFields)) {
@@ -124,7 +159,7 @@ export default function InscricaoScreen() {
     if (onlyDigits(cpf).length < 11) { setErr("generic"); setErrMsg("Informe um CPF válido."); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await karatePortalApi.lookup(slugStr, eventIdStr, cpf);
+      const r = await karatePortalApi.lookup(slugStr, eventIdStr, cpf, isCompetition ? selectedCategoryId || undefined : undefined);
       if (r.already_enrolled) { setErr("ja"); return; }
       setPract(r.practitioner);
       setStep("confirma");
@@ -134,14 +169,18 @@ export default function InscricaoScreen() {
 
   const doSubmit = async () => {
     setMissingFieldLabels([]);
-    if (clientMissingFields.length > 0) {
+    if (!isCompetition && clientMissingFields.length > 0) {
       setMissingFieldLabels(clientMissingFields);
       setErrMsg("Preencha os campos obrigatórios destacados abaixo antes de continuar.");
       return;
     }
     setBusy(true); setErr(null);
     try {
-      const r = await karatePortalApi.submitInscricao(slugStr, eventIdStr, cpf, responses);
+      const r = await karatePortalApi.submitInscricao(
+        slugStr, eventIdStr, cpf,
+        isCompetition ? undefined : responses,
+        isCompetition ? selectedCategoryId || undefined : undefined
+      );
       setPayment(r.payment);
       setStep("pix");
     } catch (e) { handleErr(e); }
@@ -150,13 +189,17 @@ export default function InscricaoScreen() {
 
   const resetToEvent = () => {
     setErr(null); setStep("evento"); setCpf(""); setPract(null);
-    setResponses({}); setMissingFieldLabels([]);
+    setResponses({}); setMissingFieldLabels([]); setSelectedCategoryId(null);
   };
 
   // ── progress ──
+  // Campeonato tem um passo a mais (categoria) — desenha 4 segmentos em vez
+  // de 3. STEP_IDX já reserva o índice 1 pra "categoria" (só usado quando
+  // isCompetition), então o segmento extra só aparece nesse fluxo.
+  const progressSteps = isCompetition ? [0, 1, 2, 3] : [0, 2, 3];
   const Progress = () => (
     <View style={styles.prog}>
-      {[0, 1, 2].map((i) => (
+      {progressSteps.map((i) => (
         <View key={i} style={[styles.progSeg, i <= STEP_IDX[step] && styles.progSegOn]} />
       ))}
     </View>
@@ -166,9 +209,8 @@ export default function InscricaoScreen() {
   if (err && err !== "generic") {
     const cfg = {
       nao:    { tone: "bad",  icon: "search",       title: "Praticante não localizado", msg: "Não encontramos um cadastro federativo para este CPF. Verifique os números ou cadastre-se na sua federação antes de se inscrever." },
-      ja:     { tone: "warn", icon: "checkmark-circle", title: "Você já está inscrito", msg: "Encontramos uma inscrição para este CPF neste evento. Não é necessário se inscrever novamente." },
+      ja:     { tone: "warn", icon: "checkmark-circle", title: "Você já está inscrito", msg: isCompetition ? "Encontramos uma inscrição para este CPF nesta categoria. Não é necessário se inscrever novamente." : "Encontramos uma inscrição para este CPF neste evento. Não é necessário se inscrever novamente." },
       fim:    { tone: "warn", icon: "time",         title: "Inscrições encerradas", msg: "O prazo de inscrição para este evento terminou. Acompanhe a agenda para os próximos eventos." },
-      comp:   { tone: "bad",  icon: "alert-circle", title: "Inscrição de competição", msg: "Competições não são inscritas por este fluxo. A inscrição é feita pela sua academia junto à federação, com chaveamento por categoria e peso." },
       evento: { tone: "bad",  icon: "search",       title: "Evento não encontrado", msg: errMsg || "Este evento não está disponível para inscrição online." },
     }[err]!;
     const toneColor = cfg.tone === "bad" ? KarateColors.danger : KarateColors.warn;
@@ -182,7 +224,6 @@ export default function InscricaoScreen() {
             </View>
             <Text style={styles.errTitle}>{cfg.title}</Text>
             <Text style={styles.errMsg}>{cfg.msg}</Text>
-            {err === "comp" ? <Text style={styles.code501}>erro 501 · fluxo não habilitado</Text> : null}
           </View>
           <View style={styles.foot}>
             {err === "nao" ? (
@@ -210,7 +251,7 @@ export default function InscricaoScreen() {
             <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={KarateColors.primary} /></View>
           ) : step === "evento" ? (
             <>
-              <Text style={styles.stepLabel}>ETAPA 1 DE 3 · EVENTO</Text>
+              <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 1 DE 4" : "ETAPA 1 DE 3"} · EVENTO</Text>
               <Text style={styles.h2}>{event?.name || "Inscrição em evento"}</Text>
               <Text style={styles.sub}>Confira os dados antes de iniciar sua inscrição.</Text>
               <View style={styles.evSum}>
@@ -225,9 +266,45 @@ export default function InscricaoScreen() {
                 <Text style={{ fontSize: 13, color: KarateColors.ink2, lineHeight: 20, marginTop: 14 }}>{(event as any).description}</Text>
               )}
             </>
+          ) : step === "categoria" ? (
+            <>
+              <Text style={styles.stepLabel}>ETAPA 2 DE 4 · CATEGORIA</Text>
+              <Text style={styles.h2}>Escolha sua categoria</Text>
+              <Text style={styles.sub}>Selecione a categoria em que deseja competir.</Text>
+              {categories.length === 0 ? (
+                <Text style={[styles.inlineErr, { marginTop: 16 }]}>
+                  Nenhuma categoria disponível para esta competição no momento.
+                </Text>
+              ) : (
+                <View style={{ marginTop: 16, gap: 10 }}>
+                  {categories.map((c) => {
+                    const active = selectedCategoryId === c.id;
+                    const full = c.max_entries != null && c.entry_count >= c.max_entries;
+                    const summary = categorySummary(c);
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        onPress={() => setSelectedCategoryId(c.id)}
+                        style={[styles.catCard, active && styles.catCardActive]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.catCardTitle, active && styles.catCardTitleActive]}>{c.name}</Text>
+                          <Text style={styles.catCardMeta}>{modalityLabel(c.modality)}{summary ? ` · ${summary}` : ""}</Text>
+                          {full ? <Text style={styles.catCardFull}>Vagas preenchidas — entra em lista de espera</Text> : null}
+                        </View>
+                        {c.fee_amount != null ? <Text style={styles.catCardFee}>{fmtBRL(c.fee_amount)}</Text> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {err === "generic" ? <Text style={styles.inlineErr}>{errMsg}</Text> : null}
+            </>
           ) : step === "cpf" ? (
             <>
-              <Text style={styles.stepLabel}>ETAPA 2 DE 3 · IDENTIFICAÇÃO</Text>
+              <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 3 DE 4" : "ETAPA 2 DE 3"} · IDENTIFICAÇÃO</Text>
               <Text style={styles.h2}>Informe seu CPF</Text>
               <Text style={styles.sub}>Usamos seu CPF apenas para localizar seu registro na federação.</Text>
               <Text style={styles.label}>CPF do praticante</Text>
@@ -246,7 +323,7 @@ export default function InscricaoScreen() {
             </>
           ) : step === "confirma" ? (
             <>
-              <Text style={styles.stepLabel}>ETAPA 3 DE 3 · CONFIRMAÇÃO</Text>
+              <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 4 DE 4" : "ETAPA 3 DE 3"} · CONFIRMAÇÃO</Text>
               <Text style={styles.h2}>Confirme sua inscrição</Text>
               <Text style={styles.sub}>Revise os dados. O pagamento é feito via PIX na próxima etapa.</Text>
               <View style={styles.conf}>
@@ -259,14 +336,17 @@ export default function InscricaoScreen() {
                   </View>
                 </View>
                 <ConfRow k="Evento" v={event?.name || "—"} />
+                {isCompetition ? <ConfRow k="Categoria" v={selectedCategory?.name || "—"} /> : null}
                 <ConfRow k="Data" v={fmtDate(event?.event_date)} />
                 <View style={[styles.confRow, styles.confTotal]}>
                   <Text style={styles.confK}>Total</Text>
-                  <Text style={styles.confTotalV}>{fmtBRL(event?.fee_amount)}</Text>
+                  <Text style={styles.confTotalV}>
+                    {fmtBRL(isCompetition && selectedCategory?.fee_amount != null ? selectedCategory.fee_amount : event?.fee_amount)}
+                  </Text>
                 </View>
               </View>
 
-              {registrationFields.length > 0 && (
+              {!isCompetition && registrationFields.length > 0 && (
                 <View style={styles.extraFields}>
                   <Text style={styles.extraFieldsTitle}>Informações adicionais</Text>
                   {registrationFields.map((f) => (
@@ -279,7 +359,7 @@ export default function InscricaoScreen() {
                   ))}
                 </View>
               )}
-              {missingFieldLabels.length > 0 ? (
+              {!isCompetition && missingFieldLabels.length > 0 ? (
                 <Text style={styles.inlineErr}>
                   {errMsg} {"\n"}Faltando: {missingFieldLabels.join(", ")}.
                 </Text>
@@ -329,10 +409,24 @@ export default function InscricaoScreen() {
         {!loadingEvent && (
           <View style={styles.foot}>
             {step === "evento" ? (
-              <KarateButton label="Iniciar inscrição" onPress={() => { setErr(null); setStep("cpf"); }} style={{ flex: 1 }} />
-            ) : step === "cpf" ? (
+              <KarateButton
+                label="Iniciar inscrição"
+                onPress={() => { setErr(null); setStep(isCompetition ? "categoria" : "cpf"); }}
+                style={{ flex: 1 }}
+              />
+            ) : step === "categoria" ? (
               <>
                 <KarateButton label="Voltar" variant="secondary" onPress={() => setStep("evento")} style={{ flex: 1 }} />
+                <KarateButton
+                  label="Continuar"
+                  onPress={() => { setErr(null); setStep("cpf"); }}
+                  disabled={!selectedCategoryId}
+                  style={{ flex: 2 }}
+                />
+              </>
+            ) : step === "cpf" ? (
+              <>
+                <KarateButton label="Voltar" variant="secondary" onPress={() => setStep(isCompetition ? "categoria" : "evento")} style={{ flex: 1 }} />
                 <KarateButton label={busy ? "Localizando…" : "Continuar"} onPress={doLookup} loading={busy} style={{ flex: 2 }} />
               </>
             ) : step === "confirma" ? (
@@ -520,6 +614,19 @@ const styles = StyleSheet.create({
   selectPillActive: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
   selectPillText: { fontSize: 12.5, fontWeight: "600", color: KarateColors.ink2 } as TextStyle,
   selectPillTextActive: { color: KarateColors.primary } as TextStyle,
+
+  // Track E / P0-0.4 — cartão de seleção de categoria de campeonato.
+  catCard: {
+    flexDirection: "row", alignItems: "center", gap: 10, padding: 13,
+    borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md,
+    backgroundColor: KarateColors.glass,
+  } as ViewStyle,
+  catCardActive: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  catCardTitle: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  catCardTitleActive: { color: KarateColors.primary } as TextStyle,
+  catCardMeta: { fontSize: 12, color: KarateColors.ink3, marginTop: 3 } as TextStyle,
+  catCardFull: { fontSize: 11, color: KarateColors.warn, marginTop: 4 } as TextStyle,
+  catCardFee: { fontSize: 13, fontWeight: "700", color: KarateColors.primary, fontFamily: KarateFonts.mono } as TextStyle,
 
   conf: { marginTop: 18, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, overflow: "hidden" } as ViewStyle,
   confRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, padding: 13, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
