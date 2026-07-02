@@ -41,7 +41,10 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { LancarAnuidadeDojoModal } from "@/components/karate/LancarAnuidadeDojoModal";
 import { SearchField } from "@/components/karate/shoji";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
+import { toast } from "@/components/Toast";
 import { downloadCsv } from "./EntriesTab";
 import {
   karateApi,
@@ -122,6 +125,8 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const [feeEdits, setFeeEdits]   = useState<Record<string, string>>({});
   const [savingFees, setSavingFees] = useState(false);
   const [pixTarget, setPixTarget] = useState<DojoAnnuity | null>(null);
+  const [chargeTarget, setChargeTarget] = useState<DojoAnnuity | null>(null);
+  const [editTarget, setEditTarget] = useState<DojoAnnuity | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -199,6 +204,35 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       Alert.alert("Não foi possível salvar a tabela", e?.message ?? "Tente novamente.");
     } finally {
       setSavingFees(false);
+    }
+  };
+
+  // Id da cobrança (annuity_history_id) — só presente na resposta do POST
+  // .../charge, NÃO no GET de listagem (backend ainda não devolve id na
+  // listagem). Editar/Excluir só ficam disponíveis para linhas com id
+  // conhecido (ex.: cobrança lançada nesta sessão) — mesmo padrão defensivo
+  // de annuityId() em app/karate/(federation)/dojos/[dojoId].tsx.
+  const annuityRowId = (a: DojoAnnuity) => a.annuity_history_id || a.annuity_id || null;
+
+  const handleVoid = async (ann: DojoAnnuity) => {
+    const id = annuityRowId(ann);
+    if (!id) {
+      toast.error("Não foi possível identificar esta cobrança para estorno.");
+      return;
+    }
+    const ok = await confirmAsync({
+      title: "Estornar anuidade?",
+      message: `Estornar a anuidade ${ann.reference_period} de ${ann.dojo_name}? O lançamento será cancelado.`,
+      confirmLabel: "Estornar",
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await karateApi.voidAnnuity(federationId, ann.dojo_id, id);
+      toast.success("Anuidade estornada");
+      load(true);
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível estornar a anuidade.");
     }
   };
 
@@ -344,17 +378,50 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             <View style={{ alignItems: "flex-end", gap: 6 }}>
               <Text style={st.annuityAmount}>{formatCurrency(ann.amount)}</Text>
               <AnnuityStatusBadge status={ann.status} />
-              {(ann.status === "due" || ann.status === "overdue" || ann.status === "defaulting") && (
-                <TouchableOpacity
-                  style={st.pixBtn}
-                  onPress={() => setPixTarget(ann)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Registrar pagamento PIX de ${ann.dojo_name}`}
-                >
-                  <Icon name="qr-code-outline" size={13} color="#fff" />
-                  <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
-                </TouchableOpacity>
-              )}
+              <View style={st.rowActions}>
+                {ann.status === "no_charge" && (
+                  <TouchableOpacity
+                    style={st.launchBtn}
+                    onPress={() => setChargeTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Lançar anuidade de ${ann.dojo_name}`}
+                  >
+                    <Icon name="add" size={13} color="#fff" />
+                    <Text style={st.launchBtnLabel}>Lançar anuidade</Text>
+                  </TouchableOpacity>
+                )}
+                {(ann.status === "due" || ann.status === "overdue" || ann.status === "defaulting") && (
+                  <TouchableOpacity
+                    style={st.pixBtn}
+                    onPress={() => setPixTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Registrar pagamento PIX de ${ann.dojo_name}`}
+                  >
+                    <Icon name="qr-code-outline" size={13} color="#fff" />
+                    <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
+                  </TouchableOpacity>
+                )}
+                {ann.status !== "paid" && ann.status !== "no_charge" && (
+                  <TouchableOpacity
+                    style={st.iconBtn}
+                    onPress={() => setEditTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar anuidade de ${ann.dojo_name}`}
+                  >
+                    <Icon name="create-outline" size={14} color={KarateColors.ink2} />
+                  </TouchableOpacity>
+                )}
+                {ann.status !== "no_charge" && (
+                  <TouchableOpacity
+                    style={st.iconBtn}
+                    onPress={() => handleVoid(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Excluir anuidade de ${ann.dojo_name}`}
+                  >
+                    <Icon name="trash" size={14} color={KarateColors.danger} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         ))
@@ -377,6 +444,40 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             load(true);
           }}
           onClose={() => setPixTarget(null)}
+        />
+      )}
+
+      {/* Lançar anuidade (nova cobrança) */}
+      {chargeTarget && (
+        <LancarAnuidadeDojoModal
+          visible={!!chargeTarget}
+          mode="charge"
+          federationId={federationId}
+          dojoId={chargeTarget.dojo_id}
+          dojoName={chargeTarget.dojo_name}
+          onClose={() => setChargeTarget(null)}
+          onDone={() => {
+            setChargeTarget(null);
+            load(true);
+          }}
+        />
+      )}
+
+      {/* Editar anuidade (cobrança não paga) */}
+      {editTarget && (
+        <LancarAnuidadeDojoModal
+          visible={!!editTarget}
+          mode="edit"
+          federationId={federationId}
+          dojoId={editTarget.dojo_id}
+          dojoName={editTarget.dojo_name}
+          annuityId={annuityRowId(editTarget)}
+          annuity={editTarget}
+          onClose={() => setEditTarget(null)}
+          onDone={() => {
+            setEditTarget(null);
+            load(true);
+          }}
         />
       )}
     </ScrollView>
@@ -409,8 +510,15 @@ const st = StyleSheet.create({
   annuityOverdue: { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
   annuityAmount:{ fontFamily: KarateFonts.mono, fontSize: 16, fontWeight: "700", color: KarateColors.ink } as TextStyle,
 
+  rowActions:   { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" } as ViewStyle,
+
   pixBtn:       { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:  { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+
+  launchBtn:    { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
+  launchBtnLabel: { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+
+  iconBtn:      { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
 
   badge:        { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: KarateRadius.sm } as ViewStyle,
   badgeText:    { fontSize: 10, fontWeight: "700" } as TextStyle,
