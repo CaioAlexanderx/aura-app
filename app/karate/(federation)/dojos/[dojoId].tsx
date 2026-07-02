@@ -57,6 +57,7 @@ import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCou
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
 import { copyToClipboard } from "@/utils/clipboard";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
@@ -220,7 +221,8 @@ export default function DojoDetailScreen() {
     if (!data || busy) return;
     const next = isSuspended;
     const verb = next ? "reativar" : "suspender";
-    if (typeof window !== "undefined" && !window.confirm(`Deseja ${verb} o dojô "${data.name}"?`)) return;
+    const title = next ? "Reativar dojô?" : "Suspender dojô?";
+    if (!(await confirmAsync({ title, message: `Deseja ${verb} o dojô "${data.name}"?`, confirmLabel: next ? "Reativar" : "Suspender", destructive: !next }))) return;
     setBusy(true);
     try {
       await karateApi.updateDojo(federationId, dojoId!, { is_active: next });
@@ -234,8 +236,7 @@ export default function DojoDetailScreen() {
   // ── Excluir dojô ─────────────────────────────────────────────────
   const deleteDojo = useCallback(async () => {
     if (!data || busy) return;
-    if (typeof window !== "undefined" &&
-        !window.confirm(`Excluir o dojô "${data.name}"? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirmAsync({ title: "Excluir dojô?", message: `Excluir o dojô "${data.name}"? Esta ação não pode ser desfeita.`, confirmLabel: "Excluir", destructive: true }))) return;
     setBusy(true);
     try {
       await karateApi.deleteDojo(federationId, dojoId!);
@@ -265,11 +266,14 @@ export default function DojoDetailScreen() {
 
   const excluirDefinitivo = useCallback(async () => {
     if (!data || !dojoId || busy) return;
-    if (typeof window !== "undefined" && !window.confirm(
-      `EXCLUSÃO DEFINITIVA do dojô "${data.name}" e de TODO o histórico vinculado ` +
-      `(praticantes, anuidades, transações, faixas, transferências, conexões).\n\n` +
-      `Esta ação é IRREVERSÍVEL. Confirmar?`
-    )) return;
+    if (!(await confirmAsync({
+      title: "Excluir definitivamente?",
+      message: `EXCLUSÃO DEFINITIVA do dojô "${data.name}" e de TODO o histórico vinculado ` +
+        `(praticantes, anuidades, transações, faixas, transferências, conexões).\n\n` +
+        `Esta ação é IRREVERSÍVEL. Confirmar?`,
+      confirmLabel: "Excluir definitivamente",
+      destructive: true,
+    }))) return;
     setBusy(true);
     try {
       await karateApi.deleteDojo(federationId, dojoId, { cascade: true });
@@ -289,7 +293,7 @@ export default function DojoDetailScreen() {
     const msg = strong
       ? `A anuidade ${a.reference_period} consta como PAGA. Estornar mesmo assim? Esta ação reverte o pagamento.`
       : `Estornar a anuidade ${a.reference_period}? O lançamento será cancelado.`;
-    if (typeof window !== "undefined" && !window.confirm(msg)) return;
+    if (!(await confirmAsync({ title: "Estornar anuidade?", message: msg, confirmLabel: "Estornar", destructive: true }))) return;
     setBusy(true);
     try {
       await karateApi.voidAnnuity(federationId, dojoId!, id);

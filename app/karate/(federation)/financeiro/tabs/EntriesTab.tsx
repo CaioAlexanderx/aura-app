@@ -46,6 +46,7 @@ import {
   ExpenseCategory,
   IncomeCategory,
 } from "@/services/karateApi";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 
 // ── Rótulos amigáveis de categoria, por kind ────────────────────
 const EXPENSE_CATEGORIES: { key: ExpenseCategory; label: string }[] = [
@@ -245,11 +246,14 @@ export function EntriesTab({ federationId }: Props) {
     }
   };
 
-  const handleDelete = (e: FinancialEntry) => {
+  const handleDelete = async (e: FinancialEntry) => {
     const label = e.kind === "income" ? "esta entrada" : "esta saída";
-    if (typeof window !== "undefined" && window.confirm) {
-      if (!window.confirm(`Excluir ${label}?\n\n${e.description} — ${formatCurrency(e.amount)}\nEsta ação não pode ser desfeita.`)) return;
-    }
+    if (!(await confirmAsync({
+      title: "Excluir lançamento?",
+      message: `Excluir ${label}?\n\n${e.description} — ${formatCurrency(e.amount)}\nEsta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    }))) return;
     karateApi
       .deleteEntry(federationId, e.id)
       .then(() => {

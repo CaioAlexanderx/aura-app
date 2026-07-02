@@ -26,7 +26,8 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 
 // Componentes extraídos
-import { canTransfer, webConfirm, webAlert } from "@/components/karate/praticante-detalhe/helpers";
+import { canTransfer, webAlert } from "@/components/karate/praticante-detalhe/helpers";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { CadastroTab } from "@/components/karate/praticante-detalhe/CadastroTab";
 import { TrajetoriaTab } from "@/components/karate/praticante-detalhe/TrajetoriaTab";
 import { CertificadosTab } from "@/components/karate/praticante-detalhe/CertificadosTab";
@@ -82,7 +83,7 @@ export default function FichaPraticanteScreen() {
   // Header "Excluir praticante": tenta hard delete; se HAS_HISTORY, abre modal.
   async function handleDeletePractitioner() {
     if (!practitionerId) return;
-    if (!webConfirm("Excluir este praticante?")) return;
+    if (!(await confirmAsync({ title: "Excluir praticante?", message: "Excluir este praticante?", confirmLabel: "Excluir", destructive: true }))) return;
     setDeleting(true);
     try {
       await karateApi.deletePractitioner(federationId, practitionerId);
@@ -114,7 +115,7 @@ export default function FichaPraticanteScreen() {
 
   async function handleExcluirDefinitivo() {
     if (!practitionerId) return;
-    if (!webConfirm("Excluir DEFINITIVAMENTE este praticante e TODO o seu histórico? Esta ação não pode ser desfeita.")) return;
+    if (!(await confirmAsync({ title: "Excluir definitivamente?", message: "Excluir DEFINITIVAMENTE este praticante e TODO o seu histórico? Esta ação não pode ser desfeita.", confirmLabel: "Excluir definitivamente", destructive: true }))) return;
     setDelBusy("delete");
     try {
       await karateApi.deletePractitioner(federationId, practitionerId, { cascade: true });
