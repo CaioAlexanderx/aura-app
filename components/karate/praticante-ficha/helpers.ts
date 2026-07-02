@@ -15,7 +15,7 @@ export const EMPTY = {
   full_name: "", cpf: "", rg: "", birth_date: "", email: "", phone: "",
   dojo_id: "", dojo_name: "",
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
-  is_arbiter: false, is_instructor: false, is_examiner: false,
+  is_arbiter: false, is_instructor: false, is_examiner: false, is_assistant: false,
   is_active: true,
   // P6
   photo_url: "",

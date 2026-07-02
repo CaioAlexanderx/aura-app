@@ -122,7 +122,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           dojo_id: p.dojo_id || "", dojo_name: dojoName,
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
-          is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner,
+          is_arbiter: !!p.is_arbiter, is_instructor: !!p.is_instructor, is_examiner: !!p.is_examiner, is_assistant: !!p.is_assistant,
           is_active: p.is_active !== false,
           // P6: usa karate_photo_url (campo permanente do R2) se disponível
           photo_url: p.karate_photo_url || p.photo_url || "",
@@ -262,7 +262,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       email: form.email || null,
       phone: onlyD(form.phone) || null,
       dojo_id: form.dojo_id,
-      is_arbiter: form.is_arbiter, is_instructor: form.is_instructor, is_examiner: form.is_examiner,
+      is_arbiter: form.is_arbiter, is_instructor: form.is_instructor, is_examiner: form.is_examiner, is_assistant: form.is_assistant,
       is_active: form.is_active,
       street: form.street || null, number: form.number || null, complement: form.complement || null,
       neighborhood: form.neighborhood || null, city: form.city || null,
