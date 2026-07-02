@@ -8,6 +8,9 @@ export const GUARDIAN_RELATIONSHIPS = [
 ] as const;
 export type GuardianRelationship = typeof GUARDIAN_RELATIONSHIPS[number];
 
+export const SEX_OPTIONS = ["masculino", "feminino", "outro"] as const;
+export type Sex = typeof SEX_OPTIONS[number];
+
 export const EMPTY = {
   full_name: "", cpf: "", rg: "", birth_date: "", email: "", phone: "",
   dojo_id: "", dojo_name: "",
@@ -18,6 +21,9 @@ export const EMPTY = {
   photo_url: "",
   // P7
   guardian_name: "", guardian_cpf: "", guardian_phone: "", guardian_relationship: "" as GuardianRelationship | "",
+  // F9: sexo (chips) + filiado desde (dd/mm/aaaa, mesmo padrão do birth_date)
+  sex: "" as Sex | "",
+  affiliation_since: "",
 };
 export type Form = typeof EMPTY;
 

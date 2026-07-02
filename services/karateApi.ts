@@ -152,6 +152,8 @@ export interface PractitionerDetail extends Practitioner {
   address: string | null;
   graduated_at: string | null;
   affiliation_since: string | null;
+  // F9: 'masculino' | 'feminino' | 'outro' ou null
+  sex: string | null;
   belt_history: BeltHistoryEntry[];
   transfers: TransferRecord[];
   current_belt: CurrentBelt | null;
@@ -169,6 +171,8 @@ export interface PractitionerInput {
   belt_level?: string | null;
   graduated_at?: string | null;
   affiliation_since?: string | null;
+  // F9: 'masculino' | 'feminino' | 'outro' ou null
+  sex?: string | null;
 }
 
 // ── Dojô ───────────────────────────────────────────────────────

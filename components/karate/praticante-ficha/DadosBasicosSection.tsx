@@ -7,14 +7,20 @@
 // elemento da seção de identidade, acima do nome).
 // ============================================================
 import React from "react";
-import { View, Text, TextInput } from "react-native";
+import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { Dojo } from "@/services/karateApi";
 import { maskCpf } from "@/utils/masks";
-import { Form, maskDate } from "./helpers";
+import { Form, maskDate, SEX_OPTIONS, Sex } from "./helpers";
 import { SectionTitle, Row2, Field, styles } from "./shared-styles";
 import { DojoSelectSection } from "./DojoSelectSection";
+
+const SEX_LABELS: Record<Sex, string> = {
+  masculino: "Masculino",
+  feminino: "Feminino",
+  outro: "Outro",
+};
 
 interface DadosBasicosSectionProps {
   federationId: string;
@@ -97,6 +103,35 @@ export function DadosBasicosSection({
         inputRef={rgRef} returnKeyType="next"
         onSubmitEditing={onRgSubmit}
       />
+
+      <Row2>
+        <View style={[styles.field, { flex: 1 }]}>
+          <Text style={styles.label}>Sexo</Text>
+          <View style={styles.chipsRow}>
+            {SEX_OPTIONS.map((opt) => {
+              const active = form.sex === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setField("sex", active ? "" : opt)}
+                  activeOpacity={0.7}
+                  accessibilityLabel={SEX_LABELS[opt]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: active }}
+                >
+                  <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{SEX_LABELS[opt]}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+        <Field
+          flex label="Filiado desde" hint="dd/mm/aaaa" mono value={form.affiliation_since}
+          onChangeText={(v) => setField("affiliation_since", maskDate(v))}
+          keyboardType="numeric" placeholder="dd/mm/aaaa"
+        />
+      </Row2>
 
       {age != null && age < 18 && (
         <View style={styles.lgpd}>
