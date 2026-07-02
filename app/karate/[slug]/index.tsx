@@ -23,6 +23,7 @@ import { BannerCarousel } from "@/components/karate/portal/BannerCarousel";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
 import { karatePortalApi, OpenEvent } from "@/services/karatePortalApi";
 import { toast } from "@/components/Toast";
+import { formatEventDateShort } from "@/utils/eventDate";
 
 const C = KarateColors;
 const F = KarateFonts;
@@ -220,10 +221,7 @@ function HubCard({
 
 // ─── Eventos abertos (Bloco B) ─────────────────────────────────
 function fmtEventDate(iso?: string | null): string {
-  if (!iso) return "Data a definir";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  return formatEventDateShort(iso, "Data a definir");
 }
 function fmtEventFee(v?: number | null): string {
   if (v == null) return "Gratuito";

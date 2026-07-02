@@ -39,10 +39,11 @@ import {
 } from "@/components/karate/shoji";
 import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateCompact } from "@/utils/eventDate";
 
 const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtPct = (v: number) => `${(v * 100).toFixed(1).replace(".", ",")}%`;
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+const fmtDate = (iso: string) => formatEventDateCompact(iso);
 const beltColor = (lvl: string) => { const k = resolveBeltKey(lvl); return k ? KarateBelts[k].color : C.ink3; };
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];

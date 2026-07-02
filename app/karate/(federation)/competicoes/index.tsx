@@ -18,12 +18,13 @@ import {
 import { CriarTorneioModal } from "@/components/karate/CriarTorneioModal";
 import { karateCompetitionsApi, Competition, CompetitionStatus } from "@/services/karateCompetitionsApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateShort } from "@/utils/eventDate";
 
 const STATUS: Record<CompetitionStatus, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Inscrições abertas", badge: "ok" },
   closed: { label: "Encerradas", badge: "warn" }, done: { label: "Concluído", badge: "neutral" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
-const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }); };
+const fmtDate = (iso?: string | null) => formatEventDateShort(iso, "Data a definir");
 
 export default function CompeticoesIndex() {
   const router = useRouter();

@@ -14,8 +14,9 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { ShojiBackground, Card, ShojiBadge, Body } from "@/components/karate/shoji";
 import { karateApi, BeltExam } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateNumeric } from "@/utils/eventDate";
 
-const fmt = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR"); };
+const fmt = (iso?: string | null) => formatEventDateNumeric(iso, "—");
 
 export default function EventosHistorico() {
   const router = useRouter();
