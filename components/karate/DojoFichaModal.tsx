@@ -828,9 +828,11 @@ const styles = StyleSheet.create({
     fontFamily: F.body, fontSize: 11, color: P.ok, marginTop: 4,
   } as TextStyle,
   senseiDropList: {
-    position: "absolute", top: "100%", left: 0, right: 0,
+    // In-flow (não-absolute): dentro do ScrollView, um dropdown absolute é
+    // recortado no web (overflow do ScrollView). Renderizar em fluxo empurra os
+    // campos abaixo e evita o clip/z-index — mesmo padrão do dropdown de região.
     backgroundColor: P.paper, borderWidth: 1, borderColor: P.line2,
-    borderRadius: R.md, overflow: "hidden", zIndex: 300,
+    borderRadius: R.md, overflow: "hidden",
     shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
     marginTop: 3,
