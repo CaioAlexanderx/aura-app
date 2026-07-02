@@ -16,8 +16,12 @@ import {
 } from "@/constants/karateTheme";
 import {
   AfiliacaoPayload, CoberturaPayload, InadimplenciaPayload, ProjecaoPayload,
-  GraduacoesPayload, RelacaoFaixasPayload,
+  GraduacoesPayload, RelacaoFaixasPayload, RelacaoFaixasStatus,
+  karateNetworkHealthApi,
 } from "@/services/karateNetworkHealthApi";
+import { BELT_HEX as CANONICAL_BELT_HEX } from "@/constants/karateBelts";
+import { Chip } from "@/components/karate/shoji";
+import { useKarateFederation } from "@/contexts/KarateFederation";
 import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart } from "./shared";
 
 type CardCallbacks = { onDetail: () => void };
@@ -43,16 +47,24 @@ export function AfiliacaoCard({
       ) : (
         <>
           <View style={st.heroRow}>
-            <Text style={st.heroNum}>{data.total_now}</Text>
-            <Text style={st.heroSub}>dojôs filiados em {data.season}</Text>
+            <Text style={st.heroNum}>{data.total_now ?? 0}</Text>
+            <Text style={st.heroSub}>dojôs cadastrados em {data.season}</Text>
           </View>
           <View style={st.twinBoxRow}>
             <View style={[st.twinBox, st.twinBoxOk]}>
-              <Text style={st.twinBoxNum}>+{data.novas_affiliacoes}</Text>
+              <Text style={st.twinBoxNum}>{data.dojos_ativos ?? 0}</Text>
+              <Text style={st.twinBoxLabel}>ativos</Text>
+            </View>
+            <View style={[st.twinBox, st.twinBoxWarn]}>
+              <Text style={[st.twinBoxNum, { color: C.ink2 }]}>{data.dojos_inativos ?? 0}</Text>
+              <Text style={st.twinBoxLabel}>inativos</Text>
+            </View>
+            <View style={[st.twinBox, st.twinBoxOk]}>
+              <Text style={st.twinBoxNum}>+{data.novas_affiliacoes ?? 0}</Text>
               <Text style={st.twinBoxLabel}>novas filiações · {data.season}</Text>
             </View>
             <View style={[st.twinBox, st.twinBoxDanger]}>
-              <Text style={[st.twinBoxNum, { color: C.danger }]}>{data.nao_renovaram}</Text>
+              <Text style={[st.twinBoxNum, { color: C.danger }]}>{data.nao_renovaram ?? 0}</Text>
               <Text style={st.twinBoxLabel}>não renovaram · {data.season}</Text>
             </View>
           </View>
@@ -290,18 +302,64 @@ export function GraduacoesCard({
 }
 
 // ── Relação de faixas (snapshot) ───────────────────────
+// Cores por faixa: pega o hex canônico de constants/karateBelts.ts
+// (BELT_HEX, chaveado por slug) e reindexa pelo LABEL em PT que o
+// backend devolve em `buckets[].faixa` (~10 linhas por faixa, mais
+// os graus de Dan que não têm slug próprio — mapeados manualmente
+// para o tom "preta"). Fallback `|| C.ink2` para chave desconhecida.
 const BELT_HEX: Record<string, string> = {
-  "Kyu iniciante": "#e0d8c6",
-  "Kyu intermediário": "#c06f35",
-  "Kyu avançado": "#7a4e30",
-  "1º Dan": "#2b2620",
-  "2º Dan ou acima": "#2b2620",
+  "Branca": CANONICAL_BELT_HEX.branca,
+  "Amarela": CANONICAL_BELT_HEX.amarela,
+  "Laranja": CANONICAL_BELT_HEX.laranja,
+  "Verde": CANONICAL_BELT_HEX.verde,
+  "Azul Claro": CANONICAL_BELT_HEX.azul_claro,
+  "Roxa": CANONICAL_BELT_HEX.roxa,
+  "Azul Escuro": CANONICAL_BELT_HEX.azul_escuro,
+  "Marrom": CANONICAL_BELT_HEX.marrom,
+  "1º Dan": CANONICAL_BELT_HEX.preta,
+  "2º Dan ou acima": CANONICAL_BELT_HEX.preta,
 };
+
+// ── Filtro de status (Todos / Ativos / Inativos) ───────────────
+const STATUS_FILTERS: Array<{ key: RelacaoFaixasStatus; label: string }> = [
+  { key: "all", label: "Todos" },
+  { key: "active", label: "Ativos" },
+  { key: "inactive", label: "Inativos" },
+];
 
 export function RelacaoFaixasCard({
   data, loading, onDetail,
 }: { data: RelacaoFaixasPayload | null; loading: boolean } & CardCallbacks) {
-  const maxN = data ? Math.max(...data.buckets.map((b) => b.n), 1) : 1;
+  const { federationId } = useKarateFederation();
+
+  // Estado LOCAL do filtro de status — escopo restrito a este card.
+  // Não mexe no load centralizado de Saúde da Rede (Promise.allSettled
+  // no orquestrador): busca relacao-faixas de forma independente aqui
+  // quando o filtro muda, sem afetar os outros cards.
+  const [status, setStatus] = React.useState<RelacaoFaixasStatus>("all");
+  const [localData, setLocalData] = React.useState<RelacaoFaixasPayload | null>(null);
+  const [localLoading, setLocalLoading] = React.useState(false);
+  const [hasFiltered, setHasFiltered] = React.useState(false);
+
+  React.useEffect(() => {
+    // "Todos" no primeiro render == o `data` que já veio do load
+    // compartilhado; só dispara fetch próprio quando o usuário de fato
+    // troca o filtro (evita um /relacao-faixas duplicado no mount).
+    if (status === "all" && !hasFiltered) return;
+    if (!federationId) return;
+    let cancelled = false;
+    setLocalLoading(true);
+    karateNetworkHealthApi
+      .getRelacaoFaixas(federationId, status)
+      .then((res) => { if (!cancelled) setLocalData(res); })
+      .catch((err) => { console.error("[saude-rede] relacao-faixas filtro:", err); })
+      .finally(() => { if (!cancelled) setLocalLoading(false); });
+    return () => { cancelled = true; };
+  }, [federationId, status, hasFiltered]);
+
+  const effectiveData = hasFiltered ? localData : data;
+  const effectiveLoading = hasFiltered ? localLoading : loading;
+  const maxN = effectiveData ? Math.max(...effectiveData.buckets.map((b) => b.n), 1) : 1;
 
   return (
     <View style={st.card}>
@@ -312,27 +370,37 @@ export function RelacaoFaixasCard({
         csvData={{
           filename: "relacao-faixas",
           headers: ["Faixa", "Praticantes", "Percentual"],
-          rows: (data?.buckets || []).map((b) => [b.faixa, String(b.n), fmtPct(b.pct)]),
+          rows: (effectiveData?.buckets || []).map((b) => [b.faixa, String(b.n), fmtPct(b.pct)]),
         }}
       />
-      {loading || !data ? (
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {STATUS_FILTERS.map((f) => (
+          <Chip
+            key={f.key}
+            label={f.label}
+            active={status === f.key}
+            onPress={() => { setHasFiltered(true); setStatus(f.key); }}
+          />
+        ))}
+      </View>
+      {effectiveLoading || !effectiveData ? (
         <><Sk h={36} mb={8} /><Sk h={100} /></>
       ) : (
         <View style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
           {/* Hero */}
           <View style={st.beltHero}>
             <Text style={st.beltHeroPct}>
-              {data.dan_pct.toFixed(0)}<Text style={st.beltHeroPctUnit}>%</Text>
+              {(effectiveData.dan_pct ?? 0).toFixed(0)}<Text style={st.beltHeroPctUnit}>%</Text>
             </Text>
             <Text style={st.beltHeroSub}>chegam ao Dan (faixa preta)</Text>
             <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
-              <View><Text style={st.beltStat}>{fmtN(data.kyu)}</Text><Text style={st.beltStatLabel}>Kyu</Text></View>
-              <View><Text style={st.beltStat}>{fmtN(data.dan)}</Text><Text style={st.beltStatLabel}>Dan</Text></View>
+              <View><Text style={st.beltStat}>{fmtN(effectiveData.kyu ?? 0)}</Text><Text style={st.beltStatLabel}>Kyu</Text></View>
+              <View><Text style={st.beltStat}>{fmtN(effectiveData.dan ?? 0)}</Text><Text style={st.beltStatLabel}>Dan</Text></View>
             </View>
           </View>
           {/* Pyramid */}
           <View style={{ flex: 1, gap: 10 }}>
-            {data.buckets.map((b) => (
+            {effectiveData.buckets.map((b) => (
               <View key={b.faixa} style={st.beltRow}>
                 <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
                 <View style={st.beltBarTrack}>
