@@ -85,13 +85,14 @@ export const DAN_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 // Kyu por faixa (FPKT Shotokan): lista de kyus que a faixa pode representar.
 // Ex.: Marrom pode ser 3kyu, 2kyu ou 1kyu.
 export const BELT_KYUS: Partial<Record<BeltKey, number[]>> = {
-  branca:      [10, 9],
-  amarela:     [8],
-  laranja:     [7],
-  verde:       [6],
-  azul_claro:  [5],
-  roxo:        [4],
-  azul_escuro: [3],
+  // FPKT Shotokan (de-para): cada faixa = 1 kyu, exceto Marrom (3º/2º/1º).
+  branca:      [10],
+  amarela:     [9],
+  laranja:     [8],
+  verde:       [7],
+  azul_claro:  [6],
+  roxo:        [5],
+  azul_escuro: [4],
   marrom:      [3, 2, 1],
 };
 
