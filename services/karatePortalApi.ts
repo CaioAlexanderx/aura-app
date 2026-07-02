@@ -130,12 +130,30 @@ export interface RegistrationField {
   options?: string[];
 }
 
+// Track E / P0-0.4 — categoria de campeonato, usada na etapa de inscrição
+// pública quando o evento é kind==='competition' (em vez de
+// registration_fields, o praticante escolhe uma destas).
+export interface CompetitionCategory {
+  id: string;
+  name: string;
+  modality: "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite";
+  min_age: number | null;
+  max_age: number | null;
+  belt_min: string | null;
+  belt_max: string | null;
+  sex: "M" | "F" | "mixed";
+  weight_class: string | null;
+  max_entries: number | null;
+  fee_amount: number | null;
+  entry_count: number;
+}
+
 export interface PublicEvent {
   federation: { name: string; logo: string | null };
   event: {
     id: string;
     name: string;
-    kind: "exam" | "course";
+    kind: "exam" | "course" | "competition";
     type: string | null;
     event_date: string | null;
     location: string | null;
@@ -143,6 +161,8 @@ export interface PublicEvent {
     capacity: { max: number | null; filled: number } | null;
     /** Bloco A — campos extras do formulário de inscrição (migration 200). Vazio = sem campos extras. */
     registration_fields: RegistrationField[];
+    /** Track E / P0-0.4 — só presente quando kind==='competition'. */
+    categories?: CompetitionCategory[];
   };
   requires: string[];
 }
@@ -165,7 +185,7 @@ export interface InscricaoPayment {
 }
 export interface InscricaoResult {
   ok: boolean;
-  inscription: { type: "exam" | "course"; id: string };
+  inscription: { type: "exam" | "course" | "competition"; id: string; category_id?: string; category_name?: string };
   practitioner: { id: string; name: string };
   fee_amount: number;
   payment: InscricaoPayment | null;
@@ -191,7 +211,12 @@ export interface AgendaEvent {
   fee_amount: number | null;
 }
 
-/** Bloco B — eventos ABERTOS (karate_belt_exams status='open') para o hub público. */
+/**
+ * Bloco B — eventos ABERTOS para o hub público. UNION de karate_belt_exams
+ * (status='open', kind='exam') com karate_competitions (status='open',
+ * kind='competition') — Track E / P0-0.4. exam_type é sempre null para
+ * campeonato (competição não tem essa coluna).
+ */
 export interface OpenEvent {
   id: string;
   name: string;
@@ -199,6 +224,7 @@ export interface OpenEvent {
   event_date: string | null;
   location: string | null;
   fee_amount: number | null;
+  kind: "exam" | "competition";
 }
 
 const enc = encodeURIComponent;
@@ -243,18 +269,27 @@ export const karatePortalApi = {
   getEvent: (slug: string, eventId: string): Promise<PublicEvent> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`),
 
-  lookup: (slug: string, eventId: string, cpf: string): Promise<LookupResult> =>
-    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, { method: "POST", body: { cpf } }),
+  /** `categoryId` é obrigatório quando o evento é kind==='competition' (Track E / P0-0.4). */
+  lookup: (slug: string, eventId: string, cpf: string, categoryId?: string): Promise<LookupResult> =>
+    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, {
+      method: "POST",
+      body: { cpf, ...(categoryId ? { category_id: categoryId } : {}) },
+    }),
 
-  /** `responses` é opcional — só é exigido quando o evento tem registration_fields obrigatórios. */
+  /**
+   * `responses` é opcional — só é exigido quando o evento tem registration_fields
+   * obrigatórios (exame/curso). `categoryId` é obrigatório quando kind==='competition'
+   * (Track E / P0-0.4) — o praticante escolhe a categoria em vez de preencher formulário.
+   */
   submitInscricao: (
     slug: string,
     eventId: string,
     cpf: string,
-    responses?: Record<string, unknown>
+    responses?: Record<string, unknown>,
+    categoryId?: string
   ): Promise<InscricaoResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
       method: "POST",
-      body: { cpf, ...(responses ? { responses } : {}) },
+      body: { cpf, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}) },
     }),
 };
