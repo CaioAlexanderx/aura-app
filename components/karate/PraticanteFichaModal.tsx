@@ -19,6 +19,7 @@ import {
   ActivityIndicator, useWindowDimensions, TextInput, Animated, StyleSheet,
 } from "react-native";
 import { Icon } from "@/components/Icon";
+import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { karateApi } from "@/services/karateApi";
 import { request } from "@/services/api";
@@ -349,7 +350,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.card, { width: cardW }]}>
+        <ModalPop visible={visible} style={[styles.card, { width: cardW }]}>
           {/* header */}
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
@@ -483,7 +484,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               <Text style={styles.toastTxt}>{toast}</Text>
             </Animated.View>
           ) : null}
-        </View>
+        </ModalPop>
       </View>
     </Modal>
   );

@@ -36,6 +36,7 @@ import {
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
+import { PressableScale } from "@/components/karate/anim/PressableScale";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -69,7 +70,7 @@ const DEBOUNCE_MS = 350;
 // Linha extraída do render (componente estável) — são remonta a cada tecla.
 function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; wide: boolean; onPress: () => void }) {
   if (wide) return (
-    <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
+    <PressableScale style={styles.tr} onPress={onPress} accessibilityRole="button">
       <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
         <Avatar name={item.full_name} size={34} />
         <View style={{ flex: 1 }}>
@@ -81,10 +82,10 @@ function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; 
       <View style={{ width: 150 }}>{item.belt_name ? <BeltTag level={item.belt_name.toLowerCase().replace(/\s+/g, "_")} name={item.belt_name} /> : <Body muted>—</Body>}</View>
       <View style={{ width: 120 }}><ShojiBadge affiliationStatus={item.affiliation_status} /></View>
       <Icon name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
-    </TouchableOpacity>
+    </PressableScale>
   );
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+    <PressableScale style={styles.card} onPress={onPress} accessibilityRole="button">
       <Avatar name={item.full_name} size={40} />
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={styles.name}>{item.full_name}</Text>
@@ -95,7 +96,7 @@ function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; 
         {item.belt_name ? <BeltTag level={item.belt_name.toLowerCase().replace(/\s+/g, "_")} name={item.belt_name} /> : null}
         <ShojiBadge affiliationStatus={item.affiliation_status} />
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 const Row = React.memo(PractitionerRow);

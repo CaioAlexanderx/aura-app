@@ -6,10 +6,10 @@
 // karateCompetitionsApi. Sem mock: loading → spinner, falha →
 // ErrorState; lançamento falho avisa erro (não finge sucesso).
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
-  ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
+  ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -79,6 +79,12 @@ export default function TorneioDetalhe() {
   const [showEditInfo, setShowEditInfo] = useState(false);
   // F6.3: publicar campeonato (draft -> open) para abrir inscrições.
   const [publishing, setPublishing] = useState(false);
+  // Celebração sóbria ao publicar: leve glow + check animado no header do
+  // status (some sozinha após a animação; sem libs de confete).
+  const [justPublished, setJustPublished] = useState(false);
+  const celebrateAnim = useRef(new Animated.Value(0)).current;
+  const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (celebrateTimer.current) clearTimeout(celebrateTimer.current); }, []);
   // F7.4: encerrar (open -> done) e cancelar (draft/open -> cancelled) o campeonato.
   const [closing, setClosing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -119,6 +125,15 @@ export default function TorneioDetalhe() {
       await karateCompetitionsApi.patchCompetition(federationId, cid, { status: "open" });
       setComp((prev) => (prev ? { ...prev, status: "open" } : prev));
       notify("Inscrições abertas", "O campeonato foi publicado e já aceita inscrições.");
+      setJustPublished(true);
+      celebrateAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(celebrateAnim, { toValue: 1, duration: 260, useNativeDriver: false }),
+        Animated.timing(celebrateAnim, { toValue: 1, duration: 900, useNativeDriver: false }),
+        Animated.timing(celebrateAnim, { toValue: 0, duration: 320, useNativeDriver: false }),
+      ]).start(() => setJustPublished(false));
+      if (celebrateTimer.current) clearTimeout(celebrateTimer.current);
+      celebrateTimer.current = setTimeout(() => setJustPublished(false), 1600);
     } catch (e: any) {
       notify("Não foi possível publicar", e?.message ?? "Tente novamente.");
     } finally {
@@ -194,10 +209,32 @@ export default function TorneioDetalhe() {
         <Text style={styles.backText}>Competições</Text>
       </TouchableOpacity>
 
-      <View style={styles.headerCard}>
+      <Animated.View style={[
+        styles.headerCard,
+        justPublished && {
+          shadowColor: KarateColors.primary,
+          shadowOpacity: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }),
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 0 },
+          borderColor: celebrateAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [KarateColors.border, KarateColors.primary],
+          }),
+        },
+      ]}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>{comp.name}</Text>
-          <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {justPublished && (
+              <Animated.View style={[styles.celebrateCheck, {
+                opacity: celebrateAnim,
+                transform: [{ scale: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+              }]}>
+                <Icon name="checkmark-circle" size={16} color={KarateColors.primary} />
+              </Animated.View>
+            )}
+            <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
+          </View>
         </View>
         <Text style={styles.meta}>Temporada {comp.season}{comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}</Text>
         {!!comp.location && <Text style={styles.meta}>{comp.location}</Text>}
@@ -257,7 +294,7 @@ export default function TorneioDetalhe() {
             />
           )}
         </View>
-      </View>
+      </Animated.View>
 
       {/* Banner deixou de ser tela própria: agora é anexo do evento. */}
       <EventBannerManager federationId={federationId} eventId={cid} />
@@ -655,6 +692,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   headerCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 4 } as ViewStyle,
   headerTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } as ViewStyle,
+  celebrateCheck: { alignItems: "center", justifyContent: "center" } as ViewStyle,
   title: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,

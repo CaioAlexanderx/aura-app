@@ -54,6 +54,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, AffiliationModel, DojoInput, PractitionerListItem } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
@@ -429,7 +430,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => { setRegionOpen(false); setSuggestionsOpen(false); onClose(); }} />
-        <View style={[styles.card, { width: cardW }]}>
+        <ModalPop visible={visible} style={[styles.card, { width: cardW }]}>
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
               <Text style={styles.eyebrow}>空  FPKT · {isEdit ? "Editar dojô" : "Novo dojô"}</Text>
@@ -770,7 +771,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               <Text style={styles.toastTxt}>{toast}</Text>
             </Animated.View>
           ) : null}
-        </View>
+        </ModalPop>
       </View>
     </Modal>
   );
