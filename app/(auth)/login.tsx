@@ -13,7 +13,6 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
-import { karateIntroSeen } from "@/utils/karateIntroSeen";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
@@ -175,16 +174,12 @@ export default function LoginScreen() {
       }
       // Karatê tem porta dedicada: dispara a animação Shoji (one-shot) e
       // navega para /karate ao final. Demais verticais seguem o fluxo normal.
-      const st = useAuthStore.getState();
-      const co = st.company as any;
+      const co = useAuthStore.getState().company as any;
       const vertical = co?.vertical_active ?? co?.vertical;
-      if (KARATE_VERTICALS.includes(vertical)) {
-        // Entrada Shoji (portas abrindo) é one-shot: só no PRIMEIRO login.
-        // Logins seguintes vão direto para /karate, sem a animação.
-        const seen = await karateIntroSeen.has(st.user?.id);
-        if (!seen) { await karateIntroSeen.mark(st.user?.id); setKarateIntro(true); return; }
-        router.replace("/karate"); return;
-      }
+      // Entrada Shoji (portas abrindo) é uma cerimônia de login: dispara a
+      // cada AÇÃO de login com senha (uma vez por sessão). Não é montada no
+      // shell, então não reaparece em refresh/navegação. Karatê → /karate.
+      if (KARATE_VERTICALS.includes(vertical)) { setKarateIntro(true); return; }
       router.replace("/(tabs)");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
