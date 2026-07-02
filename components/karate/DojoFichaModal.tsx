@@ -52,6 +52,7 @@ import {
   Modal, View, Text, TextInput, ScrollView, Pressable, TouchableOpacity,
   ActivityIndicator, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Animated,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, AffiliationModel, DojoInput, PractitionerListItem } from "@/services/karateApi";
@@ -150,6 +151,7 @@ function resolveRegionValue(pick: string, custom: string): string | undefined {
 }
 
 export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved }: Props) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const cardW = Math.min(720, width - 24);
   const isEdit = !!dojoId;
@@ -163,6 +165,10 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // toast de sucesso (inline, sem sistema global)
   const [toast, setToast] = useState<string | null>(null);
+  // b5: id do dojô recém-criado (só no fluxo CREATE) — usado para oferecer
+  // "Ir para o dojô" no toast de sucesso, sem fechar o modal automaticamente
+  // até o usuário decidir (ir para o dojô, ou fechar/continuar cadastrando).
+  const [createdDojoId, setCreatedDojoId] = useState<string | null>(null);
   // dropdown de região: estado aberto/fechado
   const [regionOpen, setRegionOpen] = useState(false);
 
@@ -194,6 +200,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null); setToast(null); setRegionOpen(false);
     setSuggestions([]); setSuggestionsOpen(false);
+    setCreatedDojoId(null); // b5: reseta o estado de sucesso do create a cada abertura
     if (!dojoId) { setForm(EMPTY); setFpkt(null); setStatusLabel(null); return; }
     setLoading(true);
     karateApi.getDojo(federationId, dojoId)
@@ -202,9 +209,11 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
         // legado p/ não perder o dado (campo read-friendly).
         const hasStructured = !!(d.address_street || d.address_city || d.address_zip ||
           d.address_neighborhood || d.address_number || d.address_state);
-        // Status: o detalhe traz `status` (DojoStatus). "suspended" → Suspenso.
+        // Status: o detalhe traz `status` (DojoStatus). b1: o backend agora manda
+        // "inactive" (baseado em is_active) em vez de "suspended" — tratamos os
+        // dois como "não ativo" por compatibilidade retroativa.
         // Se o backend expuser is_active, ele tem precedência.
-        const active = d.is_active !== undefined ? !!d.is_active : d.status !== "suspended";
+        const active = d.is_active !== undefined ? !!d.is_active : (d.status !== "suspended" && d.status !== "inactive");
         const { region_pick, region_custom } = resolveRegionPick(d.region);
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",
@@ -381,17 +390,35 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     // Status: só envia is_active na EDIÇÃO (cadastro novo nasce ativo no back).
     if (isEdit) body.is_active = form.active;
     try {
-      if (isEdit) await karateApi.updateDojo(federationId, dojoId!, body);
-      else await karateApi.createDojo(federationId, body);
-      setSaving(false);
-      showToast(isEdit ? "Alterações salvas" : "Dojô salvo");
-      onSaved();
-      // dá um instante p/ o toast aparecer antes de fechar
-      setTimeout(() => onClose(), 480);
+      if (isEdit) {
+        await karateApi.updateDojo(federationId, dojoId!, body);
+        setSaving(false);
+        showToast("Alterações salvas");
+        onSaved();
+        // dá um instante p/ o toast aparecer antes de fechar
+        setTimeout(() => onClose(), 480);
+      } else {
+        // b5: CREATE — captura o dojô criado (tem `id`) e OFERECE ir direto
+        // para a página dele, em vez de fechar o modal na hora. O toast fica
+        // sem auto-dismiss enquanto o painel de sucesso está visível; o
+        // usuário decide entre "Ir para o dojô" ou "Continuar" (fecha aqui).
+        const created = await karateApi.createDojo(federationId, body);
+        setSaving(false);
+        setCreatedDojoId(created?.id ?? null);
+        showToast("Dojô salvo");
+        onSaved();
+      }
     } catch (e: any) {
       setSaving(false); setErrorMsg(e?.message || "Erro ao salvar. Tente novamente.");
     }
   }
+
+  // b5: navega para o detalhe do dojô recém-criado e fecha o modal.
+  const goToCreatedDojo = useCallback(() => {
+    if (!createdDojoId) return;
+    onClose();
+    router.push(("/karate/dojos/" + encodeURIComponent(createdDojoId)) as any);
+  }, [createdDojoId, onClose, router]);
 
   // Rótulo exibido no botão do dropdown de região
   const regionLabel = form.region_pick === REGION_OTHER
@@ -428,7 +455,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                 </View>
               )}
 
-              {/* Status (Ativo/Suspenso) — só na edição, envia is_active no PATCH */}
+              {/* Status (Ativo/Inativo) — só na edição, envia is_active no PATCH.
+                  b1: rótulo "Suspenso" virou "Inativo" (mesmo campo is_active). */}
               {isEdit && (
                 <View style={styles.statusBox}>
                   <Text style={styles.statusLabel}>Status</Text>
@@ -445,9 +473,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                       style={[styles.segBtn, !form.active && styles.segBtnOnRed]}
                       onPress={() => set("active", false)}
                       activeOpacity={0.85}
-                      accessibilityLabel="Status Suspenso"
+                      accessibilityLabel="Status Inativo"
                     >
-                      <Text style={[styles.segTxt, !form.active && styles.segTxtOnRed]}>Suspenso</Text>
+                      <Text style={[styles.segTxt, !form.active && styles.segTxtOnRed]}>Inativo</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -702,15 +730,38 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
             </ScrollView>
           )}
 
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={onClose} style={styles.btnGhost}><Text style={styles.btnGhostTxt}>Cancelar</Text></TouchableOpacity>
-            <TouchableOpacity onPress={handleSave} disabled={saving || loading} style={[styles.btnPrimary, (saving || loading) && { opacity: 0.6 }]}>
-              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.btnPrimaryTxt}>{isEdit ? "Salvar alterações" : "Salvar dojô"}</Text>}
-            </TouchableOpacity>
-          </View>
+          {/* b5: CREATE bem-sucedido — troca o footer padrão por um convite
+              claro para ir direto ao dojô recém-criado, em vez de fechar
+              silenciosamente. */}
+          {createdDojoId ? (
+            <View style={styles.successBar}>
+              <View style={styles.successMsg}>
+                <Icon name="check_circle" size={18} color={P.ok} />
+                <Text style={styles.successTxt}>Dojô salvo com sucesso.</Text>
+              </View>
+              <View style={styles.successActions}>
+                <TouchableOpacity onPress={onClose} style={styles.btnGhost}>
+                  <Text style={styles.btnGhostTxt}>Continuar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={goToCreatedDojo} style={styles.btnPrimary} accessibilityRole="button" accessibilityLabel="Ir para o dojô">
+                  <Text style={styles.btnPrimaryTxt}>Ir para o dojô</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.footer}>
+              <TouchableOpacity onPress={onClose} style={styles.btnGhost}><Text style={styles.btnGhostTxt}>Cancelar</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} disabled={saving || loading} style={[styles.btnPrimary, (saving || loading) && { opacity: 0.6 }]}>
+                {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.btnPrimaryTxt}>{isEdit ? "Salvar alterações" : "Salvar dojô"}</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
 
-          {/* toast de sucesso (inline) */}
-          {toast ? (
+          {/* toast de sucesso (inline) — na edição (auto-some); no create o
+              feedback vira a barra de ações acima (createdDojoId), então o
+              toast some antes dela renderizar de fato (mesma msg "Dojô salvo"
+              some rápido e a successBar assume o protagonismo). */}
+          {toast && !createdDojoId ? (
             <Animated.View pointerEvents="none" style={[styles.toast, {
               opacity: toastAnim,
               transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
@@ -851,6 +902,12 @@ const styles = StyleSheet.create({
   errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
 
   footer: { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
+  // b5: barra de sucesso do CREATE (substitui o footer padrão) — mensagem +
+  // "Continuar" (fecha) + "Ir para o dojô" (navega e fecha).
+  successBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: P.line, backgroundColor: P.glassHi, flexWrap: "wrap" } as ViewStyle,
+  successMsg: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  successTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
+  successActions: { flexDirection: "row", gap: 10 } as ViewStyle,
   btnGhost: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: R.md, borderWidth: 1, borderColor: P.line2 } as ViewStyle,
   btnGhostTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
   btnPrimary: { paddingVertical: 11, paddingHorizontal: 22, borderRadius: R.md, backgroundColor: P.ink, minWidth: 150, alignItems: "center" } as ViewStyle,

@@ -50,14 +50,16 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 
-// Todos os status reais (computeDojoStatus) — incl. Suspenso, que faltava.
+// Todos os status reais (computeDojoStatus). b1: o backend agora manda
+// 'inactive' (baseado em is_active) em vez de 'suspended' — a key do filtro
+// precisa casar com o valor real que a API envia.
 const STATUS_FILTERS: { key: DojoStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "active", label: "Ativo" },
   { key: "expiring", label: "A vencer" },
   { key: "overdue", label: "Vencido" },
   { key: "defaulting", label: "Inadimplente" },
-  { key: "suspended", label: "Suspenso" },
+  { key: "inactive", label: "Inativo" },
 ];
 
 export default function DojosScreen() {
