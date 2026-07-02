@@ -33,11 +33,15 @@ interface Props {
   allowed: boolean; // pode lançar anuidade (mesmo gate de escrita da ficha)
 }
 
-const STATUS_MAP: Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }> = {
-  paid:      { label: "Pago",      icon: "checkmark-circle", color: ShojiPalette.ok,    bg: ShojiPalette.okSoft },
-  pending:   { label: "Pendente",  icon: "time",              color: ShojiPalette.warn,  bg: ShojiPalette.warnSoft },
-  overdue:   { label: "Vencido",   icon: "warning",           color: ShojiPalette.alert, bg: ShojiPalette.alertSoft },
-  cancelled: { label: "Cancelado", icon: "close-circle",      color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
+const STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
+  paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okSoft },
+  pending:    { label: "Pendente",     icon: "time",             color: ShojiPalette.warn,    bg: ShojiPalette.warnSoft },
+  due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,    bg: ShojiPalette.warnSoft },
+  overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,   bg: ShojiPalette.alertSoft },
+  defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger,  bg: ShojiPalette.dangerSoft },
+  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
+  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
+  cancelled:  { label: "Cancelado",    icon: "close-circle",     color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
 };
 
 // Fallback neutro para status fora do STATUS_MAP (ex.: "Suspenso" ou qualquer

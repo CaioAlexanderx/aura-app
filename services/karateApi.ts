@@ -51,7 +51,15 @@ export type BeltSchema = "kyu" | "dan";
 export type DojoStatus = "active" | "inactive" | "suspended";
 export type AffiliationModel = "anual" | "semestral" | "trimestral";
 export type AffiliationStatus = "affiliated" | "pending" | "lapsed" | "none";
-export type AnnuityStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type AnnuityStatus =
+  | "pending"
+  | "paid"
+  | "due"
+  | "overdue"
+  | "defaulting"
+  | "suspended"
+  | "no_charge"
+  | "cancelled";
 export type OverdueTargetType = "dojo" | "cpf";
 export type ReminderChannel = "email" | "whatsapp";
 
@@ -339,17 +347,23 @@ export interface AnnualFeeInput {
 }
 
 export interface DojoAnnuity {
-  id: string;
   dojo_id: string;
   dojo_name: string;
+  // Campos abaixo refletem o shape real de GET /financial/annuities/dojos e do
+  // POST .../charge (ver karateAnnuities.js) — a interface antiga (id/payment_method/
+  // nfse_ref/created_at) não batia com a resposta real da API.
+  fpkt_affiliation_id?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
   paid_at: string | null;
-  payment_method: string | null;
   status: AnnuityStatus;
-  nfse_ref: string | null;
-  created_at: string;
+  days_overdue?: number;
+  nfse_id?: string | null;
+  // Presentes apenas na resposta do POST .../charge (não na listagem).
+  annuity_id?: string;
+  annuity_history_id?: string;
+  transaction_id?: string;
 }
 
 export interface CpfAnnuity {
