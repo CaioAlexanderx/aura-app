@@ -131,6 +131,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           guardian_cpf: p.guardian_cpf ? maskCpf(p.guardian_cpf) : "",
           guardian_phone: p.guardian_phone ? maskPhoneUtil(p.guardian_phone) : "",
           guardian_relationship: (p.guardian_relationship as any) || "",
+          // F9
+          sex: (p.sex as any) || "",
+          affiliation_since: fromISO(p.affiliation_since),
         });
         setFpkt(p.karate_registration_number || null);
         setBeltName(p.current_belt?.belt_name || null);
@@ -270,6 +273,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       guardian_cpf: onlyD(form.guardian_cpf) || null,
       guardian_phone: onlyD(form.guardian_phone) || null,
       guardian_relationship: form.guardian_relationship || null,
+      // F9: sexo + filiado desde (mesmo padrão do birth_date: string dd/mm/aaaa → ISO no submit)
+      sex: form.sex || null,
+      affiliation_since: parseBrDate(form.affiliation_since),
       // P6: photo_url deliberadamente AUSENTE do body (blob inútil; URL permanente vem do /photo)
     };
 
