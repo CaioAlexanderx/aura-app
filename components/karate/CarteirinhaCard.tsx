@@ -123,16 +123,21 @@ function Watermark({ f, size, x, y, opacity }: { f: (n: number) => number; size:
   );
 }
 
-function Field({ label, value, f, mono, big, accent }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; big?: boolean; accent?: boolean }) {
+function Field({ label, value, f, mono, big, accent, longValue }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; big?: boolean; accent?: boolean; longValue?: boolean }) {
+  // d1: campos que costumam receber texto comprido (ex.: nome de dojô) usam
+  // fonte menor + até 2 linhas em vez de cortar bruscamente em 1 linha.
   return (
     <View style={{ marginBottom: f(4) }}>
       <Text style={{ fontSize: f(13), fontWeight: "700", letterSpacing: f(1.4), textTransform: "uppercase", color: "#8a8a8a", marginBottom: f(3) }}>{label}</Text>
       <Text
-        numberOfLines={1}
+        numberOfLines={longValue ? 2 : 1}
+        adjustsFontSizeToFit={longValue}
+        minimumFontScale={longValue ? 0.6 : undefined}
         style={{
-          fontSize: big ? f(31) : f(25), fontWeight: big ? "800" : "600",
+          fontSize: big ? f(31) : longValue ? f(20) : f(25), fontWeight: big ? "800" : "600",
           color: accent ? ACCENT : "#161616",
           fontFamily: mono ? "monospace" : undefined,
+          lineHeight: longValue ? f(23) : undefined,
         }}
       >{value || "—"}</Text>
     </View>
@@ -187,7 +192,7 @@ function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number;
             <Field label="Nome" value={card.student_name} f={f} />
             <View style={{ flexDirection: "row", gap: f(36) }}>
               <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-              <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
+              <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} longValue /></View>
             </View>
             <View style={{ flexDirection: "row", gap: f(36) }}>
               <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>

@@ -71,7 +71,12 @@ export function webAlert(message: string) {
 }
 
 // Opções de faixa para a graduação manual (deriva do mapa canônico de cores).
+// Exclui faixas legadas (isLegacy: true, ex.: Vermelha) — no sistema novo
+// não se gradua PARA essas faixas; elas seguem exibidas normalmente no
+// histórico/faixa atual do praticante (ver KarateBelts / resolveBeltKey),
+// só ficam fora das OPÇÕES de nova graduação.
 export const BELT_OPTIONS: Array<{ key: BeltKey; label: string }> = (Object.keys(KarateBelts) as BeltKey[])
+  .filter((k) => !KarateBelts[k].isLegacy)
   .map((k) => ({ key: k, label: KarateBelts[k].label }));
 
 // Graus Dan (Preta): 1º a 10º

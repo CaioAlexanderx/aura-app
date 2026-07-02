@@ -119,7 +119,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
             '</div>' +
             '<div class="field">' +
               '<div class="flabel">Dojô</div>' +
-              '<div class="fvalue">' + esc(card.dojo_name || "—") + '</div>' +
+              '<div class="fvalue fvalue-dojo">' + esc(card.dojo_name || "—") + '</div>' +
             '</div>' +
           '</div>' +
           '<div class="belt-row">' +
@@ -213,6 +213,10 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.fvalue.name{font-size:7.6pt;font-weight:800}';
   html += '.fvalue.mono{font-family:"Courier New",monospace}';
   html += '.fvalue.accent{color:' + ACCENT + ';font-weight:800}';
+  // d1: nome de dojô comprido — permite quebra de linha em vez de cortar
+  // (a .fvalue geral usa nowrap+ellipsis, ruim para "Dojô" que costuma ser
+  // o campo com nomes mais longos). Fonte levemente menor + até 2 linhas.
+  html += '.fvalue-dojo{font-size:5.8pt;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}';
   html += '.belt-row{display:flex;align-items:center;gap:1.6mm;margin-top:0.6mm}';
   html += '.belt-tag{font-size:5pt;font-weight:800;padding:0.5mm 1.6mm;border-radius:3mm;white-space:nowrap;text-transform:uppercase;letter-spacing:0.2pt}';
   html += '.issued{font-size:4.6pt;color:#9a9a9a;font-family:"Courier New",monospace}';

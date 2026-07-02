@@ -7,7 +7,31 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { PractitionerDetail } from "@/services/karateApi";
 import { formatIsoToBr } from "@/components/inputs/DateInput";
+import { formatEventDateNumeric } from "@/utils/eventDate";
 import { formatCpfDisplay, formatPhoneDisplay, formatCepDisplay, ageFromBirthDate } from "./helpers";
+
+// c5: "há X" a partir de uma data ISO — usado SÓ para o cálculo de diferença
+// de tempo (nunca para formatar a data exibida ao usuário, que vem sempre de
+// formatEventDateNumeric). Regra: <1 mês → dias; <24 meses → meses; senão anos.
+function timeAgoLabel(iso: string): string | null {
+  const m = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const then = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(then.getTime())) return null;
+  const now = new Date();
+  const diffMs = now.getTime() - then.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 30) {
+    return `há ${diffDays} dia${diffDays === 1 ? "" : "s"}`;
+  }
+  const diffMonths =
+    (now.getFullYear() - then.getFullYear()) * 12 + (now.getMonth() - then.getMonth());
+  if (diffMonths < 24) {
+    return `há ${diffMonths} ${diffMonths === 1 ? "mês" : "meses"}`;
+  }
+  const diffYears = Math.floor(diffMonths / 12);
+  return `há ${diffYears} ano${diffYears === 1 ? "" : "s"}`;
+}
 
 interface Props {
   practitioner: PractitionerDetail;
@@ -95,9 +119,33 @@ export function CadastroTab({ practitioner }: Props) {
         </>
       )}
 
+      <SectionHeader title="FUNÇÕES" />
+      <Field
+        label="Funções"
+        value={
+          [
+            p.is_arbiter ? "Árbitro" : null,
+            p.is_instructor ? "Instrutor" : null,
+            p.is_examiner ? "Examinador" : null,
+            p.is_assistant ? "Auxiliar" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || null
+        }
+      />
+
       <SectionHeader title="ATIVIDADE" />
       <Field label="Filiado em" value={p.affiliation_since ? formatIsoToBr(p.affiliation_since) : null} />
       <Field label="Dojô" value={p.dojo_name} />
+      {p.last_exam?.date ? (
+        <Field
+          label="Último exame"
+          value={`${formatEventDateNumeric(p.last_exam.date)}${
+            timeAgoLabel(p.last_exam.date) ? ` (${timeAgoLabel(p.last_exam.date)})` : ""
+          }`}
+        />
+      ) : null}
+      <Field label="Cursos (2 anos)" value={String(p.course_count_2y ?? 0)} />
     </View>
   );
 }

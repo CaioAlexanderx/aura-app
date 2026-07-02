@@ -16,6 +16,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { karateApi, ChargeInput } from "@/services/karateApi";
 import { maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
+import { toast } from "@/components/Toast";
 
 interface Props {
   visible: boolean;
@@ -61,7 +62,9 @@ export function LancarAnuidadeModal({
       onDone();
     } catch (e: any) {
       setSaving(false);
-      setErr(e?.message || "Não foi possível lançar a anuidade.");
+      const msg = e?.message || "Não foi possível lançar a anuidade.";
+      setErr(msg);
+      toast.error(msg);
     }
   }
 
