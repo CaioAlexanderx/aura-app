@@ -44,7 +44,11 @@ export default function CompeticoesRanking() {
         distinct.sort((a, b) => b - a);
         const list = distinct.length > 0 ? distinct : [thisYear];
         setSeasons(list);
-        setSeason(list[0]);
+        // Preferir o ano corrente quando ele existir na lista de temporadas;
+        // caso contrário, cair na mais recente (list[0], já ordenada desc).
+        // Sem isso, uma temporada futura (ex.: 2027) já cadastrada abre por
+        // padrão em vez do ano corrente (2026).
+        setSeason(list.includes(thisYear) ? thisYear : list[0]);
       } catch {
         if (!cancelled) setSeasons([thisYear]);
       } finally {

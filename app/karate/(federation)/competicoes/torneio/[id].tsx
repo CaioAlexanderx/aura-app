@@ -202,8 +202,8 @@ export default function TorneioDetalhe() {
         <Text style={styles.meta}>Temporada {comp.season}{comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}</Text>
         {!!comp.location && <Text style={styles.meta}>{comp.location}</Text>}
         <View style={styles.statsRow}>
-          <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> categorias</Text>
-          <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count}</Text> inscritos</Text>
+          <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> {comp.categories.length === 1 ? "categoria" : "categorias"}</Text>
+          <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count ?? 0}</Text> {(comp.entry_count ?? 0) === 1 ? "inscrito" : "inscritos"}</Text>
         </View>
         {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa.
             F7.4: Chaves (sempre que houver categoria), Encerrar (open) e Cancelar (draft/open). */}
@@ -274,7 +274,7 @@ export default function TorneioDetalhe() {
               <TouchableOpacity style={styles.catHead} onPress={() => toggleCat(cat.id)} accessibilityRole="button">
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catName}>{cat.name}</Text>
-                  <Text style={styles.catMeta}>{MODALITY_LABEL[cat.modality]} · {cat.entry_count ?? entries.length} inscritos</Text>
+                  <Text style={styles.catMeta}>{MODALITY_LABEL[cat.modality]} · {cat.entry_count ?? entries.length} {(cat.entry_count ?? entries.length) === 1 ? "inscrito" : "inscritos"}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => setEditFor(cat)}
@@ -365,7 +365,7 @@ export default function TorneioDetalhe() {
       <ConfirmModal
         visible={confirmClose}
         title="Encerrar campeonato?"
-        message="O campeonato sera marcado como concluido. Nenhum novo resultado podera ser lancado depois disso."
+        message="O campeonato será marcado como concluído. Nenhum novo resultado poderá ser lançado depois disso."
         confirmLabel="Encerrar"
         loading={closing}
         onCancel={() => setConfirmClose(false)}
@@ -374,7 +374,7 @@ export default function TorneioDetalhe() {
       <ConfirmModal
         visible={confirmCancel}
         title="Cancelar campeonato?"
-        message="O campeonato sera marcado como cancelado. Essa acao nao pode ser desfeita pelo app."
+        message="O campeonato será marcado como cancelado. Essa ação não pode ser desfeita pelo app."
         confirmLabel="Cancelar campeonato"
         destructive
         loading={cancelling}
@@ -514,7 +514,6 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
         belt_min: beltMin || null,
         belt_max: beltMax || null,
         sex,
-        weight_class: null,
         max_entries: maxEntries ? parseInt(maxEntries, 10) : null,
         fee_amount: fee ? moneyToNumber(fee) : null,
       };

@@ -205,7 +205,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           min_age: c.ageMin ? parseInt(c.ageMin, 10) : null,
           max_age: c.ageMax ? parseInt(c.ageMax, 10) : null,
           belt_min: c.beltMin || null, belt_max: c.beltMax || null,
-          sex: c.sex, weight_class: null,
+          sex: c.sex,
           max_entries: c.maxEntries ? parseInt(c.maxEntries, 10) : null,
           fee_amount: c.fee ? moneyToNumber(c.fee) : null,
         });

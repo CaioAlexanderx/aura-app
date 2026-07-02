@@ -81,7 +81,7 @@ import { useAuthStore } from "@/stores/auth";
 // sidebarOnly=true → não aparece na bottom tab bar mobile.
 // icon → chave válida do componente <Icon> (components/Icon.tsx) ou alias.
 const NAV_ITEMS = [
-  { label: "Dashboard",       icon: "grid",      route: "/karate/",              roles: null,          sidebarOnly: false },
+  { label: "Painel",          icon: "grid",      route: "/karate/",              roles: null,          sidebarOnly: false },
   { label: "Saúde da Rede",   icon: "activity",  route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   { label: "Dojôs",           icon: "building",  route: "/karate/dojos",         roles: null,          sidebarOnly: false },
   { label: "Praticantes",     icon: "users",     route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
@@ -129,8 +129,11 @@ function roleLabel(role: string | null): string {
 }
 
 // Iniciais a partir de um nome (1 ou 2 letras). Espelha o Avatar do kit.
+// Sanitiza pontuacao antes de extrair as iniciais - nomes como "Davi (Dojo X)"
+// nao podem virar "D(" (o "(" nao e letra e nao deve compor a inicial).
 function initialsOf(name: string): string {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const clean = String(name || "").replace(/[^\p{L}\s]/gu, " ");
+  const parts = clean.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "··";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -147,21 +150,37 @@ const SECTION_LABEL: Record<string, string> = (() => {
   return map;
 })();
 
+// Sub-rotas NOMEADAS (não são "<id>" dinâmico, são abas/páginas fixas dentro
+// de uma seção — ex.: /karate/competicoes/ranking). Sem essa exceção,
+// deriveLocation trata qualquer 2º segmento como "detalhe" genérico e o
+// breadcrumb mostra "Detalhe" em vez do nome real da página.
+// Chave: `${secao}/${subrota}` → rótulo exibido no breadcrumb.
+const NAMED_SUBROUTE_LABEL: Record<string, string> = {
+  "competicoes/ranking": "Ranking",
+};
+
 // Deriva, a partir da pathname, a seção atual e se estamos num detalhe.
-//   /karate                  → { section: "Dashboard", route: "/karate/", detail: false }
+//   /karate                  → { section: "Painel", route: "/karate/", detail: false }
 //   /karate/dojos            → { section: "Dojôs", route: "/karate/dojos", detail: false }
 //   /karate/dojos/<id>       → { section: "Dojôs", route: "/karate/dojos", detail: true }
+//   /karate/competicoes/ranking → { section: "Ranking", route: "/karate/competicoes/ranking", detail: false }
 function deriveLocation(path: string): { section: string; route: string; detail: boolean } {
   const clean = (path || "").split("?")[0].split("#")[0];
   const parts = clean.split("/").filter(Boolean); // ["karate", "dojos", "<id>", ...]
   if (parts[0] !== "karate" || parts.length <= 1) {
-    return { section: "Dashboard", route: "/karate/", detail: false };
+    return { section: "Painel", route: "/karate/", detail: false };
   }
   const sectionSeg = parts[1];
   const label = SECTION_LABEL[sectionSeg];
   if (!label) {
-    // seção desconhecida → não arrisca rótulo errado; cai no Dashboard.
-    return { section: "Dashboard", route: "/karate/", detail: false };
+    // seção desconhecida → não arrisca rótulo errado; cai no Painel.
+    return { section: "Painel", route: "/karate/", detail: false };
+  }
+  if (parts.length > 2) {
+    const namedLabel = NAMED_SUBROUTE_LABEL[`${sectionSeg}/${parts[2]}`];
+    if (namedLabel) {
+      return { section: namedLabel, route: `/karate/${sectionSeg}/${parts[2]}`, detail: false };
+    }
   }
   return { section: label, route: `/karate/${sectionSeg}`, detail: parts.length > 2 };
 }

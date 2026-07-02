@@ -13,14 +13,14 @@ interface Props {
   practitioner: PractitionerDetail;
 }
 
-// F4.1: rotulo sempre visível; valor ausente renderiza um traçodeioro leve (“”
+// F4.1: rotulo sempre visível; valor ausente renderiza um travessão neutro ("—").
 // Alinhamento: label fixo 110px, valor ao lado, ambos na mesma linha.
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <View style={fieldStyles.row}>
       <Text style={fieldStyles.label}>{label}</Text>
       <Text style={value ? fieldStyles.value : fieldStyles.empty} numberOfLines={2}>
-        {value || "“"}
+        {value || "—"}
       </Text>
     </View>
   );

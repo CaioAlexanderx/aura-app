@@ -133,7 +133,7 @@ export function InadimplenciaCard({
       ) : (
         <>
           <View style={st.heroRow}>
-            <Text style={[st.heroNum, { color: C.danger }]}>
+            <Text style={[st.heroNum, { color: data.inad_pct > 0 ? C.danger : C.ink }]}>
               {fmtPct(data.inad_pct)}
             </Text>
             <Text style={st.heroSub}>das anuidades de filiação vencidas</Text>
