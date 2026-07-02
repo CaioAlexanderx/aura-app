@@ -37,6 +37,7 @@ import {
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
+import { PressableScale } from "@/components/karate/anim/PressableScale";
 import { useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -188,7 +189,7 @@ export default function DojosScreen() {
   function Row({ d }: { d: Dojo }) {
     const onPress = () => router.push(`/karate/dojos/${d.id}` as any);
     if (wide) return (
-      <TouchableOpacity style={styles.tr} onPress={onPress} activeOpacity={0.7}>
+      <PressableScale style={styles.tr} onPress={onPress} accessibilityRole="button">
         <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
           <Avatar name={d.name} size={34} />
           <View style={{ flex: 1 }}>
@@ -201,10 +202,10 @@ export default function DojosScreen() {
         <Mono style={[styles.cellNum, { width: 90, textAlign: "right" }]}>{d.practitioner_count}</Mono>
         <View style={{ width: 130 }}><ShojiBadge dojoStatus={d.status} /></View>
         <Icon name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
-      </TouchableOpacity>
+      </PressableScale>
     );
     return (
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+      <PressableScale style={styles.card} onPress={onPress} accessibilityRole="button">
         <View style={styles.cardTop}>
           <Avatar name={d.name} size={38} />
           <View style={{ flex: 1 }}>
@@ -218,7 +219,7 @@ export default function DojosScreen() {
           <Meta icon="people-outline" text={`${d.practitioner_count} praticantes`} />
           <Meta icon="ribbon-outline" text={MODEL_LABEL[d.affiliation_model] ?? "—"} />
         </View>
-      </TouchableOpacity>
+      </PressableScale>
     );
   }
 
