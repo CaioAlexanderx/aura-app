@@ -4,7 +4,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert as RNAlert,
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -18,6 +18,7 @@ import {
 import { ConectarDojoModal } from "@/components/karate/ConectarDojoModal";
 import { karateConnectionsApi, Connection } from "@/services/karateConnectionsApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { notify } from "@/utils/webAlert";
 
 export function connView(c: Connection): { label: string; tone: "ok" | "warn" | "danger" | "neutral" } {
   if (c.status === "connected" && c.via === "native") return { label: "Conectado · atualiza sozinho", tone: "ok" };
@@ -48,8 +49,8 @@ export default function ConexoesIndex() {
   }, [federationId]);
   useEffect(() => { load(); }, [load]);
 
-  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { RNAlert.alert("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
-  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { RNAlert.alert("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
+  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { notify("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
+  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { notify("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
 
   if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
   const connected = conns.filter((c) => c.status === "connected").length;

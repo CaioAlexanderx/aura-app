@@ -4,6 +4,7 @@ import { Redirect } from "expo-router";
 import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateShell } from "@/components/karate/KarateShell";
 import { ToastContainer } from "@/components/Toast";
+import { ConfirmHost } from "@/components/karate/ConfirmDialog";
 import { useAuthStore } from "@/stores/auth";
 import { KarateColors } from "@/constants/karateTheme";
 
@@ -58,6 +59,7 @@ export default function KarateLayout() {
     <KarateFederationProvider>
       <KarateShell />
       <ToastContainer />
+      <ConfirmHost />
     </KarateFederationProvider>
   );
 }

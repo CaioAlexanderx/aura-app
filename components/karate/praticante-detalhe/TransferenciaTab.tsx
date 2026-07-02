@@ -9,7 +9,8 @@ import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
 import { karateApi, PractitionerDetail, TransferRecord } from "@/services/karateApi";
-import { canTransfer, webConfirm, webAlert } from "./helpers";
+import { canTransfer, webAlert } from "./helpers";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { EditarTransferenciaModal } from "./EditarTransferenciaModal";
 
 interface Props {
@@ -47,7 +48,7 @@ export function TransferenciaTab({
   const allowed = canTransfer(karateRole);
 
   async function handleDelete(t: TransferRecord) {
-    if (!webConfirm("Excluir este registro? Isso NÃO move o praticante de volta.")) return;
+    if (!(await confirmAsync({ title: "Excluir registro?", message: "Excluir este registro? Isso NÃO move o praticante de volta.", confirmLabel: "Excluir", destructive: true }))) return;
     setBusyId(t.id);
     try {
       await karateApi.deleteTransfer(federationId, practitioner.id, t.id);

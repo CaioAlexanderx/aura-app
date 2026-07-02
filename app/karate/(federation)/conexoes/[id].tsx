@@ -8,7 +8,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,6 +18,7 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateConnectionsApi, ConnectionDetail, SyncEvent } from "@/services/karateConnectionsApi";
+import { notify } from "@/utils/webAlert";
 
 type Vibe = "ok" | "manual" | "down" | "empty";
 
@@ -82,7 +83,7 @@ export default function ConexaoDojoDetalhe() {
       setShowTech(false);
       load();
     } catch (e: any) {
-      Alert.alert("Não foi possível reconectar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível reconectar", e?.message ?? "Tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -90,9 +91,9 @@ export default function ConexaoDojoDetalhe() {
   const rotateKey = async () => {
     try {
       await karateConnectionsApi.rotateKey(federationId, connId);
-      Alert.alert("Nova chave gerada", "A conexão foi protegida com uma nova chave.");
+      notify("Nova chave gerada", "A conexão foi protegida com uma nova chave.");
     } catch (e: any) {
-      Alert.alert("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
+      notify("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
     }
   };
 

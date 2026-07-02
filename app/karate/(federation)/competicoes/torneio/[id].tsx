@@ -8,7 +8,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
+  View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
   ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -174,7 +174,7 @@ export default function TorneioDetalhe() {
       }));
       setResultFor(null);
     } catch (e: any) {
-      Alert.alert("Não foi possível salvar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível salvar", e?.message ?? "Tente novamente.");
     }
   };
 

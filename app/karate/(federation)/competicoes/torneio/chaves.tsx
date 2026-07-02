@@ -18,7 +18,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -43,6 +42,7 @@ import {
   DrawMethod,
 } from "@/services/karateBracketsApi";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
+import { notify } from "@/utils/webAlert";
 import { SorteioPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
@@ -153,7 +153,7 @@ export default function ChavesScreen() {
       });
       await loadBracket();
     } catch (e: any) {
-      Alert.alert("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
+      notify("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
     } finally {
       setGenerating(false);
     }
@@ -165,7 +165,7 @@ export default function ChavesScreen() {
       await karateBracketsApi.lockBracket(federationId, cid || "", selectedCatId);
       await loadBracket();
     } catch (e: any) {
-      Alert.alert("Não foi possível travar a chave", e?.message ?? "Tente novamente.");
+      notify("Não foi possível travar a chave", e?.message ?? "Tente novamente.");
     } finally {
       setLocking(false);
     }
@@ -185,7 +185,7 @@ export default function ChavesScreen() {
       );
       await loadBracket();
     } catch (e: any) {
-      Alert.alert("Não foi possível lançar o resultado", e?.message ?? "Tente novamente.");
+      notify("Não foi possível lançar o resultado", e?.message ?? "Tente novamente.");
       await loadBracket();
     } finally {
       setAdvancingMatch(null);
@@ -210,7 +210,7 @@ export default function ChavesScreen() {
       setEditScore(null);
       setScoreInput("");
     } catch (e: any) {
-      Alert.alert("Não foi possível salvar a nota", e?.message ?? "Tente novamente.");
+      notify("Não foi possível salvar a nota", e?.message ?? "Tente novamente.");
     } finally {
       setSavingScore(false);
     }

@@ -10,7 +10,8 @@ import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateApi, PractitionerDetail, BeltHistoryEntry } from "@/services/karateApi";
 import { formatIsoToBr } from "@/components/inputs/DateInput";
-import { canTransfer, isUnknownBeltDate, webConfirm, webAlert } from "./helpers";
+import { canTransfer, isUnknownBeltDate, webAlert } from "./helpers";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { RegistrarGraduacaoModal } from "./RegistrarGraduacaoModal";
 import { EditarGraduacaoModal } from "./EditarGraduacaoModal";
 
@@ -47,7 +48,7 @@ export function TrajetoriaTab({
   const currentSinceUnknown = currentBelt ? isUnknownBeltDate(currentBelt.current_since) : true;
 
   async function handleDelete(entry: BeltHistoryEntry) {
-    if (!webConfirm("Excluir esta graduação? A faixa atual será recalculada.")) return;
+    if (!(await confirmAsync({ title: "Excluir graduação?", message: "Excluir esta graduação? A faixa atual será recalculada.", confirmLabel: "Excluir", destructive: true }))) return;
     setBusyId(entry.id);
     try {
       await karateApi.deleteGraduation(federationId, practitionerId, entry.id);
