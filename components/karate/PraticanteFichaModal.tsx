@@ -361,7 +361,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {isEdit && fpkt ? (
                 <Text style={styles.subMono}>{fpkt}{beltName ? `  ·  ${beltName}` : ""}</Text>
               ) : (
-                <Text style={styles.sub}>Só o nome é obrigatório — o resto você completa quando quiser.</Text>
+                <Text style={styles.sub}>Nome e dojô são obrigatórios — o resto você completa quando quiser.</Text>
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>

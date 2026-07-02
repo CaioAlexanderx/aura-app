@@ -258,7 +258,7 @@ export default function ExamesScreen() {
 
             <Text style={cs.hint}>
               <Icon name="information-circle-outline" size={12} color={C.ink4} />
-              {" "}Mudanças de estado disparam um e-mail ao dojô (Track I). O seletor no detalhe permite saltar para qualquer estado.
+              {" "}Mudanças de estado disparam um e-mail ao dojô. O seletor no detalhe permite saltar para qualquer estado.
             </Text>
           </>
         )}
