@@ -342,15 +342,17 @@ export function RelacaoFaixasCard({
             {data.buckets.map((b) => (
               <View key={b.faixa} style={st.beltRow}>
                 <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
-                <View
-                  style={[
-                    st.beltBar,
-                    {
-                      width: `${Math.round(b.n / maxN * 100)}%` as any,
-                      backgroundColor: BELT_HEX[b.faixa] || C.ink2,
-                    },
-                  ]}
-                />
+                <View style={st.beltBarTrack}>
+                  <View
+                    style={[
+                      st.beltBar,
+                      {
+                        width: `${Math.round(b.n / maxN * 100)}%` as any,
+                        backgroundColor: BELT_HEX[b.faixa] || C.ink2,
+                      },
+                    ]}
+                  />
+                </View>
                 <Text style={st.beltRowCount}>
                   {fmtN(b.n)} <Text style={st.beltRowPct}>{fmtPct(b.pct)}</Text>
                 </Text>

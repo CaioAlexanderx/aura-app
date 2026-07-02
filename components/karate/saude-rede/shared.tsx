@@ -378,6 +378,7 @@ export const st = StyleSheet.create({
   beltStatLabel: { fontFamily: F.body, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.6, color: C.ink3, marginTop: 2 } as TextStyle,
   beltRow:       { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   beltRowLabel:  { fontFamily: F.body, fontSize: 12, color: C.ink2, width: 110 } as TextStyle,
+  beltBarTrack:  { flex: 1, minWidth: 0 } as ViewStyle,
   beltBar:       { height: 20, borderRadius: 5, borderWidth: 1, borderColor: "rgba(43,38,32,0.12)" } as ViewStyle,
   beltRowCount:  { fontFamily: F.mono, fontSize: 13, color: C.ink, textAlign: "right" } as TextStyle,
   beltRowPct:    { fontFamily: F.body, fontSize: 11, color: C.ink3 } as TextStyle,
