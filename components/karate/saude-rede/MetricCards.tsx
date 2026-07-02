@@ -22,7 +22,7 @@ import {
 import { BELT_HEX as CANONICAL_BELT_HEX } from "@/constants/karateBelts";
 import { Chip } from "@/components/karate/shoji";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart } from "./shared";
+import { st, fmtBRL, fmtPct, fmtN, fmtMesAno, Sk, SectionRow, BarChart, FadeIn, AnimatedWidthBar } from "./shared";
 
 type CardCallbacks = { onDetail: () => void };
 
@@ -45,7 +45,7 @@ export function AfiliacaoCard({
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={80} /></>
       ) : (
-        <>
+        <FadeIn>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>{data.total_now ?? 0}</Text>
             <Text style={st.heroSub}>dojôs cadastrados em {data.season}</Text>
@@ -68,7 +68,7 @@ export function AfiliacaoCard({
               <Text style={st.twinBoxLabel}>não renovaram · {data.season}</Text>
             </View>
           </View>
-        </>
+        </FadeIn>
       )}
     </View>
   );
@@ -96,7 +96,7 @@ export function CoberturaCard({
       {loading || !data ? (
         <><Sk h={120} mb={8} /><Sk h={60} /></>
       ) : (
-        <>
+        <FadeIn>
           {/* Ranking */}
           <View style={{ gap: 8, marginBottom: 12 }}>
             {top5.map((r) => (
@@ -114,7 +114,7 @@ export function CoberturaCard({
               </View>
             ))}
           </View>
-        </>
+        </FadeIn>
       )}
     </View>
   );
@@ -143,7 +143,7 @@ export function InadimplenciaCard({
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={60} /></>
       ) : (
-        <>
+        <FadeIn>
           <View style={st.heroRow}>
             <Text style={[st.heroNum, { color: data.inad_pct > 0 ? C.danger : C.ink }]}>
               {fmtPct(data.inad_pct)}
@@ -187,7 +187,7 @@ export function InadimplenciaCard({
               </Text>
             </View>
           ))}
-        </>
+        </FadeIn>
       )}
     </View>
   );
@@ -219,7 +219,7 @@ export function ProjecaoCard({
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={120} /></>
       ) : (
-        <>
+        <FadeIn>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>
               {fmtBRL(data.total_realized + data.total_projected)}
@@ -246,7 +246,7 @@ export function ProjecaoCard({
               <Text style={st.legendLabel}>Projetado</Text>
             </View>
           </View>
-        </>
+        </FadeIn>
       )}
     </View>
   );
@@ -274,7 +274,7 @@ export function GraduacoesCard({
       {loading || !data ? (
         <><Sk h={36} mb={8} /><Sk h={120} /></>
       ) : (
-        <>
+        <FadeIn>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>{data.total}</Text>
             <Text style={st.heroSub}>graduações YTD (no ano corrente)</Text>
@@ -295,7 +295,7 @@ export function GraduacoesCard({
             </View>
             <Text style={st.gradNote}>Registro · não é gestão de dojô</Text>
           </View>
-        </>
+        </FadeIn>
       )}
     </View>
   );
@@ -392,7 +392,7 @@ export function RelacaoFaixasCard({
       {effectiveLoading || !effectiveData ? (
         <><Sk h={36} mb={8} /><Sk h={100} /></>
       ) : (
-        <View style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
+        <FadeIn style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
           {/* Hero */}
           <View style={st.beltHero}>
             <Text style={st.beltHeroPct}>
@@ -406,7 +406,7 @@ export function RelacaoFaixasCard({
           </View>
           {/* Pyramid */}
           <View style={{ flex: 1, gap: 10 }}>
-            {effectiveData.buckets.map((b) => (
+            {effectiveData.buckets.map((b, i) => (
               <View key={b.faixa} style={st.beltRow}>
                 <View style={{ width: 110 }}>
                   <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
@@ -415,13 +415,12 @@ export function RelacaoFaixasCard({
                   ) : null}
                 </View>
                 <View style={st.beltBarTrack}>
-                  <View
+                  <AnimatedWidthBar
+                    index={i}
+                    pct={Math.round(b.n / maxN * 100)}
                     style={[
                       st.beltBar,
-                      {
-                        width: `${Math.round(b.n / maxN * 100)}%` as any,
-                        backgroundColor: BELT_HEX[b.faixa] || C.ink2,
-                      },
+                      { backgroundColor: BELT_HEX[b.faixa] || C.ink2 },
                     ]}
                   />
                 </View>
@@ -431,7 +430,7 @@ export function RelacaoFaixasCard({
               </View>
             ))}
           </View>
-        </View>
+        </FadeIn>
       )}
     </View>
   );

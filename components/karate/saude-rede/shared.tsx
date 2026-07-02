@@ -5,9 +5,9 @@
 // gráfico de barras e estilos de card. Re-skin Shoji: papel opaco,
 // sumi como estrutura, vermelhão (P.red) raro como acento.
 // ============================================================
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
-  View, Text, TouchableOpacity, Platform, StyleSheet, ViewStyle, TextStyle,
+  View, Text, TouchableOpacity, Platform, StyleSheet, ViewStyle, TextStyle, Animated, Easing,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import {
@@ -136,6 +136,28 @@ export function Sk({ h, mb }: { h: number; mb?: number }) {
       accessibilityLabel="carregando"
     />
   );
+}
+
+// ── Fade-in do conteúdo ao sair do loading (skeleton → dado) ──────────
+// Envolve o conteúdo carregado dos cards da Saúde da Rede: opacity 0→1
+// (~300ms) quando o `loading` vira false. Não reserva/altera layout —
+// só a opacidade anima. useNativeDriver:false (web-safe).
+export function FadeIn({ children, style }: { children: React.ReactNode; style?: any }) {
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    anim.setValue(0);
+    const timer = Animated.timing(anim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+  }, [anim]);
+
+  return <Animated.View style={[{ opacity: anim }, style]}>{children}</Animated.View>;
 }
 
 // ── Section header (título + sub + ações CSV / Ver detalhe) ──────
@@ -274,12 +296,13 @@ export function BarChart({
             <Text style={st.barValLabel}>
               {item.value > 0 ? fmtN(Math.round(item.value)) : ""}
             </Text>
-            <View
+            <AnimatedBar
+              index={i}
+              height={barH}
               style={[
                 st.bar,
                 single ? st.barSingle : st.barMulti,
                 {
-                  height: barH,
                   backgroundColor: bg,
                   opacity: item.isProj ? 0.55 : 1,
                   borderStyle: item.isProj ? "dashed" : "solid",
@@ -295,6 +318,72 @@ export function BarChart({
       })}
     </View>
   );
+}
+
+// ── Barra horizontal animada por LARGURA (%) ──────────────────────────
+// Usada na pirâmide de faixas (RelacaoFaixasCard): cresce de 0% até o
+// pct final, com stagger por índice. useNativeDriver:false (width).
+export function AnimatedWidthBar({
+  index,
+  pct,
+  style,
+}: {
+  index: number;
+  pct: number;
+  style: any;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    const delay = Math.min(index, 20) * 60;
+    const timer = Animated.timing(anim, {
+      toValue: pct,
+      duration: 420,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+  }, [pct, index, anim]);
+
+  const width = anim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+
+  return <Animated.View style={[style, { width }]} />;
+}
+
+// ── Barra individual animada (cresce de 0 até a altura final) ────────
+// Stagger por índice (delay incremental ~60ms) — reanima quando `height`
+// muda (recarga/troca de filtro), pois o valor final entra nas deps do
+// effect. useNativeDriver:false (anima "height", não suportado no driver
+// nativo do RN Web).
+function AnimatedBar({
+  index,
+  height,
+  style,
+}: {
+  index: number;
+  height: number;
+  style: any;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    const delay = Math.min(index, 20) * 60;
+    const timer = Animated.timing(anim, {
+      toValue: height,
+      duration: 420,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+  }, [height, index, anim]);
+
+  return <Animated.View style={[style, { height: anim }]} />;
 }
 
 // ── StyleSheet compartilhado ──────────────────────────────────

@@ -11,8 +11,9 @@
 import React, { useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform,
-  ViewStyle, TextStyle, StyleProp,
+  ViewStyle, TextStyle, StyleProp, Animated, Easing,
 } from "react-native";
+import { useCountUp } from "@/hooks/useCountUp";
 import { TextInput } from "react-native";
 import { useFonts } from "expo-font";
 import { ShipporiMincho_400Regular } from "@expo-google-fonts/shippori-mincho";
@@ -154,28 +155,63 @@ export function Card({ children, style, flush }: { children: React.ReactNode; st
 
 // ── KPI band (faixa única dividida por hairlines) ────────────
 export type KpiItem = { label: string; value: string | number; meta?: string; accent?: boolean };
+
+// Count-up só quando o value já chega como NÚMERO puro (não string
+// pré-formatada, ex. moeda/percentual — essas já vêm prontas dos callers
+// via fmtMoney/fmtPct/toLocaleString e são mostradas direto, sem animar).
+function KpiCell({ item, isLast }: { item: KpiItem; isLast: boolean }) {
+  const isNumeric = typeof item.value === "number" && Number.isFinite(item.value);
+  const animated = useCountUp(isNumeric ? (item.value as number) : 0, 700);
+  const display = isNumeric ? Math.round(animated).toLocaleString("pt-BR") : String(item.value);
+  return (
+    <View style={[styles.kpiCell, !isLast && styles.kpiCellDivider]}>
+      <Text style={styles.kpiLabel}>{item.label}</Text>
+      <Text style={[styles.kpiNum, item.accent && { color: P.red }]}>{display}</Text>
+      {item.meta ? <Text style={styles.kpiMeta}>{item.meta}</Text> : null}
+    </View>
+  );
+}
+
 export function KpiBand({ items, style }: { items: KpiItem[]; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.kpiBand, SH.card, style]}>
       {items.map((k, i) => (
-        <View key={i} style={[styles.kpiCell, i < items.length - 1 && styles.kpiCellDivider]}>
-          <Text style={styles.kpiLabel}>{k.label}</Text>
-          <Text style={[styles.kpiNum, k.accent && { color: P.red }]}>{String(k.value)}</Text>
-          {k.meta ? <Text style={styles.kpiMeta}>{k.meta}</Text> : null}
-        </View>
+        <KpiCell key={i} item={k} isLast={i === items.length - 1} />
       ))}
     </View>
   );
 }
 
 // ── Bar row (gráfico de barras) ──────────────────────────────
-export function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color?: string }) {
+// `index` (opcional) escalona o crescimento da barra (stagger ~60ms por
+// posição) — usado na pirâmide de faixas do Painel. Sem index, anima sem
+// delay (comportamento padrão preservado).
+export function BarRow({ label, value, max, color, index }: { label: string; value: number; max: number; color?: string; index?: number }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    const delay = Math.min(index ?? 0, 20) * 60;
+    const timer = Animated.timing(anim, {
+      toValue: pct,
+      duration: 420,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pct, index]);
+
+  const width = anim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+
   return (
     <View style={styles.barRow}>
       <Text style={styles.barLabel} numberOfLines={1}>{label}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color ?? C.ink2 }]} />
+        <Animated.View style={[styles.barFill, { width, backgroundColor: color ?? C.ink2 }]} />
       </View>
       <Text style={styles.barVal}>{value}</Text>
     </View>

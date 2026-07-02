@@ -7,8 +7,30 @@ import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F,
 } from "@/constants/karateTheme";
-import { NetworkSummary } from "@/services/karateNetworkHealthApi";
+import { NetworkSummary, NetworkKpi } from "@/services/karateNetworkHealthApi";
 import { fmtBRL, fmtPct, fmtN, Sk } from "./shared";
+import { useCountUp } from "@/hooks/useCountUp";
+
+type KpiEntry = NetworkKpi;
+
+// Anima o NÚMERO cru do KPI (count-up) e só então reformata (moeda/%/inteiro)
+// — nunca anima a string já formatada com símbolo.
+function KpiCard({ k }: { k: KpiEntry }) {
+  const isNumeric = Number.isFinite(k.value);
+  const animated = useCountUp(isNumeric ? k.value : 0, 700);
+  const display = isNumeric ? animated : k.value;
+  return (
+    <View style={kst.kpiCard}>
+      <Text style={kst.kpiLabel}>{k.label}</Text>
+      <Text style={[kst.kpiValue, k.key === "inadimplencia" && k.value > 10 && { color: P.red }]}>
+        {k.unit === "BRL" ? fmtBRL(display) : k.unit === "%" ? fmtPct(display) : fmtN(Math.round(display))}
+        {k.unit && k.unit !== "BRL" && k.unit !== "%" && (
+          <Text style={kst.kpiUnit}> {k.unit}</Text>
+        )}
+      </Text>
+    </View>
+  );
+}
 
 export function KpiStrip({ data }: { data: NetworkSummary | null }) {
   const items = data?.kpis || [];
@@ -22,15 +44,7 @@ export function KpiStrip({ data }: { data: NetworkSummary | null }) {
   return (
     <View style={kst.kpiRow}>
       {items.map((k) => (
-        <View key={k.key} style={kst.kpiCard}>
-          <Text style={kst.kpiLabel}>{k.label}</Text>
-          <Text style={[kst.kpiValue, k.key === "inadimplencia" && k.value > 10 && { color: P.red }]}>
-            {k.unit === "BRL" ? fmtBRL(k.value) : k.unit === "%" ? fmtPct(k.value) : fmtN(k.value)}
-            {k.unit && k.unit !== "BRL" && k.unit !== "%" && (
-              <Text style={kst.kpiUnit}> {k.unit}</Text>
-            )}
-          </Text>
-        </View>
+        <KpiCard key={k.key} k={k} />
       ))}
     </View>
   );
