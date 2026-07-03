@@ -211,10 +211,10 @@ export default function ConsultaScreen() {
           </View>
 
           {/* Inscrições */}
-          {result.registrations.length > 0 && (
+          {(result.registrations || []).length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Inscrições</Text>
-              {result.registrations.map((r: LookupRegistration, idx: number) => {
+              {(result.registrations || []).map((r: LookupRegistration, idx: number) => {
                 const payLabel = paymentStatusLabel(r.payment_status);
                 return (
                   <View key={`${r.kind}-${r.event_id}-${idx}`} style={styles.enrollCard}>
@@ -245,7 +245,7 @@ export default function ConsultaScreen() {
             </View>
           )}
 
-          {result.registrations.length === 0 && (
+          {(result.registrations || []).length === 0 && (
             <View style={styles.emptyEnroll}>
               <Text style={styles.emptyEnrollText}>Nenhuma inscrição encontrada no momento.</Text>
             </View>
