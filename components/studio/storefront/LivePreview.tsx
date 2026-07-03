@@ -2,42 +2,39 @@
 // components/studio/storefront/LivePreview.tsx
 // Wrap do PersonalizationPreview com props claras e tipadas.
 //
-// PONTO DE PLUGUE ONDA 1 (Agente J):
-//   O Agente J alimenta imageUrl com a URL R2 após upload
-//   (vinda do FieldImage/useStorefront.uploadImage).
-//   O posicionamento na print_area (width_cm/height_cm/position)
-//   já é resolvido dentro do PersonalizationPreview.
+// VISUAL ENGINE F3/F4 (03/07/2026):
+//   Quando slug+productId são passados (ProductConfigurator) e o
+//   produto tem template visual vinculado (fetch público, cache),
+//   o preview sobe de nível:
+//     photo2d → canvas do motor compose2d (frente/verso, arte real)
+//     model3d → viewer 3D da caneca (Mug3DPreview, arraste pra girar)
+//   Sem template (ou nativo, ou uso no checkout sem as props novas)
+//   → comportamento ANTIGO intacto (PersonalizationPreviewBase SVG).
 //
-// CONTRATO (não alterar assinatura de props):
+// CONTRATO (props antigas inalteradas; slug/productId são opcionais):
 //   config       — CustomizationConfig | null (inclui print_area, fields)
 //   values       — Record<fieldId, any> (estado atual da personalização)
-//   size         — number (px de lado do preview quadrado)
-//   productName  — string (nome do produto, passado pro PersonalizationPreview)
-//   showLabel    — boolean (exibe ou não o label do produto no preview)
+//   size         — number (px de lado do preview)
+//   productName  — string
+//   showLabel    — boolean
+//   slug?        — slug da loja (habilita o motor)
+//   productId?   — id do produto (habilita o motor)
 //
-// COMO O AGENTE J ALIMENTA O PREVIEW:
-//   O values passado pro LivePreview já contém a URL da imagem
-//   em values[field.id] após o FieldImage chamar onChange(url).
-//   O PersonalizationPreview existente já lê esse campo e renderiza.
-//   Agente J só precisa garantir que a URL R2 é passada em values.
+// TRATAMENTO PDF (D1): mantido — valor PDF é stripado antes de
+// qualquer renderer (SVG ou canvas) e a nota discreta aparece abaixo.
 //
-// TRATAMENTO PDF (D1):
-//   Quando values[fieldId] de um campo type='image' é uma URL .pdf,
-//   o PersonalizationPreview tentaria renderizar via <image href> — o
-//   que falha silenciosamente no browser. Portanto este wrap detecta
-//   PDFs, remove o valor do campo antes de repassar ao PersonalizationPreview
-//   (mantendo o mockup limpo do produto), e exibe uma nota discreta abaixo.
-//
-// DESACOPLAMENTO DE TEMA (Onda 0 · 0.6):
-//   O storefront é público e NÃO monta o StudioThemeProvider. Por isso
-//   usamos PersonalizationPreviewBase com uma paleta derivada do T da
-//   própria loja (STOREFRONT_PALETTE) — em vez do PersonalizationPreview
-//   temático, que cairia no default DARK do context interno do painel.
+// DESACOPLAMENTO DE TEMA (Onda 0 · 0.6): mantido — storefront usa
+// PersonalizationPreviewBase com STOREFRONT_PALETTE no fallback.
 // ============================================================
-import { View, Text, Platform } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
 import type { CustomizationConfig } from "./types";
 import { T } from "./types";
+import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
+import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
+import { composeView } from "@/components/studio/visualEngine/compose2d";
+import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
 // Paleta do storefront (light) derivada do T da loja — sem tocar no
 // tema interno do painel. Mantém o mockup coerente com a vitrine pública.
@@ -84,35 +81,147 @@ function findPdfImageField(
   return null;
 }
 
+function PdfNote({ size }: { size: number }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+        backgroundColor: "rgba(100,116,139,0.10)",
+        borderWidth: 1,
+        borderColor: "rgba(100,116,139,0.20)",
+        maxWidth: size,
+      }}
+      accessibilityRole="text"
+      accessibilityLabel="PDF enviado. Pré-visualização indisponível."
+    >
+      <Text style={{ fontSize: 12, color: T.ink3 }}>📄</Text>
+      <Text
+        style={{ fontSize: 11, color: T.ink3, fontWeight: "600", flexShrink: 1 }}
+        numberOfLines={1}
+      >
+        PDF enviado — pré-visualização indisponível
+      </Text>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Componente
 // ---------------------------------------------------------------------------
 
 export function LivePreview({
-  config, values, size, productName, showLabel,
+  config, values, size, productName, showLabel, slug, productId,
 }: {
-  /** CustomizationConfig do produto (inclui print_area, fields, has_back, etc.) */
   config: CustomizationConfig | null;
-  /** Estado atual da personalização. Agente J grava a URL da imagem enviada em values[fieldId] */
   values: Record<string, any>;
-  /** Tamanho em px (quadrado). Padrão configurador: min(320, 280web). Padrão checkout: 56 */
   size: number;
-  /** Nome do produto — passado direto ao PersonalizationPreview */
   productName: string;
-  /** Exibir label interno do preview? false no configurador e checkout */
   showLabel: boolean;
+  /** F3: slug da loja — junto com productId habilita o motor visual */
+  slug?: string;
+  /** F3: id do produto — junto com slug habilita o motor visual */
+  productId?: string;
 }) {
-  // -------------------------------------------------------------------------
-  // D1: Tratamento de PDF
-  // -------------------------------------------------------------------------
-  const pdfField = findPdfImageField(config, values);
+  const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
+  const [tpl, setTpl] = useState<VisualTemplate | null>(null);
+  const [viewId, setViewId] = useState<"front" | "back">("front");
+  const canvasRef = useRef<any>(null);
 
-  // Se há um campo image com PDF, stripa o valor antes de passar ao preview
-  // para que o SVG mostre o mockup limpo (sem <image href> quebrado).
+  useEffect(() => {
+    let alive = true;
+    if (canUseEngine) {
+      fetchStorefrontVisualTemplate(slug as string, productId as string).then((t) => {
+        if (alive) setTpl(t);
+      });
+    } else {
+      setTpl(null);
+    }
+    return () => { alive = false; };
+  }, [slug, productId, canUseEngine]);
+
+  // D1: Tratamento de PDF (vale pra qualquer renderer)
+  const pdfField = findPdfImageField(config, values);
   const safeValues: Record<string, any> = pdfField
     ? { ...values, [pdfField.fieldId]: undefined }
     : values;
 
+  const photoViews: VisualView[] =
+    tpl?.kind === "photo2d" && Array.isArray(tpl.spec?.views) && tpl.spec!.views!.length
+      ? (tpl.spec!.views as VisualView[])
+      : [];
+  const engineView = photoViews.length
+    ? (viewId === "back" && photoViews[1] ? photoViews[1] : photoViews[0])
+    : null;
+  const showBackToggle = photoViews.length > 1 && config?.has_back === true;
+  const safeValuesKey = JSON.stringify(safeValues);
+
+  useEffect(() => {
+    if (!engineView || !canvasRef.current) return;
+    composeView(canvasRef.current, engineView, safeValues, {
+      showAreas: false,
+      pixelWidth: 800,
+    });
+    // safeValuesKey representa safeValues de forma estável
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineView, safeValuesKey]);
+
+  // ── F4: template 3D (caneca) ───────────────────────────
+  if (tpl?.kind === "model3d" && tpl.spec) {
+    return (
+      <View style={{ alignItems: "center", gap: 6 }}>
+        <Mug3DPreview
+          spec={tpl.spec}
+          values={safeValues}
+          size={size}
+          accentColor={T.primary}
+        />
+        {pdfField && <PdfNote size={size} />}
+      </View>
+    );
+  }
+
+  // ── F3: template 2D (foto/vetor + arte real do cliente) ──────
+  if (engineView) {
+    const h = Math.round(size * (engineView.base.h / engineView.base.w));
+    return (
+      <View style={{ alignItems: "center", gap: 6 }}>
+        {showBackToggle && (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {(["front", "back"] as const).map((v) => {
+              const sel = viewId === v;
+              return (
+                <Pressable
+                  key={v}
+                  onPress={() => setViewId(v)}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+                    backgroundColor: sel ? T.primary : "transparent",
+                    borderWidth: 1.5, borderColor: sel ? T.primary : T.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
+                    {v === "front" ? "Frente" : "Verso"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+        <View style={{ width: size, height: h, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: T.border }}>
+          {/* @ts-ignore — canvas DOM no web (motor compose2d) */}
+          <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" } as any} />
+        </View>
+        {pdfField && <PdfNote size={size} />}
+      </View>
+    );
+  }
+
+  // ── Fallback: comportamento antigo (SVG) ────────────────────
   return (
     <View style={{ alignItems: "center", gap: 6 }}>
       <PersonalizationPreviewBase
@@ -123,41 +232,7 @@ export function LivePreview({
         showLabel={showLabel}
         t={STOREFRONT_PALETTE}
       />
-
-      {/* Nota discreta quando o cliente enviou um PDF */}
-      {pdfField && (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 999,
-            backgroundColor: "rgba(100,116,139,0.10)", // T.ink3 @ 10%
-            borderWidth: 1,
-            borderColor: "rgba(100,116,139,0.20)",
-            // Não ultrapassa a largura do preview
-            maxWidth: size,
-          }}
-          accessibilityRole="text"
-          accessibilityLabel="PDF enviado. Pré-visualização indisponível."
-        >
-          {/* Ícone de documento — texto puro, sem dependência de lib de ícone */}
-          <Text style={{ fontSize: 12, color: T.ink3 }}>📄</Text>
-          <Text
-            style={{
-              fontSize: 11,
-              color: T.ink3,
-              fontWeight: "600",
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-          >
-            PDF enviado — pré-visualização indisponível
-          </Text>
-        </View>
-      )}
+      {pdfField && <PdfNote size={size} />}
     </View>
   );
 }

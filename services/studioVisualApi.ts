@@ -2,9 +2,10 @@
 // AURA. — services/studioVisualApi.ts
 // Visual Engine (F0/F1, 03/07/2026) — templates visuais 2D/3D
 // mantidos pela Aura + registro de renders com content_hash.
+// F2 (03/07/2026): requestApprovalWithRender (render_id no link de
+// aprovação existente) + getProductVisualTemplate (vínculo produto).
 //
-// Backend: Aura-backend#296 (migration 208) — rotas em
-// /companies/:id/studio/visual-templates | /visual-renders.
+// Backend: Aura-backend#296 (migration 208) + #298 (migration 209).
 //
 // Módulo separado do studioApi.ts (34KB) de propósito: evita
 // colisão de merge no arquivo grande (técnica da casa).
@@ -16,10 +17,11 @@ import { request } from "./api";
 // photo_url é null, o motor desenha o garment vetorial provisório
 // (assets provisórios até as fotos HD definitivas — decisão F1).
 export type VisualArea = {
-  id: string;                 // 'front' | 'back' | custom
+  id: string;                 // 'front' | 'back' | 'panel' | 'wrap' | custom
   width_cm: number;
   height_cm: number;
-  rect: { x: number; y: number; w: number; h: number };
+  rect?: { x: number; y: number; w: number; h: number }; // photo2d
+  uv?: { u0: number; v0: number; u1: number; v1: number }; // model3d
 };
 
 export type VisualView = {
@@ -32,20 +34,30 @@ export type VisualView = {
   areas: VisualArea[];
 };
 
+// model3d (F4): modelo procedural de caneca (GLB real entra depois
+// trocando model.kind → 'glb' + url, sem mudar o viewer).
+export type VisualModel3D = {
+  kind: "procedural-mug" | "glb";
+  url?: string | null;
+  texture: { w: number; h: number };
+};
+
 export type VisualTemplateSpec = {
   schema: 1;
-  views: VisualView[];
+  views?: VisualView[];       // photo2d
+  model?: VisualModel3D;      // model3d
+  areas?: VisualArea[];       // model3d: painel/wrap com uv
 };
 
 export type VisualTemplateKind = "photo2d" | "model3d";
 export type VisualTemplateStatus = "draft" | "published" | "archived";
 
 export type VisualTemplate = {
-  id: string;
+  id?: string;
   key: string;
   name: string;
   kind: VisualTemplateKind;
-  status: VisualTemplateStatus;
+  status?: VisualTemplateStatus;
   version: number;
   spec?: VisualTemplateSpec;
   created_at?: string;
@@ -64,6 +76,19 @@ export type VisualRender = {
   created_at: string;
 };
 
+export type ApprovalWithRenderCreated = {
+  id: string;
+  token: string;
+  mockup_url: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  render_id?: string | null;
+  approval_url: string;
+  wa_me_link: string | null;
+  message_text?: string;
+};
+
 const base = (cid: string) => "/companies/" + cid + "/studio";
 
 export const studioVisualApi = {
@@ -76,6 +101,18 @@ export const studioVisualApi = {
     request<{ template: VisualTemplate }>(
       base(cid) + "/visual-templates/" + encodeURIComponent(key),
       { method: "GET", retry: 1, timeout: 8000 }
+    ),
+  // F4: template visual vinculado ao produto (ou null)
+  getProductVisualTemplate: (cid: string, pid: string) =>
+    request<{ product_id: string; visual_template_key: string | null; template: VisualTemplate | null }>(
+      base(cid) + "/products/" + pid + "/visual-template",
+      { method: "GET", retry: 1, timeout: 8000 }
+    ),
+  // F4: lojista vincula/desvincula produto ↔ template publicado
+  setProductVisualTemplate: (cid: string, pid: string, key: string | null) =>
+    request<{ ok: true; product_id: string; visual_template_key: string | null }>(
+      base(cid) + "/products/" + pid + "/visual-template",
+      { method: "PUT", body: { key }, retry: 0, timeout: 8000 }
     ),
   // Registra um render gerado (o content_hash é calculado no backend a
   // partir de template@version + customization canônica — prova de aprovação)
@@ -105,6 +142,22 @@ export const studioVisualApi = {
       { method: "GET", retry: 1, timeout: 8000 }
     );
   },
+  // F2: mesmo endpoint do studioApi.requestApproval + render_id (migration 209).
+  // Mantido aqui pra não tocar no studioApi.ts (34KB).
+  requestApprovalWithRender: (
+    cid: string,
+    oid: string,
+    body: {
+      mockup_url: string;
+      render_id?: string | null;
+      customer_phone?: string;
+      custom_message?: string;
+      expires_in_days?: number;
+    }
+  ) =>
+    request<ApprovalWithRenderCreated>(base(cid) + "/orders/" + oid + "/approval", {
+      method: "POST", body, retry: 0, timeout: 10000,
+    }),
 };
 
 export default studioVisualApi;
