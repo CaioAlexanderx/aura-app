@@ -145,7 +145,13 @@ export default function InscricaoScreen() {
   // mas havia taxa > 0). payment.amount, quando presente, é a fonte mais
   // confiável (retornada pelo backend após o submit); fora do passo pix
   // caímos no preço já conhecido do evento/categoria.
-  const feeDue = payment?.amount ?? (isCompetition ? (selectedCategory?.fee_amount ?? 0) : (event?.fee_amount ?? 0));
+  // Taxa efetiva: categoria (quando definida) herda a taxa do evento; senão
+  // a taxa do evento. isFree distingue evento/categoria sem cobrança.
+  const effectiveFee = isCompetition
+    ? (selectedCategory?.fee_amount != null ? Number(selectedCategory.fee_amount) : Number(event?.fee_amount ?? 0))
+    : Number(event?.fee_amount ?? 0);
+  const feeDue = payment?.amount ?? effectiveFee;
+  const isFree = Number(feeDue) <= 0;
 
   useEffect(() => {
     let alive = true;
@@ -364,7 +370,7 @@ export default function InscricaoScreen() {
             <>
               <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 4 DE 4" : "ETAPA 3 DE 3"} · CONFIRMAÇÃO</Text>
               <Text style={styles.h2}>Confirme sua inscrição</Text>
-              <Text style={styles.sub}>Revise os dados. O pagamento é feito via PIX na próxima etapa.</Text>
+              <Text style={styles.sub}>{isFree ? "Revise os dados e confirme sua inscrição." : "Revise os dados. O pagamento é feito via PIX na próxima etapa."}</Text>
               <View style={styles.conf}>
                 <ConfRow k="Praticante" v={pract?.name || "—"} />
                 <View style={styles.confRow}>
@@ -379,8 +385,8 @@ export default function InscricaoScreen() {
                 <ConfRow k="Data" v={fmtDate(event?.event_date)} />
                 <View style={[styles.confRow, styles.confTotal]}>
                   <Text style={styles.confK}>Total</Text>
-                  <Text style={styles.confTotalV}>
-                    {fmtBRL(isCompetition && selectedCategory?.fee_amount != null ? selectedCategory.fee_amount : event?.fee_amount)}
+                  <Text style={[styles.confTotalV, isFree && { color: KarateColors.ink2 }]}>
+                    {isFree ? "Gratuito" : fmtBRL(effectiveFee)}
                   </Text>
                 </View>
               </View>
@@ -494,7 +500,7 @@ export default function InscricaoScreen() {
             ) : step === "confirma" ? (
               <>
                 <KarateButton label="Voltar" variant="secondary" onPress={() => setStep("cpf")} style={{ flex: 1 }} />
-                <KarateButton label={busy ? "Gerando…" : "Confirmar e gerar PIX"} onPress={doSubmit} loading={busy} style={{ flex: 2 }} />
+                <KarateButton label={busy ? (isFree ? "Enviando…" : "Gerando…") : (isFree ? "Confirmar inscrição" : "Confirmar e gerar PIX")} onPress={doSubmit} loading={busy} style={{ flex: 2 }} />
               </>
             ) : (
               <KarateButton label="Concluir" variant="secondary" onPress={resetToEvent} style={{ flex: 1 }} />
