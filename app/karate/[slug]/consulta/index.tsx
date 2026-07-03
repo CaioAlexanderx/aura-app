@@ -23,21 +23,43 @@ import { BeltTag } from "@/components/karate/shoji";
 import {
   karatePublicApi,
   LookupResponse,
-  LookupEnrollment,
+  LookupRegistration,
   ApiError,
 } from "@/services/karatePublicApi";
-import { formatEventDateShort } from "@/utils/eventDate";
-
 type Phase = "form" | "loading" | "result" | "error";
 
-function formatDate(iso: string | null): string {
-  return formatEventDateShort(iso, "—");
+// `registration.created_at` é um TIMESTAMPTZ (INSERT ... created_at NOW()),
+// diferente de event_date que é DATA pura — aqui `new Date(iso)` é seguro
+// (mesmo padrão de fmtDate em praticante.tsx para graduated_at/issued_at).
+function formatRegisteredAt(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function kindLabel(kind: string): string {
   if (kind === "exam") return "Exame";
   if (kind === "course") return "Curso";
+  if (kind === "competition") return "Campeonato";
   return kind;
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pending: "Pendente", confirmed: "Confirmada", approved: "Aprovada",
+    rejected: "Recusada", cancelled: "Cancelada", waitlist: "Lista de espera",
+  };
+  return map[status] || status;
+}
+
+function paymentStatusLabel(status: string | null): string | null {
+  if (!status) return null;
+  const map: Record<string, string> = {
+    pending: "Pagamento pendente", paid: "Pago", confirmed: "Pagamento confirmado",
+    failed: "Pagamento falhou", refunded: "Reembolsado", waived: "Isento",
+  };
+  return map[status] || status;
 }
 
 export default function ConsultaScreen() {
@@ -85,14 +107,21 @@ export default function ConsultaScreen() {
     >
       {/* Cabeçalho */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.back}
-          onPress={() => router.canGoBack() ? router.back() : router.push(`/karate/${slug}` as any)}
-          accessibilityLabel="Voltar"
-        >
-          <Icon name="chevron_left" size={18} color={KarateColors.ink2} />
-          <Text style={styles.backLabel}>Início</Text>
-        </TouchableOpacity>
+        <View style={styles.brandRow}>
+          <FpktLogo size={30} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.brandName} numberOfLines={1}>{result?.federation?.name || "FPKT"}</Text>
+            <Text style={styles.brandSub}>Portal do praticante</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.back}
+            onPress={() => router.canGoBack() ? router.back() : router.push(`/karate/${slug}` as any)}
+            accessibilityLabel="Voltar"
+          >
+            <Icon name="chevron_left" size={18} color={KarateColors.ink2} />
+            <Text style={styles.backLabel}>Início</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.eyebrowRow}>
           <View style={styles.eyebrowLine} />
@@ -181,30 +210,44 @@ export default function ConsultaScreen() {
             ) : null}
           </View>
 
-          {/* Inscrições ativas */}
-          {result.active_enrollments.length > 0 && (
+          {/* Inscrições */}
+          {(result.registrations || []).length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Inscrições ativas</Text>
-              {result.active_enrollments.map((e: LookupEnrollment) => (
-                <View key={e.id} style={styles.enrollCard}>
-                  <View style={styles.enrollKind}>
-                    <Text style={styles.enrollKindText}>{kindLabel(e.kind)}</Text>
+              <Text style={styles.sectionTitle}>Inscrições</Text>
+              {(result.registrations || []).map((r: LookupRegistration, idx: number) => {
+                const payLabel = paymentStatusLabel(r.payment_status);
+                return (
+                  <View key={`${r.kind}-${r.event_id}-${idx}`} style={styles.enrollCard}>
+                    <View style={styles.enrollKind}>
+                      <Text style={styles.enrollKindText}>{kindLabel(r.kind)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.enrollName}>{r.event_name}</Text>
+                      <Text style={styles.enrollMeta}>
+                        {r.category_name ? r.category_name : "Sem categoria"}
+                        {"  ·  "}
+                        {formatRegisteredAt(r.created_at)}
+                      </Text>
+                      <View style={styles.enrollBadges}>
+                        <View style={styles.statusChip}>
+                          <Text style={styles.statusChipText}>{statusLabel(r.status)}</Text>
+                        </View>
+                        {payLabel ? (
+                          <View style={styles.payChip}>
+                            <Text style={styles.payChipText}>{payLabel}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.enrollName}>{e.name}</Text>
-                    <Text style={styles.enrollMeta}>
-                      {formatDate(e.event_date)}
-                      {e.location ? `  ·  ${e.location}` : ""}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
-          {result.active_enrollments.length === 0 && (
+          {(result.registrations || []).length === 0 && (
             <View style={styles.emptyEnroll}>
-              <Text style={styles.emptyEnrollText}>Nenhuma inscrição ativa no momento.</Text>
+              <Text style={styles.emptyEnrollText}>Nenhuma inscrição encontrada no momento.</Text>
             </View>
           )}
 
@@ -259,11 +302,31 @@ const styles = StyleSheet.create({
   } as ViewStyle,
 
   header: { marginBottom: 28 } as ViewStyle,
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 24,
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  } as ViewStyle,
+  brandName: {
+    fontFamily: F.heading,
+    fontSize: 15,
+    fontWeight: "400",
+    color: C.ink,
+  } as TextStyle,
+  brandSub: {
+    fontSize: 11,
+    color: C.ink3,
+    fontFamily: F.body,
+    marginTop: 1,
+  } as TextStyle,
   back: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginBottom: 24,
     alignSelf: "flex-start",
   } as ViewStyle,
   backLabel: { fontSize: 13, color: C.ink2, fontFamily: F.body } as TextStyle,
@@ -477,6 +540,40 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: C.ink3,
     marginTop: 2,
+  } as TextStyle,
+  enrollBadges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  } as ViewStyle,
+  statusChip: {
+    paddingVertical: 3,
+    paddingHorizontal: 9,
+    borderRadius: R.pill,
+    backgroundColor: C.bg2,
+    borderWidth: 1,
+    borderColor: C.border,
+  } as ViewStyle,
+  statusChipText: {
+    fontFamily: F.body,
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: C.ink2,
+  } as TextStyle,
+  payChip: {
+    paddingVertical: 3,
+    paddingHorizontal: 9,
+    borderRadius: R.pill,
+    backgroundColor: P.redWash,
+    borderWidth: 1,
+    borderColor: P.redLine,
+  } as ViewStyle,
+  payChipText: {
+    fontFamily: F.body,
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: P.red,
   } as TextStyle,
 
   emptyEnroll: {
