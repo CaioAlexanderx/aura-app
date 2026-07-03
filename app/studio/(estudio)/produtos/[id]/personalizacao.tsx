@@ -3,6 +3,8 @@
 // (Fase 1 skeleton — 24/05/2026)
 // Agente H (03/06/2026): seção "Serviço de Arte" no Step 2
 // Agente I (03/06/2026): seção "Guia de Medidas" no Step 2 + Step 3 preview
+// F1 Visual Engine (03/07/2026): preview vivo canvas no Step 3
+//   (PersonalizacaoLivePreview — componente autocontido, 1 linha aqui)
 //
 // Primeira aplicação do <StudioWorkflow> canônico.
 // 4 passos: Área de impressão → Campos permitidos → Preview → Salvar.
@@ -10,8 +12,8 @@
 // Submete via studioApi.saveCustomizationConfig() → PUT backend.
 //
 // Skeleton MVP: cada passo tem um form básico funcional, mas a
-// experiência rica (drag-drop de fields, preview SVG ao vivo,
-// galeria de fontes) entra em iterações da Fase 1.
+// experiência rica (drag-drop de fields, galeria de fontes) entra
+// em iterações da Fase 1.
 // ============================================================
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
@@ -20,6 +22,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
+import { PersonalizacaoLivePreview } from "@/components/studio/visualEngine/PersonalizacaoLivePreview";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
@@ -31,13 +34,13 @@ const FONTS_PRESET   = ["Pacifico", "Caveat", "Playfair Display", "Bebas Neue", 
 const COLORS_PRESET  = ["#0F172A", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#EC4899", "#FFFFFF"];
 const FORMATS_PRESET = ["png", "jpg", "jpeg", "pdf"];
 
-// ─── ART_SERVICE_FIELD_ID canônico ───────────────────────────────────────────
+// ─── ART_SERVICE_FIELD_ID canônico ───────────────────────────────────────
 // Usado em buildConfig() e na seção de preview (Step 3).
 // Manter em sincronia com FieldArtService.tsx (ART_FIELD_ID = 'art_service').
 export const ART_SERVICE_FIELD_ID  = "art_service";
 export const ART_SERVICE_BRIEF_ID  = "art_service_brief";
 
-// ─── Agente I: tipo do guia de medidas ───────────────────────────────────────
+// ─── Agente I: tipo do guia de medidas ─────────────────────────────────────
 // Shape gravado em customization_config.size_guide:
 // { file_url: string; content_type: string }
 // Ex: { file_url: "https://r2.../guia.pdf", content_type: "application/pdf" }
@@ -131,7 +134,7 @@ export default function PersonalizacaoWizard() {
       ? draft.allow_text || draft.allow_image || draft.allow_template || draft.allow_art_service
       : true;
 
-  // ─── Agente H: parse do preço ─────────────────────────────────────────────
+  // ─── Agente H: parse do preço ───────────────────────────────────────────
   function parseArtPrice(raw: string): number {
     // Aceita "30", "30,00", "30.00"
     const normalized = raw.replace(",", ".").replace(/[^\d.]/g, "");
@@ -218,7 +221,7 @@ export default function PersonalizacaoWizard() {
       });
     }
 
-    // ─── Agente H: campo art_service ─────────────────────────────────────────
+    // ─── Agente H: campo art_service ───────────────────────────────────────
     // DECISÃO D2: campo type='option' + config.is_art_service:true.
     // O motor computeChoicesDelta no backend soma price_delta de choices selecionadas
     // sem qualquer mudança de backend. Apenas a choice 'designer' carrega o delta.
@@ -404,7 +407,7 @@ export default function PersonalizacaoWizard() {
             tone="warm"
           />
 
-          {/* ─── Agente H: Seção Serviço de Arte ─────────────────────────── */}
+          {/* ─── Agente H: Seção Serviço de Arte ─────────────────────── */}
           <View style={s.artServiceDivider}>
             <View style={s.artServiceDividerLine} />
             <Text style={s.artServiceDividerTxt}>Serviço Premium</Text>
@@ -441,12 +444,12 @@ export default function PersonalizacaoWizard() {
               </View>
             </View>
           )}
-          {/* ─── Fim seção Agente H ────────────────────────────────────── */}
+          {/* ─── Fim seção Agente H ────────────────────────────── */}
 
-          {/* ═══════════════════════════════════════════════════════════════
+          {/* ═══════════════════════════════════════════════════════════
               SEÇÃO AGENTE I — GUIA DE MEDIDAS
               Início
-          ═══════════════════════════════════════════════════════════════ */}
+          ═══════════════════════════════════════════════════════════ */}
           <View style={s.sizeGuideDivider}>
             <View style={s.sizeGuideDividerLine} />
             <Text style={s.sizeGuideDividerTxt}>Guia de Medidas</Text>
@@ -567,10 +570,10 @@ export default function PersonalizacaoWizard() {
               </View>
             )}
           </View>
-          {/* ═══════════════════════════════════════════════════════════════
+          {/* ═══════════════════════════════════════════════════════════
               SEÇÃO AGENTE I — GUIA DE MEDIDAS
               Fim
-          ═══════════════════════════════════════════════════════════════ */}
+          ═══════════════════════════════════════════════════════════ */}
         </View>
       )}
 
@@ -578,8 +581,18 @@ export default function PersonalizacaoWizard() {
         <View style={s.stepBlock}>
           <Text style={s.q}>Confira como vai ficar</Text>
           <Text style={s.help}>
-            O cliente verá um preview ao vivo da arte aplicada. O renderer SVG completo vem na próxima iteração da Fase 1.
+            Preview vivo do motor visual — o mesmo motor gera o render HD de aprovação
+            e o preview da loja. Ajuste texto e cores de exemplo pra sentir o resultado.
           </Text>
+
+          {/* F1 Visual Engine: preview vivo (frente/verso, export HD 2048px) */}
+          <PersonalizacaoLivePreview
+            widthCm={Number(draft.print_area_w) || 0}
+            heightCm={Number(draft.print_area_h) || 0}
+            position={draft.print_area_pos}
+            allowText={draft.allow_text}
+            allowImage={draft.allow_image}
+          />
 
           <View style={s.previewCard}>
             <Text style={s.previewEyebrow}>PRÉVIA — configuração resumida</Text>
