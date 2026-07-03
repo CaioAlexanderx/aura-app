@@ -45,7 +45,7 @@ import {
   type CustomizationFieldType,
   type Template,
 } from "@/services/studioApi";
-import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+import { EnginePreview } from "@/components/studio/visualEngine/EnginePreview";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
@@ -513,12 +513,14 @@ export function StudioPersonalizacaoPanel({
       <View style={s.previewCard}>
         <Text style={s.eyebrow}>PREVIEW AO VIVO</Text>
         <View style={s.previewBox}>
-          <PersonalizationPreview
+          <EnginePreview
             config={config}
             values={previewValues}
             size={isWide ? 320 : 280}
             productName={productName}
             showLabel
+            companyId={companyId}
+            productId={productId}
           />
         </View>
         {slug ? (
