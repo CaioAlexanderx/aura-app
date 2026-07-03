@@ -46,6 +46,7 @@ import { notify } from "@/utils/webAlert";
 import { SorteioPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
 
 // ── Component ─────────────────────────────────────────────────────────
 export default function ChavesScreen() {
@@ -80,9 +81,11 @@ export default function ChavesScreen() {
   const [selectedCatId, setSelectedCatId] = useState(catId || "");
   const [selectedModality, setSelectedModality] = useState(modality || "");
   const [selectedCatName, setSelectedCatName] = useState(catName || "");
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Load categories for the competition
   const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
     try {
       const cats = await karateCompetitionsApi.listCategories(federationId, cid || "");
       if (cats && cats.length) {
@@ -92,9 +95,14 @@ export default function ChavesScreen() {
           setSelectedModality(cats[0].modality);
           setSelectedCatName(cats[0].name);
         }
+      } else {
+        setCategories([]);
       }
     } catch {
       // sem categorias: mantém vazio
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
     }
   }, [federationId, cid, selectedCatId]);
 
@@ -102,7 +110,10 @@ export default function ChavesScreen() {
 
   // Load bracket when category changes
   const loadBracket = useCallback(async () => {
-    if (!selectedCatId) return;
+    if (!selectedCatId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const resp = await karateBracketsApi.getBracket(federationId, cid || "", selectedCatId);
@@ -127,16 +138,26 @@ export default function ChavesScreen() {
   }, [federationId, cid, selectedCatId, selectedModality]);
 
   const loadKata = useCallback(async () => {
-    if (!selectedCatId) return;
+    if (!selectedCatId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const scores = await karateBracketsApi.getKataScores(federationId, cid || "", selectedCatId);
       if (scores) setKataScores(scores);
     } catch {
       setKataScores([]);
+    } finally {
+      setLoading(false);
     }
   }, [federationId, cid, selectedCatId]);
 
   useEffect(() => {
+    if (!selectedCatId) {
+      setLoading(false);
+      return;
+    }
     if (selectedModality === "kata" || selectedModality === "team_kata") {
       loadKata();
     } else {
@@ -261,11 +282,34 @@ export default function ChavesScreen() {
 
         <View style={styles.divider} />
 
-        {/* Loading */}
-        {loading && <ActivityIndicator color={P.red} style={{ marginTop: 32 }} />}
+        {/* Loading (only while there is a selected category to fetch data for) */}
+        {loading && !!selectedCatId && <ActivityIndicator color={P.red} style={{ marginTop: 32 }} />}
+
+        {/* ============= EMPTY STATE: ainda carregando categorias ============= */}
+        {categoriesLoading && !selectedCatId && (
+          <ActivityIndicator color={P.red} style={{ marginTop: 32 }} />
+        )}
+
+        {/* ============= EMPTY STATE: sem categorias no campeonato ============= */}
+        {!categoriesLoading && categories.length === 0 && (
+          <KarateEmptyState
+            icon="layers"
+            title="Este campeonato ainda não tem categorias"
+            subtitle="Cadastre uma categoria na tela da competição para gerar chaves."
+          />
+        )}
+
+        {/* ============= EMPTY STATE: há categorias, mas nenhuma selecionada ============= */}
+        {!categoriesLoading && categories.length > 0 && !selectedCatId && (
+          <KarateEmptyState
+            icon="layers"
+            title="Selecione uma categoria"
+            subtitle="Escolha uma categoria acima para ver ou gerar a chave."
+          />
+        )}
 
         {/* ============= KATA VIEW ============= */}
-        {!loading && isKataMode && (
+        {!loading && !!selectedCatId && isKataMode && (
           <KataView
             catName={selectedCatName}
             scores={kataScores}
@@ -274,7 +318,7 @@ export default function ChavesScreen() {
         )}
 
         {/* ============= SORTEIO PANEL (not generated or draft) ============= */}
-        {!loading && !isKataMode && (notGenerated || hasDraft) && (
+        {!loading && !!selectedCatId && !isKataMode && (notGenerated || hasDraft) && (
           <SorteioPanel
             method={method}
             setMethod={setMethod}
@@ -292,7 +336,7 @@ export default function ChavesScreen() {
         )}
 
         {/* ============= BRACKET VIEW (locked) ============= */}
-        {!loading && !isKataMode && locked && bracket && (
+        {!loading && !!selectedCatId && !isKataMode && locked && bracket && (
           <BracketView
             bracket={bracket}
             advancingMatch={advancingMatch}
