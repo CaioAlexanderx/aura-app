@@ -60,6 +60,7 @@ import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoP
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
 import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
+import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { Icon } from "@/components/Icon";
 import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
@@ -84,6 +85,7 @@ type StudioProduct = {
   extra_images_count?: number;
   category?: string | null;
   studio_storefront_visible?: boolean;
+  visual_template_key?: string | null;
 };
 
 type SectionKey = "basico" | "personalizacao" | "ficha" | "templates";
@@ -128,7 +130,7 @@ export default function StudioEstoque() {
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  // ── Deep-link params ──────────────────────────────────────────────────────
+  // ── Deep-link params ────────────────────────────────────────────────────────────────────────
   // Captura action + id para tratar tanto ?action=novo-produto quanto
   // ?action=edit-product&id=<pid> no mesmo useEffect de mount.
   const params = useLocalSearchParams<{ action?: string; id?: string }>();
@@ -223,6 +225,7 @@ export default function StudioEstoque() {
         extra_images_count: Number(p.extra_images_count) || 0,
         category: p.category || null,
         studio_storefront_visible: p.studio_storefront_visible !== false,
+        visual_template_key: p.visual_template_key || null,
       })));
 
       // Categorias (#4)
@@ -286,6 +289,7 @@ export default function StudioEstoque() {
         template_count: Number(r.template_count) || 0,
         extra_images_count: Number(r.extra_images_count) || 0,
         category: r.category || null,
+        visual_template_key: r.visual_template_key ?? null,
       };
       setProducts((prev) => prev.map((p) => (p.id === expandedId ? { ...p, ...fresh } : p)));
     } catch (e) {
@@ -511,6 +515,12 @@ function ProductRow({
           ) : (
             <Image source={{ uri: product.image_url }} style={s.rowThumb} />
           )
+        ) : product.visual_template_key && Platform.OS === "web" ? (
+          /* F6: thumb do template visual; TODO expor kind no GET /studio/products em vez de inferir pela key */
+          <VisualTemplateThumb
+            kind={String(product.visual_template_key).includes("caneca") ? "model3d" : "photo2d"}
+            size={48}
+          />
         ) : (
           <View style={[s.rowThumb, s.rowThumbEmpty]}>
             <Icon name="image" size={18} color={t.ink4} />
@@ -673,6 +683,12 @@ function ProductExpanded({
             ) : (
               <Image source={{ uri: product.image_url }} style={s.expandedThumb} />
             )
+          ) : product.visual_template_key && Platform.OS === "web" ? (
+            /* F6: thumb do template visual; TODO expor kind no GET /studio/products em vez de inferir pela key */
+            <VisualTemplateThumb
+              kind={String(product.visual_template_key).includes("caneca") ? "model3d" : "photo2d"}
+              size={72}
+            />
           ) : (
             <View style={[s.expandedThumb, s.rowThumbEmpty]}>
               <Icon name="image" size={24} color={t.ink4} />
