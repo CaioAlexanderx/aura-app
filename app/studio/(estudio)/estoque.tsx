@@ -130,7 +130,7 @@ export default function StudioEstoque() {
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  // ── Deep-link params ────────────────────────────────────────────────────────────────────────
+  // ── Deep-link params ────────────────────────────────────────────────────
   // Captura action + id para tratar tanto ?action=novo-produto quanto
   // ?action=edit-product&id=<pid> no mesmo useEffect de mount.
   const params = useLocalSearchParams<{ action?: string; id?: string }>();
