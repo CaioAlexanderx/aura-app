@@ -14,7 +14,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
-  StyleSheet, ViewStyle, TextStyle, Platform, Switch,
+  StyleSheet, ViewStyle, TextStyle, Platform, Switch, Image, useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -112,6 +112,9 @@ export default function InscricaoScreen() {
   const { slug, eventId } = useLocalSearchParams<{ slug: string; eventId: string }>();
   const slugStr = String(slug || "");
   const eventIdStr = String(eventId || "");
+  // Landing "evento" (estilo Sympla/Eventim) — >= ~880px permite o card de
+  // preço/CTA ao lado da descrição; abaixo disso empilha (ver EventLanding).
+  const { width: winWidth } = useWindowDimensions();
 
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [event, setEvent] = useState<PublicEvent["event"] | null>(null);
@@ -278,6 +281,26 @@ export default function InscricaoScreen() {
     );
   }
 
+  // ── ETAPA "evento" — landing pública estilo Sympla/Eventim ──
+  // Substitui o card estreito do wizard por uma página de evento completa
+  // (hero/banner, fatos, descrição, preço + CTA). O restante do wizard
+  // (categoria/cpf/confirma/pix) continua usando o Card estreito abaixo,
+  // sem nenhuma alteração de lógica.
+  if (!loadingEvent && step === "evento") {
+    return (
+      <ScrollView style={styles.page} contentContainerStyle={styles.landingWrap}>
+        <EventLanding
+          event={event}
+          fedName={fedName}
+          isCompetition={isCompetition}
+          winWidth={winWidth}
+          onCta={() => { setErr(null); setStep(isCompetition ? "categoria" : "cpf"); }}
+        />
+        <AuraFooter />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.wrap}>
       <Card fed={fedName}>
@@ -286,23 +309,6 @@ export default function InscricaoScreen() {
         <View style={styles.body}>
           {loadingEvent ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={KarateColors.primary} /></View>
-          ) : step === "evento" ? (
-            <>
-              <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 1 DE 4" : "ETAPA 1 DE 3"} · EVENTO</Text>
-              <Text style={styles.h2}>{event?.name || "Inscrição em evento"}</Text>
-              <Text style={styles.sub}>Confira os dados antes de iniciar sua inscrição.</Text>
-              <View style={styles.evSum}>
-                <SumRow icon="calendar-outline" k="Data" v={fmtDate(event?.event_date)} />
-                <SumRow icon="location-outline" k="Local" v={event?.location || "a definir"} />
-                {event?.capacity ? (
-                  <SumRow icon="people-outline" k="Vagas" v={`${event.capacity.filled}${event.capacity.max ? ` de ${event.capacity.max}` : ""} preenchidas`} />
-                ) : null}
-                <SumRow icon="pricetag-outline" k="Inscrição" v={fmtEventFeeSummary(event?.fee_amount, (event as any)?.from_price)} price />
-              </View>
-              {!!(event as any)?.description && (
-                <Text style={{ fontSize: 13, color: KarateColors.ink2, lineHeight: 20, marginTop: 14 }}>{(event as any).description}</Text>
-              )}
-            </>
           ) : step === "categoria" ? (
             <>
               <Text style={styles.stepLabel}>ETAPA 2 DE 4 · CATEGORIA</Text>
@@ -473,16 +479,12 @@ export default function InscricaoScreen() {
           )}
         </View>
 
-        {/* footer actions */}
+        {/* footer actions — a etapa "evento" agora é a landing (EventLanding),
+            renderizada fora deste Card; o CTA dela chama a mesma transição
+            setStep(isCompetition ? "categoria" : "cpf") usada aqui antes. */}
         {!loadingEvent && (
           <View style={styles.foot}>
-            {step === "evento" ? (
-              <KarateButton
-                label="Iniciar inscrição"
-                onPress={() => { setErr(null); setStep(isCompetition ? "categoria" : "cpf"); }}
-                style={{ flex: 1 }}
-              />
-            ) : step === "categoria" ? (
+            {step === "categoria" ? (
               <>
                 <KarateButton label="Voltar" variant="secondary" onPress={() => setStep("evento")} style={{ flex: 1 }} />
                 <KarateButton
@@ -627,9 +629,214 @@ function AuraFooter() {
   );
 }
 
+// ============================================================
+// EventLanding — landing pública da etapa "evento" (estilo Sympla/Eventim,
+// identidade Shoji). Substitui o cartão estreito de resumo por uma página
+// de evento: hero com banner (ou fallback), título/data/local sobre
+// gradiente escuro, badges, fatos, descrição longa e card de preço + CTA.
+// Duas colunas em telas largas (>= LANDING_BREAKPOINT); empilha abaixo
+// disso — prioriza não quebrar o layout no RN Web.
+// ============================================================
+const LANDING_BREAKPOINT = 880;
+
+function eventKindLabel(kind?: string | null): string {
+  if (kind === "competition") return "Campeonato";
+  if (kind === "course") return "Curso";
+  if (kind === "exam") return "Exame";
+  return "Evento";
+}
+
+function EventLanding({
+  event, fedName, isCompetition, winWidth, onCta,
+}: {
+  event: PublicEvent["event"] | null;
+  fedName: string;
+  isCompetition: boolean;
+  winWidth: number;
+  onCta: () => void;
+}) {
+  const bannerUrl: string | null = (event as any)?.banner_url || null;
+  const description: string = (event as any)?.description || "";
+  const isWide = winWidth >= LANDING_BREAKPOINT;
+  const ctaLabel = isCompetition ? "Escolher categoria" : "Iniciar inscrição";
+  const capacity = event?.capacity || null;
+  const vagasLabel = capacity
+    ? `${capacity.filled}${capacity.max ? ` de ${capacity.max}` : ""} preenchidas`
+    : null;
+
+  const factsBlock = (
+    <View style={landing.facts}>
+      <FactCard icon="calendar-outline" k="Data" v={fmtDate(event?.event_date)} />
+      <FactCard icon="location-outline" k="Local" v={event?.location || "a definir"} />
+      {vagasLabel ? <FactCard icon="people-outline" k="Vagas" v={vagasLabel} /> : null}
+      <FactCard icon="pricetag-outline" k="Organização" v={fedName} />
+    </View>
+  );
+
+  const priceCard = (
+    <View style={landing.buyCard}>
+      <Text style={landing.buyFrom}>A partir de</Text>
+      <Text style={landing.buyPrice}>{fmtEventFeeSummary(event?.fee_amount, (event as any)?.from_price)}</Text>
+      <KarateButton label={ctaLabel} onPress={onCta} style={{ marginTop: 16, width: "100%" } as any} />
+      <View style={landing.secureRow}>
+        <Icon name="shield" size={14} color={KarateColors.ink3} />
+        <Text style={landing.secureTxt}>Pagamento PIX · confirmação pela federação</Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={landing.page}>
+      <View style={landing.brandRow}>
+        <FpktLogo size={34} />
+        <View>
+          <Text style={landing.brandT}>Inscrição</Text>
+          <Text style={landing.brandS}>{fedName}</Text>
+        </View>
+      </View>
+
+      {/* HERO */}
+      <View style={landing.hero}>
+        {bannerUrl ? (
+          <Image source={{ uri: bannerUrl }} style={landing.heroImg} resizeMode="cover" accessibilityLabel={event?.name || "Banner do evento"} />
+        ) : (
+          <View style={[landing.heroImg, landing.heroFallback]}>
+            <Text style={landing.heroGlyph}>空</Text>
+          </View>
+        )}
+        <View style={landing.heroBadges}>
+          <View style={landing.badge}>
+            <Text style={landing.badgeTxt}>{eventKindLabel(event?.kind)}</Text>
+          </View>
+        </View>
+        <View style={landing.heroCap}>
+          <Text style={landing.heroTitle}>{event?.name || "Inscrição em evento"}</Text>
+          <View style={landing.heroMeta}>
+            <Text style={landing.heroMetaTxt}>{fmtDate(event?.event_date)}</Text>
+            {event?.location ? <Text style={landing.heroMetaTxt}>·  {event.location}</Text> : null}
+          </View>
+        </View>
+      </View>
+
+      {/* CONTEÚDO — empilha sempre em telas estreitas; 2 colunas em largas */}
+      <View style={[landing.body, isWide && landing.bodyWide]}>
+        <View style={isWide ? landing.mainWide : undefined}>
+          {factsBlock}
+          {!!description && (
+            <View style={landing.descBlock}>
+              <Text style={landing.descEyebrow}>SOBRE O EVENTO</Text>
+              <Text style={landing.descTxt}>{description}</Text>
+            </View>
+          )}
+          {!isWide ? priceCard : null}
+        </View>
+        {isWide ? <View style={landing.sideWide}>{priceCard}</View> : null}
+      </View>
+    </View>
+  );
+}
+
+function FactCard({ icon, k, v }: { icon: string; k: string; v: string }) {
+  return (
+    <View style={landing.fact}>
+      <View style={landing.factIc}>
+        <Icon name={icon as any} size={16} color={KarateColors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={landing.factK}>{k}</Text>
+        <Text style={landing.factV}>{v}</Text>
+      </View>
+    </View>
+  );
+}
+
+const landing = StyleSheet.create({
+  page: { width: "100%", maxWidth: 900 } as ViewStyle,
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 } as ViewStyle,
+  brandT: { fontFamily: KarateFonts.heading, fontSize: 15, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  brandS: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginTop: 1 } as TextStyle,
+
+  hero: {
+    width: "100%", aspectRatio: 16 / 6.5, borderRadius: KarateRadius.xl, overflow: "hidden",
+    borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.ink,
+    ...Platform.select({
+      web: { boxShadow: "0 24px 60px rgba(28,23,20,0.18)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 28, elevation: 6 },
+    }),
+  } as ViewStyle,
+  heroImg: { width: "100%", height: "100%", position: "absolute", top: 0, left: 0} as any,
+  heroFallback: {
+    alignItems: "flex-end", justifyContent: "flex-end", backgroundColor: KarateColors.headRed,
+    overflow: "hidden",
+  } as ViewStyle,
+  heroGlyph: {
+    fontFamily: KarateFonts.heading, fontSize: 140, color: "rgba(253,244,236,0.14)",
+    marginRight: -8, marginBottom: -30,
+  } as TextStyle,
+  heroBadges: { position: "absolute", top: 16, left: 16, flexDirection: "row", gap: 8 } as ViewStyle,
+  badge: {
+    backgroundColor: "rgba(43,38,32,0.72)", borderRadius: KarateRadius.pill,
+    paddingVertical: 6, paddingHorizontal: 12,
+  } as ViewStyle,
+  badgeTxt: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: "#fdf4ec" } as TextStyle,
+  heroCap: {
+    position: "absolute", left: 0, right: 0, bottom: 0, padding: 20,
+    backgroundColor: "rgba(20,15,13,0.001)",
+    ...Platform.select({
+      web: { background: "linear-gradient(0deg, rgba(20,15,13,0.82), rgba(20,15,13,0))" } as any,
+      default: {},
+    }),
+  } as ViewStyle,
+  heroTitle: {
+    fontFamily: KarateFonts.heading, fontWeight: "400", fontSize: 24, lineHeight: 28,
+    color: "#fdf8f2",
+  } as TextStyle,
+  heroMeta: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 } as ViewStyle,
+  heroMetaTxt: { fontSize: 12.5, color: "rgba(253,248,242,0.92)", fontWeight: "600" } as TextStyle,
+
+  body: { marginTop: 20, gap: 16 } as ViewStyle,
+  bodyWide: { flexDirection: "row", alignItems: "flex-start" } as ViewStyle,
+  mainWide: { flex: 1, minWidth: 0, marginRight: 24 } as ViewStyle,
+  sideWide: { width: 300 } as ViewStyle,
+
+  facts: { flexDirection: "row", flexWrap: "wrap", gap: 10 } as ViewStyle,
+  fact: {
+    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
+    borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md,
+    backgroundColor: KarateColors.glass, flexGrow: 1, minWidth: 160,
+  } as ViewStyle,
+  factIc: {
+    width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center",
+    backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine,
+  } as ViewStyle,
+  factK: { fontSize: 10, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.5 } as TextStyle,
+  factV: { fontSize: 13.5, fontWeight: "700", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+
+  descBlock: {
+    marginTop: 4, padding: 20, borderWidth: 1, borderColor: KarateColors.border,
+    borderRadius: KarateRadius.lg, backgroundColor: KarateColors.glass,
+  } as ViewStyle,
+  descEyebrow: { fontSize: 10.5, fontWeight: "700", letterSpacing: 1, color: KarateColors.ink3, marginBottom: 10 } as TextStyle,
+  descTxt: { fontSize: 14.5, lineHeight: 24, color: KarateColors.ink2 } as TextStyle,
+
+  buyCard: {
+    marginTop: 4, padding: 20, borderWidth: 1, borderColor: KarateColors.border,
+    borderRadius: KarateRadius.lg, backgroundColor: KarateColors.glass,
+    ...Platform.select({
+      web: { boxShadow: "0 18px 50px -28px rgba(43,38,32,0.30)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 4 },
+    }),
+  } as ViewStyle,
+  buyFrom: { fontSize: 11.5, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.5 } as TextStyle,
+  buyPrice: { fontFamily: KarateFonts.heading, fontSize: 30, color: KarateColors.ink, marginTop: 4 } as TextStyle,
+  secureRow: { flexDirection: "row", alignItems: "center", gap: 7, justifyContent: "center", marginTop: 12 } as ViewStyle,
+  secureTxt: { fontSize: 11, color: KarateColors.ink3, textAlign: "center" } as TextStyle,
+});
+
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   wrap: { alignItems: "center", padding: 20, paddingTop: 32, paddingBottom: 56 } as ViewStyle,
+  landingWrap: { alignItems: "center", padding: 20, paddingTop: 24, paddingBottom: 56 } as ViewStyle,
   card: {
     width: "100%", maxWidth: 440, backgroundColor: KarateColors.glass, borderWidth: 1, borderColor: KarateColors.border,
     borderRadius: KarateRadius.lg, overflow: "hidden",

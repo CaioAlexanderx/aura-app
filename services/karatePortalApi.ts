@@ -165,6 +165,10 @@ export interface PublicEvent {
     registration_fields: RegistrationField[];
     /** Track E / P0-0.4 — só presente quando kind==='competition'. */
     categories?: CompetitionCategory[];
+    /** Texto longo (descrição do evento), pode ter múltiplas linhas. */
+    description?: string | null;
+    /** URL do banner do evento (EventBannerManager). null = sem banner, usar fallback visual. */
+    banner_url?: string | null;
   };
   requires: string[];
 }
