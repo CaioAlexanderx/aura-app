@@ -269,7 +269,7 @@ export default function InscricaoScreen() {
             {err === "nao" ? (
               <>
                 <KarateButton label="Corrigir CPF" variant="secondary" onPress={() => { setErr(null); setStep("cpf"); }} style={{ flex: 1 }} />
-                <KarateButton label="Falar com a federação" onPress={() => Linking.openURL("https://www.getaura.com.br")} style={{ flex: 2 }} />
+                <KarateButton label="Falar com a federação" onPress={() => Linking.openURL("https://wa.me/5511982924664")} style={{ flex: 2 }} />
               </>
             ) : (
               <KarateButton label="Fechar" variant="secondary" onPress={resetToEvent} style={{ flex: 1 }} />
