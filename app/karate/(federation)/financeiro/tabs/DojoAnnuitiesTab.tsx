@@ -296,6 +296,11 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             )}
           </View>
         ))}
+        {fees.length === 0 && !showFeeEditor ? (
+          <Text style={{ fontSize: 12.5, color: KarateColors.ink3, paddingVertical: 6, lineHeight: 18 }}>
+            Nenhuma anuidade configurada ainda. Toque em “Editar” para definir os valores por porte de dojô e por CPF.
+          </Text>
+        ) : null}
         {showFeeEditor && (
           <KarateButton
             label="Salvar nova vigência"
