@@ -4,6 +4,8 @@
 // LivePreview, quantidade, botao Adicionar/Atualizar.
 // Agente I (03/06/2026): link 'Ver guia de medidas' + values/onFieldChange no FieldRenderer
 // Agente J (03/06/2026): ocultar campo image quando art_service=designer + limpar valor
+// Visual Engine F3 (03/07/2026): slug+productId passados ao LivePreview —
+//   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
@@ -208,6 +210,8 @@ export function ProductConfigurator({
             size={defaultConfiguratorSize()}
             productName={activeProduct.name}
             showLabel={false}
+            slug={slug}
+            productId={activeProduct.id}
           />
         </View>
 
