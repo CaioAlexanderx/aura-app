@@ -9,10 +9,14 @@
 // Áreas painel/wrap vêm da spec (uv por área). Mesmo contrato de
 // values do 2D: { text, image, ... } (fieldId → valor).
 //
-// Handle devolvido: update(), setArea(), snapshot(px), dispose().
-// Drag pra girar + auto-rotate até o 1º toque (igual demo aprovado).
+// Handle devolvido: update(), snapshot(px), recordTurntable(ms),
+// dispose(). Drag pra girar + auto-rotate até o 1º toque.
 //
-// 03/07/2026 — F4 do escopo Visualização 2D/3D (contrato no chat)
+// F5 (03/07/2026): recordTurntable — grava uma volta completa (~4s)
+// via canvas.captureStream + MediaRecorder (webm). Zero infra: o
+// vídeo nasce no browser do lojista, igual ao demo aprovado.
+//
+// 03/07/2026 — F4/F5 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { loadThree } from "./threeLoader";
@@ -28,6 +32,7 @@ export type Mug3DOptions = {
 export type Mug3DHandle = {
   update: (values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
   snapshot: (pixelWidth?: number) => string | null;
+  recordTurntable: (durationMs?: number) => Promise<Blob | null>;
   dispose: () => void;
 };
 
@@ -138,10 +143,12 @@ export async function createMugViewer(
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 
   function resize() {
-    const w = canvas.clientWidth || 320;
+    // clientWidth=0 em canvas offscreen (geração de vídeo/render sem DOM):
+    // cai pra canvas.width setado pelo caller antes do createMugViewer.
+    const w = canvas.clientWidth || canvas.width || 320;
     const h = canvas.clientHeight || Math.round(w * 0.78);
     renderer.setSize(w, h, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
@@ -218,6 +225,53 @@ export async function createMugViewer(
     }
   }
 
+  // F5: grava uma volta completa (ease in-out) e devolve Blob webm.
+  // null = navegador sem captureStream/MediaRecorder (caller mostra erro).
+  function recordTurntable(durationMs = 3600): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const anyCanvas = canvas as any;
+      if (typeof anyCanvas.captureStream !== "function" || typeof (window as any).MediaRecorder === "undefined") {
+        return resolve(null);
+      }
+      userTouched = true; // pausa o auto-rotate do loop durante a gravação
+      let rec: any;
+      try {
+        const stream = anyCanvas.captureStream(30);
+        const MR = (window as any).MediaRecorder;
+        let mime = "video/webm;codecs=vp9";
+        if (MR.isTypeSupported && !MR.isTypeSupported(mime)) mime = "video/webm";
+        try {
+          rec = new MR(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
+        } catch (_e) {
+          rec = new MR(stream);
+        }
+      } catch (_e) {
+        return resolve(null);
+      }
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e: any) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || "video/webm" }));
+      rec.onerror = () => resolve(null);
+      rec.start();
+
+      const start = performance.now();
+      const startRot = group.rotation.y;
+      const spin = (now: number) => {
+        if (disposed) { try { rec.stop(); } catch (_e) { resolve(null); } return; }
+        const t = Math.min((now - start) / durationMs, 1);
+        const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        group.rotation.y = startRot + ease * Math.PI * 2;
+        render();
+        if (t < 1) {
+          requestAnimationFrame(spin);
+        } else {
+          setTimeout(() => { try { rec.stop(); } catch (_e) { resolve(null); } }, 150);
+        }
+      };
+      requestAnimationFrame(spin);
+    });
+  }
+
   function dispose() {
     disposed = true;
     canvas.removeEventListener("pointerdown", onDown);
@@ -230,5 +284,5 @@ export async function createMugViewer(
   await update(values);
   loop();
 
-  return { update, snapshot, dispose };
+  return { update, snapshot, recordTurntable, dispose };
 }
