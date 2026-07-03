@@ -260,7 +260,14 @@ export default function TorneioDetalhe() {
               label="Chaves"
               variant="secondary"
               size="sm"
-              onPress={() => router.push(`/karate/competicoes/torneio/chaves?id=${cid}`)}
+              onPress={() => {
+                const firstCat = comp.categories[0];
+                router.push(
+                  firstCat
+                    ? `/karate/competicoes/torneio/chaves?id=${cid}&catId=${firstCat.id}&catName=${encodeURIComponent(firstCat.name)}&modality=${firstCat.modality}`
+                    : `/karate/competicoes/torneio/chaves?id=${cid}`
+                );
+              }}
               style={{ flex: 1 }}
             />
           )}
