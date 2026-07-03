@@ -133,6 +133,33 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
     );
   };
 
+  // Modal de confirmação — precisa ser renderizado em TODOS os caminhos de
+  // return (inclusive no estado vazio !card, onde fica o botão "Emitir").
+  // Fix (10/07): antes o <Modal> só existia no return "com carteirinha";
+  // no estado vazio, clicar "Emitir" setava o confirmDialog mas nada era
+  // renderizado — nenhuma confirmação, nenhum POST /issue-card, nenhum
+  // feedback. Extraído para constante e incluído nos dois returns.
+  const confirmModal = (
+    <Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}>
+      <View style={{ flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <View style={{ width: "100%", maxWidth: 380, backgroundColor: "#fdf8f2", borderRadius: 16, padding: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: "800", color: KarateColors.ink, marginBottom: 8 }}>{confirmDialog?.title}</Text>
+          <Text style={{ fontSize: 13, color: KarateColors.ink3, lineHeight: 19, marginBottom: 16 }}>{confirmDialog?.message}</Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <KarateButton label="Cancelar" variant="ghost" size="md" onPress={() => setConfirmDialog(null)} style={{ flex: 1 }} />
+            <KarateButton
+              label={confirmDialog?.confirmLabel || "Confirmar"}
+              variant="primary"
+              size="md"
+              onPress={() => { const cb = confirmDialog?.onConfirm; setConfirmDialog(null); cb && cb(); }}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading) {
     return (
       <View style={styles.tab}>
@@ -159,6 +186,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
             onPress={confirmIssue}
           />
         </View>
+        {confirmModal}
       </View>
     );
   }
@@ -243,24 +271,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
         )}
       </View>
 
-      <Modal transparent visible={!!confirmDialog} animationType="fade" onRequestClose={() => setConfirmDialog(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <View style={{ width: "100%", maxWidth: 380, backgroundColor: "#fdf8f2", borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: KarateColors.ink, marginBottom: 8 }}>{confirmDialog?.title}</Text>
-            <Text style={{ fontSize: 13, color: KarateColors.ink3, lineHeight: 19, marginBottom: 16 }}>{confirmDialog?.message}</Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <KarateButton label="Cancelar" variant="ghost" size="md" onPress={() => setConfirmDialog(null)} style={{ flex: 1 }} />
-              <KarateButton
-                label={confirmDialog?.confirmLabel || "Confirmar"}
-                variant="primary"
-                size="md"
-                onPress={() => { const cb = confirmDialog?.onConfirm; setConfirmDialog(null); cb && cb(); }}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {confirmModal}
     </View>
   );
 }
