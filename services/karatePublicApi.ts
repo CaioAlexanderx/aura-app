@@ -50,13 +50,21 @@ const enc = encodeURIComponent;
 // ─────────────────────────────────────────────────────────────
 // Tipos — Lookup
 // ─────────────────────────────────────────────────────────────
-export interface LookupEnrollment {
-  id: string;
-  name: string;
-  kind: string;
-  event_date: string | null;
-  location: string | null;
+/**
+ * Uma inscrição do praticante (exame, campeonato ou curso), como retornada
+ * por POST /:slug/lookup. `category_name` só é preenchido quando
+ * kind==='competition' e o praticante escolheu uma categoria; caso
+ * contrário vem null. `payment_status` também pode ser null quando o
+ * evento é gratuito (sem cobrança associada).
+ */
+export interface LookupRegistration {
+  kind: "exam" | "competition" | "course";
+  event_id: string;
+  event_name: string;
+  category_name: string | null;
   status: string;
+  payment_status: string | null;
+  created_at: string;
 }
 
 export interface LookupPractitioner {
@@ -70,7 +78,7 @@ export interface LookupPractitioner {
 export interface LookupResponse {
   federation: { name: string; logo: string | null };
   practitioner: LookupPractitioner;
-  active_enrollments: LookupEnrollment[];
+  registrations: LookupRegistration[];
 }
 
 // ─────────────────────────────────────────────────────────────

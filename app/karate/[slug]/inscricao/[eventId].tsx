@@ -26,20 +26,41 @@ import { PixQRCode } from "@/components/karate/PixQRCode";
 import { karatePortalApi, PublicEvent, LookupResult, InscricaoResult, RegistrationField, CompetitionCategory } from "@/services/karatePortalApi";
 import { formatEventDateShort } from "@/utils/eventDate";
 
-function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
-function maskCpf(s: string) {
-  const d = onlyDigits(s).slice(0, 11);
-  return d
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1-$2");
-}
 function fmtDate(iso?: string | null): string {
   return formatEventDateShort(iso, "a definir");
 }
 function fmtBRL(v?: number | null): string {
   if (v == null) return "—";
   return `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
+}
+// Espelha fmtEventFee de app/karate/[slug]/index.tsx — evita mostrar
+// "R$ 0,00" na etapa 1 quando fee_amount é null/0 mas o evento tem
+// categorias pagas (campeonato): usa from_price ("a partir de R$ X")
+// calculado pelo backend. Sem categoria/preço nenhum, mostra "Gratuito".
+function fmtEventFeeSummary(feeAmount?: number | null, fromPrice?: number | null): string {
+  const n = feeAmount == null ? 0 : Number(feeAmount);
+  if (n > 0) return `R$ ${n.toFixed(2).replace(".", ",")}`;
+  const fp = fromPrice == null ? 0 : Number(fromPrice);
+  if (fp > 0) return `a partir de R$ ${fp.toFixed(2).replace(".", ",")}`;
+  return "Gratuito";
+}
+// PIX expira em `expires_at`, um timestamp ISO completo (com hora/timezone,
+// ex. "2026-07-02T15:30:00.000Z" — TIMESTAMPTZ no backend, ver
+// karatePaymentProvider.js). Diferente das datas puras "YYYY-MM-DD" de
+// evento, aqui `new Date(iso)` é seguro: o valor já carrega o offset UTC,
+// não há ambiguidade de fuso a resolver client-side.
+function fmtExpiry(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const diffMs = d.getTime() - Date.now();
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (diffMs <= 0) return `expirou às ${time}`;
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "expira em instantes";
+  if (mins < 60) return `expira em ${mins} min (às ${time})`;
+  const hours = Math.round(mins / 60);
+  return `expira em ${hours}h (às ${time})`;
 }
 function beltLabel(name?: string | null, level?: string | null): string {
   if (!name) return "—";
@@ -118,6 +139,13 @@ export default function InscricaoScreen() {
   const categories: CompetitionCategory[] = event?.categories ?? [];
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
+  // Taxa efetiva desta inscrição (categoria, quando campeonato; senão o
+  // evento) — usada no passo PIX pra distinguir "evento gratuito" (payment
+  // fica null por não ter cobrança) de "falha ao gerar PIX" (payment null
+  // mas havia taxa > 0). payment.amount, quando presente, é a fonte mais
+  // confiável (retornada pelo backend após o submit); fora do passo pix
+  // caímos no preço já conhecido do evento/categoria.
+  const feeDue = payment?.amount ?? (isCompetition ? (selectedCategory?.fee_amount ?? 0) : (event?.fee_amount ?? 0));
 
   useEffect(() => {
     let alive = true;
@@ -156,10 +184,13 @@ export default function InscricaoScreen() {
     .map((f) => f.label);
 
   const doLookup = async () => {
-    if (onlyDigits(cpf).length < 11) { setErr("generic"); setErrMsg("Informe um CPF válido."); return; }
+    // A4 — identificação livre (CPF, e-mail ou nº FPKT): validação client-side
+    // é só "não vazio, min. 3 caracteres" — a validação de formato específico
+    // (CPF/e-mail/registro) é sempre do backend, que já sabe distinguir os 3.
+    if (cpf.trim().length < 3) { setErr("generic"); setErrMsg("Informe seu CPF, e-mail ou nº de registro FPKT."); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await karatePortalApi.lookup(slugStr, eventIdStr, cpf, isCompetition ? selectedCategoryId || undefined : undefined);
+      const r = await karatePortalApi.lookup(slugStr, eventIdStr, cpf.trim(), isCompetition ? selectedCategoryId || undefined : undefined);
       if (r.already_enrolled) { setErr("ja"); return; }
       setPract(r.practitioner);
       setStep("confirma");
@@ -177,7 +208,7 @@ export default function InscricaoScreen() {
     setBusy(true); setErr(null);
     try {
       const r = await karatePortalApi.submitInscricao(
-        slugStr, eventIdStr, cpf,
+        slugStr, eventIdStr, cpf.trim(),
         isCompetition ? undefined : responses,
         isCompetition ? selectedCategoryId || undefined : undefined
       );
@@ -260,7 +291,7 @@ export default function InscricaoScreen() {
                 {event?.capacity ? (
                   <SumRow icon="people-outline" k="Vagas" v={`${event.capacity.filled}${event.capacity.max ? ` de ${event.capacity.max}` : ""} preenchidas`} />
                 ) : null}
-                <SumRow icon="pricetag-outline" k="Inscrição" v={fmtBRL(event?.fee_amount)} price />
+                <SumRow icon="pricetag-outline" k="Inscrição" v={fmtEventFeeSummary(event?.fee_amount, (event as any)?.from_price)} price />
               </View>
               {!!(event as any)?.description && (
                 <Text style={{ fontSize: 13, color: KarateColors.ink2, lineHeight: 20, marginTop: 14 }}>{(event as any).description}</Text>
@@ -305,20 +336,20 @@ export default function InscricaoScreen() {
           ) : step === "cpf" ? (
             <>
               <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 3 DE 4" : "ETAPA 2 DE 3"} · IDENTIFICAÇÃO</Text>
-              <Text style={styles.h2}>Informe seu CPF</Text>
-              <Text style={styles.sub}>Usamos seu CPF apenas para localizar seu registro na federação.</Text>
-              <Text style={styles.label}>CPF do praticante</Text>
+              <Text style={styles.h2}>Informe seus dados</Text>
+              <Text style={styles.sub}>Usamos seu CPF, e-mail ou nº FPKT apenas para localizar seu registro.</Text>
+              <Text style={styles.label}>CPF, e-mail ou nº de registro FPKT</Text>
               <TextInput
                 style={styles.input}
-                inputMode="numeric"
-                placeholder="000.000.000-00"
+                placeholder="000.000.000-00, voce@email.com ou nº FPKT"
                 placeholderTextColor={KarateColors.ink4}
                 value={cpf}
-                onChangeText={(t) => setCpf(maskCpf(t))}
-                maxLength={14}
+                onChangeText={setCpf}
+                autoCapitalize="none"
+                autoCorrect={false}
                 autoFocus
               />
-              <Text style={styles.hint}>Seu CPF não fica visível em nenhuma página pública.</Text>
+              <Text style={styles.hint}>Esses dados não ficam visíveis em nenhuma página pública.</Text>
               {err === "generic" ? <Text style={styles.inlineErr}>{errMsg}</Text> : null}
             </>
           ) : step === "confirma" ? (
@@ -374,10 +405,16 @@ export default function InscricaoScreen() {
                   <Text style={styles.h2}>Escaneie para pagar</Text>
                   <PixQRCode payload={payment.payload} qrImage={payment.qr_image || undefined} size={196} style={{ marginTop: 14 }} />
                   <Text style={styles.amt}>{fmtBRL(payment.amount ?? event?.fee_amount)}</Text>
+                  {!!fmtExpiry(payment.expires_at) && (
+                    <Text style={styles.expiryLine}>{fmtExpiry(payment.expires_at)}</Text>
+                  )}
                   <View style={styles.expire}>
                     <Icon name="time-outline" size={14} color={KarateColors.warn} />
                     <Text style={styles.expireTxt}>Aguardando confirmação do pagamento</Text>
                   </View>
+                  <Text style={styles.pixHonestNote}>
+                    A federação confirma o pagamento manualmente; sua inscrição fica pendente até lá.
+                  </Text>
                   <View style={styles.copyBox}>
                     <Text style={styles.copyLbl}>PIX COPIA E COLA</Text>
                     <View style={styles.copyRow}>
@@ -390,15 +427,32 @@ export default function InscricaoScreen() {
                 </>
               ) : (
                 <>
-                  <View style={[styles.errGlyph, { backgroundColor: KarateColors.okSoft }]}>
-                    <Icon name="checkmark-circle" size={30} color={KarateColors.ok} />
-                  </View>
-                  <Text style={styles.h2}>Inscrição registrada</Text>
-                  <Text style={styles.sub}>
-                    {payment?.error
-                      ? payment.error
-                      : "Sua inscrição foi registrada. A federação confirmará e, se houver taxa, enviará as instruções de pagamento."}
-                  </Text>
+                  {/* payment null/sem payload: dois casos distintos —
+                      (a) evento gratuito (nenhuma cobrança a fazer) ou
+                      (b) taxa > 0 mas o provider falhou/não gerou o PIX
+                      (payment?.error carrega o motivo, quando houver).
+                      Nunca simular um QR code aqui — só copy honesta. */}
+                  {feeDue <= 0 ? (
+                    <>
+                      <View style={[styles.errGlyph, { backgroundColor: KarateColors.okSoft }]}>
+                        <Icon name="checkmark-circle" size={30} color={KarateColors.ok} />
+                      </View>
+                      <Text style={styles.h2}>Inscrição registrada</Text>
+                      <Text style={styles.sub}>Este evento não tem taxa de inscrição. Sua inscrição já foi registrada — a federação cuida do resto.</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={[styles.errGlyph, { backgroundColor: KarateColors.warnSoft }]}>
+                        <Icon name="time-outline" size={30} color={KarateColors.warn} />
+                      </View>
+                      <Text style={styles.h2}>Pagamento a confirmar</Text>
+                      <Text style={styles.sub}>
+                        {payment?.error
+                          ? payment.error
+                          : "Sua inscrição foi registrada, mas não foi possível gerar o QR code PIX agora. A federação entrará em contato com as instruções de pagamento."}
+                      </Text>
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -638,8 +692,10 @@ const styles = StyleSheet.create({
   confTotalV: { fontSize: 16, fontWeight: "800", color: KarateColors.primary, fontFamily: KarateFonts.mono } as TextStyle,
 
   amt: { fontSize: 22, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono, marginTop: 16 } as TextStyle,
+  expiryLine: { fontSize: 12, color: KarateColors.ink3, marginTop: 4, fontFamily: KarateFonts.mono } as TextStyle,
   expire: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: KarateColors.warnSoft, borderWidth: 1, borderColor: KarateColors.warn, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 13, marginTop: 12 } as ViewStyle,
   expireTxt: { fontSize: 12.5, color: KarateColors.warn } as TextStyle,
+  pixHonestNote: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", marginTop: 10, lineHeight: 17, maxWidth: 320 } as TextStyle,
   copyBox: { alignSelf: "stretch", marginTop: 16 } as ViewStyle,
   copyLbl: { fontSize: 11, color: KarateColors.ink3, fontFamily: KarateFonts.mono, letterSpacing: 0.6, marginBottom: 7 } as TextStyle,
   copyRow: { flexDirection: "row", gap: 9, alignItems: "stretch" } as ViewStyle,

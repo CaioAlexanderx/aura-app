@@ -255,11 +255,16 @@ function HubCard({
 function fmtEventDate(iso?: string | null): string {
   return formatEventDateShort(iso, "Data a definir");
 }
-function fmtEventFee(v?: number | null): string {
-  if (v == null) return "Gratuito";
-  const n = Number(v);
-  if (!n) return "Gratuito";
-  return `R$ ${n.toFixed(2).replace(".", ",")}`;
+function fmtEventFee(v?: number | null, fromPrice?: number | null): string {
+  const n = v == null ? 0 : Number(v);
+  if (n > 0) return `R$ ${n.toFixed(2).replace(".", ",")}`;
+  // fee_amount é null/0 (comum em campeonato, onde o preço vive nas
+  // categorias) — usa from_price (menor preço positivo dentre evento +
+  // categorias, calculado pelo backend) como "a partir de X" em vez de
+  // mostrar "R$ 0,00" ou "Gratuito" incorretamente.
+  const fp = fromPrice == null ? 0 : Number(fromPrice);
+  if (fp > 0) return `a partir de R$ ${fp.toFixed(2).replace(".", ",")}`;
+  return "Gratuito";
 }
 
 function EventCard({ event, onPress }: { event: OpenEvent; onPress: () => void }) {
@@ -288,7 +293,7 @@ function EventCard({ event, onPress }: { event: OpenEvent; onPress: () => void }
             </>
           )}
           <Text style={styles.eventCardDot}>•</Text>
-          <Text style={styles.eventCardMeta}>{fmtEventFee(event.fee_amount)}</Text>
+          <Text style={styles.eventCardMeta}>{fmtEventFee(event.fee_amount, event.from_price)}</Text>
         </View>
       </View>
       <Icon name="arrow_right" size={16} color={P.red2} />

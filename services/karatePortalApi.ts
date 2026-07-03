@@ -158,6 +158,8 @@ export interface PublicEvent {
     event_date: string | null;
     location: string | null;
     fee_amount: number | null;
+    /** Menor preço positivo entre o evento e suas categorias — usado quando `fee_amount` é null/0 mas há categorias pagas (competição) ou o preço "a partir de" faz mais sentido. */
+    from_price: number | null;
     capacity: { max: number | null; filled: number } | null;
     /** Bloco A — campos extras do formulário de inscrição (migration 200). Vazio = sem campos extras. */
     registration_fields: RegistrationField[];
@@ -224,6 +226,8 @@ export interface OpenEvent {
   event_date: string | null;
   location: string | null;
   fee_amount: number | null;
+  /** Menor preço positivo entre o evento e suas categorias. */
+  from_price: number | null;
   kind: "exam" | "competition";
 }
 
@@ -269,27 +273,35 @@ export const karatePortalApi = {
   getEvent: (slug: string, eventId: string): Promise<PublicEvent> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`),
 
-  /** `categoryId` é obrigatório quando o evento é kind==='competition' (Track E / P0-0.4). */
-  lookup: (slug: string, eventId: string, cpf: string, categoryId?: string): Promise<LookupResult> =>
+  /**
+   * `identifier` aceita CPF, e-mail ou nº de registro FPKT (contrato novo do
+   * backend). Mantemos `cpf` no corpo por compatibilidade (backend antigo
+   * ainda lê esse campo), mas o valor enviado em ambos é o mesmo — quem
+   * chama não precisa mais validar formato de CPF.
+   * `categoryId` é obrigatório quando o evento é kind==='competition' (Track E / P0-0.4).
+   */
+  lookup: (slug: string, eventId: string, identifier: string, categoryId?: string): Promise<LookupResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, {
       method: "POST",
-      body: { cpf, ...(categoryId ? { category_id: categoryId } : {}) },
+      body: { identifier, cpf: identifier, ...(categoryId ? { category_id: categoryId } : {}) },
     }),
 
   /**
-   * `responses` é opcional — só é exigido quando o evento tem registration_fields
-   * obrigatórios (exame/curso). `categoryId` é obrigatório quando kind==='competition'
-   * (Track E / P0-0.4) — o praticante escolhe a categoria em vez de preencher formulário.
+   * `identifier` aceita CPF, e-mail ou nº de registro FPKT (mesmo contrato do
+   * `lookup` acima). `responses` é opcional — só é exigido quando o evento tem
+   * registration_fields obrigatórios (exame/curso). `categoryId` é obrigatório
+   * quando kind==='competition' (Track E / P0-0.4) — o praticante escolhe a
+   * categoria em vez de preencher formulário.
    */
   submitInscricao: (
     slug: string,
     eventId: string,
-    cpf: string,
+    identifier: string,
     responses?: Record<string, unknown>,
     categoryId?: string
   ): Promise<InscricaoResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
       method: "POST",
-      body: { cpf, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}) },
+      body: { identifier, cpf: identifier, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}) },
     }),
 };
