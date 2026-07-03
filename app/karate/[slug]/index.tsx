@@ -4,7 +4,7 @@
 //
 // Layout: sidebar colapsável (desktop) + área de conteúdo principal.
 // Fundo Shoji (papel de arroz + lavagem de chá). Hero com logo FPKT.
-// Grade de cards: Inscrições, Carteirinha/Consulta, Ranking, Anuidade (cadeado).
+// Grade de cards: Inscrições, Carteirinha/Consulta, Ranking.
 // Carrossel de banners (placement=hub, aspect-ratio respeitado).
 // Footer "Desenvolvido por Aura Karatê" linkando getaura.com.br/dojo.
 // Ícones via wrapper components/Icon.tsx (nunca @expo/vector-icons).
@@ -76,14 +76,6 @@ const HUB_CARDS: CardDef[] = [
     desc: "Pontuação acumulada por temporada e categoria.",
     icon: "trophy",
     cta: "Ver ranking",
-  },
-  {
-    key: "anuidade",
-    title: "Anuidade do dojô",
-    desc: "Situação financeira e praticantes do seu dojô — acesse pelo link exclusivo enviado pela federação.",
-    icon: "wallet",
-    cta: "Pelo seu link privado",
-    locked: true,
   },
 ];
 
@@ -450,7 +442,7 @@ export default function KarateHubScreen() {
                   {fedName || "Federação Paulista de Karatê-Dô Tradicional"}
                 </Text>
                 <Text style={styles.heroSub}>
-                  Inscrições em eventos e campeonatos, consulta de carteirinha, anuidade e ranking — tudo num só lugar.
+                  Inscrições em eventos e campeonatos, consulta de carteirinha e ranking — tudo num só lugar.
                 </Text>
               </View>
             </View>
