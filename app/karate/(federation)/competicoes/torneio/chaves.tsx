@@ -67,6 +67,8 @@ export default function ChavesScreen() {
 
   // ── Bracket state
   const [bracket, setBracket] = useState<BracketState | null>(null);
+  // Inscritos com pagamento pendente (aguardando confirmação da federação).
+  const [pendingPayment, setPendingPayment] = useState(0);
   const [loading, setLoading] = useState(true);
   const [advancingMatch, setAdvancingMatch] = useState<string | null>(null);
 
@@ -164,6 +166,17 @@ export default function ChavesScreen() {
       loadBracket();
     }
   }, [selectedCatId, selectedModality, loadBracket, loadKata]);
+
+  // Pending de pagamento: GET /bracket retorna pending_payment_count para kata
+  // e kumite (inclusive not_generated). Independente do fluxo kata/kumite.
+  const loadPending = useCallback(async () => {
+    if (!selectedCatId) { setPendingPayment(0); return; }
+    try {
+      const resp = await karateBracketsApi.getBracket(federationId, cid || "", selectedCatId);
+      setPendingPayment((resp as any)?.pending_payment_count ?? 0);
+    } catch { setPendingPayment(0); }
+  }, [federationId, cid, selectedCatId]);
+  useEffect(() => { loadPending(); }, [loadPending]);
 
   // ── Actions
   const handleGenerate = async () => {
@@ -308,6 +321,16 @@ export default function ChavesScreen() {
           />
         )}
 
+        {/* ============= AVISO: inscritos aguardando pagamento ============= */}
+        {!loading && !!selectedCatId && pendingPayment > 0 && (
+          <View style={styles.pendingBanner}>
+            <Icon name="time-outline" size={16} color={P.red} />
+            <Text style={styles.pendingText}>
+              {pendingPayment} inscrito{pendingPayment > 1 ? "s" : ""} aguardando confirmação de pagamento — {pendingPayment > 1 ? "entram" : "entra"} na chave após a federação confirmar.
+            </Text>
+          </View>
+        )}
+
         {/* ============= KATA VIEW ============= */}
         {!loading && !!selectedCatId && isKataMode && (
           <KataView
@@ -378,6 +401,8 @@ export default function ChavesScreen() {
 
 // ── Styles (orquestrador: header + chips de categoria + modal) ─────────
 const styles = StyleSheet.create({
+  pendingBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.md, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14 } as ViewStyle,
+  pendingText: { flex: 1, fontFamily: F.body, fontSize: 12.5, color: C.ink2, lineHeight: 17 } as TextStyle,
   content: { padding: 40, paddingTop: 40, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center", gap: 12 } as ViewStyle,
   backRow: { flexDirection: "row", alignItems: "center", gap: 2 } as ViewStyle,
   backText: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.red } as TextStyle,

@@ -44,6 +44,7 @@ export interface BracketState {
   seed: string | null;
   options: BracketOptions;
   athletes_count: number;
+  pending_payment_count?: number;
   bye_count: number;
   rounds: BracketMatch[][];
   third_place_match: BracketMatch | null;
@@ -53,6 +54,7 @@ export interface BracketState {
 export interface BracketNotGenerated {
   status: "not_generated";
   athletes_count: number;
+  pending_payment_count?: number;
   bracket: null;
 }
 
