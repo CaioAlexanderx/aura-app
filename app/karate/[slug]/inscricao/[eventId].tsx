@@ -325,7 +325,15 @@ export default function InscricaoScreen() {
                           <Text style={styles.catCardMeta}>{modalityLabel(c.modality)}{summary ? ` · ${summary}` : ""}</Text>
                           {full ? <Text style={styles.catCardFull}>Vagas preenchidas — entra em lista de espera</Text> : null}
                         </View>
-                        {c.fee_amount != null ? <Text style={styles.catCardFee}>{fmtBRL(c.fee_amount)}</Text> : null}
+                        {(() => {
+                          // Preço efetivo: taxa da categoria quando definida; senão
+                          // herda a taxa padrão do evento. Antes o preço sumia quando
+                          // a categoria herdava o default (fee_amount null).
+                          const catFee = c.fee_amount != null ? c.fee_amount : (event?.fee_amount ?? null);
+                          return catFee != null && Number(catFee) > 0
+                            ? <Text style={styles.catCardFee}>{fmtBRL(catFee)}</Text>
+                            : null;
+                        })()}
                       </TouchableOpacity>
                     );
                   })}

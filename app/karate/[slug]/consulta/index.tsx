@@ -47,6 +47,7 @@ function kindLabel(kind: string): string {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
+    registered: "Inscrito", enrolled: "Inscrito",
     pending: "Pendente", confirmed: "Confirmada", approved: "Aprovada",
     rejected: "Recusada", cancelled: "Cancelada", waitlist: "Lista de espera",
   };
@@ -225,7 +226,7 @@ export default function ConsultaScreen() {
                       <Text style={styles.enrollName}>{r.event_name}</Text>
                       <Text style={styles.enrollMeta}>
                         {r.category_name ? r.category_name : "Sem categoria"}
-                        {"  ·  "}
+                        {"  ·  Inscrito em "}
                         {formatRegisteredAt(r.created_at)}
                       </Text>
                       <View style={styles.enrollBadges}>

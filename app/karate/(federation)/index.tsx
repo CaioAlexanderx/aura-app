@@ -154,7 +154,7 @@ export default function KaratePainel() {
             { label: "Dojôs filiados", value: data!.kpis.dojo_count },
             { label: "Praticantes", value: data!.kpis.practitioner_count.toLocaleString("pt-BR") },
             { label: "Receita YTD", value: fmtMoney(data!.kpis.revenue_ytd) },
-            { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: true, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
+            { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: (Number(data!.kpis.overdue_rate) || 0) > 0, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
           ]} />
         )}
 
