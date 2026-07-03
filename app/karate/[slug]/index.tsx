@@ -43,7 +43,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: "inscricoes", label: "Inscrições",         icon: "calendar",  action: "card_inscricoes" },
   { key: "consulta",   label: "Buscar praticante",  icon: "search",    action: "card_consulta"   },
   { key: "ranking",    label: "Ranking",            icon: "trophy",    action: "card_ranking"    },
-  { key: "anuidade",   label: "Anuidade",           icon: "wallet",    action: "card_anuidade"   },
 ];
 
 // ─── Cards do hub ─────────────────────────────────────────────
