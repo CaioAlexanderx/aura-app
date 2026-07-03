@@ -1,26 +1,36 @@
 // ============================================================
 // AURA STUDIO · StudioOnboarding (Onda 2 — checklist-herói)
 //
-// Substitui o banner/tour modal por um checklist-herói inline que
-// guia o usuário de zero até a primeira venda:
+// Checklist-herói inline que guia o usuário na CONFIGURAÇÃO da loja:
 //   1) Cadastrar um insumo  → /studio/insumos?action=novo-insumo
 //   2) Montar ficha técnica → /studio/estoque (catálogo)
 //   3) Publicar um produto  → /studio/estoque?action=novo-produto
-//   4) Fazer a 1ª venda     → /studio/vendas/caixa
 //
 // Status lido SEMPRE do endpoint fresco (Agente B):
 //   GET /companies/:id/studio/onboarding-status
 //   → { temInsumo, temFicha, temProduto, temVenda }
 //
 // Comportamento:
-//   - Barra de progresso real ("X de 4 prontos")
+//   - Barra de progresso real ("X de 3 prontos")
 //   - Próximo passo pendente recebe destaque navy (ring + CTA primário)
-//   - Quando todos os 4 done (ou temVenda=true): some silenciosamente
+//   - temVenda=true: não renderiza NADA (nem conclusão)
+//   - Config completa e temVenda=false: card discreto de conclusão
+//     ("Tudo pronto para vender 🎉") com CTA pro PDV + botão "Ocultar"
+//   - "Ocultar" persiste em StudioSettings.onboarding.setup_done_dismissed;
+//     fallback: se a leitura/gravação do settings falhar, esconde só
+//     na sessão (estado local), sem quebrar
 //   - reduceMotion: animação de progresso desativada
-//   - Multi-CNPJ: status é por empresa (cid do contexto)
+//   - Multi-CNPJ: status e settings são por empresa (cid do contexto)
 //
 // 02/06/2026 — Agente F, Onda 2, feat/studio-shell-clareza
 // 05/06/2026 — fix: silenciar AbortError no catch do fetchStatus
+// 03/07/2026 — Racional novo: venda é resultado, não tarefa —
+//   checklist só cobra configuração (insumo, ficha, produto).
+//   "Fazer a 1ª venda" saiu das pendências e do progresso; virou
+//   card de conclusão dismissível. onComplete passa a disparar
+//   quando a configuração está completa (ou já existe venda),
+//   não mais apenas com a 1ª venda. Par backend: Aura-backend#300
+//   (temVenda conta venda de qualquer fonte).
 // ============================================================
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
@@ -56,10 +66,12 @@ const EMPTY_STATUS: OnboardingStatus = {
   temVenda: false,
 };
 
-// ─── Definição dos 4 passos ──────────────────────────────────
+// ─── Definição dos passos de CONFIGURAÇÃO ────────────────────
+// 03/07/2026: venda é resultado, não tarefa — checklist só cobra
+// configuração. O antigo passo 4 ("Fazer a 1ª venda") saiu daqui.
 type ChecklistStep = {
   id: keyof OnboardingStatus;
-  num: 1 | 2 | 3 | 4;
+  num: 1 | 2 | 3;
   title: string;
   why: string;  // "o porquê" — 1 linha
   cta: string;
@@ -91,23 +103,24 @@ const STEPS: ChecklistStep[] = [
     cta: "Novo produto",
     href: "/studio/estoque?action=novo-produto",
   },
-  {
-    id: "temVenda",
-    num: 4,
-    title: "Fazer a 1ª venda",
-    why: "Abra o PDV e venda em 1 toque.",
-    cta: "Abrir caixa",
-    href: "/studio/vendas/caixa",
-  },
 ];
 
 const TOTAL = STEPS.length;
+
+// Chave em StudioSettings.onboarding que persiste o "Ocultar"
+// do card de conclusão (por empresa).
+const DISMISS_KEY = "setup_done_dismissed";
 
 // ─── Props públicas ──────────────────────────────────────────
 export type StudioOnboardingProps = {
   /** Quando true, renderiza nada (já superado). */
   visible?: boolean;
-  /** Callback chamado quando temVenda=true (checklist completo). */
+  /**
+   * Callback chamado quando a configuração está completa
+   * (insumo + ficha + produto) OU quando já existe venda.
+   * O painel usa isso pra tirar os KPIs do modo discreto.
+   * (03/07/2026: antes só disparava com temVenda=true.)
+   */
   onComplete?: () => void;
 };
 
@@ -134,7 +147,9 @@ export function StudioOnboarding({
     try {
       const data = await studioApi.getOnboardingStatus(cid);
       setStatus(data);
-      if (data.temVenda) onComplete?.();
+      // Config completa (ou venda já existente) → painel sai do modo discreto
+      const configDone = data.temInsumo && data.temFicha && data.temProduto;
+      if (configDone || data.temVenda) onComplete?.();
     } catch (err: any) {
       if (err?.name === "AbortError" || err?.code === 20) return; // fetch abortado — normal no desmonte
       setError("Não foi possível carregar o progresso.");
@@ -149,6 +164,48 @@ export function StudioOnboarding({
     fetchStatus();
   }, [fetchStatus]);
 
+  // ─── "Ocultar" persistido em StudioSettings.onboarding ────
+  // dismissed: card de conclusão ocultado (persistido ou só sessão)
+  // settingsChecked: leitura inicial resolvida (evita flash do card
+  // de conclusão antes de saber se já foi ocultado)
+  const [dismissed, setDismissed] = useState(false);
+  const [settingsChecked, setSettingsChecked] = useState(false);
+
+  useEffect(() => {
+    if (!cid) return;
+    let mounted = true;
+    studioApi
+      .getSettings(cid)
+      .then(({ settings }) => {
+        if (!mounted) return;
+        if (settings?.onboarding?.[DISMISS_KEY]) setDismissed(true);
+      })
+      .catch((err: any) => {
+        // Fallback: sem settings, o "Ocultar" vale só na sessão
+        console.warn("[StudioOnboarding] getSettings:", err?.message || err);
+      })
+      .finally(() => {
+        if (mounted) setSettingsChecked(true);
+      });
+    return () => { mounted = false; };
+  }, [cid]);
+
+  const handleDismiss = useCallback(async () => {
+    // Otimista: some imediatamente (pelo menos nesta sessão)
+    setDismissed(true);
+    if (!cid) return;
+    try {
+      // Lê o settings atual pra não sobrescrever outras flags de onboarding
+      const { settings } = await studioApi.getSettings(cid);
+      await studioApi.saveSettings(cid, {
+        onboarding: { ...(settings?.onboarding || {}), [DISMISS_KEY]: true },
+      });
+    } catch (err: any) {
+      // Fallback: persistência falhou — fica oculto só nesta sessão
+      console.warn("[StudioOnboarding] handleDismiss:", err?.message || err);
+    }
+  }, [cid]);
+
   // ─── reduceMotion ─────────────────────────────────────────
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -159,7 +216,7 @@ export function StudioOnboarding({
     return () => { mounted = false; };
   }, []);
 
-  // ─── Barra de progresso animada ───────────────────────────
+  // ─── Barra de progresso animada (só passos de config) ─────
   const doneCount = useMemo(
     () => STEPS.filter((step) => status[step.id]).length,
     [status]
@@ -185,9 +242,50 @@ export function StudioOnboarding({
     [status]
   );
 
-  // ─── Ocultar quando completo ──────────────────────────────
+  // ─── Decisão de renderização (racional 03/07/2026) ────────
+  // temVenda=true → nada (nem conclusão). Config completa e sem
+  // venda → card discreto de conclusão (a menos que ocultado).
+  // Config pendente → checklist normal (só tarefas de config).
   if (!visible) return null;
   if (!loading && status.temVenda) return null;
+
+  const configDone =
+    status.temInsumo && status.temFicha && status.temProduto;
+
+  if (!loading && !error && configDone) {
+    // Conclusão ocultada (persistida ou nesta sessão) → nada.
+    // Antes de resolver a leitura do settings, também nada (anti-flash).
+    if (dismissed || !settingsChecked) return null;
+
+    return (
+      <View style={s.doneCard}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.doneTitle}>Tudo pronto para vender 🎉</Text>
+          <Text style={s.doneText}>
+            Sua loja está configurada. Registre vendas pelo PDV ou divulgue
+            sua Loja Online.
+          </Text>
+        </View>
+        <View style={s.doneActions}>
+          <Pressable
+            onPress={() => router.push("/studio/vendas/caixa" as any)}
+            style={s.donePdvBtn}
+            accessibilityLabel="Abrir PDV"
+          >
+            <Text style={s.donePdvBtnTxt}>Abrir PDV</Text>
+            <Icon name="arrow-right" size={11} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={handleDismiss}
+            style={s.doneDismissBtn}
+            accessibilityLabel="Ocultar"
+          >
+            <Text style={s.doneDismissTxt}>Ocultar</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={s.card}>
@@ -201,8 +299,6 @@ export function StudioOnboarding({
               ? "Verificando seu progresso..."
               : error
               ? error
-              : doneCount === TOTAL
-              ? "Tudo pronto! ✓"
               : `${doneCount} de ${TOTAL} prontos`}
           </Text>
         </View>
@@ -238,7 +334,7 @@ export function StudioOnboarding({
         />
       </View>
 
-      {/* Lista de passos */}
+      {/* Lista de passos (só configuração — venda não é pendência) */}
       {!loading && !error && (
         <View style={s.stepsList}>
           {STEPS.map((step) => {
@@ -326,7 +422,7 @@ export function StudioOnboarding({
       {/* Skeleton (loading) */}
       {loading && (
         <View style={s.skeletonWrap}>
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3].map((i) => (
             <View key={i} style={s.skeletonRow}>
               <View style={s.skeletonCircle} />
               <View style={{ flex: 1, gap: 5 }}>
@@ -489,6 +585,66 @@ const buildStyles = (t: StudioPalette) =>
     },
     stepCtaTxtNext: {
       color: "#fff",
+    },
+
+    // ── Card de conclusão (03/07/2026) ──
+    // Discreto de propósito: 1 linha, sem barra de progresso,
+    // sem lista — a configuração acabou, venda é resultado.
+    doneCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 12,
+      backgroundColor: t.paperCard,
+      borderRadius: StudioRadiusV2.xl as number,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      paddingHorizontal: 18,
+      paddingVertical: 14,
+      marginBottom: 18,
+    },
+    doneTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: t.ink,
+      letterSpacing: -0.2,
+    },
+    doneText: {
+      fontSize: 12,
+      color: t.ink3,
+      marginTop: 3,
+      lineHeight: 17,
+    },
+    doneActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 0,
+    },
+    donePdvBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 8,
+      backgroundColor: t.primary,
+    },
+    donePdvBtnTxt: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    doneDismissBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 8,
+      backgroundColor: "transparent",
+    },
+    doneDismissTxt: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: t.ink3,
     },
 
     // ── Skeleton ──
