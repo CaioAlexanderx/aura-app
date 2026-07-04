@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Image, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, ViewStyle, Platform, NativeSyntheticEvent, NativeScrollEvent,
+  useWindowDimensions, ViewStyle, Platform, NativeSyntheticEvent, NativeScrollEvent,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { HubBanner, karatePublicApi } from "@/services/karatePublicApi";
@@ -48,7 +48,7 @@ export function BannerCarousel({ slug }: Props) {
     return () => { alive = false; };
   }, [slug]);
 
-  const screenW = Dimensions.get("window").width;
+  const { width: screenW } = useWindowDimensions();
   // Para layout de portal (sidebar 248px em telas largas), limitar largura do carrossel
   const maxW = Math.min(screenW, 760);
   const itemW = maxW;
