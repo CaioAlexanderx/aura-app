@@ -44,7 +44,6 @@ import {
   Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as XLSX from "xlsx";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -342,6 +341,8 @@ export default function DojoDetailScreen() {
     if (!dojoId || exportingPractitioners) return;
     setExportingPractitioners(true);
     try {
+      // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
+      const XLSX = await import("xlsx");
       const res = await karateApi.listPractitioners(federationId, { dojo_id: dojoId, pageSize: 500 });
       const rows: PractitionerListItem[] = res.data || [];
 
