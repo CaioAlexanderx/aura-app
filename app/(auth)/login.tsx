@@ -12,7 +12,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
+import { useKarateIntro } from "@/stores/karateIntro";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
@@ -139,7 +139,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState(typeof emailParam === "string" ? emailParam : "");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [karateIntro, setKarateIntro] = useState(false);
   const { login, isLoading } = useAuthStore();
 
   // Native fade-in for mobile
@@ -151,12 +150,6 @@ export default function LoginScreen() {
       Animated.timing(translateY, { toValue: 0, duration: 600, delay: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
-
-  // DESIGN-29: a animação só existe quando disparada pela AÇÃO de login (abaixo).
-  // Nunca é montada no shell — portanto não reaparece em navegações/re-mounts.
-  if (karateIntro) {
-    return <KarateLoginTransition onDone={() => router.replace("/karate")} />;
-  }
 
   async function handleLogin() {
     if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
@@ -179,7 +172,7 @@ export default function LoginScreen() {
       // Entrada Shoji (portas abrindo) é uma cerimônia de login: dispara a
       // cada AÇÃO de login com senha (uma vez por sessão). Não é montada no
       // shell, então não reaparece em refresh/navegação. Karatê → /karate.
-      if (KARATE_VERTICALS.includes(vertical)) { setKarateIntro(true); return; }
+      if (KARATE_VERTICALS.includes(vertical)) { useKarateIntro.getState().trigger(); router.replace("/karate"); return; }
       router.replace("/(tabs)");
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";

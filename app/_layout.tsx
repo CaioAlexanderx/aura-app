@@ -13,6 +13,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
+import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
+import { useKarateIntro } from "@/stores/karateIntro";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,8 @@ function checkVerifiedParam() {
 
 function AuthGuard() {
   const { token, user, company, isHydrated, isDemo, isStaff, trialActive, hydrate } = useAuthStore();
+  const karateIntroPending = useKarateIntro((st) => st.pending);
+  const consumeKarateIntro = useKarateIntro((st) => st.consume);
   const segments = useSegments();
   const router = useRouter();
 
@@ -160,6 +164,7 @@ function AuthGuard() {
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
         isStudio ? "/studio/(estudio)"     :
+        isKarate ? "/karate"               :
         "/(tabs)"
       );
       return;
@@ -169,6 +174,7 @@ function AuthGuard() {
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
         isStudio ? "/studio/(estudio)"     :
+        isKarate ? "/karate"               :
         "/(tabs)"
       );
       return;
@@ -211,7 +217,12 @@ function AuthGuard() {
     }
   }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
 
-  return <Slot />;
+  return (
+    <>
+      <Slot />
+      {karateIntroPending && <KarateLoginTransition onDone={consumeKarateIntro} />}
+    </>
+  );
 }
 
 export default function RootLayout() {
