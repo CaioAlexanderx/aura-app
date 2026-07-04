@@ -28,7 +28,7 @@ import {
   Platform, useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Alert,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import * as XLSX from "xlsx";
+import type * as XLSX from "xlsx";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, ExportDojoPayload } from "@/services/karateApi";
 
@@ -52,13 +52,13 @@ function toBr(iso: string | null): string {
 
 // Constrói uma worksheet no formato do import: linha 1 = banner, linha 2 =
 // cabeçalhos, linhas seguintes = dados. (O import lê com range:1.)
-function sheetWithBanner(banner: string, headers: string[], rows: (string | null)[][]): XLSX.WorkSheet {
+function sheetWithBanner(banner: string, headers: string[], rows: (string | null)[][], xlsx: typeof import("xlsx")): XLSX.WorkSheet {
   const aoa: (string | null)[][] = [
     [banner],
     headers,
     ...rows.map((r) => headers.map((_, i) => (r[i] ?? ""))),
   ];
-  return XLSX.utils.aoa_to_sheet(aoa);
+  return xlsx.utils.aoa_to_sheet(aoa);
 }
 
 const slug = (s: string) =>
@@ -75,8 +75,10 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const buildAndDownload = useCallback((data: ExportDojoPayload) => {
-    const wb = XLSX.utils.book_new();
+  const buildAndDownload = useCallback(async (data: ExportDojoPayload) => {
+    // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
+    const xlsx = await import("xlsx");
+    const wb = xlsx.utils.book_new();
 
     // ── Academias ──
     const acaHeaders = ["Cód.", "Academia", "Status", "Endereço", "Bairro", "Cidade", "Estado", "Telefone"];
@@ -95,7 +97,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
     ]];
     // Status do dojô: o import só distingue Ativo×Inativo. Mantemos "Ativo"
     // (dojôs exportados estão na rede); o reimport completa o que falta.
-    XLSX.utils.book_append_sheet(wb, sheetWithBanner("Academias — exportado do Aura", acaHeaders, acaRows), "Academias");
+    xlsx.utils.book_append_sheet(wb, sheetWithBanner("Academias — exportado do Aura", acaHeaders, acaRows, xlsx), "Academias");
 
     // ── Alunos ──
     const aluHeaders = [
@@ -120,7 +122,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
       p.faixa_atual || "",
       p.academia_name || d.name || "",
     ]);
-    XLSX.utils.book_append_sheet(wb, sheetWithBanner("Alunos — exportado do Aura", aluHeaders, aluRows), "Alunos");
+    xlsx.utils.book_append_sheet(wb, sheetWithBanner("Alunos — exportado do Aura", aluHeaders, aluRows, xlsx), "Alunos");
 
     // ── Histórico (faixas + transferências) ──
     // Só monta a aba se algum dos toggles estiver ligado.
@@ -147,13 +149,13 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
           ]);
         }
       }
-      XLSX.utils.book_append_sheet(wb, sheetWithBanner("Histórico — exportado do Aura", histHeaders, histRows), "Histórico");
+      xlsx.utils.book_append_sheet(wb, sheetWithBanner("Histórico — exportado do Aura", histHeaders, histRows, xlsx), "Histórico");
     }
 
     // ── Download (web) ──
     const today = new Date().toISOString().slice(0, 10);
     const fname = `FPKT_${slug(fpktId || d.cod || "dojo")}_${slug(dojoName || d.name || "dojo")}_${today}.xlsx`;
-    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const out = xlsx.write(wb, { bookType: "xlsx", type: "array" });
     const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -178,7 +180,7 @@ export function DojoExportModal({ federationId, visible, dojoId, dojoName, fpktI
         include_belts: includeBelts,
         include_transfers: includeTransfers,
       });
-      buildAndDownload(data);
+      await buildAndDownload(data);
       setBusy(false);
       onClose();
     } catch (e: any) {

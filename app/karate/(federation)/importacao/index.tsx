@@ -27,7 +27,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
-import * as XLSX from "xlsx";
+import type * as XLSX from "xlsx";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Stepper } from "@/components/karate/Stepper";
 import { ShojiBackground, PageHead, Card, ShojiButton, Body, Mono } from "@/components/karate/shoji";
@@ -104,16 +104,16 @@ type Summary = {
 };
 
 // Lê uma aba pulando a 1ª linha (banner); a 2ª linha são os cabeçalhos reais.
-function sheetRows(wb: XLSX.WorkBook, name: string): any[] {
+function sheetRows(wb: XLSX.WorkBook, name: string, xlsx: typeof import("xlsx")): any[] {
   const ws = wb.Sheets[name];
   if (!ws) return [];
-  return XLSX.utils.sheet_to_json(ws, { range: 1, defval: null, raw: false });
+  return xlsx.utils.sheet_to_json(ws, { range: 1, defval: null, raw: false });
 }
 
-function parseWorkbook(wb: XLSX.WorkBook, fileName: string): Parsed {
-  const aca = sheetRows(wb, "Academias");
-  const alu = sheetRows(wb, "Alunos");
-  const hist = sheetRows(wb, "Histórico");
+function parseWorkbook(wb: XLSX.WorkBook, fileName: string, xlsx: typeof import("xlsx")): Parsed {
+  const aca = sheetRows(wb, "Academias", xlsx);
+  const alu = sheetRows(wb, "Alunos", xlsx);
+  const hist = sheetRows(wb, "Histórico", xlsx);
 
   const dojos: Dojo[] = aca.map((r) => ({
     cod: clean(r["Cód."]),
@@ -199,8 +199,9 @@ export default function ImportacaoScreen() {
       setParsing(true);
       try {
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const p = parseWorkbook(wb, file.name);
+        const xlsx = await import("xlsx");
+        const wb = xlsx.read(buf, { type: "array" });
+        const p = parseWorkbook(wb, file.name, xlsx);
         if (!p.dojos.length && !p.students.length) {
           setError("Não encontrei as abas 'Academias' e 'Alunos' na planilha.");
           setParsing(false);
