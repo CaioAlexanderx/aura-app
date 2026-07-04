@@ -13,6 +13,7 @@ import { Icon } from "@/components/Icon";
 import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
+import { EmissorConfigForm } from "@/components/screens/nfe/EmissorConfigForm";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 
 // IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
@@ -53,6 +54,18 @@ function NfeScreenInner() {
   });
   const emissions: NfceEmission[] = data?.emissions || [];
   const stats = data?.stats;
+
+  // Config NFC-e (série/CSC/ambiente/emissor) — mesma query key usada em
+  // usePdvState.ts (autoEmitNfce), pra reaproveitar cache entre PDV e esta aba.
+  // A seção "Emissor da NFC-e" só renderiza quando já existe config (empresa
+  // já passou pelo setup inicial via console da Nuvem Fiscal/backend).
+  const { data: nfceConfigData } = useQuery({
+    queryKey: ["nfce-config", company?.id],
+    queryFn: () => nfceApi.getConfig(company!.id),
+    enabled: !!company?.id && !isDemo,
+    staleTime: 5 * 60_000,
+  });
+  const nfceConfig = nfceConfigData?.config || null;
 
   // Atualiza flag hasProcessing quando emissions mudam
   useEffect(() => {
@@ -306,6 +319,18 @@ function NfeScreenInner() {
           prefill={reemitPrefill}
           onClearPrefill={() => setReemitPrefill(null)}
         />
+      )}
+      {tab === 3 && company?.id && (
+        nfceConfig
+          ? <EmissorConfigForm companyId={company.id} config={nfceConfig} />
+          : (
+            <View style={ns.formCard}>
+              <Text style={ns.formTitle}>Emissor da NFC-e</Text>
+              <Text style={ns.formHint}>
+                Configure a NFC-e (certificado, CSC e série) para liberar a escolha de emissor.
+              </Text>
+            </View>
+          )
       )}
 
       {/* Modal inline de cancelamento (com input para motivo, regra SEFAZ ≥ 15 chars) */}

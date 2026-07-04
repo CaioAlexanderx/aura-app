@@ -14,9 +14,11 @@ export type NfeDoc = {
   value: number; issued_at: string | null; cancelled_at: string | null; created_at: string;
 };
 
-// Aba Configuração some — certificado A1 é cadastrado direto via console
-// da Nuvem Fiscal (decisão registrada no plano).
-export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e"];
+// Aba Configuração (setup certificado/CSC/série/ambiente) some — certificado A1
+// é cadastrado direto via console da Nuvem Fiscal (decisão registrada no plano).
+// Jul/2026: "Configurar NFC-e" volta como aba enxuta — só o seletor de emissor
+// (Nuvem Fiscal vs. Emissão Aura), não o setup completo.
+export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e", "Configurar NFC-e"];
 
 export const fmt = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -45,6 +47,37 @@ export function isFailedStatus(status: string): boolean {
 export function StatusBadge({ status }: { status: string }) {
   const st = STATUS_MAP[status] || STATUS_MAP.processando;
   return <View style={[ns.badge, { backgroundColor: st.color + "18" }]}><Text style={[ns.badgeText, { color: st.color }]}>{st.label}</Text></View>;
+}
+
+// Jul/2026 (engine própria SEFAZ-SP): badges informativos por nota.
+// - "Aura": provider_used === 'sefaz_sp' (emissão própria, sem passar pela Nuvem Fiscal).
+// - "Fallback: Nuvem Fiscal": fallback_reason presente (engine própria falhou, Nuvem Fiscal assumiu).
+// - "Contingência": tp_emis === 9 (SEFAZ fora do ar no momento da emissão).
+// Notas antigas (provider_used null/undefined) não ganham nenhum chip novo.
+export function ProviderBadges({ emission }: { emission: NfceEmission }) {
+  const showAura = emission.provider_used === "sefaz_sp";
+  const showFallback = !!emission.fallback_reason;
+  const showContingencia = emission.tp_emis === 9;
+  if (!showAura && !showFallback && !showContingencia) return null;
+  return (
+    <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 2 }}>
+      {showAura && (
+        <View style={[ns.badge, { backgroundColor: Colors.violet3 + "22" }]}>
+          <Text style={[ns.badgeText, { color: Colors.violet3 }]}>Aura</Text>
+        </View>
+      )}
+      {showFallback && (
+        <View style={[ns.badge, { backgroundColor: Colors.amber + "22" }]} accessibilityLabel={`Fallback: ${emission.fallback_reason}`}>
+          <Text style={[ns.badgeText, { color: Colors.amber }]}>Fallback: Nuvem Fiscal</Text>
+        </View>
+      )}
+      {showContingencia && (
+        <View style={[ns.badge, { backgroundColor: Colors.amber + "22" }]}>
+          <Text style={[ns.badgeText, { color: Colors.amber }]}>Contingência</Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 // ── EmissionRow: novo formato consumindo /nfce do backend ──────
@@ -85,6 +118,7 @@ export function EmissionRow({
       <View style={ns.docRight}>
         <Text style={ns.docAmount}>{fmt(emission.total_nfce)}</Text>
         <StatusBadge status={emission.status} />
+        <ProviderBadges emission={emission} />
         <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Pressable onPress={onView} style={ns.miniBtn} accessibilityLabel={isAuthorized ? `2ª via da nota ${emission.numero}` : "Ver detalhe da nota"}>
             <Text style={ns.miniBtnText}>{viewLabel}</Text>

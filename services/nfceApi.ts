@@ -63,6 +63,13 @@ export type NfceEmission = {
   transaction_id?: string | null;
   items?: NfceEmissionItem[];
   payment_change?: number | null;
+  // Jul/2026 (engine própria SEFAZ-SP): qual provider realmente emitiu esta nota.
+  // null em notas antigas (emitidas antes da engine própria existir).
+  provider_used?: "sefaz_sp" | "nuvemfiscal" | null;
+  // Motivo do fallback transparente pra Nuvem Fiscal quando a engine própria falha.
+  fallback_reason?: string | null;
+  // 9 = contingência (SEFAZ fora do ar / falha de transmissão).
+  tp_emis?: number | null;
 };
 
 export type NfceStats = {
@@ -86,6 +93,14 @@ export type NfceConfig = {
   csc_id: string | null;
   /** Se true, o PDV emite NFC-e automaticamente após finalizar a venda. */
   auto_emit_nfce: boolean;
+  // Jul/2026: qual emissor a empresa está usando. 'nuvemfiscal' = gateway
+  // atual (encerra 30/07). 'sefaz_sp' = engine própria, direto na SEFAZ-SP,
+  // com fallback automático pra Nuvem Fiscal se a emissão própria falhar.
+  provider?: "nuvemfiscal" | "sefaz_sp";
+  /** Série usada pela emissão própria — sempre distinta de serie_nfce. */
+  serie_sefaz_sp?: number | null;
+  /** Próximo número reservado pra emissão própria (engine SEFAZ-SP). */
+  next_number_sefaz_sp?: number | null;
 };
 
 export type NfceConfigResponse = {
@@ -101,6 +116,8 @@ export type NfceConfigUpdateBody = Partial<{
   csc_id: string | null;
   csc_token: string | null;
   auto_emit_nfce: boolean;
+  provider: "nuvemfiscal" | "sefaz_sp";
+  serie_sefaz_sp: number;
 }>;
 
 export type EmitBody = {
@@ -129,6 +146,10 @@ export type EmitResponse = {
   url_consulta: string | null;
   /** True quando idempotência por sale_id retornou nota existente. */
   idempotent?: boolean;
+  /** Provider que efetivamente emitiu ('sefaz_sp' | 'nuvemfiscal'). */
+  provider_used?: "sefaz_sp" | "nuvemfiscal" | null;
+  /** True quando a engine própria falhou e a Nuvem Fiscal assumiu na mesma request. */
+  fallback?: boolean;
 };
 
 export type EmitErrorPayload = {
