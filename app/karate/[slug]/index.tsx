@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  ViewStyle, TextStyle, Platform, Linking, Dimensions, Animated, Easing,
+  ViewStyle, TextStyle, Platform, Linking, useWindowDimensions, Animated, Easing,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -330,10 +330,14 @@ export default function KarateHubScreen() {
     return () => { alive = false; };
   }, [fedSlug]);
 
-  // No mobile, sidebar começa colapsada
+  // Largura reativa (reage a rotação / resize de janela) — substitui o
+  // Dimensions.get estático, que capturava o valor uma única vez.
+  const { width: winW } = useWindowDimensions();
+
+  // No mobile, sidebar começa colapsada (uma vez, no mount)
   useEffect(() => {
-    const w = Dimensions.get("window").width;
-    if (w < 700) setSideCollapsed(true);
+    if (winW < 700) setSideCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // CTA "Inscrições" (card do grid + item de sidebar): não existe rota
@@ -400,9 +404,9 @@ export default function KarateHubScreen() {
     }
   };
 
-  // Determina se sidebar deve aparecer (telas >= 700px no web)
-  const screenW = Dimensions.get("window").width;
-  const showSidebar = Platform.OS === "web" && screenW >= 700;
+  // Determina se sidebar deve aparecer (telas >= 700px no web) — reativo
+  const showSidebar = Platform.OS === "web" && winW >= 700;
+  const isNarrow = winW < 700;
 
   return (
     <ShojiBackground style={styles.root}>
@@ -423,7 +427,7 @@ export default function KarateHubScreen() {
           <ScrollView
             ref={scrollRef}
             style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, isNarrow && styles.scrollContentNarrow]}
             showsVerticalScrollIndicator={false}
           >
             {/* Eyebrow */}
@@ -638,6 +642,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     gap: 0,
   } as ViewStyle,
+  scrollContentNarrow: { padding: 20, paddingTop: 24 } as ViewStyle,
 
   eyebrowRow: {
     flexDirection: "row",
