@@ -96,12 +96,23 @@ export function CadastroTab({ practitioner }: Props) {
       <Field label="E-mail" value={p.email} />
       <Field label="Telefone" value={formatPhoneDisplay(p.phone)} />
 
-      {/* Endereço — F4.4: mostra quando pelo menos 1 campo está preenchido */}
-      {[p.street, p.neighborhood, p.city, p.state, p.zip_code].some(Boolean) && (
+      {/* Endereço — F4.4: mostra quando pelo menos 1 campo está preenchido.
+          Endereço completo compõe logradouro + número + complemento
+          (praticante cadastrado sem número aparecia "incompleto" na exibição
+          apesar de o dado estar salvo — bug reportado). */}
+      {[p.street, p.number, p.complement, p.neighborhood, p.city, p.state, p.zip_code].some(Boolean) && (
         <>
           <SectionHeader title="ENDEREÇO" />
           <Field label="CEP" value={formatCepDisplay(p.zip_code)} />
-          <Field label="Endereço" value={p.street} />
+          <Field
+            label="Endereço"
+            value={
+              p.street
+                ? `${p.street}${p.number ? `, ${p.number}` : ""}`
+                : (p.number ? `Nº ${p.number}` : null)
+            }
+          />
+          <Field label="Complemento" value={p.complement} />
           <Field label="Bairro" value={p.neighborhood} />
           <Field
             label="Município"
@@ -116,6 +127,7 @@ export function CadastroTab({ practitioner }: Props) {
           <Field label="Nome" value={p.guardian_name} />
           <Field label="Telefone" value={formatPhoneDisplay(p.guardian_phone)} />
           <Field label="CPF" value={formatCpfDisplay(p.guardian_cpf)} />
+          <Field label="Parentesco" value={p.guardian_relationship ? p.guardian_relationship.charAt(0).toUpperCase() + p.guardian_relationship.slice(1) : null} />
         </>
       )}
 
