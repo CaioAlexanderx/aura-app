@@ -15,7 +15,7 @@
 // Google Fonts no <style> (não dependem de KarateFonts, que é RN-only).
 //
 // Dois designs, decididos pela faixa (isPreta):
-//   - Design 01 (faixas coloridas): header direito "Carteira"/"do atleta";
+//   - Design 01 (faixas coloridas): header direito "Carteira"/"do filiado";
 //     SEM campo Faixa; sem barra preta.
 //   - Design 02 (faixa-preta): header direito "Carteira" + badge quadrado
 //     preto "faixa-preta"; barra preta 8px full-bleed abaixo da régua
@@ -137,7 +137,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 
   const headerRight = isPreta
     ? '<div class="hd-carteira">Carteira</div><div class="hd-badge"><span class="badge-sq"></span>faixa-preta</div>'
-    : '<div class="hd-carteira">Carteira</div><div class="hd-sub">do atleta</div>';
+    : '<div class="hd-carteira">Carteira</div><div class="hd-sub">do filiado</div>';
 
   const blackBar = isPreta ? '<div class="black-bar"></div>' : '';
 

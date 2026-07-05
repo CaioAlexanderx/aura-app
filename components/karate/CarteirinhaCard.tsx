@@ -11,7 +11,7 @@
 // qualquer largura (phone/web). Razão do cartão: 404/640 = 0.63125.
 //
 // Dois designs, decididos pela faixa do atleta (resolveBeltKey):
-//   - Design 01 (faixas coloridas): header direito "Carteira" / "do atleta";
+//   - Design 01 (faixas coloridas): header direito "Carteira" / "do filiado";
 //     SEM campo Faixa no corpo; sem barra preta.
 //   - Design 02 (faixa-preta): header direito "Carteira" / badge quadrado
 //     preto + "faixa-preta"; barra preta 8px full-bleed abaixo da régua
@@ -283,7 +283,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
               <Text style={{ fontSize: f(11), letterSpacing: f(1.4), textTransform: "uppercase", color: INK_2, fontWeight: "500" }}>faixa-preta</Text>
             </View>
           ) : (
-            <Text style={{ fontSize: f(8), letterSpacing: f(1.44), textTransform: "uppercase", color: INK_3, marginTop: f(4) }}>do atleta</Text>
+            <Text style={{ fontSize: f(8), letterSpacing: f(1.44), textTransform: "uppercase", color: INK_3, marginTop: f(4) }}>do filiado</Text>
           )}
         </View>
       </View>
