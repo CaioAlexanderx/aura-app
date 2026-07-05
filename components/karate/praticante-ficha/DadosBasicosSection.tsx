@@ -40,13 +40,16 @@ interface DadosBasicosSectionProps {
   onRgSubmit: () => void;
   // slot de foto — renderizado antes do campo Nome (ordem do original)
   photoSlot?: React.ReactNode;
+  // F-matricula: slot renderizado logo após o seletor de dojô — só no cadastro
+  // (a página chamadora só passa este slot quando !isEdit).
+  registrationSlot?: React.ReactNode;
 }
 
 export function DadosBasicosSection({
   federationId, form, setField, lastDojoRef,
   dateBad, age, cpfBad,
   nameRef, birthRef, cpfRef, rgRef, onRgSubmit,
-  photoSlot,
+  photoSlot, registrationSlot,
 }: DadosBasicosSectionProps) {
   return (
     <>
@@ -74,6 +77,8 @@ export function DadosBasicosSection({
           setField("dojo_name", d.name);
         }}
       />
+
+      {registrationSlot}
 
       <Row2>
         <Field
