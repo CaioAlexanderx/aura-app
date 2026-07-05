@@ -6,12 +6,25 @@
 // components/screens/estoque/labels/buildLabelHtml.ts (mesmo padrão de
 // botão flutuante "Imprimir" + @media print escondendo controles).
 //
-// Reconstrói em HTML/CSS o layout de components/karate/CarteirinhaCard.tsx —
-// FRENTE e VERSO de cada carteirinha. Mantém fidelidade nos campos:
-// frente: logo/nome da federação, nome do aluno, nº carteirinha, faixa com
-// cor (KarateBelts), dojô, foto (se houver) e emissão; verso: Dojo Kun (os
-// cinco princípios, espelhando CarteirinhaCard.Back), QR de verificação e
-// nº de registro/data de emissão.
+// Reescrito para bater 1:1 com o mock aprovado "Carteirinhas FPKT"
+// (Carteirinhas FPKT.dc.html, cartão CR80 640×404px, razão 0.63125),
+// espelhando components/karate/CarteirinhaCard.tsx. Tokens Shoji/Kinari
+// (colors.css/typography.css): papel #f0ebe0, sumi #2b2620, vermelhão
+// hanko #b8463a, barra-preta #141210. Fontes: Shippori Mincho (heading),
+// Zen Kaku Gothic New (body), DM Mono (dados) — carregadas via @import
+// Google Fonts no <style> (não dependem de KarateFonts, que é RN-only).
+//
+// Dois designs, decididos pela faixa (isPreta):
+//   - Design 01 (faixas coloridas): header direito "Carteira"/"do atleta";
+//     SEM campo Faixa; sem barra preta.
+//   - Design 02 (faixa-preta): header direito "Carteira" + badge quadrado
+//     preto "faixa-preta"; barra preta 8px full-bleed abaixo da régua
+//     vermelha (frente e verso); corpo COM campo Faixa (quadrado preto +
+//     "Preta · Nº Dan").
+//
+// Discrepância sinalizada (ver PR): o cliente pediu para remover a
+// assinatura "Presidente", mas o mock APROVADO mantém essa linha no
+// footer da frente. Seguimos o mock (fiel ao design aprovado).
 //
 // Layout de impressão: para cada praticante, a FRENTE e o VERSO são
 // emitidos em sequência no mesmo grid 2 colunas (frente, depois verso logo
@@ -26,22 +39,31 @@
 // fora de contexto React (PixQRCode/QrCode dependem de libs RN). Mesma URL de
 // verificação do CarteirinhaCard: https://app.getaura.com.br/karate/verify/<token>.
 //
-// Tamanho do cartão: 80mm x 50mm — padrão da carteirinha emitida pela
-// federação. O layout de impressão preserva exatamente essa dimensão.
+// Tamanho do cartão: CR80, 85.6mm x 54mm (padrão internacional de cartão de
+// identificação, mesma proporção do mock 640x404px — 404/640 = 0.63125;
+// 54/85.6 = 0.6308, arredondamento equivalente). Preserva exatamente essa
+// dimensão física na impressão.
 // ============================================================
-import { resolveBeltKey, KarateBelts } from "@/constants/karateTheme";
-import { formatBeltLabel } from "@/utils/beltDisplay";
+import { resolveBeltKey } from "@/constants/karateTheme";
 import type { MembershipCard } from "@/services/karateCardApi";
 
-const ACCENT = "#D4121B";
-const CARD_W_MM = 80;
-const CARD_H_MM = 50;
+const RED = "#b8463a";
+const INK = "#2b2620";
+const INK_2 = "#6a6154";
+const INK_3 = "#9b9180";
+const INK_4 = "#c1b8a7";
+const LINE = "rgba(43,38,32,0.10)";
+const LINE_2 = "rgba(43,38,32,0.17)";
+const BLACK_BAR = "#141210";
+
+const CARD_W_MM = 85.6;
+const CARD_H_MM = 54;
 
 // Dojo Kun — os cinco princípios (espelha DOJO_KUN em CarteirinhaCard.tsx)
 const DOJO_KUN = [
   "Esforçar-se para a formação do caráter",
   "Criar intuito de esforço",
-  "Respeitar acima de tudo",
+  "Respeito acima de tudo",
   "Conter o espírito de agressão",
   "Fidelidade para com o verdadeiro caminho da razão",
 ];
@@ -63,22 +85,39 @@ function fmtBR(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function beltColor(card: MembershipCard): { bg: string; text: string; label: string } {
+function isBeltPreta(card: MembershipCard): boolean {
   const key = resolveBeltKey(card.belt_name || card.belt || "");
-  if (key && KarateBelts[key]) {
-    const b = KarateBelts[key];
-    return { bg: b.color, text: b.textColor, label: formatBeltLabel(card.belt, card.belt_name) || b.label };
+  return key === "preta";
+}
+
+// "Preta · Nº Dan" — adapta formatBeltLabel (ex.: "Preta 1º Dan") para o
+// formato do mock ("Preta · 1º Dan"). Espelha beltDanLabel em CarteirinhaCard.tsx.
+function beltDanLabel(card: MembershipCard): string {
+  const raw = (card.belt_name || card.belt || "Preta").trim();
+  const m = raw.match(/(\d+\s*[ºo°]?\s*dan)/i);
+  if (m) {
+    const dan = m[1].replace(/\s+/g, " ").trim();
+    return `Preta · ${dan.charAt(0).toUpperCase()}${dan.slice(1)}`;
   }
-  return { bg: "#e0d8c6", text: "#2b2620", label: formatBeltLabel(card.belt, card.belt_name) };
+  return "Preta · Dan";
+}
+
+function federationNameLines(name?: string | null): [string, string] {
+  const fallback: [string, string] = ["Federação Paulista de", "Karatê-dô Tradicional"];
+  if (!name || !name.trim()) return fallback;
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return [name.trim(), ""];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
 }
 
 function verifyUrlFor(card: MembershipCard): string {
   return `https://app.getaura.com.br/karate/verify/${encodeURIComponent(card.verify_token || "")}`;
 }
 
-function qrImgUrl(data: string, size = 150): string {
+function qrImgUrl(data: string, size = 220): string {
   return "https://api.qrserver.com/v1/create-qr-code/?size=" + size + "x" + size +
-    "&data=" + encodeURIComponent(data) + "&bgcolor=ffffff&color=000000&margin=1";
+    "&data=" + encodeURIComponent(data) + "&bgcolor=ffffff&color=1a1611&margin=1";
 }
 
 export type CarteirinhaBatchOptions = {
@@ -86,53 +125,66 @@ export type CarteirinhaBatchOptions = {
 };
 
 function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): string {
-  const belt = beltColor(card);
-  const federationLabel = esc(card.federation_name || options?.federationName || "Federação de Karatê");
+  const isPreta = isBeltPreta(card);
+  const federationName = card.federation_name || options?.federationName || null;
+  const [line1, line2] = federationNameLines(federationName);
   const logo = card.federation_logo
     ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
     : '<div class="logo-fallback">空</div>';
   const photo = card.photo_url
     ? '<img class="photo" src="' + esc(card.photo_url) + '" alt="">'
-    : '<div class="photo photo-empty">Foto</div>';
+    : '<div class="photo photo-empty"><span>FOTO</span><span class="photo-sub">3 &times; 4</span></div>';
+
+  const headerRight = isPreta
+    ? '<div class="hd-carteira">Carteira</div><div class="hd-badge"><span class="badge-sq"></span>faixa-preta</div>'
+    : '<div class="hd-carteira">Carteira</div><div class="hd-sub">do atleta</div>';
+
+  const blackBar = isPreta ? '<div class="black-bar"></div>' : '';
+
+  const fieldsGrid = isPreta
+    ? (
+      '<div class="grid2">' +
+        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(card.cpf || "—") + '</div></div>' +
+      '</div>' +
+      '<div class="fld reg-fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>'
+    )
+    : (
+      '<div class="grid2">' +
+        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(card.cpf || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
+      '</div>'
+    );
 
   return (
-    '<div class="card">' +
-      '<div class="card-head">' +
-        '<div class="logo">' + logo + '</div>' +
-        '<div class="head-text">' +
-          '<div class="fed-name">' + federationLabel + '</div>' +
-          '<div class="doc-title">Carteira do Atleta</div>' +
+    '<div class="cr80">' +
+      (card.federation_logo ? '<img class="wm wm-front" src="' + esc(card.federation_logo) + '" alt="">' : '') +
+      '<div class="face-pad">' +
+        '<div class="head">' +
+          '<div class="head-left">' +
+            '<div class="logo">' + logo + '</div>' +
+            '<div class="fed-name"><div>' + esc(line1) + '</div>' + (line2 ? '<div>' + esc(line2) + '</div>' : '') + '</div>' +
+          '</div>' +
+          '<div class="head-right">' + headerRight + '</div>' +
         '</div>' +
-        '<div class="face-tag">Frente</div>' +
-      '</div>' +
-      '<div class="card-body">' +
-        photo +
-        '<div class="fields">' +
-          '<div class="field">' +
-            '<div class="flabel">Nome</div>' +
-            '<div class="fvalue name">' + esc(card.student_name) + '</div>' +
-          '</div>' +
-          '<div class="field-row">' +
-            '<div class="field">' +
-              '<div class="flabel">Nº registro</div>' +
-              '<div class="fvalue mono accent">' + esc(card.card_number || "—") + '</div>' +
-            '</div>' +
-            '<div class="field">' +
-              '<div class="flabel">Dojô</div>' +
-              '<div class="fvalue fvalue-dojo">' + esc(card.dojo_name || "—") + '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="belt-row">' +
-            '<span class="belt-tag" style="background:' + belt.bg + ';color:' + belt.text + '">' + esc(belt.label) + '</span>' +
-            '<span class="issued">Emissão: ' + fmtBR(card.issued_at) + '</span>' +
+        '<div class="ruler-red"></div>' +
+        blackBar +
+        '<div class="body-row">' +
+          photo +
+          '<div class="fields">' +
+            '<div class="fld name-fld"><div class="flabel">Nome</div><div class="fvalue name">' + esc(card.student_name) + '</div></div>' +
+            fieldsGrid +
           '</div>' +
         '</div>' +
-        '<div class="qr-col">' +
-          '<img class="qr" src="' + qrImgUrl(verifyUrlFor(card), 150) + '" alt="QR de verificação">' +
-          '<div class="qr-hint">verificar</div>' +
+        '<div class="footer-row">' +
+          '<div class="pres-col"><div class="pres-line"></div><div class="pres-label">Presidente</div></div>' +
+          '<div class="valid-col"><span class="valid-dot"></span><div class="valid-text">Documento válido em todo o<br>território da federação · F.P.K.T.</div></div>' +
         '</div>' +
       '</div>' +
-      '<div class="cut-hint"></div>' +
     '</div>'
   );
 }
@@ -140,41 +192,50 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 // Verso — espelha CarteirinhaCard.Back: Dojo Kun (os cinco princípios) à
 // esquerda, QR de verificação + nº de registro + data de emissão à direita.
 function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): string {
-  const federationLabel = esc(card.federation_name || options?.federationName || "Federação de Karatê");
+  const isPreta = isBeltPreta(card);
+  const federationName = card.federation_name || options?.federationName || null;
+  const [line1, line2] = federationNameLines(federationName);
   const logo = card.federation_logo
     ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
     : '<div class="logo-fallback">空</div>';
   const verifyUrl = verifyUrlFor(card);
-  const qr = qrImgUrl(verifyUrl, 150);
-  const kunList = DOJO_KUN.map(function (line, i) {
-    return '<li class="kun-item">' +
-      '<span class="kun-dot"></span>' +
-      '<span class="kun-text">' + esc(line) + '</span>' +
-      '</li>';
+  const qr = qrImgUrl(verifyUrl, 220);
+  const blackBar = isPreta ? '<div class="black-bar"></div>' : '';
+  const kunList = DOJO_KUN.map(function (line) {
+    return '<div class="kun-item"><span class="kun-dot"></span><span class="kun-text">' + esc(line) + '</span></div>';
   }).join("");
 
   return (
-    '<div class="card">' +
-      '<div class="card-head">' +
-        '<div class="logo">' + logo + '</div>' +
-        '<div class="head-text">' +
-          '<div class="fed-name">' + federationLabel + '</div>' +
-          '<div class="doc-title">Carteira do Atleta</div>' +
+    '<div class="cr80">' +
+      (card.federation_logo ? '<img class="wm wm-back" src="' + esc(card.federation_logo) + '" alt="">' : '') +
+      '<div class="face-pad">' +
+        '<div class="head">' +
+          '<div class="head-left">' +
+            '<div class="logo">' + logo + '</div>' +
+            '<div class="fed-name"><div>' + esc(line1) + '</div>' + (line2 ? '<div>' + esc(line2) + '</div>' : '') + '</div>' +
+          '</div>' +
+          '<div class="hd-verso">Verso</div>' +
         '</div>' +
-        '<div class="face-tag">Verso</div>' +
+        '<div class="ruler-red"></div>' +
+        blackBar +
+        '<div class="back-row">' +
+          '<div class="kun-col">' +
+            '<div class="kun-eyebrow">Lema do Karatê</div>' +
+            '<div class="kun-title">Dojo Kun &middot; os cinco princípios</div>' +
+            '<div class="kun-list">' + kunList + '</div>' +
+          '</div>' +
+          '<div class="verify-col">' +
+            '<div class="verify-eyebrow">Identificação</div>' +
+            '<div class="verify-title">Validação do atleta</div>' +
+            '<img class="qr" src="' + qr + '" alt="QR de verificação">' +
+            '<div class="verify-num">' + esc(card.card_number || "—") + '</div>' +
+            '<div class="issued-col">' +
+              '<div class="issued-label">Data de emissão</div>' +
+              '<div class="issued-value">' + fmtBR(card.issued_at) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
-      '<div class="card-body back-body">' +
-        '<div class="kun-col">' +
-          '<div class="kun-title">Dojo Kun · os cinco princípios</div>' +
-          '<ul class="kun-list">' + kunList + '</ul>' +
-        '</div>' +
-        '<div class="verify-col">' +
-          '<img class="qr" src="' + qr + '" alt="QR de verificação">' +
-          '<div class="fvalue mono accent verify-num">' + esc(card.card_number || "—") + '</div>' +
-          '<div class="issued">Emissão: ' + fmtBR(card.issued_at) + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="cut-hint"></div>' +
     '</div>'
   );
 }
@@ -189,51 +250,80 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Carteirinhas Aura - ' + total + ' carteirinha(s)</title>';
   html += '<style>';
+  // Fontes do mock aprovado (Shippori Mincho / Zen Kaku Gothic New / DM Mono)
+  html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap\');';
   html += '@page{size:A4;margin:10mm}';
   html += '*{margin:0;padding:0;box-sizing:border-box}';
-  html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
+  html += 'body{font-family:"Zen Kaku Gothic New",system-ui,sans-serif;background:#f5f5f5;color:' + INK + '}';
   html += '.grid{display:grid;grid-template-columns:repeat(2, ' + CARD_W_MM + 'mm);gap:6mm 8mm;justify-content:center;padding-top:64px;padding-bottom:80px}';
-  html += '.card{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#fcfcfd;border-radius:2.2mm;border:0.3mm solid rgba(0,0,0,0.12);overflow:hidden;page-break-inside:avoid;break-inside:avoid;display:flex;flex-direction:column;position:relative}';
-  html += '.card-head{height:9mm;padding:0 3mm;display:flex;align-items:center;gap:2mm;border-bottom:0.6mm solid ' + ACCENT + ';background:#fff;flex-shrink:0}';
-  html += '.logo{width:7mm;height:7mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}';
+
+  // ── cartão CR80 ──
+  html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
+  html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.2mm 5.1mm 3.5mm}';
+  html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
+  html += '.wm-front{right:-3.8mm;top:56%;width:46mm;opacity:0.06;transform:translateY(-50%)}';
+  html += '.wm-back{left:50%;top:56%;width:41mm;opacity:0.05;transform:translate(-50%,-50%)}';
+
+  // header
+  html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
+  html += '.head-left{display:flex;align-items:center;gap:2.1mm}';
+  html += '.logo{width:6.3mm;height:6.3mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}';
   html += '.logo-img{max-width:100%;max-height:100%;object-fit:contain}';
-  html += '.logo-fallback{font-size:5mm;color:' + ACCENT + '}';
-  html += '.head-text{min-width:0;flex:1}';
-  html += '.fed-name{font-size:6.2pt;font-weight:700;color:' + ACCENT + ';text-transform:uppercase;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.doc-title{font-size:5.4pt;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.4pt}';
-  html += '.card-body{flex:1;display:flex;padding:2mm 3mm;gap:2.4mm;min-height:0}';
-  html += '.photo{width:12mm;height:15mm;border-radius:1mm;border:0.2mm solid rgba(17,17,17,0.16);object-fit:cover;flex-shrink:0;background:#f2f2f4}';
-  html += '.photo-empty{display:flex;align-items:center;justify-content:center;font-size:5pt;color:#aaa;text-align:center}';
-  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1.2mm}';
-  html += '.field{min-width:0}';
-  html += '.field-row{display:flex;gap:2.4mm}';
-  html += '.field-row .field{flex:1;min-width:0}';
-  html += '.flabel{font-size:4.6pt;font-weight:700;letter-spacing:0.3pt;text-transform:uppercase;color:#8a8a8a;margin-bottom:0.3mm}';
-  html += '.fvalue{font-size:6.6pt;font-weight:600;color:#161616;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.fvalue.name{font-size:7.6pt;font-weight:800}';
-  html += '.fvalue.mono{font-family:"Courier New",monospace}';
-  html += '.fvalue.accent{color:' + ACCENT + ';font-weight:800}';
-  // d1: nome de dojô comprido — permite quebra de linha em vez de cortar
-  // (a .fvalue geral usa nowrap+ellipsis, ruim para "Dojô" que costuma ser
-  // o campo com nomes mais longos). Fonte levemente menor + até 2 linhas.
-  html += '.fvalue-dojo{font-size:5.8pt;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}';
-  html += '.belt-row{display:flex;align-items:center;gap:1.6mm;margin-top:0.6mm}';
-  html += '.belt-tag{font-size:5pt;font-weight:800;padding:0.5mm 1.6mm;border-radius:3mm;white-space:nowrap;text-transform:uppercase;letter-spacing:0.2pt}';
-  html += '.issued{font-size:4.6pt;color:#9a9a9a;font-family:"Courier New",monospace}';
-  html += '.qr-col{width:13mm;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6mm}';
-  html += '.qr{width:11mm;height:11mm;image-rendering:pixelated}';
-  html += '.qr-hint{font-size:4pt;color:#9a9a9a;text-transform:uppercase;letter-spacing:0.3pt}';
-  html += '.cut-hint{position:absolute;inset:0;border:0.15mm dashed rgba(0,0,0,0.15);border-radius:2.2mm;pointer-events:none}';
-  html += '.face-tag{font-size:4.6pt;font-weight:700;letter-spacing:0.4pt;text-transform:uppercase;color:#bdbdbd;flex-shrink:0}';
-  html += '.back-body{padding:1.8mm 3mm;gap:2.6mm}';
-  html += '.kun-col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.8mm}';
-  html += '.kun-title{font-size:5.2pt;font-weight:700;color:' + ACCENT + ';text-transform:uppercase;letter-spacing:0.2pt;margin-bottom:0.6mm}';
-  html += '.kun-list{list-style:none;display:flex;flex-direction:column;gap:0.6mm}';
-  html += '.kun-item{display:flex;align-items:flex-start;gap:1mm}';
-  html += '.kun-dot{width:0.9mm;height:0.9mm;border-radius:0.5mm;background:' + ACCENT + ';margin-top:0.8mm;flex-shrink:0}';
-  html += '.kun-text{font-size:4.8pt;line-height:1.35;color:#1f1f1f}';
-  html += '.verify-col{width:15mm;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.8mm;border-left:0.2mm solid rgba(17,17,17,0.10);padding-left:2.4mm}';
-  html += '.verify-num{font-size:5.6pt}';
+  html += '.logo-fallback{font-size:4mm;color:' + RED + '}';
+  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;letter-spacing:0.05pt;color:' + INK + ';line-height:1.35}';
+  html += '.hd-carteira{font-family:"Shippori Mincho",serif;font-size:7.3pt;font-weight:400;color:' + INK_2 + ';text-align:right}';
+  html += '.hd-sub{font-size:3.7pt;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
+  html += '.hd-badge{font-size:5pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:500;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
+  html += '.badge-sq{width:1.3mm;height:1.3mm;background:' + BLACK_BAR + ';display:inline-block}';
+  html += '.hd-verso{font-size:3.7pt;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
+
+  // réguas
+  html += '.ruler-red{margin:2.4mm -5.1mm 0;height:0.3mm;background:' + RED + '}';
+  html += '.black-bar{margin:1.6mm -5.1mm 0;height:1.15mm;background:' + BLACK_BAR + '}';
+
+  // body
+  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.6mm;flex:1;min-height:0;align-items:flex-start}';
+  html += '.photo{width:21.7mm;height:28.9mm;flex-shrink:0;border-radius:1.4mm;border:0.15mm solid ' + LINE_2 + ';object-fit:cover;background:#faf8f3}';
+  html += '.photo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;font-family:"DM Mono",monospace;font-size:4.6pt;letter-spacing:0.5pt;color:' + INK_4 + '}';
+  html += '.photo-sub{font-size:4.2pt}';
+  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.1mm}';
+  html += '.flabel{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
+  html += '.fvalue{font-family:"Zen Kaku Gothic New",sans-serif;font-size:6.4pt;font-weight:500;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  html += '.fvalue.name{font-size:9pt;font-weight:700;white-space:normal}';
+  html += '.fvalue.mono{font-family:"DM Mono",monospace;font-weight:400}';
+  html += '.name-fld{margin-bottom:0.4mm}';
+  html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.2mm 2.6mm}';
+  html += '.reg-fld{margin-top:1.6mm}';
+  html += '.reg-num{font-size:7.6pt;font-weight:500;color:' + RED + ';letter-spacing:0.2pt}';
+  html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
+  html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
+  html += '.belt-label{margin-top:0;font-weight:700}';
+
+  // footer
+  html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between}';
+  html += '.pres-line{width:20mm;height:0.15mm;background:' + INK_4 + '}';
+  html += '.pres-label{font-family:"DM Mono",monospace;font-size:3.4pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';margin-top:0.9mm}';
+  html += '.valid-col{display:flex;align-items:center;gap:1.2mm}';
+  html += '.valid-dot{width:0.7mm;height:0.7mm;border-radius:0.4mm;background:' + RED + ';flex-shrink:0}';
+  html += '.valid-text{font-family:"DM Mono",monospace;font-size:3.2pt;letter-spacing:0.4pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;line-height:1.5}';
+
+  // verso body
+  html += '.back-row{display:flex;flex:1;margin-top:2.6mm;min-height:0}';
+  html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
+  html += '.kun-eyebrow{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
+  html += '.kun-title{font-family:"Shippori Mincho",serif;font-size:6.8pt;font-weight:500;margin-top:0.9mm;color:' + INK + '}';
+  html += '.kun-list{margin-top:2.4mm;display:flex;flex-direction:column;gap:1.6mm}';
+  html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
+  html += '.kun-dot{width:0.8mm;height:0.8mm;background:' + RED + ';margin-top:0.7mm;flex-shrink:0}';
+  html += '.kun-text{font-size:5pt;line-height:1.4;color:' + INK + '}';
+  html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
+  html += '.verify-eyebrow{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + '}';
+  html += '.verify-title{font-family:"Shippori Mincho",serif;font-size:6.8pt;font-weight:500;margin-top:0.9mm;color:' + INK + '}';
+  html += '.qr{width:14.9mm;height:14.9mm;margin-top:2.1mm;background:#fff;image-rendering:pixelated}';
+  html += '.verify-num{font-family:"DM Mono",monospace;font-size:5.2pt;color:' + INK + ';margin-top:1.6mm;letter-spacing:0.2pt}';
+  html += '.issued-col{margin-top:2.1mm}';
+  html += '.issued-label{font-family:"DM Mono",monospace;font-size:3.4pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
+  html += '.issued-value{font-family:"DM Mono",monospace;font-size:5.2pt;margin-top:0.5mm;color:' + INK + '}';
 
   // ── Controles de tela (escondidos na impressão) ──
   html += '.print-fab{position:fixed;bottom:20px;right:20px;z-index:999;background:#7c3aed;color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.35);font-family:-apple-system,"Segoe UI",sans-serif}';
