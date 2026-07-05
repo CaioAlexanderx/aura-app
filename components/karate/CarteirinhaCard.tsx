@@ -1,24 +1,39 @@
 // ============================================================
-// CarteirinhaCard — Aura Karatê (DESIGN-14, aprovado 08/06)
+// CarteirinhaCard — Aura Karatê (mock aprovado "Carteirinhas FPKT",
+// design system Shoji/Kinari — papel de arroz, sumi, vermelhão hanko)
 //
 // Renderiza o "cartão" (frente/verso) a partir dos DADOS da carteirinha
 // (GET .../card). DATA-ONLY: o backend não gera imagem; a arte é toda aqui.
 //
-// Porte fiel do mock (card.jsx, 1012×638). Mede a largura disponível e
-// aplica um fator de escala sc = W/1012 a todas as medidas, preservando as
-// proporções do mock aprovado em qualquer largura (phone/web).
+// Porte fiel do mock aprovado (Carteirinhas FPKT.dc.html, cartão CR80
+// 640×404px). Mede a largura disponível e aplica um fator de escala
+// sc = W/640 a todas as medidas, preservando as proporções do mock em
+// qualquer largura (phone/web). Razão do cartão: 404/640 = 0.63125.
 //
-// Decisões Caio (08/06): QR codifica app.getaura.com.br/karate/verify/<token>
-// (nº de registro vira legenda); carteirinha SEM validade por tempo (sem
-// frase de validade); Dojo Kun mantém "Criar intuito de esforço".
+// Dois designs, decididos pela faixa do atleta (resolveBeltKey):
+//   - Design 01 (faixas coloridas): header direito "Carteira" / "do filiado";
+//     SEM campo Faixa no corpo; sem barra preta.
+//   - Design 02 (faixa-preta): header direito "Carteira" / badge quadrado
+//     preto + "faixa-preta"; barra preta 8px full-bleed abaixo da régua
+//     vermelha (frente e verso); corpo COM campo Faixa (quadrado preto +
+//     "Preta · Nº Dan", via formatBeltLabel adaptado).
+//
+// Discrepância sinalizada (ver PR): o cliente pediu para remover a
+// assinatura "Presidente", mas o mock APROVADO mantém essa linha no
+// footer da frente. Seguimos o mock (fiel), registrando a nota no PR
+// para confirmação do cliente.
+//
+// Decisões Caio (08/06, mantidas): QR codifica
+// app.getaura.com.br/karate/verify/<token> (nº de registro vira legenda);
+// carteirinha SEM validade por tempo (sem frase de validade); Dojo Kun
+// mantém "Criar intuito de esforço".
 // ============================================================
 import React, { useState } from "react";
-import { View, Text, Image, LayoutChangeEvent, ViewStyle } from "react-native";
+import { View, Text, Image, LayoutChangeEvent } from "react-native";
 import { PixQRCode } from "@/components/karate/PixQRCode";
 import { FpktLogo } from "@/components/karate/FpktLogo";
-import { KarateFonts } from "@/constants/karateTheme";
+import { KarateFonts, resolveBeltKey } from "@/constants/karateTheme";
 import { MembershipCard } from "@/services/karateCardApi";
-import { formatBeltLabel, beltColorHex } from "@/utils/beltDisplay";
 
 // Logo da carteirinha: usa a logo REAL da federação (card.federation_logo,
 // vindo de companies.karate_logo_url/logo_url) quando disponível. Antes a
@@ -38,15 +53,24 @@ function CardLogo({ card, size }: { card: MembershipCard; size: number }) {
   return <FpktLogo size={size} />;
 }
 
-const CARD_W = 1012;
-const CARD_H = 638;
-const RATIO = CARD_H / CARD_W; // 0.6304
-const ACCENT = "#D4121B";
+// ── tokens do mock (colors.css) ──
+const INK = "#2b2620";
+const INK_2 = "#6a6154";
+const INK_3 = "#9b9180";
+const INK_4 = "#c1b8a7";
+const RED = "#b8463a";
+const LINE_2 = "rgba(43,38,32,0.17)";
+const LINE = "rgba(43,38,32,0.10)";
+const BLACK_BAR = "#141210";
+
+const CARD_W = 640;
+const CARD_H = 404;
+const RATIO = CARD_H / CARD_W; // 0.63125
 
 const DOJO_KUN = [
   "Esforçar-se para a formação do caráter",
   "Criar intuito de esforço",
-  "Respeitar acima de tudo",
+  "Respeito acima de tudo",
   "Conter o espírito de agressão",
   "Fidelidade para com o verdadeiro caminho da razão",
 ];
@@ -75,6 +99,27 @@ function fmtBR(iso?: string | null): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+/**
+ * "Preta · Nº Dan" — adapta a saída de formatBeltLabel (ex.: "Preta 1º Dan")
+ * para o formato do mock ("Preta · 1º Dan"). Se não houver grau explícito,
+ * cai para "Preta · Dan".
+ */
+function beltDanLabel(belt?: string | null, beltName?: string | null): string {
+  const raw = (beltName || belt || "Preta").trim();
+  const m = raw.match(/(\d+\s*[ºo°]?\s*dan)/i);
+  if (m) {
+    const dan = m[1].replace(/\s+/g, " ").trim();
+    return `Preta · ${dan.charAt(0).toUpperCase()}${dan.slice(1)}`;
+  }
+  if (/dan/i.test(raw)) return "Preta · Dan";
+  return "Preta · Dan";
+}
+
+function isBeltPreta(belt?: string | null, beltName?: string | null): boolean {
+  const key = resolveBeltKey(beltName || belt || "");
+  return key === "preta";
+}
+
 interface CarteirinhaCardProps {
   card: MembershipCard;
   face: "front" | "back";
@@ -93,6 +138,7 @@ export function CarteirinhaCard({ card, face, maxWidth = 520 }: CarteirinhaCardP
   const sc = w / CARD_W;
   const f = (n: number) => n * sc;
   const H = w * RATIO;
+  const isPreta = isBeltPreta(card.belt, card.belt_name);
 
   const verifyUrl = `https://app.getaura.com.br/karate/verify/${card.verify_token}`;
 
@@ -101,169 +147,291 @@ export function CarteirinhaCard({ card, face, maxWidth = 520 }: CarteirinhaCardP
       {w > 0 ? (
         <View
           style={{
-            width: w, height: H, backgroundColor: "#fcfcfd", borderRadius: f(26),
-            overflow: "hidden", borderWidth: 1, borderColor: "rgba(0,0,0,0.08)",
+            width: w, height: H, backgroundColor: "#ffffff", borderRadius: f(16),
+            overflow: "hidden", borderWidth: 1, borderColor: LINE_2, position: "relative",
           }}
         >
-          {face === "front" ? <Front card={card} f={f} H={H} /> : <Back card={card} f={f} H={H} verifyUrl={verifyUrl} />}
+          {face === "front" ? (
+            <Front card={card} f={f} isPreta={isPreta} />
+          ) : (
+            <Back card={card} f={f} verifyUrl={verifyUrl} isPreta={isPreta} />
+          )}
         </View>
       ) : (
-        <View style={{ width: "100%", aspectRatio: 1 / RATIO, borderRadius: 16, backgroundColor: "#fcfcfd", borderWidth: 1, borderColor: "rgba(0,0,0,0.08)" }} />
+        <View style={{ width: "100%", aspectRatio: 1 / RATIO, borderRadius: 16, backgroundColor: "#ffffff", borderWidth: 1, borderColor: LINE_2 }} />
       )}
     </View>
   );
 }
 
-// ── Watermark — pirâmide FPKT esmaecida (segurança/identidade) ──
-function Watermark({ f, size, x, y, opacity }: { f: (n: number) => number; size: number; x: number; y: number; opacity: number }) {
+// ── Marca d'água — logo FPKT REAL (cor real, sem tintColor) ──
+// Frente: right:-24, top:56%, translateY(-50%), width:290, opacity 0.06.
+// Verso: centralizada (left/top:50%, translate -50%/-50%), width:260, opacity 0.05.
+function Watermark({ f, side }: { f: (n: number) => number; side: "front" | "back" }) {
+  if (side === "front") {
+    return (
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute", right: f(-24), top: "56%", width: f(290), opacity: 0.06,
+          transform: [{ translateY: -f(290) * 0.475 * 0.5 }],
+        }}
+      >
+        <FpktLogo size={f(290)} />
+      </View>
+    );
+  }
   return (
-    <View pointerEvents="none" style={{ position: "absolute", left: f(x), top: f(y), opacity }}>
-      <FpktLogo size={f(size)} style={{ tintColor: "#111" }} />
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute", left: "50%", top: "56%", width: f(260), opacity: 0.05,
+        transform: [{ translateX: -f(260) / 2 }, { translateY: -f(260) * 0.475 * 0.5 }],
+      }}
+    >
+      <FpktLogo size={f(260)} />
     </View>
   );
 }
 
-function Field({ label, value, f, mono, big, accent, longValue }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; big?: boolean; accent?: boolean; longValue?: boolean }) {
-  // d1: campos que costumam receber texto comprido (ex.: nome de dojô) usam
-  // fonte menor + até 2 linhas em vez de cortar bruscamente em 1 linha.
+// ── label mono uppercase pequeno (padrão dos campos) ──
+function FieldLabel({ children, f, color = INK_3 }: { children: React.ReactNode; f: (n: number) => number; color?: string }) {
   return (
-    <View style={{ marginBottom: f(4) }}>
-      <Text style={{ fontSize: f(13), fontWeight: "700", letterSpacing: f(1.4), textTransform: "uppercase", color: "#8a8a8a", marginBottom: f(3) }}>{label}</Text>
+    <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8.5), letterSpacing: f(1.4), textTransform: "uppercase", color }}>
+      {children}
+    </Text>
+  );
+}
+
+function Field({ label, value, f, mono, marginTop = 6 }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; marginTop?: number }) {
+  return (
+    <View>
+      <FieldLabel f={f}>{label}</FieldLabel>
       <Text
-        numberOfLines={longValue ? 2 : 1}
-        adjustsFontSizeToFit={longValue}
-        minimumFontScale={longValue ? 0.6 : undefined}
+        numberOfLines={1}
         style={{
-          fontSize: big ? f(31) : longValue ? f(20) : f(25), fontWeight: big ? "800" : "600",
-          color: accent ? ACCENT : "#161616",
-          fontFamily: mono ? "monospace" : undefined,
-          lineHeight: longValue ? f(23) : undefined,
+          fontFamily: mono ? KarateFonts.mono : KarateFonts.body,
+          fontSize: f(15), fontWeight: mono ? "400" : "500",
+          marginTop: f(marginTop), color: INK,
         }}
-      >{value || "—"}</Text>
+      >
+        {value || "—"}
+      </Text>
     </View>
   );
 }
 
 function BeltField({ card, f }: { card: MembershipCard; f: (n: number) => number }) {
-  const label = formatBeltLabel(card.belt, card.belt_name);
-  const color = beltColorHex(card.belt, card.belt_name);
+  const label = beltDanLabel(card.belt, card.belt_name);
   return (
-    <View style={{ marginBottom: f(4) }}>
-      <Text style={{ fontSize: f(13), fontWeight: "700", letterSpacing: f(1.4), textTransform: "uppercase", color: "#8a8a8a", marginBottom: f(3) }}>Faixa</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: f(11) }}>
-        <View style={{ width: f(20), height: f(20), borderRadius: f(5), backgroundColor: color, borderWidth: 1, borderColor: "rgba(0,0,0,0.14)" }} />
-        <Text numberOfLines={1} style={{ fontSize: f(25), fontWeight: "700", color: "#161616" }}>{label}</Text>
+    <View>
+      <FieldLabel f={f}>Faixa</FieldLabel>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: f(8), marginTop: f(6) }}>
+        <View style={{ width: f(14), height: f(14), backgroundColor: BLACK_BAR, borderRadius: f(2) }} />
+        <Text style={{ fontFamily: KarateFonts.body, fontSize: f(15), fontWeight: "600", color: INK }}>{label}</Text>
       </View>
     </View>
   );
 }
 
-function Front({ card, f, H }: { card: MembershipCard; f: (n: number) => number; H: number }) {
+// Nome da federação em 2 linhas (fiel ao mock: "Federação Paulista de" /
+// "Karatê-dô Tradicional"). Quando card.federation_name vem preenchido
+// (multi-federação), divide o nome real ao meio das palavras para manter
+// o layout de 2 linhas; sem nome, usa o texto oficial FPKT como fallback.
+function federationNameLines(name?: string | null): [string, string] {
+  const fallback: [string, string] = ["Federação Paulista de", "Karatê-dô Tradicional"];
+  if (!name || !name.trim()) return fallback;
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return [name.trim(), ""];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+
+// ── header comum (frente + verso) ──
+function HeaderLeft({ card, f, size }: { card: MembershipCard; f: (n: number) => number; size: number }) {
+  const [line1, line2] = federationNameLines(card.federation_name);
   return (
-    <View style={{ flex: 1 }}>
-      <Watermark f={f} size={560} x={470} y={140} opacity={0.045} />
+    <View style={{ flexDirection: "row", alignItems: "center", gap: f(13) }}>
+      <CardLogo card={card} size={f(size)} />
+      <View>
+        <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(14), fontWeight: "500", letterSpacing: f(0.3), color: INK }}>
+          {line1}
+        </Text>
+        {line2 ? (
+          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(14), fontWeight: "500", letterSpacing: f(0.3), color: INK, marginTop: f(3) }}>
+            {line2}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => number; isPreta: boolean }) {
+  return (
+    <View style={{ flex: 1, paddingTop: f(26), paddingBottom: f(22), paddingHorizontal: f(32) }}>
+      <Watermark f={f} side="front" />
+
       {/* header */}
-      <View style={{ height: f(124), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(22), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <CardLogo card={card} size={f(88)} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: f(13.5), fontWeight: "700", letterSpacing: f(2.4), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
-          <Text style={{ fontSize: f(29), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>
-        </View>
-        <View style={{ alignItems: "flex-end", paddingLeft: f(18), borderLeftWidth: 1, borderLeftColor: "rgba(17,17,17,0.10)" }}>
-          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(24), color: "#161616" }}>Carteira</Text>
-          <Text style={{ fontSize: f(11), fontWeight: "700", letterSpacing: f(2), color: "#9a9a9a", textTransform: "uppercase", marginTop: f(3) }}>do Atleta</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", minHeight: f(46) }}>
+        <HeaderLeft card={card} f={f} size={40} />
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(16), color: INK_2, fontWeight: "400" }}>Carteira</Text>
+          {isPreta ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: f(6), marginTop: f(5) }}>
+              <View style={{ width: f(9), height: f(9), backgroundColor: BLACK_BAR }} />
+              <Text style={{ fontSize: f(11), letterSpacing: f(1.4), textTransform: "uppercase", color: INK_2, fontWeight: "500" }}>faixa-preta</Text>
+            </View>
+          ) : (
+            <Text style={{ fontSize: f(8), letterSpacing: f(1.44), textTransform: "uppercase", color: INK_3, marginTop: f(4) }}>do filiado</Text>
+          )}
         </View>
       </View>
+
+      {/* régua vermelha full-bleed */}
+      <View style={{ marginTop: f(16), marginHorizontal: -f(32), height: f(2), backgroundColor: RED }} />
+      {isPreta ? <View style={{ marginTop: f(11), marginHorizontal: -f(32), height: f(8), backgroundColor: BLACK_BAR }} /> : null}
 
       {/* body */}
-      <View style={{ flex: 1, paddingHorizontal: f(40), paddingTop: f(28) }}>
-        {/* photo + fields */}
-        <View style={{ flex: 1, flexDirection: "row", gap: f(40) }}>
-          <View style={{ width: f(252), height: f(332) }}>
-            {card.photo_url ? (
-              <Image source={{ uri: card.photo_url }} style={{ width: f(252), height: f(332), borderRadius: f(10), borderWidth: 1, borderColor: "rgba(17,17,17,0.14)" }} resizeMode="cover" />
-            ) : (
-              <View style={{ width: f(252), height: f(332), borderRadius: f(10), borderWidth: 1, borderColor: "rgba(17,17,17,0.14)", backgroundColor: "#f2f2f4", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: f(15), color: "#aaa" }}>Foto do atleta</Text>
-              </View>
-            )}
-          </View>
-          <View style={{ flex: 1, justifyContent: "center", gap: f(16) }}>
-            <Field label="Nome" value={card.student_name} f={f} />
-            <View style={{ flexDirection: "row", gap: f(36) }}>
-              <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-              <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} longValue /></View>
+      <View style={{ flexDirection: "row", gap: f(30), marginTop: f(18), flex: 1, alignItems: "flex-start" }}>
+        <View
+          style={{
+            width: f(162), height: f(216), borderRadius: f(10), borderWidth: 1, borderColor: LINE_2,
+            backgroundColor: "#faf8f3", alignItems: "center", justifyContent: "center", overflow: "hidden",
+          }}
+        >
+          {card.photo_url ? (
+            <Image source={{ uri: card.photo_url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          ) : (
+            <View style={{ alignItems: "center" }}>
+              <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(10), letterSpacing: f(1.6), color: INK_4 }}>FOTO</Text>
+              <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(9), letterSpacing: f(1.6), color: INK_4, marginTop: f(3) }}>3 × 4</Text>
             </View>
-            <View style={{ flexDirection: "row", gap: f(36) }}>
-              <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
-              <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
-            </View>
-            <Field label="Nº de registro FPKT" value={card.card_number} f={f} mono big accent />
-          </View>
+          )}
         </View>
 
-        {/* signature band */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: f(36), paddingTop: f(10), paddingBottom: f(28) }}>
-          <View style={{ width: f(252) }}>
-            <View style={{ height: f(26) }} />
-            <View style={{ borderTopWidth: 1.5, borderTopColor: "#2a2a2a", paddingTop: f(8), alignItems: "center" }}>
-              <Text style={{ fontSize: f(13.5), fontWeight: "700", letterSpacing: f(1.6), color: "#444", textTransform: "uppercase" }}>Presidente</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <FieldLabel f={f}>Nome</FieldLabel>
+          <Text
+            numberOfLines={1}
+            style={{ fontFamily: KarateFonts.body, fontSize: f(21), fontWeight: "600", marginTop: f(5), color: INK }}
+          >
+            {card.student_name}
+          </Text>
+
+          {isPreta ? (
+            // Design 02: grid 2x2 [Data nasc · Dojô / Faixa · CPF] + registro abaixo, full width
+            <View style={{ marginTop: f(16), gap: f(16) }}>
+              <View style={{ flexDirection: "row", gap: f(22) }}>
+                <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
+                <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
+              </View>
+              <View style={{ flexDirection: "row", gap: f(22) }}>
+                <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
+                <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
+              </View>
+              <View>
+                <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
+                <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(18), fontWeight: "500", marginTop: f(5), color: RED, letterSpacing: f(0.5) }}>
+                  {card.card_number || "—"}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: f(10) }}>
-            <View style={{ width: f(7), height: f(7), borderRadius: f(4), backgroundColor: ACCENT }} />
-            <Text style={{ fontSize: f(12), fontWeight: "600", letterSpacing: f(0.6), color: "#9a9a9a", textTransform: "uppercase", textAlign: "right", maxWidth: f(280) }}>
-              Documento válido em todo o território da federação · F.P.K.T.
-            </Text>
-          </View>
+          ) : (
+            // Design 01: grid 2x2 [Data nasc · Dojô / CPF · Nº registro FPKT]
+            <View style={{ marginTop: f(24), gap: f(22) }}>
+              <View style={{ flexDirection: "row", gap: f(20) }}>
+                <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
+                <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
+              </View>
+              <View style={{ flexDirection: "row", gap: f(20) }}>
+                <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
+                <View style={{ flex: 1 }}>
+                  <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
+                  <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(18), fontWeight: "500", marginTop: f(5), color: RED, letterSpacing: f(0.5) }}>
+                    {card.card_number || "—"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* footer */}
+      <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <View>
+          <View style={{ width: f(150), height: 1, backgroundColor: INK_4 }} />
+          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8), letterSpacing: f(1.28), textTransform: "uppercase", color: INK_3, marginTop: f(7) }}>
+            Presidente
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: f(9) }}>
+          <View style={{ width: f(5), height: f(5), borderRadius: f(2.5), backgroundColor: RED }} />
+          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(7.5), letterSpacing: f(1.05), textTransform: "uppercase", color: INK_3, textAlign: "right", lineHeight: f(11.25) }}>
+            Documento válido em todo o{"\n"}território da federação · F.P.K.T.
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-function Back({ card, f, H, verifyUrl }: { card: MembershipCard; f: (n: number) => number; H: number; verifyUrl: string }) {
+function Back({ card, f, verifyUrl, isPreta }: { card: MembershipCard; f: (n: number) => number; verifyUrl: string; isPreta: boolean }) {
   return (
-    <View style={{ flex: 1 }}>
-      <Watermark f={f} size={520} x={150} y={250} opacity={0.035} />
+    <View style={{ flex: 1, paddingTop: f(26), paddingBottom: f(22), paddingHorizontal: f(32) }}>
+      <Watermark f={f} side="back" />
+
       {/* header */}
-      <View style={{ height: f(104), paddingHorizontal: f(40), flexDirection: "row", alignItems: "center", gap: f(18), borderBottomWidth: f(5), borderBottomColor: ACCENT, backgroundColor: "#fff" }}>
-        <CardLogo card={card} size={f(66)} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: f(11.5), fontWeight: "700", letterSpacing: f(2.2), color: ACCENT, textTransform: "uppercase" }}>Federação Paulista de</Text>
-          <Text style={{ fontSize: f(21), fontWeight: "800", color: "#141414", textTransform: "uppercase" }} numberOfLines={1}>Karatê-Dô Tradicional</Text>
-        </View>
-        <Text style={{ fontSize: f(11), fontWeight: "700", letterSpacing: f(2), color: "#bdbdbd", textTransform: "uppercase" }}>Verso</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", minHeight: f(46) }}>
+        <HeaderLeft card={card} f={f} size={40} />
+        <Text style={{ fontSize: f(8), letterSpacing: f(1.6), textTransform: "uppercase", color: INK_3 }}>Verso</Text>
       </View>
 
+      <View style={{ marginTop: f(16), marginHorizontal: -f(32), height: f(2), backgroundColor: RED }} />
+      {isPreta ? <View style={{ marginTop: f(11), marginHorizontal: -f(32), height: f(8), backgroundColor: BLACK_BAR }} /> : null}
+
       {/* two halves */}
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        {/* left — Dojo Kun */}
-        <View style={{ flex: 1, paddingVertical: f(26), paddingLeft: f(40), paddingRight: f(30), borderRightWidth: 1, borderRightColor: "rgba(17,17,17,0.10)" }}>
-          <Text style={{ fontSize: f(12), fontWeight: "700", letterSpacing: f(2.2), color: ACCENT, textTransform: "uppercase" }}>Lema do Karatê</Text>
-          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(22), color: "#141414", marginTop: f(2) }}>Dojo Kun · os cinco princípios</Text>
-          <View style={{ flex: 1, justifyContent: "center", marginTop: f(14) }}>
+      <View style={{ flexDirection: "row", flex: 1, marginTop: f(18) }}>
+        {/* left: Dojo Kun */}
+        <View style={{ flex: 1.45, paddingRight: f(24) }}>
+          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8.5), letterSpacing: f(1.53), textTransform: "uppercase", color: RED }}>
+            Lema do Karatê
+          </Text>
+          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(17), fontWeight: "500", marginTop: f(7), color: INK }}>
+            Dojo Kun · os cinco princípios
+          </Text>
+          <View style={{ marginTop: f(18), gap: f(12) }}>
             {DOJO_KUN.map((line, i) => (
-              <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: f(13), paddingBottom: f(10), borderBottomWidth: i < DOJO_KUN.length - 1 ? 1 : 0, borderBottomColor: "rgba(17,17,17,0.07)" }}>
-                <View style={{ width: f(7), height: f(7), borderRadius: f(4), backgroundColor: ACCENT, marginTop: f(6) }} />
-                <Text style={{ flex: 1, fontSize: f(15.5), fontWeight: "500", color: "#1f1f1f" }}>{line}</Text>
+              <View key={i} style={{ flexDirection: "row", gap: f(11), alignItems: "flex-start" }}>
+                <View style={{ width: f(6), height: f(6), backgroundColor: RED, marginTop: f(4) }} />
+                <Text style={{ flex: 1, fontFamily: KarateFonts.body, fontSize: f(12.5), color: INK, lineHeight: f(17.5) }}>{line}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* right — QR + emissão */}
-        <View style={{ flex: 1, paddingVertical: f(26), paddingHorizontal: f(36), alignItems: "center" }}>
-          <Text style={{ fontSize: f(12), fontWeight: "700", letterSpacing: f(2.2), color: "#9a9a9a", textTransform: "uppercase" }}>Identificação</Text>
-          <Text style={{ fontFamily: KarateFonts.serif, fontSize: f(22), color: "#141414", marginTop: f(2) }}>Validação do atleta</Text>
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <PixQRCode payload={verifyUrl} size={Math.max(64, Math.round(f(176)))} />
-            <Text style={{ fontSize: f(16), color: "#161616", fontFamily: "monospace", marginTop: f(12) }}>{card.card_number || "—"}</Text>
-            <Text style={{ fontSize: f(11), color: "#9a9a9a", fontFamily: "monospace", marginTop: f(2) }}>app.getaura.com.br/karate/verify</Text>
+        {/* right: validação */}
+        <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: LINE, paddingLeft: f(24), alignItems: "center" }}>
+          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8.5), letterSpacing: f(1.53), textTransform: "uppercase", color: INK_3 }}>
+            Identificação
+          </Text>
+          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(17), fontWeight: "500", marginTop: f(7), color: INK, textAlign: "center" }}>
+            Validação do atleta
+          </Text>
+          <View style={{ width: f(112), height: f(112), marginTop: f(16), backgroundColor: "#fff", padding: f(2) }}>
+            <PixQRCode payload={verifyUrl} size={Math.max(48, Math.round(f(108)))} />
           </View>
-          <View style={{ paddingTop: f(12), borderTopWidth: 1, borderTopColor: "rgba(17,17,17,0.10)", alignItems: "center", alignSelf: "stretch" }}>
-            <Text style={{ fontSize: f(11.5), fontWeight: "700", letterSpacing: f(1.4), color: "#9a9a9a", textTransform: "uppercase" }}>Data de emissão</Text>
-            <Text style={{ fontSize: f(18), color: "#161616", fontFamily: "monospace", marginTop: f(4) }}>{fmtBR(card.issued_at)}</Text>
+          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(13), color: INK, marginTop: f(12), letterSpacing: f(0.5) }}>
+            {card.card_number || "—"}
+          </Text>
+          <View style={{ marginTop: f(16), alignItems: "center" }}>
+            <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8), letterSpacing: f(1.28), textTransform: "uppercase", color: INK_3 }}>
+              Data de emissão
+            </Text>
+            <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(13), marginTop: f(4), color: INK }}>
+              {fmtBR(card.issued_at)}
+            </Text>
           </View>
         </View>
       </View>
