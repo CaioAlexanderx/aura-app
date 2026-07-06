@@ -1,5 +1,5 @@
 // ============================================================================
-// AURA. — Gerador HTML de etiquetas 33x21mm (3 colunas)
+// AURA. — Gerador HTML de etiquetas (multi-tamanho via LABEL_SIZE_PRESETS)
 //
 // ╔════════════════════════════════════════════════════════════════════════╗
 // ║                    *** DESIGN LOCKED — DO NOT MODIFY ***               ║
@@ -7,11 +7,16 @@
 // ║  Aprovado pela Finesse (cliente piloto varejo moda) em 23/04/2026.     ║
 // ║  Esta funcao e CRITICA: etiqueta quebrada = POS nao le = venda perdida ║
 // ║                                                                        ║
+// ║  07/2026: parametrizado por preset (LABEL_SIZE_PRESETS) pra suportar   ║
+// ║  novos tamanhos de etiqueta (ex: 30x25mm) sem tocar no preset "99x21"  ║
+// ║  usado pela Finesse. O preset "99x21" DEVE gerar exatamente o mesmo    ║
+// ║  HTML de antes — qualquer numero novo do preset "99x21" e regressao.   ║
+// ║                                                                        ║
 // ║  Zonas LOCKED (nao alterar sem teste real de scanner):                 ║
 // ║    1. BARCODE_OPTS            — parametros do JsBarcode                ║
 // ║    2. SVG inline              — o <svg id="bc-N" data-code="...">      ║
 // ║    3. .bc-inner .bc-box       — container do codigo                    ║
-// ║    4. @page e table width/height                                       ║
+// ║    4. Numeros do preset "99x21" em LABEL_SIZE_PRESETS                  ║
 // ║                                                                        ║
 // ║  Zonas LIVRES (pode mudar):                                            ║
 // ║    - Textos (nome, preco, storeHeader)                                 ║
@@ -150,15 +155,38 @@ export type LabelItem = {
   variantId?: string;
 };
 
+// ----- Presets de tamanho de etiqueta -----
+// "99x21" e o formato original (Finesse, LOCKED, validado com scanner fisico).
+// Novos presets sao livres de adicionar aqui - a estrutura de CSS abaixo e
+// toda parametrizada por preset, entao um preset novo nao mexe no HTML
+// gerado pelos outros. NUNCA mudar os numeros do preset "99x21".
+export type LabelSizeKey = "99x21" | "30x25";
+
+export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
+  pageWidthMm: number;
+  pageHeightMm: number;
+  cols: number;
+  cellWidthMm: number;
+  cellHeightMm: number;
+  uiLabel: string;
+}> = {
+  "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
+  "30x25": { pageWidthMm: 90, pageHeightMm: 25, cols: 3, cellWidthMm: 30, cellHeightMm: 25, uiLabel: "30x25mm (3 colunas)" },
+};
+export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
+// -------------------------------------------
+
 type BuildOptions = {
   mode: "barcode" | "qr";
   storeName: string;
   showStoreName: boolean;
+  labelSize?: LabelSizeKey;
 };
 
 export function buildLabelHtml(items: LabelItem[], options: BuildOptions): string {
   const isQR = options.mode === "qr";
-  const COLS = 3;
+  const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
+  const COLS = preset.cols;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
   const totalLabels = items.reduce((s, i) => s + i.qty, 0);
 
@@ -207,26 +235,31 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   let html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
   if (!isQR) html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
+  // Valores derivados do preset. Pro preset default "99x21" estes calculos
+  // reproduzem exatamente os numeros LOCKED originais (33-3=30, min(33,21)-4=17).
+  const bcBoxMaxWidthMm = preset.cellWidthMm - 3;
+  const qrSizeMm = Math.min(preset.cellWidthMm, preset.cellHeightMm) - 4;
+
   html += '<style>';
-  // ===== LOCKED CSS — dimensoes da etiqueta (nao mudar) =====
-  html += '@page{margin:0;size:99mm 21mm}*{margin:0;padding:0;box-sizing:border-box}';
+  // ===== LOCKED CSS — dimensoes da etiqueta (nao mudar pro preset 99x21) =====
+  html += '@page{margin:0;size:' + preset.pageWidthMm + 'mm ' + preset.pageHeightMm + 'mm}*{margin:0;padding:0;box-sizing:border-box}';
   html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
-  html += 'table{border-collapse:collapse;width:99mm;table-layout:fixed}tr{height:21mm;page-break-inside:avoid}';
-  html += '.cell{width:33mm;height:21mm;overflow:hidden;vertical-align:top;padding:0}';
+  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed}tr{height:' + preset.cellHeightMm + 'mm;page-break-inside:avoid}';
+  html += '.cell{width:' + preset.cellWidthMm + 'mm;height:' + preset.cellHeightMm + 'mm;overflow:hidden;vertical-align:top;padding:0}';
   // ============================================================
 
   // LOCKED: layout interno da celula barcode (padrao Finesse)
   // Ordem visual: store (topo) → barcode → nome → preco (fundo)
-  html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:21mm;width:33mm;gap:0.3mm}';
+  html += '.bc-inner{padding:0.8mm 1mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;height:' + preset.cellHeightMm + 'mm;width:' + preset.cellWidthMm + 'mm;gap:0.3mm}';
   html += '.bc-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:30mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
+  html += '.bc-inner .bc-box{flex:1 1 auto;width:100%;max-width:' + bcBoxMaxWidthMm + 'mm;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;padding:0.2mm 0}';
   html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
   html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
 
   // QR layout
-  html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:21mm;width:33mm}';
-  html += '.qr-inner .qr{width:17mm;height:17mm;flex-shrink:0;image-rendering:pixelated}';
+  html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:' + preset.cellHeightMm + 'mm;width:' + preset.cellWidthMm + 'mm}';
+  html += '.qr-inner .qr{width:' + qrSizeMm + 'mm;height:' + qrSizeMm + 'mm;flex-shrink:0;image-rendering:pixelated}';
   html += '.qr-inner .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden}';
   html += '.qr-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.qr-inner .name{font-size:5.5pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
@@ -258,7 +291,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '<div class="setup-guide" id="setupGuide">';
   html += '<h2>Antes de imprimir — confira o setup da impressora</h2>';
   html += '<div class="steps">';
-  html += '<div class="step"><b>1</b> Papel: <b>99 x 21 mm</b> (bobina 3 etiquetas)</div>';
+  html += '<div class="step"><b>1</b> Papel: <b>' + preset.pageWidthMm + ' x ' + preset.pageHeightMm + ' mm</b> (bobina ' + preset.cols + ' etiqueta' + (preset.cols > 1 ? 's' : '') + ')</div>';
   html += '<div class="step"><b>2</b> Margens: <b>Nenhuma</b></div>';
   html += '<div class="step"><b>3</b> Escala: <b>100%</b> (não usar "Ajustar à página")</div>';
   html += '<div class="step"><b>4</b> Cabeçalho/Rodapé: <b>Desligados</b></div>';
@@ -267,7 +300,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '</div>';
 
   html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
-  html += '<div class="preview-bar"><div><span>Etiqueta 33x21mm x 3 colunas (' + (isQR ? "QR Code" : "EAN-13") + ')</span><br>';
+  html += '<div class="preview-bar"><div><span>Etiqueta ' + preset.cellWidthMm + 'x' + preset.cellHeightMm + 'mm x ' + preset.cols + ' coluna' + (preset.cols > 1 ? 's' : '') + ' (' + (isQR ? "QR Code" : "EAN-13") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
   html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirmação acima</button></div>';
 
