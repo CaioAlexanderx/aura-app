@@ -577,48 +577,53 @@ export default function TorneioDetalhe() {
           {selection.kind === "category" && selectedCategory && (
             <View>
               <View style={styles.catHeadRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.catName}>{selectedCategory.name}</Text>
+                <View style={[styles.mtile, isKataModality(selectedCategory.modality) ? styles.mtileKata : styles.mtileKumite]}>
+                  <Text style={[styles.mtileGlyph, { color: isKataModality(selectedCategory.modality) ? P.warn : P.red2 }]}>
+                    {isKataModality(selectedCategory.modality) ? "型" : "組"}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.catName} numberOfLines={1}>{selectedCategory.name}</Text>
                   <Text style={styles.catMeta}>
                     {MODALITY_LABEL[selectedCategory.modality]} · {selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)} {(selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)) === 1 ? "inscrito" : "inscritos"}
                   </Text>
                 </View>
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setEditFor(selectedCategory)}
-                  style={styles.iconBtn}
+                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
                   accessibilityLabel={`Editar categoria ${selectedCategory.name}`}
                   hitSlop={8}
                 >
-                  <Icon name="edit" size={15} color={KarateColors.ink3} />
-                </TouchableOpacity>
-                <TouchableOpacity
+                  <Icon name="edit" size={15} color={KarateColors.ink2} />
+                </Pressable>
+                <Pressable
                   onPress={() => setCopyFor(selectedCategory)}
-                  style={styles.iconBtn}
+                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
                   accessibilityLabel={`Copiar categoria ${selectedCategory.name}`}
                   hitSlop={8}
                 >
-                  <Icon name="copy" size={15} color={KarateColors.ink3} />
-                </TouchableOpacity>
+                  <Icon name="copy" size={15} color={KarateColors.ink2} />
+                </Pressable>
               </View>
 
               {/* Abas locais — trocar de categoria mantém a aba ativa. */}
               <View style={styles.tabsRow}>
-                <TouchableOpacity
-                  style={[styles.tabBtn, activeTab === "inscritos" && styles.tabBtnActive]}
+                <Pressable
+                  style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "inscritos" && styles.tabBtnActive]}
                   onPress={() => setActiveTab("inscritos")}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: activeTab === "inscritos" }}
                 >
                   <Text style={[styles.tabBtnText, activeTab === "inscritos" && styles.tabBtnTextActive]}>Inscritos</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tabBtn, activeTab === "chaves" && styles.tabBtnActive]}
+                </Pressable>
+                <Pressable
+                  style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "chaves" && styles.tabBtnActive]}
                   onPress={() => setActiveTab("chaves")}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: activeTab === "chaves" }}
                 >
                   <Text style={[styles.tabBtnText, activeTab === "chaves" && styles.tabBtnTextActive]}>{chavesTabLabel}</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {activeTab === "inscritos" && (
@@ -1067,7 +1072,10 @@ function InscritosTab({
   return (
     <View style={styles.entriesPanel}>
       <View style={styles.entriesPanelHead}>
-        <Text style={styles.entriesPanelTitle}>Inscritos</Text>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+          <Text style={styles.entriesPanelTitle}>Inscritos</Text>
+          {entries.length > 0 && <Text style={styles.entriesPanelCount}>{entries.length}</Text>}
+        </View>
         <KarateButton
           label={printing ? "Gerando..." : "Imprimir lista"}
           variant="secondary"
@@ -1077,27 +1085,34 @@ function InscritosTab({
         />
       </View>
       {loading ? (
-        <ActivityIndicator color={KarateColors.primary} style={{ marginTop: 20 }} />
+        <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 22 }} />
       ) : entries.length === 0 ? (
         <Text style={styles.emptyEntries}>Nenhum inscrito nesta categoria.</Text>
       ) : (
-        entries.map((e) => (
-          <View key={e.id} style={styles.entryRow}>
-            <View style={styles.placeBadge}>
-              <Text style={styles.placeText}>{e.placement ? `${e.placement}º` : "—"}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.entryName}>{e.student_name}</Text>
-              <Text style={styles.entryMeta}>
-                {e.karate_registration_number ?? "—"} · {e.dojo_name ?? "—"} · {ENTRY_STATUS_LABEL[e.status] ?? e.status}
-              </Text>
-            </View>
-            {e.points_awarded > 0 ? <Text style={styles.entryPts}>{e.points_awarded} pts</Text> : null}
-            <TouchableOpacity onPress={() => onLaunchResult(e)} style={styles.resultBtn} accessibilityLabel={`Lançar resultado de ${e.student_name}`}>
-              <Icon name="create-outline" size={16} color={KarateColors.primary} />
-            </TouchableOpacity>
-          </View>
-        ))
+        entries.map((e) => {
+          const medal = e.placement === 1 ? styles.placeGold : e.placement === 2 ? styles.placeSilver : e.placement === 3 ? styles.placeBronze : null;
+          const medalText = e.placement === 1 ? styles.placeGoldText : e.placement === 2 ? styles.placeSilverText : e.placement === 3 ? styles.placeBronzeText : null;
+          return (
+            <Pressable
+              key={e.id}
+              onPress={() => onLaunchResult(e)}
+              accessibilityLabel={`Lançar resultado de ${e.student_name}`}
+              style={({ hovered }) => [styles.entryRow, hovered && styles.rowHover]}
+            >
+              <View style={[styles.placeBadge, medal]}>
+                <Text style={[styles.placeText, medalText]}>{e.placement ? `${e.placement}º` : "—"}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.entryName} numberOfLines={1}>{e.student_name}</Text>
+                <Text style={styles.entryMeta} numberOfLines={1}>
+                  <Text style={styles.entryReg}>{e.karate_registration_number ?? "—"}</Text> · {e.dojo_name ?? "—"} · {ENTRY_STATUS_LABEL[e.status] ?? e.status}
+                </Text>
+              </View>
+              {e.points_awarded > 0 ? <Text style={styles.entryPts}>{e.points_awarded} pts</Text> : null}
+              <Icon name="create-outline" size={16} color={KarateColors.ink4} />
+            </Pressable>
+          );
+        })
       )}
     </View>
   );
@@ -1380,22 +1395,32 @@ const styles = StyleSheet.create({
   progressUnknown: { color: "#b8463a", backgroundColor: "rgba(184,70,58,0.08)" } as TextStyle,
 
   // ── Categoria: header + abas ──
-  catHeadRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 } as ViewStyle,
-  catName: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  catHeadRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 } as ViewStyle,
+  catName: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink, lineHeight: 23 } as TextStyle,
   catMeta: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
-  iconBtn: { padding: 6, borderRadius: 8, backgroundColor: KarateColors.surface } as ViewStyle,
-  tabsRow: { flexDirection: "row", gap: 8, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border, paddingBottom: 10 } as ViewStyle,
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: KarateColors.surface, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
-  tabBtnActive: { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primary } as ViewStyle,
-  tabBtnText: { fontSize: 12.5, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
+  iconBtn: { padding: 8, borderRadius: 8, backgroundColor: KarateColors.surface } as ViewStyle,
+  iconBtnHover: { backgroundColor: KarateColors.bg2 } as ViewStyle,
+  tabsRow: { flexDirection: "row", gap: 2, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
+  tabBtn: { paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: 2, borderBottomColor: "transparent", marginBottom: -1 } as ViewStyle,
+  tabBtnHover: { borderBottomColor: KarateColors.border2 } as ViewStyle,
+  tabBtnActive: { borderBottomColor: KarateColors.primary } as ViewStyle,
+  tabBtnText: { fontSize: 13, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
   tabBtnTextActive: { color: KarateColors.primary } as TextStyle,
 
   // ── Aba Inscritos ──
-  entriesPanel: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
-  entriesPanelHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-  entriesPanelTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  entriesPanel: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
+  entriesPanelHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
+  entriesPanelTitle: { fontFamily: KarateFonts.heading, fontSize: 16, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  entriesPanelCount: { fontFamily: KarateFonts.mono, fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   emptyEntries: { fontSize: 12, color: KarateColors.ink3, paddingHorizontal: 18, paddingVertical: 16 } as TextStyle,
-  entryRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  entryRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 16, paddingVertical: 11, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  entryReg: { fontFamily: KarateFonts.mono, color: KarateColors.ink2 } as TextStyle,
+  placeGold: { backgroundColor: "rgba(156,111,46,0.16)" } as ViewStyle,
+  placeGoldText: { color: "#9c6f2e" } as TextStyle,
+  placeSilver: { backgroundColor: "rgba(106,97,84,0.14)" } as ViewStyle,
+  placeSilverText: { color: KarateColors.ink2 } as TextStyle,
+  placeBronze: { backgroundColor: "rgba(168,84,58,0.15)" } as ViewStyle,
+  placeBronzeText: { color: "#a8543a" } as TextStyle,
   placeBadge: { width: 34, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
   placeText: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
   entryName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,

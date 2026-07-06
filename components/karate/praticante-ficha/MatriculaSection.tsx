@@ -71,3 +71,27 @@ export function MatriculaSection({ mode, onChangeMode, manualValue, onChangeManu
     </View>
   );
 }
+
+// Campo editável de matrícula para o modo EDIÇÃO da ficha. Sem o seletor
+// auto/manual (a matrícula já existe) — apenas permite corrigir/trocar o
+// número. A unicidade é validada no backend (409 se já estiver em uso).
+export function MatriculaEditField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <View style={{ marginBottom: 11 }}>
+      <Text style={styles.label}>Numero de matricula (FPKT)</Text>
+      <Field
+        label="Numero da matricula"
+        mono
+        value={value}
+        onChangeText={onChange}
+        placeholder="Ex.: 000123"
+      />
+      <View style={styles.guardianNote}>
+        <Icon name="info" size={13} color={P.ink3} />
+        <Text style={styles.guardianNoteTxt}>
+          Alterar a matricula muda o numero exibido na carteirinha. Se ja estiver em uso por outro praticante, a alteracao sera recusada.
+        </Text>
+      </View>
+    </View>
+  );
+}

@@ -146,13 +146,15 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 
   const fieldsGrid = isPreta
     ? (
+      // Design 02: MESMA ordem/grid do Design 01 [Data nasc · Dojô / CPF · Nº registro]
+      // + campo "Faixa" acrescentado como ÚLTIMO item (diferenciação da faixa-preta).
       '<div class="grid2">' +
         '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
         '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
-        '<div class="fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
         '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>' +
-      '<div class="fld reg-fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>'
+      '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>'
     )
     : (
       '<div class="grid2">' +
