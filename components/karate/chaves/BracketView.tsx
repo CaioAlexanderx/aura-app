@@ -44,6 +44,13 @@ import {
 
 const isWeb = Platform.OS === "web";
 
+// Chave grande: acima de 16 confrontos na 1ª fase (> 32 atletas), o
+// drag-and-drop de edição total fica impraticável e pesado (centenas de
+// slots draggable simultâneos). Acima do limite, o modo edição/arrasto é
+// desabilitado — clique-para-vencedor e impressão continuam normais, e
+// "Refazer sorteio" é o caminho pra reorganizar a chave.
+const LARGE_BRACKET_EDIT_LIMIT = 16;
+
 // Slot vazio ("bye" ou null) não é arrastável nem carrega atleta.
 type SlotValue = BracketAthleteRef | "bye" | null;
 
@@ -68,6 +75,12 @@ export function BracketView({
 }) {
   const totalRounds = bracket.rounds.length;
   const locked = bracket.status === "locked";
+
+  // Chave grande (> 16 confrontos na 1ª fase, ou seja, > 32 atletas):
+  // desabilita o modo edição/arrasto (DnD pesado e impraticável em escala).
+  // Clique-para-vencedor e impressão continuam disponíveis normalmente.
+  const firstPhaseMatches = bracket.rounds[0]?.length ?? 0;
+  const isLargeBracket = firstPhaseMatches > LARGE_BRACKET_EDIT_LIMIT;
 
   // ── Modo edição total (drag-and-drop) ─────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -101,6 +114,10 @@ export function BracketView({
 
   // ── Entrar/sair do modo edição ─────────────────────────────────────
   const handleToggleEditMode = useCallback(() => {
+    if (isLargeBracket) {
+      toast.info("Chave grande — reorganize por \"Refazer sorteio\"; edição por arrasto fica para chaves menores.");
+      return;
+    }
     if (locked) {
       toast.info("Destrave a chave para editar as posições.");
       return;
@@ -118,7 +135,7 @@ export function BracketView({
       setDirty(false);
       setEditMode(true);
     }
-  }, [locked, editMode, dirty, allMatchesFlat]);
+  }, [locked, editMode, dirty, allMatchesFlat, isLargeBracket]);
 
   // ── Troca (swap) de posições entre dois slots quaisquer ─────────────
   const handleSwap = useCallback((from: BracketSlotId, to: BracketSlotId) => {
@@ -293,12 +310,20 @@ export function BracketView({
       {/* Barra de ações — edição total */}
       <View style={ctrlStyles.actionsRow}>
         <TouchableOpacity
-          style={[ctrlStyles.toggleBtn, editMode && ctrlStyles.toggleBtnActive]}
+          style={[
+            ctrlStyles.toggleBtn,
+            editMode && ctrlStyles.toggleBtnActive,
+            isLargeBracket && ctrlStyles.toggleBtnDisabled,
+          ]}
           onPress={handleToggleEditMode}
-          disabled={saving}
+          disabled={saving || isLargeBracket}
         >
-          <Icon name={editMode ? "unlock" : "edit"} size={14} color={editMode ? "#fdf8f2" : C.ink2} />
-          <Text style={[ctrlStyles.toggleBtnText, editMode && ctrlStyles.toggleBtnTextActive]}>
+          <Icon name={editMode ? "unlock" : "edit"} size={14} color={editMode ? "#fdf8f2" : (isLargeBracket ? C.ink4 : C.ink2)} />
+          <Text style={[
+            ctrlStyles.toggleBtnText,
+            editMode && ctrlStyles.toggleBtnTextActive,
+            isLargeBracket && ctrlStyles.toggleBtnTextDisabled,
+          ]}>
             {editMode ? "Modo edição (ativo)" : "Modo edição"}
           </Text>
         </TouchableOpacity>
@@ -357,11 +382,13 @@ export function BracketView({
       <View style={S.bracketHint}>
         <Icon name="info" size={14} color={P.red} />
         <Text style={S.bracketHintText}>
-          {editMode
-            ? (isWeb
-              ? "Arraste um atleta sobre outro slot para trocar as posições. Depois clique em \"Salvar chave\"."
-              : "Arrastar-e-soltar só funciona na versão web. Use a versão web para editar posições; no app, use apenas o clique para lançar vencedores.")
-            : "Clique no vencedor para lançar o resultado."}
+          {isLargeBracket
+            ? "Chave grande — reorganize por \"Refazer sorteio\"; edição por arrasto fica para chaves menores. Clique no vencedor e a impressão continuam disponíveis normalmente."
+            : editMode
+              ? (isWeb
+                ? "Arraste um atleta sobre outro slot para trocar as posições. Depois clique em \"Salvar chave\"."
+                : "Arrastar-e-soltar só funciona na versão web. Use a versão web para editar posições; no app, use apenas o clique para lançar vencedores.")
+              : "Clique no vencedor para lançar o resultado."}
         </Text>
       </View>
 
@@ -621,8 +648,10 @@ const ctrlStyles = StyleSheet.create({
     borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2,
   } as ViewStyle,
   toggleBtnActive: { backgroundColor: C.ink, borderColor: C.ink } as ViewStyle,
+  toggleBtnDisabled: { opacity: 0.5 } as ViewStyle,
   toggleBtnText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: C.ink2 } as TextStyle,
   toggleBtnTextActive: { color: "#fdf8f2" } as TextStyle,
+  toggleBtnTextDisabled: { color: C.ink4 } as TextStyle,
 
   // slot states (drag)
   slotDraggable: { cursor: "grab" as any },
