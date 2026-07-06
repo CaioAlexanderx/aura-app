@@ -103,10 +103,10 @@ function beltDanLabel(card: MembershipCard): string {
 }
 
 function federationNameLines(name?: string | null): [string, string] {
-  const fallback: [string, string] = ["Federação Paulista de", "Karatê-dô Tradicional"];
-  if (!name || !name.trim()) return fallback;
-  const words = name.trim().split(/\s+/);
-  if (words.length < 2) return [name.trim(), ""];
+  const fallback: [string, string] = ["Federação Paulista de", "Karatê-Dô Tradicional"];
+  const n = (name || "").trim();
+  if (!n || !/\s/.test(n)) return fallback;
+  const words = n.split(/\s+/);
   const mid = Math.ceil(words.length / 2);
   return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
 }
@@ -179,9 +179,6 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
             '<div class="fld name-fld"><div class="flabel">Nome</div><div class="fvalue name">' + esc(card.student_name) + '</div></div>' +
             fieldsGrid +
           '</div>' +
-        '</div>' +
-        '<div class="footer-row">' +
-          '<div class="valid-col"><span class="valid-dot"></span><div class="valid-text">Documento válido em todo o<br>território da federação · F.P.K.T.</div></div>' +
         '</div>' +
       '</div>' +
     '</div>'
