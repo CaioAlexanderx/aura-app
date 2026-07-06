@@ -38,7 +38,7 @@ import { FotoSection, fileToBase64 } from "./praticante-ficha/FotoSection";
 import { EnderecoSection } from "./praticante-ficha/EnderecoSection";
 import { ResponsavelSection } from "./praticante-ficha/ResponsavelSection";
 import { PapeisSection } from "./praticante-ficha/PapeisSection";
-import { MatriculaSection } from "./praticante-ficha/MatriculaSection";
+import { MatriculaSection, MatriculaEditField } from "./praticante-ficha/MatriculaSection";
 
 interface Props {
   federationId: string;
@@ -146,6 +146,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           affiliation_since: fromISO(p.affiliation_since),
         });
         setFpkt(p.karate_registration_number || null);
+        setManualRegistrationNumber(p.karate_registration_number || "");
         setBeltName(p.current_belt?.belt_name || null);
       })
       .catch(() => setErrorMsg("Não foi possível carregar a ficha."))
@@ -266,6 +267,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       setErrorMsg("Informe o número de matrícula ou volte para o modo automático.");
       return;
     }
+    // F-matricula (edição): a matrícula é editável, mas não pode ficar vazia.
+    if (isEdit && !manualRegistrationNumber.trim()) {
+      setErrorMsg("A matrícula não pode ficar vazia.");
+      return;
+    }
     setErrorMsg(null); setSaving(true);
 
     // P6: nunca envia blob URL no body do praticante.
@@ -299,6 +305,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     // só quando o modo é manual + campo preenchido. No modo automático o campo NÃO é
     // enviado — o backend gera o número sozinho.
     if (!isEdit && registrationMode === "manual" && manualRegistrationNumber.trim()) {
+      body.karate_registration_number = manualRegistrationNumber.trim();
+    }
+    // Edição: envia a matrícula só quando o valor mudou (evita 409 falso ao
+    // revalidar contra o próprio registro).
+    if (isEdit && manualRegistrationNumber.trim() && manualRegistrationNumber.trim() !== (fpkt || "")) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
 
@@ -443,14 +454,19 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   />
                 }
                 registrationSlot={
-                  !isEdit ? (
+                  isEdit ? (
+                    <MatriculaEditField
+                      value={manualRegistrationNumber}
+                      onChange={setManualRegistrationNumber}
+                    />
+                  ) : (
                     <MatriculaSection
                       mode={registrationMode}
                       onChangeMode={setRegistrationMode}
                       manualValue={manualRegistrationNumber}
                       onChangeManualValue={setManualRegistrationNumber}
                     />
-                  ) : undefined
+                  )
                 }
               />
 

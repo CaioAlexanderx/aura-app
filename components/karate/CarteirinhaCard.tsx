@@ -325,22 +325,23 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
           </Text>
 
           {isPreta ? (
-            // Design 02: grid 2x2 [Data nasc · Dojô / Faixa · CPF] + registro abaixo, full width
-            <View style={{ marginTop: f(16), gap: f(16) }}>
-              <View style={{ flexDirection: "row", gap: f(22) }}>
+            // Design 02: MESMA ordem/grid do Design 01 [Data nasc · Dojô / CPF · Nº registro]
+            // + campo "Faixa" acrescentado como ÚLTIMO item (diferenciação da faixa-preta).
+            <View style={{ marginTop: f(24), gap: f(22) }}>
+              <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
                 <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
               </View>
-              <View style={{ flexDirection: "row", gap: f(22) }}>
-                <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
+              <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
+                <View style={{ flex: 1 }}>
+                  <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
+                  <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(18), fontWeight: "500", marginTop: f(5), color: RED, letterSpacing: f(0.5) }}>
+                    {card.card_number || "—"}
+                  </Text>
+                </View>
               </View>
-              <View>
-                <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
-                <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(18), fontWeight: "500", marginTop: f(5), color: RED, letterSpacing: f(0.5) }}>
-                  {card.card_number || "—"}
-                </Text>
-              </View>
+              <View><BeltField card={card} f={f} /></View>
             </View>
           ) : (
             // Design 01: grid 2x2 [Data nasc · Dojô / CPF · Nº registro FPKT]
