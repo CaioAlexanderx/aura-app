@@ -239,10 +239,11 @@ function BeltField({ card, f }: { card: MembershipCard; f: (n: number) => number
 // (multi-federação), divide o nome real ao meio das palavras para manter
 // o layout de 2 linhas; sem nome, usa o texto oficial FPKT como fallback.
 function federationNameLines(name?: string | null): [string, string] {
-  const fallback: [string, string] = ["Federação Paulista de", "Karatê-dô Tradicional"];
-  if (!name || !name.trim()) return fallback;
-  const words = name.trim().split(/\s+/);
-  if (words.length < 2) return [name.trim(), ""];
+  const fallback: [string, string] = ["Federação Paulista de", "Karatê-Dô Tradicional"];
+  const n = (name || "").trim();
+  // Sem nome ou acrônimo de uma palavra (ex.: "FPKT") → nome canônico completo.
+  if (!n || !/\s/.test(n)) return fallback;
+  const words = n.split(/\s+/);
   const mid = Math.ceil(words.length / 2);
   return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
 }
@@ -358,15 +359,6 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
         </View>
       </View>
 
-      {/* footer */}
-      <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: f(9) }}>
-          <View style={{ width: f(5), height: f(5), borderRadius: f(2.5), backgroundColor: RED }} />
-          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(7.5), letterSpacing: f(1.05), textTransform: "uppercase", color: INK_3, textAlign: "right", lineHeight: f(11.25) }}>
-            Documento válido em todo o{"\n"}território da federação · F.P.K.T.
-          </Text>
-        </View>
-      </View>
     </View>
   );
 }
