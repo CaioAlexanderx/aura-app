@@ -24,10 +24,19 @@ export function initials(name: string | null): string {
   return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
 
-export const ROUND_LABELS = ["Oitavas", "Quartas", "Semifinais", "Final"];
+// Rótulo de fase por NÚMERO DE CONFRONTOS na rodada (não por índice fixo),
+// pra suportar chaves de qualquer tamanho (64/128/256+ atletas) sem cair
+// em "R{n}": 1 confronto = Final, 2 = Semis, 4 = Quartas, 8 = Oitavas,
+// 16+ = "{matches}-avos" (16-avos, 32-avos, 64-avos, 128-avos...).
+export const ROUND_LABELS_BY_MATCHES: Record<number, string> = {
+  1: "Final",
+  2: "Semifinais",
+  4: "Quartas",
+  8: "Oitavas",
+};
 export function roundLabel(round: number, totalRounds: number): string {
-  const idx = totalRounds - 1 - round;
-  return ROUND_LABELS[idx] ?? `R${round + 1}`;
+  const matches = Math.pow(2, totalRounds - 1 - round);
+  return ROUND_LABELS_BY_MATCHES[matches] ?? `${matches}-avos`;
 }
 
 // ── Toggle ─────────────────────────────────────────────────────────────

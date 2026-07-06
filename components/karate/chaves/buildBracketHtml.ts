@@ -31,10 +31,18 @@ const LINE_2 = "rgba(43,38,32,0.17)";
 // Mesmos rótulos/lógica de components/karate/chaves/shared.tsx (roundLabel),
 // duplicados aqui porque o builder de impressão não pode depender de RN
 // (StyleSheet/View) — só HTML/CSS puro, no espírito de buildCarteirinhaHtml.ts.
-const ROUND_LABELS = ["Oitavas", "Quartas", "Semifinais", "Final"];
+// MANTER EM SINCRONIA com shared.tsx: rótulo por número de confrontos na
+// rodada (2^(totalRounds-1-round)), não por índice fixo — suporta chaves
+// de qualquer tamanho (64/128/256+ atletas) sem cair em "R{n}".
+const ROUND_LABELS_BY_MATCHES: Record<number, string> = {
+  1: "Final",
+  2: "Semifinais",
+  4: "Quartas",
+  8: "Oitavas",
+};
 function roundLabel(round: number, totalRounds: number): string {
-  const idx = totalRounds - 1 - round;
-  return ROUND_LABELS[idx] ?? `R${round + 1}`;
+  const matches = Math.pow(2, totalRounds - 1 - round);
+  return ROUND_LABELS_BY_MATCHES[matches] ?? `${matches}-avos`;
 }
 
 function esc(s: string | null | undefined): string {
@@ -107,6 +115,118 @@ function renderMatch(match: BracketMatch, label?: string): string {
   );
 }
 
+// ── Planilha de confrontos (chaves grandes) ─────────────────────────────
+// Acima de 8 confrontos na 1ª fase (>16 atletas na chave), a árvore visual
+// não cabe legível numa folha A4. Em vez disso, geramos uma PLANILHA
+// paginada — uma tabela por fase, em ordem — que é a ferramenta real de
+// controle do organizador no papel durante o evento: confronto nº, aka,
+// shiro, vencedor e placar (em branco pra anotar à mão quando pendente).
+const LARGE_BRACKET_THRESHOLD = 8; // confrontos na 1ª fase (> 8 = > 16 atletas)
+
+function sideLabel(value: BracketAthleteRef | "bye" | null | undefined): string {
+  if (value === "bye") return "BYE";
+  if (isAthlete(value)) {
+    const dojo = value.dojo_name ? " (" + value.dojo_name + ")" : "";
+    return esc(value.student_name) + esc(dojo);
+  }
+  return "";
+}
+
+function winnerLabel(match: BracketMatch): string {
+  const akaId = isAthlete(match.aka) ? match.aka.entry_id : null;
+  const shiroId = isAthlete(match.shiro) ? match.shiro.entry_id : null;
+  if (!match.winner_entry_id) return "";
+  if (match.winner_entry_id === akaId) return sideLabel(match.aka);
+  if (match.winner_entry_id === shiroId) return sideLabel(match.shiro);
+  return "";
+}
+
+function scoreLabel(match: BracketMatch): string {
+  const hasAny = typeof match.aka_score === "number" || typeof match.shiro_score === "number";
+  if (!hasAny) return "";
+  const a = typeof match.aka_score === "number" ? String(match.aka_score) : "&mdash;";
+  const s = typeof match.shiro_score === "number" ? String(match.shiro_score) : "&mdash;";
+  return a + " &times; " + s;
+}
+
+// Uma linha da tabela: nº do confronto (dentro da fase), aka, shiro,
+// vencedor/placar já preenchidos se houver resultado, senão espaço em
+// branco (célula ".blank") pra anotar à mão durante o evento.
+function renderSheetRow(match: BracketMatch, indexInPhase: number): string {
+  const akaIsBye = match.aka === "bye";
+  const shiroIsBye = match.shiro === "bye";
+  const akaText = sideLabel(match.aka) || (akaIsBye ? "BYE" : '<span class="tbd">a definir</span>');
+  const shiroText = sideLabel(match.shiro) || (shiroIsBye ? "BYE" : '<span class="tbd">a definir</span>');
+  const winner = winnerLabel(match);
+  const score = scoreLabel(match);
+  const rowClass = winner ? "row-done" : "row-pending";
+
+  return (
+    '<tr class="' + rowClass + '">' +
+      '<td class="col-num">' + (indexInPhase + 1) + '</td>' +
+      '<td class="col-aka">' + akaText + '</td>' +
+      '<td class="col-shiro">' + shiroText + '</td>' +
+      '<td class="col-winner">' + (winner || '<span class="blank"></span>') + '</td>' +
+      '<td class="col-score">' + (score || '<span class="blank"></span>') + '</td>' +
+    '</tr>'
+  );
+}
+
+// Uma tabela por fase (rounds[] na ordem) + a disputa de 3º lugar, se houver.
+// page-break-before entre fases (exceto a primeira) pra cada fase começar
+// numa página nova quando fizer sentido — o navegador decide o encaixe
+// real com page-break-inside:avoid nas linhas/tabela.
+function renderSheetTables(bracket: BracketState, totalRounds: number): string {
+  const phases = bracket.rounds.map(function (round, rIdx) {
+    const label = roundLabel(rIdx, totalRounds);
+    const rows = round.map(function (m, i) { return renderSheetRow(m, i); }).join("\n");
+    return (
+      '<section class="phase">' +
+        '<h2 class="phase-head">' + esc(label) + '<span class="phase-count">' + round.length + ' confronto' + (round.length === 1 ? "" : "s") + '</span></h2>' +
+        '<table class="sheet-table">' +
+          '<thead><tr>' +
+            '<th class="col-num">Nº</th>' +
+            '<th class="col-aka">Aka</th>' +
+            '<th class="col-shiro">Shiro</th>' +
+            '<th class="col-winner">Vencedor</th>' +
+            '<th class="col-score">Placar</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</section>'
+    );
+  });
+
+  if (bracket.third_place_match) {
+    phases.push(
+      '<section class="phase">' +
+        '<h2 class="phase-head">3º lugar<span class="phase-count">1 confronto</span></h2>' +
+        '<table class="sheet-table">' +
+          '<thead><tr>' +
+            '<th class="col-num">Nº</th>' +
+            '<th class="col-aka">Aka</th>' +
+            '<th class="col-shiro">Shiro</th>' +
+            '<th class="col-winner">Vencedor</th>' +
+            '<th class="col-score">Placar</th>' +
+          '</tr></thead>' +
+          '<tbody>' + renderSheetRow(bracket.third_place_match, 0) + '</tbody>' +
+        '</table>' +
+      '</section>'
+    );
+  }
+
+  if (bracket.champion) {
+    phases.push(
+      '<section class="phase phase-champ">' +
+        '<h2 class="phase-head">Campe&atilde;o</h2>' +
+        '<div class="champ-line"><strong>' + esc(bracket.champion.student_name) + '</strong> &mdash; ' + esc(bracket.champion.dojo_name || "&mdash;") + '</div>' +
+      '</section>'
+    );
+  }
+
+  return phases.join("\n");
+}
+
 export type BuildBracketHtmlOptions = {
   competitionName?: string;
   categoryName?: string;
@@ -117,9 +237,19 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
   const totalRounds = bracket.rounds.length;
   const printedAt = fmtBRDateTime(new Date());
 
-  const federationName = options?.federationName || "Aura Karatê";
+  const federationName = options?.federationName || "Aura Karat\u00ea";
   const competitionName = options?.competitionName || "";
   const categoryName = options?.categoryName || "";
+
+  const firstPhaseMatches = bracket.rounds[0]?.length ?? 0;
+  const isLarge = firstPhaseMatches > LARGE_BRACKET_THRESHOLD;
+
+  const subtitleParts = [categoryName, competitionName].filter(Boolean).map(esc);
+  const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" &middot; ") : "";
+
+  if (isLarge) {
+    return buildLargeBracketSheetHtml(bracket, totalRounds, printedAt, federationName, categoryName, competitionName, subtitle);
+  }
 
   // ── Colunas de rounds ──
   const roundsHtml = bracket.rounds.map(function (round, rIdx) {
@@ -163,9 +293,6 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
       '</div>'
     )
     : "";
-
-  const subtitleParts = [categoryName, competitionName].filter(Boolean).map(esc);
-  const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" &middot; ") : "";
 
   let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Chave - ' + esc(categoryName || "Kumite") + '</title>';
@@ -261,6 +388,100 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
 
   html += '<div class="bracket">' + roundsHtml + champCol + '</div>';
   html += thirdHtml;
+  html += '</div>';
+
+  html += '<button class="print-fab" onclick="window.print()">Imprimir</button>';
+
+  html += '</body></html>';
+  return html;
+}
+
+// ── Chave grande (> 8 confrontos na 1ª fase, ou seja > 16 atletas) ───────
+// Planilha de confrontos paginada, A4 RETRATO: uma tabela por fase, em vez
+// da árvore visual (que não caberia legível numa única folha). É o formato
+// que o organizador usa pra controlar o evento no papel — por isso colunas
+// largas o bastante pra nome+dojô, e Vencedor/Placar em branco quando
+// pendentes (preenchimento à mão durante o evento).
+function buildLargeBracketSheetHtml(
+  bracket: BracketState,
+  totalRounds: number,
+  printedAt: string,
+  federationName: string,
+  categoryName: string,
+  competitionName: string,
+  subtitle: string,
+): string {
+  const tablesHtml = renderSheetTables(bracket, totalRounds);
+  const totalAthletes = (bracket.rounds[0]?.length ?? 0) * 2;
+
+  let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
+  html += '<title>Chave - ' + esc(categoryName || "Kumite") + '</title>';
+  html += '<style>';
+  html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap\');';
+  html += '@page{size:A4 portrait;margin:12mm 10mm}';
+  html += '*{margin:0;padding:0;box-sizing:border-box}';
+  html += 'html,body{background:' + PAPER + ';color:' + INK + ';font-family:"Zen Kaku Gothic New",system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+
+  // ── Cabeçalho (repetido no topo do documento; fixo na 1ª página) ──
+  html += '.sheet{padding:56px 6px 30px}';
+  html += '.header{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid ' + INK + ';padding-bottom:8px;margin-bottom:14px}';
+  html += '.header-left{display:flex;flex-direction:column;gap:2px}';
+  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:12pt;font-weight:500;color:' + INK + '}';
+  html += '.cat-name{font-size:9.5pt;font-weight:700;color:' + INK + ';margin-top:2px}';
+  html += '.meta-line{font-family:"DM Mono",monospace;font-size:7.5pt;color:' + INK_3 + ';margin-top:2px}';
+  html += '.header-right{text-align:right;font-family:"DM Mono",monospace;font-size:7.5pt;color:' + INK_3 + '}';
+
+  // ── Fases/tabelas — compactas, MUITAS linhas por página ──
+  html += '.phase{page-break-inside:auto;margin-bottom:16px}';
+  html += '.phase+.phase{page-break-before:auto}';
+  html += '.phase-head{font-family:"DM Mono",monospace;font-size:9.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1.2pt;color:' + INK + ';border-bottom:1.3px solid ' + INK + ';padding:6px 2px;margin-bottom:4px;display:flex;align-items:baseline;justify-content:space-between;page-break-after:avoid}';
+  html += '.phase-count{font-family:"DM Mono",monospace;font-size:7.5pt;font-weight:500;text-transform:none;letter-spacing:0;color:' + INK_3 + '}';
+
+  html += '.sheet-table{width:100%;border-collapse:collapse;font-size:8pt}';
+  html += '.sheet-table thead{display:table-header-group}'; // repete cabeçalho da tabela em cada página
+  html += '.sheet-table tr{page-break-inside:avoid}';
+  html += '.sheet-table th{font-family:"DM Mono",monospace;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.6pt;color:' + INK_2 + ';text-align:left;padding:4px 6px;border:1px solid ' + INK + ';background:' + PAPER_WARM + '}';
+  html += '.sheet-table td{padding:3.5px 6px;border:1px solid ' + INK_4 + ';color:' + INK + ';vertical-align:middle;line-height:1.25}';
+  html += '.sheet-table .col-num{width:26px;text-align:center;font-family:"DM Mono",monospace;font-weight:700}';
+  html += '.sheet-table .col-aka{width:29%}';
+  html += '.sheet-table .col-shiro{width:29%}';
+  html += '.sheet-table .col-winner{width:26%;font-weight:700}';
+  html += '.sheet-table .col-score{width:60px;font-family:"DM Mono",monospace;text-align:center}';
+
+  // P&B: linha com resultado já lançado ganha fundo cinza claro (visível em
+  // grayscale) + vencedor em negrito — nunca só cor. Linha pendente fica
+  // neutra, com as células Vencedor/Placar em branco pra anotar à mão.
+  html += 'tr.row-done{background:#eeeae2}';
+  html += 'tr.row-done td.col-winner{font-weight:700}';
+  html += '.tbd{font-style:italic;color:' + INK_3 + '}';
+  html += '.blank{display:inline-block;min-width:100%;min-height:11px}';
+
+  // ── Campeão (linha final da planilha) ──
+  html += '.phase-champ{margin-top:10px}';
+  html += '.champ-line{font-size:10pt;padding:8px 6px;border:2px solid ' + INK + ';border-radius:4px;background:#fff}';
+
+  // ── Controles de tela ──
+  html += '.print-fab{position:fixed;bottom:20px;right:20px;z-index:999;background:#7c3aed;color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.35);font-family:-apple-system,"Segoe UI",sans-serif}';
+  html += '.print-fab:hover{background:#6d28d9}';
+  html += '.top-bar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;z-index:999;display:flex;align-items:center;justify-content:space-between;font-family:-apple-system,"Segoe UI",sans-serif}';
+  html += '.top-bar span{color:#a78bfa;font-size:12px}.top-bar b{color:#e2e8f0;font-size:13px}';
+  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.sheet{padding-top:0}html,body{background:#fff}tr.row-done{background:#eeeae2!important}.sheet-table th{background:' + PAPER_WARM + '!important}}';
+  html += '</style></head><body>';
+
+  html += '<div class="top-bar"><div><span>Chave Aura &mdash; planilha de controle (A4 retrato, ' + totalAthletes + ' atletas)</span><br>';
+  html += '<b>' + esc(categoryName || "Kumite") + (competitionName ? " &middot; " + esc(competitionName) : "") + '</b></div></div>';
+
+  html += '<div class="sheet">';
+  html += '<div class="header">';
+  html += '<div class="header-left">';
+  html += '<div class="fed-name">' + esc(federationName) + '</div>';
+  if (subtitle) html += '<div class="cat-name">' + subtitle + '</div>';
+  html += '<div class="meta-line">Planilha de confrontos &mdash; ' + totalAthletes + ' atletas &middot; preencha Vencedor/Placar &agrave; m&atilde;o quando pendente</div>';
+  html += '</div>';
+  html += '<div class="header-right">Impresso em ' + esc(printedAt) + '</div>';
+  html += '</div>';
+
+  html += tablesHtml;
   html += '</div>';
 
   html += '<button class="print-fab" onclick="window.print()">Imprimir</button>';
