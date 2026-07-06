@@ -531,9 +531,6 @@ export default function TorneioDetalhe() {
         </View>
       </Animated.View>
 
-      {/* Banner deixou de ser tela própria: agora é anexo do evento. */}
-      <EventBannerManager federationId={federationId} eventId={cid} />
-
       {/* ── Workspace: rail + conteúdo ──────────────────────────────── */}
       <View style={[styles.workspace, isWide ? styles.workspaceWide : styles.workspaceNarrow]}>
         <CategoryRail
@@ -547,13 +544,20 @@ export default function TorneioDetalhe() {
 
         <View style={styles.contentArea}>
           {selection.kind === "overview" && (
-            <VisaoGeral
-              comp={comp}
-              entriesByCat={entriesByCat}
-              catProgress={catProgress}
-              loadingProgress={loadingProgress}
-              isKataModality={isKataModality}
-            />
+            <>
+              <VisaoGeral
+                comp={comp}
+                entriesByCat={entriesByCat}
+                catProgress={catProgress}
+                loadingProgress={loadingProgress}
+                isKataModality={isKataModality}
+              />
+              {/* Divulgação/Banners: anexo do evento, dentro da Visão geral
+                  para não roubar altura do rail + chaves no workspace. */}
+              <View style={{ marginTop: 20 }}>
+                <EventBannerManager federationId={federationId} eventId={cid} />
+              </View>
+            </>
           )}
           {selection.kind === "ranking" && (
             <RankingGeral
