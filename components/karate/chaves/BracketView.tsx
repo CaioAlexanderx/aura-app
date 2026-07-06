@@ -33,6 +33,7 @@ import {
   karateBracketsApi,
   BracketState, BracketMatch, BracketAthleteRef, BracketMatchEdit,
 } from "@/services/karateBracketsApi";
+import { buildBracketHtml } from "@/components/karate/chaves/buildBracketHtml";
 import {
   styles as S, initials, roundLabel, ByeText, PendingText,
 } from "./shared";
@@ -47,6 +48,7 @@ type SlotValue = BracketAthleteRef | "bye" | null;
 
 export function BracketView({
   bracket, advancingMatch, onAdvance, onReopen, catName, federationId, cid, catId, onReloaded,
+  competitionName, federationName,
 }: {
   bracket: BracketState;
   advancingMatch: string | null;
@@ -58,6 +60,10 @@ export function BracketView({
   catId: string;
   /** Chamado após save/reset/unlock bem-sucedidos para o orquestrador recarregar o bracket real. */
   onReloaded: () => void | Promise<void>;
+  /** Nome da competição, usado no cabeçalho da folha impressa (opcional). */
+  competitionName?: string;
+  /** Nome da federação, usado no cabeçalho da folha impressa (opcional — cai para o contexto). */
+  federationName?: string;
 }) {
   const totalRounds = bracket.rounds.length;
   const locked = bracket.status === "locked";
@@ -243,6 +249,32 @@ export function BracketView({
     setScoreTarget(null);
   }, [scoreTarget, akaScoreInput, shiroScoreInput, onAdvance]);
 
+  // ── Imprimir chave — Fase 3 ──────────────────────────────────────────
+  // Mesmo padrão de CarteirinhaBatchTab.tsx: builder retorna HTML puro
+  // (buildBracketHtml), abre via Blob + URL.createObjectURL + window.open,
+  // com fallback document.write se o popup for bloqueado. Web-only.
+  const handlePrint = useCallback(() => {
+    if (!isWeb) {
+      toast.error("Impressão da chave disponível apenas na versão web");
+      return;
+    }
+    try {
+      const html = buildBracketHtml(bracket, { competitionName, categoryName: catName, federationName });
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, "_blank");
+      if (!w) {
+        const w2 = window.open("", "_blank");
+        if (w2) { w2.document.write(html); w2.document.close(); }
+        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+      }
+      toast.success("Chave aberta para impressão");
+    } catch (e: any) {
+      console.error("[BracketView] Erro ao gerar impressão da chave:", e);
+      toast.error(e?.message || "Erro ao gerar a chave para impressão");
+    }
+  }, [bracket, competitionName, catName, federationName]);
+
   return (
     <View>
       {/* Section head */}
@@ -302,6 +334,13 @@ export function BracketView({
             </TouchableOpacity>
           </>
         )}
+        <ShojiButton
+          label="Imprimir chave"
+          icon="print"
+          variant="ghost"
+          onPress={handlePrint}
+          style={ctrlStyles.actionBtn}
+        />
       </View>
 
       <View style={S.bracketHint}>

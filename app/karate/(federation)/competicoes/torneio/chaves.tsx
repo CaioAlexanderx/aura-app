@@ -54,7 +54,7 @@ export default function ChavesScreen() {
     id: string; catId: string; catName: string; modality: string;
   }>();
   const router = useRouter();
-  const { federationId } = useKarateFederation();
+  const { federationId, federationName } = useKarateFederation();
 
   const isKata = modality === "kata" || modality === "team_kata";
 
@@ -370,6 +370,7 @@ export default function ChavesScreen() {
             cid={cid || ""}
             catId={selectedCatId}
             onReloaded={loadBracket}
+            federationName={federationName}
           />
         )}
 
