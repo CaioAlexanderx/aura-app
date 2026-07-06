@@ -156,10 +156,21 @@ export type LabelItem = {
 };
 
 // ----- Presets de tamanho de etiqueta -----
-// "99x21" e o formato original (Finesse, LOCKED, validado com scanner fisico).
-// Novos presets sao livres de adicionar aqui - a estrutura de CSS abaixo e
-// toda parametrizada por preset, entao um preset novo nao mexe no HTML
-// gerado pelos outros. NUNCA mudar os numeros do preset "99x21".
+// "99x21" e o formato original (Finesse, LOCKED, validado com scanner fisico) —
+// rolo 3-across com etiquetas COLADAS (sem vao): pageWidth 99 = 3x33.
+//
+// "30x25" (rolo da Eryca): 3-across COM vao de 2mm entre colunas E entre linhas
+// (medido no rolo fisico). Por isso a geometria e diferente:
+//   - pageWidthMm 94  = 3x30 + 2 vaos de 2mm  -> alinha as 3 colunas
+//   - pageHeightMm 27 = 25 (label) + 2mm de vao vertical = PASSO de uma linha
+//   - colGapMm/rowGapMm 2 -> insere colunas espacadoras e sobra 2mm embaixo
+// A pagina de impressao passa a ser o PASSO de uma linha; o conteudo da
+// etiqueta ocupa o topo 25mm de cada linha (o resto e o vao). O layout INTERNO
+// da celula (fonte, barcode, preco) NAO muda — so a geometria de encaixe.
+//
+// Um preset SEM colGapMm/rowGapMm (como "99x21") se comporta como antes
+// (vao 0), entao presets colados continuam byte-identicos.
+// NUNCA mudar os numeros do preset "99x21".
 export type LabelSizeKey = "99x21" | "30x25";
 
 export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
@@ -168,10 +179,12 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   cols: number;
   cellWidthMm: number;
   cellHeightMm: number;
+  colGapMm?: number;
+  rowGapMm?: number;
   uiLabel: string;
 }> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
-  "30x25": { pageWidthMm: 90, pageHeightMm: 25, cols: 3, cellWidthMm: 30, cellHeightMm: 25, uiLabel: "30x25mm (3 colunas)" },
+  "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
 };
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
 // -------------------------------------------
@@ -187,6 +200,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const isQR = options.mode === "qr";
   const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
   const COLS = preset.cols;
+  // Vao horizontal entre colunas (0 = etiquetas coladas, comportamento original).
+  const colGapMm = preset.colGapMm || 0;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
   const totalLabels = items.reduce((s, i) => s + i.qty, 0);
 
@@ -226,9 +241,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
 
   while (cells.length % COLS !== 0) cells.push('<td class="cell"></td>');
 
+  // Insere colunas espacadoras (vao) entre as celulas de cada linha. Com
+  // colGapMm=0 (ex: preset 99x21) o separador e vazio -> join identico ao antigo.
+  const colSep = colGapMm > 0 ? '<td class="colgap"></td>' : "";
   let rowsHtml = "";
   for (let r = 0; r < cells.length; r += COLS) {
-    rowsHtml += "<tr>" + cells.slice(r, r + COLS).join("") + "</tr>\n";
+    rowsHtml += "<tr>" + cells.slice(r, r + COLS).join(colSep) + "</tr>\n";
   }
   const totalRows = cells.length / COLS;
 
@@ -242,10 +260,14 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
 
   html += '<style>';
   // ===== LOCKED CSS — dimensoes da etiqueta (nao mudar pro preset 99x21) =====
+  // @page e tr usam pageHeightMm = PASSO da linha (label + vao vertical). Pro
+  // 99x21 (sem vao) pageHeightMm == cellHeightMm, entao sai identico ao antigo.
   html += '@page{margin:0;size:' + preset.pageWidthMm + 'mm ' + preset.pageHeightMm + 'mm}*{margin:0;padding:0;box-sizing:border-box}';
   html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
-  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed}tr{height:' + preset.cellHeightMm + 'mm;page-break-inside:avoid}';
+  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed}tr{height:' + preset.pageHeightMm + 'mm;page-break-inside:avoid}';
   html += '.cell{width:' + preset.cellWidthMm + 'mm;height:' + preset.cellHeightMm + 'mm;overflow:hidden;vertical-align:top;padding:0}';
+  // Coluna espacadora = vao horizontal entre etiquetas (so quando colGapMm>0).
+  if (colGapMm > 0) html += '.colgap{width:' + colGapMm + 'mm;height:' + preset.cellHeightMm + 'mm;padding:0;border:none;background:transparent}';
   // ============================================================
 
   // LOCKED: layout interno da celula barcode (padrao Finesse)
@@ -284,7 +306,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
   html += '.preview-bar button:disabled{background:#4b5563;color:#9ca3af;cursor:not-allowed;opacity:0.7}';
   html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-top:170px;padding-bottom:80px}';
-  html += '.preview-wrap table{border:1px dashed #ccc}.preview-wrap .cell{border:1px dashed #eee}';
+  html += '.preview-wrap table{border:1px dashed #ccc}.preview-wrap .cell{border:1px dashed #eee}.preview-wrap .colgap{border:none}';
   html += '@media print{.setup-guide{display:none!important}.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
   html += '</style></head><body>';
 
