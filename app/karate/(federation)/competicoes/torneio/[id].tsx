@@ -29,7 +29,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
+  View, Text, ScrollView, TouchableOpacity, Pressable, Modal, TextInput,
   ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Animated, useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -53,7 +53,8 @@ import { buildRosterHtml } from "@/components/karate/chaves/buildRosterHtml";
 import { buildRankingHtml, RankingRowLike } from "@/components/karate/chaves/buildRankingHtml";
 import { karateBracketsApi } from "@/services/karateBracketsApi";
 import { formatEventDateNumeric } from "@/utils/eventDate";
-import { Card, KpiBand, KpiItem } from "@/components/karate/shoji";
+import { Card } from "@/components/karate/shoji";
+import { useCountUp } from "@/hooks/useCountUp";
 
 const MODALITY_LABEL: Record<Modality, string> = {
   kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
@@ -465,8 +466,21 @@ export default function TorneioDetalhe() {
           }),
         },
       ]}>
+        <View style={styles.headerAccent} />
         <View style={styles.headerTop}>
-          <Text style={styles.title}>{comp.name}</Text>
+          <View style={styles.titleBlock}>
+            <View style={styles.seal}>
+              <Icon name="trophy" size={20} color={KarateColors.bg} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.title}>{comp.name}</Text>
+              <Text style={styles.subtitle}>
+                Temporada {comp.season}
+                {comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}
+                {comp.location ? ` · ${comp.location}` : ""}
+              </Text>
+            </View>
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {justPublished && (
               <Animated.View style={[styles.celebrateCheck, {
@@ -479,12 +493,6 @@ export default function TorneioDetalhe() {
             <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
           </View>
         </View>
-        <Text style={styles.meta}>Temporada {comp.season}{comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}</Text>
-        {!!comp.location && <Text style={styles.meta}>{comp.location}</Text>}
-        <View style={styles.statsRow}>
-          <Text style={styles.stat}><Text style={styles.statNum}>{comp.categories.length}</Text> {comp.categories.length === 1 ? "categoria" : "categorias"}</Text>
-          <Text style={styles.stat}><Text style={styles.statNum}>{comp.entry_count ?? 0}</Text> {(comp.entry_count ?? 0) === 1 ? "inscrito" : "inscritos"}</Text>
-        </View>
         {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa.
             F7.4: Encerrar (open) e Cancelar (draft/open). "Chaves" deixou de ser um botão
             separado — agora é uma aba dentro de cada categoria no workspace abaixo. */}
@@ -496,7 +504,6 @@ export default function TorneioDetalhe() {
               size="sm"
               loading={publishing}
               onPress={handlePublish}
-              style={{ flex: 1 }}
             />
           )}
           <KarateButton
@@ -504,28 +511,25 @@ export default function TorneioDetalhe() {
             variant="secondary"
             size="sm"
             onPress={() => setShowEditInfo(true)}
-            style={{ flex: 1 }}
           />
           {comp.status === "open" && (
             <KarateButton
               label={closing ? "Encerrando..." : "Encerrar"}
-              variant="secondary"
+              variant="ghost"
               size="sm"
               loading={closing}
               disabled={closing || cancelling}
               onPress={handleClose}
-              style={{ flex: 1 }}
             />
           )}
           {(comp.status === "draft" || comp.status === "open") && (
             <KarateButton
               label={cancelling ? "Cancelando..." : "Cancelar"}
-              variant="primary"
+              variant="ghost"
               size="sm"
               loading={cancelling}
               disabled={closing || cancelling}
               onPress={handleCancel}
-              style={{ flex: 1 }}
             />
           )}
         </View>
@@ -551,6 +555,7 @@ export default function TorneioDetalhe() {
                 catProgress={catProgress}
                 loadingProgress={loadingProgress}
                 isKataModality={isKataModality}
+                onSelectCategory={handleSelectCategory}
               />
               {/* Divulgação/Banners: anexo do evento, dentro da Visão geral
                   para não roubar altura do rail + chaves no workspace. */}
@@ -687,6 +692,81 @@ export default function TorneioDetalhe() {
 // ── Rail de categorias ────────────────────────────────────────────
 // Telas largas (>= WIDE_BREAKPOINT): coluna fixa à esquerda.
 // Telas estreitas: faixa horizontal de chips no topo (ScrollView horizontal).
+type MetricDef = { label: string; value: number; meta?: string; metaWarn?: boolean; glyph: string; accent: "ink" | "red" };
+type ProgressTone = "done" | "pend" | "unknown" | "loading";
+
+// Animação de entrada (fade + slide) — useNativeDriver:false para o web.
+function useMountAnim(delay = 0) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.timing(a, { toValue: 1, duration: 360, delay, useNativeDriver: false });
+    anim.start();
+    return () => anim.stop();
+  }, [a, delay]);
+  return a;
+}
+
+function MetricCard({ label, value, meta, metaWarn, glyph, accent, delay }: MetricDef & { delay?: number }) {
+  const mount = useMountAnim(delay ?? 0);
+  const counted = useCountUp(value, 700);
+  const display = Math.round(counted).toLocaleString("pt-BR");
+  return (
+    <Animated.View style={[styles.metricWrap, {
+      opacity: mount,
+      transform: [{ translateY: mount.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+    }]}>
+      <Pressable style={({ hovered }) => [styles.metric, hovered && styles.metricHover]}>
+        <View style={[styles.metricAccent, accent === "red" ? styles.metricAccentRed : styles.metricAccentInk]} />
+        <View style={styles.metricTop}>
+          <Text style={styles.metricLabel}>{label}</Text>
+          <Icon name={glyph as any} size={15} color={KarateColors.ink4} />
+        </View>
+        <Text style={[styles.metricVal, accent === "red" && styles.metricValRed]}>{display}</Text>
+        {!!meta && (
+          <View style={styles.metricMetaRow}>
+            {metaWarn && <View style={styles.metricMetaDot} />}
+            <Text style={styles.metricMeta}>{meta}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+const PROGRESS_TONE: Record<ProgressTone, { fg: string; chip: keyof typeof styles }> = {
+  done:    { fg: P.ok,           chip: "chipDone" },
+  pend:    { fg: P.warn,         chip: "chipPend" },
+  unknown: { fg: P.red2,         chip: "chipUnknown" },
+  loading: { fg: KarateColors.ink3, chip: "chipLoading" },
+};
+
+function ProgressRow({ kata, name, modalityLabel, count, statusText, tone, onPress }: {
+  kata: boolean; name: string; modalityLabel: string; count: number;
+  statusText: string; tone: ProgressTone; onPress: () => void;
+}) {
+  const t = PROGRESS_TONE[tone];
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ hovered }) => [styles.progressRow, hovered && styles.rowHover]}
+    >
+      <View style={[styles.mtile, kata ? styles.mtileKata : styles.mtileKumite]}>
+        <Text style={[styles.mtileGlyph, { color: kata ? P.warn : P.red2 }]}>{kata ? "型" : "組"}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.progressCatName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.progressCatMeta}>{modalityLabel} · {count} {count === 1 ? "inscrito" : "inscritos"}</Text>
+      </View>
+      <View style={[styles.statChip, styles[t.chip] as ViewStyle]}>
+        {tone !== "loading" && <View style={[styles.statLed, { backgroundColor: t.fg }]} />}
+        <Text style={[styles.statChipText, { color: t.fg }]}>{statusText}</Text>
+      </View>
+      <Icon name="chevron-forward" size={16} color={KarateColors.ink4} />
+    </Pressable>
+  );
+}
+
 function CategoryRail({
   isWide, categories, selection, onSelect, onSelectCategory, entriesByCat,
 }: {
@@ -702,6 +782,7 @@ function CategoryRail({
 
   const items = (
     <>
+      {isWide && <Text style={styles.railSection}>Geral</Text>}
       <RailItem
         isWide={isWide}
         icon="grid"
@@ -716,7 +797,10 @@ function CategoryRail({
         active={isRanking}
         onPress={() => onSelect({ kind: "ranking" })}
       />
-      {categories.length > 0 && <View style={isWide ? styles.railDividerWide : styles.railDividerNarrow} />}
+      {categories.length > 0 && (isWide
+        ? <Text style={styles.railSection}>Categorias · {categories.length}</Text>
+        : <View style={styles.railDividerNarrow} />
+      )}
       {categories.map((cat) => {
         const count = cat.entry_count ?? (entriesByCat[cat.id]?.length ?? 0);
         return (
@@ -725,7 +809,8 @@ function CategoryRail({
             isWide={isWide}
             icon="albums-outline"
             label={cat.name}
-            sub={`${MODALITY_LABEL[cat.modality]} · ${count} ${count === 1 ? "inscrito" : "inscritos"}`}
+            sub={MODALITY_LABEL[cat.modality]}
+            count={count}
             active={selection.kind === "category" && selection.categoryId === cat.id}
             onPress={() => onSelectCategory(cat.id)}
           />
@@ -752,41 +837,46 @@ function CategoryRail({
 }
 
 function RailItem({
-  isWide, icon, label, sub, active, onPress,
+  isWide, icon, label, sub, count, active, onPress,
 }: {
   isWide: boolean;
   icon: string;
   label: string;
   sub?: string;
+  count?: number;
   active: boolean;
   onPress: () => void;
 }) {
   if (isWide) {
     return (
-      <TouchableOpacity
-        style={[styles.railItemWide, active && styles.railItemWideActive]}
+      <Pressable
+        style={({ hovered }) => [styles.railItemWide, hovered && !active && styles.railItemWideHover, active && styles.railItemWideActive]}
         onPress={onPress}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
       >
+        {active && <View style={styles.railAccentBar} />}
         <Icon name={icon as any} size={16} color={active ? KarateColors.primary : KarateColors.ink3} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.railItemWideLabel, active && styles.railItemWideLabelActive]} numberOfLines={1}>{label}</Text>
           {!!sub && <Text style={styles.railItemWideSub} numberOfLines={1}>{sub}</Text>}
         </View>
-      </TouchableOpacity>
+        {typeof count === "number" && (
+          <Text style={[styles.railCount, active && styles.railCountActive]}>{count}</Text>
+        )}
+      </Pressable>
     );
   }
   return (
-    <TouchableOpacity
-      style={[styles.railChip, active && styles.railChipActive]}
+    <Pressable
+      style={({ hovered }) => [styles.railChip, hovered && !active && styles.railChipHover, active && styles.railChipActive]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
       <Icon name={icon as any} size={14} color={active ? KarateColors.primary : KarateColors.ink3} />
       <Text style={[styles.railChipLabel, active && styles.railChipLabelActive]} numberOfLines={1}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -798,13 +888,14 @@ function RailItem({
 // loadOverviewProgress acima), total de inscritos e pendências de
 // pagamento (Entry.fee_paid — quando o dado existe no modelo).
 function VisaoGeral({
-  comp, entriesByCat, catProgress, loadingProgress, isKataModality,
+  comp, entriesByCat, catProgress, loadingProgress, isKataModality, onSelectCategory,
 }: {
   comp: CompetitionDetail;
   entriesByCat: Record<string, Entry[]>;
   catProgress: Record<string, boolean | null>;
   loadingProgress: boolean;
   isKataModality: (m: Modality) => boolean;
+  onSelectCategory: (categoryId: string) => void;
 }) {
   const totalCategorias = comp.categories.length;
   const progressValues = comp.categories.map((c) => catProgress[c.id]);
@@ -828,58 +919,71 @@ function VisaoGeral({
   );
   const pendenciaParcial = loadedCats.length < totalCategorias;
 
-  const kpis: KpiItem[] = [
-    { label: "Categorias", value: totalCategorias },
-    { label: "Chaves/apuração geradas", value: geradas, meta: totalCategorias > 0 ? `${naoGeradas} pendente${naoGeradas === 1 ? "" : "s"}` : undefined },
-    { label: "Inscritos", value: totalInscritos },
+  const kataCount = comp.categories.filter((c) => isKataModality(c.modality)).length;
+  const kumiteCount = totalCategorias - kataCount;
+
+  const metrics: MetricDef[] = [
+    { label: "Categorias", value: totalCategorias, glyph: "grid", accent: "ink",
+      meta: totalCategorias > 0 ? `${kataCount} Kata · ${kumiteCount} Kumite` : undefined },
+    { label: "Chaves geradas", value: geradas, glyph: "layers", accent: "ink",
+      meta: totalCategorias > 0 ? `${naoGeradas} pendente${naoGeradas === 1 ? "" : "s"}` : undefined,
+      metaWarn: naoGeradas > 0 },
+    { label: "Inscritos", value: totalInscritos, glyph: "people", accent: "red",
+      meta: totalCategorias > 0 ? `em ${totalCategorias} categoria${totalCategorias === 1 ? "" : "s"}` : undefined },
   ];
   if (loadedCats.length > 0) {
-    kpis.push({
+    metrics.push({
       label: "Aguardando pagamento",
       value: pendentesPagamento,
-      accent: pendentesPagamento > 0,
-      meta: pendenciaParcial ? "parcial — só categorias abertas" : undefined,
+      glyph: "card",
+      accent: pendentesPagamento > 0 ? "red" : "ink",
+      meta: pendenciaParcial ? "parcial — categorias abertas" : undefined,
+      metaWarn: pendentesPagamento > 0,
     });
   }
 
   return (
-    <View style={{ gap: 14 }}>
-      <KpiBand items={kpis} />
+    <View style={{ gap: 16 }}>
+      <View style={styles.metricsRow}>
+        {metrics.map((m, i) => (
+          <MetricCard key={m.label} {...m} delay={i * 80} />
+        ))}
+      </View>
 
-      <Card>
-        <Text style={styles.overviewSectionTitle}>Progresso por categoria</Text>
+      <Card flush>
+        <View style={styles.cardHead}>
+          <Text style={styles.cardTitle}>Progresso por categoria</Text>
+          {totalCategorias > 0 && (
+            <Text style={styles.cardHint}>{geradas} de {totalCategorias} pronta{geradas === 1 ? "" : "s"}</Text>
+          )}
+        </View>
         {totalCategorias === 0 ? (
           <Text style={styles.emptyEntries}>Sem categorias cadastradas.</Text>
         ) : (
-          <View style={{ gap: 8, marginTop: 8 }}>
-            {comp.categories.map((cat) => {
-              const status = catProgress[cat.id];
-              const label = isKataModality(cat.modality) ? "Apuração Kata" : "Chave";
-              let statusText = "—";
-              let statusStyle = styles.progressPending;
-              if (loadingProgress && status === undefined) {
-                statusText = "Verificando...";
-              } else if (status === true) {
-                statusText = `${label} gerada`;
-                statusStyle = styles.progressDone;
-              } else if (status === false) {
-                statusText = `${label} não gerada`;
-                statusStyle = styles.progressPending;
-              } else if (status === null) {
-                statusText = "Não foi possível verificar";
-                statusStyle = styles.progressUnknown;
-              }
-              return (
-                <View key={cat.id} style={styles.progressRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.progressCatName} numberOfLines={1}>{cat.name}</Text>
-                    <Text style={styles.progressCatMeta}>{MODALITY_LABEL[cat.modality]}</Text>
-                  </View>
-                  <Text style={[styles.progressStatus, statusStyle]}>{statusText}</Text>
-                </View>
-              );
-            })}
-          </View>
+          comp.categories.map((cat) => {
+            const kata = isKataModality(cat.modality);
+            const status = catProgress[cat.id];
+            const label = kata ? "Apuração" : "Chave";
+            const count = cat.entry_count ?? (entriesByCat[cat.id]?.length ?? 0);
+            let statusText = "—";
+            let tone: ProgressTone = "pend";
+            if (loadingProgress && status === undefined) { statusText = "Verificando..."; tone = "loading"; }
+            else if (status === true) { statusText = `${label} gerada`; tone = "done"; }
+            else if (status === false) { statusText = `${label} pendente`; tone = "pend"; }
+            else if (status === null) { statusText = "Indisponível"; tone = "unknown"; }
+            return (
+              <ProgressRow
+                key={cat.id}
+                kata={kata}
+                name={cat.name}
+                modalityLabel={MODALITY_LABEL[cat.modality]}
+                count={count}
+                statusText={statusText}
+                tone={tone}
+                onPress={() => onSelectCategory(cat.id)}
+              />
+            );
+          })
         )}
       </Card>
     </View>
@@ -1226,13 +1330,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   back: { flexDirection: "row", alignItems: "center", gap: 2, padding: 24, paddingBottom: 0 } as ViewStyle,
   backText: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  headerCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 4, marginHorizontal: 24, marginTop: 16 } as ViewStyle,
+  headerCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.xl, borderWidth: 1, borderColor: KarateColors.border, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 18, marginHorizontal: 24, marginTop: 16, overflow: "hidden" } as ViewStyle,
   headerTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } as ViewStyle,
   celebrateCheck: { alignItems: "center", justifyContent: "center" } as ViewStyle,
-  title: { flex: 1, fontFamily: KarateFonts.heading, fontSize: 22, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  title: { fontFamily: KarateFonts.heading, fontSize: 24, fontWeight: "400", color: KarateColors.ink, lineHeight: 28 } as TextStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statsRow: { flexDirection: "row", gap: 18, marginTop: 6 } as ViewStyle,
-  headerActions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" } as ViewStyle,
+  headerActions: { flexDirection: "row", gap: 8, marginTop: 18, flexWrap: "wrap", justifyContent: "flex-end" } as ViewStyle,
   stat: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
@@ -1267,7 +1371,7 @@ const styles = StyleSheet.create({
 
   // ── Visão geral: progresso por categoria ──
   overviewSectionTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  progressRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 13, paddingVertical: 12, paddingHorizontal: 18, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   progressCatName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   progressCatMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
   progressStatus: { fontSize: 11.5, fontWeight: "700", paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, overflow: "hidden" } as TextStyle,
@@ -1290,7 +1394,7 @@ const styles = StyleSheet.create({
   entriesPanel: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, overflow: "hidden" } as ViewStyle,
   entriesPanelHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   entriesPanelTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  emptyEntries: { fontSize: 12, color: KarateColors.ink3, padding: 14 } as TextStyle,
+  emptyEntries: { fontSize: 12, color: KarateColors.ink3, paddingHorizontal: 18, paddingVertical: 16 } as TextStyle,
   entryRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   placeBadge: { width: 34, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
   placeText: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, fontFamily: KarateFonts.mono } as TextStyle,
@@ -1319,4 +1423,52 @@ const styles = StyleSheet.create({
   beltChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: "transparent" } as ViewStyle,
   beltChipSelected: { borderColor: P.ink } as ViewStyle,
   beltChipText: { fontSize: 12, fontWeight: "700" } as TextStyle,
+  // ── Header polish ──
+  headerAccent: { position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: P.headRed } as ViewStyle,
+  titleBlock: { flexDirection: "row", alignItems: "flex-start", gap: 13, flex: 1, minWidth: 0 } as ViewStyle,
+  seal: { width: 44, height: 44, borderRadius: 12, backgroundColor: KarateColors.ink, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  subtitle: { fontSize: 12.5, color: KarateColors.ink2, marginTop: 4 } as TextStyle,
+
+  // ── Metric cards ──
+  metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 } as ViewStyle,
+  metricWrap: { flexGrow: 1, flexBasis: 150, minWidth: 150 } as ViewStyle,
+  metric: { position: "relative", backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.lg, paddingVertical: 16, paddingHorizontal: 18, overflow: "hidden" } as ViewStyle,
+  metricHover: { borderColor: KarateColors.border2, backgroundColor: KarateColors.paperWarm } as ViewStyle,
+  metricAccent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3 } as ViewStyle,
+  metricAccentInk: { backgroundColor: KarateColors.ink2 } as ViewStyle,
+  metricAccentRed: { backgroundColor: P.red } as ViewStyle,
+  metricTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
+  metricLabel: { fontSize: 10.5, fontWeight: "700", letterSpacing: 1.0, textTransform: "uppercase", color: KarateColors.ink3 } as TextStyle,
+  metricVal: { fontFamily: KarateFonts.heading, fontSize: 34, fontWeight: "400", color: KarateColors.ink, lineHeight: 36, marginTop: 8 } as TextStyle,
+  metricValRed: { color: P.red2 } as TextStyle,
+  metricMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 } as ViewStyle,
+  metricMeta: { fontSize: 11.5, color: KarateColors.ink2 } as TextStyle,
+  metricMetaDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: P.warn } as ViewStyle,
+
+  // ── Card head (flush) ──
+  cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 15, paddingBottom: 13 } as ViewStyle,
+  cardTitle: { fontFamily: KarateFonts.heading, fontSize: 16, fontWeight: "400", color: KarateColors.ink } as TextStyle,
+  cardHint: { fontSize: 11.5, color: KarateColors.ink3 } as TextStyle,
+
+  // ── Progress rows (polish) ──
+  rowHover: { backgroundColor: KarateColors.bg2 } as ViewStyle,
+  mtile: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: KarateColors.surface } as ViewStyle,
+  mtileKata: { backgroundColor: "rgba(156,111,46,0.14)" } as ViewStyle,
+  mtileKumite: { backgroundColor: P.redWash } as ViewStyle,
+  mtileGlyph: { fontFamily: KarateFonts.heading, fontSize: 18, lineHeight: 22 } as TextStyle,
+  statChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999, borderWidth: 1 } as ViewStyle,
+  statLed: { width: 6, height: 6, borderRadius: 3 } as ViewStyle,
+  statChipText: { fontSize: 11.5, fontWeight: "700" } as TextStyle,
+  chipDone: { backgroundColor: P.okWash, borderColor: P.okLine } as ViewStyle,
+  chipPend: { backgroundColor: "transparent", borderColor: "rgba(156,111,46,0.34)" } as ViewStyle,
+  chipUnknown: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  chipLoading: { backgroundColor: KarateColors.surface, borderColor: KarateColors.border } as ViewStyle,
+
+  // ── Rail polish ──
+  railSection: { fontSize: 10.5, fontWeight: "700", letterSpacing: 1.1, textTransform: "uppercase", color: KarateColors.ink3, paddingHorizontal: 12, marginTop: 6, marginBottom: 4 } as TextStyle,
+  railItemWideHover: { backgroundColor: KarateColors.bg2 } as ViewStyle,
+  railChipHover: { backgroundColor: KarateColors.bg2 } as ViewStyle,
+  railAccentBar: { position: "absolute", left: 0, top: 8, bottom: 8, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: P.red } as ViewStyle,
+  railCount: { fontFamily: KarateFonts.mono, fontSize: 11.5, color: KarateColors.ink3, backgroundColor: KarateColors.bg2, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, minWidth: 24, textAlign: "center", overflow: "hidden" } as TextStyle,
+  railCountActive: { backgroundColor: "#ffffff", color: P.red2 } as TextStyle,
 });
