@@ -97,14 +97,31 @@ export interface PortalData {
   belt_history: BeltHistoryItem[];
   exams: PortalExam[];
   certificates: PortalCertificate[];
+  /**
+   * Carteirinha completa do PRÓPRIO praticante autenticado (JWT type:'portal',
+   * OTP validado com o CPF dele). Contrato espelha karateCardService.getCurrentCard
+   * no backend (mesma função usada por GET /federation/:id/practitioners/:pid/card).
+   * Seguro expor foto/CPF/nascimento aqui — NUNCA usar este shape na tela de
+   * verificação pública (app/karate/verify/[token].tsx), que consome
+   * CardVerification (dados mínimos, sem CPF/nascimento/foto p/ menor).
+   */
   card: {
+    student_name: string;
     card_number: string | null;
     belt: string | null;
     belt_name: string | null;
     dojo_name: string | null;
+    /** Apenas neste portal autenticado — NUNCA na verificação pública. */
+    birth_date?: string | null;
+    /** Apenas neste portal autenticado — NUNCA na verificação pública. */
+    cpf?: string | null;
+    photo_url: string | null;
     is_minor: boolean;
+    issued_at: string;
     verify_token: string;
     status: "active" | "revoked";
+    federation_name?: string | null;
+    federation_logo?: string | null;
   } | null;
   public_portal: { opt_in: boolean; public_token: string | null };
 }
