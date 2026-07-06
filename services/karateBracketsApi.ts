@@ -35,6 +35,8 @@ export interface BracketMatch {
   shiro: BracketAthleteRef | "bye" | null;
   winner_entry_id: string | null;
   is_bye: boolean;
+  aka_score?: number;
+  shiro_score?: number;
 }
 
 export interface BracketState {
@@ -89,6 +91,23 @@ export interface AdvanceResult {
     shiro_entry_id: string | null;
     winner_entry_id: string | null;
   } | null;
+}
+
+// ── Edição total do bracket (Fase 2) ──────────────────────────────
+// Cada item representa SOMENTE os campos que mudaram para aquele match.
+// `id` é o id sintético devolvido pelo GET (ex.: "r0-0", "r1-2", "third").
+export interface BracketMatchEdit {
+  id: string;
+  aka_entry_id?: string | null;
+  shiro_entry_id?: string | null;
+  winner_entry_id?: string | null;
+  aka_score?: number | null;
+  shiro_score?: number | null;
+  is_bye?: boolean;
+}
+
+export interface UnlockResult {
+  status: "draft";
 }
 
 export interface KataScore {
@@ -159,11 +178,45 @@ export const karateBracketsApi = {
     federationId: string,
     cid: string,
     catId: string,
-    body: { match_id: string; winner_entry_id: string }
+    body: { match_id: string; winner_entry_id: string; aka_score?: number; shiro_score?: number }
   ): Promise<AdvanceResult> =>
     request(
       `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/advance`,
       { method: "POST", body }
+    ),
+
+  /** PUT /competitions/:cid/categories/:catId/bracket/matches — edição total (Fase 2) */
+  saveMatches: (
+    federationId: string,
+    cid: string,
+    catId: string,
+    matches: BracketMatchEdit[]
+  ): Promise<BracketState> =>
+    request(
+      `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/matches`,
+      { method: "PUT", body: { matches } }
+    ),
+
+  /** POST /competitions/:cid/categories/:catId/bracket/reset — limpa vencedores/placares, mantém posições */
+  resetBracket: (
+    federationId: string,
+    cid: string,
+    catId: string
+  ): Promise<BracketState> =>
+    request(
+      `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/reset`,
+      { method: "POST", body: {} }
+    ),
+
+  /** POST /competitions/:cid/categories/:catId/bracket/unlock — destrava (locked → draft) */
+  unlockBracket: (
+    federationId: string,
+    cid: string,
+    catId: string
+  ): Promise<UnlockResult> =>
+    request(
+      `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/unlock`,
+      { method: "POST", body: {} }
     ),
 
   // ── Kata scores ─────────────────────────────────────────
