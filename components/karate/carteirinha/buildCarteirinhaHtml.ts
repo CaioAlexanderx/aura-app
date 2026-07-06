@@ -181,7 +181,6 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
           '</div>' +
         '</div>' +
         '<div class="footer-row">' +
-          '<div class="pres-col"><div class="pres-line"></div><div class="pres-label">Presidente</div></div>' +
           '<div class="valid-col"><span class="valid-dot"></span><div class="valid-text">Documento válido em todo o<br>território da federação · F.P.K.T.</div></div>' +
         '</div>' +
       '</div>' +
@@ -226,7 +225,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
           '</div>' +
           '<div class="verify-col">' +
             '<div class="verify-eyebrow">Identificação</div>' +
-            '<div class="verify-title">Validação do atleta</div>' +
+            '<div class="verify-title">Validação do filiado</div>' +
             '<img class="qr" src="' + qr + '" alt="QR de verificação">' +
             '<div class="verify-num">' + esc(card.card_number || "—") + '</div>' +
             '<div class="issued-col">' +
@@ -300,7 +299,7 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.belt-label{margin-top:0;font-weight:700}';
 
   // footer
-  html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between}';
+  html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:flex-end}';
   html += '.pres-line{width:20mm;height:0.15mm;background:' + INK_4 + '}';
   html += '.pres-label{font-family:"DM Mono",monospace;font-size:3.4pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';margin-top:0.9mm}';
   html += '.valid-col{display:flex;align-items:center;gap:1.2mm}';
