@@ -146,27 +146,31 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 
   const fieldsGrid = isPreta
     ? (
-      // Design 02: MESMA ordem/grid do Design 01 [Data nasc · Dojô / CPF · Nº registro]
-      // + campo "Faixa" acrescentado como ÚLTIMO item (diferenciação da faixa-preta).
-      '<div class="grid2">' +
-        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
-        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
-        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
-        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
+      // Design 02: mesma ordem do Design 01 [Nasc · Dojô / CPF · Nº registro]
+      // + Faixa como ÚLTIMO item. Dojô em coluna larga com fallback de 2 linhas.
+      '<div class="frow">' +
+        '<div class="fld f-date"><div class="flabel">Nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld f-dojo"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
+      '</div>' +
+      '<div class="frow">' +
+        '<div class="fld f-half"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
+        '<div class="fld f-half"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>' +
       '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>'
     )
     : (
-      '<div class="grid2">' +
-        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
-        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
-        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
-        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
+      '<div class="frow">' +
+        '<div class="fld f-date"><div class="flabel">Nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld f-dojo"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
+      '</div>' +
+      '<div class="frow">' +
+        '<div class="fld f-half"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
+        '<div class="fld f-half"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>'
     );
 
   return (
-    '<div class="cr80">' +
+    '<div class="cr80' + (isPreta ? ' is-preta' : '') + '">' +
       (card.federation_logo ? '<img class="wm wm-front" src="' + esc(card.federation_logo) + '" alt="">' : '') +
       '<div class="face-pad">' +
         '<div class="head">' +
@@ -280,21 +284,32 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
 
   // réguas
   html += '.ruler-red{margin:2.4mm -5.1mm 0;height:0.3mm;background:' + RED + '}';
-  html += '.black-bar{margin:1.6mm -5.1mm 0;height:1.15mm;background:' + BLACK_BAR + '}';
+  html += '.black-bar{margin:1.2mm -5.1mm 0;height:1.15mm;background:' + BLACK_BAR + '}';
 
   // body
-  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.6mm;flex:1;min-height:0;align-items:flex-start}';
+  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.0mm;flex:1;min-height:0;align-items:flex-start}';
   html += '.photo{width:21.7mm;height:28.9mm;flex-shrink:0;border-radius:1.4mm;border:0.15mm solid ' + LINE_2 + ';object-fit:cover;background:#faf8f3}';
   html += '.photo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;font-family:"DM Mono",monospace;font-size:4.6pt;letter-spacing:0.5pt;color:' + INK_4 + '}';
   html += '.photo-sub{font-size:4.2pt}';
-  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.1mm}';
+  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.6mm}';
   html += '.flabel{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New",sans-serif;font-size:6.4pt;font-weight:500;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.12}';
+  html += '.frow{display:flex;gap:2.6mm}';
+  html += '.f-date{width:14mm;flex:none;min-width:0}';
+  html += '.f-dojo{flex:1;min-width:0}';
+  html += '.f-half{flex:1;min-width:0}';
   html += '.fvalue.name{font-size:9pt;font-weight:700;white-space:normal}';
   html += '.fvalue.mono{font-family:"DM Mono",monospace;font-weight:400}';
   html += '.name-fld{margin-bottom:0.4mm}';
   html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.2mm 2.6mm}';
-  html += '.reg-fld{margin-top:1.6mm}';
+  html += '.reg-fld{margin-top:1.1mm}';
+  html += '.is-preta .body-row{margin-top:1.5mm}';
+  html += '.is-preta .fields{gap:1.2mm}';
+  html += '.is-preta .fvalue.name{font-size:8.4pt}';
+  html += '.is-preta .reg-fld{margin-top:0.7mm}';
+  html += '.is-preta .belt-line{margin-top:0.4mm}';
+  html += '.is-preta .face-pad{padding-bottom:2.6mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:500;color:' + RED + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
