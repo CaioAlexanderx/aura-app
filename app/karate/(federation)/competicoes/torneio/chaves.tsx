@@ -337,6 +337,12 @@ export default function ChavesScreen() {
             catName={selectedCatName}
             scores={kataScores}
             onEditScore={(s) => { setEditScore(s); setScoreInput(s.nota !== null ? String(s.nota).replace(".", ",") : ""); }}
+            federationId={federationId}
+            cid={cid || ""}
+            catId={selectedCatId}
+            competitionName={selectedCatName}
+            federationName={federationName}
+            onReloaded={loadKata}
           />
         )}
 

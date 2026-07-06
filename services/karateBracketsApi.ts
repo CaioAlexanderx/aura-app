@@ -138,6 +138,12 @@ export interface KataOrderResult {
   presentation_order: Array<{ entry_id: string; student_name: string; order: number }>;
 }
 
+/** Item enviado ao PUT .../kata-scores/order (reordenação manual). */
+export interface KataOrderItem {
+  entry_id: string;
+  presentation_order: number;
+}
+
 // ── API calls ──────────────────────────────────────────────────
 export const karateBracketsApi = {
   // ── Kumite bracket ────────────────────────────────────────
@@ -263,5 +269,18 @@ export const karateBracketsApi = {
     request(
       `/federation/${federationId}/competitions/${cid}/categories/${catId}/kata-scores/advance`,
       { method: "POST", body: body || {} }
+    ),
+
+  /** PUT .../kata-scores/order — reordenação manual (drag-and-drop) da ordem de apresentação */
+  saveKataOrder: (
+    federationId: string,
+    cid: string,
+    catId: string,
+    phase: KataPhase,
+    order: KataOrderItem[]
+  ): Promise<KataScore[]> =>
+    request(
+      `/federation/${federationId}/competitions/${cid}/categories/${catId}/kata-scores/order`,
+      { method: "PUT", body: { phase, order } }
     ),
 };
