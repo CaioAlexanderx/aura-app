@@ -34,6 +34,7 @@ import {
   BracketState, BracketMatch, BracketAthleteRef, BracketMatchEdit,
 } from "@/services/karateBracketsApi";
 import { buildBracketHtml } from "@/components/karate/chaves/buildBracketHtml";
+import { EventDayMode } from "@/components/karate/chaves/EventDayMode";
 import {
   styles as S, initials, roundLabel, ByeText, PendingText,
 } from "./shared";
@@ -70,6 +71,7 @@ export function BracketView({
 
   // ── Modo edição total (drag-and-drop) ─────────────────────────────
   const [editMode, setEditMode] = useState(false);
+  const [eventMode, setEventMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
@@ -334,6 +336,15 @@ export function BracketView({
             </TouchableOpacity>
           </>
         )}
+        {locked && !editMode && (
+          <ShojiButton
+            label="Modo evento"
+            icon="pulse"
+            variant="accent"
+            onPress={() => setEventMode(true)}
+            style={ctrlStyles.actionBtn}
+          />
+        )}
         <ShojiButton
           label="Imprimir chave"
           icon="print"
@@ -449,6 +460,21 @@ export function BracketView({
           </View>
         </View>
       </Modal>
+
+      {/* Modo dia do evento — visão focada de tela cheia (Fase 5) */}
+      {locked && (
+        <EventDayMode
+          visible={eventMode}
+          onClose={() => setEventMode(false)}
+          bracket={bracket}
+          onAdvance={onAdvance}
+          onReloaded={onReloaded}
+          advancingMatch={advancingMatch}
+          catName={catName}
+          competitionName={competitionName}
+          federationName={federationName}
+        />
+      )}
     </View>
   );
 }
