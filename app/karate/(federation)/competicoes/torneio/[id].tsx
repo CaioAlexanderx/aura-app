@@ -1,9 +1,7 @@
 // ============================================================
 // Competições — Workspace do Campeonato — Aura Karatê (federação)
 //
-// FASE 1 do Workspace unificado: reestruturação de NAVEGAÇÃO/UI apenas
-// (sem mudar o modelo de dados de resultados/ranking). Substitui a tela
-// antiga de "categorias expansíveis em lista" por um workspace com:
+// Workspace unificado do campeonato (Fase 1 + Fase 2):
 //   - Rail de categorias (lateral em telas largas / chips no topo em
 //     telas estreitas) com dois itens de nível-competição fixos no topo
 //     ("Visão geral", "Ranking geral") + uma entrada por categoria.
@@ -15,8 +13,15 @@
 //     handlers de publicar/editar/encerrar/cancelar de antes (lógica
 //     inalterada, só reorganizados na tela).
 //
-// "Visão geral" e "Ranking geral" são placeholders nesta fase — a
-// implementação real entra na Fase 2 (ver comentários `// FASE2:`).
+// "Visão geral" (VisaoGeral): KPIs client-side — total de categorias,
+// progresso de chave/kata gerado por categoria (karateBracketsApi.getBracket
+// / getKataScores, buscados em paralelo), total de inscritos e pendências
+// de pagamento (Entry.fee_paid, só para categorias já carregadas).
+//
+// "Ranking geral" (RankingGeral): classificação consolidada do CAMPEONATO
+// via karateCompetitionsApi.getTournamentRanking (ranking por competição —
+// distinto de getSeasonRanking, que é por temporada), somado por atleta
+// client-side (um atleta pode pontuar em mais de uma categoria).
 //
 // A rota antiga app/karate/(federation)/competicoes/torneio/chaves.tsx
 // continua existindo (deep-link), agora também consumindo o mesmo
@@ -45,6 +50,10 @@ import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import { CategoryBracketPanel } from "@/components/karate/chaves/CategoryBracketPanel";
 import { buildRosterHtml } from "@/components/karate/chaves/buildRosterHtml";
+import { buildRankingHtml, RankingRowLike } from "@/components/karate/chaves/buildRankingHtml";
+import { karateBracketsApi } from "@/services/karateBracketsApi";
+import { formatEventDateNumeric } from "@/utils/eventDate";
+import { Card, KpiBand, KpiItem } from "@/components/karate/shoji";
 
 const MODALITY_LABEL: Record<Modality, string> = {
   kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
@@ -265,7 +274,7 @@ export default function TorneioDetalhe() {
     }
   };
 
-  // Botão "Imprimir lista" da aba Inscritos — stub funcional (Fase 2 refina).
+  // Botão "Imprimir lista" da aba Inscritos.
   const handlePrintRoster = useCallback(() => {
     if (!selectedCategory) return;
     setPrintingRoster(true);
@@ -275,6 +284,8 @@ export default function TorneioDetalhe() {
         competitionName: comp?.name,
         categoryName: selectedCategory.name,
         federationName,
+        modalityLabel: MODALITY_LABEL[selectedCategory.modality],
+        eventDateLabel: comp?.event_date ? formatEventDateNumeric(comp.event_date) : null,
       });
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -292,6 +303,136 @@ export default function TorneioDetalhe() {
     }
   }, [selectedCategory, entriesByCat, comp, federationName]);
 
+  // ── Visão geral: progresso de chave/kata gerado por categoria ──────
+  // Sem endpoint novo: para cada categoria, reaproveita os MESMOS
+  // endpoints que CategoryBracketPanel usa para decidir o que renderizar
+  // (karateBracketsApi.getBracket para Kumite/Kihon-Ippon/Kumite Equipe;
+  // karateBracketsApi.getKataScores para Kata/Kata Equipe). Buscado em
+  // paralelo (Promise.all) para não serializar N requests.
+  const [catProgress, setCatProgress] = useState<Record<string, boolean | null>>({});
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const isKataModality = useCallback((m: Modality) => m === "kata" || m === "team_kata", []);
+
+  const loadOverviewProgress = useCallback(async () => {
+    if (!comp || comp.categories.length === 0) { setCatProgress({}); return; }
+    setLoadingProgress(true);
+    try {
+      const entries = await Promise.all(
+        comp.categories.map(async (cat) => {
+          try {
+            if (isKataModality(cat.modality)) {
+              const scores = await karateBracketsApi.getKataScores(federationId, cid, cat.id);
+              return [cat.id, Array.isArray(scores) && scores.length > 0] as const;
+            }
+            const resp = await karateBracketsApi.getBracket(federationId, cid, cat.id);
+            return [cat.id, resp.status !== "not_generated"] as const;
+          } catch {
+            // Falha pontual numa categoria não deve derrubar o resumo inteiro —
+            // marcamos como "desconhecido" (null) em vez de fingir "não gerada".
+            return [cat.id, null] as const;
+          }
+        })
+      );
+      setCatProgress(Object.fromEntries(entries));
+    } finally {
+      setLoadingProgress(false);
+    }
+  }, [comp, federationId, cid, isKataModality]);
+
+  useEffect(() => {
+    if (selection.kind === "overview" && comp) {
+      loadOverviewProgress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection.kind, comp?.id, comp?.categories.length]);
+
+  // ── Ranking geral: classificação consolidada do CAMPEONATO ─────────
+  // getTournamentRanking (karateCompetitionsApi) é o ranking POR
+  // COMPETIÇÃO (não por temporada — esse é getSeasonRanking, endpoint
+  // diferente): já retorna, por categoria, os resultados lançados
+  // (placement + points_awarded) de cada atleta. Somamos aqui,
+  // client-side, os pontos de um mesmo atleta em todas as categorias
+  // em que competiu (ex.: atleta que disputa Kata E Kumite no mesmo
+  // campeonato) — sem endpoint novo.
+  const [ranking, setRanking] = useState<RankingRowLike[] | null>(null);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+  const [rankingError, setRankingError] = useState(false);
+  const [printingRanking, setPrintingRanking] = useState(false);
+
+  const loadRanking = useCallback(async () => {
+    setLoadingRanking(true);
+    setRankingError(false);
+    try {
+      const data = await karateCompetitionsApi.getTournamentRanking(federationId, cid);
+      const byAthlete = new Map<string, RankingRowLike>();
+      for (const cat of data.categories) {
+        for (const r of cat.results) {
+          const existing = byAthlete.get(r.student_id);
+          const isGold = r.placement === 1;
+          const isSilver = r.placement === 2;
+          const isBronze = r.placement === 3;
+          if (existing) {
+            existing.total_points += r.points_awarded ?? 0;
+            if (!existing.categories.includes(cat.category_name)) existing.categories.push(cat.category_name);
+            if (isGold) existing.gold += 1;
+            if (isSilver) existing.silver += 1;
+            if (isBronze) existing.bronze += 1;
+          } else {
+            byAthlete.set(r.student_id, {
+              student_id: r.student_id,
+              student_name: r.student_name,
+              dojo_name: r.dojo_name,
+              total_points: r.points_awarded ?? 0,
+              categories: [cat.category_name],
+              gold: isGold ? 1 : 0,
+              silver: isSilver ? 1 : 0,
+              bronze: isBronze ? 1 : 0,
+            });
+          }
+        }
+      }
+      const rows = Array.from(byAthlete.values()).sort((a, b) => b.total_points - a.total_points);
+      setRanking(rows);
+    } catch {
+      setRanking(null);
+      setRankingError(true);
+    } finally {
+      setLoadingRanking(false);
+    }
+  }, [federationId, cid]);
+
+  useEffect(() => {
+    if (selection.kind === "ranking" && ranking === null && !loadingRanking) {
+      loadRanking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection.kind]);
+
+  const handlePrintRanking = useCallback(() => {
+    if (!ranking) return;
+    setPrintingRanking(true);
+    try {
+      const html = buildRankingHtml(ranking, {
+        competitionName: comp?.name,
+        federationName,
+        eventDateLabel: comp?.event_date ? formatEventDateNumeric(comp.event_date) : null,
+      });
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, "_blank");
+      if (!w) {
+        const w2 = window.open("", "_blank");
+        if (w2) { w2.document.write(html); w2.document.close(); }
+        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+      }
+      toast.success("Ranking aberto para impressão");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar o ranking para impressão");
+    } finally {
+      setPrintingRanking(false);
+    }
+  }, [ranking, comp, federationName]);
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: KarateColors.bg, padding: 24, gap: 12 }}>
@@ -301,7 +442,6 @@ export default function TorneioDetalhe() {
   }
   if (error || !comp) return <KarateErrorState onRetry={load} />;
 
-  const isKataModality = (m: Modality) => m === "kata" || m === "team_kata";
   const chavesTabLabel = selectedCategory && isKataModality(selectedCategory.modality) ? "Apuração Kata" : "Chaves & Resultados";
 
   return (
@@ -406,8 +546,25 @@ export default function TorneioDetalhe() {
         />
 
         <View style={styles.contentArea}>
-          {selection.kind === "overview" && <VisaoGeralPlaceholder comp={comp} />}
-          {selection.kind === "ranking" && <RankingGeralPlaceholder />}
+          {selection.kind === "overview" && (
+            <VisaoGeral
+              comp={comp}
+              entriesByCat={entriesByCat}
+              catProgress={catProgress}
+              loadingProgress={loadingProgress}
+              isKataModality={isKataModality}
+            />
+          )}
+          {selection.kind === "ranking" && (
+            <RankingGeral
+              ranking={ranking}
+              loading={loadingRanking}
+              error={rankingError}
+              onRetry={loadRanking}
+              onPrint={handlePrintRanking}
+              printing={printingRanking}
+            />
+          )}
           {selection.kind === "category" && selectedCategory && (
             <View>
               <View style={styles.catHeadRow}>
@@ -629,32 +786,161 @@ function RailItem({
   );
 }
 
-// ── Placeholders (Fase 2 — outro agente implementa o conteúdo real) ──
-function VisaoGeralPlaceholder({ comp }: { comp: CompetitionDetail }) {
-  // FASE2: substituir por dashboard real da competição (KPIs agregados,
-  // progresso de chaves/kata por categoria, atalhos). Por ora, um slot
-  // simples no shell só para o workspace ter algo navegável.
+// ── Visão geral (nível competição) ──────────────────────────────────
+// KPIs agregados client-side a partir dos dados já carregados/buscáveis
+// via API existente (sem endpoint novo): total de categorias, progresso
+// de chave/kata gerado (catProgress vem de karateBracketsApi.getBracket/
+// getKataScores, buscado por CADA categoria em paralelo — ver
+// loadOverviewProgress acima), total de inscritos e pendências de
+// pagamento (Entry.fee_paid — quando o dado existe no modelo).
+function VisaoGeral({
+  comp, entriesByCat, catProgress, loadingProgress, isKataModality,
+}: {
+  comp: CompetitionDetail;
+  entriesByCat: Record<string, Entry[]>;
+  catProgress: Record<string, boolean | null>;
+  loadingProgress: boolean;
+  isKataModality: (m: Modality) => boolean;
+}) {
+  const totalCategorias = comp.categories.length;
+  const progressValues = comp.categories.map((c) => catProgress[c.id]);
+  const geradas = progressValues.filter((v) => v === true).length;
+  const naoGeradas = progressValues.filter((v) => v === false).length;
+  const desconhecidas = progressValues.filter((v) => v === undefined || v === null).length;
+
+  const totalInscritos = comp.entry_count ?? comp.categories.reduce(
+    (sum, c) => sum + (c.entry_count ?? (entriesByCat[c.id]?.length ?? 0)), 0
+  );
+
+  // Pendências de pagamento: soma de Entry.fee_paid === false entre as
+  // categorias cujos inscritos já foram carregados. Como só temos
+  // entries carregadas sob demanda (ao abrir cada categoria no rail),
+  // a métrica reflete o que já foi buscado — não inventamos dado para
+  // categorias ainda não abertas.
+  const loadedCats = Object.keys(entriesByCat);
+  const pendentesPagamento = loadedCats.reduce(
+    (sum, catId) => sum + (entriesByCat[catId] || []).filter((e) => e.fee_paid === false).length,
+    0
+  );
+  const pendenciaParcial = loadedCats.length < totalCategorias;
+
+  const kpis: KpiItem[] = [
+    { label: "Categorias", value: totalCategorias },
+    { label: "Chaves/apuração geradas", value: geradas, meta: totalCategorias > 0 ? `${naoGeradas} pendente${naoGeradas === 1 ? "" : "s"}` : undefined },
+    { label: "Inscritos", value: totalInscritos },
+  ];
+  if (loadedCats.length > 0) {
+    kpis.push({
+      label: "Aguardando pagamento",
+      value: pendentesPagamento,
+      accent: pendentesPagamento > 0,
+      meta: pendenciaParcial ? "parcial — só categorias abertas" : undefined,
+    });
+  }
+
   return (
-    <View style={styles.placeholderCard}>
-      <Icon name="grid" size={22} color={KarateColors.ink3} />
-      <Text style={styles.placeholderTitle}>Visão geral — em construção</Text>
-      <Text style={styles.placeholderSub}>
-        Um resumo do campeonato (progresso por categoria, pendências, atalhos) chega na Fase 2.
-      </Text>
+    <View style={{ gap: 14 }}>
+      <KpiBand items={kpis} />
+
+      <Card>
+        <Text style={styles.overviewSectionTitle}>Progresso por categoria</Text>
+        {totalCategorias === 0 ? (
+          <Text style={styles.emptyEntries}>Sem categorias cadastradas.</Text>
+        ) : (
+          <View style={{ gap: 8, marginTop: 8 }}>
+            {comp.categories.map((cat) => {
+              const status = catProgress[cat.id];
+              const label = isKataModality(cat.modality) ? "Apuração Kata" : "Chave";
+              let statusText = "—";
+              let statusStyle = styles.progressPending;
+              if (loadingProgress && status === undefined) {
+                statusText = "Verificando...";
+              } else if (status === true) {
+                statusText = `${label} gerada`;
+                statusStyle = styles.progressDone;
+              } else if (status === false) {
+                statusText = `${label} não gerada`;
+                statusStyle = styles.progressPending;
+              } else if (status === null) {
+                statusText = "Não foi possível verificar";
+                statusStyle = styles.progressUnknown;
+              }
+              return (
+                <View key={cat.id} style={styles.progressRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.progressCatName} numberOfLines={1}>{cat.name}</Text>
+                    <Text style={styles.progressCatMeta}>{MODALITY_LABEL[cat.modality]}</Text>
+                  </View>
+                  <Text style={[styles.progressStatus, statusStyle]}>{statusText}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </Card>
     </View>
   );
 }
 
-function RankingGeralPlaceholder() {
-  // FASE2: substituir por getSeasonRanking (karateCompetitionsApi) com
-  // tabela de classificação consolidada do campeonato/temporada.
+// ── Ranking geral (nível competição) ────────────────────────────────
+// Classificação consolidada do CAMPEONATO (não da temporada), calculada
+// client-side a partir de karateCompetitionsApi.getTournamentRanking —
+// ver loadRanking acima para a justificativa de por que este endpoint
+// (e não getSeasonRanking) é o correto aqui.
+function RankingGeral({
+  ranking, loading, error, onRetry, onPrint, printing,
+}: {
+  ranking: RankingRowLike[] | null;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  onPrint: () => void;
+  printing: boolean;
+}) {
+  if (loading) {
+    return <ActivityIndicator color={KarateColors.primary} style={{ marginTop: 32 }} />;
+  }
+  if (error) {
+    return (
+      <View style={styles.placeholderCard}>
+        <Icon name="alert_circle" size={22} color={KarateColors.ink3} />
+        <Text style={styles.placeholderTitle}>Não foi possível carregar o ranking</Text>
+        <KarateButton label="Tentar novamente" variant="secondary" size="sm" onPress={onRetry} style={{ marginTop: 8 }} />
+      </View>
+    );
+  }
+  const rows = ranking || [];
   return (
-    <View style={styles.placeholderCard}>
-      <Icon name="trophy" size={22} color={KarateColors.ink3} />
-      <Text style={styles.placeholderTitle}>Ranking geral — em construção</Text>
-      <Text style={styles.placeholderSub}>
-        A classificação consolidada do campeonato (getSeasonRanking) chega na Fase 2.
-      </Text>
+    <View style={styles.entriesPanel}>
+      <View style={styles.entriesPanelHead}>
+        <Text style={styles.entriesPanelTitle}>Ranking geral</Text>
+        <KarateButton
+          label={printing ? "Gerando..." : "Imprimir ranking"}
+          variant="secondary"
+          size="sm"
+          loading={printing}
+          disabled={rows.length === 0}
+          onPress={onPrint}
+        />
+      </View>
+      {rows.length === 0 ? (
+        <Text style={styles.emptyEntries}>Nenhum resultado lançado ainda.</Text>
+      ) : (
+        rows.map((r, i) => (
+          <View key={r.student_id} style={styles.entryRow}>
+            <View style={styles.placeBadge}>
+              <Text style={styles.placeText}>{i + 1}º</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.entryName}>{r.student_name}</Text>
+              <Text style={styles.entryMeta} numberOfLines={1}>
+                {r.dojo_name ?? "—"} · {r.categories.join(", ")}
+              </Text>
+            </View>
+            <Text style={styles.entryPts}>{r.total_points} pts</Text>
+          </View>
+        ))
+      )}
     </View>
   );
 }
@@ -970,10 +1256,20 @@ const styles = StyleSheet.create({
   railChipLabelActive: { color: KarateColors.primary } as TextStyle,
   railDividerNarrow: { width: 1, backgroundColor: KarateColors.border, marginHorizontal: 4 } as ViewStyle,
 
-  // ── Placeholders (Fase 2) ──
+  // ── Placeholders / estados vazios genéricos ──
   placeholderCard: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, borderStyle: "dashed", padding: 28, alignItems: "center", gap: 8 } as ViewStyle,
   placeholderTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   placeholderSub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 420 } as TextStyle,
+
+  // ── Visão geral: progresso por categoria ──
+  overviewSectionTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
+  progressCatName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  progressCatMeta: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  progressStatus: { fontSize: 11.5, fontWeight: "700", paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, overflow: "hidden" } as TextStyle,
+  progressDone: { color: "#1f7a4d", backgroundColor: "rgba(31,122,77,0.10)" } as TextStyle,
+  progressPending: { color: KarateColors.ink3, backgroundColor: KarateColors.surface } as TextStyle,
+  progressUnknown: { color: "#b8463a", backgroundColor: "rgba(184,70,58,0.08)" } as TextStyle,
 
   // ── Categoria: header + abas ──
   catHeadRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 } as ViewStyle,

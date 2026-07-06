@@ -1,18 +1,24 @@
 // ============================================================
-// buildRosterHtml — Aura Karatê (Workspace do campeonato, Fase 1)
+// buildRosterHtml — Aura Karatê (Workspace do campeonato)
 //
-// Stub funcional para impressão da lista de inscritos de UMA categoria
+// Gera HTML de impressão da lista de inscritos de UMA categoria
 // (aba "Inscritos" do workspace em torneio/[id].tsx): nome, nº de
-// registro, dojô e status. Segue o MESMO padrão de buildBracketHtml.ts
-// (HTML/CSS puro, P&B-safe, botão flutuante "Imprimir" via
-// window.print(), @media print escondendo os controles de tela) —
-// o componente que chama este builder é responsável por
+// registro, dojô, status e colocação já lançada. Segue o MESMO padrão
+// de buildBracketHtml.ts (HTML/CSS puro, P&B-safe, botão flutuante
+// "Imprimir" via window.print(), @media print escondendo os controles
+// de tela) — o componente que chama este builder é responsável por
 // Blob + URL.createObjectURL + window.open (ver handlePrint em
 // BracketView.tsx para o padrão exato de abertura).
 //
-// FASE 2: outro agente deve refinar esta planilha (colunas extras,
-// ordenação, agrupamento por status, placar/colocação já lançados etc).
-// Por ora, o objetivo é ter algo funcional e honesto com os dados reais.
+// FASE 2 (refinamento do stub da Fase 1):
+//   - Ordena por NOME (ordem alfabética) — é lista de chamada usada na
+//     mesa de arbitragem para conferir presença; ordem por nome é o
+//     que os árbitros/organizadores esperam encontrar, não por nº de
+//     registro (que não segue nenhuma ordem previsível para quem
+//     confere presença visualmente).
+//   - Cabeçalho passa a incluir a data do evento (quando disponível),
+//     junto de federação/categoria/modalidade/competição, para a folha
+//     impressa não depender só da data de impressão.
 // ============================================================
 const INK = "#2b2620";
 const INK_2 = "#6a6154";
@@ -33,6 +39,9 @@ export type BuildRosterHtmlOptions = {
   competitionName?: string;
   categoryName?: string;
   federationName?: string;
+  modalityLabel?: string;
+  /** Data do evento já formatada (tz-safe), ex.: "20/09/2026". Opcional. */
+  eventDateLabel?: string | null;
 };
 
 function esc(s: string | null | undefined): string {
@@ -58,6 +67,14 @@ function statusLabel(status?: string | null): string {
   return STATUS_LABEL[status] ?? esc(status);
 }
 
+// Ordem de chamada: alfabética por nome (localeCompare pt-BR, acento-safe).
+// Não muda o array recebido (evita efeito colateral em quem chama).
+function sortByName(entries: RosterEntryLike[]): RosterEntryLike[] {
+  return [...entries].sort((a, b) =>
+    String(a.student_name || "").localeCompare(String(b.student_name || ""), "pt-BR", { sensitivity: "base" })
+  );
+}
+
 function renderRow(entry: RosterEntryLike, index: number): string {
   const reg = entry.karate_registration_number ? esc(entry.karate_registration_number) : "—";
   const dojo = entry.dojo_name ? esc(entry.dojo_name) : "—";
@@ -80,12 +97,17 @@ export function buildRosterHtml(entries: RosterEntryLike[], options?: BuildRoste
   const federationName = options?.federationName || "Aura Karatê";
   const competitionName = options?.competitionName || "";
   const categoryName = options?.categoryName || "";
+  const modalityLabel = options?.modalityLabel || "";
+  const eventDateLabel = options?.eventDateLabel || "";
 
-  const subtitleParts = [categoryName, competitionName].filter(Boolean).map(esc);
+  const sorted = sortByName(entries);
+
+  const subtitleParts = [categoryName, modalityLabel, competitionName].filter(Boolean).map(esc);
   const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" &middot; ") : "";
+  const dateLine = eventDateLabel ? esc(eventDateLabel) : "";
 
-  const rowsHtml = entries.length > 0
-    ? entries.map((e, i) => renderRow(e, i)).join("\n")
+  const rowsHtml = sorted.length > 0
+    ? sorted.map((e, i) => renderRow(e, i)).join("\n")
     : '<tr><td class="col-empty" colspan="6">Nenhum inscrito nesta categoria.</td></tr>';
 
   let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
@@ -132,7 +154,7 @@ export function buildRosterHtml(entries: RosterEntryLike[], options?: BuildRoste
   html += '<div class="header-left">';
   html += '<div class="fed-name">' + esc(federationName) + '</div>';
   if (subtitle) html += '<div class="cat-name">' + subtitle + '</div>';
-  html += '<div class="meta-line">' + entries.length + ' inscrito' + (entries.length === 1 ? "" : "s") + '</div>';
+  html += '<div class="meta-line">' + sorted.length + ' inscrito' + (sorted.length === 1 ? "" : "s") + (dateLine ? " &middot; Evento em " + dateLine : "") + '</div>';
   html += '</div>';
   html += '<div class="header-right">Impresso em ' + esc(printedAt) + '</div>';
   html += '</div>';
