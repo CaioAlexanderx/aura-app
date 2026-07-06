@@ -93,7 +93,7 @@ export function BracketView({
 
   // ── Entrar/sair do modo edição ─────────────────────────────────────
   const handleToggleEditMode = useCallback(() => {
-    if (!locked) {
+    if (locked) {
       toast.info("Destrave a chave para editar as posições.");
       return;
     }
@@ -279,13 +279,15 @@ export function BracketView({
           />
         ) : (
           <>
-            <ShojiButton
-              label={resetting ? "Limpando..." : "Limpar resultados"}
-              icon="refresh"
-              variant="ghost"
-              onPress={handleReset}
-              style={ctrlStyles.actionBtn}
-            />
+            {!locked && (
+              <ShojiButton
+                label={resetting ? "Limpando..." : "Limpar resultados"}
+                icon="refresh"
+                variant="ghost"
+                onPress={handleReset}
+                style={ctrlStyles.actionBtn}
+              />
+            )}
             {locked && (
               <ShojiButton
                 label={unlocking ? "Destravando..." : "Destravar para editar"}
