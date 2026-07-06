@@ -104,14 +104,18 @@ function fmtBR(iso?: string | null): string {
  * para o formato do mock ("Preta · 1º Dan"). Se não houver grau explícito,
  * cai para "Preta · Dan".
  */
+// CPF na grade padrão xxx.xxx.xxx-xx.
+function fmtCpf(cpf?: string | null): string {
+  const d = String(cpf || "").replace(/\D/g, "").slice(0, 11);
+  if (d.length !== 11) return cpf || "—";
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
 function beltDanLabel(belt?: string | null, beltName?: string | null): string {
   const raw = (beltName || belt || "Preta").trim();
-  const m = raw.match(/(\d+\s*[ºo°]?\s*dan)/i);
-  if (m) {
-    const dan = m[1].replace(/\s+/g, " ").trim();
-    return `Preta · ${dan.charAt(0).toUpperCase()}${dan.slice(1)}`;
-  }
-  if (/dan/i.test(raw)) return "Preta · Dan";
+  // Extrai o grau: primeiro número no nome (ex.: "Preta 1°", "Preta 1º Dan", "1 Dan").
+  const m = raw.match(/(\d+)/);
+  if (m) return `Preta · ${m[1]}º Dan`;
   return "Preta · Dan";
 }
 
@@ -173,8 +177,8 @@ function Watermark({ f, side }: { f: (n: number) => number; side: "front" | "bac
       <View
         pointerEvents="none"
         style={{
-          position: "absolute", right: f(-24), top: "56%", width: f(290), opacity: 0.06,
-          transform: [{ translateY: -f(290) * 0.475 * 0.5 }],
+          position: "absolute", left: "50%", top: "50%", width: f(290), opacity: 0.06,
+          transform: [{ translateX: -f(290) / 2 }, { translateY: -f(290) * 0.475 * 0.5 }],
         }}
       >
         <FpktLogo size={f(290)} />
@@ -329,7 +333,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
               </View>
               <View style={{ flexDirection: "row", gap: f(22) }}>
                 <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
-                <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
+                <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
               </View>
               <View>
                 <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
@@ -346,7 +350,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
                 <View style={{ flex: 1 }}><Field label="Dojô" value={card.dojo_name} f={f} /></View>
               </View>
               <View style={{ flexDirection: "row", gap: f(20) }}>
-                <View style={{ flex: 1 }}><Field label="CPF" value={card.cpf} f={f} mono /></View>
+                <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
                 <View style={{ flex: 1 }}>
                   <FieldLabel f={f}>Nº de registro FPKT</FieldLabel>
                   <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(18), fontWeight: "500", marginTop: f(5), color: RED, letterSpacing: f(0.5) }}>

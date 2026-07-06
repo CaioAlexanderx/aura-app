@@ -92,13 +92,16 @@ function isBeltPreta(card: MembershipCard): boolean {
 
 // "Preta · Nº Dan" — adapta formatBeltLabel (ex.: "Preta 1º Dan") para o
 // formato do mock ("Preta · 1º Dan"). Espelha beltDanLabel em CarteirinhaCard.tsx.
+function fmtCpf(cpf?: string | null): string {
+  const d = String(cpf || "").replace(/\D/g, "").slice(0, 11);
+  if (d.length !== 11) return cpf || "—";
+  return d.slice(0, 3) + "." + d.slice(3, 6) + "." + d.slice(6, 9) + "-" + d.slice(9);
+}
+
 function beltDanLabel(card: MembershipCard): string {
   const raw = (card.belt_name || card.belt || "Preta").trim();
-  const m = raw.match(/(\d+\s*[ºo°]?\s*dan)/i);
-  if (m) {
-    const dan = m[1].replace(/\s+/g, " ").trim();
-    return `Preta · ${dan.charAt(0).toUpperCase()}${dan.slice(1)}`;
-  }
+  const m = raw.match(/(\d+)/);
+  if (m) return `Preta · ${m[1]}º Dan`;
   return "Preta · Dan";
 }
 
@@ -147,7 +150,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
         '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
         '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
         '<div class="fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
-        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(card.cpf || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
       '</div>' +
       '<div class="fld reg-fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>'
     )
@@ -155,7 +158,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
       '<div class="grid2">' +
         '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
         '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue">' + esc(card.dojo_name || "—") + '</div></div>' +
-        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(card.cpf || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
         '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>'
     );
@@ -257,7 +260,7 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.2mm 5.1mm 3.5mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
-  html += '.wm-front{right:-3.8mm;top:56%;width:46mm;opacity:0.06;transform:translateY(-50%)}';
+  html += '.wm-front{left:50%;top:50%;width:46mm;opacity:0.06;transform:translate(-50%,-50%)}';
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:0.05;transform:translate(-50%,-50%)}';
 
   // header
