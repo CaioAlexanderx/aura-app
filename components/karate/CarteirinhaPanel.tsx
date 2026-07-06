@@ -29,6 +29,14 @@
 // Fix tz (25/06): fmtBR usava new Date("YYYY-MM-DD") que parseia como UTC
 //   midnight e exibe o dia anterior no Brasil (UTC-3). Corrigido para parsear
 //   a parte da data manualmente e construir Date em hora local.
+//
+// Exportar PDF (Fase 3, 05/07): botão "Exportar PDF" ao lado de Emitir/Renovar,
+//   visível sempre que há carteirinha emitida (ativa OU revogada). Reutiliza
+//   EXATAMENTE o mecanismo de components/karate/carteirinha/CarteirinhaBatchTab.tsx
+//   (buildCarteirinhaHtml → Blob → URL.createObjectURL → window.open, com
+//   fallback document.write se o popup for bloqueado). O HTML já traz o botão
+//   "Imprimir"; o usuário salva como PDF pelo diálogo de impressão do
+//   navegador — sem libs pesadas. Web-only (window/Blob); em nativo, toast.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import { Platform, View, Text, TouchableOpacity, Alert, Modal, StyleSheet, ViewStyle, TextStyle } from "react-native";
@@ -38,6 +46,8 @@ import { Badge } from "@/components/karate/Badge";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { notify } from "@/utils/webAlert";
+import { toast } from "@/components/Toast";
+import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
 import { karateCardApi, MembershipCard } from "@/services/karateCardApi";
@@ -54,6 +64,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [face, setFace] = useState<"front" | "back">("front");
   // Confirmação inline (modal in-app) — evita window.confirm, que trava a aba no web.
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
@@ -131,6 +142,38 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
       "Revogar",
       doRevoke
     );
+  };
+
+  // Exportar PDF — reutiliza o MESMO mecanismo do CarteirinhaBatchTab (F5):
+  // gera o HTML de impressão (buildCarteirinhaHtml) para um único card e abre
+  // numa nova janela via Blob URL, com fallback document.write se o popup for
+  // bloqueado. O HTML já traz o botão "Imprimir" + @media print; o usuário
+  // salva como PDF pelo diálogo de impressão do navegador. Recurso web-only
+  // (window.open/Blob não existem em nativo) — em nativo, avisa via toast.
+  const exportPdf = () => {
+    if (Platform.OS !== "web") {
+      toast.error("Exportação em PDF disponível apenas na versão web");
+      return;
+    }
+    if (!card) return;
+    setExporting(true);
+    try {
+      const html = buildCarteirinhaHtml([card]);
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, "_blank");
+      if (!w) {
+        const w2 = window.open("", "_blank");
+        if (w2) { w2.document.write(html); w2.document.close(); }
+        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+      }
+      toast.success("Carteirinha aberta para exportação em PDF");
+    } catch (err) {
+      console.error("[CarteirinhaPanel] Erro ao exportar PDF:", err);
+      toast.error("Erro ao gerar PDF da carteirinha");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Modal de confirmação — precisa ser renderizado em TODOS os caminhos de
@@ -240,6 +283,18 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
 
       {/* ações */}
       <View style={styles.actions}>
+        {/* Exportar PDF — disponível sempre que há carteirinha emitida
+            (ativa ou revogada), independente do gate de emitir/renovar. */}
+        <TouchableOpacity
+          onPress={exportPdf}
+          disabled={exporting}
+          style={[styles.exportBtn, exporting && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Exportar PDF da carteirinha"
+        >
+          <Icon name="download" size={15} color={KarateColors.ink2} />
+          <Text style={styles.exportTxt}>{exporting ? "Exportando…" : "Exportar PDF"}</Text>
+        </TouchableOpacity>
         {revoked ? (
           // Após revogar, "Emitir" gera uma nova carteirinha.
           <KarateButton
@@ -306,6 +361,10 @@ const styles = StyleSheet.create({
   // Revogar — botão destrutivo (vermelho/primary).
   revokeBtn:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
   revokeTxt:  { fontSize: 13.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  // Exportar PDF — ação neutra (outline discreto), mesmo padrão visual do
+  // botão "Revogar" mas em tom neutro (não destrutivo/não vermelhão).
+  exportBtn:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
+  exportTxt:  { fontSize: 13.5, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   statusRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
   statusLabel:{ fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   flipRow:    { flexDirection: "row", gap: 8, alignSelf: "center" } as ViewStyle,
