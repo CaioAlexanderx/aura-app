@@ -359,13 +359,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
       </View>
 
       {/* footer */}
-      <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
-        <View>
-          <View style={{ width: f(150), height: 1, backgroundColor: INK_4 }} />
-          <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(8), letterSpacing: f(1.28), textTransform: "uppercase", color: INK_3, marginTop: f(7) }}>
-            Presidente
-          </Text>
-        </View>
+      <View style={{ marginTop: "auto", flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: f(9) }}>
           <View style={{ width: f(5), height: f(5), borderRadius: f(2.5), backgroundColor: RED }} />
           <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(7.5), letterSpacing: f(1.05), textTransform: "uppercase", color: INK_3, textAlign: "right", lineHeight: f(11.25) }}>
@@ -417,7 +411,7 @@ function Back({ card, f, verifyUrl, isPreta }: { card: MembershipCard; f: (n: nu
             Identificação
           </Text>
           <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(17), fontWeight: "500", marginTop: f(7), color: INK, textAlign: "center" }}>
-            Validação do atleta
+            Validação do filiado
           </Text>
           <View style={{ width: f(112), height: f(112), marginTop: f(16), backgroundColor: "#fff", padding: f(2) }}>
             <PixQRCode payload={verifyUrl} size={Math.max(48, Math.round(f(108)))} />
