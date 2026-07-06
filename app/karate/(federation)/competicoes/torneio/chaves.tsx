@@ -209,13 +209,13 @@ export default function ChavesScreen() {
     setBracket((prev) => prev ? { ...prev, status: "draft" } : null);
   };
 
-  const handleAdvance = async (matchId: string, winnerId: string) => {
+  const handleAdvance = async (matchId: string, winnerId: string, akaScore?: number, shiroScore?: number) => {
     if (!bracket || bracket.status !== "locked") return;
     setAdvancingMatch(matchId);
     try {
       await karateBracketsApi.advanceWinner(
         federationId, cid || "", selectedCatId,
-        { match_id: matchId, winner_entry_id: winnerId }
+        { match_id: matchId, winner_entry_id: winnerId, aka_score: akaScore, shiro_score: shiroScore }
       );
       await loadBracket();
     } catch (e: any) {
@@ -366,6 +366,10 @@ export default function ChavesScreen() {
             onAdvance={handleAdvance}
             onReopen={handleReopen}
             catName={selectedCatName}
+            federationId={federationId}
+            cid={cid || ""}
+            catId={selectedCatId}
+            onReloaded={loadBracket}
           />
         )}
 
