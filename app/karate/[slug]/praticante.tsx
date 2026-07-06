@@ -27,6 +27,10 @@ import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karatePortalApi, PortalData } from "@/services/karatePortalApi";
 import { formatEventDateShort } from "@/utils/eventDate";
+import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
+import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
+import type { MembershipCard } from "@/services/karateCardApi";
+import { toast } from "@/components/Toast";
 
 const APP_ORIGIN = "https://app.getaura.com.br";
 
@@ -65,6 +69,63 @@ function copyText(t: string) {
       (navigator as any).clipboard.writeText(t);
     }
   } catch { /* noop */ }
+}
+
+// Monta o MembershipCard (mesmo shape usado pela emissão/impressão em lote)
+// a partir do payload do portal — dados do PRÓPRIO praticante autenticado
+// por OTP (seguro expor foto/CPF/nascimento só aqui). `id`/`federation_id`/
+// `dojo_id` não são usados visualmente por CarteirinhaCard/buildCarteirinhaHtml
+// (só compõem o QR/labels com verify_token, belt, datas etc.), mas o tipo
+// MembershipCard os declara — preenchidos com placeholders estáveis.
+function toMembershipCard(portal: PortalData): MembershipCard | null {
+  const card = portal.card;
+  const p = portal.practitioner;
+  if (!card) return null;
+  return {
+    id: card.verify_token,
+    federation_id: "",
+    student_id: p?.id || "",
+    student_name: card.student_name || p?.name || "",
+    birth_date: card.birth_date ?? null,
+    cpf: card.cpf ?? null,
+    card_number: card.card_number,
+    belt: card.belt,
+    belt_name: card.belt_name,
+    dojo_id: p?.dojo_id || null,
+    dojo_name: card.dojo_name,
+    photo_url: card.photo_url,
+    is_minor: card.is_minor,
+    issued_at: card.issued_at,
+    verify_token: card.verify_token,
+    status: card.status,
+    federation_name: card.federation_name ?? null,
+    federation_logo: card.federation_logo ?? null,
+  };
+}
+
+// Abre o HTML de impressão da carteirinha numa nova aba — MESMO padrão de
+// components/karate/carteirinha/CarteirinhaBatchTab.tsx (blob URL, fallback
+// document.write se popup bloqueado). Só disponível em web.
+function downloadCarteirinhaPdf(card: MembershipCard, federationName?: string | null) {
+  if (Platform.OS !== "web") {
+    toast.error("Baixar carteirinha disponível apenas na versão web do Aura");
+    return;
+  }
+  try {
+    const html = buildCarteirinhaHtml([card], { federationName: federationName || undefined });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, "_blank");
+    if (!w) {
+      const w2 = window.open("", "_blank");
+      if (w2) { w2.document.write(html); w2.document.close(); }
+      else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+    }
+    toast.success("Carteirinha aberta para impressão/PDF");
+  } catch (err) {
+    console.error("[praticante] Erro ao gerar carteirinha para download:", err);
+    toast.error("Erro ao gerar a carteirinha");
+  }
 }
 
 type Stage = "cpf" | "code" | "portal";
@@ -217,6 +278,7 @@ export default function PortalPraticanteScreen() {
   const revoked = card?.status === "revoked";
   const timeline = [...(portal?.belt_history || [])].reverse();
   const optIn = !!portal?.public_portal?.opt_in;
+  const membershipCard = portal ? toMembershipCard(portal) : null;
   const publicUrl = portal?.public_portal?.public_token
     ? `${APP_ORIGIN}/karate/${slugStr}/p/${portal.public_portal.public_token}`
     : null;
@@ -271,6 +333,48 @@ export default function PortalPraticanteScreen() {
                   </View>
                 </TouchableOpacity>
               ) : null}
+            </View>
+
+            {/* Sua carteirinha — carteirinha COMPLETA (foto/CPF/nascimento), só
+                aqui no portal autenticado por OTP (LGPD: praticante autenticou
+                com o próprio CPF). A validação pública (QR) continua reduzida. */}
+            <View style={styles.sec}>
+              <View style={styles.secH}>
+                <Icon name="card-outline" size={18} color={KarateColors.ink2} />
+                <Text style={styles.secTitle}>Sua carteirinha</Text>
+              </View>
+              {membershipCard ? (
+                <>
+                  <View style={styles.cardsRow}>
+                    <View style={styles.cardsCol}>
+                      <Text style={styles.cardsColLabel}>Frente</Text>
+                      <CarteirinhaCard card={membershipCard} face="front" />
+                    </View>
+                    <View style={styles.cardsCol}>
+                      <Text style={styles.cardsColLabel}>Verso</Text>
+                      <CarteirinhaCard card={membershipCard} face="back" />
+                    </View>
+                  </View>
+                  {revoked ? (
+                    <View style={styles.minorLock}>
+                      <Icon name="lock-closed" size={15} color={KarateColors.warn} />
+                      <Text style={styles.minorLockTxt}>
+                        Esta carteirinha foi revogada pela federação. O download em PDF fica indisponível — procure sua federação para mais informações.
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.downloadBtn}
+                      onPress={() => downloadCarteirinhaPdf(membershipCard, card?.federation_name)}
+                    >
+                      <Icon name="download" size={16} color="#fff" />
+                      <Text style={styles.downloadBtnTxt}>Baixar carteirinha (PDF)</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.emptyTxt}>Carteirinha ainda não emitida pela federação.</Text>
+              )}
             </View>
 
             {/* trajetória */}
@@ -485,6 +589,12 @@ const styles = StyleSheet.create({
   secTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   secCnt: { marginLeft: "auto", fontSize: 12, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   emptyTxt: { fontSize: 13, color: KarateColors.ink3, paddingVertical: 8 } as TextStyle,
+
+  cardsRow: { flexDirection: "row", flexWrap: "wrap", gap: 20, justifyContent: "center" } as ViewStyle,
+  cardsCol: { flexGrow: 1, flexBasis: 320, maxWidth: 520 } as ViewStyle,
+  cardsColLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, marginBottom: 8, textAlign: "center" } as TextStyle,
+  downloadBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.md, paddingVertical: 14, marginTop: 16 } as ViewStyle,
+  downloadBtnTxt: { fontSize: 14, fontWeight: "700", color: "#fff" } as TextStyle,
 
   tlItem: { flexDirection: "row", gap: 14, paddingBottom: 18 } as ViewStyle,
   tlDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: KarateColors.bg, marginTop: 2 } as ViewStyle,
