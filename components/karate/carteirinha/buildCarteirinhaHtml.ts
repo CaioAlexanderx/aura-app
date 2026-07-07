@@ -45,6 +45,7 @@
 // dimensão física na impressão.
 // ============================================================
 import { resolveBeltKey } from "@/constants/karateTheme";
+import { FPKT_LOGO_DATA_URI } from "./fpktLogoDataUri";
 import type { MembershipCard } from "@/services/karateCardApi";
 
 const RED = "#b8463a";
@@ -131,9 +132,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
   const isPreta = isBeltPreta(card);
   const federationName = card.federation_name || options?.federationName || null;
   const [line1, line2] = federationNameLines(federationName);
-  const logo = card.federation_logo
-    ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
-    : '<div class="logo-fallback">空</div>';
+  const logo = '<img class="logo-img" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">';
   const photo = card.photo_url
     ? '<img class="photo" src="' + esc(card.photo_url) + '" alt="">'
     : '<div class="photo photo-empty"><span>FOTO</span><span class="photo-sub">3 &times; 4</span></div>';
@@ -171,7 +170,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 
   return (
     '<div class="cr80' + (isPreta ? ' is-preta' : '') + '">' +
-      (card.federation_logo ? '<img class="wm wm-front" src="' + esc(card.federation_logo) + '" alt="">' : '') +
+      '<img class="wm wm-front" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">' +
       '<div class="face-pad">' +
         '<div class="head">' +
           '<div class="head-left">' +
@@ -200,9 +199,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
   const isPreta = isBeltPreta(card);
   const federationName = card.federation_name || options?.federationName || null;
   const [line1, line2] = federationNameLines(federationName);
-  const logo = card.federation_logo
-    ? '<img class="logo-img" src="' + esc(card.federation_logo) + '" alt="">'
-    : '<div class="logo-fallback">空</div>';
+  const logo = '<img class="logo-img" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">';
   const verifyUrl = verifyUrlFor(card);
   const qr = qrImgUrl(verifyUrl, 220);
   const blackBar = isPreta ? '<div class="black-bar"></div>' : '';
@@ -212,7 +209,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
 
   return (
     '<div class="cr80">' +
-      (card.federation_logo ? '<img class="wm wm-back" src="' + esc(card.federation_logo) + '" alt="">' : '') +
+      '<img class="wm wm-back" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">' +
       '<div class="face-pad">' +
         '<div class="head">' +
           '<div class="head-left">' +
