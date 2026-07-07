@@ -667,10 +667,10 @@ function EventLanding({
   const factsBlock = (
     <View style={landing.facts}>
       <FactCard icon="calendar-outline" k="Data" v={fmtDate(event?.event_date)} />
-      <FactCard icon="location-outline" k="Local" v={event?.location || "a definir"} />
       {vagasLabel ? <FactCard icon="people-outline" k="Vagas" v={vagasLabel} /> : null}
       {(event as any)?.hours ? <FactCard icon="time-outline" k="Carga horária" v={`${(event as any).hours}h/aula`} /> : null}
-      <FactCard icon="pricetag-outline" k="Organização" v={fedName} />
+      <FactCard icon="location-outline" k="Local" v={event?.location || "a definir"} wide />
+      <FactCard icon="pricetag-outline" k="Organização" v={fedName} wide />
     </View>
   );
 
@@ -737,9 +737,9 @@ function EventLanding({
   );
 }
 
-function FactCard({ icon, k, v }: { icon: string; k: string; v: string }) {
+function FactCard({ icon, k, v, wide }: { icon: string; k: string; v: string; wide?: boolean }) {
   return (
-    <View style={landing.fact}>
+    <View style={[landing.fact, wide && landing.factWide]}>
       <View style={landing.factIc}>
         <Icon name={icon as any} size={16} color={KarateColors.primary} />
       </View>
@@ -800,7 +800,8 @@ const landing = StyleSheet.create({
   mainWide: { flex: 1, minWidth: 0, marginRight: 24 } as ViewStyle,
   sideWide: { width: 300 } as ViewStyle,
 
-  facts: { flexDirection: "row", flexWrap: "wrap", gap: 10 } as ViewStyle,
+  facts: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "flex-start" } as ViewStyle,
+  factWide: { flexBasis: "100%" } as ViewStyle,
   fact: {
     flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 12,
     borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md,
