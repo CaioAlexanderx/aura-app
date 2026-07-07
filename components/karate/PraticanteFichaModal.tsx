@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ModalPop } from "@/components/karate/anim/ModalPop";
-import { ShojiPalette as P } from "@/constants/karateTheme";
+import { ShojiPalette as P, BeltKey } from "@/constants/karateTheme";
 import { karateApi } from "@/services/karateApi";
 import { request } from "@/services/api";
 import { parseBrDate } from "@/components/inputs/DateInput";
@@ -34,6 +34,7 @@ import {
 } from "./praticante-ficha/helpers";
 import { styles } from "./praticante-ficha/shared-styles";
 import { DadosBasicosSection } from "./praticante-ficha/DadosBasicosSection";
+import { FaixaSection, faixaToBody } from "./praticante-ficha/FaixaSection";
 import { FotoSection, fileToBase64 } from "./praticante-ficha/FotoSection";
 import { EnderecoSection } from "./praticante-ficha/EnderecoSection";
 import { ResponsavelSection } from "./praticante-ficha/ResponsavelSection";
@@ -80,6 +81,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   // Só é relevante em modo criação — na edição a matrícula é somente leitura (já existente).
   const [registrationMode, setRegistrationMode] = useState<"auto" | "manual">("auto");
   const [manualRegistrationNumber, setManualRegistrationNumber] = useState("");
+  // Faixa inicial — só no cadastro; semeia a trajetória (karate_belt_history) no backend.
+  const [beltKey, setBeltKey] = useState<BeltKey | null>("branca");
+  const [danDeg, setDanDeg] = useState<number | null>(null);
+  const [kyuDeg, setKyuDeg] = useState<number | null>(null);
   // P6: File escolhido pelo usuário (web); null = nenhuma foto nova nesta sessão de edição
   const pendingPhotoFile = useRef<File | null>(null);
 
@@ -117,6 +122,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       setCanRepeat(!!lastShared);
       // F-matricula: reseta sempre para "auto" ao abrir um cadastro novo
       setRegistrationMode("auto"); setManualRegistrationNumber("");
+      setBeltKey("branca"); setDanDeg(null); setKyuDeg(null);
       return;
     }
     setCanRepeat(false);
@@ -307,6 +313,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (!isEdit && registrationMode === "manual" && manualRegistrationNumber.trim()) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
+    // Faixa inicial (cadastro): backend semeia a trajetória e auto-emite a carteirinha.
+    if (!isEdit) {
+      const fx = faixaToBody(beltKey, danDeg, kyuDeg);
+      if (fx) { body.belt_level = fx.belt_level; body.belt_name = fx.belt_name; body.belt_schema = fx.belt_schema; }
+    }
     // Edição: envia a matrícula só quando o valor mudou (evita 409 falso ao
     // revalidar contra o próprio registro).
     if (isEdit && manualRegistrationNumber.trim() && manualRegistrationNumber.trim() !== (fpkt || "")) {
@@ -469,6 +480,18 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   )
                 }
               />
+
+              {/* ── Seção: Faixa atual (só no cadastro) ── */}
+              {!isEdit ? (
+                <FaixaSection
+                  beltKey={beltKey}
+                  danDeg={danDeg}
+                  kyuDeg={kyuDeg}
+                  onChangeBelt={(k) => { setBeltKey(k); setDanDeg(null); setKyuDeg(null); }}
+                  onChangeDan={setDanDeg}
+                  onChangeKyu={setKyuDeg}
+                />
+              ) : null}
 
               {/* ── Seção: Contato & endereço ── */}
               <EnderecoSection
