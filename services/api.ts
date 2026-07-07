@@ -154,7 +154,7 @@ export { companiesApi } from "./companiesApi";
 
 export { employeesApi } from "./employeesApi";
 
-export type { TokenizeResponse, SubscribeResponse } from "./billingApi";
+export type { TokenizeResponse, SubscribeResponse, KarateGateResponse } from "./billingApi";
 export { billingApi } from "./billingApi";
 
 export type { AccessCodeRow, CreateAccessCodeBody } from "./adminApi";

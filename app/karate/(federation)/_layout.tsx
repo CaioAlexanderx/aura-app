@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from "react-native";
 import { Redirect } from "expo-router";
 import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateShell } from "@/components/karate/KarateShell";
+import { KarateBillingGate } from "@/components/karate/KarateBillingGate";
 import { ToastContainer } from "@/components/Toast";
 import { ConfirmHost } from "@/components/karate/ConfirmDialog";
 import { useAuthStore } from "@/stores/auth";
@@ -58,6 +59,9 @@ export default function KarateLayout() {
   return (
     <KarateFederationProvider>
       <KarateShell />
+      {/* Checkout "invisível": só aparece (bloqueante) quando a federação
+          está em atraso/vencimento; caso contrário renderiza null. */}
+      <KarateBillingGate federationId={federationId} />
       <ToastContainer />
       <ConfirmHost />
     </KarateFederationProvider>
