@@ -101,6 +101,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
   const [location, setLocation] = useState("");
   const [fee, setFee] = useState("");
   const [maxCandidates, setMaxCandidates] = useState("");
+  const [hours, setHours] = useState(""); // carga horária (curso/seminário)
 
   const [createdExamId, setCreatedExamId] = useState<string | null>(null);
 
@@ -123,7 +124,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
   const dateBad = examDate.length === 10 && parseBrDate(examDate) === null;
 
   const resetAndClose = () => {
-    setKind("exame"); setStep(0); setTitle(""); setExamDate(""); setLocation(""); setFee(""); setMaxCandidates("");
+    setKind("exame"); setStep(0); setTitle(""); setExamDate(""); setLocation(""); setFee(""); setMaxCandidates(""); setHours("");
     setCreatedExamId(null); setPool([]); setPoolQ(""); setExaminers([]);
     setSelected([]); setEligibilityMap({}); setLoading(false); setBusyId(null); setError(null);
     onClose();
@@ -159,6 +160,7 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
           exam_type: kind, // 'exame' ou 'curso'
           fee_amount: fee ? moneyToNumber(fee) : undefined,
           max_candidates: maxCandidates ? parseInt(maxCandidates, 10) : undefined,
+          hours: kind === "curso" && hours ? parseInt(hours, 10) : undefined,
         },
       });
       setCreatedExamId(exam?.id ?? null);
@@ -337,6 +339,11 @@ export function CriarExameModal({ visible, onClose, federationId, onCreated }: P
                     onChangeText={(v) => setMaxCandidates(onlyD(v))} keyboardType="numeric"
                     placeholder="Sem limite" />
                 </Row2>
+                {kind === "curso" && (
+                  <Field label="Carga horária (horas/aula)" hint="opcional" mono value={hours}
+                    onChangeText={(v) => setHours(onlyD(v))} keyboardType="numeric"
+                    placeholder="Ex.: 8" />
+                )}
               </View>
             )}
 

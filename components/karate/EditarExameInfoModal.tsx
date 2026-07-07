@@ -58,6 +58,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [targetBelt, setTargetBelt] = useState("");
+  const [hours, setHours] = useState(""); // carga horária (curso)
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
     setLocation(exam.location ?? "");
     setDescription((exam as any).description ?? "");
     setTargetBelt(exam.target_belt ?? "");
+    setHours((exam as any).hours != null ? String((exam as any).hours) : "");
     setError(null);
     setSaving(false);
   }, [visible, exam]);
@@ -95,6 +97,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
         description: description.trim() || null,
       };
       if (!isCurso) body.target_belt = targetBelt.trim();
+      if (isCurso) body.hours = hours.trim() ? parseInt(hours.replace(/[^0-9]/g, ""), 10) : null;
       const updated = await karateApi.updateBeltExam(federationId, exam.id, body as any);
       onSaved({ ...exam, ...updated });
     } catch (e: any) {
@@ -185,6 +188,22 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
                 />
               </View>
             </View>
+
+            {isCurso && (
+              <View style={styles.field}>
+                <Text style={styles.label}>Carga horária (horas/aula)</Text>
+                <View style={styles.inputWrap}>
+                  <TextInput
+                    style={styles.input}
+                    value={hours}
+                    onChangeText={(v) => setHours(v.replace(/[^0-9]/g, ""))}
+                    keyboardType="numeric"
+                    placeholder="Ex.: 8"
+                    placeholderTextColor={P.ink4}
+                  />
+                </View>
+              </View>
+            )}
 
             <View style={styles.field}>
               <Text style={styles.label}>Descrição / regras (opcional)</Text>
