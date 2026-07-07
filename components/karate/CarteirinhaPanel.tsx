@@ -218,7 +218,7 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
         <KarateEmptyState
           icon="card-outline"
           title="Nenhuma carteirinha emitida"
-          subtitle="Emita a carteirinha digital do praticante. Os dados (faixa, dojô, registro) são capturados no momento da emissão."
+          subtitle="Emita a carteirinha digital do praticante. Depois de emitida, os dados (faixa, dojô, matrícula) se atualizam automaticamente sempre que a ficha muda."
           style={{ paddingVertical: 24 }}
         />
         <View style={styles.actions}>
