@@ -145,26 +145,21 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
 
   const fieldsGrid = isPreta
     ? (
-      // Design 02: mesma ordem do Design 01 [Nasc · Dojô / CPF · Nº registro]
-      // + Faixa como ÚLTIMO item. Dojô em coluna larga com fallback de 2 linhas.
-      '<div class="frow">' +
-        '<div class="fld f-date"><div class="flabel">Nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
-        '<div class="fld f-dojo"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
-      '</div>' +
-      '<div class="frow">' +
-        '<div class="fld f-half"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
-        '<div class="fld f-half"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
+      // Design 02: grid 1fr 1fr alinhado (igual ao mock aprovado) + Faixa no fim.
+      '<div class="grid2">' +
+        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>' +
       '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>'
     )
     : (
-      '<div class="frow">' +
-        '<div class="fld f-date"><div class="flabel">Nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
-        '<div class="fld f-dojo"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
-      '</div>' +
-      '<div class="frow">' +
-        '<div class="fld f-half"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
-        '<div class="fld f-half"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
+      '<div class="grid2">' +
+        '<div class="fld"><div class="flabel">Data de nascimento</div><div class="fvalue mono">' + fmtBR(card.birth_date) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Dojô</div><div class="fvalue dojo">' + esc(card.dojo_name || "—") + '</div></div>' +
+        '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
+        '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>'
     );
 
@@ -268,11 +263,13 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
 
   // header
   html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
-  html += '.head-left{display:flex;align-items:center;gap:2.1mm}';
-  html += '.logo{width:6.3mm;height:6.3mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}';
-  html += '.logo-img{max-width:100%;max-height:100%;object-fit:contain}';
+  html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
+  html += '.logo{flex-shrink:0;display:flex;align-items:center}';
+  html += '.logo-img{width:8.4mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;letter-spacing:0.05pt;color:' + INK + ';line-height:1.35}';
+  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;letter-spacing:0.05pt;color:' + INK + ';line-height:1.3}';
+  html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho",serif;font-size:7.3pt;font-weight:400;color:' + INK_2 + ';text-align:right}';
   html += '.hd-sub{font-size:3.7pt;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
   html += '.hd-badge{font-size:5pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:500;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
@@ -281,14 +278,14 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
 
   // réguas
   html += '.ruler-red{margin:2.4mm -5.1mm 0;height:0.3mm;background:' + RED + '}';
-  html += '.black-bar{margin:1.2mm -5.1mm 0;height:1.15mm;background:' + BLACK_BAR + '}';
+  html += '.black-bar{margin:0.8mm -5.1mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
 
   // body
-  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.0mm;flex:1;min-height:0;align-items:flex-start}';
+  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.4mm;flex:1;min-height:0;align-items:flex-start}';
   html += '.photo{width:21.7mm;height:28.9mm;flex-shrink:0;border-radius:1.4mm;border:0.15mm solid ' + LINE_2 + ';object-fit:cover;background:#faf8f3}';
   html += '.photo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;font-family:"DM Mono",monospace;font-size:4.6pt;letter-spacing:0.5pt;color:' + INK_4 + '}';
   html += '.photo-sub{font-size:4.2pt}';
-  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.6mm}';
+  html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
   html += '.flabel{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New",sans-serif;font-size:6.4pt;font-weight:500;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.12}';
@@ -299,14 +296,12 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.fvalue.name{font-size:9pt;font-weight:700;white-space:normal}';
   html += '.fvalue.mono{font-family:"DM Mono",monospace;font-weight:400}';
   html += '.name-fld{margin-bottom:0.4mm}';
-  html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.2mm 2.6mm}';
-  html += '.reg-fld{margin-top:1.1mm}';
-  html += '.is-preta .body-row{margin-top:1.5mm}';
-  html += '.is-preta .fields{gap:1.2mm}';
-  html += '.is-preta .fvalue.name{font-size:8.4pt}';
-  html += '.is-preta .reg-fld{margin-top:0.7mm}';
-  html += '.is-preta .belt-line{margin-top:0.4mm}';
-  html += '.is-preta .face-pad{padding-bottom:2.6mm}';
+  html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.6mm 2.7mm}';
+  html += '.reg-fld{margin-top:1.6mm}';
+  html += '.is-preta .body-row{margin-top:1.7mm}';
+  html += '.is-preta .fields{gap:1.9mm}';
+  html += '.is-preta .name-fld{margin-bottom:0.2mm}';
+  html += '.is-preta .reg-fld{margin-top:1.0mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:500;color:' + RED + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
@@ -321,20 +316,20 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.valid-text{font-family:"DM Mono",monospace;font-size:3.2pt;letter-spacing:0.4pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;line-height:1.5}';
 
   // verso body
-  html += '.back-row{display:flex;flex:1;margin-top:2.6mm;min-height:0}';
+  html += '.back-row{display:flex;flex:1;margin-top:1.8mm;min-height:0}';
   html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
   html += '.kun-eyebrow{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
-  html += '.kun-title{font-family:"Shippori Mincho",serif;font-size:6.8pt;font-weight:500;margin-top:0.9mm;color:' + INK + '}';
-  html += '.kun-list{margin-top:2.4mm;display:flex;flex-direction:column;gap:1.6mm}';
+  html += '.kun-title{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;margin-top:0.4mm;color:' + INK + '}';
+  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:0.95mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
   html += '.kun-dot{width:0.8mm;height:0.8mm;background:' + RED + ';margin-top:0.7mm;flex-shrink:0}';
-  html += '.kun-text{font-size:5pt;line-height:1.4;color:' + INK + '}';
+  html += '.kun-text{font-size:5pt;line-height:1.2;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
   html += '.verify-eyebrow{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.verify-title{font-family:"Shippori Mincho",serif;font-size:6.8pt;font-weight:500;margin-top:0.9mm;color:' + INK + '}';
-  html += '.qr{width:14.9mm;height:14.9mm;margin-top:2.1mm;background:#fff;image-rendering:pixelated}';
-  html += '.verify-num{font-family:"DM Mono",monospace;font-size:5.2pt;color:' + INK + ';margin-top:1.6mm;letter-spacing:0.2pt}';
-  html += '.issued-col{margin-top:2.1mm}';
+  html += '.qr{width:14.2mm;height:14.2mm;margin-top:1.6mm;background:#fff;image-rendering:pixelated}';
+  html += '.verify-num{font-family:"DM Mono",monospace;font-size:5.2pt;color:' + INK + ';margin-top:1.2mm;letter-spacing:0.2pt}';
+  html += '.issued-col{margin-top:1.5mm}';
   html += '.issued-label{font-family:"DM Mono",monospace;font-size:3.4pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.issued-value{font-family:"DM Mono",monospace;font-size:5.2pt;margin-top:0.5mm;color:' + INK + '}';
 
