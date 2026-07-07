@@ -669,6 +669,7 @@ function EventLanding({
       <FactCard icon="calendar-outline" k="Data" v={fmtDate(event?.event_date)} />
       <FactCard icon="location-outline" k="Local" v={event?.location || "a definir"} />
       {vagasLabel ? <FactCard icon="people-outline" k="Vagas" v={vagasLabel} /> : null}
+      {(event as any)?.hours ? <FactCard icon="time-outline" k="Carga horária" v={`${(event as any).hours}h/aula`} /> : null}
       <FactCard icon="pricetag-outline" k="Organização" v={fedName} />
     </View>
   );

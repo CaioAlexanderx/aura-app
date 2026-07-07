@@ -489,6 +489,12 @@ export default function ExameDetalhe() {
                 <Text style={styles.metaText}>{exam.location}</Text>
               </>
             )}
+            {!!(exam as any).hours && (
+              <>
+                <Icon name={"time-outline" as any} size={13} color={KarateColors.ink3} />
+                <Text style={styles.metaText}>{(exam as any).hours}h/aula</Text>
+              </>
+            )}
           </View>
           {!isCurso && <Text style={styles.metaText}>Faixa alvo: {exam.target_belt}</Text>}
           {!!exam.description && (

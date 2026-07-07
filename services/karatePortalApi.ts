@@ -186,6 +186,8 @@ export interface PublicEvent {
     description?: string | null;
     /** URL do banner do evento (EventBannerManager). null = sem banner, usar fallback visual. */
     banner_url?: string | null;
+    /** Carga horária em horas/aula (cursos/seminários). null = não informada. */
+    hours?: number | null;
   };
   requires: string[];
 }
