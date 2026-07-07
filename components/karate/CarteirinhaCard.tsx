@@ -329,8 +329,8 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
             // + campo "Faixa" acrescentado como ÚLTIMO item (diferenciação da faixa-preta).
             <View style={{ marginTop: f(24), gap: f(22) }}>
               <View style={{ flexDirection: "row", gap: f(20) }}>
-                <View style={{ flex: 0.62 }}><Field label="Nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-                <View style={{ flex: 1.38, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
               </View>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
@@ -347,8 +347,8 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
             // Design 01: grid 2x2 [Data nasc · Dojô / CPF · Nº registro FPKT]
             <View style={{ marginTop: f(24), gap: f(22) }}>
               <View style={{ flexDirection: "row", gap: f(20) }}>
-                <View style={{ flex: 0.62 }}><Field label="Nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-                <View style={{ flex: 1.38, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
               </View>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
