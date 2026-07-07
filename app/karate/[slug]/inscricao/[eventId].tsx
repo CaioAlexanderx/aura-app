@@ -743,8 +743,8 @@ function FactCard({ icon, k, v }: { icon: string; k: string; v: string }) {
       <View style={landing.factIc}>
         <Icon name={icon as any} size={16} color={KarateColors.primary} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={landing.factK}>{k}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={landing.factK} numberOfLines={1}>{k}</Text>
         <Text style={landing.factV}>{v}</Text>
       </View>
     </View>
@@ -802,16 +802,17 @@ const landing = StyleSheet.create({
 
   facts: { flexDirection: "row", flexWrap: "wrap", gap: 10 } as ViewStyle,
   fact: {
-    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
+    flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 12,
     borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md,
-    backgroundColor: KarateColors.glass, flexGrow: 1, minWidth: 160,
+    backgroundColor: KarateColors.glass, flexGrow: 1, flexBasis: 160, minWidth: 160,
   } as ViewStyle,
   factIc: {
     width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center",
     backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine,
+    flexShrink: 0,
   } as ViewStyle,
   factK: { fontSize: 10, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.5 } as TextStyle,
-  factV: { fontSize: 13.5, fontWeight: "700", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  factV: { fontSize: 13.5, fontWeight: "700", color: KarateColors.ink, marginTop: 2, lineHeight: 18, flexShrink: 1 } as TextStyle,
 
   descBlock: {
     marginTop: 4, padding: 20, borderWidth: 1, borderColor: KarateColors.border,
