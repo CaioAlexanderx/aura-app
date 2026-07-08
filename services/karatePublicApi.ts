@@ -120,5 +120,7 @@ export const karatePublicApi = {
     pub(`/public/karate/${enc(slug)}/banners?placement=${enc(placement)}`),
   verifyCert: (token: string): Promise<any> =>
     pub(`/public/karate/verify/cert/${enc(token)}`),
+  myCerts: (slug: string, cpf: string): Promise<{ federation: { name: string }; certificates: { verify_token: string; course_name: string | null; participant_name: string | null; issued_at: string }[] }> =>
+    pub(`/public/karate/${enc(slug)}/meus-certificados`, { method: "POST", body: { cpf } }),
 
 };
