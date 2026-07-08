@@ -101,7 +101,7 @@ function copyText(t: string) {
 }
 
 // "categoria" só é usado quando o evento é kind==='competition' (Track E).
-type Step = "evento" | "categoria" | "cpf" | "confirma" | "pix";
+type Step = "evento" | "categoria" | "cpf" | "convidado" | "confirma" | "pix";
 type Err = "nao" | "ja" | "fim" | "evento" | "generic" | null;
 // Índices do progresso: exame/curso tem 3 passos visíveis (evento/cpf/confirma);
 // campeonato tem 4 (evento/categoria/cpf/confirma). getProgressSteps() abaixo
@@ -121,6 +121,7 @@ export default function InscricaoScreen() {
   const [fedName, setFedName] = useState("FPKT");
 
   const [step, setStep] = useState<Step>("evento");
+  const [guest, setGuest] = useState({ name: "", cpf: "", email: "", phone: "" });
   const [err, setErr] = useState<Err>(null);
   const [errMsg, setErrMsg] = useState<string>("");
   const [cpf, setCpf] = useState("");
@@ -227,6 +228,24 @@ export default function InscricaoScreen() {
     finally { setBusy(false); }
   };
 
+  const doSubmitGuest = async () => {
+    if (!guest.name.trim()) { setErr("generic"); setErrMsg("Informe seu nome completo."); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await karatePortalApi.submitInscricao(
+        slugStr, eventIdStr, (guest.cpf.trim() || cpf.trim()),
+        isCompetition ? undefined : responses,
+        isCompetition ? selectedCategoryId || undefined : undefined,
+        { name: guest.name.trim(), cpf: guest.cpf.trim(), email: guest.email.trim(), phone: guest.phone.trim() }
+      );
+      setPayment(r.payment);
+      setStep("pix");
+    } catch (e) { handleErr(e); }
+    finally { setBusy(false); }
+  };
+
+  const nonMemberPrice: number | null = (event as any)?.current_lot?.price_nonmember ?? null;
+
   const resetToEvent = () => {
     setErr(null); setStep("evento"); setCpf(""); setPract(null);
     setResponses({}); setMissingFieldLabels([]); setSelectedCategoryId(null);
@@ -268,8 +287,8 @@ export default function InscricaoScreen() {
           <View style={styles.foot}>
             {err === "nao" ? (
               <>
-                <KarateButton label="Corrigir CPF" variant="secondary" onPress={() => { setErr(null); setStep("cpf"); }} style={{ flex: 1 }} />
-                <KarateButton label="Falar com a federação" onPress={() => Linking.openURL("https://wa.me/5511982924664")} style={{ flex: 2 }} />
+                <KarateButton label="Corrigir" variant="secondary" onPress={() => { setErr(null); setStep("cpf"); }} style={{ flex: 1 }} />
+                <KarateButton label="Sou não-filiado" onPress={() => { setErr(null); setGuest((g) => ({ ...g, cpf: /^[0-9.\-\s]+$/.test(cpf) ? cpf : g.cpf })); setStep("convidado"); }} style={{ flex: 2 }} />
               </>
             ) : (
               <KarateButton label="Fechar" variant="secondary" onPress={resetToEvent} style={{ flex: 1 }} />
@@ -370,6 +389,27 @@ export default function InscricaoScreen() {
                 autoFocus
               />
               <Text style={styles.hint}>Esses dados não ficam visíveis em nenhuma página pública.</Text>
+              {err === "generic" ? <Text style={styles.inlineErr}>{errMsg}</Text> : null}
+            </>
+          ) : step === "convidado" ? (
+            <>
+              <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 3 DE 4" : "ETAPA 2 DE 3"} · NÃO-FILIADO</Text>
+              <Text style={styles.h2}>Inscrição de não-filiado</Text>
+              <Text style={styles.sub}>Não encontramos seu registro nesta federação. Preencha seus dados para se inscrever como não-filiado.</Text>
+              {nonMemberPrice != null ? (
+                <View style={styles.guestPriceBox}>
+                  <Text style={styles.guestPriceLbl}>Valor não-filiado</Text>
+                  <Text style={styles.guestPriceVal}>{fmtBRL(nonMemberPrice)}</Text>
+                </View>
+              ) : null}
+              <Text style={styles.label}>Nome completo</Text>
+              <TextInput style={styles.input} value={guest.name} onChangeText={(v) => setGuest({ ...guest, name: v })} placeholder="Seu nome" placeholderTextColor={KarateColors.ink4} autoFocus />
+              <Text style={styles.label}>CPF</Text>
+              <TextInput style={styles.input} value={guest.cpf} onChangeText={(v) => setGuest({ ...guest, cpf: v })} placeholder="000.000.000-00" placeholderTextColor={KarateColors.ink4} keyboardType="numeric" />
+              <Text style={styles.label}>E-mail</Text>
+              <TextInput style={styles.input} value={guest.email} onChangeText={(v) => setGuest({ ...guest, email: v })} placeholder="voce@email.com" placeholderTextColor={KarateColors.ink4} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
+              <Text style={styles.label}>Telefone</Text>
+              <TextInput style={styles.input} value={guest.phone} onChangeText={(v) => setGuest({ ...guest, phone: v })} placeholder="(11) 99999-9999" placeholderTextColor={KarateColors.ink4} keyboardType="phone-pad" />
               {err === "generic" ? <Text style={styles.inlineErr}>{errMsg}</Text> : null}
             </>
           ) : step === "confirma" ? (
@@ -498,6 +538,11 @@ export default function InscricaoScreen() {
               <>
                 <KarateButton label="Voltar" variant="secondary" onPress={() => setStep(isCompetition ? "categoria" : "evento")} style={{ flex: 1 }} />
                 <KarateButton label={busy ? "Localizando…" : "Continuar"} onPress={doLookup} loading={busy} style={{ flex: 2 }} />
+              </>
+            ) : step === "convidado" ? (
+              <>
+                <KarateButton label="Voltar" variant="secondary" onPress={() => { setErr(null); setStep("cpf"); }} style={{ flex: 1 }} />
+                <KarateButton label={busy ? "Gerando…" : "Inscrever como não-filiado"} onPress={doSubmitGuest} loading={busy} style={{ flex: 2 }} />
               </>
             ) : step === "confirma" ? (
               <>
@@ -900,6 +945,9 @@ const landing = StyleSheet.create({
   priceVal: { fontFamily: KarateFonts.heading, fontSize: 21, color: KarateColors.ink, marginTop: 2 } as TextStyle,
   secureRow: { flexDirection: "row", alignItems: "center", gap: 7, justifyContent: "center", marginTop: 12 } as ViewStyle,
   secureTxt: { fontSize: 11, color: KarateColors.ink3, textAlign: "center" } as TextStyle,
+  guestPriceBox: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, backgroundColor: KarateColors.glass, paddingHorizontal: 14, paddingVertical: 12, marginTop: 14 } as ViewStyle,
+  guestPriceLbl: { fontSize: 12, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.4 } as TextStyle,
+  guestPriceVal: { fontFamily: KarateFonts.heading, fontSize: 22, color: KarateColors.ink } as TextStyle,
 });
 
 const styles = StyleSheet.create({

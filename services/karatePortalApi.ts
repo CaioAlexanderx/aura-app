@@ -327,10 +327,11 @@ export const karatePortalApi = {
     eventId: string,
     identifier: string,
     responses?: Record<string, unknown>,
-    categoryId?: string
+    categoryId?: string,
+    guest?: { name: string; cpf?: string; email?: string; phone?: string }
   ): Promise<InscricaoResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
       method: "POST",
-      body: { identifier, cpf: identifier, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}) },
+      body: { identifier, cpf: identifier, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}), ...(guest ? { guest } : {}) },
     }),
 };
