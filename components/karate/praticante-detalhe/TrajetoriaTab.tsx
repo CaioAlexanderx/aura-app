@@ -4,7 +4,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -112,6 +112,12 @@ export function TrajetoriaTab({
                 ) : (
                   <Text style={tabStyles.beltDate}>Data não informada</Text>
                 )}
+                {entry.cbkt_number ? (
+                  <Text style={tabStyles.beltCbkt}>Nº CBKT: {entry.cbkt_number}</Text>
+                ) : null}
+                {entry.notes ? (
+                  <Text style={tabStyles.beltNotes}>{entry.notes}</Text>
+                ) : null}
               </View>
               {allowed && (
                 <View style={tabStyles.itemActions}>
@@ -178,5 +184,7 @@ const tabStyles = StyleSheet.create({
   beltEntry:        { flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 8 } as ViewStyle,
   beltLine:         { width: 3, borderRadius: 2, backgroundColor: KarateColors.border, alignSelf: "stretch", minHeight: 40 } as ViewStyle,
   beltDate:         { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  beltCbkt:         { fontSize: 12, color: KarateColors.ink2, fontFamily: KarateFonts.mono, marginTop: 2 } as TextStyle,
+  beltNotes:        { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 17, marginTop: 2 } as TextStyle,
 });
 

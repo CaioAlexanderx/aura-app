@@ -27,13 +27,15 @@ export function RegistrarGraduacaoModal({
   const [danDeg, setDanDeg] = useState<number | null>(null);
   const [kyuDeg, setKyuDeg] = useState<number | null>(null);
   const [dateBr, setDateBr] = useState("");
+  const [cbkt, setCbkt] = useState("");
+  const [notes, setNotes] = useState("");
   const [legacy, setLegacy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   // reset ao abrir
   useEffect(() => {
-    if (visible) { setBeltKey(null); setDanDeg(null); setKyuDeg(null); setDateBr(""); setLegacy(false); setErr(null); setSaving(false); }
+    if (visible) { setBeltKey(null); setDanDeg(null); setKyuDeg(null); setDateBr(""); setCbkt(""); setNotes(""); setLegacy(false); setErr(null); setSaving(false); }
   }, [visible]);
 
   // Reset grau ao trocar faixa
@@ -57,6 +59,8 @@ export function RegistrarGraduacaoModal({
         belt_name: buildBeltName(beltKey, danDeg ?? undefined, kyuDeg ?? undefined),
         belt_schema: legacy ? "legacy" : "fpkt_shotokan",
         graduated_at: dateIso ?? undefined, // sem data → backend usa hoje
+        cbkt_number: beltKey === "preta" && cbkt.trim() ? cbkt.trim() : undefined,
+        notes: notes.trim() || undefined,
       });
       setSaving(false);
       onDone();
@@ -155,6 +159,32 @@ export function RegistrarGraduacaoModal({
               accessibilityLabel="Data da graduação"
             />
             {dateBad ? <Text style={gradStyles.errInline}>Data inválida</Text> : null}
+
+            {beltKey === "preta" ? (
+              <>
+                <Text style={gradStyles.label}>Nº CBKT <Text style={gradStyles.labelHint}>(federação nacional · só histórico)</Text></Text>
+                <TextInput
+                  style={gradStyles.input}
+                  value={cbkt}
+                  onChangeText={setCbkt}
+                  placeholder="Ex.: CBKT-12345"
+                  placeholderTextColor={KarateColors.ink4}
+                  autoCapitalize="characters"
+                  accessibilityLabel="Número CBKT"
+                />
+              </>
+            ) : null}
+
+            <Text style={gradStyles.label}>Observação <Text style={gradStyles.labelHint}>(opcional)</Text></Text>
+            <TextInput
+              style={[gradStyles.input, { minHeight: 64, textAlignVertical: "top", fontFamily: KarateFonts.body, letterSpacing: 0 }]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Ex.: exame na sede, banca X, menção honrosa…"
+              placeholderTextColor={KarateColors.ink4}
+              multiline
+              accessibilityLabel="Observação da graduação"
+            />
 
             <TouchableOpacity style={gradStyles.legacyRow} onPress={() => setLegacy((v) => !v)} activeOpacity={0.7}>
               <View style={[gradStyles.checkbox, legacy && gradStyles.checkboxOn]}>

@@ -115,6 +115,8 @@ export interface BeltHistoryEntry {
   graduated_at: string;
   is_legacy: boolean;
   exam_id: string | null;
+  notes?: string | null;
+  cbkt_number?: string | null;
 }
 
 export interface CurrentBelt {
@@ -125,8 +127,11 @@ export interface CurrentBelt {
 
 export interface GraduationInput {
   belt_level: string;
+  belt_name?: string;
+  belt_schema?: string;
   graduated_at: string; // YYYY-MM-DD
   notes?: string | null;
+  cbkt_number?: string | null;
 }
 
 export interface TransferRecord {
