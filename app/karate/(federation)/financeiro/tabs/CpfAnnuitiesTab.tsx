@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { WhatsAppChargeModal } from "@/components/karate/WhatsAppChargeModal";
 import { downloadCsv } from "./EntriesTab";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
 
@@ -79,6 +80,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [search, setSearch]       = useState("");
   const [pixTarget, setPixTarget] = useState<CpfAnnuityWithTx | null>(null);
+  const [waTarget, setWaTarget] = useState<CpfAnnuityWithTx | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -205,6 +207,17 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
                     <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
                   </TouchableOpacity>
                 )}
+                {canPay && (
+                  <TouchableOpacity
+                    style={st.waBtn}
+                    onPress={() => setWaTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cobrar via WhatsApp de ${ann.full_name}`}
+                  >
+                    <Icon name="logo-whatsapp" size={13} color="#fff" />
+                    <Text style={st.pixBtnLabel}>WhatsApp</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );
@@ -225,6 +238,23 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
           isAdmin
           onSuccess={() => { setPixTarget(null); load(true); }}
           onClose={() => setPixTarget(null)}
+        />
+      )}
+
+      {/* Cobrança manual via WhatsApp */}
+      {waTarget && (
+        <WhatsAppChargeModal
+          visible={!!waTarget}
+          federationId={federationId}
+          target={{
+            name: waTarget.full_name,
+            phone: waTarget.whatsapp,
+            amount: waTarget.amount,
+            reference_period: waTarget.reference_period,
+            due_date: waTarget.due_date,
+            status: waTarget.status,
+          }}
+          onClose={() => setWaTarget(null)}
         />
       )}
     </ScrollView>
@@ -248,6 +278,7 @@ const st = StyleSheet.create({
   badgeText:         { fontSize: 10, fontWeight: "700" } as TextStyle,
   pixBtn:            { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:       { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+  waBtn:             { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#25D366", borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   exportRow:         { flexDirection: "row", justifyContent: "flex-end", marginBottom: 4 } as ViewStyle,
   exportBtn:         { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
   exportLabel:       { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,

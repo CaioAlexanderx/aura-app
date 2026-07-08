@@ -364,6 +364,7 @@ export interface DojoAnnuity {
   // POST .../charge (ver karateAnnuities.js) — a interface antiga (id/payment_method/
   // nfse_ref/created_at) não batia com a resposta real da API.
   fpkt_affiliation_id?: string | null;
+  whatsapp?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
@@ -381,6 +382,7 @@ export interface CpfAnnuity {
   id: string;
   practitioner_id: string;
   full_name: string;
+  whatsapp?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
@@ -1256,6 +1258,16 @@ export const karateApi = {
     request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pix`, {
       method: "POST",
       body,
+    }),
+
+  /** Gera o copia-e-cola PIX (BR Code estático) para a mensagem de cobrança wa.me/e-mail. Não persiste intent. */
+  pixBrcode: (
+    federationId: string,
+    amount: number
+  ): Promise<{ payload: string | null; provider: string | null }> =>
+    request(`/federation/${federationId}/financial/annuities/pix-brcode`, {
+      method: "POST",
+      body: { amount },
     }),
 
   /** Edita uma anuidade de dojô já lançada (valor, vencimento, período, status). */
