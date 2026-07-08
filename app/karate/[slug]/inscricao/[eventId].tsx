@@ -861,7 +861,7 @@ const landing = StyleSheet.create({
     borderRadius: KarateRadius.lg, backgroundColor: KarateColors.glass,
   } as ViewStyle,
   descEyebrow: { fontSize: 10.5, fontWeight: "700", letterSpacing: 1, color: KarateColors.ink3, marginBottom: 10 } as TextStyle,
-  descTxt: { fontSize: 14.5, lineHeight: 24, color: KarateColors.ink2 } as TextStyle,
+  descTxt: { fontSize: 14.5, lineHeight: 24, color: KarateColors.ink2, maxWidth: 680 } as TextStyle,
 
   buyCard: {
     marginTop: 4, padding: 20, borderWidth: 1, borderColor: KarateColors.border,
