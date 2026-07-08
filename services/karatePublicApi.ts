@@ -118,4 +118,7 @@ export const karatePublicApi = {
    */
   getBanners: (slug: string, placement = "hub"): Promise<BannersResponse> =>
     pub(`/public/karate/${enc(slug)}/banners?placement=${enc(placement)}`),
+  verifyCert: (token: string): Promise<any> =>
+    pub(`/public/karate/verify/cert/${enc(token)}`),
+
 };
