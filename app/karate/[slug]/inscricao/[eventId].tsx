@@ -758,7 +758,8 @@ const landing = StyleSheet.create({
   brandS: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginTop: 1 } as TextStyle,
 
   hero: {
-    width: "100%", aspectRatio: 16 / 6.5, borderRadius: KarateRadius.xl, overflow: "hidden",
+    width: "100%", aspectRatio: 16 / 4.6, maxHeight: 260, minHeight: 150,
+    borderRadius: KarateRadius.xl, overflow: "hidden",
     borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.ink,
     ...Platform.select({
       web: { boxShadow: "0 24px 60px rgba(28,23,20,0.18)" } as any,
@@ -771,8 +772,8 @@ const landing = StyleSheet.create({
     overflow: "hidden",
   } as ViewStyle,
   heroGlyph: {
-    fontFamily: KarateFonts.heading, fontSize: 140, color: "rgba(253,244,236,0.14)",
-    marginRight: -8, marginBottom: -30,
+    fontFamily: KarateFonts.heading, fontSize: 104, color: "rgba(253,244,236,0.14)",
+    marginRight: -4, marginBottom: -18,
   } as TextStyle,
   heroBadges: { position: "absolute", top: 16, left: 16, flexDirection: "row", gap: 8 } as ViewStyle,
   badge: {
