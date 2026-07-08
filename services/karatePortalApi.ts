@@ -190,6 +190,10 @@ export interface PublicEvent {
     banner_has_text?: boolean;
     /** Carga horária em horas/aula (cursos/seminários). null = não informada. */
     hours?: number | null;
+    /** Lotes de inscrição (Fase 2): cada um com preço de filiado e não-filiado. */
+    lots?: { id: string; name: string; price_member: number; price_nonmember: number; ends_at: string | null; is_current: boolean }[];
+    /** Lote vigente agora (por data). null = sem lotes configurados. */
+    current_lot?: { id: string; name: string; price_member: number; price_nonmember: number; ends_at: string | null } | null;
   };
   requires: string[];
 }
