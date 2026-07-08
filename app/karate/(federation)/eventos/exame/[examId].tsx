@@ -37,6 +37,7 @@ import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
 import { RegistrationLotsManager } from "@/components/karate/RegistrationLotsManager";
+import { EventInstructorsManager } from "@/components/karate/EventInstructorsManager";
 import { EventCertificatesManager } from "@/components/karate/EventCertificatesManager";
 import { EditarExameInfoModal } from "@/components/karate/EditarExameInfoModal";
 import { formatEventDateNumeric } from "@/utils/eventDate";
@@ -548,6 +549,9 @@ export default function ExameDetalhe() {
 
         {/* Lotes de inscrição (Fase 2): preço filiado × não-filiado por lote. */}
         <RegistrationLotsManager federationId={federationId} eventId={exam.id} />
+
+        {/* Ministrantes e assinaturas (alimentam o certificado) */}
+        <EventInstructorsManager federationId={federationId} eventId={exam.id} />
 
         {/* Certificados (Fase 3/4/5): monta modelo + preview + emissão em lote */}
         <EventCertificatesManager

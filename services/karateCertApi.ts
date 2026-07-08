@@ -52,3 +52,19 @@ export const certApi = {
   listIssued: (fedId: string, examId: string): Promise<IssuedCertificate[]> =>
     request(`/federation/${fedId}/belt-exams/${examId}/certificates`),
 };
+
+// Ministrantes do evento (karate_event_instructors) — assinam o certificado.
+export interface EventInstructor {
+  id: string; event_id: string; name: string; role: string | null;
+  signature_url: string | null; sort_order: number; created_at: string;
+}
+export const instructorApi = {
+  list: (fedId: string, examId: string): Promise<EventInstructor[]> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/instructors`),
+  create: (fedId: string, examId: string, body: { name: string; role?: string | null; signature_url?: string | null; sort_order?: number }): Promise<EventInstructor> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/instructors`, { method: "POST", body }),
+  update: (fedId: string, examId: string, id: string, patch: Partial<{ name: string; role: string | null; signature_url: string | null; sort_order: number }>): Promise<EventInstructor> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/instructors/${id}`, { method: "PATCH", body: patch }),
+  remove: (fedId: string, examId: string, id: string): Promise<{ ok: boolean }> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/instructors/${id}`, { method: "DELETE" }),
+};
