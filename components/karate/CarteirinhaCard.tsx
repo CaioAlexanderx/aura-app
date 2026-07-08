@@ -173,15 +173,16 @@ export function CarteirinhaCard({ card, face, maxWidth = 520 }: CarteirinhaCardP
 // Verso: centralizada (left/top:50%, translate -50%/-50%), width:260, opacity 0.05.
 function Watermark({ f, side }: { f: (n: number) => number; side: "front" | "back" }) {
   if (side === "front") {
+    // Item 3: deslocada para a direita (sai de cima da foto) e mais visível.
     return (
       <View
         pointerEvents="none"
         style={{
-          position: "absolute", left: "50%", top: "50%", width: f(290), opacity: 0.06,
-          transform: [{ translateX: -f(290) / 2 }, { translateY: -f(290) * 0.475 * 0.5 }],
+          position: "absolute", left: "70%", top: "50%", width: f(300), opacity: 0.12,
+          transform: [{ translateX: -f(300) / 2 }, { translateY: -f(300) * 0.475 * 0.5 }],
         }}
       >
-        <FpktLogo size={f(290)} />
+        <FpktLogo size={f(300)} />
       </View>
     );
   }
@@ -207,7 +208,7 @@ function FieldLabel({ children, f, color = INK_3 }: { children: React.ReactNode;
   );
 }
 
-function Field({ label, value, f, mono, marginTop = 6, lines = 1 }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; marginTop?: number; lines?: number }) {
+function Field({ label, value, f, mono, marginTop = 6, lines = 1, valueSize = 15 }: { label: string; value?: string | null; f: (n: number) => number; mono?: boolean; marginTop?: number; lines?: number; valueSize?: number }) {
   return (
     <View>
       <FieldLabel f={f}>{label}</FieldLabel>
@@ -215,8 +216,8 @@ function Field({ label, value, f, mono, marginTop = 6, lines = 1 }: { label: str
         numberOfLines={lines}
         style={{
           fontFamily: mono ? KarateFonts.mono : KarateFonts.body,
-          fontSize: f(15), fontWeight: mono ? "400" : "500",
-          marginTop: f(marginTop), color: INK,
+          fontSize: f(valueSize), fontWeight: mono ? "400" : "500",
+          marginTop: f(marginTop), color: INK, lineHeight: f(valueSize * 1.2),
         }}
       >
         {value || "—"}
@@ -259,11 +260,11 @@ function HeaderLeft({ card, f, size }: { card: MembershipCard; f: (n: number) =>
     <View style={{ flexDirection: "row", alignItems: "center", gap: f(13) }}>
       <CardLogo card={card} size={f(size)} />
       <View>
-        <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(14), fontWeight: "500", letterSpacing: f(0.3), color: INK }}>
+        <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(15.5), fontWeight: "700", letterSpacing: f(0.2), color: INK }}>
           {line1}
         </Text>
         {line2 ? (
-          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(14), fontWeight: "500", letterSpacing: f(0.3), color: INK, marginTop: f(3) }}>
+          <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(15.5), fontWeight: "700", letterSpacing: f(0.2), color: INK, marginTop: f(2) }}>
             {line2}
           </Text>
         ) : null}
@@ -279,7 +280,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
 
       {/* header */}
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", minHeight: f(46) }}>
-        <HeaderLeft card={card} f={f} size={40} />
+        <HeaderLeft card={card} f={f} size={48} />
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontFamily: KarateFonts.heading, fontSize: f(16), color: INK_2, fontWeight: "400" }}>Carteira</Text>
           {isPreta ? (
@@ -330,7 +331,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
             <View style={{ marginTop: f(24), gap: f(22) }}>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1, minWidth: 0 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={3} valueSize={13} /></View>
               </View>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
@@ -348,7 +349,7 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
             <View style={{ marginTop: f(24), gap: f(22) }}>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1, minWidth: 0 }}><Field label="Data de nascimento" value={fmtBR(card.birth_date)} f={f} mono /></View>
-                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={2} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Field label="Dojô" value={card.dojo_name} f={f} lines={3} valueSize={13} /></View>
               </View>
               <View style={{ flexDirection: "row", gap: f(20) }}>
                 <View style={{ flex: 1 }}><Field label="CPF" value={fmtCpf(card.cpf)} f={f} mono /></View>
@@ -375,7 +376,7 @@ function Back({ card, f, verifyUrl, isPreta }: { card: MembershipCard; f: (n: nu
 
       {/* header */}
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", minHeight: f(46) }}>
-        <HeaderLeft card={card} f={f} size={40} />
+        <HeaderLeft card={card} f={f} size={48} />
         <Text style={{ fontSize: f(8), letterSpacing: f(1.6), textTransform: "uppercase", color: INK_3 }}>Verso</Text>
       </View>
 
