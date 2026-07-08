@@ -88,7 +88,8 @@ function AuthGuard() {
         segments[2] === "p" ||                  // perfil público reduzido
         segments[2] === "inscricao" ||          // inscrição pública
         segments[2] === "ranking" ||              // ranking embed
-        segments[2] === "consulta"             // consulta publica de praticante
+        segments[2] === "consulta" ||          // consulta publica de praticante
+        segments[2] === "meus-certificados"    // participante: meus certificados
       );
       if (!onPublicMicrosite) {
         if (typeof window !== "undefined") window.location.href = APP_URL;
@@ -133,7 +134,8 @@ function AuthGuard() {
       segments[2] === "p" ||
       segments[2] === "inscricao" ||
       segments[2] === "ranking" ||
-      segments[2] === "consulta"
+      segments[2] === "consulta" ||
+      segments[2] === "meus-certificados"
     );
     if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 
