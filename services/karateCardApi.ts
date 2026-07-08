@@ -142,4 +142,25 @@ export const karateCardApi = {
     if (!res.ok) throw new Error(`Falha ao verificar registro (${res.status})`);
     return res.json();
   },
+
+  /**
+   * POST /public/karate/verify/{token}/card — cópia digital autenticada (Item 6).
+   * O praticante informa RG ou CPF; se conferir, devolve o cartão completo para
+   * gerar o PDF frente/verso. Cadastro sem RG/CPF → { no_identity, whatsapp }.
+   * Sem match → lança CardCopyMismatchError.
+   */
+  generateCardCopy: async (token: string, identifier: string): Promise<CardCopyResult> => {
+    const res = await fetch(
+      `${apiBase()}/public/karate/verify/${encodeURIComponent(token)}/card`,
+      { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ identifier }) }
+    );
+    if (res.status === 404) throw new Error("Carteirinha não encontrada.");
+    if (res.status === 401) { const e: any = new Error("RG ou CPF não confere com o cadastro."); e.code = "IDENTITY_MISMATCH"; throw e; }
+    if (!res.ok) throw new Error(`Falha ao gerar cópia (${res.status})`);
+    return res.json();
+  },
 };
+
+export type CardCopyResult =
+  | { card: MembershipCard }
+  | { no_identity: true; whatsapp: string | null; federation_name: string | null };
