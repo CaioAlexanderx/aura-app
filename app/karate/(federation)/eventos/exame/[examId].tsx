@@ -36,6 +36,7 @@ import { notify } from "@/utils/webAlert";
 import { request } from "@/services/api";
 import { RegistrationFieldsEditor, RegistrationField } from "@/components/karate/RegistrationFieldsEditor";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
+import { RegistrationLotsManager } from "@/components/karate/RegistrationLotsManager";
 import { EditarExameInfoModal } from "@/components/karate/EditarExameInfoModal";
 import { formatEventDateNumeric } from "@/utils/eventDate";
 
@@ -543,6 +544,9 @@ export default function ExameDetalhe() {
 
         {/* Banner deixou de ser tela própria: agora é anexo do evento. */}
         <EventBannerManager federationId={federationId} eventId={exam.id} />
+
+        {/* Lotes de inscrição (Fase 2): preço filiado × não-filiado por lote. */}
+        <RegistrationLotsManager federationId={federationId} eventId={exam.id} />
 
         {/* ── Seção específica de EXAME ─────────────────────────── */}
         {!isCurso && (
