@@ -656,7 +656,22 @@ function EventLanding({
   onCta: () => void;
 }) {
   const bannerUrl: string | null = (event as any)?.banner_url || null;
+  const bannerHasText: boolean = (event as any)?.banner_has_text === true;
   const description: string = (event as any)?.description || "";
+  // Aspecto natural do banner (sem cortar): busca as dimensões reais e aplica
+  // como aspectRatio. Até carregar, usa um padrão largo p/ evitar salto grande.
+  const [bannerRatio, setBannerRatio] = useState<number | null>(null);
+  useEffect(() => {
+    setBannerRatio(null);
+    if (!bannerUrl) return;
+    let alive = true;
+    Image.getSize(
+      bannerUrl,
+      (w, h) => { if (alive && w > 0 && h > 0) setBannerRatio(w / h); },
+      () => { if (alive) setBannerRatio(16 / 6); }
+    );
+    return () => { alive = false; };
+  }, [bannerUrl]);
   const isWide = winWidth >= LANDING_BREAKPOINT;
   const ctaLabel = isCompetition ? "Escolher categoria" : "Iniciar inscrição";
   const capacity = event?.capacity || null;
@@ -696,28 +711,47 @@ function EventLanding({
         </View>
       </View>
 
-      {/* HERO */}
-      <View style={landing.hero}>
-        {bannerUrl ? (
-          <Image source={{ uri: bannerUrl }} style={landing.heroImg} resizeMode="cover" accessibilityLabel={event?.name || "Banner do evento"} />
-        ) : (
-          <View style={[landing.heroImg, landing.heroFallback]}>
-            <Text style={landing.heroGlyph}>空</Text>
+      {/* HERO — banner em aspecto natural (nunca corta); sem banner usa fallback */}
+      {(() => {
+        const overlay = (
+          <>
+            <View style={landing.heroBadges}>
+              <View style={landing.badge}>
+                <Text style={landing.badgeTxt}>{eventKindLabel(event?.kind)}</Text>
+              </View>
+            </View>
+            <View style={landing.heroCap}>
+              <Text style={landing.heroTitle}>{event?.name || "Inscrição em evento"}</Text>
+              <View style={landing.heroMeta}>
+                <Text style={landing.heroMetaTxt}>{fmtDate(event?.event_date)}</Text>
+                {event?.location ? <Text style={landing.heroMetaTxt}>·  {event.location}</Text> : null}
+              </View>
+            </View>
+          </>
+        );
+        if (bannerUrl) {
+          return (
+            <View style={landing.heroWrap}>
+              <Image
+                source={{ uri: bannerUrl }}
+                style={[landing.heroBannerImg, { aspectRatio: bannerRatio || 16 / 6 }]}
+                resizeMode="cover"
+                accessibilityLabel={event?.name || "Banner do evento"}
+              />
+              {/* Se o banner já tem o texto embutido, não sobrepõe título/data. */}
+              {!bannerHasText && overlay}
+            </View>
+          );
+        }
+        return (
+          <View style={landing.hero}>
+            <View style={[landing.heroImg, landing.heroFallback]}>
+              <Text style={landing.heroGlyph}>空</Text>
+            </View>
+            {overlay}
           </View>
-        )}
-        <View style={landing.heroBadges}>
-          <View style={landing.badge}>
-            <Text style={landing.badgeTxt}>{eventKindLabel(event?.kind)}</Text>
-          </View>
-        </View>
-        <View style={landing.heroCap}>
-          <Text style={landing.heroTitle}>{event?.name || "Inscrição em evento"}</Text>
-          <View style={landing.heroMeta}>
-            <Text style={landing.heroMetaTxt}>{fmtDate(event?.event_date)}</Text>
-            {event?.location ? <Text style={landing.heroMetaTxt}>·  {event.location}</Text> : null}
-          </View>
-        </View>
-      </View>
+        );
+      })()}
 
       {/* CONTEÚDO — empilha sempre em telas estreitas; 2 colunas em largas */}
       <View style={[landing.body, isWide && landing.bodyWide]}>
@@ -767,6 +801,12 @@ const landing = StyleSheet.create({
     }),
   } as ViewStyle,
   heroImg: { width: "100%", height: "100%", position: "absolute", top: 0, left: 0} as any,
+  heroWrap: {
+    width: "100%", borderRadius: KarateRadius.xl, overflow: "hidden",
+    borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.ink,
+    position: "relative",
+  } as ViewStyle,
+  heroBannerImg: { width: "100%" } as any,
   heroFallback: {
     alignItems: "flex-end", justifyContent: "flex-end", backgroundColor: KarateColors.headRed,
     overflow: "hidden",

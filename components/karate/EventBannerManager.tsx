@@ -98,6 +98,7 @@ interface FormState {
   placement: BannerPlacement;
   sortOrder: string;
   active: boolean;
+  hasText: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -109,6 +110,7 @@ const EMPTY_FORM: FormState = {
   placement: "ambos",
   sortOrder: "0",
   active: true,
+  hasText: false,
 };
 
 interface FormularioBannerProps {
@@ -148,6 +150,7 @@ function FormularioBanner({ federationId, eventId, onSuccess, onCancel }: Formul
       event_id: eventId,
       sort_order: parseInt(form.sortOrder, 10) || 0,
       active: form.active,
+      has_text: form.hasText,
     };
     createMut.mutate(body);
   }
@@ -222,6 +225,20 @@ function FormularioBanner({ federationId, eventId, onSuccess, onCancel }: Formul
         placeholder="0"
         placeholderTextColor={KarateColors.ink4}
       />
+
+      {/* Banner já contém o texto/arte completa → esconde a sobreposição de título/data na página */}
+      <View style={styles.toggleRow}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={styles.fieldLabel}>Banner já contém o texto</Text>
+          <Text style={styles.hintText}>Se ligado, a página do evento não sobrepõe título e data — a arte fala por si.</Text>
+        </View>
+        <Switch
+          value={form.hasText}
+          onValueChange={(v) => setForm((f) => ({ ...f, hasText: v }))}
+          trackColor={{ false: KarateColors.border, true: KarateColors.primary }}
+          thumbColor={KarateColors.bg}
+        />
+      </View>
 
       {/* Ativo */}
       <View style={styles.toggleRow}>
@@ -580,6 +597,7 @@ const styles = StyleSheet.create({
   } as TextStyle,
 
   // Toggle
+  hintText: { fontSize: 11, color: KarateColors.ink3, marginTop: 2, lineHeight: 15 } as any,
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",

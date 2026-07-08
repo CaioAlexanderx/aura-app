@@ -1837,6 +1837,7 @@ export interface Banner {
   sort_order: number;
   starts_at: string | null;
   ends_at: string | null;
+  has_text: boolean;
   created_at: string;
 }
 
@@ -1851,6 +1852,7 @@ export interface BannerCreateInput {
   active?: boolean;
   starts_at?: string | null;
   ends_at?: string | null;
+  has_text?: boolean;
 }
 
 export interface BannerPatchInput {
@@ -1860,6 +1862,7 @@ export interface BannerPatchInput {
   format?: BannerFormat;
   event_id?: string | null;
   placement?: BannerPlacement;
+  has_text?: boolean;
 }
 
 export const bannerApi = {
