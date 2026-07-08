@@ -786,7 +786,7 @@ function FactCard({ icon, k, v, wide }: { icon: string; k: string; v: string; wi
 }
 
 const landing = StyleSheet.create({
-  page: { width: "100%", maxWidth: 900 } as ViewStyle,
+  page: { width: "100%", maxWidth: 1120 } as ViewStyle,
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 } as ViewStyle,
   brandT: { fontFamily: KarateFonts.heading, fontSize: 15, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   brandS: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginTop: 1 } as TextStyle,
@@ -838,8 +838,8 @@ const landing = StyleSheet.create({
 
   body: { marginTop: 20, gap: 16 } as ViewStyle,
   bodyWide: { flexDirection: "row", alignItems: "flex-start" } as ViewStyle,
-  mainWide: { flex: 1, minWidth: 0, marginRight: 24 } as ViewStyle,
-  sideWide: { width: 300 } as ViewStyle,
+  mainWide: { flex: 1, minWidth: 0, marginRight: 32 } as ViewStyle,
+  sideWide: { width: 340 } as ViewStyle,
 
   facts: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "flex-start" } as ViewStyle,
   factWide: { flexBasis: "100%" } as ViewStyle,
