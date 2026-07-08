@@ -258,16 +258,16 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.2mm 5.1mm 3.5mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
-  html += '.wm-front{left:50%;top:50%;width:46mm;opacity:0.06;transform:translate(-50%,-50%)}';
+  html += '.wm-front{left:70%;top:50%;width:52mm;opacity:0.12;transform:translate(-50%,-50%)}';
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:0.05;transform:translate(-50%,-50%)}';
 
   // header
   html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
   html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
-  html += '.logo-img{width:8.4mm;height:auto;object-fit:contain}';
+  html += '.logo-img{width:10.2mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;letter-spacing:0.05pt;color:' + INK + ';line-height:1.3}';
+  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:7.4pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.26}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho",serif;font-size:7.3pt;font-weight:400;color:' + INK_2 + ';text-align:right}';
@@ -288,7 +288,7 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
   html += '.flabel{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New",sans-serif;font-size:6.4pt;font-weight:500;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.12}';
+  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.1;font-size:5.8pt}';
   html += '.frow{display:flex;gap:2.6mm}';
   html += '.f-date{width:14mm;flex:none;min-width:0}';
   html += '.f-dojo{flex:1;min-width:0}';
