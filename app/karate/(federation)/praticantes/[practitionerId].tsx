@@ -36,7 +36,7 @@ import { TransferenciaTab } from "@/components/karate/praticante-detalhe/Transfe
 import { ExcluirComHistoricoModal } from "@/components/karate/praticante-detalhe/ExcluirComHistoricoModal";
 import { AnuidadeCard } from "@/components/karate/praticante-detalhe/AnuidadeCard";
 
-const TABS = ["Cadastro", "Trajetória", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
+const TABS = ["Cadastro", "Histórico", "Certif./Exames", "Carteirinha", "Transferência", "Documentos"] as const;
 type Tab = typeof TABS[number];
 
 function PlaceholderTab({ label }: { label: string }) {
@@ -219,7 +219,7 @@ export default function FichaPraticanteScreen() {
             />
           </>
         )}
-        {activeTab === "Trajetória"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onChanged={reload} />}
+        {activeTab === "Histórico"     && <TrajetoriaTab history={data.belt_history} currentBelt={data.current_belt} federationId={federationId} practitionerId={practitionerId!} karateRole={karateRole} onChanged={reload} />}
         {activeTab === "Certif./Exames" && <CertificadosTab federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Carteirinha"    && <CarteirinhaPanel federationId={federationId} practitionerId={practitionerId!} />}
         {activeTab === "Transferência"  && <TransferenciaTab federationId={federationId} practitioner={data} karateRole={karateRole} onTransferred={reload} />}
