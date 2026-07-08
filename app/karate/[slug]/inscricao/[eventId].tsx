@@ -657,6 +657,7 @@ function EventLanding({
 }) {
   const bannerUrl: string | null = (event as any)?.banner_url || null;
   const bannerHasText: boolean = (event as any)?.banner_has_text === true;
+  const currentLot: any = (event as any)?.current_lot || null;
   const description: string = (event as any)?.description || "";
   // Aspecto natural do banner (sem cortar): busca as dimensões reais e aplica
   // como aspectRatio. Até carregar, usa um padrão largo p/ evitar salto grande.
@@ -691,8 +692,27 @@ function EventLanding({
 
   const priceCard = (
     <View style={landing.buyCard}>
-      <Text style={landing.buyFrom}>A partir de</Text>
-      <Text style={landing.buyPrice}>{fmtEventFeeSummary(event?.fee_amount, (event as any)?.from_price)}</Text>
+      {currentLot ? (
+        <>
+          <Text style={landing.buyFrom}>{currentLot.name}</Text>
+          <View style={landing.priceRow}>
+            <View style={landing.priceCol}>
+              <Text style={landing.priceLabel}>Filiado</Text>
+              <Text style={landing.priceVal}>{fmtBRL(currentLot.price_member)}</Text>
+            </View>
+            <View style={landing.priceDiv} />
+            <View style={landing.priceCol}>
+              <Text style={landing.priceLabel}>Não-filiado</Text>
+              <Text style={landing.priceVal}>{fmtBRL(currentLot.price_nonmember)}</Text>
+            </View>
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={landing.buyFrom}>A partir de</Text>
+          <Text style={landing.buyPrice}>{fmtEventFeeSummary(event?.fee_amount, (event as any)?.from_price)}</Text>
+        </>
+      )}
       <KarateButton label={ctaLabel} onPress={onCta} style={{ marginTop: 16, width: "100%" } as any} />
       <View style={landing.secureRow}>
         <Icon name="shield" size={14} color={KarateColors.ink3} />
@@ -873,6 +893,11 @@ const landing = StyleSheet.create({
   } as ViewStyle,
   buyFrom: { fontSize: 11.5, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.5 } as TextStyle,
   buyPrice: { fontFamily: KarateFonts.heading, fontSize: 30, color: KarateColors.ink, marginTop: 4 } as TextStyle,
+  priceRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginTop: 8 } as ViewStyle,
+  priceCol: { flex: 1, minWidth: 0 } as ViewStyle,
+  priceDiv: { width: 1, alignSelf: "stretch", backgroundColor: KarateColors.border } as ViewStyle,
+  priceLabel: { fontSize: 10.5, color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.4 } as TextStyle,
+  priceVal: { fontFamily: KarateFonts.heading, fontSize: 21, color: KarateColors.ink, marginTop: 2 } as TextStyle,
   secureRow: { flexDirection: "row", alignItems: "center", gap: 7, justifyContent: "center", marginTop: 12 } as ViewStyle,
   secureTxt: { fontSize: 11, color: KarateColors.ink3, textAlign: "center" } as TextStyle,
 });
