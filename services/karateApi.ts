@@ -1865,6 +1865,39 @@ export interface BannerPatchInput {
   has_text?: boolean;
 }
 
+export interface RegistrationLot {
+  id: string;
+  event_id: string;
+  name: string;
+  sort_order: number;
+  price_member: number;
+  price_nonmember: number;
+  ends_at: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface RegistrationLotInput {
+  name: string;
+  sort_order?: number;
+  price_member?: number;
+  price_nonmember?: number;
+  ends_at?: string | null;
+  active?: boolean;
+}
+
+// Lotes de inscrição do evento (Fase 2). Montados sob /federation/:id/belt-exams/:examId/lots
+export const lotApi = {
+  listLots: (fedId: string, examId: string): Promise<RegistrationLot[]> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/lots`),
+  createLot: (fedId: string, examId: string, body: RegistrationLotInput): Promise<RegistrationLot> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/lots`, { method: "POST", body }),
+  updateLot: (fedId: string, examId: string, lotId: string, patch: Partial<RegistrationLotInput>): Promise<RegistrationLot> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/lots/${lotId}`, { method: "PATCH", body: patch }),
+  deleteLot: (fedId: string, examId: string, lotId: string): Promise<{ ok: boolean }> =>
+    request(`/federation/${fedId}/belt-exams/${examId}/lots/${lotId}`, { method: "DELETE" }),
+};
+
 export const bannerApi = {
   /** GET /federation/:fedId/banners */
   listBanners: (fedId: string): Promise<{ banners: Banner[] }> =>
