@@ -8,13 +8,20 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { certApi, IssuedCertificate } from "@/services/karateCertApi";
 import { request } from "@/services/api";
 import { CertificatePreview, printCertificate } from "@/components/karate/certificado/CertificatePreview";
-import type { CertLayout, CertSeal, CertData, CertTemplate } from "@/components/karate/certificado/buildCertificateHtml";
+import type { CertLayout, CertFont, CertSeal, CertData, CertTemplate } from "@/components/karate/certificado/buildCertificateHtml";
+import { CERT_FONTS } from "@/components/karate/certificado/buildCertificateHtml";
 import { FPKT_LOGO_DATA_URI } from "@/components/karate/carteirinha/fpktLogoDataUri";
 
 const LAYOUTS: { key: CertLayout; label: string }[] = [
   { key: "A", label: "Clássico" }, { key: "B", label: "Kraft" }, { key: "C", label: "Sumi-ê" },
   { key: "D", label: "Lateral" }, { key: "E", label: "Dupla borda" },
 ];
+const FONT_KEYS: CertFont[] = ["classica", "imponente", "elegante", "sofisticada", "tradicional"];
+type SizeMode = "auto" | "P" | "M" | "G";
+const SIZES: { key: SizeMode; label: string }[] = [
+  { key: "auto", label: "Auto" }, { key: "P", label: "Pequeno" }, { key: "M", label: "Médio" }, { key: "G", label: "Grande" },
+];
+const SIZE_SCALE: Record<Exclude<SizeMode, "auto">, number> = { P: 0.9, M: 1, G: 1.15 };
 const VERIFY_BASE = "https://app.getaura.com.br/karate/verify/cert";
 
 function pickPng(): Promise<{ base64: string; ct: string } | null> {
@@ -47,6 +54,8 @@ export function EventCertificatesManager({ federationId, event, federationName }
   const [customText, setCustomText] = useState(false);
   const [bodyText, setBodyText] = useState("");
   const [seals, setSeals] = useState<CertSeal[]>([{ label: "FPKT", image_url: FPKT_LOGO_DATA_URI }]);
+  const [font, setFont] = useState<CertFont>("classica");
+  const [sizeMode, setSizeMode] = useState<SizeMode>("M");
   const [issued, setIssued] = useState<IssuedCertificate[]>([]);
   const [signatories, setSignatories] = useState<{ name: string; role?: string | null }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -65,8 +74,11 @@ export function EventCertificatesManager({ federationId, event, federationName }
   }, [federationId, event.id]);
   useEffect(() => { load(); }, [load]);
 
+  const sizeFields = sizeMode === "auto"
+    ? { auto_fit: true as const }
+    : { text_scale: SIZE_SCALE[sizeMode] };
   const template: CertTemplate = {
-    layout, title, body_mode: customText ? "custom" : "default", body_text: customText ? bodyText : null, seals,
+    layout, title, body_mode: customText ? "custom" : "default", body_text: customText ? bodyText : null, seals, font, ...sizeFields,
   };
   const instructorsText = signatories.length
     ? (signatories.length === 1 ? `Sensei ${signatories[0].name}`
@@ -99,7 +111,7 @@ export function EventCertificatesManager({ federationId, event, federationName }
   const emit = async () => {
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const r = await certApi.emit(federationId, event.id, { template: { layout, title, body_mode: customText ? "custom" : "default", body_text: customText ? bodyText : null, seals } });
+      const r = await certApi.emit(federationId, event.id, { template });
       setMsg(`Emitidos ${r.issued} certificado(s)${r.skipped ? `, ${r.skipped} já existiam` : ""} (elegíveis: ${r.eligible}).`);
       await load();
     } catch (e: any) { setErr(e?.message ?? "Erro ao emitir"); }
@@ -122,6 +134,27 @@ export function EventCertificatesManager({ federationId, event, federationName }
         {LAYOUTS.map((l) => (
           <TouchableOpacity key={l.key} onPress={() => setLayout(l.key)} style={[s.chip, layout === l.key && s.chipOn]}>
             <Text style={[s.chipTxt, layout === l.key && s.chipTxtOn]}>{l.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Fonte */}
+      <Text style={s.lbl}>Fonte</Text>
+      <View style={s.chips}>
+        {FONT_KEYS.map((k) => (
+          <TouchableOpacity key={k} onPress={() => setFont(k)} style={[s.chip, font === k && s.chipOn]}>
+            <Text style={[s.chipTxt, font === k && s.chipTxtOn]}>{CERT_FONTS[k].label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Tamanho do texto */}
+      <Text style={s.lbl}>Tamanho do texto</Text>
+      <Text style={s.hint}>Auto aumenta a fonte quando o texto é curto, para preencher o certificado.</Text>
+      <View style={s.chips}>
+        {SIZES.map((z) => (
+          <TouchableOpacity key={z.key} onPress={() => setSizeMode(z.key)} style={[s.chip, sizeMode === z.key && s.chipOn]}>
+            <Text style={[s.chipTxt, sizeMode === z.key && s.chipTxtOn]}>{z.label}</Text>
           </TouchableOpacity>
         ))}
       </View>

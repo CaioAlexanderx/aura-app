@@ -4,6 +4,7 @@
 // Espelha o padrão do buildCarteirinhaHtml (HTML standalone p/ impressão/preview).
 
 export type CertLayout = "A" | "B" | "C" | "D" | "E";
+export type CertFont = "classica" | "imponente" | "elegante" | "sofisticada" | "tradicional";
 
 export interface CertSeal { label: string; image_url: string | null; }
 export interface CertSignatory { name: string; role?: string | null; signature_url?: string | null; }
@@ -14,6 +15,53 @@ export interface CertTemplate {
   body_mode?: "default" | "custom";
   body_text?: string | null;    // usado quando custom; aceita tags {nome} etc.
   seals?: CertSeal[];           // FPKT + opcionais (JKA-SP, CEPEUSP, ...)
+  font?: CertFont;              // preset tipográfico (default "classica")
+  text_scale?: number;          // multiplicador de tamanho do texto (default 1)
+  auto_fit?: boolean;           // ajusta tamanho ao comprimento do texto (preenche área)
+}
+
+// Presets tipográficos: par (título / corpo). "import" carrega a webfont quando necessário.
+export interface CertFontDef { label: string; heading: string; body: string; import?: string; }
+export const CERT_FONTS: Record<CertFont, CertFontDef> = {
+  classica: {
+    label: "Clássica",
+    heading: 'Georgia, "Times New Roman", serif',
+    body: 'Georgia, "Times New Roman", serif',
+  },
+  imponente: {
+    label: "Imponente",
+    heading: '"Cinzel", Georgia, serif',
+    body: '"EB Garamond", Georgia, serif',
+    import: "https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap",
+  },
+  elegante: {
+    label: "Elegante",
+    heading: '"Playfair Display", Georgia, serif',
+    body: '"Lato", "Helvetica Neue", Arial, sans-serif',
+    import: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Lato:ital,wght@0,400;0,700;1,400&display=swap",
+  },
+  sofisticada: {
+    label: "Sofisticada",
+    heading: '"Cormorant Garamond", Georgia, serif',
+    body: '"Cormorant Garamond", Georgia, serif',
+    import: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap",
+  },
+  tradicional: {
+    label: "Tradicional",
+    heading: '"EB Garamond", Georgia, serif',
+    body: '"EB Garamond", Georgia, serif',
+    import: "https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+  },
+};
+
+// Fator de tamanho final. auto_fit: cresce quando o texto é curto (preenche a área).
+function computeScale(t: CertTemplate, bodyPlainLen: number): number {
+  if (t.auto_fit) {
+    const l = bodyPlainLen;
+    return l < 80 ? 1.42 : l < 120 ? 1.30 : l < 170 ? 1.18 : l < 230 ? 1.07 : 1;
+  }
+  const s = typeof t.text_scale === "number" && t.text_scale > 0 ? t.text_scale : 1;
+  return Math.max(0.8, Math.min(1.6, s));
 }
 
 export interface CertData {
@@ -64,25 +112,29 @@ function qrImg(url: string, size = 200): string {
     "&margin=0&data=" + encodeURIComponent(url);
 }
 
-// ── CSS base compartilhado ──
-function baseCss(): string {
+// ── CSS base compartilhado (parametrizado por fonte + escala de texto) ──
+function baseCss(fontKey: CertFont, scale: number): string {
+  const f = CERT_FONTS[fontKey] || CERT_FONTS.classica;
+  const imp = f.import ? `@import url('${f.import}');\n` : "";
+  const n = (base: number) => +(base * scale).toFixed(2);   // px/pt escalado
+  const bodyMax = Math.min(230, Math.round(205 * (scale > 1 ? 1 : 1)));  // largura estável
   return `
-@page { size: 297mm 210mm; margin: 0; }
+${imp}@page { size: 297mm 210mm; margin: 0; }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:Georgia,"Times New Roman",serif;color:${INK};}
+body{font-family:${f.body};color:${INK};}
 .cert{width:297mm;height:210mm;position:relative;overflow:hidden;background:#fff;}
-.pad{position:absolute;inset:20mm 22mm;display:flex;flex-direction:column;align-items:center;}
+.pad{position:absolute;inset:20mm 22mm;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .seals{display:flex;align-items:center;justify-content:center;gap:12mm;min-height:20mm;}
 .seal{height:22mm;width:auto;object-fit:contain;}
 .seal-ph{width:18mm;height:18mm;border:0.4mm dashed #b8b0a0;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#a89f8e;font-size:6pt;font-family:Arial,sans-serif;text-align:center;}
-.fed{font-size:9.5pt;letter-spacing:0.4pt;color:#4a443c;margin-top:3mm;text-align:center;text-transform:uppercase;}
-.title{font-size:33pt;font-weight:bold;letter-spacing:3pt;margin-top:5mm;color:${INK};}
+.fed{font-size:${n(9.5)}pt;letter-spacing:0.4pt;color:#4a443c;margin-top:3mm;text-align:center;text-transform:uppercase;}
+.title{font-family:${f.heading};font-size:${n(33)}pt;font-weight:bold;letter-spacing:3pt;margin-top:5mm;color:${INK};line-height:1.05;}
 .rule{width:50mm;height:0.8mm;background:${FPKT_RED};margin-top:3mm;}
-.body{font-size:14pt;line-height:1.85;text-align:center;max-width:205mm;margin-top:7mm;}
+.body{font-size:${n(14)}pt;line-height:1.85;text-align:center;max-width:${bodyMax}mm;margin-top:7mm;}
 .body b{font-weight:bold;}
-.place{font-size:12pt;margin-top:7mm;}
+.place{font-size:${n(12)}pt;margin-top:7mm;}
 .sigs{position:absolute;bottom:20mm;left:26mm;right:26mm;display:flex;justify-content:center;gap:18mm;}
-.sig{text-align:center;min-width:46mm;max-width:70mm;}
+.sig{text-align:center;min-width:46mm;max-width:70mm;font-family:${f.body};}
 .sig-img{height:12mm;object-fit:contain;margin-bottom:-1mm;}
 .sig-line{border-top:0.4mm solid ${INK};margin-bottom:1.5mm;}
 .sig-name{font-size:10.5pt;font-weight:bold;}
@@ -166,10 +218,13 @@ function sigsHtml(sigs: CertSignatory[] | undefined): string {
 // HTML de UM certificado (uma página). watermarkUrl opcional (marca d'água).
 export function buildCertificateHtml(data: CertData, template: CertTemplate, watermarkUrl?: string | null): string {
   const layout = template.layout || "A";
+  const fontKey: CertFont = template.font && CERT_FONTS[template.font] ? template.font : "classica";
   const title = template.title || "CERTIFICADO";
   const bodyHtml = template.body_mode === "custom" && template.body_text
     ? esc(fillTags(template.body_text, data)).replace(/\n/g, "<br>")
     : defaultBody(data);
+  const bodyPlainLen = bodyHtml.replace(/<[^>]+>/g, "").length;
+  const scale = computeScale(template, bodyPlainLen);
   const placeLine = (data.location || data.issued_date_text)
     ? `${esc(data.location || "")}${data.location && data.issued_date_text ? ", " : ""}${esc(data.issued_date_text || "")}.`
     : "";
@@ -179,7 +234,7 @@ export function buildCertificateHtml(data: CertData, template: CertTemplate, wat
     : "";
 
   let html = "<!doctype html><html lang='pt-BR'><head><meta charset='UTF-8'>";
-  html += "<style>" + baseCss() + layoutCss(layout) + "</style></head><body>";
+  html += "<style>" + baseCss(fontKey, scale) + layoutCss(layout) + "</style></head><body>";
   html += "<div class='cert'>" + wm + layoutDeco(layout) + "<div class='pad'>";
   html += sealsHtml(template.seals);
   html += `<div class="fed">${esc(data.federation_name || "")}</div>`;
