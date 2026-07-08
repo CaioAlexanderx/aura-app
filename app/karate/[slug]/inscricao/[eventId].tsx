@@ -786,7 +786,7 @@ function FactCard({ icon, k, v, wide }: { icon: string; k: string; v: string; wi
 }
 
 const landing = StyleSheet.create({
-  page: { width: "100%", maxWidth: 1120 } as ViewStyle,
+  page: { width: "100%", maxWidth: 1350 } as ViewStyle,
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 } as ViewStyle,
   brandT: { fontFamily: KarateFonts.heading, fontSize: 15, fontWeight: "400", color: KarateColors.ink } as TextStyle,
   brandS: { fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono, marginTop: 1 } as TextStyle,
