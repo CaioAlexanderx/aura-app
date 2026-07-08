@@ -14,14 +14,15 @@
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Image, ActivityIndicator,
+  View, Text, ScrollView, Image, ActivityIndicator, TextInput,
   StyleSheet, ViewStyle, TextStyle, Platform, Linking, TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
-import { karateCardApi, CardVerification, VerifyStatus } from "@/services/karateCardApi";
+import { karateCardApi, CardVerification, VerifyStatus, MembershipCard } from "@/services/karateCardApi";
+import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 
 // ── helpers ──────────────────────────────────────────────
@@ -158,7 +159,10 @@ export default function VerifyCardScreen() {
             <Text style={styles.loadingTxt}>Verificando registro…</Text>
           </View>
         ) : data ? (
-          <VerifiedCard v={data} />
+          <>
+            <VerifiedCard v={data} />
+            {data.status !== "revogada" ? <CardCopySection token={String(token || "")} /> : null}
+          </>
         ) : (
           <NotFound token={String(token || "")} isError={error} />
         )}
@@ -257,6 +261,95 @@ function VerifiedCard({ v }: { v: CardVerification }) {
           <Text style={styles.footTxt}>Verificação oficial FPKT</Text>
         </View>
       </View>
+    </View>
+  );
+}
+
+// ── segunda via digital (Item 6): valida RG/CPF → PDF frente+verso ─────────
+function maskId(v: string): string {
+  // Mantém dígitos, X (RG) e formatação leve; não força máscara de CPF pois
+  // aceita RG também. Apenas remove espaços duplicados.
+  return v.replace(/\s+/g, "");
+}
+
+function CardCopySection({ token }: { token: string }) {
+  const [id, setId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [wa, setWa] = useState<{ whatsapp: string | null; federation_name: string | null } | null>(null);
+  const [ok, setOk] = useState(false);
+
+  const openPdf = (card: MembershipCard) => {
+    if (Platform.OS !== "web") return;
+    const html = buildCarteirinhaHtml([card]);
+    const w = window.open("", "_blank");
+    if (!w) { setErr("Permita pop-ups para gerar a carteirinha."); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  };
+
+  const submit = async () => {
+    if (id.replace(/[^0-9]/g, "").length < 5) { setErr("Informe seu RG ou CPF."); return; }
+    setBusy(true); setErr(null); setWa(null); setOk(false);
+    try {
+      const res = await karateCardApi.generateCardCopy(token, id);
+      if ("card" in res) { openPdf(res.card); setOk(true); }
+      else { setWa({ whatsapp: res.whatsapp, federation_name: res.federation_name }); }
+    } catch (e: any) {
+      setErr(e?.message ?? "Não foi possível gerar a cópia.");
+    } finally { setBusy(false); }
+  };
+
+  const openWhats = () => {
+    const digits = String(wa?.whatsapp || "").replace(/\D/g, "");
+    if (!digits) return;
+    const full = digits.startsWith("55") ? digits : `55${digits}`;
+    const msg = encodeURIComponent("Olá! Gostaria de gerar minha carteirinha digital, mas não tenho RG/CPF cadastrado.");
+    Linking.openURL(`https://wa.me/${full}?text=${msg}`);
+  };
+
+  return (
+    <View style={copyStyles.wrap}>
+      <View style={copyStyles.head}>
+        <Icon name="download" size={16} color={KarateColors.primary} />
+        <Text style={copyStyles.title}>Segunda via digital</Text>
+      </View>
+      <Text style={copyStyles.sub}>
+        Para gerar sua carteirinha (frente e verso), confirme sua identidade com o RG ou CPF cadastrado.
+      </Text>
+
+      {wa ? (
+        <View style={copyStyles.waBox}>
+          <Text style={copyStyles.waTxt}>
+            Não encontramos RG ou CPF no seu cadastro. Fale com a federação para atualizar e gerar sua carteirinha.
+          </Text>
+          {wa.whatsapp ? (
+            <TouchableOpacity style={copyStyles.waBtn} onPress={openWhats} accessibilityRole="button">
+              <Icon name="logo-whatsapp" size={16} color="#fff" />
+              <Text style={copyStyles.waBtnTxt}>Falar no WhatsApp</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={copyStyles.waTxt}>Contato da federação indisponível no momento.</Text>
+          )}
+          <TouchableOpacity onPress={() => setWa(null)}><Text style={copyStyles.link}>Tentar novamente</Text></TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <TextInput
+            style={copyStyles.input}
+            value={id}
+            onChangeText={(v) => setId(maskId(v))}
+            placeholder="RG ou CPF"
+            placeholderTextColor={KarateColors.ink4}
+            autoCapitalize="none"
+            accessibilityLabel="RG ou CPF"
+          />
+          {err ? <Text style={copyStyles.err}>{err}</Text> : null}
+          {ok ? <Text style={copyStyles.ok}>Carteirinha gerada — confira a nova aba e use "Imprimir" para salvar em PDF.</Text> : null}
+          <TouchableOpacity style={[copyStyles.btn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy} accessibilityRole="button">
+            {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={copyStyles.btnTxt}>Gerar carteirinha (PDF)</Text>}
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }
@@ -382,4 +475,21 @@ const styles = StyleSheet.create({
   footSealK:  { fontFamily: KarateFonts.heading, fontSize: 16, color: KarateColors.ink3 } as TextStyle,
   footWm:     { fontSize: 13, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
   footSub:    { fontSize: 11, color: KarateColors.ink4 } as TextStyle,
+});
+
+const copyStyles = StyleSheet.create({
+  wrap:     { marginTop: 14, backgroundColor: KarateColors.glass, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.lg, padding: 16 } as ViewStyle,
+  head:     { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 } as ViewStyle,
+  title:    { fontFamily: KarateFonts.heading, fontSize: 16, color: KarateColors.ink } as TextStyle,
+  sub:      { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 17, marginBottom: 12 } as TextStyle,
+  input:    { borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, color: KarateColors.ink, backgroundColor: KarateColors.bg, fontFamily: KarateFonts.mono, letterSpacing: 0.4 } as TextStyle,
+  err:      { color: KarateColors.danger, fontSize: 12.5, marginTop: 8 } as TextStyle,
+  ok:       { color: KarateColors.ok, fontSize: 12.5, marginTop: 8, lineHeight: 17 } as TextStyle,
+  btn:      { marginTop: 12, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.md, paddingVertical: 13, alignItems: "center" } as ViewStyle,
+  btnTxt:   { color: "#fff", fontSize: 14, fontWeight: "700" } as TextStyle,
+  waBox:    { gap: 10 } as ViewStyle,
+  waTxt:    { fontSize: 13, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
+  waBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#25D366", borderRadius: KarateRadius.md, paddingVertical: 12 } as ViewStyle,
+  waBtnTxt: { color: "#fff", fontSize: 14, fontWeight: "700" } as TextStyle,
+  link:     { color: KarateColors.primary, fontSize: 12.5, fontWeight: "600", marginTop: 2 } as TextStyle,
 });
