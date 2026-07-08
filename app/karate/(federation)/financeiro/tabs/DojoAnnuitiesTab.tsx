@@ -41,6 +41,7 @@ import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { WhatsAppChargeModal } from "@/components/karate/WhatsAppChargeModal";
 import { LancarAnuidadeDojoModal } from "@/components/karate/LancarAnuidadeDojoModal";
 import { SearchField } from "@/components/karate/shoji";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
@@ -125,6 +126,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const [feeEdits, setFeeEdits]   = useState<Record<string, string>>({});
   const [savingFees, setSavingFees] = useState(false);
   const [pixTarget, setPixTarget] = useState<DojoAnnuity | null>(null);
+  const [waTarget, setWaTarget] = useState<DojoAnnuity | null>(null);
   const [chargeTarget, setChargeTarget] = useState<DojoAnnuity | null>(null);
   const [editTarget, setEditTarget] = useState<DojoAnnuity | null>(null);
 
@@ -408,6 +410,17 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
                 )}
                 {ann.status !== "paid" && ann.status !== "no_charge" && (
                   <TouchableOpacity
+                    style={st.waBtn}
+                    onPress={() => setWaTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cobrar via WhatsApp de ${ann.dojo_name}`}
+                  >
+                    <Icon name="logo-whatsapp" size={13} color="#fff" />
+                    <Text style={st.waBtnLabel}>WhatsApp</Text>
+                  </TouchableOpacity>
+                )}
+                {ann.status !== "paid" && ann.status !== "no_charge" && (
+                  <TouchableOpacity
                     style={st.iconBtn}
                     onPress={() => setEditTarget(ann)}
                     accessibilityRole="button"
@@ -449,6 +462,23 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             load(true);
           }}
           onClose={() => setPixTarget(null)}
+        />
+      )}
+
+      {/* Cobrança manual via WhatsApp */}
+      {waTarget && (
+        <WhatsAppChargeModal
+          visible={!!waTarget}
+          federationId={federationId}
+          target={{
+            name: waTarget.dojo_name,
+            phone: waTarget.whatsapp,
+            amount: waTarget.amount,
+            reference_period: waTarget.reference_period,
+            due_date: waTarget.due_date,
+            status: waTarget.status,
+          }}
+          onClose={() => setWaTarget(null)}
         />
       )}
 
@@ -519,6 +549,8 @@ const st = StyleSheet.create({
 
   pixBtn:       { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:  { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+  waBtn:        { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#25D366", borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
+  waBtnLabel:   { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
 
   launchBtn:    { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   launchBtnLabel: { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
