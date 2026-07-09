@@ -244,7 +244,7 @@ export default function DojoDetailScreen() {
   // de "suspended". Aceitamos os dois valores aqui por compatibilidade
   // retroativa, e is_active tem precedência quando presente.
   const isSuspended = data
-    ? (data.is_active !== undefined ? !data.is_active : (data.status === "suspended" || data.status === "inactive"))
+    ? (data.is_active !== undefined ? !data.is_active : (data.status === "inactive"))
     : false;
   const toggleSuspend = useCallback(async () => {
     if (!data || busy) return;

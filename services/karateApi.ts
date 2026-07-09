@@ -48,9 +48,9 @@ async function withHasHistory<T>(p: Promise<T>): Promise<T> {
 // Tipos compartilhados
 // ─────────────────────────────────────────────────────────────────
 export type BeltSchema = "kyu" | "dan";
-export type DojoStatus = "active" | "inactive" | "suspended";
+export type DojoStatus = "active" | "inactive";
 export type AffiliationModel = "anual" | "semestral" | "trimestral";
-export type AffiliationStatus = "affiliated" | "pending" | "lapsed" | "none";
+export type AffiliationStatus = "active" | "inactive";
 export type AnnuityStatus =
   | "pending"
   | "paid"
@@ -1055,7 +1055,7 @@ export const karateApi = {
   // Praticantes
   listPractitioners: (
     federationId: string,
-    params?: { dojo_id?: string; belt_level?: string; affiliation_status?: AffiliationStatus; role?: string; q?: string; page?: number; pageSize?: number }
+    params?: { dojo_id?: string; belt_level?: string; affiliation_status?: AffiliationStatus | "pending"; role?: string; q?: string; page?: number; pageSize?: number }
   ): Promise<Paginated<PractitionerListItem>> => {
     const qs = new URLSearchParams();
     if (params?.dojo_id) qs.set("dojo_id", params.dojo_id);

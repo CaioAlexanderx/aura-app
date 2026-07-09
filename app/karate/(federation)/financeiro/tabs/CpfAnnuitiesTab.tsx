@@ -20,7 +20,7 @@ import {
   TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts, annuityStatusView } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -38,22 +38,9 @@ const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
   { key: "no_charge",  label: "Sem cobrança" },
 ];
 
-const STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
-  paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,     bg: ShojiPalette.okSoft },
-  due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,   bg: ShojiPalette.warnSoft },
-  overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,  bg: ShojiPalette.alertSoft },
-  defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger, bg: ShojiPalette.dangerSoft },
-  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral,bg: ShojiPalette.neutralSoft },
-  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
-};
-
-// Fallback neutro para status fora do STATUS_MAP — evita que um valor de
-// status desconhecido (TypeError: Cannot read properties of undefined
-// (reading 'bg')) derrube a lista inteira em vez de só o badge de uma linha.
-// Mesmo padrão defensivo do `sm()` em AnuidadeCard.tsx.
-const STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+// Estado da anuidade -> view canônica (fonte única: annuityStatusView).
 function sm(status: string) {
-  return STATUS_MAP[status as AnnuityStatus] || { ...STATUS_FALLBACK, label: status || "\u2014" };
+  return annuityStatusView(status);
 }
 
 // Extended type that carries transaction_id from the list response.
@@ -67,7 +54,7 @@ function formatCurrency(v: number) {
 }
 
 const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
-  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso", no_charge: "Sem cobrança",
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Inadimplente", no_charge: "Sem cobrança",
 };
 
 interface Props { federationId: string; }

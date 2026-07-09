@@ -10,7 +10,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, KarateDojoStatus, DojoStatus } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, annuityStatusView } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateApi, SenseiAnnuity, SenseiAnnuityResponse } from "@/services/karateApi";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -62,11 +62,12 @@ export default function SenseiAnuidade() {
   const pix = data?.pix ?? null;
   const hasAnyData = !!pending || history.length > 0;
 
-  // Situação: sem pendência mas com histórico pago → "Em dia" (ok). Com
-  // pendência → traduz o status real via KarateDojoStatus (mesmo mapa
-  // usado no shell da federação para o status do dojô).
-  const statusKey: DojoStatus = pending ? ((pending.status as DojoStatus) in KarateDojoStatus ? (pending.status as DojoStatus) : "overdue") : "active";
-  const statusMeta = KarateDojoStatus[statusKey];
+  // Situação da anuidade: sem pendência → "Em dia"; com pendência, usa o mapa
+  // de ANUIDADE (bug antigo usava o mapa de status do DOJÔ e mostrava "Vencido"
+  // para qualquer estado). annuityStatusView normaliza tudo.
+  const statusMeta = pending
+    ? annuityStatusView(pending.status)
+    : { ...annuityStatusView("paid"), label: "Em dia" };
   const statusDue = pending ? fmtDataLonga(pending.due_date) : null;
 
   async function handleCopy() {

@@ -45,11 +45,14 @@ import {
   ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body,
 } from "@/components/karate/shoji";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
-import { karateApi, PractitionerListItem, AffiliationStatus } from "@/services/karateApi";
+import { karateApi, PractitionerListItem } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-const STATUS_FILTERS: { key: AffiliationStatus | "all"; label: string }[] = [
-  { key: "all", label: "Todos" }, { key: "active", label: "Em dia" }, { key: "pending", label: "Pendente" }, { key: "inactive", label: "Inativo" },
+// Ativo/Inativo = afiliação (is_active). 'Sem faixa' é outra dimensão
+// (praticante ainda sem graduação), não um status — por isso rótulo próprio.
+type PractitionerStatusFilter = "all" | "active" | "inactive" | "pending";
+const STATUS_FILTERS: { key: PractitionerStatusFilter; label: string }[] = [
+  { key: "all", label: "Todos" }, { key: "active", label: "Ativo" }, { key: "inactive", label: "Inativo" }, { key: "pending", label: "Sem faixa" },
 ];
 
 // Fix 7 — filtros de papel. Os `key` casam com o contrato do backend
@@ -121,7 +124,7 @@ export default function PraticantesScreen() {
   // `debouncedQ` = termo "assentado" que efetivamente dispara o fetch.
   const [q, setQ] = useState(qParam);
   const [debouncedQ, setDebouncedQ] = useState(qParam);
-  const [status, setStatus] = useState<AffiliationStatus | "all">("all");
+  const [status, setStatus] = useState<PractitionerStatusFilter>("all");
   const [role, setRole] = useState<RoleFilter | null>(null);
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });

@@ -302,7 +302,7 @@ export function ShojiBadge({ status, dojoStatus, affiliationStatus, label }: {
   // não conhece (ex.: novo status do backend), cai em "Inativo" em vez de
   // quebrar o render.
   if (dojoStatus) { const s = KarateDojoStatus[dojoStatus] ?? KarateDojoStatus.inactive; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
-  else if (affiliationStatus) { const s = KarateAffiliationStatus[affiliationStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
+  else if (affiliationStatus) { const s = KarateAffiliationStatus[affiliationStatus] ?? KarateAffiliationStatus.inactive; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
   else { const s = KarateStatus[status ?? "neutral"]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? (status ?? ""); }
   return (
     <View style={[styles.badge, { backgroundColor: bg }]} accessibilityLabel={txt}>
