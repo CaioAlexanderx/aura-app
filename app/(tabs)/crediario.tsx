@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
@@ -35,6 +35,8 @@ import { Motion, Shadows, webTransition } from "@/constants/motion";
 //    "Em atraso" + "—" na coluna de atraso; agora mostra pill "Em atraso"
 //  Lógica preservada: busca debounce, A–Z, atraso-por-data, cobrança, modais.
 //  refreshMe() no mount mantido (armadilha_plano_stale_jwt).
+// F4.1 (09/07/2026): aderência ao modo claro — o hero usa gradiente denso
+//  no light (feito p/ texto branco); cores do hero viraram theme-aware.
 // ============================================================
 
 var fmt = function(n: number) {
@@ -114,6 +116,13 @@ const AGING_COLORS: Record<string, string> = {
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
 
 const IS_WEB = Platform.OS === "web";
+
+// F4.1: no modo claro o Glass.heroGradSoft é um gradiente violeta DENSO
+// (feito para texto branco, como no Painel) — os tokens ink/ink3/violet3
+// invertem para cores escuras e perderiam contraste sobre ele.
+const HERO_LABEL = IS_DARK_MODE ? Colors.violet3 : "rgba(255,255,255,0.9)";
+const HERO_INK   = IS_DARK_MODE ? Colors.ink : "#ffffff";
+const HERO_META  = IS_DARK_MODE ? Colors.ink3 : "rgba(255,255,255,0.75)";
 
 type CobrancaPreviewState = {
   recipientName: string;
@@ -733,10 +742,10 @@ const s = StyleSheet.create({
   eyebrow: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 6 },
   pageTitle: { fontSize: 30, fontWeight: "800", color: Colors.ink, letterSpacing: -0.6, lineHeight: 32 },
 
-  // Hero (glass gradient)
-  heroLabel: { fontSize: 10, fontWeight: "800", color: Colors.violet3, letterSpacing: 1.4, textTransform: "uppercase" },
-  heroValue: { fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginTop: 10, marginBottom: 4, fontVariant: ["tabular-nums"] as any },
-  heroMeta: { fontSize: 12, color: Colors.ink3, marginBottom: 16 },
+  // Hero (glass gradient) — F4.1: cores theme-aware p/ contraste no claro
+  heroLabel: { fontSize: 10, fontWeight: "800", color: HERO_LABEL, letterSpacing: 1.4, textTransform: "uppercase" },
+  heroValue: { fontWeight: "800", color: HERO_INK, letterSpacing: -1, marginTop: 10, marginBottom: 4, fontVariant: ["tabular-nums"] as any },
+  heroMeta: { fontSize: 12, color: HERO_META, marginBottom: 16 },
   heroStats: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   stat: {
     flexDirection: "row", alignItems: "center", gap: 9,
