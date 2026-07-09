@@ -4,46 +4,56 @@
 // (decomposto em ficha/* em 11/06; este é o shell que mantém estado/queries
 //  e compõe TabParcelas/TabHistorico/TabConta.)
 //
-// C-2 (12/06): header do cliente + banner + abas ficam FIXOS (fora do
-//   ScrollView); só o conteúdo da aba rola. Footer "Confirmar recebimento"
-//   removido em consolidação (13/06): CTA vive dentro do card B3 com preview.
-// A2-FE (12/06): triggerPreview envia paid_at (alinha preview↔aplicação no
-//   recebimento retroativo com encargos).
-// feat (13/06): TabHistorico recebe companyId/customerId/onRefresh para
-//   revelar botões Recibo (B5) e Devolver (B4) em cada evento.
-// feat (13/06): openFreePix — Pix EMV para recebimento de valor livre (B3).
-//   Reutiliza o mesmo overlay pixInstId/pixData/pixLoading; identificado
-//   por pixInstId === "free" quando originado do valor livre.
-//   Tratamento amigável de PIX_KEY_MISSING (422) em ambos os handlers.
-// Item 2 (16/06): renegociação de parcelas — sheet "Renegociar parcelas" com
-//   edição livre (nº ↔ valor) e total editável; rescheduleApi.apply.
-// Item 4 (16/06): botão "Cobrar" do header usa ícone whatsapp.
+// F3 do redesign (08/07/2026 — spec docs/crediario-redesign-spec.md §2.3):
+//  - 5 abas → 3: Termos e Bloqueio viraram "Ajustes deste cliente"
+//    (colapsado) dentro da aba Conta; some a 2ª linha de tabs.
+//  - Header: EM ABERTO vira o HERÓI (22/800 colorido); Score e
+//    Disponível viram suporte compacto ao lado.
+//  - Entrada do sheet via ModalPop (scale 0.96→1 + fade).
+//  - "Receber valor livre" saiu da TabParcelas: agora é o sheet
+//    "Receber pagamento", aberto pelo CTA fixo no rodapé da ficha ou
+//    por qualquer botão "Receber" (prefill). Gate 2-step âmbar migrou
+//    para <ConfirmGate> (padrão único).
+// Histórico anterior: C-2 (12/06) header fixo; A2-FE paid_at no preview;
+// B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, Modal, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Switch, Clipboard, Platform,
+  TextInput, ActivityIndicator, Clipboard,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import {
-  creditApi, printCarne,
-  type CreditAccount, type CreditInstallment, type PaymentAllocation, type CustomerTermsOverrides,
+  creditApi,
+  type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
 } from "@/services/creditApi";
 import { rescheduleApi } from "@/services/creditReschedule";
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { ModalPop } from "@/components/anim";
+import { ConfirmGate } from "@/components/ConfirmGate";
 import {
-  fmt, fmtDate, todayBrSp, parseAmount, periodLabel, scoreColor, scoreLabelPt,
-  PAYMENT_METHODS, type ReceiveMode, type Tab,
+  fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
+  PAYMENT_METHODS, type Tab,
 } from "./ficha/fichaHelpers";
 import { m } from "./ficha/fichaStyles";
 import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
+
+function translateStatus(status: string | null | undefined): string {
+  if (!status) return "";
+  if (status === "paid") return "Quitada";
+  if (status === "partial") return "Parcial";
+  if (status === "overdue") return "Em atraso";
+  if (status === "pending") return "Em aberto";
+  if (status === "cancelled") return "Cancelada";
+  return status;
+}
 
 type Props = {
   visible: boolean;
@@ -96,7 +106,9 @@ export function ClienteCrediarioModal({
   const [histLoading, setHistLoading] = useState(false);
   const [histLoaded, setHistLoaded] = useState(false);
 
-  // ── B3: único fluxo de recebimento de valor livre ─────────────────────
+  // ── B3 → F3: sheet "Receber pagamento" (antes card fixo na TabParcelas) ──
+  const [receberOpen, setReceberOpen] = useState(false);
+  const [receberGate, setReceberGate] = useState(false);
   const [freeAmt, setFreeAmt] = useState("");
   const [freeMethod, setFreeMethod] = useState("dinheiro");
   const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
@@ -106,13 +118,13 @@ export function ClienteCrediarioModal({
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo).
+  useEffect(() => { setReceberGate(false); }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
+
   // ── B2: Pix overlay — compartilhado entre parcela e valor livre ────────
-  // pixInstId === "free" indica que o overlay foi aberto pelo valor livre (B3).
-  // pixInstId === <uuid> indica que veio de uma parcela específica.
   const [pixInstId, setPixInstId] = useState<string | null>(null);
   const [pixData, setPixData] = useState<CreditPix | null>(null);
   const [pixLoading, setPixLoading] = useState(false);
-  // Label dinâmico do overlay ("Parcela" ou "Valor Livre")
   const pixOverlayTitle = pixInstId === "free" ? "Pix · Valor Livre" : "Pix da Parcela";
 
   const profileQ = useQuery({
@@ -148,6 +160,8 @@ export function ClienteCrediarioModal({
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
+      setReceberOpen(false);
+      setReceberGate(false);
       setFreeAmt("");
       setFreeMethod("dinheiro");
       setFreeDateBr(todayBrSp());
@@ -196,7 +210,6 @@ export function ClienteCrediarioModal({
   }, [openInst]);
 
   const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => i.status === "overdue");
-  const openSum = openInst.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
 
   const realCarnes = accounts.filter(a => a && a.id != null);
   const useCarneLayout = realCarnes.length > 0;
@@ -262,10 +275,11 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // prefill: alimenta o fluxo B3 (único) e dispara preview
+  // prefill: abre o sheet "Receber pagamento" com o valor e dispara preview (F3)
   function prefill(v: number) {
     const str = v.toFixed(2).replace(".", ",");
     setFreeAmt(str);
+    setReceberOpen(true);
     triggerPreview(str, freeAccountId);
   }
 
@@ -313,8 +327,6 @@ export function ClienteCrediarioModal({
   }
 
   // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
-  // Abre o sheet com prefill do escopo (carne, "sem carne" ou geral). O total
-  // default = saldo aberto do escopo; o nº default = parcelas abertas do escopo.
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
@@ -330,8 +342,6 @@ export function ClienteCrediarioModal({
     setRenegFirstDue(firstIso ? formatIsoToBr(firstIso) : todayBrSp());
   }
 
-  // Edicao livre dos dois lados: mexer no nº recalcula o valor; mexer no valor
-  // recalcula o nº; mexer no total recalcula o valor mantendo o nº.
   function setRenegCountSafe(n: number) {
     const c = Math.max(1, Math.min(36, n));
     setRenegCount(c);
@@ -463,6 +473,8 @@ export function ClienteCrediarioModal({
       setFreeAmt("");
       setFreePreview(null);
       setFreeDateBr(todayBrSp());
+      setReceberOpen(false);
+      setReceberGate(false);
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
@@ -551,20 +563,26 @@ export function ClienteCrediarioModal({
     profile?.terms?.overrides?.interest_rate != null
   );
 
-  // Derivados do sheet de renegociacao (distribuicao identica ao backend:
-  // floor por parcela, resto na ultima).
+  // Derivados do sheet de renegociacao (distribuicao identica ao backend).
   const renegTotalVal = parseAmount(renegTotal);
   const renegBase = renegCount > 0 ? Math.floor((renegTotalVal / renegCount) * 100) / 100 : 0;
   const renegLast = +(renegTotalVal - renegBase * (renegCount - 1)).toFixed(2);
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
 
+  const freeAmtValue = parseAmount(freeAmt);
+  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen;
+  const methodLabel = PAYMENT_METHODS.find(p => p.key === freeMethod)?.label || freeMethod;
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={m.backdrop} onPress={onClose}>
-        <Pressable style={m.sheet} onPress={() => {}}>
+        <ModalPop visible={visible} style={{ width: "100%", maxWidth: 700, alignItems: "center" } as any}>
+        <Pressable style={[m.sheet, { width: "100%" }]} onPress={() => {}}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
-              <Icon name="chevron_right" size={15} color={Colors.violet3} style={{ transform: [{ rotate: "180deg" }] } as any} />
+              <View style={{ transform: [{ rotate: "180deg" }] }}>
+                <Icon name="chevron_right" size={15} color={Colors.violet3} />
+              </View>
               <Text style={m.crumbTxt}>Crediário</Text>
             </Pressable>
             <Pressable onPress={onClose} style={m.xBtn}>
@@ -601,24 +619,28 @@ export function ClienteCrediarioModal({
               )}
             </View>
 
+            {/* F3: EM ABERTO é o herói; score e disponível são suporte */}
             {!!profile && (
-              <View style={m.fixedMeta}>
-                <View style={m.fixedMetaItem}>
-                  <Text style={m.fixedMetaLbl}>SCORE</Text>
-                  <Text style={[m.fixedMetaVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
-                </View>
-                {availableLimit !== undefined && (
-                  <View style={m.fixedMetaItem}>
-                    <Text style={m.fixedMetaLbl}>DISPONÍVEL</Text>
-                    <Text style={[m.fixedMetaVal, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>{fmt(availableLimit)}</Text>
-                  </View>
-                )}
-                <View style={m.fixedMetaItem}>
+              <View style={f.metaRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={m.fixedMetaLbl}>{totalBalance < 0 ? "CRÉDITO A FAVOR" : "EM ABERTO"}</Text>
-                  <Text style={[m.fixedMetaVal, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}>
+                  <Text
+                    style={[f.metaHero, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}
+                    numberOfLines={1}
+                  >
                     {fmt(Math.abs(totalBalance))}
                   </Text>
                 </View>
+                <View style={f.metaSm}>
+                  <Text style={m.fixedMetaLbl}>SCORE</Text>
+                  <Text style={[f.metaSmVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
+                </View>
+                {availableLimit !== undefined && (
+                  <View style={f.metaSm}>
+                    <Text style={m.fixedMetaLbl}>DISPONÍVEL</Text>
+                    <Text style={[f.metaSmVal, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>{fmt(availableLimit)}</Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -633,20 +655,12 @@ export function ClienteCrediarioModal({
               </View>
             )}
 
-            <View style={m.tabs}>
+            {/* F3: 5 abas → 3 (Termos/Bloqueio viraram Ajustes na aba Conta) */}
+            <View style={[m.tabs, { marginBottom: 12 }]}>
               {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
                   <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : "Conta"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={[m.tabs, { marginTop: -4, marginBottom: 8 }]}>
-              {(["termos", "bloqueio"] as Tab[]).map(t => (
-                <Pressable key={t} style={[m.tab, m.tabSm, tab === t && m.tabOn]} onPress={() => setTab(t)}>
-                  <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {t === "termos" ? `Termos${hasTermsOverride ? " •" : ""}` : "Bloqueio"}
+                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
                   </Text>
                 </Pressable>
               ))}
@@ -662,23 +676,15 @@ export function ClienteCrediarioModal({
               <>
                 {tab === "parcelas" && (
                   <TabParcelas
-                    profile={profile} detail={detail} accounts={accounts} openInst={openInst}
-                    instByAccount={instByAccount} useCarneLayout={useCarneLayout} realCarnes={realCarnes}
-                    totalBalance={totalBalance} nextDueDate={nextDueDate} scoreLabel={scoreLabel}
-                    availableLimit={availableLimit} isBlocked={isBlocked} hasOverdue={hasOverdue}
+                    accounts={accounts} openInst={openInst}
+                    instByAccount={instByAccount} useCarneLayout={useCarneLayout}
                     handleCreateAccount={handleCreateAccount} showNewAccount={showNewAccount}
                     setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
                     openInstallmentPix={openInstallmentPix}
-                    openFreePix={openFreePix}
-                    freeAmt={freeAmt} setFreeAmt={setFreeAmt} freeMethod={freeMethod} setFreeMethod={setFreeMethod}
-                    freeDateBr={freeDateBr} setFreeDateBr={setFreeDateBr}
-                    freeAccountId={freeAccountId} setFreeAccountId={setFreeAccountId}
-                    freePreview={freePreview} freePreviewLoading={freePreviewLoading}
-                    confirmFreePayment={confirmFreePayment} freeSubmitting={freeSubmitting}
-                    prefill={prefill} triggerPreview={triggerPreview}
+                    prefill={prefill}
                     companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
                   />
                 )}
@@ -698,123 +704,192 @@ export function ClienteCrediarioModal({
                     profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
                     availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
                     nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
+                    ajustes={{
+                      termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
+                      termsDirty, setTermsDirty, savingTerms, saveTerms,
+                      blockReason, setBlockReason, blockingAction, setBlockingAction,
+                      handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
+                    }}
                   />
                 )}
-
-                {tab === "termos" && (
-                  <View style={m.card}>
-                    <View style={m.cardTitleRow}>
-                      <Text style={m.cardTitle}>Termos deste cliente</Text>
-                      {hasTermsOverride && (
-                        <View style={[m.pill, { backgroundColor: Colors.violet3 + "22" }]}>
-                          <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Condições personalizadas</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={m.termsHint}>
-                      Substitui as regras padrão da loja só para este cliente. Deixe os campos em branco para usar o padrão.
-                      Salvar com tudo em branco remove o override.
-                    </Text>
-
-                    {!!profile?.terms?.effective && (
-                      <View style={m.termsEffRow}>
-                        <Text style={m.termsEffLbl}>Efetivo agora</Text>
-                        <Text style={m.termsEffVal}>
-                          {profile.terms.effective.max_installments}x ·{" "}
-                          {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% a.m.
-                        </Text>
-                      </View>
-                    )}
-
-                    <Text style={[m.fieldLabel, { marginTop: 14 }]}>Máx. parcelas</Text>
-                    <TextInput
-                      style={m.termsInput}
-                      value={termsMaxInst}
-                      placeholder={profile?.terms?.effective?.max_installments ? String(profile.terms.effective.max_installments) + " (padrão)" : "padrão"}
-                      placeholderTextColor={Colors.ink3}
-                      keyboardType="numeric"
-                      onChangeText={v => { setTermsMaxInst(v.replace(/\D/g, "").slice(0, 2)); setTermsDirty(true); }}
-                    />
-
-                    <Text style={[m.fieldLabel, { marginTop: 10 }]}>Juros ao mês (%)</Text>
-                    <TextInput
-                      style={m.termsInput}
-                      value={termsInterest}
-                      placeholder={profile?.terms?.effective ? (profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",") + " (padrão)" : "padrão"}
-                      placeholderTextColor={Colors.ink3}
-                      keyboardType="decimal-pad"
-                      onChangeText={v => { setTermsInterest(v.replace(/[^\d,.]/g, "")); setTermsDirty(true); }}
-                    />
-
-                    <Pressable
-                      style={[m.cta, { marginTop: 16 }, (!termsDirty || savingTerms) && { opacity: 0.45 }]}
-                      onPress={saveTerms}
-                      disabled={!termsDirty || savingTerms}
-                    >
-                      {savingTerms
-                        ? <ActivityIndicator color="#fff" />
-                        : <Text style={m.ctaTxt}>Salvar termos</Text>}
-                    </Pressable>
-                  </View>
-                )}
-
-                {tab === "bloqueio" && (
-                  <View style={m.card}>
-                    <Text style={m.cardTitle}>Bloqueio manual</Text>
-                    <Text style={m.termsHint}>
-                      O bloqueio manual impede novas vendas a prazo para este cliente. É diferente do score — score baixo nunca bloqueia, só exibe aviso.
-                    </Text>
-
-                    <View style={m.blockRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={m.blockLabel}>{isBlocked ? "Cliente bloqueado" : "Cliente ativo"}</Text>
-                        {isBlocked && !!profile?.blocked_reason && (
-                          <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
-                        )}
-                      </View>
-                      <Switch
-                        value={isBlocked}
-                        onValueChange={handleBlockToggle}
-                        trackColor={{ false: Colors.bg4, true: Colors.red }}
-                        thumbColor="#fff"
-                        disabled={blockMut.isPending}
-                      />
-                    </View>
-
-                    {blockingAction === "block" && !isBlocked && (
-                      <>
-                        <Text style={[m.fieldLabel, { marginTop: 14 }]}>Motivo (opcional)</Text>
-                        <TextInput
-                          style={[m.termsInput, { minHeight: 72, textAlignVertical: "top" }]}
-                          value={blockReason}
-                          onChangeText={setBlockReason}
-                          placeholder="Ex: Inadimplência por 60+ dias"
-                          placeholderTextColor={Colors.ink3}
-                          multiline
-                        />
-                        <Pressable
-                          style={[m.cta, { marginTop: 12, backgroundColor: Colors.red }, blockMut.isPending && { opacity: 0.5 }]}
-                          onPress={confirmBlock}
-                          disabled={blockMut.isPending}
-                        >
-                          {blockMut.isPending
-                            ? <ActivityIndicator color="#fff" />
-                            : <Text style={m.ctaTxt}>Confirmar bloqueio</Text>}
-                        </Pressable>
-                        <Pressable
-                          style={[m.cta, { marginTop: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-                          onPress={() => setBlockingAction(null)}
-                        >
-                          <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
-                        </Pressable>
-                      </>
-                    )}
-                  </View>
-                )}
-
               </>
             )}
           </ScrollView>
+
+          {/* F3: CTA fixo — abre o sheet "Receber pagamento" */}
+          {!anyOverlayOpen && tab === "parcelas" && !detailQ.isLoading && (
+            <View style={m.footer}>
+              <Pressable style={m.cta} onPress={() => setReceberOpen(true)}>
+                <Text style={m.ctaTxt}>Receber pagamento</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── Sheet "Receber pagamento" (ex-card "valor livre" da TabParcelas) ── */}
+          {receberOpen && (
+            <View style={m.editDueDateSheet}>
+              <View style={m.editDueDateHeader}>
+                <Text style={m.editDueDateTitle}>Receber pagamento</Text>
+                <Pressable onPress={() => { setReceberOpen(false); setReceberGate(false); }} style={m.xBtn}>
+                  <Icon name="x" size={13} color={Colors.ink3} />
+                </Pressable>
+              </View>
+              <Text style={m.editDueDateSub}>
+                Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
+              </Text>
+
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                {realCarnes.length > 1 && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={m.fieldLabel}>Carnê</Text>
+                    <View style={m.chipRow}>
+                      <Pressable
+                        style={[m.chip, freeAccountId === undefined && m.chipOn]}
+                        onPress={() => { setFreeAccountId(undefined); triggerPreview(freeAmt, undefined); }}
+                      >
+                        <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
+                      </Pressable>
+                      {realCarnes.map(acc => (
+                        <Pressable
+                          key={acc.id!}
+                          style={[m.chip, freeAccountId === acc.id && m.chipOn]}
+                          onPress={() => { setFreeAccountId(acc.id); triggerPreview(freeAmt, acc.id); }}
+                        >
+                          <Text style={[m.chipTxt, freeAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                <Text style={m.fieldLabel}>Valor recebido</Text>
+                <View style={m.amountIn}>
+                  <Text style={m.amountPrefix}>R$</Text>
+                  <TextInput
+                    style={m.amountInput}
+                    value={freeAmt}
+                    onChangeText={(v) => {
+                      const clean = v.replace(/[^\d,.]/g, "");
+                      setFreeAmt(clean);
+                      triggerPreview(clean, freeAccountId);
+                    }}
+                    placeholder="0,00"
+                    placeholderTextColor={Colors.ink3}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={m.quickRow}>
+                  {[50, 100, 200].map(v => (
+                    <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
+                      <Text style={m.qChipTxt}>{fmt(v)}</Text>
+                    </Pressable>
+                  ))}
+                  {totalBalance > 0 && (
+                    <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
+                      <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
+                <DateInput
+                  value={freeDateBr}
+                  onChangeText={setFreeDateBr}
+                  placeholder="dd/mm/aaaa"
+                  style={m.dateInput}
+                />
+                <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
+
+                <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
+                <View style={m.methods}>
+                  {PAYMENT_METHODS.map(pm => (
+                    <Pressable
+                      key={pm.key}
+                      style={[m.method, freeMethod === pm.key && m.methodActive]}
+                      onPress={() => setFreeMethod(pm.key)}
+                    >
+                      <Text style={[m.methodTxt, freeMethod === pm.key && { color: "#fff" }]}>{pm.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {freePreviewLoading && (
+                  <View style={{ alignItems: "center", marginTop: 14 }}>
+                    <ActivityIndicator size="small" color={Colors.violet3} />
+                    <Text style={[m.termsHint, { textAlign: "center", marginTop: 4 }]}>Calculando distribuição...</Text>
+                  </View>
+                )}
+                {!freePreviewLoading && freePreview && (
+                  <View style={m.previewBox}>
+                    <Text style={m.previewTitle}>Como o valor vai ser aplicado</Text>
+                    {freePreview.applied.map((line, i) => (
+                      <View key={line.installment_id + i} style={m.previewRow}>
+                        <Text style={m.previewLbl}>
+                          Parcela {line.number ?? "?"}
+                        </Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          {line.charges_paid > 0 && (
+                            <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
+                              Encargos: {fmt(line.charges_paid)}
+                            </Text>
+                          )}
+                          <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
+                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                            {translateStatus(line.status_after)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
+                      <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
+                      <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
+                        {fmt(freePreview.new_balance)}
+                      </Text>
+                    </View>
+                    {freePreview.credit_generated > 0 && (
+                      <View style={m.previewRow}>
+                        <Text style={m.previewLbl}>Crédito gerado</Text>
+                        <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* ConfirmGate — padrão único (substitui o 2-step manual) */}
+              <ConfirmGate
+                visible={receberGate}
+                message={`Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`}
+                onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
+                onCancel={() => setReceberGate(false)}
+                loading={freeSubmitting}
+              />
+              {!receberGate && (
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+                  <Pressable
+                    style={[
+                      m.pixBtn,
+                      { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
+                      freeAmtValue <= 0 && { opacity: 0.4 },
+                    ]}
+                    disabled={freeAmtValue <= 0}
+                    onPress={() => openFreePix(freeAmtValue)}
+                  >
+                    <Text style={m.pixBtnTxt}>Gerar Pix</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[m.cta, { flex: 2 }, freeAmtValue <= 0 && { opacity: 0.45 }]}
+                    disabled={freeAmtValue <= 0}
+                    onPress={() => setReceberGate(true)}
+                  >
+                    <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
+                      {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
 
           {!!pixInstId && (
             <View style={m.pixOverlay}>
@@ -1004,9 +1079,18 @@ export function ClienteCrediarioModal({
           )}
 
         </Pressable>
+        </ModalPop>
       </Pressable>
     </Modal>
   );
 }
+
+// Estilos locais da F3 (herói do header)
+const f = StyleSheet.create({
+  metaRow: { flexDirection: "row", alignItems: "flex-end", gap: 16, marginBottom: 12 },
+  metaHero: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginTop: 2 },
+  metaSm: { alignItems: "flex-end" },
+  metaSmVal: { fontSize: 13, fontWeight: "700", marginTop: 3 },
+});
 
 export default ClienteCrediarioModal;

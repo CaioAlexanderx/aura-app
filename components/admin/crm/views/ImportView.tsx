@@ -11,7 +11,6 @@ import { WA_TEMPLATE_DEFAULT } from "../shared/constants";
 import { extractCity } from "../shared/helpers";
 import { toast } from "@/components/Toast";
 import * as DocumentPicker from "expo-document-picker";
-import * as XLSX from "xlsx";
 import type { ImportStats } from "../shared/types";
 
 type Props = {
@@ -37,6 +36,8 @@ export function ImportView({ waTemplate, setWaTemplate, onImport, isImporting, i
       if (result.canceled || !result.assets?.length) return;
       setReading(true);
 
+      // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
+      const XLSX = await import("xlsx");
       const asset = result.assets[0];
       const res = await fetch(asset.uri);
       const buf = await res.arrayBuffer();

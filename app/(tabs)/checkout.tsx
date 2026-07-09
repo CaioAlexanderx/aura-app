@@ -102,7 +102,8 @@ export default function CheckoutScreen() {
   var annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
   var annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
   var annualSavings = plan.monthly * 12 - annualTotal;
-  var price = isAnnual ? annualTotal : plan.monthly;
+  // Sempre mostra mensalidade — o plano anual é cobrado mensalmente, não à vista.
+  var price = isAnnual ? annualMonthly : plan.monthly;
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
@@ -216,6 +217,30 @@ export default function CheckoutScreen() {
     toast.success("Codigo Pix copiado!");
   }
 
+  // 2026-06-18: gate para usuário multi-CNPJ em modo consolidado (company=null).
+  // Antes os botões "Gerar Pix" / "Assinar Agora" faziam `return` silencioso
+  // sem nenhum feedback — o usuário clicava e nada acontecia.
+  if (!company?.id) {
+    return (
+      <View style={[z.screen, { justifyContent: "center", alignItems: "center", padding: 32 }]}>
+        <Icon name="building" size={48} color={Colors.ink3} />
+        <Text style={[z.title, { marginTop: 20 }]}>Selecione uma empresa</Text>
+        <Text style={[z.subtitle, { marginBottom: 28 }]}>
+          Escolha qual empresa deseja assinar um plano para continuar.
+        </Text>
+        <Pressable
+          onPress={function () { router.push("/empresas" as any); }}
+          style={z.payBtn}
+        >
+          <Text style={z.payBtnText}>Escolher empresa</Text>
+        </Pressable>
+        <Pressable onPress={function () { router.back(); }} style={z.backLink}>
+          <Text style={z.backLinkText}>Voltar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (success) {
     return (
       <View style={[z.screen, { justifyContent: "center", alignItems: "center" }]}>
@@ -276,14 +301,17 @@ export default function CheckoutScreen() {
       <View style={z.summaryCard}>
         <View style={z.summaryRow}>
           <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
-          <Text style={z.summaryValue}>{isAnnual ? fmt(price) : fmtMo(price)}</Text>
+          <Text style={z.summaryValue}>{fmtMo(price)}</Text>
         </View>
+        {isAnnual && (
+          <Text style={z.annualNote}>Cobrado mensalmente · economia de {fmt(annualSavings)}/ano</Text>
+        )}
       </View>
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && { opacity: 0.6 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmt(price)}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmtMo(price)}</Text>}
           </Pressable>
         </View>
       )}
@@ -386,8 +414,9 @@ var z = StyleSheet.create({
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   summaryValue: { fontSize: 16, color: Colors.green, fontWeight: "800" },
+  annualNote: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
-  payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
+  payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", width: "100%" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },

@@ -6,8 +6,8 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
-import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13 } from "@/components/screens/estoque/labels/buildLabelHtml";
-import type { LabelItem, InvalidCodeItem } from "@/components/screens/estoque/labels/buildLabelHtml";
+import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
+import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
 type Props = {
@@ -60,9 +60,31 @@ function colorNameToHex(name: string): string | null {
   return COLOR_NAME_TO_HEX[name.toLowerCase().trim()] || null;
 }
 
+var LABEL_SIZE_STORAGE_KEY = "aura_label_print_size";
+var LABEL_SIZE_OPTIONS: LabelSizeKey[] = ["99x21", "30x25"];
+
+// Toggle manual com memoria: le a ultima escolha do navegador (web only).
+// Sem preferencia salva ainda -> cai no DEFAULT_LABEL_SIZE (99x21, formato
+// atual da Finesse), entao clientes existentes nao mudam de comportamento.
+function loadStoredLabelSize(): LabelSizeKey {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+    var stored = window.localStorage.getItem(LABEL_SIZE_STORAGE_KEY);
+    if (stored === "99x21" || stored === "30x25") return stored;
+  }
+  return DEFAULT_LABEL_SIZE;
+}
+
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   var { company, token } = useAuthStore();
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
+  var [labelSize, setLabelSizeState] = useState<LabelSizeKey>(loadStoredLabelSize);
+  var labelPreset = LABEL_SIZE_PRESETS[labelSize];
+  function setLabelSize(key: LabelSizeKey) {
+    setLabelSizeState(key);
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(LABEL_SIZE_STORAGE_KEY, key);
+    }
+  }
   var [search, setSearch] = useState("");
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
@@ -194,7 +216,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   // Executa a impressao com os itens ja prontos (barcodes validos EAN-13)
   function doPrint(items: LabelItem[]) {
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName });
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize });
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);
@@ -326,12 +348,24 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     <View style={s.container}>
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={s.title}>Etiquetas 33x21mm — Padrão EAN-13</Text>
+          <Text style={s.title}>Etiquetas {labelPreset.uiLabel} — Padrão EAN-13</Text>
           <Text style={s.hint}>Selecione os produtos. Produtos sem EAN-13 válido receberão um código interno gerado automaticamente antes da impressão.</Text>
         </View>
-        <View style={s.modeToggle}>
-          <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>EAN-13</Text></Pressable>
-          <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}><Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text></Pressable>
+        <View style={{ gap: 6, alignItems: "flex-end" }}>
+          <View style={s.modeToggle}>
+            <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>EAN-13</Text></Pressable>
+            <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}><Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text></Pressable>
+          </View>
+          <View style={s.modeToggle}>
+            {LABEL_SIZE_OPTIONS.map(function(key) {
+              var active = labelSize === key;
+              return (
+                <Pressable key={key} onPress={function() { setLabelSize(key); }} style={[s.modeBtn, active && s.modeBtnActive]}>
+                  <Text style={[s.modeText, active && s.modeTextActive]}>{LABEL_SIZE_PRESETS[key].uiLabel}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
 
@@ -561,7 +595,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       </Pressable>
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel 99x21mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque de cada variante.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel {labelPreset.pageWidthMm}x{labelPreset.pageHeightMm}mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque de cada variante.</Text>
       </View>
     </View>
   );

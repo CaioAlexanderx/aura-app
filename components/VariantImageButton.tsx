@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — VariantImageButton (23/05/2026)
+// AURA. — VariantImageButton (23/05/2026, fix 27/06/2026)
 //
 // Botao circular (~30px) no inicio de cada linha de variante.
 // - Sem foto: mostra ícone de camera sobre o swatch da cor (ou
@@ -13,6 +13,18 @@
 // direta em POST/DELETE /variant-image.
 //
 // Reutiliza padrao web file picker de ProductImageUpload.tsx.
+//
+// 27/06/2026 (fix bug Davi): variantes recem-criadas (cor/tamanho
+// adicionados na sessao atual antes do auto-save concluir) nao
+// existem ainda no banco. Antes o botao parecia ativo e o usuario
+// clicava → backend respondia 404 → toast "Salve a variante antes
+// de subir foto". Agora o botao tem 3 estados claros:
+//   - persisted: ativo, comportamento normal
+//   - pending  : esmaecido (opacity 0.45), spinner pequeno, click
+//                pede pra aguardar (flush imediato via onRequestFlush)
+//   - disabled : esmaecido sem spinner (produto sem id ainda, etc)
+// O componente pai (ProductVariationsSection) decide o estado via
+// props isPersisted / isSaving.
 // ============================================================
 import { useState } from "react";
 import { View, Image, Pressable, ActivityIndicator, Platform, StyleSheet } from "react-native";
@@ -39,6 +51,15 @@ type Props = {
   onUploaded?: (url: string) => void;
   /** Notificacao apos delete bem-sucedido. */
   onDeleted?: () => void;
+  /** 27/06/2026: combinacao (cor,tamanho) ja existe como variante no banco.
+   *  Quando false, o botao fica esmaecido e click pede pra aguardar/flushar. */
+  isPersisted?: boolean;
+  /** 27/06/2026: ha um auto-save em voo. Mostra spinner no thumb. */
+  isSaving?: boolean;
+  /** 27/06/2026: callback para forcar flush imediato do auto-save quando
+   *  o usuario clica no botao com variante ainda nao persistida. O pai
+   *  resolve a promise apos o PUT completar; o botao entao tenta o upload. */
+  onRequestFlush?: () => Promise<void>;
 };
 
 const MAX_SIZE_MB = 5;
@@ -47,12 +68,39 @@ const isWeb = Platform.OS === "web";
 export function VariantImageButton({
   productId, colorHex, sizeValue, imageUrl, fallbackColor,
   size = 28, onUploaded, onDeleted,
+  isPersisted = true, isSaving = false, onRequestFlush,
 }: Props) {
   const { company } = useAuthStore();
   const [busy, setBusy] = useState(false);
 
+  // 27/06/2026: usa o file picker mas, se nao estiver persistido, primeiro
+  // tenta flushar o auto-save e ai sim faz o upload. Sem flush, mostra hint.
   function pickFile() {
-    if (!isWeb || !company?.id || busy) return;
+    if (!isWeb || !company?.id || busy || isSaving) return;
+    // Variante ainda nao salva no banco. Tenta flushar antes; se nao houver
+    // handler de flush, avisa o usuario.
+    if (!isPersisted) {
+      if (onRequestFlush) {
+        // Encadeia: flush → entao file picker → entao upload.
+        setBusy(true);
+        onRequestFlush()
+          .then(() => {
+            setBusy(false);
+            openPicker();
+          })
+          .catch(() => {
+            setBusy(false);
+            toast.error("Nao foi possivel salvar a variante. Tente novamente em 1 segundo.");
+          });
+        return;
+      }
+      toast.info("Aguarde — variante sendo salva.");
+      return;
+    }
+    openPicker();
+  }
+
+  function openPicker() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/jpeg,image/png,image/webp";
@@ -88,11 +136,12 @@ export function VariantImageButton({
       if (onUploaded) onUploaded(res.image_url);
       toast.success("Foto da variante salva");
     } catch (err: any) {
-      // Erro mais comum: variante ainda nao existe no banco (auto-save
-      // ainda nao rodou apos adicionar cor/tamanho). Mensagem amigavel.
+      // 27/06/2026: ainda mantemos o fallback de 404 (corrida residual:
+      // p.ex. quando o flush completou mas o GET ainda nao retornou),
+      // com mensagem mais explicativa.
       const msg = err?.data?.error || err?.message || "";
       if (msg.includes("nao encontrada") || /404/.test(String(err?.status || ""))) {
-        toast.error("Salve a variante antes de subir foto (aguarde alguns segundos)");
+        toast.error("Variante ainda nao foi salva no servidor. Aguarde 2s e tente novamente.");
       } else {
         toast.error(msg || "Erro ao salvar foto");
       }
@@ -121,6 +170,12 @@ export function VariantImageButton({
 
   const radius = size / 2;
   const hasImage = !!imageUrl;
+  // 27/06/2026: estado visual da variante ainda nao persistida.
+  // Esmaecido (opacity 0.45) sinaliza "aguarde" sem esconder o botao.
+  const isPending = !isPersisted || isSaving;
+  const a11yLabel = hasImage
+    ? "Foto da variante (trocar)"
+    : (isPending ? "Foto da variante (aguardando salvar)" : "Foto da variante (clique para subir)");
 
   return (
     <View style={{ width: size, height: size, position: "relative" as any, flexShrink: 0 }}>
@@ -132,9 +187,12 @@ export function VariantImageButton({
           {
             width: size, height: size, borderRadius: radius,
             backgroundColor: hasImage ? Colors.bg4 : fallbackColor,
+            opacity: isPending && !busy ? 0.45 : 1,
           },
         ]}
-        accessibilityLabel="Foto da variante"
+        accessibilityLabel={a11yLabel}
+        // @ts-ignore — title funciona na web (tooltip nativo)
+        title={isPending ? "Aguarde — salvando variante…" : (hasImage ? "Trocar foto" : "Subir foto da variante")}
       >
         {hasImage ? (
           <Image
@@ -145,14 +203,14 @@ export function VariantImageButton({
         ) : (
           <Icon name="camera" size={Math.max(10, size * 0.4)} color="rgba(255,255,255,0.85)" />
         )}
-        {busy && (
+        {(busy || isSaving) && (
           <View style={[s.loadingOverlay, { borderRadius: radius }]}>
             <ActivityIndicator color="#fff" size="small" />
           </View>
         )}
       </Pressable>
 
-      {hasImage && !busy && (
+      {hasImage && !busy && !isPending && (
         <Pressable
           onPress={handleDelete}
           hitSlop={4}

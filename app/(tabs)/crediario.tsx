@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable,
+  View, Text, ScrollView, StyleSheet, Pressable, Animated,
   ActivityIndicator, RefreshControl, useWindowDimensions,
   TextInput, Platform,
 } from "react-native";
@@ -15,17 +15,26 @@ import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
+import { GlassCard } from "@/components/GlassCard";
+import { Button } from "@/components/Button";
+import { Motion, Shadows, webTransition } from "@/constants/motion";
 
 // ============================================================
-// AURA. — Crediário (DESIGN-38 / Onda C — shell visual do mockup)
-// C-1: hero + trio KPI + mapa de risco + chips + linha com avatar.
-// C-3: mapa de risco CLICÁVEL — clicar numa faixa filtra a carteira.
-// Lógica preservada: busca debounce, A–Z, atraso-por-data, cobrança, modais.
-// Follow-up backend: pílulas Risco/Bloqueado + chip "Bloqueados"
-// dependem de score/status por cliente no /balances (ainda não vem).
-// feat (13/06): refetch de plano no mount via refreshMe() para combater
-// armadilha_plano_stale_jwt (plan/module_overrides podem ter mudado desde
-// que o JWT foi emitido).
+// AURA. — Crediário (F2 do redesign — spec docs/crediario-redesign-spec.md §2.2)
+//
+// F2 (08/07/2026):
+//  - Header enxuto (sem subtítulo) + Button unificado
+//  - Hero GLASS unificado: 1 herói (count-up) + stats inline clicáveis
+//    (Vencido/Clientes em atraso filtram a carteira) — some o trio de KPIs
+//  - "Carteira por atraso": o mapa de risco É o filtro (barra + pills);
+//    chips Com saldo/Em atraso/Em dia removidos (redundantes)
+//  - Carteira: hover lift (web, aditivo — sem hover-reveal), pill colorida
+//    de atraso, telefone sai da linha (vive na ficha), alvo WhatsApp 40px
+//  - Entrada escalonada das seções (FadeInUp) + skeleton com pulse
+//  - Fix display-side [ao vivo]: cliente overdue sem next_due_date mostrava
+//    "Em atraso" + "—" na coluna de atraso; agora mostra pill "Em atraso"
+//  Lógica preservada: busca debounce, A–Z, atraso-por-data, cobrança, modais.
+//  refreshMe() no mount mantido (armadilha_plano_stale_jwt).
 // ============================================================
 
 var fmt = function(n: number) {
@@ -39,7 +48,6 @@ var fmtDate = function(iso: string) {
   try {
     const s = String(iso);
     if (s.length === 10) {
-      // date-only — split to avoid UTC off-by-one
       const [, m, d] = s.split("-");
       return d + "/" + m;
     }
@@ -105,6 +113,8 @@ const AGING_COLORS: Record<string, string> = {
 
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
 
+const IS_WEB = Platform.OS === "web";
+
 type CobrancaPreviewState = {
   recipientName: string;
   phone: string;
@@ -114,7 +124,90 @@ type CobrancaPreviewState = {
 };
 
 type SortOrder = "balance" | "az";
-type Filter = "saldo" | "atraso" | "dia";
+/** F2: filtro único — "todos" | "atraso" (qualquer vencido) | faixa de aging. */
+type FilterSel = "todos" | "atraso" | string;
+
+// ── F2: count-up do número herói (RAF, web+nativo) ─────────────────────
+function useCountUp(target: number, duration = 500): number {
+  const [val, setVal] = useState(target);
+  const fromRef = useRef(target);
+  useEffect(() => {
+    const from = fromRef.current;
+    if (!isFinite(target) || from === target) { setVal(target); return; }
+    fromRef.current = target;
+    const start = Date.now();
+    let raf = 0;
+    const step = () => {
+      const p = Math.min(1, (Date.now() - start) / duration);
+      const e = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      setVal(from + (target - from) * e);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+// ── F2: entrada escalonada das seções (fade + translateY 8→0) ─────────
+function FadeInUp({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: any }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: Motion.slow, delay, useNativeDriver: false }).start();
+  }, [anim, delay]);
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+  return (
+    <Animated.View style={[style, { opacity: anim, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ── F2: skeleton com pulse (substitui blocos estáticos) ────────────────
+function PulseBlock({ w, h, r = 6, mb = 0 }: { w: number | string; h: number; r?: number; mb?: number }) {
+  const anim = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(anim, { toValue: 0.65, duration: 700, useNativeDriver: false }),
+      Animated.timing(anim, { toValue: 0.35, duration: 700, useNativeDriver: false }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [anim]);
+  return <Animated.View style={{ width: w as any, height: h, borderRadius: r, marginBottom: mb, backgroundColor: Colors.border, opacity: anim }} />;
+}
+
+// ── F2: stat inline do hero (clicável quando tem onPress) ──────────────
+function HeroStat({ dot, label, value, sub, color, onPress, active }: {
+  dot: string; label: string; value: string; sub?: string; color: string;
+  onPress?: () => void; active?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : "text"}
+      accessibilityLabel={`${label}: ${value}${onPress ? ". Toque para filtrar a carteira" : ""}`}
+      style={({ hovered, pressed }: any) => [
+        s.stat,
+        active && s.statActive,
+        onPress && (hovered || pressed) && ({
+          transform: [{ translateY: -2 }],
+          borderColor: Colors.border2,
+          ...(IS_WEB ? ({ boxShadow: Shadows.soft } as any) : null),
+        } as any),
+        IS_WEB ? (webTransition(["transform", "box-shadow", "border-color"], Motion.base) as any) : null,
+      ]}
+    >
+      <View style={[s.statDot, { backgroundColor: dot }]} />
+      <View style={{ minWidth: 0 }}>
+        <Text style={s.statLabel} numberOfLines={1}>{label}</Text>
+        <Text style={[s.statValue, { color }]} numberOfLines={1}>{value}</Text>
+        {!!sub && <Text style={s.statSub} numberOfLines={1}>{sub}</Text>}
+      </View>
+    </Pressable>
+  );
+}
 
 export default function CrediarioScreen() {
   const { company, refreshMe } = useAuthStore();
@@ -127,9 +220,7 @@ export default function CrediarioScreen() {
 
   // ── Refetch de plano no mount (combate armadilha_plano_stale_jwt) ──────
   useEffect(() => {
-    let cancelled = false;
     refreshMe().catch(() => {});
-    return () => { cancelled = true; };
   }, []);
 
   // ── Busca (DESIGN-38) ──────────────────────────────────────────────
@@ -144,9 +235,12 @@ export default function CrediarioScreen() {
   }, [searchInput]);
 
   const [sortOrder, setSortOrder] = useState<SortOrder>("balance");
-  const [filter, setFilter] = useState<Filter>("saldo");
-  // C-3: faixa do mapa de risco selecionada (clique no aging filtra a carteira).
-  const [agingFilter, setAgingFilter] = useState<string | null>(null);
+  // F2: filtro único (todos | atraso | faixa de aging) — substitui chips + agingFilter.
+  const [filterSel, setFilterSel] = useState<FilterSel>("todos");
+
+  const toggleFilter = useCallback((f: FilterSel) => {
+    setFilterSel(prev => (prev === f ? "todos" : f));
+  }, []);
 
   const { width } = useWindowDimensions();
   const isWide   = width > 720;
@@ -242,22 +336,24 @@ export default function CrediarioScreen() {
   const kpis = dashQ.data?.kpis;
   const aging: AgingRow[] = agingQ.data || [];
   const agingMap = Object.fromEntries(aging.map(r => [r.faixa, r]));
-  const agingTotal = aging.reduce((s, r) => s + Number(r.amount), 0) || 1;
+  const agingTotal = aging.reduce((s2, r) => s2 + Number(r.amount), 0) || 1;
+  const hasOverdueAging = aging.some(r => r.faixa !== "a_vencer" && Number(r.amount) > 0);
 
   // Prefere portfolio_open_amount (carteira real: parcelado + à vista + avulsos).
   // Fallbacks para total_open de /balances e total_open_amount do dashboard.
   const totalOpen = kpis?.portfolio_open_amount ?? carteiraQ.data?.total_open ?? kpis?.total_open_amount ?? 0;
   const overdueAmount = kpis?.overdue_amount || 0;
+  const heroValue = useCountUp(Number(totalOpen) || 0, 500);
 
-  // Carteira: filtros (chips/faixa) + ordenação.
+  // Carteira: filtro único + ordenação.
   const carteiraRaw = carteiraQ.data?.customers || [];
   const carteira = [...carteiraRaw]
     .filter((c) => {
-      // C-3: faixa de aging tem prioridade (vinda do clique no mapa de risco).
-      if (agingFilter) return agingBucket(daysLate((c as any).next_due_date)) === agingFilter;
-      if (filter === "atraso") return isCustomerOverdue(c as any);
-      if (filter === "dia") return !isCustomerOverdue(c as any);
-      return true; // saldo (todos com saldo aberto)
+      if (filterSel === "todos") return true;
+      if (filterSel === "atraso") return isCustomerOverdue(c as any);
+      // faixa de aging: "a_vencer" = em dia; demais por dias de atraso
+      if (filterSel === "a_vencer") return !isCustomerOverdue(c as any);
+      return isCustomerOverdue(c as any) && agingBucket(daysLate((c as any).next_due_date)) === filterSel;
     })
     .sort((a, b) => {
       if (sortOrder === "az") return a.name.localeCompare(b.name, "pt-BR");
@@ -279,15 +375,20 @@ export default function CrediarioScreen() {
           <Text style={s.eyebrow}>Relacionamento · fiado</Text>
           <Text style={s.pageTitle}>Crediário</Text>
         </View>
-        <View style={[s.heroRow, !isWide && { flexDirection: "column" }]}>
-          <View style={[s.heroCard, { opacity: 0.5 }]}>
-            <View style={{ width: 90, height: 10, borderRadius: 5, backgroundColor: Colors.border, marginBottom: 12 }} />
-            <View style={{ width: 160, height: 36, borderRadius: 8, backgroundColor: Colors.border }} />
+        <GlassCard tone="gradient" style={{ padding: 22 }}>
+          <PulseBlock w={90} h={10} r={5} mb={12} />
+          <PulseBlock w={180} h={36} r={8} mb={16} />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <PulseBlock w={120} h={44} r={11} />
+            <PulseBlock w={120} h={44} r={11} />
+            <PulseBlock w={120} h={44} r={11} />
           </View>
-        </View>
+        </GlassCard>
       </ScrollView>
     );
   }
+
+  const clearOrLabel = filterSel !== "todos" ? "toque de novo p/ limpar" : "toque numa faixa p/ filtrar";
 
   return (
     <ScrollView
@@ -295,125 +396,144 @@ export default function CrediarioScreen() {
       contentContainerStyle={[s.content, { padding: pad }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
     >
-      {/* ── Header: eyebrow + título + ação ── */}
+      {/* ── Header: eyebrow + título + ações (F2: sem subtítulo) ── */}
       <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.eyebrow}>Relacionamento · fiado</Text>
           <Text style={s.pageTitle}>Crediário</Text>
-          <Text style={s.pageSubtitle} numberOfLines={2}>
-            Ficha completa de cada cliente fiado — conta, parcelas e histórico num só lugar.
-          </Text>
         </View>
         <View style={[{ flexDirection: "row", gap: 8 }, !isWide && { width: "100%" }]}>
-          <Pressable onPress={() => setShowCriar(true)} style={[s.headerBtn, !isWide && s.headerBtnMobile]}>
-            <Icon name="plus" size={15} color={Colors.violet3} />
-            <Text style={s.headerBtnText}>Novo lançamento</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push("/crediario/settings" as any)} style={[s.headerBtnIcon, !isWide && { paddingHorizontal: 14 }]}>
-            <Icon name="settings" size={15} color={Colors.violet3} />
-          </Pressable>
+          <Button
+            title="Novo lançamento"
+            icon="plus"
+            variant="secondary"
+            onPress={() => setShowCriar(true)}
+            style={!isWide ? { flex: 1 } : undefined}
+          />
+          <Button
+            title=""
+            icon="settings"
+            variant="secondary"
+            accessibilityLabel="Configurações do crediário"
+            onPress={() => router.push("/crediario/settings" as any)}
+            style={{ paddingHorizontal: 13, gap: 0 } as any}
+          />
         </View>
       </View>
 
-      {/* ── Hero: EM ABERTO · TOTAL + trio KPI ── */}
-      <View style={[s.heroRow, !isWide && { flexDirection: "column" }]}>
-        <View style={[s.heroCard, isWide && { flex: 1.4 }]}>
+      {/* ── Hero GLASS unificado: 1 herói + stats inline (F2) ── */}
+      <FadeInUp>
+        <GlassCard tone="gradient" style={{ padding: isNarrow ? 18 : 24, marginBottom: 14 }}>
           <Text style={s.heroLabel}>Em aberto · total</Text>
-          <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(totalOpen)}</Text>
+          <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(heroValue)}</Text>
           <Text style={s.heroMeta}>
             {(kpis?.customers_with_balance ?? carteiraQ.data?.customers_open ?? carteiraRaw.length)} cliente(s) com saldo em aberto
           </Text>
-        </View>
-
-        <View style={[s.kpiCol, isWide ? { flex: 2 } : { width: "100%" }]}>
-          <View style={s.kpiGrid}>
-            <View style={[s.kpiCard, { borderColor: Colors.red + "44" }]}>
-              <View style={s.kpiHead}>
-                <Text style={s.kpiLabel}>Vencido</Text>
-                <View style={[s.kpiIcon, { backgroundColor: Colors.redD, borderColor: Colors.red + "44" }]}>
-                  <Icon name="alert" size={13} color={Colors.red} />
-                </View>
-              </View>
-              <Text style={[s.kpiValue, { color: Colors.red, fontSize: isNarrow ? 17 : 22 }]}>{fmt(overdueAmount)}</Text>
-              <Text style={s.kpiMeta}>{kpis?.overdue_count || 0} parcelas em atraso</Text>
-            </View>
-
-            <View style={[s.kpiCard, { borderColor: Colors.green + "44" }]}>
-              <View style={s.kpiHead}>
-                <Text style={s.kpiLabel}>Recebido no mês</Text>
-                <View style={[s.kpiIcon, { backgroundColor: Colors.greenD, borderColor: Colors.green + "44" }]}>
-                  <Icon name="check" size={13} color={Colors.green} />
-                </View>
-              </View>
-              <Text style={[s.kpiValue, { color: Colors.green, fontSize: isNarrow ? 17 : 22 }]}>{fmt(kpis?.paid_this_month_amount || 0)}</Text>
-              <Text style={s.kpiMeta}>{kpis?.paid_this_month_count || 0} recebimentos</Text>
-            </View>
-
-            <View style={[s.kpiCard, { borderColor: Colors.amber + "44" }]}>
-              <View style={s.kpiHead}>
-                <Text style={s.kpiLabel}>Clientes em atraso</Text>
-                <View style={[s.kpiIcon, { backgroundColor: "rgba(251,191,36,0.12)", borderColor: Colors.amber + "44" }]}>
-                  <Icon name="percent" size={13} color={Colors.amber} />
-                </View>
-              </View>
-              <Text style={[s.kpiValue, { color: Colors.amber, fontSize: isNarrow ? 17 : 22 }]}>{kpis?.defaulting_customers ?? 0}</Text>
-              <Text style={s.kpiMeta}>com parcela vencida</Text>
-            </View>
+          <View style={s.heroStats}>
+            <HeroStat
+              dot={Colors.red} color={Colors.red}
+              label="Vencido" value={fmt(overdueAmount)}
+              sub={`${kpis?.overdue_count || 0} parcela(s)`}
+              onPress={() => toggleFilter("atraso")}
+              active={filterSel === "atraso"}
+            />
+            <HeroStat
+              dot={Colors.green} color={Colors.green}
+              label="Recebido no mês" value={fmt(kpis?.paid_this_month_amount || 0)}
+              sub={`${kpis?.paid_this_month_count || 0} recebimento(s)`}
+            />
+            <HeroStat
+              dot={Colors.amber} color={Colors.amber}
+              label="Clientes em atraso" value={String(kpis?.defaulting_customers ?? 0)}
+              sub="com parcela vencida"
+              onPress={() => toggleFilter("atraso")}
+              active={filterSel === "atraso"}
+            />
           </View>
-        </View>
-      </View>
+        </GlassCard>
+      </FadeInUp>
 
-      {/* ── Mapa de risco · há quanto tempo está vencido (barra empilhada CLICÁVEL) ── */}
+      {/* ── Carteira por atraso: o mapa É o filtro (F2) ── */}
       {aging.length > 0 && (
-        <View style={s.riskCard}>
-          <View style={s.riskHead}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={s.riskTick} />
-              <Text style={s.riskTitle}>Mapa de risco · há quanto tempo está vencido</Text>
+        <FadeInUp delay={60}>
+          <GlassCard style={{ padding: 18, marginBottom: 16 }}>
+            <View style={s.riskHead}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={s.riskTick} />
+                <Text style={s.riskTitle}>Carteira por atraso</Text>
+              </View>
+              <Text style={s.riskMeta}>{clearOrLabel}</Text>
             </View>
-            <Text style={s.riskMeta}>{agingFilter ? "toque p/ limpar" : "toque numa faixa p/ filtrar"}</Text>
-          </View>
 
-          <View style={s.stackBar}>
-            {AGING_ORDER.map((faixa) => {
-              const row = agingMap[faixa];
-              const amt = row ? Number(row.amount) : 0;
-              if (amt <= 0) return null;
-              const pct = Math.max(2, Math.round((amt / agingTotal) * 100));
-              return (
-                <Pressable
-                  key={faixa}
-                  onPress={() => { setAgingFilter(prev => prev === faixa ? null : faixa); setFilter("saldo"); }}
-                  style={{ width: (`${pct}%` as any), backgroundColor: AGING_COLORS[faixa], opacity: agingFilter && agingFilter !== faixa ? 0.35 : 1 }}
-                />
-              );
-            })}
-          </View>
+            <View style={s.stackBar}>
+              {AGING_ORDER.map((faixa) => {
+                const row = agingMap[faixa];
+                const amt = row ? Number(row.amount) : 0;
+                if (amt <= 0) return null;
+                const pct = Math.max(2, Math.round((amt / agingTotal) * 100));
+                const dimmed = filterSel !== "todos" && filterSel !== faixa && !(filterSel === "atraso" && faixa !== "a_vencer");
+                return (
+                  <Pressable
+                    key={faixa}
+                    onPress={() => toggleFilter(faixa)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${AGING_LABELS[faixa]}: ${fmt(amt)}, ${row.count} cliente(s). Toque para filtrar`}
+                    style={({ hovered }: any) => [
+                      {
+                        width: (`${pct}%` as any),
+                        backgroundColor: AGING_COLORS[faixa],
+                        opacity: dimmed ? 0.3 : 1,
+                        borderRadius: 999,
+                      },
+                      hovered && ({ transform: [{ scaleY: 1.3 }] } as any),
+                      IS_WEB ? (webTransition(["transform", "opacity"], Motion.base) as any) : null,
+                    ]}
+                  />
+                );
+              })}
+            </View>
 
-          <View style={s.legendGrid}>
-            {AGING_ORDER.map((faixa) => {
-              const row = agingMap[faixa];
-              if (!row) return null;
-              return (
+            <View style={s.pillRow}>
+              <Pressable
+                onPress={() => setFilterSel("todos")}
+                style={({ hovered }: any) => [s.pill, filterSel === "todos" && s.pillActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color", "background-color"], Motion.base) as any) : null]}
+              >
+                <Text style={[s.pillLabel, filterSel === "todos" && s.pillLabelActive]}>Todos</Text>
+                <Text style={[s.pillAmount, filterSel === "todos" && s.pillLabelActive]}>{fmt(totalOpen)}</Text>
+              </Pressable>
+
+              {AGING_ORDER.map((faixa) => {
+                const row = agingMap[faixa];
+                if (!row || Number(row.amount) <= 0) return null;
+                const on = filterSel === faixa;
+                return (
+                  <Pressable
+                    key={faixa}
+                    onPress={() => toggleFilter(faixa)}
+                    style={({ hovered }: any) => [s.pill, on && s.pillActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color", "background-color"], Motion.base) as any) : null]}
+                  >
+                    <View style={[s.pillDot, { backgroundColor: AGING_COLORS[faixa] }]} />
+                    <Text style={[s.pillLabel, on && s.pillLabelActive]}>{AGING_LABELS[faixa]}</Text>
+                    <Text style={[s.pillAmount, on && s.pillLabelActive]}>{fmt(row.amount)}</Text>
+                  </Pressable>
+                );
+              })}
+
+              {hasOverdueAging && (
                 <Pressable
-                  key={faixa}
-                  onPress={() => { setAgingFilter(prev => prev === faixa ? null : faixa); setFilter("saldo"); }}
-                  style={[s.legendItem, agingFilter === faixa && s.legendItemActive]}
+                  onPress={() => toggleFilter("atraso")}
+                  style={({ hovered }: any) => [s.pill, filterSel === "atraso" && s.pillActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color", "background-color"], Motion.base) as any) : null]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                    <View style={[s.legendDot, { backgroundColor: AGING_COLORS[faixa] }]} />
-                    <Text style={[s.legendLabel, agingFilter === faixa && { color: Colors.violet3 }]}>{AGING_LABELS[faixa]}</Text>
-                  </View>
-                  <Text style={s.legendAmount}>{fmt(row.amount)}</Text>
-                  <Text style={s.legendCount}>{row.count} cliente(s)</Text>
+                  <View style={[s.pillDot, { backgroundColor: Colors.red }]} />
+                  <Text style={[s.pillLabel, filterSel === "atraso" && s.pillLabelActive]}>Em atraso · todos</Text>
                 </Pressable>
-              );
-            })}
-          </View>
-        </View>
+              )}
+            </View>
+          </GlassCard>
+        </FadeInUp>
       )}
 
-      {/* ── Busca + chips + A–Z ── */}
+      {/* ── Toolbar enxuta: busca + A–Z (F2: chips de estado saíram) ── */}
       <View style={s.toolbar}>
         <View style={s.searchBox}>
           <Icon name="search" size={14} color={Colors.ink3} />
@@ -434,110 +554,139 @@ export default function CrediarioScreen() {
             </Pressable>
           )}
         </View>
-
-        <View style={s.chipRow}>
-          <Pressable style={[s.chip, !agingFilter && filter === "saldo" && s.chipActive]} onPress={() => { setFilter("saldo"); setAgingFilter(null); }}>
-            <Text style={[s.chipText, !agingFilter && filter === "saldo" && s.chipTextActive]}>Com saldo</Text>
-          </Pressable>
-          <Pressable style={[s.chip, !agingFilter && filter === "atraso" && s.chipActive]} onPress={() => { setFilter("atraso"); setAgingFilter(null); }}>
-            <Text style={[s.chipText, !agingFilter && filter === "atraso" && s.chipTextActive]}>Em atraso</Text>
-          </Pressable>
-          <Pressable style={[s.chip, !agingFilter && filter === "dia" && s.chipActive]} onPress={() => { setFilter("dia"); setAgingFilter(null); }}>
-            <Text style={[s.chipText, !agingFilter && filter === "dia" && s.chipTextActive]}>Em dia</Text>
-          </Pressable>
-          <Pressable style={[s.chip, sortOrder === "az" && s.chipActive]} onPress={() => setSortOrder(p => p === "az" ? "balance" : "az")}>
-            <Text style={[s.chipText, sortOrder === "az" && s.chipTextActive]}>A–Z</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => setSortOrder(p => p === "az" ? "balance" : "az")}
+          style={({ hovered }: any) => [s.chip, sortOrder === "az" && s.chipActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color"], Motion.base) as any) : null]}
+        >
+          <Text style={[s.chipText, sortOrder === "az" && s.chipTextActive]}>A–Z</Text>
+        </Pressable>
       </View>
 
       {/* ── Carteira ── */}
-      <View style={s.tableCard}>
-        <View style={s.tableHeadRow}>
-          <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
-          <Text style={[s.th, s.thRight, { width: 110 }]}>Saldo</Text>
-          {isWide && <Text style={[s.th, { width: 92 }]}>Maior atraso</Text>}
-          <Text style={[s.th, s.thRight, { width: isWide ? 96 : 64 }]}>Ações</Text>
-        </View>
+      <FadeInUp delay={120}>
+        <GlassCard style={{ overflow: "hidden" }}>
+          <View style={s.tableHeadRow}>
+            <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
+            <Text style={[s.th, s.thRight, { width: 110 }]}>Saldo</Text>
+            {isWide && <Text style={[s.th, { width: 100 }]}>Maior atraso</Text>}
+            <Text style={[s.th, s.thRight, { width: isWide ? 96 : 64 }]}>Ações</Text>
+          </View>
 
-        {carteiraQ.isLoading ? (
-          <View style={{ padding: 16 }}>
-            {[0, 1, 2].map(i => (
-              <View key={i} style={{ height: 16, borderRadius: 6, backgroundColor: Colors.border, opacity: 0.4, marginBottom: 12 }} />
-            ))}
-          </View>
-        ) : carteira.length === 0 ? (
-          <View style={{ paddingVertical: 28, alignItems: "center" }}>
-            <Text style={s.emptyText}>
-              {searchQ ? `Nenhum cliente encontrado para "${searchQ}".`
-                : agingFilter ? `Nenhum cliente na faixa ${AGING_LABELS[agingFilter]}.`
-                : filter === "atraso" ? "Nenhum cliente em atraso. 🎉"
-                : "Nenhum cliente com saldo em aberto."}
-            </Text>
-          </View>
-        ) : (
-          carteira.map((cust) => {
-            const overdue = isCustomerOverdue(cust as any);
-            const dl = daysLate((cust as any).next_due_date);
-            return (
-              <Pressable key={cust.id} style={s.row} onPress={() => setModalCust({ id: cust.id, name: cust.name })}>
-                {/* Cliente: avatar + nome + status */}
-                <View style={s.rowClient}>
-                  <View style={[s.avatar, { backgroundColor: overdue ? Colors.red : Colors.violet3 }]}>
-                    <Text style={s.avatarText}>{initials(cust.name)}</Text>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.rowName} numberOfLines={1}>{cust.name}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                      <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : Colors.green }]} />
-                      <Text style={s.rowMeta} numberOfLines={1}>
-                        {overdue ? "Em atraso" : "Em dia"}
-                        {!isWide && dl > 0 ? ` · ${dl}d` : ""}
-                        {cust.phone ? ` · ${cust.phone}` : ""}
-                      </Text>
+          {carteiraQ.isLoading ? (
+            <View style={{ padding: 16 }}>
+              {[0, 1, 2].map(i => <PulseBlock key={i} w="100%" h={16} mb={12} />)}
+            </View>
+          ) : carteira.length === 0 ? (
+            <View style={{ paddingVertical: 32, alignItems: "center", gap: 14 }}>
+              <Text style={s.emptyText}>
+                {searchQ ? `Nenhum cliente encontrado para "${searchQ}".`
+                  : filterSel === "atraso" ? "Nenhum cliente em atraso. 🎉"
+                  : filterSel !== "todos" ? `Nenhum cliente na faixa ${AGING_LABELS[filterSel] || filterSel}.`
+                  : "Nenhum cliente com saldo em aberto."}
+              </Text>
+              {!searchQ && filterSel === "todos" && (
+                <Button title="Novo lançamento" icon="plus" variant="secondary" onPress={() => setShowCriar(true)} />
+              )}
+            </View>
+          ) : (
+            carteira.map((cust) => {
+              const overdue = isCustomerOverdue(cust as any);
+              const dl = daysLate((cust as any).next_due_date);
+              return (
+                <Pressable
+                  key={cust.id}
+                  onPress={() => setModalCust({ id: cust.id, name: cust.name })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Abrir ficha de ${cust.name}, saldo ${fmt(cust.balance)}`}
+                  style={({ hovered, pressed }: any) => [
+                    s.row,
+                    (hovered || pressed) && ({
+                      backgroundColor: Colors.violetD,
+                      ...(IS_WEB ? ({ transform: [{ translateY: -1 }], boxShadow: Shadows.soft } as any) : null),
+                    } as any),
+                    IS_WEB ? (webTransition(["background-color", "transform", "box-shadow"], Motion.fast) as any) : null,
+                  ]}
+                >
+                  {/* Cliente: avatar + nome + status (F2: telefone saiu — vive na ficha) */}
+                  <View style={s.rowClient}>
+                    <View style={[s.avatar, { backgroundColor: overdue ? Colors.red : Colors.violet3 }]}>
+                      <Text style={s.avatarText}>{initials(cust.name)}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={s.rowName} numberOfLines={1}>{cust.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                        <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : Colors.green }]} />
+                        <Text style={s.rowMeta} numberOfLines={1}>
+                          {overdue ? "Em atraso" : "Em dia"}
+                          {!isWide && dl > 0 ? ` · ${dl}d` : ""}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
 
-                {/* Saldo */}
-                <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : Colors.ink }]} numberOfLines={1}>
-                  {fmt(cust.balance)}
-                </Text>
+                  {/* Saldo */}
+                  <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : Colors.ink }]} numberOfLines={1}>
+                    {fmt(cust.balance)}
+                  </Text>
 
-                {/* Maior atraso (desktop) */}
-                {isWide && (
-                  <View style={{ width: 92 }}>
-                    {dl > 0 ? (
-                      <Text style={[s.lateText, { color: dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber }]}>● {dl} dias</Text>
-                    ) : (
-                      <Text style={s.lateTextOk}>—</Text>
-                    )}
+                  {/* Maior atraso (desktop) — F2: pill colorida; overdue sem data ganha pill "Em atraso" */}
+                  {isWide && (
+                    <View style={{ width: 100 }}>
+                      {dl > 0 ? (
+                        <View style={[s.latePill, {
+                          backgroundColor: (dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber) + "1f",
+                          borderColor: (dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber) + "55",
+                        }]}>
+                          <Text style={[s.latePillText, { color: dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber }]}>{dl} dias</Text>
+                        </View>
+                      ) : overdue ? (
+                        <View style={[s.latePill, { backgroundColor: Colors.amber + "1f", borderColor: Colors.amber + "55" }]}>
+                          <Text style={[s.latePillText, { color: Colors.amber }]}>Em atraso</Text>
+                        </View>
+                      ) : (
+                        <Text style={s.lateTextOk}>—</Text>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Ações — alvo 40px + hover glow */}
+                  <View style={[s.rowActions, { width: isWide ? 96 : 64 }]}>
+                    <Pressable
+                      disabled={triggeringId === cust.id}
+                      onPress={() => handleCobrar(cust.id, cust.name, cust.phone)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cobrar ${cust.name} no WhatsApp`}
+                      hitSlop={4}
+                      style={({ hovered, pressed }: any) => [
+                        s.actBtn,
+                        triggeringId === cust.id && { opacity: 0.4 },
+                        (hovered || pressed) && ({
+                          transform: [{ translateY: -2 }],
+                          ...(IS_WEB ? ({ boxShadow: Shadows.glowGreen } as any) : null),
+                        } as any),
+                        IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
+                      ]}
+                    >
+                      {triggeringId === cust.id
+                        ? <ActivityIndicator size="small" color={Colors.green} />
+                        : <Icon name="message_circle" size={16} color={Colors.green} />}
+                    </Pressable>
+                    <Icon name="chevron_right" size={15} color={Colors.ink3} />
                   </View>
-                )}
-
-                {/* Ações */}
-                <View style={[s.rowActions, { width: isWide ? 96 : 64 }]}>
-                  <Pressable
-                    style={[s.actBtn, triggeringId === cust.id && { opacity: 0.4 }]}
-                    disabled={triggeringId === cust.id}
-                    onPress={() => handleCobrar(cust.id, cust.name, cust.phone)}
-                    hitSlop={6}
-                  >
-                    {triggeringId === cust.id
-                      ? <ActivityIndicator size="small" color={Colors.green} />
-                      : <Icon name="message_circle" size={15} color={Colors.green} />}
-                  </Pressable>
-                  <Icon name="chevron_right" size={15} color={Colors.ink3} />
-                </View>
-              </Pressable>
-            );
-          })
-        )}
-      </View>
+                </Pressable>
+              );
+            })
+          )}
+        </GlassCard>
+      </FadeInUp>
 
       {carteira.length > 0 && (
         <Text style={s.footerCount}>
-          {carteira.length} cliente{carteira.length !== 1 ? "s" : ""} · {agingFilter ? `faixa ${AGING_LABELS[agingFilter]} (toque na faixa p/ limpar)` : sortOrder === "az" ? "ordem alfabética" : "maior atraso primeiro"}
+          {carteira.length} cliente{carteira.length !== 1 ? "s" : ""}
+          {" · "}
+          {filterSel === "atraso" ? "em atraso (toque na pill p/ limpar)"
+            : filterSel !== "todos" ? `faixa ${AGING_LABELS[filterSel] || filterSel} (toque p/ limpar)`
+            : sortOrder === "az" ? "ordem alfabética" : "maior atraso primeiro"}
         </Text>
       )}
 
@@ -583,58 +732,54 @@ const s = StyleSheet.create({
   headerRowMobile: { flexDirection: "column", alignItems: "stretch", gap: 14 },
   eyebrow: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 6 },
   pageTitle: { fontSize: 30, fontWeight: "800", color: Colors.ink, letterSpacing: -0.6, lineHeight: 32 },
-  pageSubtitle: { fontSize: 12.5, color: Colors.ink3, marginTop: 8, maxWidth: 460 },
-  headerBtn: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: Colors.violetD, borderRadius: 11, borderWidth: 1, borderColor: Colors.border2 },
-  headerBtnMobile: { flex: 1, justifyContent: "center" },
-  headerBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  headerBtnIcon: { alignItems: "center", justifyContent: "center", paddingHorizontal: 12, backgroundColor: Colors.violetD, borderRadius: 11, borderWidth: 1, borderColor: Colors.border2 },
 
-  // Hero
-  heroRow: { flexDirection: "row", gap: 12, marginBottom: 14 },
-  heroCard: {
-    padding: 22, borderRadius: 20, borderWidth: 1, borderColor: Colors.violet + "55",
-    backgroundColor: Colors.violetD, justifyContent: "center",
-  },
+  // Hero (glass gradient)
   heroLabel: { fontSize: 10, fontWeight: "800", color: Colors.violet3, letterSpacing: 1.4, textTransform: "uppercase" },
-  heroValue: { fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginTop: 12, marginBottom: 10 },
-  heroMeta: { fontSize: 12, color: Colors.ink3 },
+  heroValue: { fontWeight: "800", color: Colors.ink, letterSpacing: -1, marginTop: 10, marginBottom: 4, fontVariant: ["tabular-nums"] as any },
+  heroMeta: { fontSize: 12, color: Colors.ink3, marginBottom: 16 },
+  heroStats: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  stat: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+    paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12,
+    backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border,
+    minHeight: 44,
+  },
+  statActive: { borderColor: Colors.violet2, backgroundColor: Colors.violetD },
+  statDot: { width: 8, height: 8, borderRadius: 4 },
+  statLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", color: Colors.ink3 },
+  statValue: { fontSize: 15, fontWeight: "700", fontVariant: ["tabular-nums"] as any },
+  statSub: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
 
-  kpiCol: { justifyContent: "center" },
-  kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  kpiCard: { flex: 1, minWidth: 150, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  kpiHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  kpiLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
-  kpiIcon: { width: 30, height: 30, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  kpiValue: { fontWeight: "800", letterSpacing: -0.5 },
-  kpiMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 6 },
-
-  // Risk map
-  riskCard: { backgroundColor: Colors.bg3, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  // Carteira por atraso (risco = filtro)
   riskHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
   riskTick: { width: 4, height: 14, borderRadius: 2, backgroundColor: Colors.violet3 },
   riskTitle: { fontSize: 11.5, fontWeight: "800", color: Colors.ink2, letterSpacing: 0.3 },
   riskMeta: { fontSize: 11, color: Colors.ink3 },
-  stackBar: { flexDirection: "row", height: 14, borderRadius: 999, overflow: "hidden", backgroundColor: Colors.bg4, gap: 2 },
-  legendGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, gap: 14 },
-  legendItem: { flex: 1, minWidth: 120, gap: 5, paddingLeft: 12, paddingRight: 8, paddingVertical: 6, borderLeftWidth: 1, borderLeftColor: Colors.border, borderRadius: 8 },
-  legendItemActive: { backgroundColor: Colors.violetD, borderLeftColor: Colors.violet3 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendLabel: { fontSize: 11, fontWeight: "600", color: Colors.ink2 },
-  legendAmount: { fontSize: 15, fontWeight: "700", color: Colors.ink },
-  legendCount: { fontSize: 11, color: Colors.ink3 },
+  stackBar: { flexDirection: "row", height: 14, borderRadius: 999, backgroundColor: Colors.bg4, gap: 2 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  pill: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2,
+    minHeight: 36,
+  },
+  pillActive: { borderColor: Colors.violet2, backgroundColor: Colors.violetD },
+  pillHover: { transform: [{ translateY: -1 }], borderColor: Colors.border2 },
+  pillDot: { width: 8, height: 8, borderRadius: 4 },
+  pillLabel: { fontSize: 12, fontWeight: "600", color: Colors.ink2 },
+  pillLabelActive: { color: Colors.violet3 },
+  pillAmount: { fontSize: 12, fontWeight: "800", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
 
   // Toolbar
   toolbar: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 11, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 9, flex: 1, minWidth: 220, maxWidth: 360 },
-  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: "none" as any },
-  chipRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink, outlineStyle: "none" } as any,
   chip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
   chipActive: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
   chipText: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
   chipTextActive: { color: Colors.violet3 },
 
   // Table
-  tableCard: { borderRadius: 18, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
   tableHeadRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   th: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.8, textTransform: "uppercase" },
   thRight: { textAlign: "right" },
@@ -646,11 +791,12 @@ const s = StyleSheet.create({
   rowName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   rowMeta: { fontSize: 11, color: Colors.ink3 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  rowBalance: { fontSize: 14, fontWeight: "800", textAlign: "right" },
-  lateText: { fontSize: 12, fontWeight: "700" },
+  rowBalance: { fontSize: 14, fontWeight: "800", textAlign: "right", fontVariant: ["tabular-nums"] as any },
+  latePill: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
+  latePillText: { fontSize: 11, fontWeight: "700" },
   lateTextOk: { fontSize: 12, color: Colors.ink3 },
   rowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10 },
-  actBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
+  actBtn: { width: 40, height: 40, borderRadius: 11, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
 
   footerCount: { fontSize: 11, color: Colors.ink3, textAlign: "right", marginTop: 10 },
   emptyText: { fontSize: 13, color: Colors.ink3 },

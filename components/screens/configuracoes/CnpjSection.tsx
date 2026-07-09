@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
-import { maskCNPJ } from "@/utils/masks";
+import { maskCnpj } from "@/utils/masks";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { Card, fmtCNPJ, regimeLabel, sh } from "./shared";
@@ -72,7 +72,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
   }
 
   function handleCnpjInputChange(v: string) {
-    const masked = maskCNPJ(v);
+    const masked = maskCnpj(v);
     setCnpjInput(masked);
     const nums = masked.replace(/\D/g, "");
     if (nums.length === 14) lookupCNPJ(nums);

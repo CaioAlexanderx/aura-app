@@ -12,11 +12,18 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  Image, TextInput, Modal,
+  Image, TextInput, Modal, Platform, Linking,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { studioApi, type PublicApproval } from "@/services/studioApi";
+
+// F5: mockup pode ser um vídeo turntable (.webm/.mp4) gerado pelo motor 3D
+function isVideoUrl(v?: string | null): boolean {
+  if (!v) return false;
+  const p = String(v).split("?")[0].toLowerCase();
+  return p.endsWith(".webm") || p.endsWith(".mp4");
+}
 
 export default function AprovacaoPublica() {
   const { token } = useLocalSearchParams<{ token: string }>();
@@ -112,7 +119,19 @@ export default function AprovacaoPublica() {
                   : "A loja recebeu seu pedido de ajuste e vai te chamar.")}
             </Text>
             {data.mockup_url && (
-              <Image source={{ uri: data.mockup_url }} style={s.finalMockup} />
+              isVideoUrl(data.mockup_url) && Platform.OS === "web" ? (
+                <>
+                  {/* @ts-ignore — video DOM no web (mockup em vídeo turntable, Visual Engine F5) */}
+                  <video src={data.mockup_url} controls autoPlay loop muted playsInline style={{ width: 160, maxWidth: 420, borderRadius: 12, marginTop: 18, display: "block" } as any} />
+                </>
+              ) : isVideoUrl(data.mockup_url) ? (
+                <Pressable style={s.videoLink} onPress={() => Linking.openURL(String(data.mockup_url))}>
+                  <Icon name="play" size={16} color="#fff" />
+                  <Text style={s.videoLinkTxt}>Assistir vídeo</Text>
+                </Pressable>
+              ) : (
+                <Image source={{ uri: data.mockup_url }} style={s.finalMockup} />
+              )
             )}
           </View>
         </ScrollView>
@@ -152,7 +171,19 @@ export default function AprovacaoPublica() {
         {/* Mockup grande */}
         <View style={s.mockupCard}>
           <Text style={s.mockupLabel}>SUA ARTE</Text>
-          <Image source={{ uri: data.mockup_url }} style={s.mockupImg} resizeMode="contain" />
+          {isVideoUrl(data.mockup_url) && Platform.OS === "web" ? (
+            <>
+              {/* @ts-ignore — video DOM no web (mockup em vídeo turntable, Visual Engine F5) */}
+              <video src={data.mockup_url} controls autoPlay loop muted playsInline style={{ width: "100%", maxWidth: 420, borderRadius: 12, display: "block", marginLeft: "auto", marginRight: "auto", backgroundColor: "#F8FAFC" } as any} />
+            </>
+          ) : isVideoUrl(data.mockup_url) ? (
+            <Pressable style={[s.videoLink, { alignSelf: "center" }]} onPress={() => Linking.openURL(String(data.mockup_url))}>
+              <Icon name="play" size={16} color="#fff" />
+              <Text style={s.videoLinkTxt}>Assistir vídeo</Text>
+            </Pressable>
+          ) : (
+            <Image source={{ uri: data.mockup_url }} style={s.mockupImg} resizeMode="contain" />
+          )}
         </View>
 
         {/* Botões */}
@@ -273,6 +304,14 @@ const s = StyleSheet.create({
   },
   mockupLabel: { fontSize: 10, color: "#64748B", fontWeight: "700", letterSpacing: 0.5, marginBottom: 10, textAlign: "center" },
   mockupImg: { width: "100%", aspectRatio: 1, borderRadius: 12, backgroundColor: "#F8FAFC" },
+
+  // F5: fallback nativo pro mockup em vídeo (abre a URL no player externo)
+  videoLink: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: "#1E3A8A", paddingVertical: 12, paddingHorizontal: 20,
+    borderRadius: 10, marginTop: 18,
+  },
+  videoLinkTxt: { color: "#fff", fontSize: 13.5, fontWeight: "700" },
 
   actions: { gap: 10, marginBottom: 20 },
   btnApprove: {

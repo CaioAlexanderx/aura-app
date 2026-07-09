@@ -13,6 +13,13 @@ import { request } from "@/services/api";
 // GET retorna `images: { "hex|size": url }`. Upload/delete em rota
 // separada (/variant-image) que identifica variante por combinacao
 // pra sobreviver ao soft-delete+INSERT do PUT.
+//
+// 27/06/2026 (frente 1 fix Davi): foto POR COR.
+// uploadColorImage/deleteColorImage acionam POST/DELETE /color-image,
+// que aplica imagem em TODAS variantes ativas da cor (independente de
+// tamanho). Evita a janela de race entre PUT /variations e upload por
+// combo (cor,tamanho). UX nova em ProductVariationsSection esconde foto
+// por variante em produtos so-tamanho e agrupa por cor nos demais.
 // ============================================================
 
 export type ColorEntry = {
@@ -76,6 +83,18 @@ export type UploadVariantImageResponse = {
   size_value: string | null;
 };
 
+// 27/06/2026: foto por COR (aplica em TODAS variantes da cor)
+export type UploadColorImageBody = {
+  color_hex: string;
+  content: string;
+  content_type: string;
+};
+export type UploadColorImageResponse = {
+  image_url: string;
+  color_hex: string;
+  variants_affected: number;
+};
+
 // Helper: monta a chave da matrix (usada em ambos os lados)
 export function matrixKey(hex: string | null, size: string | null): string {
   return (hex || '') + '|' + (size || '');
@@ -94,9 +113,7 @@ export var productsVariationsApi = {
       { method: "PUT", body: body, retry: 0 }
     );
   },
-  // 23/05/2026: upload de foto por variante. Identifica a variante via
-  // combinacao (color_hex + size_value) — nao precisa de variant_id,
-  // sobrevive ao soft-delete + INSERT do PUT.
+  // 23/05/2026: upload de foto por variante (legado; mantido pra back-compat).
   uploadImage: function(companyId: string, productId: string, body: UploadVariantImageBody) {
     return request<UploadVariantImageResponse>(
       "/companies/" + companyId + "/products/" + productId + "/variant-image",
@@ -106,6 +123,21 @@ export var productsVariationsApi = {
   deleteImage: function(companyId: string, productId: string, args: { color_hex?: string | null; size_value?: string | null }) {
     return request<{ deleted: boolean; variant_id: string }>(
       "/companies/" + companyId + "/products/" + productId + "/variant-image",
+      { method: "DELETE", body: args, retry: 0 }
+    );
+  },
+  // 27/06/2026: foto POR COR (aplica em TODAS variantes ativas com Cor=hex,
+  // independente de tamanho). Usado pelo ColorImageButton no novo fluxo de
+  // ProductVariationsSection.
+  uploadColorImage: function(companyId: string, productId: string, body: UploadColorImageBody) {
+    return request<UploadColorImageResponse>(
+      "/companies/" + companyId + "/products/" + productId + "/color-image",
+      { method: "POST", body: body, retry: 0 }
+    );
+  },
+  deleteColorImage: function(companyId: string, productId: string, args: { color_hex: string }) {
+    return request<{ deleted: boolean; color_hex: string; variants_affected: number }>(
+      "/companies/" + companyId + "/products/" + productId + "/color-image",
       { method: "DELETE", body: args, retry: 0 }
     );
   },
