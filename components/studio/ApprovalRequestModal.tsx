@@ -7,6 +7,14 @@
 // 25/05 — item #10 da análise UX/UI: upload integrado.
 // Lojista clica "Subir do dispositivo", arquivo vai pro R2, URL volta
 // já preenchida. Mantém URL externa como fallback.
+//
+// 03/07/2026 — Visual Engine F2: botão "Gerar do pedido" — o motor
+// compose2d gera o render HD 2048px a partir da customization do
+// próprio pedido, sobe pro R2, registra em studio_visual_renders
+// (content_hash) e vincula render_id ao link de aprovação (migr 209).
+// F5: produto com template 3D gera VÍDEO turntable (~4s, webm) em vez
+// de imagem — o cliente vê a caneca girando no link de aprovação.
+// Fluxos manuais (upload/URL) continuam idênticos como fallback.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -17,6 +25,8 @@ import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type StudioOrder, type StudioApprovalCreated } from "@/services/studioApi";
+import { studioVisualApi } from "@/services/studioVisualApi";
+import { gerarRenderDoPedido } from "@/components/studio/visualEngine/gerarRenderAprovacao";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { fileToBase64Web, pickFileWeb, uploadStudioMockup } from "@/services/studioUploadApi";
@@ -27,6 +37,12 @@ type Props = {
   onSent: () => void;
 };
 
+// F5: mockup em vídeo (turntable 3D) — preview de <Image> não se aplica
+function isVideoUrl(v: string): boolean {
+  const p = v.split("?")[0].toLowerCase();
+  return p.endsWith(".webm") || p.endsWith(".mp4");
+}
+
 export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -34,6 +50,11 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const [step, setStep] = useState(1);
   const [mockupUrl, setMockupUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  // F2: render gerado pelo motor visual (null = fluxo manual)
+  const [renderId, setRenderId] = useState<string | null>(null);
+  const [renderHashShort, setRenderHashShort] = useState<string | null>(null);
+  const [renderIsVideo, setRenderIsVideo] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [customerPhone, setCustomerPhone] = useState(order.customer_phone || "");
   const [customMessage, setCustomMessage] = useState("");
   const [created, setCreated] = useState<StudioApprovalCreated | null>(null);
@@ -42,6 +63,37 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     step === 1 ? /^https?:\/\//.test(mockupUrl.trim()) :
     step === 2 ? customerPhone.replace(/\D/g, "").length >= 10 :
     true;
+
+  // F2: qualquer alteração manual do mockup desfaz o vínculo com o render
+  function setMockupUrlManual(v: string) {
+    setMockupUrl(v);
+    if (renderId) { setRenderId(null); setRenderHashShort(null); setRenderIsVideo(false); }
+  }
+
+  async function handleGerarDoPedido() {
+    if (!company?.id || generating) return;
+    if (Platform.OS !== "web") {
+      toast.error("Geração de render disponível na versão web do Studio.");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const r = await gerarRenderDoPedido(company.id, order.id);
+      setMockupUrl(r.url);
+      setRenderId(r.renderId);
+      setRenderHashShort(r.contentHash.slice(0, 12));
+      setRenderIsVideo(!!r.isVideo);
+      toast.success(
+        r.isVideo
+          ? "Vídeo turntable gerado de \"" + r.itemName + "\" — o cliente vê a peça girando!"
+          : "Render gerado de \"" + r.itemName + "\" e vinculado ao pedido!"
+      );
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível gerar o render");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handlePickAndUpload() {
     if (!company?.id) return;
@@ -59,7 +111,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
         content_type,
         kind: "approval",
       });
-      setMockupUrl(r.url);
+      setMockupUrlManual(r.url);
       toast.success("Mockup enviado!");
     } catch (e: any) {
       toast.error(e?.message || "Falha no upload");
@@ -71,12 +123,16 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   async function generateLink() {
     if (!company?.id) return;
     try {
-      const r = await studioApi.requestApproval(company.id, order.id, {
+      const body = {
         mockup_url: mockupUrl.trim(),
         customer_phone: customerPhone.trim() || undefined,
         custom_message: customMessage.trim() || undefined,
-      });
-      setCreated(r);
+      };
+      // F2: com render do motor, usa a variante que grava render_id
+      const r = renderId
+        ? await studioVisualApi.requestApprovalWithRender(company.id, order.id, { ...body, render_id: renderId })
+        : await studioApi.requestApproval(company.id, order.id, body);
+      setCreated(r as StudioApprovalCreated);
       setStep(3);
     } catch (e: any) {
       toast.error(e?.message || "Erro ao gerar link");
@@ -96,6 +152,10 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     toast.success("✨ Aprovação solicitada! Aguarde resposta do cliente.");
     onSent();
   }
+
+  const trimmedUrl = mockupUrl.trim();
+  const hasUrl = /^https?:\/\//.test(trimmedUrl);
+  const urlIsVideo = hasUrl && isVideoUrl(trimmedUrl);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -130,8 +190,34 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
           <View style={s.block}>
             <Text style={s.q}>Qual mockup vai enviar?</Text>
             <Text style={s.help}>
-              Suba do seu dispositivo ou cole uma URL pública (PNG, JPG, PDF até 15 MB).
+              Gere direto do pedido com o motor visual (produto 3D vira vídeo girando!),
+              suba do seu dispositivo ou cole uma URL pública (PNG, JPG, PDF até 15 MB).
             </Text>
+
+            {/* F2/F5: gerar render/vídeo a partir da customization do pedido */}
+            <Pressable
+              onPress={handleGerarDoPedido}
+              style={[s.generateBtn, generating && { opacity: 0.6 }]}
+              disabled={generating}
+            >
+              {generating ? (
+                <ActivityIndicator color={t.primary} />
+              ) : (
+                <>
+                  <Icon name="zap" size={16} color={t.primary} />
+                  <Text style={s.generateBtnTxt}>Gerar do pedido (motor visual)</Text>
+                </>
+              )}
+            </Pressable>
+
+            {renderId && (
+              <View style={s.renderChip}>
+                <Icon name="check-circle" size={14} color={t.mint} />
+                <Text style={s.renderChipTxt}>
+                  {renderIsVideo ? "Vídeo turntable" : "Render HD"} vinculado ao pedido · hash {renderHashShort}… — fica gravado como prova do que o cliente aprovou
+                </Text>
+              </View>
+            )}
 
             <Pressable
               onPress={handlePickAndUpload}
@@ -158,14 +244,22 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
               style={s.input}
               placeholder="https://..."
               value={mockupUrl}
-              onChangeText={setMockupUrl}
+              onChangeText={setMockupUrlManual}
               autoCapitalize="none"
               autoCorrect={false}
             />
-            {/^https?:\/\//.test(mockupUrl.trim()) && (
+            {hasUrl && !urlIsVideo && (
               <View style={s.preview}>
-                <Image source={{ uri: mockupUrl.trim() }} style={s.previewImg} />
+                <Image source={{ uri: trimmedUrl }} style={s.previewImg} />
                 <Text style={s.previewCap}>Prévia do que o cliente vai ver</Text>
+              </View>
+            )}
+            {urlIsVideo && (
+              <View style={s.videoChip}>
+                <Icon name="play-circle" size={16} color={t.primary} />
+                <Text style={s.videoChipTxt}>
+                  Vídeo turntable pronto — o cliente assiste à peça girando na página de aprovação
+                </Text>
               </View>
             )}
           </View>
@@ -240,6 +334,24 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   subHelp: { fontSize: 12, color: t.ink3, marginTop: 8, fontStyle: "italic" },
   label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   input: { backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: t.ink },
+
+  generateBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: "transparent",
+    borderWidth: 1.5, borderColor: t.primary, borderStyle: "dashed",
+    paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+  },
+  generateBtnTxt: { color: t.primary, fontWeight: "800", fontSize: 13.5 },
+  renderChip: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: t.mintSoft, borderRadius: 10, padding: 10, marginBottom: 10,
+  },
+  renderChipTxt: { flex: 1, fontSize: 11.5, color: t.ink2, lineHeight: 16 },
+  videoChip: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: t.primaryGhost, borderRadius: 10, padding: 12, marginTop: 12,
+  },
+  videoChipTxt: { flex: 1, fontSize: 12, color: t.ink2, lineHeight: 17 },
 
   uploadBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
