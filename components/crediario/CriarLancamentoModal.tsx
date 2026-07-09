@@ -40,6 +40,18 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { ModalPop, Collapsible } from "@/components/anim";
+
+// ============================================================
+// F4 do redesign (08/07/2026 — spec §2.4): o passo 2 deixou de ser
+// um formulário monolítico de 10+ blocos e virou 3 grupos:
+//   ESSENCIAL — valor · parcelas · 1º vencimento (sempre visível)
+//   CARNÊ     — disclosure; fechado mostra só o resumo ("Conta geral")
+//   AVANÇADO  — disclosure; data retroativa, periodicidade, juros,
+//               descrição e unificação moram aqui
+// Resumo + CTA agora são FIXOS no rodapé do sheet (não rolam).
+// Entrada via ModalPop. Nenhuma lógica de submit/unify mudou.
+// ============================================================
 
 type Step = "customer" | "details";
 type Mode = "search" | "create";
@@ -148,6 +160,10 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [fetchedAccounts, setFetchedAccounts]     = useState<CreditAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts]     = useState(false);
 
+  // F4: disclosures dos grupos Carnê e Avançado
+  const [carneOpen, setCarneOpen] = useState(false);
+  const [advOpen, setAdvOpen]     = useState(false);
+
   // feat(unify): toggle de unificação (só disponível em accountMode=existing com saldo)
   const [unifyEnabled, setUnifyEnabled]           = useState(false);
   const [unifyInstallments, setUnifyInstallments] = useState("2");
@@ -178,6 +194,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setSelectedAccountId(null);
     setNewAccountName("");
     setFetchedAccounts([]);
+    setCarneOpen(false);
+    setAdvOpen(false);
     setUnifyEnabled(false);
     setUnifyInstallments("2");
     setUnifyFirstDue(defaultDueDate());
@@ -409,6 +427,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={s.kvWrapper}
         >
+          <ModalPop visible={visible}>
           <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
             {/* Header */}
             <View style={s.header}>
@@ -530,9 +549,10 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
               </ScrollView>
             )}
 
-            {/* STEP 2 — Detalhes */}
+            {/* STEP 2 — Detalhes (F4: Essencial / Carnê / Avançado + footer fixo) */}
             {step === "details" && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <>
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 {/* Cliente selecionado */}
                 {customerLabel && (
                   <View style={s.customerChip}>
@@ -549,6 +569,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   </View>
                 )}
 
+                {/* ── ESSENCIAL ── */}
                 <Text style={s.label}>Valor total *</Text>
                 <View style={s.amountRow}>
                   <Text style={s.amountPrefix}>R$</Text>
@@ -566,19 +587,56 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   />
                 </View>
 
-                <Text style={s.label}>Data do lançamento</Text>
-                <DateInput
-                  style={s.input}
-                  value={entryDate}
-                  onChangeText={setEntryDate}
-                  placeholder="dd/mm/aaaa"
-                />
-                <Text style={s.dateHint}>
-                  Quando a compra foi feita. Use uma data anterior para lançar retroativo.
-                </Text>
+                {!unifyEnabled && (
+                  <View style={[s.row2, { marginTop: 2 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.label}>Parcelas</Text>
+                      <TextInput
+                        style={s.input}
+                        placeholder="1"
+                        placeholderTextColor={Colors.ink3}
+                        value={installments}
+                        onChangeText={(v) => {
+                          const n = v.replace(/\D/g, "").slice(0, 2);
+                          setInstallments(n);
+                        }}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.label}>1º vencimento</Text>
+                      <DateInput
+                        style={s.input}
+                        value={firstDueDate}
+                        onChangeText={setFirstDueDate}
+                        placeholder="dd/mm/aaaa"
+                      />
+                    </View>
+                  </View>
+                )}
 
-                {/* F3: Seletor de carnê */}
-                <Text style={s.label}>Carnê / conta</Text>
+                {/* ── CARNÊ (disclosure — fechado mostra só o resumo) ── */}
+                <Pressable
+                  style={s.groupHead}
+                  onPress={() => setCarneOpen(v => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Carnê: ${accountMode === "general" ? "Conta geral" : accountMode === "existing" ? (selectedAccount?.name || "escolher carnê") : (newAccountName || "novo carnê")}. Toque para ${carneOpen ? "recolher" : "alterar"}`}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.groupTitle}>Carnê / conta</Text>
+                    <Text style={s.groupSummary} numberOfLines={1}>
+                      {accountMode === "general"
+                        ? "Conta geral (padrão)"
+                        : accountMode === "existing"
+                          ? (selectedAccount?.name || "escolher carnê…") + (unifyEnabled ? " · unificar parcelas" : "")
+                          : (newAccountName ? `Novo: ${newAccountName}` : "novo carnê…")}
+                    </Text>
+                  </View>
+                  <View style={carneOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
+                    <Icon name="chevron-down" size={14} color={carneOpen ? Colors.violet3 : Colors.ink3} />
+                  </View>
+                </Pressable>
+                <Collapsible open={carneOpen}>
                 {loadingAccounts ? (
                   <ActivityIndicator size="small" color={Colors.violet3} style={{ marginBottom: 8 }} />
                 ) : (
@@ -731,37 +789,44 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     )}
                   </>
                 )}
+                </Collapsible>
 
-                {/* Parcelas e periodicidade (só quando não está unificando) */}
+                {/* ── AVANÇADO (disclosure — data retroativa, periodicidade, juros, descrição) ── */}
+                <Pressable
+                  style={s.groupHead}
+                  onPress={() => setAdvOpen(v => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mais opções. Toque para ${advOpen ? "recolher" : "expandir"}`}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.groupTitle}>Mais opções</Text>
+                    <Text style={s.groupSummary} numberOfLines={1}>
+                      {[
+                        entryDate !== todayBrSp() ? "retroativo" : null,
+                        periodKind !== "mensal" ? PERIOD_CHIPS.find(([k]) => k === periodKind)?.[1]?.toLowerCase() : null,
+                        interestRate.trim() ? `${interestRate}% a.m.` : null,
+                        description.trim() ? "descrição" : null,
+                      ].filter(Boolean).join(" · ") || "data, periodicidade, juros, descrição"}
+                    </Text>
+                  </View>
+                  <View style={advOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
+                    <Icon name="chevron-down" size={14} color={advOpen ? Colors.violet3 : Colors.ink3} />
+                  </View>
+                </Pressable>
+                <Collapsible open={advOpen}>
+                <Text style={s.label}>Data do lançamento</Text>
+                <DateInput
+                  style={s.input}
+                  value={entryDate}
+                  onChangeText={setEntryDate}
+                  placeholder="dd/mm/aaaa"
+                />
+                <Text style={s.dateHint}>
+                  Quando a compra foi feita. Use uma data anterior para lançar retroativo.
+                </Text>
+
                 {!unifyEnabled && (
                   <>
-                    <View style={[s.row2, { marginTop: 14 }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.label}>Parcelas</Text>
-                        <TextInput
-                          style={s.input}
-                          placeholder="1"
-                          placeholderTextColor={Colors.ink3}
-                          value={installments}
-                          onChangeText={(v) => {
-                            const n = v.replace(/\D/g, "").slice(0, 2);
-                            setInstallments(n);
-                          }}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.label}>1º vencimento</Text>
-                        <DateInput
-                          style={s.input}
-                          value={firstDueDate}
-                          onChangeText={setFirstDueDate}
-                          placeholder="dd/mm/aaaa"
-                        />
-                      </View>
-                    </View>
-
-                    {/* Periodicidade */}
                     <Text style={s.label}>Periodicidade</Text>
                     <View style={s.periodChips}>
                       {PERIOD_CHIPS.map(([k, lbl]) => (
@@ -807,40 +872,45 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   <Text style={s.labelOptional}>(opcional)</Text>
                 </Text>
                 <TextInput
-                  style={[s.input, { minHeight: 60, textAlignVertical: "top" }]}
+                  style={[s.input, { minHeight: 60, textAlignVertical: "top", marginBottom: 12 }]}
                   placeholder="Ex: Mercadoria de novembro"
                   placeholderTextColor={Colors.ink3}
                   value={description}
                   onChangeText={setDescription}
                   multiline
                 />
+                </Collapsible>
+              </ScrollView>
 
-                {/* Preview de parcelas (modo normal) */}
+              {/* ── Footer FIXO: resumo + CTA (F4 — antes rolavam junto) ── */}
+              <View style={s.footerBar}>
                 {amountNum > 0 && !unifyEnabled && (
-                  <View style={s.previewBox}>
-                    <Text style={s.previewTitle}>Resumo</Text>
-                    <View style={s.previewRow}>
-                      <Text style={s.previewLabel}>Total com juros</Text>
-                      <Text style={s.previewValue}>
-                        R${" "}
-                        {totalComJuros.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
+                  <View style={s.footerSummary}>
+                    <Text style={s.footerSummaryLbl}>
+                      Total {rateNum > 0 ? "com juros " : ""}
+                      <Text style={s.footerSummaryStrong}>
+                        R$ {totalComJuros.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </Text>
-                    </View>
-                    <View style={s.previewRow}>
-                      <Text style={s.previewLabel}>Valor por parcela</Text>
-                      <Text style={[s.previewValue, { color: Colors.violet3 }]}>
-                        R${" "}
-                        {valorParcela.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}{" "}
-                        × {nParcelas}x
+                    </Text>
+                    <Text style={[s.footerSummaryLbl, { color: Colors.violet3 }]}>
+                      {nParcelas}x de{" "}
+                      <Text style={[s.footerSummaryStrong, { color: Colors.violet3 }]}>
+                        R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </Text>
-                    </View>
+                    </Text>
                   </View>
                 )}
-
+                {unifyEnabled && unifyPreview && (
+                  <View style={s.footerSummary}>
+                    <Text style={s.footerSummaryLbl}>
+                      Unificado{" "}
+                      <Text style={s.footerSummaryStrong}>{fmtCur(unifyPreview.total)}</Text>
+                    </Text>
+                    <Text style={[s.footerSummaryLbl, { color: Colors.violet3 }]}>
+                      {unifyPreview.schedule.length}x
+                    </Text>
+                  </View>
+                )}
                 <Pressable
                   style={({ pressed }) => [
                     s.submitBtn,
@@ -861,9 +931,11 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     </>
                   )}
                 </Pressable>
-              </ScrollView>
+              </View>
+              </>
             )}
           </Pressable>
+          </ModalPop>
         </KeyboardAvoidingView>
       </Pressable>
     </Modal>
@@ -1081,30 +1153,54 @@ const s = StyleSheet.create({
     maxWidth: "100%",
   },
   customerChipText: { fontSize: 13, fontWeight: "600", color: Colors.violet3, flex: 1 },
-  previewBox: {
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: Colors.bg3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-    gap: 8,
-  },
-  previewTitle: { fontSize: 11, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  previewRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  previewLabel: { fontSize: 13, color: Colors.ink2 },
-  previewValue: { fontSize: 14, fontWeight: "700", color: Colors.ink },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 20,
-    marginBottom: 8,
     backgroundColor: Colors.violet3,
     borderRadius: 12,
     paddingVertical: 15,
   },
   submitBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
   pressed:  { opacity: 0.7 },
+  // ── F4: grupos com disclosure + footer fixo ──
+  groupHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 48,
+    backgroundColor: Colors.bg2,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    borderRadius: 10,
+  },
+  groupTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.ink3,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  groupSummary: { fontSize: 13, fontWeight: "600", color: Colors.ink, marginTop: 2 },
+  footerBar: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border2,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    backgroundColor: Colors.bg3,
+    gap: 10,
+  },
+  footerSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  footerSummaryLbl: { fontSize: 12.5, color: Colors.ink2 },
+  footerSummaryStrong: { fontWeight: "800", color: Colors.ink, fontSize: 13.5 },
 });
