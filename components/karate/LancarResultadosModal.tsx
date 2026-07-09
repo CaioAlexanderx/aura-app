@@ -13,7 +13,7 @@ import {
   Modal, View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Alert, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateApi, ExamCandidate, CandidateResult } from "@/services/karateApi";
@@ -70,12 +70,12 @@ export function LancarResultadosModal({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Lançar Resultados</Text>
           <TouchableOpacity onPress={onClose} accessibilityLabel="Fechar">
-            <Ionicons name="close" size={24} color={KarateColors.ink} />
+            <Icon name="x" size={24} color={KarateColors.ink} />
           </TouchableOpacity>
         </View>
 
         <Text style={styles.hint}>
-          Lance o resultado de cada candidato individualmente. RBAC examResults aplicado no backend.
+          Lance o resultado de cada candidato individualmente.
         </Text>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -98,7 +98,7 @@ export function LancarResultadosModal({
                     accessibilityLabel="Aprovado"
                     accessibilityState={{ checked: state.result === "approved" }}
                   >
-                    <Ionicons name="checkmark-circle" size={14} color={state.result === "approved" ? "#fff" : KarateColors.ok} />
+                    <Icon name="check" size={14} color={state.result === "approved" ? "#fff" : KarateColors.ok} />
                     <Text style={[styles.toggleText, state.result === "approved" && styles.toggleTextSelected]}>Aprovado</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -108,7 +108,7 @@ export function LancarResultadosModal({
                     accessibilityLabel="Reprovado"
                     accessibilityState={{ checked: state.result === "rejected" }}
                   >
-                    <Ionicons name="close-circle" size={14} color={state.result === "rejected" ? "#fff" : KarateColors.danger} />
+                    <Icon name="x" size={14} color={state.result === "rejected" ? "#fff" : KarateColors.danger} />
                     <Text style={[styles.toggleText, state.result === "rejected" && styles.toggleTextSelected]}>Reprovado</Text>
                   </TouchableOpacity>
                 </View>

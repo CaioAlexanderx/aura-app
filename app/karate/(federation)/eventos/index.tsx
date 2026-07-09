@@ -1,5 +1,5 @@
 // ============================================================
-// Eventos — Visão Geral — Aura Karatê (federação) · Shoji
+// Eventos — Visão Geral · Aura Karatê (federação) · Shoji
 // Fiel ao pane "graduacoes" do standalone v5. Dados reais.
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
@@ -8,7 +8,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -16,21 +16,21 @@ import {
   ShojiBackground, PageHead, SectionHead, Card, KpiBand, ShojiBadge, ShojiButton, Mono, Body,
 } from "@/components/karate/shoji";
 import { CriarExameModal } from "@/components/karate/CriarExameModal";
-import { karateApi, BeltExam, CourseEvent } from "@/services/karateApi";
+import { karateApi, BeltExam } from "@/services/karateApi";
+import { formatEventDateShort } from "@/utils/eventDate";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const EXAM_STATUS: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
-  closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
+  done: { label: "Encerrado", badge: "warn" }, closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
-const COURSE_LABEL: Record<string, string> = { seminar: "Seminário", course: "Curso", clinic: "Clínica" };
-const fmtDate = (iso?: string | null) => { if (!iso) return "Data a definir"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }); };
+const fmtDate = (iso?: string | null) => formatEventDateShort(iso, "Data a definir");
 
 export default function EventosOverview() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const [exams, setExams] = useState<BeltExam[]>([]);
-  const [courses, setCourses] = useState<CourseEvent[]>([]);
+  const [courses, setCourses] = useState<BeltExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,8 +40,10 @@ export default function EventosOverview() {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      const [e, c] = await Promise.all([karateApi.listBeltExams(federationId), karateApi.listCourses(federationId)]);
-      setExams(e.data ?? []); setCourses(c.data ?? []);
+      const { data } = await karateApi.listBeltExams(federationId);
+      const all = data ?? [];
+      setExams(all.filter((item) => item.exam_type !== "curso"));
+      setCourses(all.filter((item) => item.exam_type === "curso"));
     } catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
@@ -55,10 +57,9 @@ export default function EventosOverview() {
         <PageHead
           eyebrow="Calendário oficial FPKT"
           title="Eventos"
-          sub="Critérios oficiais, calendário de exames e cursos, e lançamento de resultados."
+          sub="Calendário de exames e cursos, e lançamento de resultados."
           actions={<>
-            <ShojiButton label="Critérios" icon="list-outline" variant="ghost" onPress={() => router.push("/karate/eventos/criterios" as any)} />
-            <ShojiButton label="Criar exame" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
+            <ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
           </>}
         />
 
@@ -73,7 +74,7 @@ export default function EventosOverview() {
             <SectionHead title="Próximos exames" />
             {exams.length === 0 ? <Card><KarateEmptyState icon="ribbon-outline" title="Nenhum exame agendado" subtitle="Crie um exame para começar." style={{ paddingVertical: 24 }} /></Card>
               : exams.map((exam) => (
-                <TouchableOpacity key={exam.id} onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any)} activeOpacity={0.85}>
+                <TouchableOpacity key={exam.id} onPress={() => router.push(`/karate/eventos/exame/${exam.id}` as any) } activeOpacity={0.85}>
                   <Card style={{ marginBottom: 12 }}>
                     <View style={styles.cardTop}>
                       <Text style={styles.cardTitle}>{exam.title}</Text>
@@ -93,17 +94,19 @@ export default function EventosOverview() {
             <SectionHead title="Cursos e seminários" />
             {courses.length === 0 ? <Card><KarateEmptyState icon="school-outline" title="Nenhum curso agendado" style={{ paddingVertical: 24 }} /></Card>
               : courses.map((course) => (
-                <Card key={course.id} style={{ marginBottom: 12 }}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.cardTitle}>{course.title}</Text>
-                    <ShojiBadge status="neutral" label={COURSE_LABEL[course.event_type] ?? course.event_type} />
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Meta icon="calendar-outline" text={fmtDate(course.event_date)} />
-                    <Meta icon="person-outline" text={course.instructor ?? "Instrutor a definir"} />
-                    <Meta icon="people-outline" text={`${course.enrolled_count} inscritos`} />
-                  </View>
-                </Card>
+                <TouchableOpacity key={course.id} onPress={() => router.push(`/karate/eventos/exame/${course.id}` as any)} activeOpacity={0.85}>
+                  <Card style={{ marginBottom: 12 }}>
+                    <View style={styles.cardTop}>
+                      <Text style={styles.cardTitle}>{course.title}</Text>
+                      <ShojiBadge status={EXAM_STATUS[course.status]?.badge ?? "neutral"} label={EXAM_STATUS[course.status]?.label ?? course.status} />
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Meta icon="calendar-outline" text={fmtDate(course.exam_date)} />
+                      {!!course.location && <Meta icon="location-outline" text={course.location} />}
+                      <Meta icon="people-outline" text={`${course.candidate_count} candidatos`} />
+                    </View>
+                  </Card>
+                </TouchableOpacity>
               ))}
           </View>
         </>}
@@ -114,7 +117,7 @@ export default function EventosOverview() {
 }
 
 function Meta({ icon, text }: { icon: string; text: string }) {
-  return <View style={styles.metaItem}><Ionicons name={icon as any} size={13} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
+  return <View style={styles.metaItem}><Icon name={icon as any} size={13} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
 }
 
 const styles = StyleSheet.create({

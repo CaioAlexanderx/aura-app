@@ -97,14 +97,31 @@ export interface PortalData {
   belt_history: BeltHistoryItem[];
   exams: PortalExam[];
   certificates: PortalCertificate[];
+  /**
+   * Carteirinha completa do PRÓPRIO praticante autenticado (JWT type:'portal',
+   * OTP validado com o CPF dele). Contrato espelha karateCardService.getCurrentCard
+   * no backend (mesma função usada por GET /federation/:id/practitioners/:pid/card).
+   * Seguro expor foto/CPF/nascimento aqui — NUNCA usar este shape na tela de
+   * verificação pública (app/karate/verify/[token].tsx), que consome
+   * CardVerification (dados mínimos, sem CPF/nascimento/foto p/ menor).
+   */
   card: {
+    student_name: string;
     card_number: string | null;
     belt: string | null;
     belt_name: string | null;
     dojo_name: string | null;
+    /** Apenas neste portal autenticado — NUNCA na verificação pública. */
+    birth_date?: string | null;
+    /** Apenas neste portal autenticado — NUNCA na verificação pública. */
+    cpf?: string | null;
+    photo_url: string | null;
     is_minor: boolean;
+    issued_at: string;
     verify_token: string;
     status: "active" | "revoked";
+    federation_name?: string | null;
+    federation_logo?: string | null;
   } | null;
   public_portal: { opt_in: boolean; public_token: string | null };
 }
@@ -118,17 +135,65 @@ export interface PublicProfile {
   belt_path: Array<{ belt_name: string; year: number }>;
 }
 
+// Bloco A — formulário de inscrição configurável por evento (migration 200).
+// Espelha o tipo equivalente em services/karateApi.ts (lado admin).
+export type RegistrationFieldType = "text" | "number" | "select" | "checkbox" | "date" | "phone";
+
+export interface RegistrationField {
+  key: string;
+  label: string;
+  type: RegistrationFieldType;
+  required: boolean;
+  options?: string[];
+}
+
+// Track E / P0-0.4 — categoria de campeonato, usada na etapa de inscrição
+// pública quando o evento é kind==='competition' (em vez de
+// registration_fields, o praticante escolhe uma destas).
+export interface CompetitionCategory {
+  id: string;
+  name: string;
+  modality: "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite";
+  min_age: number | null;
+  max_age: number | null;
+  belt_min: string | null;
+  belt_max: string | null;
+  sex: "M" | "F" | "mixed";
+  weight_class: string | null;
+  max_entries: number | null;
+  fee_amount: number | null;
+  entry_count: number;
+}
+
 export interface PublicEvent {
   federation: { name: string; logo: string | null };
   event: {
     id: string;
     name: string;
-    kind: "exam" | "course";
+    kind: "exam" | "course" | "competition";
     type: string | null;
     event_date: string | null;
     location: string | null;
     fee_amount: number | null;
+    /** Menor preço positivo entre o evento e suas categorias — usado quando `fee_amount` é null/0 mas há categorias pagas (competição) ou o preço "a partir de" faz mais sentido. */
+    from_price: number | null;
     capacity: { max: number | null; filled: number } | null;
+    /** Bloco A — campos extras do formulário de inscrição (migration 200). Vazio = sem campos extras. */
+    registration_fields: RegistrationField[];
+    /** Track E / P0-0.4 — só presente quando kind==='competition'. */
+    categories?: CompetitionCategory[];
+    /** Texto longo (descrição do evento), pode ter múltiplas linhas. */
+    description?: string | null;
+    /** URL do banner do evento (EventBannerManager). null = sem banner, usar fallback visual. */
+    banner_url?: string | null;
+    /** true = o banner já contém texto/arte completa → landing esconde a sobreposição de título/data. */
+    banner_has_text?: boolean;
+    /** Carga horária em horas/aula (cursos/seminários). null = não informada. */
+    hours?: number | null;
+    /** Lotes de inscrição (Fase 2): cada um com preço de filiado e não-filiado. */
+    lots?: { id: string; name: string; price_member: number; price_nonmember: number; ends_at: string | null; is_current: boolean }[];
+    /** Lote vigente agora (por data). null = sem lotes configurados. */
+    current_lot?: { id: string; name: string; price_member: number; price_nonmember: number; ends_at: string | null } | null;
   };
   requires: string[];
 }
@@ -136,7 +201,12 @@ export interface PublicEvent {
 export interface LookupResult {
   found: boolean;
   already_enrolled: boolean;
-  practitioner: { id: string; name: string; current_belt: string | null; current_belt_name: string | null };
+  practitioner: {
+    id: string; name: string;
+    current_belt: string | null; current_belt_name: string | null;
+    // Auto-preenchimento do filiado (só no funil autenticado por CPF do próprio).
+    birth_date?: string | null; email?: string | null; phone?: string | null; dojo_name?: string | null;
+  };
   event: { id: string; name: string; kind: string; fee_amount: number | null; requires: string[] };
 }
 
@@ -151,10 +221,21 @@ export interface InscricaoPayment {
 }
 export interface InscricaoResult {
   ok: boolean;
-  inscription: { type: "exam" | "course"; id: string };
+  inscription: { type: "exam" | "course" | "competition"; id: string; category_id?: string; category_name?: string };
   practitioner: { id: string; name: string };
   fee_amount: number;
   payment: InscricaoPayment | null;
+}
+
+/**
+ * Corpo do 422 quando faltam campos obrigatórios do formulário de inscrição
+ * (registration_fields). `missingFields` traz os LABELS dos campos faltantes
+ * (o backend já resolve key -> label antes de responder).
+ */
+export interface MissingFieldsError {
+  error: string;
+  code: "VALIDATION_ERROR";
+  missingFields: string[];
 }
 
 export interface AgendaEvent {
@@ -164,6 +245,24 @@ export interface AgendaEvent {
   event_date: string | null;
   location: string | null;
   fee_amount: number | null;
+}
+
+/**
+ * Bloco B — eventos ABERTOS para o hub público. UNION de karate_belt_exams
+ * (status='open', kind='exam') com karate_competitions (status='open',
+ * kind='competition') — Track E / P0-0.4. exam_type é sempre null para
+ * campeonato (competição não tem essa coluna).
+ */
+export interface OpenEvent {
+  id: string;
+  name: string;
+  exam_type: string | null;
+  event_date: string | null;
+  location: string | null;
+  fee_amount: number | null;
+  /** Menor preço positivo entre o evento e suas categorias. */
+  from_price: number | null;
+  kind: "exam" | "competition";
 }
 
 const enc = encodeURIComponent;
@@ -199,13 +298,45 @@ export const karatePortalApi = {
   getEvents: (slug: string): Promise<{ federation: { name: string; logo: string | null }; events: AgendaEvent[] }> =>
     pub(`/public/karate/${enc(slug)}/events`),
 
+  // ── Bloco B — eventos ABERTOS (karate_belt_exams status='open') para os
+  // cards do hub público e o seletor de evento do admin de banners. ──
+  getOpenEvents: (slug: string): Promise<{ federation: { name: string; logo: string | null }; events: OpenEvent[] }> =>
+    pub(`/public/karate/${enc(slug)}/eventos`),
+
   // ── Inscrição ──
   getEvent: (slug: string, eventId: string): Promise<PublicEvent> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`),
 
-  lookup: (slug: string, eventId: string, cpf: string): Promise<LookupResult> =>
-    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, { method: "POST", body: { cpf } }),
+  /**
+   * `identifier` aceita CPF, e-mail ou nº de registro FPKT (contrato novo do
+   * backend). Mantemos `cpf` no corpo por compatibilidade (backend antigo
+   * ainda lê esse campo), mas o valor enviado em ambos é o mesmo — quem
+   * chama não precisa mais validar formato de CPF.
+   * `categoryId` é obrigatório quando o evento é kind==='competition' (Track E / P0-0.4).
+   */
+  lookup: (slug: string, eventId: string, identifier: string, categoryId?: string): Promise<LookupResult> =>
+    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}/lookup`, {
+      method: "POST",
+      body: { identifier, cpf: identifier, ...(categoryId ? { category_id: categoryId } : {}) },
+    }),
 
-  submitInscricao: (slug: string, eventId: string, cpf: string): Promise<InscricaoResult> =>
-    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, { method: "POST", body: { cpf } }),
+  /**
+   * `identifier` aceita CPF, e-mail ou nº de registro FPKT (mesmo contrato do
+   * `lookup` acima). `responses` é opcional — só é exigido quando o evento tem
+   * registration_fields obrigatórios (exame/curso). `categoryId` é obrigatório
+   * quando kind==='competition' (Track E / P0-0.4) — o praticante escolhe a
+   * categoria em vez de preencher formulário.
+   */
+  submitInscricao: (
+    slug: string,
+    eventId: string,
+    identifier: string,
+    responses?: Record<string, unknown>,
+    categoryId?: string,
+    guest?: { name: string; cpf?: string; email?: string; phone?: string; birth_date?: string; belt?: string; dojo?: string; professor?: string }
+  ): Promise<InscricaoResult> =>
+    pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
+      method: "POST",
+      body: { identifier, cpf: identifier, ...(responses ? { responses } : {}), ...(categoryId ? { category_id: categoryId } : {}), ...(guest ? { guest } : {}) },
+    }),
 };

@@ -8,7 +8,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -18,7 +18,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 
 const BADGE: Record<string, { label: string; badge: "neutral" | "ok" | "warn" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" }, open: { label: "Aberto", badge: "ok" },
-  closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
+  done: { label: "Encerrado", badge: "warn" }, closed: { label: "Encerrado", badge: "warn" }, cancelled: { label: "Cancelado", badge: "danger" },
 };
 const dd = (iso?: string | null) => (iso ?? "--").slice(8, 10) || "--";
 const mm = (iso?: string | null) => { const s = iso ?? ""; return `${s.slice(5, 7)}/${s.slice(0, 4)}`; };
@@ -72,7 +72,7 @@ export default function EventosProximos() {
 }
 
 function Meta({ icon, text }: { icon: string; text: string }) {
-  return <View style={styles.metaItem}><Ionicons name={icon as any} size={12} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
+  return <View style={styles.metaItem}><Icon name={icon as any} size={12} color={C.ink3} /><Text style={styles.metaTxt}>{text}</Text></View>;
 }
 
 const styles = StyleSheet.create({

@@ -12,7 +12,8 @@ import {
   View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle, Linking,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { karateCompetitionsApi, RankingRow, PublicSeasons } from "@/services/karateCompetitionsApi";
@@ -21,6 +22,7 @@ const medalColor = ["#b8463a", "#9b9180", "#7a4e30"]; // ouro(vermelhão)/prata/
 
 export default function PublicRankingScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
+  const router = useRouter();
   const fedSlug = String(slug || "fpkt");
 
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,17 @@ export default function PublicRankingScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
       <View style={styles.container}>
+        {/* Voltar — mesma identidade de navegação das outras telas públicas (consulta/index.tsx) */}
+        <TouchableOpacity
+          style={styles.back}
+          onPress={() => router.canGoBack() ? router.back() : router.push(`/karate/${fedSlug}` as any)}
+          accessibilityRole="link"
+          accessibilityLabel="Voltar"
+        >
+          <Icon name="chevron_left" size={18} color={KarateColors.ink2} />
+          <Text style={styles.backLabel}>Início</Text>
+        </TouchableOpacity>
+
         {/* Cabeçalho FPKT */}
         <View style={styles.gov}>
           {fed.logo ? (
@@ -160,6 +173,8 @@ function Medal({ c, n }: { c: string; n: number }) {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  back: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 16, alignSelf: "flex-start" } as ViewStyle,
+  backLabel: { fontSize: 13, color: KarateColors.ink2, fontFamily: KarateFonts.body } as TextStyle,
   medalItem: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
   medalDot: { width: 9, height: 9, borderRadius: 5 } as ViewStyle,
   pageContent: { alignItems: "center", paddingHorizontal: 16, paddingVertical: 22, paddingBottom: 48 } as ViewStyle,

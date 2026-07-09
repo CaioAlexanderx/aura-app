@@ -8,16 +8,17 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateConnectionsApi, ConnectionDetail, SyncEvent } from "@/services/karateConnectionsApi";
+import { notify } from "@/utils/webAlert";
 
 type Vibe = "ok" | "manual" | "down" | "empty";
 
@@ -82,7 +83,7 @@ export default function ConexaoDojoDetalhe() {
       setShowTech(false);
       load();
     } catch (e: any) {
-      Alert.alert("Não foi possível reconectar", e?.message ?? "Tente novamente.");
+      notify("Não foi possível reconectar", e?.message ?? "Tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -90,9 +91,9 @@ export default function ConexaoDojoDetalhe() {
   const rotateKey = async () => {
     try {
       await karateConnectionsApi.rotateKey(federationId, connId);
-      Alert.alert("Nova chave gerada", "A conexão foi protegida com uma nova chave.");
+      notify("Nova chave gerada", "A conexão foi protegida com uma nova chave.");
     } catch (e: any) {
-      Alert.alert("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
+      notify("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
     }
   };
 
@@ -123,7 +124,7 @@ export default function ConexaoDojoDetalhe() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <TouchableOpacity style={styles.back} onPress={() => router.back()} accessibilityRole="button">
-        <Ionicons name="chevron-back" size={18} color={KarateColors.primary} />
+        <Icon name="chevron-back" size={18} color={KarateColors.primary} />
         <Text style={styles.backText}>Conexões</Text>
       </TouchableOpacity>
 
@@ -137,7 +138,7 @@ export default function ConexaoDojoDetalhe() {
       {vibe === "down" && (
         <View style={styles.alertCard}>
           <View style={styles.alertHead}>
-            <Ionicons name="warning" size={18} color={KarateColors.danger} />
+            <Icon name="warning" size={18} color={KarateColors.danger} />
             <Text style={styles.alertTitle}>A conexão com o {conn.dojo_name} caiu</Text>
           </View>
           <Text style={styles.alertBody}>Enquanto isso, o que o dojô registra (alunos novos, presenças, pagamentos) não está chegando à federação. Reconectar costuma resolver na hora.</Text>
@@ -150,7 +151,7 @@ export default function ConexaoDojoDetalhe() {
       {/* Selo */}
       <View style={[styles.hero, h.tone]}>
         <View style={[styles.heroIco, { borderColor: h.color }]}>
-          <Ionicons name={h.icon} size={24} color={h.color} />
+          <Icon name={h.icon} size={24} color={h.color} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.heroT, { color: h.color }]}>{h.t}</Text>
@@ -170,7 +171,7 @@ export default function ConexaoDojoDetalhe() {
             return (
               <View key={ev.id} style={styles.actRow}>
                 <View style={[styles.actIco, e.warn && styles.actIcoWarn]}>
-                  <Ionicons name={e.icon as any} size={16} color={e.warn ? KarateColors.danger : KarateColors.ink3} />
+                  <Icon name={e.icon as any} size={16} color={e.warn ? KarateColors.danger : KarateColors.ink3} />
                 </View>
                 <Text style={styles.actT}>
                   {e.text}{e.warn ? <Text style={styles.actFlag}>  falhou</Text> : null}
@@ -185,10 +186,10 @@ export default function ConexaoDojoDetalhe() {
       {/* Ver detalhes técnicos (recolhido · suporte) */}
       <TouchableOpacity style={styles.techToggle} onPress={() => setShowTech((v) => !v)} accessibilityRole="button">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Ionicons name="settings-outline" size={15} color={KarateColors.ink3} />
+          <Icon name="settings-outline" size={15} color={KarateColors.ink3} />
           <Text style={styles.techToggleText}>Ver detalhes técnicos</Text>
         </View>
-        <Ionicons name={showTech ? "chevron-up" : "chevron-down"} size={16} color={KarateColors.ink3} />
+        <Icon name={showTech ? "chevron-up" : "chevron-down"} size={16} color={KarateColors.ink3} />
       </TouchableOpacity>
       {showTech && (
         <View style={styles.techBody}>

@@ -15,7 +15,7 @@ import {
   ScrollView, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import { karateDojoPortalApi } from "@/services/karateDojoPortalApi";
@@ -63,7 +63,7 @@ export default function DojoPortalEntry() {
           </View>
         ) : stage === "invalid" ? (
           <View style={styles.card}>
-            <Ionicons name="lock-closed-outline" size={28} color={KarateColors.primary} />
+            <Icon name="lock-closed-outline" size={28} color={KarateColors.primary} />
             <Text style={styles.cardTitle}>Link inválido ou revogado</Text>
             <Text style={styles.cardText}>
               Este link de acesso não é mais válido. Solicite um novo link à federação.
@@ -71,7 +71,7 @@ export default function DojoPortalEntry() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Ionicons name="link-outline" size={28} color={KarateColors.ink3} />
+            <Icon name="link-outline" size={28} color={KarateColors.ink3} />
             <Text style={styles.cardTitle}>Acesse pelo seu link</Text>
             <Text style={styles.cardText}>
               O portal do dojô abre por um link permanente que a federação envia por

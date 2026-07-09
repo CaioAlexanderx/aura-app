@@ -23,6 +23,8 @@ export interface MembershipCard {
   /** Apenas contexto autenticado (admin/holder) — NUNCA no verify público. */
   cpf?: string | null;
   card_number: string | null;
+  /** Nº CBKT da faixa vigente (aparece na carteirinha do faixa-preta). */
+  cbkt_number?: string | null;
   belt: string | null;        // nível (ex.: "2dan")
   belt_name: string | null;   // nome PT (ex.: "Preta")
   dojo_id: string | null;
@@ -32,6 +34,9 @@ export interface MembershipCard {
   issued_at: string;
   verify_token: string;
   status: CardStatus;          // carteirinha SEM validade por tempo: active | revoked
+  /** Logo/nome da federação emissora (companies.karate_logo_url/logo_url). Usado no header da carteirinha. */
+  federation_name?: string | null;
+  federation_logo?: string | null;
 }
 
 export interface IssueCardResult extends MembershipCard {
@@ -139,4 +144,25 @@ export const karateCardApi = {
     if (!res.ok) throw new Error(`Falha ao verificar registro (${res.status})`);
     return res.json();
   },
+
+  /**
+   * POST /public/karate/verify/{token}/card — cópia digital autenticada (Item 6).
+   * O praticante informa RG ou CPF; se conferir, devolve o cartão completo para
+   * gerar o PDF frente/verso. Cadastro sem RG/CPF → { no_identity, whatsapp }.
+   * Sem match → lança CardCopyMismatchError.
+   */
+  generateCardCopy: async (token: string, identifier: string): Promise<CardCopyResult> => {
+    const res = await fetch(
+      `${apiBase()}/public/karate/verify/${encodeURIComponent(token)}/card`,
+      { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ identifier }) }
+    );
+    if (res.status === 404) throw new Error("Carteirinha não encontrada.");
+    if (res.status === 401) { const e: any = new Error("RG ou CPF não confere com o cadastro."); e.code = "IDENTITY_MISMATCH"; throw e; }
+    if (!res.ok) throw new Error(`Falha ao gerar cópia (${res.status})`);
+    return res.json();
+  },
 };
+
+export type CardCopyResult =
+  | { card: MembershipCard }
+  | { no_identity: true; whatsapp: string | null; federation_name: string | null };

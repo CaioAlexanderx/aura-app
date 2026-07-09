@@ -3,7 +3,7 @@
 //
 // Shell responsivo (mobile: bottom-tabs + topbar; web: sidebar).
 // Usa expo-router Slot para renderizar a tela ativa.
-// Cores Shoji: vermelho primary, fundo paper.
+// Cores Shoji: vermelhão primary, fundo paper, faixa oxblood (head-red).
 //
 // Track B: adicionado item Financeiro à navegação.
 // Track C: adicionado item Eventos à navegação.
@@ -13,13 +13,54 @@
 //   (Financeiro=admin; Conexões/Importar=admin+staff; resto=todos).
 //   karateRole null (mock/dev) → nada é escondido (comportamento antigo).
 // Track H: adicionado item Configurações (só federation_admin, só sidebar).
-// Track J: adicionado item Exames (todos os papéis, visível no mobile).
+// Track J: adicionado item Certificados (todos os papéis, visível no mobile).
+//   (rota /karate/exames = tela de Certificados/Selo; exames de faixa
+//    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
+//
+// IA/Nav P1:
+//   • isActive — o item índice (Dashboard, route "/karate/") casa por
+//     IGUALDADE EXATA ("/karate" | "/karate/"); os demais por startsWith.
+//   • Busca global: submeter navega para /karate/praticantes?q=<termo>.
+//
+// Nav P2 (3.5): breadcrumb leve em rotas aninhadas.
+//
+// ── Shell premium (v5 Shoji / 障子) ──────────────────────────
+//   Identidade e navegação concentradas na SIDEBAR (web); o header fica
+//   limpo, só com o caminho atual. Layout (25/06, feedback Caio):
+//   • Sidebar — topo: marca Aura Karatê (selo 空 sobre gradiente oxblood +
+//     wordmark, "Karatê" inteiro vermelho — G2).
+//   • Sidebar — bloco da federação: FpktLogo (pirâmide oficial) + nome da
+//     federação (nome completo sem truncamento — G4), no separador vermelho.
+//   • Sidebar — busca global (de volta à sidebar): abaixo do bloco da
+//     federação, acima da navegação; submeter → /karate/praticantes?q=.
+//   • Sidebar — rodapé: chip de usuário (avatar com iniciais + nome +
+//     papel + botão Sair).
+//   • Topbar OXBLOOD (head-red #a44c3e) no topo da área de conteúdo (web):
+//     SÓ o breadcrumb (FPKT / <página atual>) em texto claro. Sem logos,
+//     sem busca, sem sino — header reduzido a uma faixa fina com o caminho.
+//   • Sidebar refinada: nav-labels em maiúsculas + separadores vermelhos.
+//
+//   Usuário/papel: useAuthStore (user.name || user.email;
+//   company.karate_role). Logout: store.logout() (já limpa storage +
+//   redireciona). Cores via tokens Shoji (KarateColors.headRed etc.).
+//   Mobile preservado: topbar enxuta + bottom tabs (sem oxblood/chip —
+//   essa chrome é do layout web/sidebar).
+//
+// ⚠️ ÍCONES (fix 25/06): a shell renderizava ícones via @expo/vector-icons
+//   Ionicons, que NÃO é dependência deste app — a fonte de glifos nunca é
+//   carregada na web e cada ícone virava um retângulo vazio (tofu). Agora
+//   usamos <Icon> (components/Icon.tsx), o motor SVG-inline já padrão no
+//   app: sem fonte, sem gate de carregamento, glyphs sempre presentes.
+//   Os nomes em NAV_ITEMS são chaves válidas do Icon (ou aliases mapeados).
+// ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem ser
+//   objetos (cor/string solta crasha "Invalid value used as weak map key").
 // ============================================================
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -29,28 +70,30 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { useAuthStore } from "@/stores/auth";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
 // sidebarOnly=true → não aparece na bottom tab bar mobile.
+// icon → chave válida do componente <Icon> (components/Icon.tsx) ou alias.
 const NAV_ITEMS = [
-  { label: "Dashboard",       icon: "grid-outline",          route: "/karate/",              roles: null,          sidebarOnly: false },
-  { label: "Saúde da Rede",   icon: "pulse-outline",         route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Dojôs",           icon: "home-outline",          route: "/karate/dojos",         roles: null,          sidebarOnly: false },
-  { label: "Praticantes",     icon: "people-outline",        route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
-  { label: "Conexões",        icon: "link-outline",          route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  { label: "Financeiro",      icon: "card-outline",          route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
-  // Track J: Exames — visível para todos, aparece no mobile e na sidebar
-  { label: "Exames",          icon: "ribbon-outline",        route: "/karate/exames",        roles: null,          sidebarOnly: false },
-  { label: "Eventos",         icon: "calendar-outline",      route: "/karate/eventos",       roles: null,          sidebarOnly: false },
-  { label: "Competições",    icon: "trophy-outline",        route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
-  { label: "Importar",        icon: "cloud-upload-outline",  route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Painel",          icon: "grid",      route: "/karate/",              roles: null,          sidebarOnly: false },
+  { label: "Saúde da Rede",   icon: "activity",  route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Dojôs",           icon: "building",  route: "/karate/dojos",         roles: null,          sidebarOnly: false },
+  { label: "Praticantes",     icon: "users",     route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
+  { label: "Conexões",        icon: "network",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  { label: "Financeiro",      icon: "wallet",    route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
+  // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
+  { label: "Certificados",    icon: "ribbon",    route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  { label: "Eventos",         icon: "calendar",  route: "/karate/eventos",       roles: null,          sidebarOnly: false },
+  { label: "Competições",    icon: "trophy",    route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
+  { label: "Importar",        icon: "upload",    route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   // Track H: Configurações — só federation_admin, posicionado no rodapé da sidebar
-  { label: "Configurações",   icon: "settings-outline",      route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
+  { label: "Configurações",   icon: "settings",  route: "/karate/configuracoes", roles: ["federation_admin"], sidebarOnly: true },
 ] as const;
 
 type NavItem = (typeof NAV_ITEMS)[number];
@@ -63,7 +106,125 @@ function visibleNav(role: string | null): readonly NavItem[] {
   );
 }
 
+// IA/Nav P1 — estado ativo correto (índice por igualdade, resto por prefixo).
+function isItemActive(item: NavItem, path: string): boolean {
+  const isIndex = item.route === "/karate/" || item.route === "/karate";
+  if (isIndex) return path === "/karate" || path === "/karate/";
+  return path.startsWith(item.route);
+}
+
+// ── Papel karatê → rótulo humano (chip de usuário) ───────────
+// federation_admin → "Administração"; federation_staff → "Equipe";
+// sensei/dojo → "Sensei"; null/desconhecido → "Federação".
+const ROLE_LABEL: Record<string, string> = {
+  federation_admin: "Administração",
+  federation_staff: "Equipe",
+  dojo_owner: "Sensei",
+  dojo_sensei: "Sensei",
+  sensei: "Sensei",
+};
+function roleLabel(role: string | null): string {
+  if (!role) return "Federação";
+  return ROLE_LABEL[role] ?? "Federação";
+}
+
+// Iniciais a partir de um nome (1 ou 2 letras). Espelha o Avatar do kit.
+// Sanitiza pontuacao antes de extrair as iniciais - nomes como "Davi (Dojo X)"
+// nao podem virar "D(" (o "(" nao e letra e nao deve compor a inicial).
+function initialsOf(name: string): string {
+  const clean = String(name || "").replace(/[^\p{L}\s]/gu, " ");
+  const parts = clean.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "··";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// ── Breadcrumb / seção atual ─────────────────────────────────
+// Mapa segmento-da-seção → rótulo, derivado de NAV_ITEMS.
+const SECTION_LABEL: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const it of NAV_ITEMS) {
+    const seg = it.route.replace(/^\/karate\/?/, "").replace(/\/$/, "");
+    if (seg) map[seg] = it.label;
+  }
+  return map;
+})();
+
+// Sub-rotas NOMEADAS (não são "<id>" dinâmico, são abas/páginas fixas dentro
+// de uma seção — ex.: /karate/competicoes/ranking). Sem essa exceção,
+// deriveLocation trata qualquer 2º segmento como "detalhe" genérico e o
+// breadcrumb mostra "Detalhe" em vez do nome real da página.
+// Chave: `${secao}/${subrota}` → rótulo exibido no breadcrumb.
+const NAMED_SUBROUTE_LABEL: Record<string, string> = {
+  "competicoes/ranking": "Ranking",
+};
+
+// Deriva, a partir da pathname, a seção atual e se estamos num detalhe.
+//   /karate                  → { section: "Painel", route: "/karate/", detail: false }
+//   /karate/dojos            → { section: "Dojôs", route: "/karate/dojos", detail: false }
+//   /karate/dojos/<id>       → { section: "Dojôs", route: "/karate/dojos", detail: true }
+//   /karate/competicoes/ranking → { section: "Ranking", route: "/karate/competicoes/ranking", detail: false }
+function deriveLocation(path: string): { section: string; route: string; detail: boolean } {
+  const clean = (path || "").split("?")[0].split("#")[0];
+  const parts = clean.split("/").filter(Boolean); // ["karate", "dojos", "<id>", ...]
+  if (parts[0] !== "karate" || parts.length <= 1) {
+    return { section: "Painel", route: "/karate/", detail: false };
+  }
+  const sectionSeg = parts[1];
+  const label = SECTION_LABEL[sectionSeg];
+  if (!label) {
+    // seção desconhecida → não arrisca rótulo errado; cai no Painel.
+    return { section: "Painel", route: "/karate/", detail: false };
+  }
+  if (parts.length > 2) {
+    const namedLabel = NAMED_SUBROUTE_LABEL[`${sectionSeg}/${parts[2]}`];
+    if (namedLabel) {
+      return { section: namedLabel, route: `/karate/${sectionSeg}/${parts[2]}`, detail: false };
+    }
+  }
+  return { section: label, route: `/karate/${sectionSeg}`, detail: parts.length > 2 };
+}
+
 const BREAKPOINT_SIDEBAR = 768;
+
+// ── Topbar oxblood (web) — SÓ o breadcrumb (caminho atual) ───
+//   Header reduzido a uma faixa fina oxblood com o caminho de navegação.
+//   Logos, busca global e sino foram movidos/removidos (vivem na sidebar).
+function Topbar() {
+  const router = useRouter();
+  const path = usePathname();
+  const loc = deriveLocation(path);
+
+  return (
+    <View style={styles.topbar}>
+      <View style={styles.topbarInner}>
+        {/* Breadcrumb: FPKT / <seção> [ › Detalhe ] em texto claro */}
+        <View style={styles.crumbs} accessibilityRole="header">
+          <Text style={styles.crumbRoot}>FPKT</Text>
+          <Text style={styles.crumbSep}>/</Text>
+          {loc.detail ? (
+            <>
+              <TouchableOpacity
+                onPress={() => router.push(loc.route as any)}
+                accessibilityRole="link"
+                accessibilityLabel={`Voltar para ${loc.section}`}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              >
+                <Text style={styles.crumbLink}>{loc.section}</Text>
+              </TouchableOpacity>
+              <Text style={styles.crumbSep}>/</Text>
+              <Text style={styles.crumbCurrent} numberOfLines={1}>Detalhe</Text>
+            </>
+          ) : (
+            <Text style={styles.crumbCurrent} numberOfLines={1}>{loc.section}</Text>
+          )}
+        </View>
+
+        <View style={{ flex: 1 }} />
+      </View>
+    </View>
+  );
+}
 
 function SidebarNav() {
   const router = useRouter();
@@ -71,12 +232,26 @@ function SidebarNav() {
   const { federationName, karateRole } = useKarateFederation();
   const items = visibleNav(karateRole);
 
-  // Separa os itens "normais" dos items de rodapé (Configurações)
+  // Usuário logado (chip de rodapé). Nome cai no email se vier vazio.
+  const user   = useAuthStore((s) => s.user) as any;
+  const logout = useAuthStore((s) => s.logout);
+  const userName = (user?.name || user?.email || "Usuário") as string;
+  const userRole = roleLabel(karateRole);
+
+  // Busca global (de volta à sidebar): submeter → lista de Praticantes (?q=).
+  const [term, setTerm] = useState("");
+  const submitSearch = () => {
+    const q = term.trim();
+    if (!q) return;
+    router.push(("/karate/praticantes?q=" + encodeURIComponent(q)) as any);
+  };
+
+  // Separa os itens "normais" dos itens de rodapé (Configurações).
   const mainItems   = items.filter((i) => i.label !== "Configurações");
   const footerItems = items.filter((i) => i.label === "Configurações");
 
   const renderItem = (item: NavItem) => {
-    const active = path.startsWith(item.route.replace("/karate", "/karate"));
+    const active = isItemActive(item, path);
     return (
       <TouchableOpacity
         key={item.route}
@@ -86,8 +261,8 @@ function SidebarNav() {
         accessibilityLabel={item.label}
         accessibilityState={{ selected: active }}
       >
-        <Ionicons
-          name={item.icon as any}
+        <Icon
+          name={item.icon}
           size={18}
           color={active ? KarateColors.primary : KarateColors.ink3}
         />
@@ -100,26 +275,85 @@ function SidebarNav() {
 
   return (
     <View style={styles.sidebar}>
-      {/* Logo / Brand */}
-      <View style={styles.sidebarHeader}>
-        <FpktLogo size={38} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.brandTitle}>Aura Karatê</Text>
-          <Text style={styles.brandSub} numberOfLines={1}>{federationName}</Text>
+      {/* G2: Marca Aura Karatê — "Karatê" inteiro no vermelho */}
+      <View style={styles.brand}>
+        <View style={styles.brandMark}>
+          <Text style={styles.brandMarkSeal}>空</Text>
         </View>
+        <View style={styles.brandWm}>
+          <Text style={styles.brandWord}>
+            Aura <Text style={styles.brandWordRed}>Karatê</Text>
+          </Text>
+        </View>
+      </View>
+
+      {/* Bloco da federação: FpktLogo + nome (separadores vermelhos) */}
+      <View style={styles.orgSlug}>
+        <View style={styles.orgSlugFpktMark}>
+          <FpktLogo size={26} />
+        </View>
+        <View style={styles.orgSlugMeta}>
+          <Text style={styles.orgSlugLabel}>Federação</Text>
+          <Text
+            style={styles.orgSlugName}
+            {...(Platform.OS === "web"
+              ? ({ accessibilityLabel: federationName, title: federationName } as any)
+              : {})}
+          >
+            {federationName}
+          </Text>
+        </View>
+      </View>
+
+      {/* Busca global → /karate/praticantes?q= */}
+      <View style={styles.sbSearch}>
+        <Icon name="search" size={15} color={KarateColors.ink3} />
+        <TextInput
+          style={styles.sbSearchInput as any}
+          value={term}
+          onChangeText={setTerm}
+          placeholder="Buscar praticante…"
+          placeholderTextColor={KarateColors.ink4}
+          returnKeyType="search"
+          onSubmitEditing={submitSearch}
+          accessibilityLabel="Buscar praticante"
+        />
       </View>
 
       {/* Navigation principal */}
-      <View style={{ flex: 1 }}>
+      <View style={styles.navSection}>
+        <Text style={styles.navLabel}>Navegação</Text>
         {mainItems.map(renderItem)}
       </View>
 
-      {/* Rodapé: Configurações */}
+      <View style={{ flex: 1 }} />
+
+      {/* Rodapé: Configurações (se houver) */}
       {footerItems.length > 0 && (
-        <View style={styles.sidebarFooter}>
+        <View style={styles.navSectionFooter}>
           {footerItems.map(renderItem)}
         </View>
       )}
+
+      {/* Chip de usuário: avatar + nome + papel + Sair */}
+      <View style={styles.sbFoot}>
+        <View style={styles.sbAv}>
+          <Text style={styles.sbAvTxt}>{initialsOf(userName)}</Text>
+        </View>
+        <View style={styles.sbMeta}>
+          <Text style={styles.sbName} numberOfLines={1}>{userName}</Text>
+          <Text style={styles.sbRole} numberOfLines={1}>{userRole}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.sbIcoBtn}
+          onPress={() => logout()}
+          accessibilityRole="button"
+          accessibilityLabel="Sair"
+          activeOpacity={0.8}
+        >
+          <Icon name="logout" size={17} color={KarateColors.ink3} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -136,7 +370,7 @@ function BottomTabNav() {
   return (
     <View style={styles.bottomBar}>
       {MOBILE_TABS.map((item) => {
-        const active = path.startsWith(item.route.replace("/karate", "/karate"));
+        const active = isItemActive(item, path);
         return (
           <TouchableOpacity
             key={item.route}
@@ -146,8 +380,8 @@ function BottomTabNav() {
             accessibilityLabel={item.label}
             accessibilityState={{ selected: active }}
           >
-            <Ionicons
-              name={item.icon as any}
+            <Icon
+              name={item.icon}
               size={22}
               color={active ? KarateColors.primary : KarateColors.ink4}
             />
@@ -171,6 +405,8 @@ export function KarateShell() {
       <View style={styles.wideContainer}>
         <SidebarNav />
         <View style={styles.content}>
+          {/* Topbar oxblood: só o breadcrumb (caminho atual) */}
+          <Topbar />
           <Slot />
         </View>
       </View>
@@ -179,10 +415,10 @@ export function KarateShell() {
 
   return (
     <SafeAreaView style={styles.mobileContainer}>
-      {/* Topbar */}
-      <View style={styles.topbar}>
+      {/* Topbar mobile (enxuta) */}
+      <View style={styles.mobileTopbar}>
         <FpktLogo size={26} style={{ marginRight: 9 }} />
-        <Text style={styles.topbarTitle}>Aura Karatê</Text>
+        <Text style={styles.mobileTopbarTitle}>Aura Karatê</Text>
       </View>
       <View style={styles.content}>
         <Slot />
@@ -207,55 +443,267 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // Sidebar
-  sidebar: {
-    width: 220,
-    backgroundColor: KarateColors.bg2,
-    borderRightWidth: 1,
-    borderRightColor: KarateColors.border,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    flexDirection: "column",
+  // ── Topbar oxblood (web) — só breadcrumb ───────────────────
+  topbar: {
+    backgroundColor: KarateColors.headRed,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(43,38,32,0.20)",
   } as ViewStyle,
-  sidebarHeader: {
+  topbarInner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: KarateColors.border,
-    marginBottom: 8,
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   } as ViewStyle,
-  sidebarFooter: {
-    borderTopWidth: 1,
-    borderTopColor: KarateColors.border,
-    paddingTop: 8,
-    marginTop: 8,
+
+  crumbs: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
   } as ViewStyle,
-  logoMark: {
-    width: 36, height: 36,
-    borderRadius: KarateRadius.sm,
-    backgroundColor: KarateColors.primary,
+  crumbRoot: {
+    fontFamily: KarateFonts.body,
+    fontSize: 12,
+    color: "rgba(253,248,242,0.74)",
+    letterSpacing: 0.2,
+  } as TextStyle,
+  crumbLink: {
+    fontFamily: KarateFonts.body,
+    fontSize: 12,
+    color: "rgba(253,248,242,0.74)",
+    letterSpacing: 0.2,
+  } as TextStyle,
+  crumbCurrent: {
+    fontFamily: KarateFonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fdf8f2",
+    letterSpacing: 0.2,
+    flexShrink: 1,
+  } as TextStyle,
+  crumbSep: {
+    fontFamily: KarateFonts.body,
+    fontSize: 12,
+    color: "rgba(253,248,242,0.4)",
+  } as TextStyle,
+
+  // ── Sidebar ────────────────────────────────────────────────
+  sidebar: {
+    width: 236,
+    backgroundColor: KarateColors.bg2,
+    borderRightWidth: 1,
+    borderRightColor: KarateColors.border2,
+    paddingTop: 26,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    flexDirection: "column",
+  } as ViewStyle,
+
+  // Marca Aura Karatê: selo 空 + wordmark ("Karatê" inteiro vermelho — G2)
+  brand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 4,
+    marginBottom: 18,
+  } as ViewStyle,
+  brandMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,  // ~23% de 42
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#a44230",  // fallback sólido oxblood (gradiente no web)
+    borderWidth: 1,
+    borderColor: "rgba(43,38,32,0.14)",
+    overflow: "hidden",
+    ...(Platform.OS === "web"
+      ? ({ backgroundImage: "linear-gradient(150deg,#c0503f,#983429)" } as any)
+      : {}),
   } as ViewStyle,
-  logoText:         { fontSize: 13, fontWeight: "900", color: "#fff", letterSpacing: 0.5 } as TextStyle,
-  brandTitle:       { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  brandSub:         { fontSize: 10, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  brandMarkSeal: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 23,
+    color: "#fbeee4",
+    lineHeight: 28,
+  } as TextStyle,
+  brandWm: {
+    flex: 1,
+    minWidth: 0,
+  } as ViewStyle,
+  brandWord: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 22,
+    fontWeight: "500",
+    letterSpacing: 0.3,
+    color: KarateColors.ink,
+    lineHeight: 24,
+  } as TextStyle,
+  brandWordRed: {
+    color: ShojiPalette.red,
+  } as TextStyle,
+
+  // Bloco da federação: FpktLogo + nome (separadores vermelhos)
+  orgSlug: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: ShojiPalette.redLine,
+    borderBottomWidth: 1,
+    borderBottomColor: ShojiPalette.redLine,
+    marginBottom: 16,
+  } as ViewStyle,
+  orgSlugFpktMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: KarateColors.glass2,
+    borderWidth: 1,
+    borderColor: KarateColors.border2,
+    overflow: "hidden",
+  } as ViewStyle,
+  orgSlugMeta: {
+    flex: 1,
+    minWidth: 0,
+  } as ViewStyle,
+  orgSlugLabel: {
+    fontFamily: KarateFonts.body,
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    color: KarateColors.ink4,
+    marginBottom: 5,
+  } as TextStyle,
+  // G4: fontSize reduzido (14→12) e lineHeight (18→16) para o nome completo
+  // caber em 2 linhas sem truncamento (numberOfLines removido do JSX).
+  orgSlugName: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 12,
+    fontWeight: "500",
+    color: KarateColors.ink,
+    lineHeight: 16,
+  } as TextStyle,
+
+  // Busca global na sidebar
+  sbSearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: KarateColors.glass2,
+    borderWidth: 1,
+    borderColor: KarateColors.border2,
+    borderRadius: KarateRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 16,
+  } as ViewStyle,
+  sbSearchInput: {
+    flex: 1,
+    fontFamily: KarateFonts.body,
+    fontSize: 12.5,
+    color: KarateColors.ink,
+    minHeight: 20,
+    outlineStyle: "none",
+  } as any,
+
+  // nav sections
+  navSection: {
+    flexDirection: "column",
+    gap: 3,
+  } as ViewStyle,
+  navSectionFooter: {
+    flexDirection: "column",
+    gap: 3,
+    borderTopWidth: 1,
+    borderTopColor: ShojiPalette.redLine,
+    paddingTop: 14,
+    marginTop: 14,
+  } as ViewStyle,
+  navLabel: {
+    fontFamily: KarateFonts.body,
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    color: KarateColors.ink4,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 8,
+  } as TextStyle,
+
   sidebarItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 13,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: KarateRadius.sm,
+    borderRadius: KarateRadius.md,
   } as ViewStyle,
-  sidebarItemActive:      { backgroundColor: KarateColors.primarySoft } as ViewStyle,
-  sidebarItemLabel:       { fontSize: 13, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
+  sidebarItemActive: { backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  sidebarItemLabel:  { fontFamily: KarateFonts.body, fontSize: 13, fontWeight: "500", color: KarateColors.ink2 } as TextStyle,
   sidebarItemLabelActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
-  // Topbar mobile
-  topbar: {
+  // ── Chip de usuário (sb-foot) ──────────────────────────────
+  sbFoot: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingTop: 16,
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+    borderTopColor: ShojiPalette.redLine,
+    marginTop: 8,
+  } as ViewStyle,
+  sbAv: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: KarateColors.glass2,
+    borderWidth: 1,
+    borderColor: KarateColors.border2,
+  } as ViewStyle,
+  sbAvTxt: {
+    fontFamily: KarateFonts.heading,
+    fontSize: 13,
+    fontWeight: "500",
+    color: KarateColors.ink,
+  } as TextStyle,
+  sbMeta: {
+    flex: 1,
+    minWidth: 0,
+  } as ViewStyle,
+  sbName: {
+    fontFamily: KarateFonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+    color: KarateColors.ink,
+  } as TextStyle,
+  sbRole: {
+    fontFamily: KarateFonts.body,
+    fontSize: 10.5,
+    color: KarateColors.ink3,
+    marginTop: 1,
+  } as TextStyle,
+  sbIcoBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  } as ViewStyle,
+
+  // ── Topbar mobile (enxuta) ─────────────────────────────────
+  mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
     flexDirection: "row",
@@ -264,14 +712,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: KarateColors.border,
   } as ViewStyle,
-  topbarTitle: {
+  mobileTopbarTitle: {
     fontFamily: KarateFonts.heading,
     fontSize: 18,
     color: KarateColors.ink,
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // Bottom tabs
+  // ── Bottom tabs ────────────────────────────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,

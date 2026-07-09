@@ -14,8 +14,9 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { ShojiBackground, Card, ShojiBadge, Body } from "@/components/karate/shoji";
 import { karateApi, BeltExam } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateNumeric } from "@/utils/eventDate";
 
-const fmt = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR"); };
+const fmt = (iso?: string | null) => formatEventDateNumeric(iso, "—");
 
 export default function EventosHistorico() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function EventosHistorico() {
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
-    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "closed").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
+    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "done" || e.status === "closed").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
     catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);

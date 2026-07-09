@@ -6,15 +6,30 @@
 //
 // NOTA (D0): a busca rápida e o painel de notificações do Track P foram
 // removidos NESTA prova visual; serão reintroduzidos estilizados na D1.
+//
+// Empty state: quando a federação está vazia (0 dojôs e 0 praticantes),
+// mostramos boas-vindas com ação primária "Importar planilha".
+//
+// C6: o card "Praticantes por graduação" reflete só a graduação ATIVA —
+// a Vermelha é histórica (a federação não usa mais) e fica fora dos
+// gráficos/relatórios (continua no histórico do praticante, Trajetória).
+// As barras saem ordenadas pela hierarquia oficial; quando o backend
+// (back#252) envia `rank` numérico em cada item, usamos ele direto; senão
+// caímos no beltRank local. Dentro da Preta, em ordem ASCENDENTE por grau
+// Dan (1º → 2º → … → 7º).
+//
+// back#252: o número-destaque de "Praticantes por graduação" usa o
+// practitioner_total do payload (total REAL da rede), não a soma das barras
+// visíveis — a distribuição oculta a Vermelha, então somar barras subestima.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ScrollView, View, Text, RefreshControl, TouchableOpacity,
   useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
-import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, resolveBeltKey, KarateBelts } from "@/constants/karateTheme";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, resolveBeltKey, KarateBelts, beltRank, isActiveBelt } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -24,10 +39,11 @@ import {
 } from "@/components/karate/shoji";
 import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateCompact } from "@/utils/eventDate";
 
 const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtPct = (v: number) => `${(v * 100).toFixed(1).replace(".", ",")}%`;
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+const fmtDate = (iso: string) => formatEventDateCompact(iso);
 const beltColor = (lvl: string) => { const k = resolveBeltKey(lvl); return k ? KarateBelts[k].color : C.ink3; };
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -61,11 +77,66 @@ export default function KaratePainel() {
   const now = new Date();
   const events = data?.upcoming_events ?? [];
   const overdue = data?.overdue_dojos ?? [];
-  const belts = data?.belt_distribution ?? [];
+  // C6: graduação ATIVA — exclui a Vermelha (histórica) e ordena pela
+  // hierarquia oficial. O total/legenda e o max consideram só os exibidos.
+  const belts = (data?.belt_distribution ?? [])
+    .filter((b) => isActiveBelt(b.belt_level) && isActiveBelt(b.belt_name))
+    .slice()
+    // back#252: ordena pela ordem canônica. Preferimos o `rank` numérico que
+    // o backend já manda (Branca<…<Preta 1º→2º<…<Vermelha por último); na
+    // ausência dele, caímos no beltRank local — que na Preta lê o grau Dan
+    // do belt_name ('Preta 1°', 'Preta 2°'…) em ordem ASCENDENTE.
+    .sort((a, b) => {
+      if (a.rank != null && b.rank != null) return a.rank - b.rank;
+      return beltRank(a.belt_level || a.belt_name, a.belt_name) - beltRank(b.belt_level || b.belt_name, b.belt_name);
+    });
   const apiAlerts: DashboardAlert[] = (data as any)?.alerts ?? [];
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
+  // back#252: total REAL da rede. Usa practitioner_total quando vier; senão
+  // cai no KPI practitioner_count (e por último na soma das barras visíveis).
+  const practitionerTotal =
+    data?.practitioner_total ?? data?.kpis?.practitioner_count ?? beltTotal;
   const overdueTotal = overdue.reduce((s, d) => s + d.amount, 0);
+  // Federação vazia: sem dojôs E sem praticantes → tela de boas-vindas.
+  const isEmpty = !loading && !!data && data.kpis.dojo_count === 0 && data.kpis.practitioner_count === 0;
+
+  const pageHead = (
+    <PageHead
+      eyebrow={`${MONTHS[now.getMonth()]} ${now.getFullYear()}`}
+      title="Painel"
+      sub={`Indicadores de ${federationName || "sua federação"}.`}
+    />
+  );
+
+  // ── Estado de boas-vindas (federação ainda sem dados) ──
+  if (isEmpty) {
+    return (
+      <ShojiBackground>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+        >
+          {pageHead}
+          <Card style={styles.welcome}>
+            <View style={styles.welcomeIcon}>
+              <Icon name="sparkles-outline" size={28} color={P.red} />
+            </View>
+            <Text style={styles.welcomeTitle}>Bem-vindo à {federationName || "sua federação"}</Text>
+            <Body muted style={styles.welcomeSub}>
+              Ainda não há dojôs nem praticantes por aqui. O jeito mais rápido de começar é importar
+              a planilha consolidada da FPKT — as academias, os alunos e a trajetória de faixas entram de uma vez só.
+            </Body>
+            <View style={styles.welcomeActions}>
+              <ShojiButton label="Importar planilha" icon="cloud-upload-outline" variant="sumi" onPress={() => router.push("/karate/importacao" as any)} />
+              <ShojiButton label="Cadastrar dojô" icon="home-outline" variant="ghost" onPress={() => router.push("/karate/dojos" as any)} />
+              <ShojiButton label="Cadastrar praticante" icon="person-add-outline" variant="ghost" onPress={() => router.push("/karate/praticantes" as any)} />
+            </View>
+          </Card>
+        </ScrollView>
+      </ShojiBackground>
+    );
+  }
 
   return (
     <ShojiBackground>
@@ -73,12 +144,7 @@ export default function KaratePainel() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
       >
-        <PageHead
-          eyebrow={`Temporada ${now.getFullYear()} · ${MONTHS[now.getMonth()]}`}
-          title="Painel"
-          sub={`Indicadores de ${federationName || "sua federação"}.`}
-          actions={<ShojiButton label="Exportar" icon="download-outline" variant="ghost" onPress={() => {}} />}
-        />
+        {pageHead}
 
         {/* KPIs */}
         {loading ? (
@@ -88,7 +154,7 @@ export default function KaratePainel() {
             { label: "Dojôs filiados", value: data!.kpis.dojo_count },
             { label: "Praticantes", value: data!.kpis.practitioner_count.toLocaleString("pt-BR") },
             { label: "Receita YTD", value: fmtMoney(data!.kpis.revenue_ytd) },
-            { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: true, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
+            { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: (Number(data!.kpis.overdue_rate) || 0) > 0, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
           ]} />
         )}
 
@@ -116,13 +182,13 @@ export default function KaratePainel() {
           </View>
         )}
 
-        {/* Distribuição por graduação */}
+        {/* Distribuição por graduação (ativa — Vermelha histórica fica de fora) */}
         <View style={styles.section}>
-          <SectionHead title="Praticantes por graduação" sub={beltTotal > 0 ? `${beltTotal} praticantes graduados` : undefined} />
+          <SectionHead title="Praticantes por graduação" sub={practitionerTotal > 0 ? `${practitionerTotal.toLocaleString("pt-BR")} praticantes` : undefined} />
           <Card>
             {loading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
-              : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes graduados" style={{ paddingVertical: 24 }} />
-              : belts.map((b) => <BarRow key={b.belt_level} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
+              : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes" style={{ paddingVertical: 24 }} />
+              : belts.map((b, i) => <BarRow key={b.belt_level} index={i} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
           </Card>
         </View>
 
@@ -169,7 +235,7 @@ function OverdueRow({ d, last, onPress }: { d: OverdueDojo; last?: boolean; onPr
         <Text style={styles.rowDanger}>{d.days_overdue} dias em atraso</Text>
       </View>
       <Mono style={{ color: P.red, fontSize: 14 }}>{fmtMoney(d.amount)}</Mono>
-      <Ionicons name="chevron-forward" size={14} color={C.ink4} />
+      <Icon name="chevron-forward" size={14} color={C.ink4} />
     </TouchableOpacity>
   );
 }
@@ -184,4 +250,10 @@ const styles = StyleSheet.create({
   dateBox: { width: 54, paddingVertical: 7, borderRadius: R.sm, backgroundColor: P.redWash, alignItems: "center" } as ViewStyle,
   rowTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
   rowDanger: { fontFamily: F.body, fontSize: 11.5, color: P.red, marginTop: 2 } as TextStyle,
+  // Empty state de boas-vindas
+  welcome: { marginTop: SP[6], alignItems: "center", gap: 12, paddingVertical: 36, paddingHorizontal: 24 } as ViewStyle,
+  welcomeIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: P.redWash, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  welcomeTitle: { fontFamily: F.heading, fontSize: 22, color: C.ink, textAlign: "center" } as TextStyle,
+  welcomeSub: { fontSize: 13.5, textAlign: "center", maxWidth: 520, lineHeight: 20 } as TextStyle,
+  welcomeActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 } as ViewStyle,
 });

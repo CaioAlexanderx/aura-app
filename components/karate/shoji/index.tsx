@@ -11,15 +11,16 @@
 import React, { useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform,
-  ViewStyle, TextStyle, StyleProp,
+  ViewStyle, TextStyle, StyleProp, Animated, Easing,
 } from "react-native";
+import { useCountUp } from "@/hooks/useCountUp";
 import { TextInput } from "react-native";
 import { useFonts } from "expo-font";
 import { ShipporiMincho_400Regular } from "@expo-google-fonts/shippori-mincho";
 import { ZenKakuGothicNew_400Regular } from "@expo-google-fonts/zen-kaku-gothic-new";
 import { DMMono_400Regular } from "@expo-google-fonts/dm-mono";
 import { InstrumentSerif_400Regular } from "@expo-google-fonts/instrument-serif";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R,
   KarateFonts as F, KarateType as T, KarateShadows as SH, KarateSpacing as SP,
@@ -154,28 +155,63 @@ export function Card({ children, style, flush }: { children: React.ReactNode; st
 
 // ── KPI band (faixa única dividida por hairlines) ────────────
 export type KpiItem = { label: string; value: string | number; meta?: string; accent?: boolean };
+
+// Count-up só quando o value já chega como NÚMERO puro (não string
+// pré-formatada, ex. moeda/percentual — essas já vêm prontas dos callers
+// via fmtMoney/fmtPct/toLocaleString e são mostradas direto, sem animar).
+function KpiCell({ item, isLast }: { item: KpiItem; isLast: boolean }) {
+  const isNumeric = typeof item.value === "number" && Number.isFinite(item.value);
+  const animated = useCountUp(isNumeric ? (item.value as number) : 0, 700);
+  const display = isNumeric ? Math.round(animated).toLocaleString("pt-BR") : String(item.value);
+  return (
+    <View style={[styles.kpiCell, !isLast && styles.kpiCellDivider]}>
+      <Text style={styles.kpiLabel}>{item.label}</Text>
+      <Text style={[styles.kpiNum, item.accent && { color: P.red }]}>{display}</Text>
+      {item.meta ? <Text style={styles.kpiMeta}>{item.meta}</Text> : null}
+    </View>
+  );
+}
+
 export function KpiBand({ items, style }: { items: KpiItem[]; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.kpiBand, SH.card, style]}>
       {items.map((k, i) => (
-        <View key={i} style={[styles.kpiCell, i < items.length - 1 && styles.kpiCellDivider]}>
-          <Text style={styles.kpiLabel}>{k.label}</Text>
-          <Text style={[styles.kpiNum, k.accent && { color: P.red }]}>{String(k.value)}</Text>
-          {k.meta ? <Text style={styles.kpiMeta}>{k.meta}</Text> : null}
-        </View>
+        <KpiCell key={i} item={k} isLast={i === items.length - 1} />
       ))}
     </View>
   );
 }
 
 // ── Bar row (gráfico de barras) ──────────────────────────────
-export function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color?: string }) {
+// `index` (opcional) escalona o crescimento da barra (stagger ~60ms por
+// posição) — usado na pirâmide de faixas do Painel. Sem index, anima sem
+// delay (comportamento padrão preservado).
+export function BarRow({ label, value, max, color, index }: { label: string; value: number; max: number; color?: string; index?: number }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    const delay = Math.min(index ?? 0, 20) * 60;
+    const timer = Animated.timing(anim, {
+      toValue: pct,
+      duration: 420,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    timer.start();
+    return () => { timer.stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pct, index]);
+
+  const width = anim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+
   return (
     <View style={styles.barRow}>
       <Text style={styles.barLabel} numberOfLines={1}>{label}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color ?? C.ink2 }]} />
+        <Animated.View style={[styles.barFill, { width, backgroundColor: color ?? C.ink2 }]} />
       </View>
       <Text style={styles.barVal}>{value}</Text>
     </View>
@@ -194,7 +230,7 @@ export function Alert({ urgent, title, desc, when, onPress }: {
         {desc ? <Text style={styles.alertDesc}>{desc}</Text> : null}
       </View>
       {when ? <Mono style={{ fontSize: 11, color: C.ink3 }}>{when}</Mono> : null}
-      {onPress ? <Ionicons name="chevron-forward" size={16} color={C.ink4} /> : null}
+      {onPress ? <Icon name="chevron_right" size={16} color={C.ink4} /> : null}
     </TouchableOpacity>
   );
 }
@@ -207,7 +243,7 @@ export function ShojiButton({ label, icon, variant = "sumi", onPress, style }: {
   const v = BTN[variant];
   return (
     <TouchableOpacity style={[styles.btn, v.box, variant !== "text" && SH.sm, style]} onPress={onPress} activeOpacity={0.85} accessibilityRole="button">
-      {icon ? <Ionicons name={icon as any} size={14} color={v.fg} /> : null}
+      {icon ? <Icon name={icon as any} size={14} color={v.fg} /> : null}
       <Text style={[styles.btnLabel, { color: v.fg }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -234,7 +270,7 @@ export function SearchField({ value, onChangeText, placeholder, onSubmit, style 
 }) {
   return (
     <View style={[styles.search, style]}>
-      <Ionicons name="search-outline" size={16} color={C.ink3} />
+      <Icon name="search" size={16} color={C.ink3} />
       <TextInput
         style={styles.searchInput as any}
         value={value}
@@ -262,12 +298,15 @@ export function ShojiBadge({ status, dojoStatus, affiliationStatus, label }: {
   status?: KarateStatusKey; dojoStatus?: DojoStatus; affiliationStatus?: AffiliationStatus; label?: string;
 }) {
   let color: string, bg: string, icon: string, txt: string;
-  if (dojoStatus) { const s = KarateDojoStatus[dojoStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
+  // b1: fallback defensivo — se `dojoStatus` vier com um valor que a UI ainda
+  // não conhece (ex.: novo status do backend), cai em "Inativo" em vez de
+  // quebrar o render.
+  if (dojoStatus) { const s = KarateDojoStatus[dojoStatus] ?? KarateDojoStatus.inactive; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
   else if (affiliationStatus) { const s = KarateAffiliationStatus[affiliationStatus]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? s.label; }
   else { const s = KarateStatus[status ?? "neutral"]; color = s.color; bg = s.bg; icon = s.icon; txt = label ?? (status ?? ""); }
   return (
     <View style={[styles.badge, { backgroundColor: bg }]} accessibilityLabel={txt}>
-      <Ionicons name={icon as any} size={11} color={color} />
+      <Icon name={icon as any} size={11} color={color} />
       <Text style={[styles.badgeText, { color }]}>{txt}</Text>
     </View>
   );

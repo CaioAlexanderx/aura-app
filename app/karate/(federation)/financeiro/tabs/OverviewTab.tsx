@@ -7,6 +7,7 @@ import { ScrollView, View, Text, RefreshControl, StyleSheet, ViewStyle, TextStyl
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { ShojiBackground, SectionHead, Card, KpiBand, Mono, Body } from "@/components/karate/shoji";
 import { karateApi, FinancialOverview, CashflowMonth } from "@/services/karateApi";
 
@@ -62,10 +63,16 @@ export function OverviewTab({ federationId }: { federationId: string }) {
           <View style={styles.section}>
             <SectionHead title="Fluxo de caixa" />
             <Card>
-              <View style={styles.legend}>
-                <Leg c={C.ok} l="Entrada" /><Leg c={P.red} l="Saída" />
-              </View>
-              {data?.cashflow.map((m) => <CashRow key={m.month} m={m} max={maxInflow} />)}
+              {(data?.cashflow ?? []).length === 0 ? (
+                <KarateEmptyState icon="trending-up" title="Sem movimentações no período" style={{ paddingVertical: 24 }} />
+              ) : (
+                <>
+                  <View style={styles.legend}>
+                    <Leg c={C.ok} l="Entrada" /><Leg c={P.red} l="Saída" />
+                  </View>
+                  {data?.cashflow.map((m) => <CashRow key={m.month} m={m} max={maxInflow} />)}
+                </>
+              )}
             </Card>
           </View>
 

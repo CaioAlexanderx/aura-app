@@ -1,30 +1,210 @@
 // ============================================================
 // Detalhe do Dojô — Aura Karatê (federação) · Shoji
 // Dados reais via GET /federation/{id}/dojos/{dojoId}.
+//
+// Navegação: esta é a página de DETALHE full-page (destino do row-tap da lista).
+// O botão "Editar" (header) abre o modal de ficha para edição rápida.
+// IA/Nav P1: o botão "Ver praticantes" leva à lista já filtrada por este
+//   dojô (/karate/praticantes?dojo_id=<id> — a lista lê o param dojo_id).
+//
+// Export (round-trip com o import): o botão "Exportar" abre um modal que baixa
+//   os dados atuais do dojô no MESMO formato da Importação (abas Academias/
+//   Alunos/Histórico) para o dojô editar e reimportar. Ver DojoExportModal.
+//
+// Gestão da federação (fix/karate-dojo-edit-delete-ui): a federação pode
+//   SUSPENDER/REATIVAR e EXCLUIR o dojô daqui, além de EDITAR/ESTORNAR
+//   anuidades lançadas. Exclusão segue o contrato HAS_HISTORY do backend:
+//   sem histórico → hard delete; com histórico → escolha entre Desativar
+//   (soft, is_active:false) e Excluir definitivamente (cascade). Confirmações
+//   destrutivas via window.confirm / modal in-app — NUNCA Alert.alert com
+//   botões (no-op em RN-Web).
+//
+// Endereço estruturado: o detalhe exibe os campos address_* (Logradouro,
+//   Número, COMPLEMENTO, Bairro, Cidade/UF, CEP) — os mesmos da ficha (modal)
+//   e da NF-e. O Complemento é vital para envio de certificados/carteirinhas.
+//   Se o registro ainda não tem campos estruturados, cai no `address` legado.
+//
+// Nav P2 (7.3): ações de link público no header — "Ranking público" (abre)
+//   e "Copiar link do ranking". O link relevante é a página pública do RANKING
+//   da federação no microsite (/karate/[slug]/ranking servido em
+//   {slug}.getaura.com.br/ranking), onde os atletas deste dojô aparecem.
+//   O slug vem de getFederationIdentity (fallback: slug do host atual).
+//
+// DJ2: card Cadastro exibe "Sensei responsável" (sensei_practitioner_name ou
+//   sensei_name) em vez do CPF. CPF removido da exibição.
+//
+// DJ4: cada anuidade não paga ganha botão "Registrar pagamento" (modal pequeno:
+//   data + forma + valor opcional → payAnnuity). Botão geral "Lançar pagamento"
+//   no topo da seção → modal (competência + valor + data + forma →
+//   registerAnnuityPayment). Convive com Editar/Estornar já existentes.
 // ============================================================
-import React, { useEffect, useState, useCallback } from "react";
-import { ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
+  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
-  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, Mono, Body, Eyebrow, H1,
+  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
 } from "@/components/karate/shoji";
-import { karateApi, DojoDetail, AffiliationModel } from "@/services/karateApi";
+import { Icon } from "@/components/Icon";
+import DojoFichaModal from "@/components/karate/DojoFichaModal";
+import DojoExportModal from "@/components/karate/DojoExportModal";
+import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, PractitionerListItem } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { buildMicrositeUrl, getMicrositeSlug } from "@/utils/microsite";
+import { copyToClipboard } from "@/utils/clipboard";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
+import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
+import { DocumentosSection } from "@/components/karate/DocumentosSection";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
+// b4: rótulo do status do praticante na exportação. Fallback defensivo para
+// qualquer valor que a UI ainda não conheça (mesmo espírito do b1).
+const PRACT_STATUS_LABEL: Record<string, string> = { active: "Ativo", pending: "Pendente", inactive: "Inativo" };
+const practStatusLabel = (s?: string | null) => (s && PRACT_STATUS_LABEL[s]) || "Inativo";
+
+// b4: slug simples de arquivo (mesmo padrão do DojoExportModal).
+const slugFile = (s: string) =>
+  (s || "praticantes").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "praticantes";
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Máscara leve de CEP só para exibição (não altera o dado).
+const fmtCep = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const d = String(v).replace(/\D/g, "");
+  if (d.length === 8) return d.replace(/(\d{5})(\d{3})/, "$1-$2");
+  return String(v);
+};
+
+// "Logradouro, Número" numa linha só (componível com os demais KVs).
+const fmtStreetLine = (street?: string | null, number?: string | null): string | null => {
+  const s = (street || "").trim();
+  const n = (number || "").trim();
+  if (s && n) return `${s}, ${n}`;
+  return s || n || null;
+};
+
+const fmtCityLine = (city?: string | null, state?: string | null): string | null => {
+  const c = (city || "").trim();
+  const u = (state || "").trim();
+  if (c && u) return `${c} · ${u}`;
+  return c || u || null;
+};
+
+// Rótulos PT-BR para os counts do HAS_HISTORY (back manda chaves canônicas).
+const COUNT_LABEL: Record<string, string> = {
+  practitioners: "praticantes",
+  annuities: "anuidades",
+  transactions: "transações",
+  belt_history: "histórico de faixas",
+  transfers: "transferências",
+  connections: "conexões",
+};
+
+// Máscara de data dd/mm/aaaa para os modais de anuidade.
+const onlyD = (v: string) => (v || "").replace(/\D/g, "");
+function maskDate(v: string) {
+  const d = onlyD(v).slice(0, 8);
+  if (d.length > 4) return d.replace(/(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
+  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "$1/$2");
+  return d;
+}
+function brToISO(v: string): string | null {
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (d.getFullYear() !== Number(yyyy) || d.getMonth() !== Number(mm) - 1 || d.getDate() !== Number(dd)) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+function isoToBr(v: string | null | undefined): string {
+  if (!v) return "";
+  const m = String(v).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+function todayBr(): string {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${now.getFullYear()}`;
+}
+
+// Tipo defensivo: a entrada do annuity_history PODE trazer o id da anuidade
+// (annuity_history_id / id). Sem id não dá para editar/estornar; nesse caso
+// as ações simplesmente não aparecem para aquela linha.
+type AnnuityRow = DojoDetail["annuity_history"][number] & {
+  annuity_history_id?: string | null;
+  id?: string | null;
+  due_date?: string | null;
+};
+const annuityId = (a: AnnuityRow): string | null => a.annuity_history_id || a.id || null;
+
+type PaymentMethod = "pix" | "dinheiro" | "transferencia" | "outro";
+const PM_LABELS: { value: PaymentMethod; label: string }[] = [
+  { value: "pix", label: "Pix" },
+  { value: "dinheiro", label: "Dinheiro" },
+  { value: "transferencia", label: "Transferência" },
+  { value: "outro", label: "Outro" },
+];
+
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
-  const { federationId } = useKarateFederation();
+  const router = useRouter();
+  const { federationId, karateRole } = useKarateFederation();
+  // Fase 2: mesmo gate de papel usado no praticante (canTransfer) — só
+  // federation_admin/federation_staff podem anexar/excluir documentos do dojô.
+  // As demais ações desta tela (editar/excluir/suspender dojô) já assumem que
+  // só a federação chega aqui; não havia uma variável canEdit/allowed préexistente
+  // nesta tela, então reaproveitamos o mesmo helper de papel do praticante.
+  const canManage = canTransfer(karateRole);
   const [data, setData] = useState<DojoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Modal de edição (reusa a ficha de cadastro com o id atual)
+  const [editOpen, setEditOpen] = useState(false);
+  // Modal de exportação (round-trip com o import)
+  const [exportOpen, setExportOpen] = useState(false);
+  // b4: exportação rápida da lista de praticantes deste dojô (.xlsx), botão
+  // dedicado ao lado de "Ver praticantes" — separado do DojoExportModal
+  // (que exporta o dojô inteiro no formato de reimportação).
+  const [exportingPractitioners, setExportingPractitioners] = useState(false);
+  // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
+  const [teamOpen, setTeamOpen] = useState(false);
+  // Nav P2: slug público da federação (para montar o link do microsite).
+  const [pubSlug, setPubSlug] = useState<string | null>(null);
+
+  // Gestão da federação: estado das ações destrutivas / de ciclo de vida.
+  const [busy, setBusy] = useState(false);
+  const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null);
+  const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);
+
+  // DJ4: modal "Registrar pagamento" (anuidade existente não paga)
+  const [payModal, setPayModal] = useState<AnnuityRow | null>(null);
+  // DJ4: modal "Lançar pagamento" (período novo já pago)
+  const [registerModal, setRegisterModal] = useState(false);
+
+  // Toast inline — padrão das fichas Shoji.
+  const [toast, setToast] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    toastAnim.setValue(0);
+    Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setToast(null));
+    }, 2600);
+  }, [toastAnim]);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const load = useCallback(() => {
     if (!dojoId) return;
@@ -33,27 +213,272 @@ export default function DojoDetailScreen() {
   }, [federationId, dojoId]);
   useEffect(() => { load(); }, [load]);
 
+  // Resolve o slug público da federação UMA vez (não bloqueia a tela).
+  useEffect(() => {
+    let alive = true;
+    const fromHost = getMicrositeSlug();
+    if (fromHost) { setPubSlug(fromHost); return; }
+    if (!federationId) return;
+    karateApi.getFederationIdentity(federationId)
+      .then((id) => { if (alive && id?.slug) setPubSlug(id.slug); })
+      .catch(() => { /* sem slug → ações simplesmente não aparecem */ });
+    return () => { alive = false; };
+  }, [federationId]);
+
+  const publicUrl = pubSlug ? buildMicrositeUrl(pubSlug, "/ranking") : null;
+
+  const openPublic = () => {
+    if (!publicUrl) return;
+    Linking.openURL(publicUrl).catch(() =>
+      Alert.alert("Não foi possível abrir", "Tente copiar o link e abrir no navegador.")
+    );
+  };
+  const copyPublic = async () => {
+    if (!publicUrl) return;
+    const ok = await copyToClipboard(publicUrl);
+    Alert.alert(ok ? "Link copiado" : "Não foi possível copiar", ok ? publicUrl : "Copie manualmente: " + publicUrl);
+  };
+
+  // ── Suspender / Reativar ─────────────────────────────────────────
+  // b1: o backend agora manda status "inactive" (baseado em is_active) em vez
+  // de "suspended". Aceitamos os dois valores aqui por compatibilidade
+  // retroativa, e is_active tem precedência quando presente.
+  const isSuspended = data
+    ? (data.is_active !== undefined ? !data.is_active : (data.status === "suspended" || data.status === "inactive"))
+    : false;
+  const toggleSuspend = useCallback(async () => {
+    if (!data || busy) return;
+    const next = isSuspended;
+    const verb = next ? "reativar" : "suspender";
+    const title = next ? "Reativar dojô?" : "Suspender dojô?";
+    if (!(await confirmAsync({ title, message: `Deseja ${verb} o dojô "${data.name}"?`, confirmLabel: next ? "Reativar" : "Suspender", destructive: !next }))) return;
+    setBusy(true);
+    try {
+      await karateApi.updateDojo(federationId, dojoId!, { is_active: next });
+      showToast(next ? "Dojô reativado" : "Dojô suspenso");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível", e?.message || `Falha ao ${verb} o dojô.`);
+    } finally { setBusy(false); }
+  }, [data, busy, isSuspended, federationId, dojoId, load, showToast]);
+
+  // ── Excluir dojô ─────────────────────────────────────────────────
+  const deleteDojo = useCallback(async () => {
+    if (!data || busy) return;
+    if (!(await confirmAsync({ title: "Excluir dojô?", message: `Excluir o dojô "${data.name}"? Esta ação não pode ser desfeita.`, confirmLabel: "Excluir", destructive: true }))) return;
+    setBusy(true);
+    try {
+      await karateApi.deleteDojo(federationId, dojoId!);
+      showToast("Dojô excluído");
+      setTimeout(() => router.replace("/karate/dojos" as any), 320);
+    } catch (e: any) {
+      if (e instanceof HasHistoryError) {
+        setHistModal(e.counts || {});
+      } else {
+        Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
+      }
+    } finally { setBusy(false); }
+  }, [data, busy, federationId, dojoId, router, showToast]);
+
+  const desativarFromModal = useCallback(async () => {
+    if (!dojoId || busy) return;
+    setBusy(true);
+    try {
+      await karateApi.updateDojo(federationId, dojoId, { is_active: false });
+      setHistModal(null);
+      showToast("Dojô desativado");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível desativar", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [dojoId, busy, federationId, load, showToast]);
+
+  const excluirDefinitivo = useCallback(async () => {
+    if (!data || !dojoId || busy) return;
+    if (!(await confirmAsync({
+      title: "Excluir definitivamente?",
+      message: `EXCLUSÃO DEFINITIVA do dojô "${data.name}" e de TODO o histórico vinculado ` +
+        `(praticantes, anuidades, transações, faixas, transferências, conexões).\n\n` +
+        `Esta ação é IRREVERSÍVEL. Confirmar?`,
+      confirmLabel: "Excluir definitivamente",
+      destructive: true,
+    }))) return;
+    setBusy(true);
+    try {
+      await karateApi.deleteDojo(federationId, dojoId, { cascade: true });
+      setHistModal(null);
+      showToast("Dojô e histórico excluídos");
+      setTimeout(() => router.replace("/karate/dojos" as any), 320);
+    } catch (e: any) {
+      Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [data, dojoId, busy, federationId, router, showToast]);
+
+  // ── Anuidades: estornar / editar ─────────────────────────────────
+  const voidAnnuity = useCallback(async (a: AnnuityRow) => {
+    const id = annuityId(a);
+    if (!id || busy) return;
+    const strong = !!a.paid_at;
+    const msg = strong
+      ? `A anuidade ${a.reference_period} consta como PAGA. Estornar mesmo assim? Esta ação reverte o pagamento.`
+      : `Estornar a anuidade ${a.reference_period}? O lançamento será cancelado.`;
+    if (!(await confirmAsync({ title: "Estornar anuidade?", message: msg, confirmLabel: "Estornar", destructive: true }))) return;
+    setBusy(true);
+    try {
+      await karateApi.voidAnnuity(federationId, dojoId!, id);
+      showToast("Anuidade estornada");
+      load();
+    } catch (e: any) {
+      Alert.alert("Não foi possível estornar", e?.message || "Tente novamente.");
+    } finally { setBusy(false); }
+  }, [busy, federationId, dojoId, load, showToast]);
+
+  // ── b4: Exportar praticantes deste dojô em .xlsx ─────────────────
+  // Busca só os praticantes DESTE dojô (dojo_id) e monta uma planilha de
+  // 1 aba ("Praticantes") com Nome, Nº FPKT, Faixa, Status. Web-only, mesmo
+  // padrão (SheetJS + download via Blob) do DojoExportModal.
+  const exportPractitioners = useCallback(async () => {
+    if (!dojoId || exportingPractitioners) return;
+    setExportingPractitioners(true);
+    try {
+      // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
+      const XLSX = await import("xlsx");
+      const res = await karateApi.listPractitioners(federationId, { dojo_id: dojoId, pageSize: 500 });
+      const rows: PractitionerListItem[] = res.data || [];
+
+      const headers = ["Nome", "Nº FPKT", "Faixa", "Status"];
+      const aoa: (string | null)[][] = [
+        headers,
+        ...rows.map((p) => [
+          p.full_name || "",
+          p.karate_registration_number || "",
+          p.belt_name || "",
+          practStatusLabel(p.affiliation_status as any),
+        ]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Praticantes");
+
+      const today = new Date().toISOString().slice(0, 10);
+      const fname = `praticantes_${slugFile(data?.name || "dojo")}_${today}.xlsx`;
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      showToast("Planilha de praticantes exportada");
+    } catch (e: any) {
+      Alert.alert("Não foi possível exportar", e?.message || "Tente novamente.");
+    } finally {
+      setExportingPractitioners(false);
+    }
+  }, [dojoId, federationId, data, exportingPractitioners, showToast]);
+
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
+
+  // Endereço estruturado.
+  const streetLine = fmtStreetLine(data.address_street, data.address_number);
+  const cityLine = fmtCityLine(data.address_city, data.address_state);
+  const cepLine = fmtCep(data.address_zip);
+  const hasStructuredAddress = !!(streetLine || data.address_complement || data.address_neighborhood || cityLine || cepLine);
+
+  // DJ2: nome do sensei responsável (praticante vinculado tem precedência).
+  const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
+  const senseiIsPractitioner = !!(data as any).sensei_practitioner_id;
+
+  // b6: voltar para a lista de dojôs. router.back() quando há histórico de
+  // navegação (ex.: veio da lista); fallback para a rota da lista quando a
+  // tela foi aberta direto (deep link / refresh).
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.push("/karate/dojos" as any);
+  };
 
   return (
     <ShojiBackground>
       <ScrollView contentContainerStyle={styles.content}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Voltar para dojôs">
+          <Icon name="chevron-back" size={16} color={C.ink2} />
+          <Text style={styles.backBtnTxt}>Dojôs</Text>
+        </TouchableOpacity>
+
         <View style={styles.head}>
           <View style={{ flex: 1, minWidth: 240 }}>
             <Eyebrow>Detalhe · {data.fpkt_affiliation_id}</Eyebrow>
             <H1 dot style={{ marginTop: 12 }}>{data.name}</H1>
             <Body muted style={{ marginTop: 12 }}>{data.region || "—"} · {MODEL_LABEL[data.affiliation_model] ?? "—"}</Body>
           </View>
-          <ShojiBadge dojoStatus={data.status} />
+          <View style={styles.headActions}>
+            <ShojiBadge dojoStatus={data.status} />
+            <View style={styles.headBtns}>
+              {publicUrl && (
+                <>
+                  <ShojiButton label="Ranking público" icon="open-outline" variant="ghost" onPress={openPublic} />
+                  <ShojiButton label="Copiar link do ranking" icon="link-outline" variant="ghost" onPress={copyPublic} />
+                </>
+              )}
+              <ShojiButton
+                label="Ver praticantes"
+                icon="people-outline"
+                variant="ghost"
+                onPress={() => router.push(("/karate/praticantes?dojo_id=" + encodeURIComponent(dojoId!)) as any)}
+              />
+              <ShojiButton
+                label={exportingPractitioners ? "Exportando..." : "Exportar Excel"}
+                icon="grid-outline"
+                variant="ghost"
+                onPress={exportPractitioners}
+              />
+              <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
+              <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+
+              <TouchableOpacity
+                style={[styles.iconBtn, busy && styles.btnDisabled]}
+                disabled={busy}
+                onPress={toggleSuspend}
+                accessibilityRole="button"
+                accessibilityLabel={isSuspended ? "Reativar dojô" : "Suspender dojô"}
+              >
+                <Icon name="power" size={14} color={C.ink} />
+                <Text style={styles.iconBtnTxt}>{isSuspended ? "Reativar" : "Suspender"}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.dangerBtn, busy && styles.btnDisabled]}
+                disabled={busy}
+                onPress={deleteDojo}
+                accessibilityRole="button"
+                accessibilityLabel="Excluir dojô"
+              >
+                <Icon name="trash" size={14} color="#fdf8f2" />
+                <Text style={styles.dangerBtnTxt}>Excluir dojô</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
+        {/* DJ2: card Cadastro — "Sensei responsável" em vez de "CPF do sensei" */}
         <Card style={{ marginTop: SP[6] }}>
           <SectionHead title="Cadastro" />
           <KV k="Nome do dojô" v={data.name} />
           <KV k="Código FPKT" v={data.fpkt_affiliation_id} />
           <KV k="CNPJ" v={data.cnpj} />
-          <KV k="Endereço" v={data.address} />
+          <View style={styles.senseiRow}>
+            <KV k="Sensei responsável" v={senseiDisplay} />
+            {senseiIsPractitioner && senseiDisplay ? (
+              <View style={styles.senseiChip}>
+                <Icon name="person" size={11} color={C.ink2} />
+                <Text style={styles.senseiChipTxt}>praticante vinculado</Text>
+              </View>
+            ) : null}
+          </View>
           <KV k="Telefone" v={data.phone} />
           <KV k="E-mail" v={data.email} />
           <KV k="Região" v={data.region} />
@@ -63,8 +488,30 @@ export default function DojoDetailScreen() {
           <KV k="Praticantes" v={String(data.practitioner_count)} />
         </Card>
 
+        {/* Endereço — estruturado ou texto legado */}
         <Card style={{ marginTop: SP[6] }}>
-          <SectionHead title="Equipe técnica" sub="Sensei responsável + corpo de auxiliares" />
+          <SectionHead title="Endereço" sub="Usado no envio de certificados e carteirinhas" />
+          {hasStructuredAddress ? (
+            <>
+              <KV k="Logradouro" v={streetLine} />
+              <KV k="Complemento" v={data.address_complement} />
+              <KV k="Bairro" v={data.address_neighborhood} />
+              <KV k="Cidade / UF" v={cityLine} />
+              <KV k="CEP" v={cepLine} />
+            </>
+          ) : data.address ? (
+            <KV k="Endereço" v={data.address} />
+          ) : (
+            <Body muted>Endereço não informado.</Body>
+          )}
+        </Card>
+
+        <Card style={{ marginTop: SP[6] }}>
+          <SectionHead
+            title="Equipe técnica"
+            sub="Sensei responsável + corpo de auxiliares"
+            actions={<ShojiButton label="Gerir equipe" icon="settings-outline" variant="ghost" onPress={() => setTeamOpen(true)} />}
+          />
           {data.technical_team.length === 0 ? <Body muted>Nenhum membro técnico cadastrado.</Body>
             : data.technical_team.map((m, i) => (
               <View key={m.practitioner_id} style={[styles.teamRow, i === data.technical_team.length - 1 && styles.noBorder]}>
@@ -77,32 +524,543 @@ export default function DojoDetailScreen() {
             ))}
         </Card>
 
+        {/* Fase 2: seção Documentos (anexos) — mesmo gate de edição das ações da federação */}
         <Card style={{ marginTop: SP[6] }}>
-          <SectionHead title="Anuidades" />
+          <SectionHead title="Documentos" sub="Anexos do dojô (contratos, comprovantes, etc.)" />
+          <DocumentosSection
+            federationId={federationId}
+            ownerType="dojos"
+            ownerId={dojoId!}
+            canEdit={canManage}
+          />
+        </Card>
+
+        {/* DJ4: seção Anuidades com "Lançar pagamento" no topo */}
+        <Card style={{ marginTop: SP[6] }}>
+          <View style={styles.annuityHead}>
+            <SectionHead title="Anuidades" sub="Editar, estornar ou registrar pagamentos" />
+            <TouchableOpacity
+              style={styles.launchBtn}
+              onPress={() => setRegisterModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Lançar pagamento de anuidade"
+            >
+              <Icon name="add" size={13} color={C.ink} />
+              <Text style={styles.launchBtnTxt}>Lançar pagamento</Text>
+            </TouchableOpacity>
+          </View>
           {data.annuity_history.length === 0 ? <Body muted>Nenhuma anuidade registrada.</Body>
-            : data.annuity_history.map((a, i) => (
-              <View key={i} style={[styles.annRow, i === data.annuity_history.length - 1 && styles.noBorder]}>
-                <Mono style={{ fontSize: 14, color: C.ink, width: 56 }}>{a.reference_period}</Mono>
-                <View style={{ flex: 1 }}>
-                  {a.paid_at ? <Text style={styles.paid}>Pago em {fmtDate(a.paid_at)}</Text> : <Text style={styles.due}>Em aberto</Text>}
+            : (data.annuity_history as AnnuityRow[]).map((a, i) => {
+              const id = annuityId(a);
+              const canActUnpaid = !a.paid_at;
+              return (
+                <View key={id || i} style={[styles.annRow, i === data.annuity_history.length - 1 && styles.noBorder]}>
+                  <Mono style={{ fontSize: 14, color: C.ink, width: 56 }}>{a.reference_period}</Mono>
+                  <View style={{ flex: 1 }}>
+                    {a.paid_at ? <Text style={styles.paid}>Pago em {fmtDate(a.paid_at)}</Text> : <Text style={styles.due}>Em aberto</Text>}
+                  </View>
+                  <Mono style={{ fontSize: 13.5, color: C.ink2 }}>{fmtMoney(a.amount)}</Mono>
+                  <ShojiBadge dojoStatus={a.status} />
+                  {id ? (
+                    <View style={styles.annActions}>
+                      {/* DJ4: Registrar pagamento — só se não pago */}
+                      {canActUnpaid ? (
+                        <TouchableOpacity
+                          style={[styles.annBtn, styles.annBtnPay]}
+                          disabled={busy}
+                          onPress={() => setPayModal(a)}
+                          accessibilityLabel="Registrar pagamento"
+                        >
+                          <Icon name="checkmark" size={13} color={P.ok ?? "#2d8a4e"} />
+                        </TouchableOpacity>
+                      ) : null}
+                      {/* Editar — só se não pago */}
+                      {canActUnpaid ? (
+                        <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
+                          <Icon name="edit" size={13} color={C.ink} />
+                        </TouchableOpacity>
+                      ) : null}
+                      {/* Estornar — sempre se tem id */}
+                      <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => voidAnnuity(a)} accessibilityLabel="Estornar anuidade">
+                        <Icon name="repeat" size={13} color={P.red} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                 </View>
-                <Mono style={{ fontSize: 13.5, color: C.ink2 }}>{fmtMoney(a.amount)}</Mono>
-                <ShojiBadge dojoStatus={a.status} />
-              </View>
-            ))}
+              );
+            })}
         </Card>
       </ScrollView>
+
+      {/* Modal de edição da ficha */}
+      <DojoFichaModal
+        federationId={federationId}
+        visible={editOpen}
+        dojoId={dojoId!}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => load()}
+      />
+
+      {/* Modal de exportação */}
+      <DojoExportModal
+        federationId={federationId}
+        visible={exportOpen}
+        dojoId={dojoId!}
+        dojoName={data.name}
+        fpktId={data.fpkt_affiliation_id}
+        onClose={() => setExportOpen(false)}
+      />
+
+      {/* F9: Modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant) */}
+      <GerirEquipeTecnicaModal
+        visible={teamOpen}
+        onClose={() => setTeamOpen(false)}
+        federationId={federationId}
+        dojoId={dojoId!}
+        dojoName={data.name}
+        currentTeamIds={data.technical_team.map((m) => m.practitioner_id)}
+        onSaved={() => { load(); }}
+      />
+
+      {/* Modal HAS_HISTORY */}
+      <Modal visible={!!histModal} transparent animationType="fade" onRequestClose={() => setHistModal(null)}>
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setHistModal(null)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalEyebrow}>空  FPKT · Exclusão de dojô</Text>
+            <Text style={styles.modalTitle}>Este dojô tem histórico<Text style={{ color: P.red }}>.</Text></Text>
+            <Text style={styles.modalBody}>
+              Não dá para excluir direto porque há registros vinculados. Você pode
+              desativar (mantém os dados, some das listas ativas) ou excluir tudo
+              em cascata — irreversível.
+            </Text>
+
+            {histModal ? (
+              <View style={styles.countsBox}>
+                {Object.entries(histModal)
+                  .filter(([, n]) => Number(n) > 0)
+                  .map(([k, n]) => (
+                    <View key={k} style={styles.countRow}>
+                      <Mono style={styles.countNum}>{String(n)}</Mono>
+                      <Text style={styles.countLbl}>{COUNT_LABEL[k] || k}</Text>
+                    </View>
+                  ))}
+                {Object.values(histModal).every((n) => Number(n) === 0) ? (
+                  <Text style={styles.countLbl}>Registros vinculados encontrados.</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={desativarFromModal}>
+                {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Desativar</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={excluirDefinitivo}>
+                <Icon name="trash" size={14} color="#fdf8f2" />
+                <Text style={styles.dangerBtnTxt}>Excluir definitivamente</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={() => setHistModal(null)}>
+                <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de edição de anuidade (valor / vencimento / competência) */}
+      <AnnuityEditModal
+        visible={!!annuityEdit}
+        row={annuityEdit}
+        busy={busy}
+        onClose={() => setAnnuityEdit(null)}
+        onSave={async (payload) => {
+          const id = annuityEdit ? annuityId(annuityEdit) : null;
+          if (!id) return;
+          setBusy(true);
+          try {
+            await karateApi.updateAnnuity(federationId, dojoId!, id, payload);
+            setAnnuityEdit(null);
+            showToast("Anuidade atualizada");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente */}
+      <PayAnnuityModal
+        visible={!!payModal}
+        row={payModal}
+        busy={busy}
+        onClose={() => setPayModal(null)}
+        onSave={async (payload) => {
+          const id = payModal ? annuityId(payModal) : null;
+          if (!id) return;
+          setBusy(true);
+          try {
+            await karateApi.payAnnuity(federationId, dojoId!, id, payload);
+            setPayModal(null);
+            showToast("Pagamento registrado");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível registrar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia */}
+      <RegisterPaymentModal
+        visible={registerModal}
+        busy={busy}
+        onClose={() => setRegisterModal(false)}
+        onSave={async (payload) => {
+          setBusy(true);
+          try {
+            await karateApi.registerAnnuityPayment(federationId, dojoId!, payload);
+            setRegisterModal(false);
+            showToast("Pagamento lançado");
+            load();
+          } catch (e: any) {
+            Alert.alert("Não foi possível lançar", e?.message || "Tente novamente.");
+          } finally { setBusy(false); }
+        }}
+      />
+
+      {/* Toast inline */}
+      {toast ? (
+        <Animated.View pointerEvents="none" style={[styles.toast, {
+          opacity: toastAnim,
+          transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+        }]}>
+          <Icon name="check" size={16} color="#bfe3c4" />
+          <Text style={styles.toastTxt}>{toast}</Text>
+        </Animated.View>
+      ) : null}
     </ShojiBackground>
+  );
+}
+
+// ── Modal de edição de anuidade (valor / vencimento / competência) ─────
+function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
+  visible: boolean;
+  row: AnnuityRow | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { amount?: number; due_date?: string; reference_period?: string }) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [due, setDue] = useState("");
+  const [ref, setRef] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible || !row) return;
+    setErr(null);
+    setAmount(row.amount != null ? String(row.amount).replace(".", ",") : "");
+    setDue(isoToBr(row.due_date));
+    setRef(row.reference_period || "");
+  }, [visible, row]);
+
+  function submit() {
+    setErr(null);
+    const payload: { amount?: number; due_date?: string; reference_period?: string } = {};
+    if (amount.trim()) {
+      const n = Number(amount.replace(/\./g, "").replace(",", "."));
+      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
+      payload.amount = n;
+    }
+    if (due.trim()) {
+      const iso = brToISO(due);
+      if (!iso) { setErr("Vencimento inválido (dd/mm/aaaa)."); return; }
+      payload.due_date = iso;
+    }
+    if (ref.trim()) payload.reference_period = ref.trim();
+    if (Object.keys(payload).length === 0) { setErr("Nada para alterar."); return; }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Editar anuidade</Text>
+          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
+
+          <Text style={styles.fieldLbl}>Valor (R$)</Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          <Text style={styles.fieldLbl}>Vencimento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={due} onChangeText={(v) => setDue(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Vencimento" />
+
+          <Text style={styles.fieldLbl}>Competência</Text>
+          <TextInput style={styles.input} value={ref} onChangeText={setRef} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Salvar</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente ──
+function PayAnnuityModal({ visible, row, busy, onClose, onSave }: {
+  visible: boolean;
+  row: AnnuityRow | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number }) => void;
+}) {
+  const [paidAt, setPaidAt] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("pix");
+  const [amount, setAmount] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    setErr(null);
+    setPaidAt(todayBr());
+    setMethod("pix");
+    setAmount(row?.amount != null ? String(row.amount).replace(".", ",") : "");
+  }, [visible, row]);
+
+  function submit() {
+    setErr(null);
+    const payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number } = {};
+    if (paidAt.trim()) {
+      const iso = brToISO(paidAt);
+      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
+      payload.paid_at = iso;
+    }
+    payload.payment_method = method;
+    if (amount.trim()) {
+      const n = Number(amount.replace(/\./g, "").replace(",", "."));
+      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
+      payload.amount = n;
+    }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Registrar pagamento</Text>
+          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
+
+          <Text style={styles.fieldLbl}>Data do pagamento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
+
+          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
+          <View style={styles.pmChips}>
+            {PM_LABELS.map((pm) => (
+              <TouchableOpacity
+                key={pm.value}
+                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
+                onPress={() => setMethod(pm.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: method === pm.value }}
+              >
+                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.fieldLbl}>Valor recebido (R$) <Text style={styles.fieldOptional}>opcional</Text></Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Confirmar pagamento</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia ────
+function RegisterPaymentModal({ visible, busy, onClose, onSave }: {
+  visible: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod }) => void;
+}) {
+  const [period, setPeriod] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paidAt, setPaidAt] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("pix");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    setErr(null);
+    setPeriod("");
+    setAmount("");
+    setPaidAt(todayBr());
+    setMethod("pix");
+  }, [visible]);
+
+  function submit() {
+    setErr(null);
+    if (!period.trim()) { setErr("Informe a competência (ex.: 2026)."); return; }
+    const n = Number(amount.replace(/\./g, "").replace(",", "."));
+    if (!amount.trim() || !isFinite(n) || n <= 0) { setErr("Informe o valor."); return; }
+    const payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod } = {
+      reference_period: period.trim(),
+      amount: n,
+      payment_method: method,
+    };
+    if (paidAt.trim()) {
+      const iso = brToISO(paidAt);
+      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
+      payload.paid_at = iso;
+    }
+    onSave(payload);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalEyebrow}>空  FPKT · Lançar pagamento</Text>
+          <Text style={styles.modalTitle}>Período já pago<Text style={{ color: P.red }}>.</Text></Text>
+          <Text style={styles.modalBody}>
+            Use para registrar um pagamento recebido via PIX estática quando não havia cobrança prévia no sistema.
+          </Text>
+
+          <Text style={styles.fieldLbl}>Competência <Text style={styles.fieldRequired}>*</Text></Text>
+          <TextInput style={styles.input} value={period} onChangeText={setPeriod} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
+
+          <Text style={styles.fieldLbl}>Valor (R$) <Text style={styles.fieldRequired}>*</Text></Text>
+          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
+
+          <Text style={styles.fieldLbl}>Data do pagamento</Text>
+          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
+
+          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
+          <View style={styles.pmChips}>
+            {PM_LABELS.map((pm) => (
+              <TouchableOpacity
+                key={pm.value}
+                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
+                onPress={() => setMethod(pm.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: method === pm.value }}
+              >
+                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
+              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Lançar pagamento</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
+              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
+  // b6: botão de voltar Shoji (icon + texto), acima do head.
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginBottom: 18, paddingVertical: 4, paddingRight: 8 } as ViewStyle,
+  backBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink2 } as TextStyle,
   head: { flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" } as ViewStyle,
+  headActions: { alignItems: "flex-end", gap: 10 } as ViewStyle,
+  headBtns: { flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" } as ViewStyle,
   teamRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   noBorder: { borderBottomWidth: 0 } as ViewStyle,
   teamName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
+
+  // DJ2: chip "praticante vinculado" ao lado do sensei
+  senseiRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as ViewStyle,
+  senseiChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: P.glass2, borderWidth: 1, borderColor: P.line2, borderRadius: 10, paddingVertical: 3, paddingHorizontal: 8, marginTop: 2 } as ViewStyle,
+  senseiChipTxt: { fontFamily: F.body, fontSize: 10.5, color: C.ink2 } as TextStyle,
+
+  // DJ4: cabeçalho da seção anuidades com botão "Lançar pagamento"
+  annuityHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 } as ViewStyle,
+  launchBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  launchBtnTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: C.ink } as TextStyle,
+
+  // Ações de anuidade (linha)
+  annActions: { flexDirection: "row", gap: 6, marginLeft: 4 } as ViewStyle,
+  annBtn: { width: 30, height: 30, borderRadius: R.sm, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  annBtnPay: { borderColor: "#b7e0c2", backgroundColor: "#f0faf2" } as ViewStyle,
+
+  // Chips de forma de pagamento
+  pmChips: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
+  pmChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  pmChipActive: { borderColor: P.ink, backgroundColor: P.ink } as ViewStyle,
+  pmChipTxt: { fontFamily: F.body, fontSize: 13, color: C.ink } as TextStyle,
+  pmChipTxtActive: { color: "#fdf8f2" } as TextStyle,
+
+  // Campo labels
+  fieldOptional: { fontWeight: "400", color: P.ink3, fontFamily: F.body } as TextStyle,
+  fieldRequired: { color: P.red, fontFamily: F.body } as TextStyle,
+
+  // Botões do header (toggle + excluir)
+  iconBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  iconBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  dangerBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, backgroundColor: P.red } as ViewStyle,
+  dangerBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+  btnDisabled: { opacity: 0.5 } as ViewStyle,
+
+  // Modais in-app
+  backdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
+  modalCard: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, padding: 22, width: "100%", maxWidth: 460 } as ViewStyle,
+  modalEyebrow: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 1.4, color: P.ink3, textTransform: "uppercase" } as TextStyle,
+  modalTitle: { fontFamily: F.heading, fontSize: 24, color: P.ink, marginTop: 4 } as TextStyle,
+  modalBody: { fontFamily: F.body, fontSize: 13, color: P.ink2, marginTop: 8, lineHeight: 19 } as TextStyle,
+
+  countsBox: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 } as ViewStyle,
+  countRow: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 } as ViewStyle,
+  countNum: { fontFamily: F.mono, fontSize: 14, color: P.red, fontWeight: "700" } as TextStyle,
+  countLbl: { fontFamily: F.body, fontSize: 12.5, color: P.ink2 } as TextStyle,
+
+  modalActions: { gap: 10, marginTop: 20 } as ViewStyle,
+  primaryBtn: { paddingVertical: 12, borderRadius: R.md, backgroundColor: P.ink, alignItems: "center" } as ViewStyle,
+  primaryBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
+  dangerBtnWide: { flexDirection: "row", gap: 8, paddingVertical: 12, borderRadius: R.md, backgroundColor: P.red, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  ghostBtn: { paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, alignItems: "center" } as ViewStyle,
+  ghostBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
+
+  // Campos dos modais de anuidade
+  fieldLbl: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginTop: 12, marginBottom: 5 } as TextStyle,
+  input: { fontFamily: F.body, fontSize: 14, color: P.ink, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 11 } as TextStyle,
+  mono: { fontFamily: F.mono, letterSpacing: 0.5 } as TextStyle,
+  errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, marginTop: 12 } as TextStyle,
+
+  // Toast inline
+  toast: { position: "absolute", left: 20, right: 20, bottom: 24, alignSelf: "center", maxWidth: 460, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 12, paddingHorizontal: 16 } as ViewStyle,
+  toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
 });

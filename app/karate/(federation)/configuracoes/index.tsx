@@ -16,6 +16,12 @@
 //   Recursos   → karateSettingsApi.getFlags / updateFlags
 //   Identidade → karateSettingsApi.getIdentity / updateIdentity
 //
+// Notas de escopo (contexto FEDERAÇÃO):
+//   - Sem upload de "Logo da federação" aqui: o logo oficial é gerido pela
+//     Aura (Caio). O contexto "Aura Dojô" (app/karate/sensei) é separado.
+//   - Sem menção de emissão automática de NF-e/NFS-e na UI: a FPKT não emite
+//     notas pelo app. O código fiscal do backend segue dormente.
+//
 // Guardrails:
 //   - StyleSheet.create: todos os valores são objetos (sem strings soltas no top-level)
 //   - Sem deps novas: apenas RN core + @expo/vector-icons (já no projeto)
@@ -36,7 +42,7 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
@@ -67,7 +73,6 @@ const KARATE_FLAGS_DEFS = [
   { key: "competicoes", label: "Competições",       desc: "Módulo de torneios: chaveamento, lançamento de resultados e ranking." },
   { key: "carteirinha", label: "Carteirinha digital", desc: "Carteirinha do praticante com QR, graduação e validade da anuidade." },
   { key: "conexao",     label: "Conexão de dojôs",   desc: "Dojôs gerenciam seus praticantes e enviam inscrições direto pelo painel." },
-  { key: "portal",      label: "Portal público",      desc: "Página pública da federação com agenda de eventos e lista de dojôs." },
 ] as const;
 
 const ROLE_OPTS = [
@@ -153,7 +158,7 @@ function SaveToast({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
     <View style={st.toast}>
-      <Ionicons name="checkmark-circle" size={14} color={KarateColors.ok} />
+      <Icon name="checkmark-circle" size={14} color={KarateColors.ok} />
       <Text style={st.toastText}>Salvo com sucesso.</Text>
     </View>
   );
@@ -890,7 +895,7 @@ function EquipeTab({ federationId }: { federationId: string }) {
                   accessibilityLabel={`Papel de ${m.name}: ${getRoleLabel(m.role)}`}
                 >
                   <Text style={st.roleSelectText}>{getRoleLabel(m.role)}</Text>
-                  <Ionicons name="chevron-down" size={12} color={KarateColors.ink3} />
+                  <Icon name="chevron-down" size={12} color={KarateColors.ink3} />
                 </TouchableOpacity>
 
                 <View style={{ flex: 1 }}>
@@ -1062,30 +1067,23 @@ function RecursosTab({ federationId }: { federationId: string }) {
         <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 24 }} />
       ) : (
         <View style={st.identityGrid}>
-          {/* Logo + Nome */}
+          {/* Nome + Slug — o logo oficial da federação é gerido pela Aura,
+              por isso não há upload de logo aqui (contexto federação). */}
           <Card>
-            <View style={st.logoRow}>
-              <View style={st.logoBox}>
-                <Text style={st.logoBoxText}>空</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.logoLabel}>Logo da federação</Text>
-                <Text style={st.logoSub}>PNG ou SVG, fundo transparente</Text>
-              </View>
-            </View>
             <Text style={st.fieldLabel}>Nome da federação</Text>
             <TextInput style={st.field} value={f.name || ""} onChangeText={(v) => updateField("name", v)} accessibilityLabel="Nome da federação" />
             <Text style={[st.fieldLabel, { marginTop: 12 }]}>Slug público</Text>
             <View style={st.slugRow}>
-              <View style={st.slugPrefix}><Text style={st.slugPrefixText}>aura.app/</Text></View>
               <TextInput
-                style={[st.field, { flex: 1, borderLeftWidth: 0, borderRadius: 0, borderTopRightRadius: KarateRadius.sm, borderBottomRightRadius: KarateRadius.sm }]}
+                style={[st.field, { flex: 1, borderWidth: 0, borderRadius: 0 }]}
                 value={f.slug || ""}
                 onChangeText={(v) => updateField("slug", v.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
                 autoCapitalize="none"
                 accessibilityLabel="Slug público"
               />
+              <View style={st.slugSuffix}><Text style={st.slugPrefixText}>.getaura.com.br</Text></View>
             </View>
+            <Text style={st.slugHint}>Endereço público: {(f.slug || "seu-slug")}.getaura.com.br</Text>
           </Card>
 
           {/* Contato */}
@@ -1101,7 +1099,7 @@ function RecursosTab({ federationId }: { federationId: string }) {
       )}
 
       {/* Dados fiscais */}
-      <SectionHeader title="Dados fiscais" sub="Emissão automática de NFS-e para anuidades e taxas" />
+      <SectionHeader title="Dados fiscais" sub="Dados cadastrais da federação para registro" />
       {!loadingIdentity && (
         <Card>
           <Text style={st.fieldLabel}>Razão social</Text>
@@ -1138,13 +1136,6 @@ function RecursosTab({ federationId }: { federationId: string }) {
             <TextInput style={[st.field, { flex: 1 }]} value={f.state || ""} onChangeText={(v) => updateField("state", v.toUpperCase().slice(0, 2))} placeholder="UF" placeholderTextColor={KarateColors.ink4} maxLength={2} accessibilityLabel="Estado" />
           </View>
 
-          <View style={st.nfseBlock}>
-            <View style={st.nfseTag}><Text style={st.nfseTagText}>NFS-e</Text></View>
-            <Text style={st.nfseDesc}>
-              As notas de anuidade e taxas são emitidas automaticamente com estes dados. Alterações valem para emissões futuras.
-            </Text>
-          </View>
-
           <TouchableOpacity style={[st.btn, st.btnPrimary, { marginTop: 20, alignSelf: "flex-end" }]} onPress={saveIdentity} disabled={savingIdentity}>
             {savingIdentity ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.btnPrimaryText}>Salvar dados</Text>}
           </TouchableOpacity>
@@ -1166,7 +1157,7 @@ export default function ConfiguracoesFederacao() {
   if (karateRole && karateRole !== "federation_admin") {
     return (
       <View style={st.gateWrap}>
-        <Ionicons name="lock-closed" size={32} color={KarateColors.ink4} />
+        <Icon name="lock-closed" size={32} color={KarateColors.ink4} />
         <Text style={st.gateText}>Acesso restrito a administradores da federação.</Text>
       </View>
     );
@@ -1369,6 +1360,8 @@ const st = StyleSheet.create({
   slugRow:      { flexDirection: "row", borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.sm, overflow: "hidden", marginTop: 4 } as ViewStyle,
   slugPrefix:   { backgroundColor: KarateColors.bg2, borderRightWidth: 1, borderRightColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
   slugPrefixText: { fontSize: 12, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
+  slugSuffix:   { backgroundColor: KarateColors.bg2, borderLeftWidth: 1, borderLeftColor: KarateColors.border, paddingHorizontal: 10, paddingVertical: 9, justifyContent: "center" } as ViewStyle,
+  slugHint:     { fontSize: 11.5, color: KarateColors.ink3, marginTop: 6, fontFamily: KarateFonts.mono } as TextStyle,
 
   // Regime
   regimeRow:          { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 } as ViewStyle,
@@ -1377,7 +1370,7 @@ const st = StyleSheet.create({
   regimeChipText:     { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   regimeChipTextActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
-  // NFS-e block
+  // NFS-e block (estilos legados — bloco de UI removido; mantidos inertes p/ diff mínimo)
   nfseBlock:   { flexDirection: "row", gap: 12, marginTop: 20, padding: 14, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, alignItems: "flex-start" } as ViewStyle,
   nfseTag:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: KarateColors.primary } as ViewStyle,
   nfseTagText: { fontSize: 11, fontWeight: "800", color: "#fff" } as TextStyle,

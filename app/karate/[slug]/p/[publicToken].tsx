@@ -12,8 +12,8 @@ import {
   StyleSheet, ViewStyle, TextStyle, Platform, TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { Icon } from "@/components/Icon";
+import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { beltHex } from "@/constants/karateBelts";
 import { karatePortalApi, PublicProfile } from "@/services/karatePortalApi";
 
@@ -44,7 +44,7 @@ export default function PublicProfileScreen() {
         <View style={{ paddingVertical: 60 }}><ActivityIndicator color={KarateColors.primary} /></View>
       ) : notFound || !data ? (
         <View style={styles.card}>
-          <View style={styles.nfGlyph}><Ionicons name="eye-off-outline" size={30} color={KarateColors.ink3} /></View>
+          <View style={styles.nfGlyph}><Icon name="eye-off-outline" size={30} color={KarateColors.ink3} /></View>
           <Text style={styles.nfH}>Perfil não disponível</Text>
           <Text style={styles.nfP}>Este perfil público não está ativo ou o link expirou.</Text>
         </View>
@@ -87,7 +87,7 @@ export default function PublicProfileScreen() {
 
           {/* foot */}
           <View style={styles.foot}>
-            <Ionicons name="checkmark-circle" size={14} color={KarateColors.ok} />
+            <Icon name="checkmark-circle" size={14} color={KarateColors.ok} />
             <Text style={styles.footTxt}>Perfil público verificado pela {data.federation?.name || "FPKT"}</Text>
           </View>
         </View>
@@ -118,11 +118,12 @@ const styles = StyleSheet.create({
     }),
   } as ViewStyle,
 
-  ph: { backgroundColor: "#221d17", paddingVertical: 28, paddingHorizontal: 26, alignItems: "center" } as ViewStyle,
-  av: { width: 88, height: 88, borderRadius: 44, backgroundColor: "#a85c4f", alignItems: "center", justifyContent: "center", marginBottom: 14 } as ViewStyle,
-  avTxt: { fontSize: 38, fontWeight: "800", color: "#fbeee4" } as TextStyle,
-  name: { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: "#f3ece0" } as TextStyle,
-  bl: { fontSize: 13, color: "rgba(243,236,224,0.7)", marginTop: 5 } as TextStyle,
+  // Header escuro do documento — tokens Shoji (ink/headRed/paper), não hex solto.
+  ph: { backgroundColor: ShojiPalette.ink, paddingVertical: 28, paddingHorizontal: 26, alignItems: "center" } as ViewStyle,
+  av: { width: 88, height: 88, borderRadius: 44, backgroundColor: ShojiPalette.headRed, alignItems: "center", justifyContent: "center", marginBottom: 14 } as ViewStyle,
+  avTxt: { fontSize: 38, fontWeight: "800", color: ShojiPalette.paperWarm } as TextStyle,
+  name: { fontFamily: KarateFonts.heading, fontSize: 26, fontWeight: "400", color: ShojiPalette.paper } as TextStyle,
+  bl: { fontSize: 13, color: ShojiPalette.ink4, marginTop: 5 } as TextStyle,
 
   beltWrap: { paddingHorizontal: 26, paddingTop: 18 } as ViewStyle,
   beltBar: { height: 22, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.12)" } as ViewStyle,

@@ -4,11 +4,11 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert as RNAlert,
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
@@ -18,6 +18,7 @@ import {
 import { ConectarDojoModal } from "@/components/karate/ConectarDojoModal";
 import { karateConnectionsApi, Connection } from "@/services/karateConnectionsApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { notify } from "@/utils/webAlert";
 
 export function connView(c: Connection): { label: string; tone: "ok" | "warn" | "danger" | "neutral" } {
   if (c.status === "connected" && c.via === "native") return { label: "Conectado · atualiza sozinho", tone: "ok" };
@@ -48,8 +49,8 @@ export default function ConexoesIndex() {
   }, [federationId]);
   useEffect(() => { load(); }, [load]);
 
-  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { RNAlert.alert("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
-  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { RNAlert.alert("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
+  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { notify("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
+  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { notify("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
 
   if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
   const connected = conns.filter((c) => c.status === "connected").length;
@@ -67,7 +68,7 @@ export default function ConexoesIndex() {
 
         {problems > 0 && (
           <View style={styles.warn}>
-            <Ionicons name="warning" size={18} color={P.red} />
+            <Icon name="warning" size={18} color={P.red} />
             <Body style={{ flex: 1, color: C.ink }}>{problems === 1 ? "1 dojô parou de enviar atualizações" : `${problems} dojôs pararam de enviar atualizações`}. Abra o dojô e toque em Reconectar.</Body>
           </View>
         )}
@@ -96,7 +97,7 @@ export default function ConexoesIndex() {
             : conns.map((c) => {
               const v = connView(c);
               return (
-                <TouchableOpacity key={c.id} onPress={() => router.push(`/karate/conexoes/${c.id}` as any)} activeOpacity={0.85}>
+                <TouchableOpacity key={c.id} onPress={() => router.push(`/karate/conexoes/${c.id}` as any) } activeOpacity={0.85}>
                   <Card style={{ marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
                     <Avatar name={c.dojo_name ?? "Dojô"} size={36} />
                     <View style={{ flex: 1 }}>
@@ -104,7 +105,7 @@ export default function ConexoesIndex() {
                       <Mono style={{ fontSize: 10, color: P.red, marginTop: 1 }}>{c.fpkt_affiliation_id}</Mono>
                     </View>
                     <ShojiBadge status={v.tone} label={v.label} />
-                    <Ionicons name="chevron-forward" size={16} color={C.ink4} />
+                    <Icon name="chevron-forward" size={16} color={C.ink4} />
                   </Card>
                 </TouchableOpacity>
               );

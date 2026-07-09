@@ -24,7 +24,7 @@ export interface NetworkSummary {
   kpis: NetworkKpi[];
 }
 
-// Afiliação
+// Filiação
 export interface AfiliacaoDojo {
   id: string;
   name: string;
@@ -38,6 +38,8 @@ export interface AfiliacaoPayload {
   total_now: number;
   novas_affiliacoes: number;
   nao_renovaram: number;
+  dojos_ativos?: number;
+  dojos_inativos?: number;
   yearly: Array<{ ano: number; new_affiliations: number }>;
   dojos: AfiliacaoDojo[];
 }
@@ -64,9 +66,10 @@ export interface CoberturaRegion {
 }
 export interface CoberturaPayload {
   regions: CoberturaRegion[];
-  gap_count: number;
-  gap_mun_total: number;
-  gap_names: string;
+  // Lacunas de cobertura removidas (Item 5) — opcionais por compat.
+  gap_count?: number;
+  gap_mun_total?: number;
+  gap_names?: string;
 }
 
 // Inadimplência
@@ -179,6 +182,7 @@ export interface FaixaBucket {
   n: number;
   pct: number;
 }
+export type RelacaoFaixasStatus = "all" | "active" | "inactive";
 export interface RelacaoFaixasPayload {
   total: number;
   kyu: number;
@@ -251,8 +255,13 @@ export const karateNetworkHealthApi = {
     return request(`${base(federationId)}/graduacoes${q}`);
   },
 
-  getRelacaoFaixas: (federationId: string): Promise<RelacaoFaixasPayload> =>
-    request(`${base(federationId)}/relacao-faixas`),
+  getRelacaoFaixas: (
+    federationId: string,
+    status?: RelacaoFaixasStatus
+  ): Promise<RelacaoFaixasPayload> => {
+    const q = status ? `?status=${status}` : "";
+    return request(`${base(federationId)}/relacao-faixas${q}`);
+  },
 
   // CSV export — returns a URL with ?export=csv to be opened in browser/download
   csvUrl: (federationId: string, indicator: string): string => {

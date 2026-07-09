@@ -195,7 +195,11 @@ export const KarateSpacing = {
 // ─────────────────────────────────────────────────────────────
 // Status do Dojô — label + ícone + cor (sempre icon+texto)
 // ─────────────────────────────────────────────────────────────
-export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended";
+// b1: o backend agora manda 'inactive' (baseado em is_active) em vez de
+// 'suspended'. Mantemos 'suspended' no union por compatibilidade retroativa
+// (registros/telas antigas ainda podem referenciá-lo), mas ambos exibem o
+// mesmo rótulo "Inativo" na UI.
+export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended" | "inactive";
 
 export const KarateDojoStatus: Record<DojoStatus, {
   label: string; icon: string; color: string; bg: string;
@@ -204,7 +208,10 @@ export const KarateDojoStatus: Record<DojoStatus, {
   expiring:   { label: "A vencer",     icon: "alert-circle",     color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
   overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,   bg: ShojiPalette.alertWash },
   defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger,  bg: ShojiPalette.dangerWash },
-  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  // 'inactive' é o valor atual do backend; 'suspended' fica mapeado igual
+  // para compatibilidade retroativa (b1).
+  inactive:   { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  suspended:  { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
 } as const;
 
 // ─────────────────────────────────────────────────────────────
@@ -243,19 +250,137 @@ export const KarateBelts: Record<BeltKey, {
   preta:       { label: "Preta",       color: "#2b2620", textColor: "#fdf8f2" },
 } as const;
 
-// Helper: resolve belt key a partir do belt_level da API
+// Normaliza um rótulo de faixa: minúsculo, sem acento, ordinais/separadores
+// virando espaço. "Preta 1º Dan" → "preta 1 dan" · "Roxa" → "roxa" ·
+// "azul-claro" → "azul claro". Base para casar nomes reais vindos do banco.
+function normalizeBeltText(raw: string): string {
+  return String(raw || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // remove acentos
+    .replace(/[º°ª]/g, " ")          // ordinais → espaço
+    .replace(/[_\-/]/g, " ")         // separadores → espaço
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Helper: resolve belt key a partir do belt_level OU belt_name da API.
+//
+// O banco (karate_current_belt / karate_belt_history) traz tanto códigos
+// canônicos (ex.: '9kyu', '1dan') quanto nomes humanos da base importada
+// (ex.: 'Preta', 'Preta 1º Dan', 'Roxa', 'Azul Claro', 'Vermelha'). Antes,
+// só os códigos/chaves exatos casavam — 'Roxa' (a chave era 'roxo'),
+// 'Preta 1º Dan' e similares caíam no fallback neutro, deixando a bolinha
+// de faixa com a cor errada (roxa e preta foram os casos reportados).
+// Agora normalizamos (acento/caixa/ordinal) e casamos por código kyu/dan
+// e por nome de cor. É o helper compartilhado: conserta lista + detalhe.
 export function resolveBeltKey(beltLevel: string): BeltKey | null {
-  const map: Record<string, BeltKey> = {
-    branca: "branca", amarela: "amarela", laranja: "laranja",
-    verde: "verde", azul_claro: "azul_claro", roxo: "roxo",
-    azul_escuro: "azul_escuro", vermelha: "vermelha",
-    marrom: "marrom", preta: "preta",
+  if (!beltLevel) return null;
+  const n = normalizeBeltText(beltLevel);
+  if (!n) return null;
+
+  // 1) Códigos canônicos kyu/dan (qualquer dan = preta).
+  const code = n.replace(/\s+/g, ""); // "1 dan" → "1dan"
+  const codeMap: Record<string, BeltKey> = {
+    "10kyu": "branca",
     "9kyu": "branca", "8kyu": "amarela", "7kyu": "laranja",
     "6kyu": "verde",  "5kyu": "azul_claro", "4kyu": "azul_escuro",
     "3kyu": "marrom", "2kyu": "marrom", "1kyu": "marrom",
-    "1dan": "preta",  "2dan": "preta", "3dan": "preta",
   };
-  return map[beltLevel.toLowerCase()] ?? null;
+  if (codeMap[code]) return codeMap[code];
+  if (/\bdan\b/.test(n)) return "preta"; // "1dan", "preta 1 dan", "2 dan"...
+
+  // 2) Nomes de cor (base importada). Ordem importa: compostas e roxa
+  //    antes das simples para não confundir azul claro/escuro etc.
+  if (n.includes("azul"))   return n.includes("escur") ? "azul_escuro" : "azul_claro";
+  if (n.includes("rox"))    return "roxo";        // roxa / roxo
+  if (n.includes("marrom") || n.includes("marron")) return "marrom";
+  if (n.includes("preta") || n.includes("preto"))   return "preta";
+  if (n.includes("vermelh")) return "vermelha";
+  if (n.includes("verde"))   return "verde";
+  if (n.includes("laranja")) return "laranja";
+  if (n.includes("amarel"))  return "amarela";    // amarela / amarelo
+  if (n.includes("branc"))   return "branca";     // branca / branco
+
+  // 3) Chaves canônicas exatas (compat antiga).
+  const exact: Record<string, BeltKey> = {
+    branca: "branca", amarela: "amarela", laranja: "laranja",
+    verde: "verde", "azul claro": "azul_claro", roxo: "roxo", roxa: "roxo",
+    "azul escuro": "azul_escuro", vermelha: "vermelha",
+    marrom: "marrom", preta: "preta",
+  };
+  return exact[n] ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Rank hierárquico oficial da graduação (federação)
+//
+// Ordem ascendente (menor → maior grau) usada para ORDENAR faixas em
+// gráficos/relatórios da graduação ATIVA:
+//   Branca(1) · Amarela(2) · Laranja(3) · Verde(4) · (Azul Claro) ·
+//   Roxa(5) · (Azul Escuro) · Marrom(6) · Preta(7, Dan).
+// As graduações Dan (Preta 1º, 2º, …) ordenam DEPOIS das kyu, por grau.
+//
+// Vermelha é HISTÓRICA (isLegacy): a federação não usa mais essa cor.
+// Recebe rank 0 e deve ser EXCLUÍDA da graduação ativa (ver isActiveBelt).
+// Ela continua no histórico individual do praticante (aba Trajetória).
+//
+// Aceita tanto belt_level/código quanto belt_name humano (normaliza via
+// resolveBeltKey). Faixas não reconhecidas vão para o fim (rank 999).
+// ─────────────────────────────────────────────────────────────
+const BELT_KEY_RANK: Record<BeltKey, number> = {
+  branca:      1,
+  amarela:     2,
+  laranja:     3,
+  verde:       4,
+  azul_claro:  5,
+  roxo:        6,
+  azul_escuro: 7,
+  marrom:      8,
+  preta:       9,  // base Dan; o grau (1º, 2º…) refina via danDegree
+  vermelha:    0,  // histórica — excluída da graduação ativa
+};
+
+// Extrai o grau Dan de um rótulo ("Preta 1º Dan" → 1, "2 dan" → 2).
+// Retorna 0 quando não há grau explícito (Preta "crua").
+function danDegree(raw: string): number {
+  const n = String(raw || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (!/\bdan\b/.test(n)) return 0;
+  const m = n.match(/(\d+)\s*(?:º|o|a)?\s*dan/) || n.match(/dan\s*(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Rank hierárquico de uma faixa para ORDENAÇÃO. Recebe belt_level OU
+// belt_name. Preta ordena por grau Dan (Preta < Preta 1º Dan < 2º Dan…),
+// ASCENDENTE: 1º Dan < 2º Dan < … < 7º Dan.
+//
+// IMPORTANTE: na base FPKT o belt_level da preta é só 'preta' (sem grau) e o
+// GRAU vive no belt_name ('Preta 1°', 'Preta 2°'…). Por isso aceitamos um
+// segundo argumento opcional `nameForDegree`: quando informado, o grau Dan é
+// extraído dele (e cai no beltLevelOrName se não houver). Sem o name, todas as
+// pretas colapsavam no mesmo rank e não saíam ordenadas por grau (Item 4).
+//
+// Vermelha (histórica) = 0; não reconhecida = 999 (vai pro fim).
+export function beltRank(beltLevelOrName: string, nameForDegree?: string): number {
+  const key = resolveBeltKey(beltLevelOrName);
+  if (!key) return 999;
+  const base = BELT_KEY_RANK[key];
+  if (key === "preta") {
+    // grau Dan: prioriza o belt_name (carrega '1°'/'2°'…), cai no level se vazio.
+    const degree = danDegree(nameForDegree || "") || danDegree(beltLevelOrName);
+    return base * 100 + degree;
+  }
+  return base * 100;
+}
+
+// True quando a faixa pertence à graduação ATIVA (exibível em gráficos/
+// relatórios). Falso para a Vermelha (histórica/isLegacy) e para faixas
+// marcadas isLegacy no mapa KarateBelts. NÃO afeta o histórico individual
+// (Trajetória), que mantém a Vermelha.
+export function isActiveBelt(beltLevelOrName: string): boolean {
+  const key = resolveBeltKey(beltLevelOrName);
+  if (!key) return true; // desconhecida → não esconder por engano
+  return !KarateBelts[key].isLegacy;
 }
 
 // ─────────────────────────────────────────────────────────────

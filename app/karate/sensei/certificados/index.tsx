@@ -19,7 +19,7 @@ import {
   StyleSheet, ActivityIndicator, ViewStyle, TextStyle,
   KeyboardAvoidingView, Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
 import { EstadoSelo, normalizeCertStatus } from "@/components/karate/EstadoSelo";
 import { karateApi, CertOrder, CreateCertOrderInput } from "@/services/karateApi";
@@ -141,7 +141,7 @@ export default function SenseiCertificadosScreen() {
         <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 24 }} />
       ) : MOCK_APTOS.length === 0 ? (
         <View style={st.empty}>
-          <Ionicons name="ribbon-outline" size={32} color={KarateColors.ink4} />
+          <Icon name="ribbon-outline" size={32} color={KarateColors.ink4} />
           <Text style={st.emptyText}>Nenhum praticante apto no momento</Text>
         </View>
       ) : (
@@ -156,10 +156,10 @@ export default function SenseiCertificadosScreen() {
                 </View>
               </View>
               <Text style={st.examDate}>
-                <Ionicons name="calendar-outline" size={11} color={KarateColors.ink3} /> Aprovado em {a.exam_date}
+                <Icon name="calendar-outline" size={11} color={KarateColors.ink3} /> Aprovado em {a.exam_date}
               </Text>
               <TouchableOpacity style={st.btnPrimary} onPress={() => openPedir(a)}>
-                <Ionicons name="ribbon-outline" size={14} color="#fff" />
+                <Icon name="ribbon-outline" size={14} color="#fff" />
                 <Text style={st.btnPrimaryText}>Pedir certificado</Text>
               </TouchableOpacity>
             </View>
@@ -196,7 +196,7 @@ export default function SenseiCertificadosScreen() {
           <ActivityIndicator color={KarateColors.primary} />
         ) : orders.length === 0 ? (
           <View style={st.empty}>
-            <Ionicons name="mail-outline" size={28} color={KarateColors.ink4} />
+            <Icon name="mail-outline" size={28} color={KarateColors.ink4} />
             <Text style={st.emptyText}>Nenhum pedido ainda</Text>
           </View>
         ) : (
@@ -231,7 +231,7 @@ export default function SenseiCertificadosScreen() {
                 <Text style={st.modalSub}>A federação imprime e envia. Acompanhe o estado por aqui.</Text>
               </View>
               <TouchableOpacity onPress={() => setPedirOpen(false)}>
-                <Ionicons name="close" size={22} color={KarateColors.ink3} />
+                <Icon name="close" size={22} color={KarateColors.ink3} />
               </TouchableOpacity>
             </View>
 

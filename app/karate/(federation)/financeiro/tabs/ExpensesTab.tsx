@@ -21,7 +21,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -177,7 +177,7 @@ export function ExpensesTab({ federationId }: Props) {
             <View style={st.sheetHeader}>
               <Text style={st.sheetTitle}>Lançar Saída</Text>
               <TouchableOpacity onPress={() => setShowForm(false)} accessibilityLabel="Fechar" accessibilityRole="button">
-                <Ionicons name="close" size={22} color={KarateColors.ink3} />
+                <Icon name="close" size={22} color={KarateColors.ink3} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={st.formBody}>

@@ -9,15 +9,16 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateFonts as F } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { ShojiBackground, Card, Body } from "@/components/karate/shoji";
 import { karateApi, BeltExam } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { formatEventDateNumeric } from "@/utils/eventDate";
 
-const fmt = (iso?: string | null) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("pt-BR"); };
+const fmt = (iso?: string | null) => formatEventDateNumeric(iso, "—");
 
 export default function EventosResultados() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function EventosResultados() {
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
-    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "closed" || e.status === "open").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
+    try { const res = await karateApi.listBeltExams(federationId); setExams((res.data ?? []).filter((e) => e.status === "done" || e.status === "closed" || e.status === "open").sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? ""))); }
     catch { setError(true); }
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
@@ -51,7 +52,7 @@ export default function EventosResultados() {
                   <Text style={styles.title}>{exam.title}</Text>
                   <Body muted style={{ fontSize: 12, marginTop: 2 }}>{fmt(exam.exam_date)}{exam.location ? ` · ${exam.location}` : ""} · {exam.candidate_count} candidatos</Body>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={C.ink4} />
+                <Icon name="chevron-forward" size={18} color={C.ink4} />
               </Card>
             </TouchableOpacity>
           ))}

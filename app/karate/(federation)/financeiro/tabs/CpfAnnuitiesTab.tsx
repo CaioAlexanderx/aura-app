@@ -2,6 +2,7 @@
 // CpfAnnuitiesTab — Anuidades CPF (praticantes individuais)
 //
 // Lista de anuidades por CPF com status, filtro e cobrança PIX.
+// Exibida na aba "Anuidades Praticantes".
 //
 // Wired: GET /financial/annuities/cpf
 //        POST /financial/annuities/cpf/{practitionerId}/pix (dados reais).
@@ -18,12 +19,14 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { WhatsAppChargeModal } from "@/components/karate/WhatsAppChargeModal";
+import { downloadCsv } from "./EntriesTab";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
 
 const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
@@ -32,15 +35,26 @@ const STATUS_FILTER: { key: AnnuityStatus | "all"; label: string }[] = [
   { key: "due",        label: "A vencer" },
   { key: "overdue",    label: "Vencido" },
   { key: "defaulting", label: "Inadimplente" },
+  { key: "no_charge",  label: "Sem cobrança" },
 ];
 
-const STATUS_MAP: Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }> = {
+const STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
   paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,     bg: ShojiPalette.okSoft },
   due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,   bg: ShojiPalette.warnSoft },
   overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,  bg: ShojiPalette.alertSoft },
   defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger, bg: ShojiPalette.dangerSoft },
   suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral,bg: ShojiPalette.neutralSoft },
+  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
 };
+
+// Fallback neutro para status fora do STATUS_MAP — evita que um valor de
+// status desconhecido (TypeError: Cannot read properties of undefined
+// (reading 'bg')) derrube a lista inteira em vez de só o badge de uma linha.
+// Mesmo padrão defensivo do `sm()` em AnuidadeCard.tsx.
+const STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+function sm(status: string) {
+  return STATUS_MAP[status as AnnuityStatus] || { ...STATUS_FALLBACK, label: status || "\u2014" };
+}
 
 // Extended type that carries transaction_id from the list response.
 // The contract CpfAnnuity schema doesn't include transaction_id but
@@ -52,6 +66,10 @@ function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso", no_charge: "Sem cobrança",
+};
+
 interface Props { federationId: string; }
 
 export function CpfAnnuitiesTab({ federationId }: Props) {
@@ -62,6 +80,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [search, setSearch]       = useState("");
   const [pixTarget, setPixTarget] = useState<CpfAnnuityWithTx | null>(null);
+  const [waTarget, setWaTarget] = useState<CpfAnnuityWithTx | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -86,6 +105,20 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
     a.karate_registration_number.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Export CSV das anuidades JÁ filtradas (busca + status). Client-side.
+  const handleExport = () => {
+    if (filtered.length === 0) return;
+    const header = ["Praticante", "Registro", "Período", "Valor", "Status"];
+    const rows = filtered.map((a) => [
+      a.full_name ?? "",
+      a.karate_registration_number ?? "",
+      a.reference_period ?? "",
+      a.amount.toFixed(2).replace(".", ","),
+      STATUS_CSV_LABEL[a.status] ?? a.status,
+    ]);
+    downloadCsv("anuidades_praticantes", header, rows);
+  };
+
   return (
     <ScrollView
       style={st.screen}
@@ -94,9 +127,22 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={KarateColors.primary} />
       }
     >
+      {/* Exportar CSV (lista filtrada) */}
+      <View style={st.exportRow}>
+        <TouchableOpacity
+          style={st.exportBtn}
+          onPress={handleExport}
+          accessibilityRole="button"
+          accessibilityLabel="Exportar CSV"
+        >
+          <Icon name="download" size={14} color={KarateColors.ink2} />
+          <Text style={st.exportLabel}>Exportar</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Busca */}
       <View style={st.searchRow}>
-        <Ionicons name="search" size={16} color={KarateColors.ink4} style={{ marginLeft: 10 }} />
+        <Icon name="search" size={16} color={KarateColors.ink4} style={{ marginLeft: 10 }} />
         <TextInput
           style={st.searchInput}
           placeholder="Buscar praticante…"
@@ -136,7 +182,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         <KarateEmptyState icon="person-outline" title="Nenhum praticante encontrado" />
       ) : (
         filtered.map((ann) => {
-          const s = STATUS_MAP[ann.status];
+          const s = sm(ann.status);
           const canPay = ann.status !== "paid" && !!ann.transaction_id;
           return (
             <View key={ann.practitioner_id} style={st.card}>
@@ -147,7 +193,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
               <View style={{ alignItems: "flex-end", gap: 6 }}>
                 <Text style={st.amount}>{formatCurrency(ann.amount)}</Text>
                 <View style={[st.badge, { backgroundColor: s.bg }]} accessibilityLabel={s.label}>
-                  <Ionicons name={s.icon as any} size={11} color={s.color} />
+                  <Icon name={s.icon as any} size={11} color={s.color} />
                   <Text style={[st.badgeText, { color: s.color }]}>{s.label}</Text>
                 </View>
                 {canPay && (
@@ -157,8 +203,19 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel={`Cobrar PIX de ${ann.full_name}`}
                   >
-                    <Ionicons name="qr-code-outline" size={13} color="#fff" />
+                    <Icon name="qr-code-outline" size={13} color="#fff" />
                     <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
+                  </TouchableOpacity>
+                )}
+                {canPay && (
+                  <TouchableOpacity
+                    style={st.waBtn}
+                    onPress={() => setWaTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cobrar via WhatsApp de ${ann.full_name}`}
+                  >
+                    <Icon name="logo-whatsapp" size={13} color="#fff" />
+                    <Text style={st.pixBtnLabel}>WhatsApp</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -183,6 +240,23 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
           onClose={() => setPixTarget(null)}
         />
       )}
+
+      {/* Cobrança manual via WhatsApp */}
+      {waTarget && (
+        <WhatsAppChargeModal
+          visible={!!waTarget}
+          federationId={federationId}
+          target={{
+            name: waTarget.full_name,
+            phone: waTarget.whatsapp,
+            amount: waTarget.amount,
+            reference_period: waTarget.reference_period,
+            due_date: waTarget.due_date,
+            status: waTarget.status,
+          }}
+          onClose={() => setWaTarget(null)}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -204,4 +278,8 @@ const st = StyleSheet.create({
   badgeText:         { fontSize: 10, fontWeight: "700" } as TextStyle,
   pixBtn:            { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:       { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+  waBtn:             { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#25D366", borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
+  exportRow:         { flexDirection: "row", justifyContent: "flex-end", marginBottom: 4 } as ViewStyle,
+  exportBtn:         { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  exportLabel:       { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
 });

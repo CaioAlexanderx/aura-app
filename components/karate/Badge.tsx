@@ -6,7 +6,7 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   KarateStatus,
   KarateStatusKey,
@@ -22,7 +22,7 @@ interface BadgeProps {
   status?: KarateStatusKey;
   /** Ou status do dojô direto da API */
   dojoStatus?: DojoStatus;
-  /** Ou status de afiliação direto da API */
+  /** Ou status de filiação direto da API */
   affiliationStatus?: AffiliationStatus;
   /** Override do label (usa o do status se não passado) */
   label?: string;
@@ -49,7 +49,7 @@ export function Badge({ status, dojoStatus, affiliationStatus, label, style }: B
       style={[styles.container, { backgroundColor: bg }, style]}
       accessibilityLabel={resolvedLabel}
     >
-      <Ionicons name={icon as any} size={12} color={color} />
+      <Icon name={icon as any} size={12} color={color} />
       <Text style={[styles.text, { color }]}>{resolvedLabel}</Text>
     </View>
   );

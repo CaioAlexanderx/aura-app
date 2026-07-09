@@ -13,7 +13,7 @@ import {
   ActivityIndicator, ScrollView, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
 import {
@@ -104,7 +104,7 @@ export default function DojoPortal() {
           <Text style={styles.dojoSub}>Portal do Dojô · FPKT</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityLabel="Sair">
-          <Ionicons name="log-out-outline" size={20} color={KarateColors.ink3} />
+          <Icon name="log-out-outline" size={20} color={KarateColors.ink3} />
         </TouchableOpacity>
       </View>
 

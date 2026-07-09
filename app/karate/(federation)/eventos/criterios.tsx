@@ -11,7 +11,7 @@ import {
   View, Text, ScrollView, Alert,
   StyleSheet, RefreshControl, Switch, ViewStyle, TextStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FormField } from "@/components/karate/FormField";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -111,7 +111,7 @@ export default function CriteriosScreen() {
     >
       {anyUnconfirmed && (
         <View style={styles.provisoryBanner}>
-          <Ionicons name="information-circle" size={16} color={KarateColors.warn} />
+          <Icon name="information-circle" size={16} color={KarateColors.warn} />
           <View style={styles.bannerTextCol}>
             <Text style={styles.bannerTitle}>Valores provisórios</Text>
             <Text style={styles.bannerDesc}>
@@ -136,19 +136,19 @@ export default function CriteriosScreen() {
                 <BeltBadge beltLevel={r.belt_level} beltName={r.belt_name} />
                 {isUnconfirmed ? (
                   <View style={styles.unconfirmedTag}>
-                    <Ionicons name="alert-circle" size={13} color={KarateColors.warn} />
+                    <Icon name="alert-circle" size={13} color={KarateColors.warn} />
                     <Text style={styles.unconfirmedText}>Provisório</Text>
                   </View>
                 ) : (
                   <View style={styles.confirmedTag}>
-                    <Ionicons name="checkmark-circle" size={13} color={KarateColors.ok} />
+                    <Icon name="checkmark-circle" size={13} color={KarateColors.ok} />
                     <Text style={styles.confirmedText}>Confirmado</Text>
                   </View>
                 )}
               </View>
 
               <FormField label="Meses mínimos na faixa atual" value={state?.min_months ?? ""} onChangeText={(v) => setField(r.id, "min_months", v)} keyboardType="numeric" placeholder="Ex: 6" />
-              <FormField label="Katas obrigatórios (separados por vírgula)" value={state?.kata_required ?? ""} onChangeText={(v) => setField(r.id, "kata_required", v)} placeholder="Ex: Heian Shodan, Heian Nidan" />
+              <FormField label="Kaatas obrigatórios (separados por vírgula)" value={state?.kata_required ?? ""} onChangeText={(v) => setField(r.id, "kata_required", v)} placeholder="Ex: Heian Shodan, Heian Nidan" />
               <FormField label="Observações" value={state?.notes ?? ""} onChangeText={(v) => setField(r.id, "notes", v)} placeholder="Opcional" />
 
               <View style={styles.switchRow}>
