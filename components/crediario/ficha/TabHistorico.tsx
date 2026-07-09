@@ -1,9 +1,20 @@
+// ============================================================
+// TabHistorico — Aura · Crediário (F3 do redesign; spec §2.3)
+//
+// F3: legenda de cores no topo (● pagamento ● compra ● ajuste);
+// confirmações "Devolver"/"Excluir" migram do Sim/Não inline para o
+// <ConfirmGate> (padrão único, slide-down animado); alvos de ação
+// sobem para ≥40px. Auto-load ao abrir a aba já acontece no shell.
+// Lógica preservada: recibo, devolução (B4/B5), excluir manual_debit,
+// paginação por cursor.
+// ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { creditApi, printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { ConfirmGate } from "@/components/ConfirmGate";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 import { pdvApi } from "@/services/pdvApi";
@@ -29,11 +40,8 @@ export function TabHistorico({
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [loadingRefundId, setLoadingRefundId] = useState<string | null>(null);
   const [refundSale, setRefundSale] = useState<DevolucaoSale | null>(null);
-  // Gate de confirmação: armazena o id do evento que aguarda confirmação de devolução.
-  // O botão "Devolver" exige um segundo clique ("Sim") antes de abrir o DevolucaoModal.
+  // ConfirmGate (padrão único F3): id do evento aguardando confirmação.
   const [confirmRefundId, setConfirmRefundId] = useState<string | null>(null);
-  // Excluir lançamento manual (débito standalone, sem venda/parcela vinculada).
-  // Mesmo padrão de confirmação em 2 passos do "Devolver".
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -106,13 +114,20 @@ export function TabHistorico({
     <View style={m.cardTitleRow}>
       <Text style={m.cardTitle}>Linha do tempo</Text>
       <Pressable
-        style={m.newAccBtn}
+        style={[m.newAccBtn, { minHeight: 32 }]}
         onPress={() => { setHistLoaded(false); loadHistory(); }}
         disabled={histLoading}
       >
         <Icon name="refresh_cw" size={11} color={Colors.violet3} />
         <Text style={m.newAccTxt}>Atualizar</Text>
       </Pressable>
+    </View>
+
+    {/* F3: legenda de cores — antes os dots não tinham significado descobrível */}
+    <View style={lc.legendRow}>
+      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.green }]} /><Text style={lc.legendTxt}>pagamento</Text></View>
+      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.violet3 }]} /><Text style={lc.legendTxt}>compra</Text></View>
+      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.amber }]} /><Text style={lc.legendTxt}>débito/ajuste</Text></View>
     </View>
 
     {histLoading && histEvents.length === 0 && (
@@ -148,13 +163,11 @@ export function TabHistorico({
       const isPrinting = printingId === ev.id;
       const isLoadingRefund = loadingRefundId === ev.id;
       const canRefund = ev.type === "purchase" && !!ev.sale_id;
-      const awaitingConfirm = confirmRefundId === ev.id;
       // Só lançamento manual (sem venda/parcela vinculada) pode ser excluído pela
       // timeline — purchase/payment/refund têm efeitos colaterais (parcelas, estoque,
       // venda) que o endpoint genérico de "undo" pode não reverter corretamente.
       const canDelete = ev.type === "manual_debit";
       const isDeleting = deletingId === ev.id;
-      const awaitingDeleteConfirm = confirmDeleteId === ev.id;
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -185,81 +198,63 @@ export function TabHistorico({
                     style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
                     onPress={() => handlePrintReceipt(ev.id)}
                     disabled={isPrinting}
-                    hitSlop={6}
+                    hitSlop={4}
                   >
                     {isPrinting
-                      ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 11, height: 11 }} />
-                      : <Icon name="printer" size={11} color={Colors.violet3} />}
+                      ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 12, height: 12 }} />
+                      : <Icon name="printer" size={12} color={Colors.violet3} />}
                     <Text style={lc.actionBtnTxt}>Recibo</Text>
                   </Pressable>
                 )}
                 {canRefund && (
-                  awaitingConfirm ? (
-                    <View style={lc.confirmRow}>
-                      <Text style={lc.confirmTxt}>Confirmar devolução?</Text>
-                      <Pressable
-                        style={[lc.actionBtn, lc.actionBtnAmber]}
-                        onPress={() => { setConfirmRefundId(null); openRefund(ev); }}
-                        hitSlop={6}
-                      >
-                        <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Sim</Text>
-                      </Pressable>
-                      <Pressable
-                        style={lc.actionBtn}
-                        onPress={() => setConfirmRefundId(null)}
-                        hitSlop={6}
-                      >
-                        <Text style={lc.actionBtnTxt}>Não</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
-                      onPress={() => setConfirmRefundId(ev.id)}
-                      disabled={isLoadingRefund}
-                      hitSlop={6}
-                    >
-                      {isLoadingRefund
-                        ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 11, height: 11 }} />
-                        : <Icon name="repeat" size={11} color={Colors.amber} />}
-                      <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
-                    </Pressable>
-                  )
+                  <Pressable
+                    style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
+                    onPress={() => { setConfirmDeleteId(null); setConfirmRefundId(prev => prev === ev.id ? null : ev.id); }}
+                    disabled={isLoadingRefund}
+                    hitSlop={4}
+                  >
+                    {isLoadingRefund
+                      ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 12, height: 12 }} />
+                      : <Icon name="repeat" size={12} color={Colors.amber} />}
+                    <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
+                  </Pressable>
                 )}
                 {canDelete && (
-                  awaitingDeleteConfirm ? (
-                    <View style={lc.confirmRow}>
-                      <Text style={lc.confirmTxt}>Excluir lançamento?</Text>
-                      <Pressable
-                        style={[lc.actionBtn, lc.actionBtnRed]}
-                        onPress={() => { setConfirmDeleteId(null); handleDelete(ev.id); }}
-                        hitSlop={6}
-                      >
-                        <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Sim</Text>
-                      </Pressable>
-                      <Pressable
-                        style={lc.actionBtn}
-                        onPress={() => setConfirmDeleteId(null)}
-                        hitSlop={6}
-                      >
-                        <Text style={lc.actionBtnTxt}>Não</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={[lc.actionBtn, lc.actionBtnRed, isDeleting && { opacity: 0.5 }]}
-                      onPress={() => setConfirmDeleteId(ev.id)}
-                      disabled={isDeleting}
-                      hitSlop={6}
-                    >
-                      {isDeleting
-                        ? <ActivityIndicator size="small" color={Colors.red} style={{ width: 11, height: 11 }} />
-                        : <Icon name="trash" size={11} color={Colors.red} />}
-                      <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Excluir</Text>
-                    </Pressable>
-                  )
+                  <Pressable
+                    style={[lc.actionBtn, lc.actionBtnRed, isDeleting && { opacity: 0.5 }]}
+                    onPress={() => { setConfirmRefundId(null); setConfirmDeleteId(prev => prev === ev.id ? null : ev.id); }}
+                    disabled={isDeleting}
+                    hitSlop={4}
+                  >
+                    {isDeleting
+                      ? <ActivityIndicator size="small" color={Colors.red} style={{ width: 12, height: 12 }} />
+                      : <Icon name="trash" size={12} color={Colors.red} />}
+                    <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Excluir</Text>
+                  </Pressable>
                 )}
               </View>
+            )}
+            {/* ConfirmGate — padrão único de confirmação sensível (F3) */}
+            {canRefund && (
+              <ConfirmGate
+                visible={confirmRefundId === ev.id}
+                message={`Devolver itens da compra de ${fmt(Math.abs(ev.amount))}?`}
+                confirmLabel="Sim, devolver"
+                onConfirm={() => { setConfirmRefundId(null); openRefund(ev); }}
+                onCancel={() => setConfirmRefundId(null)}
+                loading={isLoadingRefund}
+              />
+            )}
+            {canDelete && (
+              <ConfirmGate
+                visible={confirmDeleteId === ev.id}
+                message={`Excluir o débito manual de ${fmt(Math.abs(ev.amount))}? Isso não pode ser desfeito.`}
+                confirmLabel="Sim, excluir"
+                tone="red"
+                onConfirm={() => { setConfirmDeleteId(null); handleDelete(ev.id); }}
+                onCancel={() => setConfirmDeleteId(null)}
+                loading={isDeleting}
+              />
             )}
           </View>
         </View>
@@ -301,6 +296,18 @@ export function TabHistorico({
 }
 
 const lc = StyleSheet.create({
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 8,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 7, height: 7, borderRadius: 4 },
+  legendTxt: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600" },
   itemList: {
     marginTop: 5,
     gap: 3,
@@ -332,39 +339,30 @@ const lc = StyleSheet.create({
     marginTop: 6,
     gap: 8,
   },
+  // F3: alvo ≥40px (antes pv 4 / fonte 11)
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    minHeight: 40,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: Colors.border2,
     backgroundColor: Colors.bg2,
   },
   actionBtnAmber: {
     borderColor: Colors.amber + "55",
-    backgroundColor: Colors.amberD ?? Colors.bg2,
+    backgroundColor: Colors.amberD,
   },
   actionBtnRed: {
     borderColor: Colors.red + "55",
-    backgroundColor: Colors.redD ?? Colors.bg2,
+    backgroundColor: Colors.redD,
   },
   actionBtnTxt: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "600",
     color: Colors.violet3,
-  },
-  confirmRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  confirmTxt: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.ink2,
-    flex: 1,
   },
 });
