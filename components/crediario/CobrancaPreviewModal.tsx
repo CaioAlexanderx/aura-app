@@ -3,14 +3,21 @@
 // Entrega 3 (08/06/2026): permite revisar e editar a mensagem
 // antes de abrir o WhatsApp. Reutilizável em crediario.tsx e
 // cliente/[id].tsx.
+// F4 (08/07/2026 — spec §2.4): ModalPop na entrada, backdrop token
+// único (0.72), hover/pressed nos botões (antes zero feedback) e
+// reset da mensagem ao reabrir (antes dependia do pai).
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal, View, Text, Pressable, TextInput, StyleSheet,
   Platform, Linking, ScrollView,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { ModalPop } from "@/components/anim";
+import { Motion, webTransition } from "@/constants/motion";
+
+const IS_WEB = Platform.OS === "web";
 
 export type CobrancaPreviewProps = {
   visible: boolean;
@@ -36,9 +43,11 @@ export function CobrancaPreviewModal({
 }: CobrancaPreviewProps) {
   const [message, setMessage] = useState(initialMessage);
 
-  // Reseta mensagem quando o modal abre com nova proposta
-  // (useEffect alternativo: não importar useEffect, manter simples —
-  //  o pai é responsável por passar initialMessage atualizado a cada abertura).
+  // F4: reseta a mensagem sempre que o modal reabre com nova proposta
+  // (antes dependia do pai remontar o componente — risco de mensagem obsoleta).
+  useEffect(() => {
+    if (visible) setMessage(initialMessage);
+  }, [visible, initialMessage]);
 
   const initial = (recipientName.trim()[0] || "?").toUpperCase();
 
@@ -52,11 +61,15 @@ export function CobrancaPreviewModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={cs.backdrop} onPress={onClose}>
+        <ModalPop visible={visible} style={{ width: "100%", maxWidth: 480 } as any}>
         <Pressable style={cs.sheet} onPress={() => {}}>
           {/* Header: X */}
           <View style={cs.headerRow}>
             <Text style={cs.headerTitle}>Prévia da cobrança</Text>
-            <Pressable onPress={onClose} style={cs.xBtn}>
+            <Pressable
+              onPress={onClose}
+              style={({ hovered, pressed }: any) => [cs.xBtn, (hovered || pressed) && { backgroundColor: Colors.bg2 }, IS_WEB ? (webTransition("background-color", Motion.fast) as any) : null]}
+            >
               <Icon name="x" size={15} color={Colors.ink3} />
             </Pressable>
           </View>
@@ -101,18 +114,38 @@ export function CobrancaPreviewModal({
               Envio segue manual pelo WhatsApp. Nada é enviado sem você tocar em Enviar.
             </Text>
 
-            {/* Botões */}
+            {/* Botões — F4: hover lift + pressed (antes sem feedback algum) */}
             <View style={cs.btnRow}>
-              <Pressable style={cs.cancelBtn} onPress={onClose}>
+              <Pressable
+                style={({ hovered, pressed }: any) => [
+                  cs.cancelBtn,
+                  (hovered || pressed) && { borderColor: Colors.border2, backgroundColor: Colors.bg4 },
+                  pressed && ({ transform: [{ scale: 0.98 }] } as any),
+                  IS_WEB ? (webTransition(["background-color", "border-color", "transform"], Motion.fast) as any) : null,
+                ]}
+                onPress={onClose}
+              >
                 <Text style={cs.cancelTxt}>Cancelar</Text>
               </Pressable>
-              <Pressable style={cs.sendBtn} onPress={handleSend}>
+              <Pressable
+                style={({ hovered, pressed }: any) => [
+                  cs.sendBtn,
+                  hovered && !pressed && ({
+                    transform: [{ translateY: -2 }],
+                    ...(IS_WEB ? ({ boxShadow: "0 4px 16px rgba(37,211,102,0.35)" } as any) : null),
+                  } as any),
+                  pressed && ({ transform: [{ scale: 0.98 }] } as any),
+                  IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
+                ]}
+                onPress={handleSend}
+              >
                 <Icon name="message_circle" size={15} color="#fff" />
                 <Text style={cs.sendTxt}>Enviar pelo WhatsApp</Text>
               </Pressable>
             </View>
           </ScrollView>
         </Pressable>
+        </ModalPop>
       </Pressable>
     </Modal>
   );
@@ -121,14 +154,14 @@ export function CobrancaPreviewModal({
 const cs = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    // F4: backdrop token único (0.72) — antes 0.55, mais claro que os irmãos
+    backgroundColor: "rgba(3,5,14,0.72)",
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
   sheet: {
     width: "100%",
-    maxWidth: 480,
     backgroundColor: Colors.bg3,
     borderRadius: 20,
     padding: 20,
@@ -253,6 +286,8 @@ const cs = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
   },
   cancelTxt: {
     fontSize: 13,
@@ -268,6 +303,7 @@ const cs = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
+    minHeight: 44,
   },
   sendTxt: {
     fontSize: 13,
