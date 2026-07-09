@@ -26,8 +26,16 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type RefundResult } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { ModalPop } from "@/components/anim";
+import { ConfirmGate } from "@/components/ConfirmGate";
+import { Motion, webTransition } from "@/constants/motion";
 
-// ─── Tipos ────────────────────────────────────────────────────
+const IS_WEB = Platform.OS === "web";
+
+// F4 (spec §2.4): rótulos do stepper — antes eram 3 dots mudos.
+const STEP_LABELS = ["Itens", "Revisar", "Pronto"] as const;
+
+// ─── Tipos ────────────────────────────────────────
 export interface DevolucaoSaleItem {
   id: string;
   product_name: string;
@@ -51,7 +59,7 @@ interface Props {
 
 type Step = "select" | "review" | "done";
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────
 function fmtBRL(value: number): string {
   return value.toLocaleString("pt-BR", {
     style: "currency",
@@ -60,7 +68,7 @@ function fmtBRL(value: number): string {
   });
 }
 
-// ─── Componente ───────────────────────────────────────────────
+// ─── Componente ─────────────────────────────────
 export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Props) {
   const qc = useQueryClient();
 
@@ -68,6 +76,8 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [result, setResult] = useState<RefundResult | null>(null);
+  // F4: ConfirmGate substitui a nota miúda de irreversibilidade (10.5px)
+  const [confirmGateOpen, setConfirmGateOpen] = useState(false);
 
   // Mapa item.id → quantidade a devolver (string para TextInput)
   const [quantities, setQuantities] = useState<Record<string, string>>(() => {
@@ -79,12 +89,13 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
   // Motivo (opcional)
   const [reason, setReason] = useState("");
 
-  // ─── Reset ──────────────────────────────────────────────────
+  // ─── Reset ──────────────────────────────────────
   const reset = useCallback(() => {
     setStep("select");
     setLoading(false);
     setApiError(null);
     setResult(null);
+    setConfirmGateOpen(false);
     setReason("");
     const init: Record<string, string> = {};
     (sale?.items || []).forEach((it) => { init[it.id] = "0"; });
@@ -96,7 +107,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
     onClose();
   }, [reset, onClose]);
 
-  // ─── Derivados ──────────────────────────────────────────────
+  // ─── Derivados ──────────────────────────────────
   const selectedItems = (sale?.items || []).filter((it) => {
     const q = parseInt(quantities[it.id] || "0", 10);
     return q > 0;
@@ -107,7 +118,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
     return acc + it.unit_price * q;
   }, 0);
 
-  // ─── Step 1 → Step 2: validação ────────────────────────────
+  // ─── Step 1 → Step 2: validação ──────────────────────
   function handleGoReview() {
     if (selectedItems.length === 0) {
       toast.error("Selecione ao menos 1 item para devolver");
@@ -122,10 +133,11 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
       }
     }
     setApiError(null);
+    setConfirmGateOpen(false);
     setStep("review");
   }
 
-  // ─── Step 2 → Confirmar ─────────────────────────────────────
+  // ─── Step 2 → Confirmar ───────────────────────────
   async function handleConfirm() {
     setLoading(true);
     setApiError(null);
@@ -153,7 +165,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
     }
   }
 
-  // ─── Quantidade helpers ──────────────────────────────────────
+  // ─── Quantidade helpers ──────────────────────────────
   function setQty(itemId: string, raw: string) {
     const digits = raw.replace(/\D/g, "").slice(0, 4);
     setQuantities((prev) => ({ ...prev, [itemId]: digits }));
@@ -165,7 +177,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
     setQuantities((prev) => ({ ...prev, [item.id]: String(next) }));
   }
 
-  // ─── Stepper dots ────────────────────────────────────────────
+  // ─── Stepper dots ──────────────────────────────────
   const stepIndex = step === "select" ? 0 : step === "review" ? 1 : 2;
 
   if (!visible) return null;
@@ -177,6 +189,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={s.kvWrapper}
         >
+          <ModalPop visible={visible}>
           <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
 
             {/* ── Header ── */}
@@ -201,12 +214,26 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
               </Pressable>
             </View>
 
-            {/* ── Stepper ── */}
+            {/* ── Stepper — F4: rótulos + transição de cor ── */}
             <View style={s.stepsRow}>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={s.stepSegment}>
-                  {i > 0 && <View style={[s.stepLine, stepIndex >= i && s.stepLineActive]} />}
-                  <View style={[s.stepDot, stepIndex >= i && s.stepDotActive]} />
+                  {i > 0 && (
+                    <View style={[
+                      s.stepLine,
+                      stepIndex >= i && s.stepLineActive,
+                      IS_WEB ? (webTransition("background-color", Motion.slow) as any) : null,
+                    ]} />
+                  )}
+                  <View style={s.stepItem}>
+                    <View style={[
+                      s.stepDot,
+                      stepIndex >= i && s.stepDotActive,
+                      IS_WEB ? (webTransition(["background-color", "transform"], Motion.slow) as any) : null,
+                      stepIndex === i && ({ transform: [{ scale: 1.25 }] } as any),
+                    ]} />
+                    <Text style={[s.stepLabel, stepIndex >= i && s.stepLabelActive]}>{STEP_LABELS[i]}</Text>
+                  </View>
                 </View>
               ))}
             </View>
@@ -351,12 +378,10 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
                   );
                 })}
 
+                {/* F4: aviso duplicado de estimativa cortado — já existe no passo 1 */}
                 <View style={s.totalBox}>
                   <Text style={s.totalBoxLabel}>Total da devolução</Text>
                   <Text style={s.totalBoxValue}>{fmtBRL(estimatedTotal)}</Text>
-                  <Text style={s.totalBoxHint}>
-                    O servidor calculará o abatimento exato de parcelas ao confirmar.
-                  </Text>
                 </View>
 
                 {reason.trim() ? (
@@ -373,29 +398,42 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
                   </View>
                 )}
 
-                <Pressable
-                  style={({ pressed }) => [
-                    s.primaryBtn,
-                    { backgroundColor: Colors.red },
-                    pressed && { opacity: 0.85 },
-                    loading && { opacity: 0.6 },
-                  ]}
-                  onPress={handleConfirm}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Icon name="check" size={15} color="#fff" />
-                      <Text style={s.primaryBtnText}>Confirmar devolução</Text>
-                    </>
-                  )}
-                </Pressable>
-
-                <Text style={s.warningNote}>
-                  Esta ação é irreversível. As parcelas serão abatidas/canceladas e o estoque será restaurado.
-                </Text>
+                {/* F4: ConfirmGate vermelho — irreversibilidade legível (antes nota de 10.5px) */}
+                <ConfirmGate
+                  visible={confirmGateOpen}
+                  tone="red"
+                  message={`Esta ação é irreversível: parcelas serão abatidas/canceladas e o estoque restaurado. Devolver ${fmtBRL(estimatedTotal)}?`}
+                  confirmLabel="Sim, devolver"
+                  onConfirm={() => { setConfirmGateOpen(false); handleConfirm(); }}
+                  onCancel={() => setConfirmGateOpen(false)}
+                  loading={loading}
+                />
+                {!confirmGateOpen && (
+                  <Pressable
+                    style={({ hovered, pressed }: any) => [
+                      s.primaryBtn,
+                      { backgroundColor: Colors.red },
+                      hovered && !pressed && ({
+                        transform: [{ translateY: -2 }],
+                        ...(IS_WEB ? ({ boxShadow: "0 4px 16px rgba(248,113,113,0.3)" } as any) : null),
+                      } as any),
+                      pressed && ({ transform: [{ scale: 0.98 }] } as any),
+                      loading && { opacity: 0.6 },
+                      IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
+                    ]}
+                    onPress={() => setConfirmGateOpen(true)}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Icon name="check" size={15} color="#fff" />
+                        <Text style={s.primaryBtnText}>Confirmar devolução</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
               </ScrollView>
             )}
 
@@ -488,13 +526,14 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
             )}
 
           </Pressable>
+          </ModalPop>
         </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
 }
 
-// ─── Estilos ──────────────────────────────────────────────────
+// ─── Estilos ────────────────────────────────────
 const s = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -557,6 +596,7 @@ const s = StyleSheet.create({
     paddingVertical: 12,
   },
   stepSegment: { flexDirection: "row", alignItems: "center" },
+  stepItem: { alignItems: "center", gap: 4 },
   stepDot: {
     width: 10,
     height: 10,
@@ -564,7 +604,10 @@ const s = StyleSheet.create({
     backgroundColor: Colors.border2,
   },
   stepDotActive: { backgroundColor: Colors.violet3 },
-  stepLine: { width: 40, height: 2, backgroundColor: Colors.border2, marginHorizontal: 4 },
+  // F4: rótulos sob os dots
+  stepLabel: { fontSize: 9.5, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase" },
+  stepLabelActive: { color: Colors.violet3 },
+  stepLine: { width: 40, height: 2, backgroundColor: Colors.border2, marginHorizontal: 4, marginBottom: 14 },
   stepLineActive: { backgroundColor: Colors.violet3 },
   // ── Body ──
   body: { paddingHorizontal: 20, paddingBottom: 24 },
@@ -711,7 +754,6 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
   },
   totalBoxValue: { fontSize: 28, fontWeight: "800", color: Colors.green, marginTop: 4 },
-  totalBoxHint: { fontSize: 10.5, color: Colors.ink3, textAlign: "center", lineHeight: 14 },
   reasonBox: {
     marginTop: 12,
     padding: 12,
@@ -741,13 +783,6 @@ const s = StyleSheet.create({
     marginTop: 12,
   },
   errorText: { flex: 1, fontSize: 12, color: Colors.red, lineHeight: 16 },
-  warningNote: {
-    fontSize: 10.5,
-    color: Colors.ink3,
-    textAlign: "center",
-    lineHeight: 14,
-    marginTop: 12,
-  },
   // ── Resultado ──
   successBadge: {
     alignItems: "center",
