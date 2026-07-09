@@ -75,34 +75,48 @@ function ToastItemView({ item, onDismiss }: { item: ToastItem; onDismiss: () => 
   );
 }
 
-// -- P0 #12: Toast container centered on content area (offset for sidebar) --
+// -- Web portal container: renderiza direto no document.body para escapar de
+//    qualquer stacking context e garantir que fica acima de qualquer modal. --
+function WebToastPortal({ toasts, remove }: { toasts: ToastItem[]; remove: (id: string) => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted || typeof document === "undefined") return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { createPortal } = require("react-dom");
+
+  const content = (
+    <div style={{
+      position: "fixed",
+      top: 20,
+      left: 0,
+      right: 0,
+      zIndex: 999999,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 10,
+      pointerEvents: "none",
+      paddingLeft: window.innerWidth > 768 ? 240 : 0,
+    } as any}>
+      {toasts.map(t => (
+        <div key={t.id} style={{ pointerEvents: "auto", width: "100%", maxWidth: 440, padding: "0 16px" } as any}>
+          <ToastItemView item={t} onDismiss={() => remove(t.id)} />
+        </div>
+      ))}
+    </div>
+  );
+
+  return createPortal(content, document.body);
+}
+
+// -- Toast container --
 export function ToastContainer() {
   const { toasts, remove } = useToast();
   if (toasts.length === 0) return null;
 
   if (Platform.OS === "web" && typeof document !== "undefined") {
-    return (
-      <div style={{
-        position: "fixed",
-        top: 20,
-        left: 0,
-        right: 0,
-        zIndex: 99999,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 10,
-        pointerEvents: "none",
-        // Offset for sidebar: on wide screens, sidebar is ~240px, so shift right
-        paddingLeft: window.innerWidth > 768 ? 240 : 0,
-      } as any}>
-        {toasts.map(t => (
-          <div key={t.id} style={{ pointerEvents: "auto", width: "100%", maxWidth: 440, padding: "0 16px" } as any}>
-            <ToastItemView item={t} onDismiss={() => remove(t.id)} />
-          </div>
-        ))}
-      </div>
-    );
+    return <WebToastPortal toasts={toasts} remove={remove} />;
   }
 
   return (
@@ -130,7 +144,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: Colors.border2,
-    // P0 #12: colored left border for type visibility
     borderLeftWidth: 4,
     maxWidth: 440,
     minWidth: 240,

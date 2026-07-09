@@ -1,0 +1,27 @@
+name: Source integrity
+
+# Garante que nenhum arquivo entre na main salvo em base64 (armadilha do MCP
+# GitHub) ou com erro de sintaxe — o bug que pausou o build do Cloudflare.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: no-base64 / parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Install minimo: so o parser. Rapido (segundos), nao roda npm ci inteiro.
+      - name: Install @babel/parser
+        run: npm install --no-save @babel/parser
+
+      - name: Check source integrity
+        run: node scripts/check-source-integrity.mjs

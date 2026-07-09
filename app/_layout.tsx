@@ -7,13 +7,20 @@ import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
+import { isMicrositeHost, getMicrositeSlug, micrositeTargetPath } from "@/utils/microsite";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
+import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
+import { useKarateIntro } from "@/stores/karateIntro";
 
 const queryClient = new QueryClient();
+
+// URL do app administrativo (login/painel da federação). O microsite
+// ({slug}.getaura.com.br) é PÚBLICO-only e manda admin/login pra cá.
+const APP_URL = "https://app.getaura.com.br";
 
 function checkVerifiedParam() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
@@ -30,6 +37,8 @@ function checkVerifiedParam() {
 
 function AuthGuard() {
   const { token, user, company, isHydrated, isDemo, isStaff, trialActive, hydrate } = useAuthStore();
+  const karateIntroPending = useKarateIntro((st) => st.pending);
+  const consumeKarateIntro = useKarateIntro((st) => st.consume);
   const segments = useSegments();
   const router = useRouter();
 
@@ -54,6 +63,41 @@ function AuthGuard() {
   }, [isHydrated, token]);
 
   useEffect(() => {
+    // Microsite ({slug}.getaura.com.br): domínio PÚBLICO-only. Só as páginas
+    // públicas (hub, portal do dojô, portal/perfil do praticante, inscrição,
+    // ranking embed, verificação de carteirinha) renderizam aqui. Qualquer
+    // rota de login/admin sai do subdomínio para o app principal — redirect de
+    // página inteira (não router.replace, que é mesmo host). Gateado por
+    // isMicrositeHost() → no domínio principal e no nativo este bloco é inerte.
+    if (isMicrositeHost()) {
+      // Backstop de roteamento: o replaceState do micrositeBootstrap nem sempre
+      // é lido pelo Expo Router no bundle web, então a raiz ("fpkt.getaura.com.br")
+      // e links limpos ("/inscricao/x") caiam no app. Aqui reescrevemos para a
+      // forma interna /karate/{slug}/... via router.replace (confiável).
+      const micrositeSlug = getMicrositeSlug();
+      if (micrositeSlug && segments[0] !== "karate") {
+        const cleanPath = typeof window !== "undefined" ? window.location.pathname : "/";
+        router.replace(micrositeTargetPath(micrositeSlug, cleanPath) as any);
+        return;
+      }
+      const onPublicMicrosite = segments[0] === "karate" && (
+        segments.length <= 2 ||                 // hub: /karate/{slug}
+        segments[1] === "verify" ||             // carteirinha pública
+        segments[2] === "dojo" ||               // portal do dojô (OTP)
+        segments[2] === "praticante" ||         // portal do praticante (OTP)
+        segments[2] === "p" ||                  // perfil público reduzido
+        segments[2] === "inscricao" ||          // inscrição pública
+        segments[2] === "ranking" ||              // ranking embed
+        segments[2] === "consulta" ||          // consulta publica de praticante
+        segments[2] === "meus-certificados"    // participante: meus certificados
+      );
+      if (!onPublicMicrosite) {
+        if (typeof window !== "undefined") window.location.href = APP_URL;
+        return;
+      }
+      return; // rota pública do microsite: renderiza sem o guard de auth
+    }
+
     if (!isHydrated) return;
 
     const inAuth     = segments[0] === "(auth)";
@@ -89,7 +133,9 @@ function AuthGuard() {
       segments[2] === "praticante" ||
       segments[2] === "p" ||
       segments[2] === "inscricao" ||
-      segments[2] === "ranking"
+      segments[2] === "ranking" ||
+      segments[2] === "consulta" ||
+      segments[2] === "meus-certificados"
     );
     if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 
@@ -120,6 +166,7 @@ function AuthGuard() {
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
         isStudio ? "/studio/(estudio)"     :
+        isKarate ? "/karate"               :
         "/(tabs)"
       );
       return;
@@ -129,6 +176,7 @@ function AuthGuard() {
         isOdonto ? "/dental/(clinic)/hoje" :
         isFood   ? "/food/(salao)/mesas"   :
         isStudio ? "/studio/(estudio)"     :
+        isKarate ? "/karate"               :
         "/(tabs)"
       );
       return;
@@ -161,13 +209,22 @@ function AuthGuard() {
     const isOwner          = memberRole === "owner";
     const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
 
-    if (token && needsCheckout && (inTabs || onDentalClinic || onFoodSalao || onStudio) && !onCheckout) {
+    // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
+    // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
+    // Antes, usuário com billing inativo que chegava em /empresas ficava preso
+    // sem nunca ser encaminhado ao checkout.
+    if (token && needsCheckout && !onCheckout) {
       router.replace("/(tabs)/checkout");
       return;
     }
   }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
 
-  return <Slot />;
+  return (
+    <>
+      <Slot />
+      {karateIntroPending && <KarateLoginTransition onDone={consumeKarateIntro} />}
+    </>
+  );
 }
 
 export default function RootLayout() {

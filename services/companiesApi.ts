@@ -125,7 +125,7 @@ export var companiesApi = {
     });
   },
   updateMember: function(companyId: string, mid: string, body: any) { return request<any>("/companies/" + companyId + "/members/" + mid, { method: "PATCH", body: body }); },
-  removeMember: function(companyId: string, mid: string) { return request<any>("/companies/" + companyId + "/members/" + mid, { method: "DELETE" }); },
+  removeMember: function(companyId: string, mid: string, hard?: boolean) { return request<any>("/companies/" + companyId + "/members/" + mid + (hard ? "?hard=true" : ""), { method: "DELETE" }); },
   membersBilling: function(companyId: string) { return request<any>("/companies/" + companyId + "/members/billing"); },
   appointments: function(companyId: string, start?: string, end?: string) { return request<any>("/companies/" + companyId + "/appointments?start=" + (start || "") + "&end=" + (end || "")); },
   createAppointment: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/appointments", { method: "POST", body: body }); },

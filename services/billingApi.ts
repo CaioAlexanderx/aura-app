@@ -18,6 +18,14 @@ export type SubscribeResponse = {
   pix_expiration?: string | null;
 };
 
+export type KarateGateResponse = {
+  state: "ok" | "blocked";
+  amount: number;
+  billing_status: string | null;
+  due_date: string | null;
+  has_subscription: boolean;
+};
+
 export var billingApi = {
   status: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/status"); },
   tokenize: function(companyId: string, cardData: {
@@ -46,4 +54,6 @@ export var billingApi = {
   invoices: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/invoices"); },
   generatePix: function(companyId: string, paymentId: string) { return request<any>("/companies/" + companyId + "/billing/generate-pix/" + paymentId, { method: "POST" }); },
   plans: function() { return request<any>("/billing/plans"); },
+  // Karatê: estado binário do gate de cobrança (ok | blocked) + valor fixo.
+  karateGate: function(companyId: string) { return request<KarateGateResponse>("/companies/" + companyId + "/billing/karate-gate"); },
 };

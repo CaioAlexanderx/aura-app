@@ -1,6 +1,19 @@
+# Assets com HASH no nome (Expo web export) — imutáveis, cache longo.
+/_expo/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Demais respostas (HTML/entry da SPA, JSON, etc.) — sempre revalidar para
+# não servir um index.html antigo apontando p/ chunks de build anterior.
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
   X-XSS-Protection: 1; mode=block
+  Cache-Control: public, max-age=0, must-revalidate
