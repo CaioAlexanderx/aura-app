@@ -214,7 +214,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
         // "inactive" (baseado em is_active) em vez de "suspended" — tratamos os
         // dois como "não ativo" por compatibilidade retroativa.
         // Se o backend expuser is_active, ele tem precedência.
-        const active = d.is_active !== undefined ? !!d.is_active : (d.status !== "suspended" && d.status !== "inactive");
+        const active = d.is_active !== undefined ? !!d.is_active : (d.status !== "inactive");
         const { region_pick, region_custom } = resolveRegionPick(d.region);
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",

@@ -33,10 +33,10 @@ export function Badge({ status, dojoStatus, affiliationStatus, label, style }: B
   let color: string, bg: string, icon: string, resolvedLabel: string;
 
   if (dojoStatus) {
-    const s = KarateDojoStatus[dojoStatus];
+    const s = KarateDojoStatus[dojoStatus] ?? KarateDojoStatus.inactive;
     color = s.color; bg = s.bg; icon = s.icon; resolvedLabel = label ?? s.label;
   } else if (affiliationStatus) {
-    const s = KarateAffiliationStatus[affiliationStatus];
+    const s = KarateAffiliationStatus[affiliationStatus] ?? KarateAffiliationStatus.inactive;
     color = s.color; bg = s.bg; icon = s.icon; resolvedLabel = label ?? s.label;
   } else {
     const key: KarateStatusKey = status ?? "neutral";

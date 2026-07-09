@@ -34,7 +34,7 @@ import {
   Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, ShojiPalette, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, ShojiPalette, KarateFonts, annuityStatusView } from "@/constants/karateTheme";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -72,23 +72,9 @@ const SIZE_TIER_LABELS: Record<SizeTier, string> = {
   over_150: "Acima 150",
 };
 
-const ANNUITY_STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
-  paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,     bg: ShojiPalette.okSoft },
-  due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,   bg: ShojiPalette.warnSoft },
-  overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,  bg: ShojiPalette.alertSoft },
-  defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger, bg: ShojiPalette.dangerSoft },
-  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral,bg: ShojiPalette.neutralSoft },
-  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
-};
-
-// Fallback neutro para qualquer status fora do ANNUITY_STATUS_MAP — evita que
-// um status desconhecido (ex.: novo valor do enum ainda não mapeado aqui)
-// derrube a linha inteira do card (Cannot read properties of undefined
-// (reading 'bg')), o que blanqueava a lista inteira em vez de só o badge.
-// Mesmo padrão defensivo do `sm()` em AnuidadeCard.tsx.
-const ANNUITY_STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+// Estado da anuidade -> view canônica (fonte única: annuityStatusView).
 function annuityStatusMeta(status: string) {
-  return ANNUITY_STATUS_MAP[status as AnnuityStatus] || { ...ANNUITY_STATUS_FALLBACK, label: status || "\u2014" };
+  return annuityStatusView(status);
 }
 
 function AnnuityStatusBadge({ status }: { status: AnnuityStatus }) {
@@ -109,7 +95,7 @@ function formatCurrency(v: number) {
 }
 
 const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
-  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Suspenso", no_charge: "Sem cobrança",
+  paid: "Pago", due: "A vencer", overdue: "Vencido", defaulting: "Inadimplente", suspended: "Inadimplente", no_charge: "Sem cobrança",
 };
 
 interface Props { federationId: string; }
@@ -161,7 +147,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const filteredAnnuities = useMemo(() => {
     const byStatus = filter === "all"
       ? annuities
-      : annuities.filter((a) => a.status === filter);
+      : annuities.filter((a) => annuityStatusView(a.status).key === filter);
     const needle = q.trim().toLowerCase();
     if (!needle) return byStatus;
     return byStatus.filter((a) =>
@@ -386,7 +372,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
               <Text style={st.annuityAmount}>{formatCurrency(ann.amount)}</Text>
               <AnnuityStatusBadge status={ann.status} />
               <View style={st.rowActions}>
-                {ann.status === "no_charge" && (
+                {annuityStatusView(ann.status).key === "no_charge" && (
                   <TouchableOpacity
                     style={st.launchBtn}
                     onPress={() => setChargeTarget(ann)}
@@ -397,7 +383,7 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
                     <Text style={st.launchBtnLabel}>Lançar anuidade</Text>
                   </TouchableOpacity>
                 )}
-                {(ann.status === "due" || ann.status === "overdue" || ann.status === "defaulting") && (
+                {(["due", "overdue", "defaulting"].includes(annuityStatusView(ann.status).key)) && (
                   <TouchableOpacity
                     style={st.pixBtn}
                     onPress={() => setPixTarget(ann)}

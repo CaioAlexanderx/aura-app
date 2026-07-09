@@ -195,37 +195,72 @@ export const KarateSpacing = {
 // ─────────────────────────────────────────────────────────────
 // Status do Dojô — label + ícone + cor (sempre icon+texto)
 // ─────────────────────────────────────────────────────────────
-// b1: o backend agora manda 'inactive' (baseado em is_active) em vez de
-// 'suspended'. Mantemos 'suspended' no union por compatibilidade retroativa
-// (registros/telas antigas ainda podem referenciá-lo), mas ambos exibem o
-// mesmo rótulo "Inativo" na UI.
-export type DojoStatus = "active" | "expiring" | "overdue" | "defaulting" | "suspended" | "inactive";
+// Status do Dojô — apenas 'active'/'inactive' (derivado de is_active no backend,
+// decisão de produto 02/07/2026). Inadimplência é métrica SEPARADA (anuidade),
+// nunca status do dojô. 'suspended' é aceito só como sinônimo retroativo de inativo.
+export type DojoStatus = "active" | "inactive";
 
 export const KarateDojoStatus: Record<DojoStatus, {
   label: string; icon: string; color: string; bg: string;
 }> = {
-  active:     { label: "Ativo",        icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
-  expiring:   { label: "A vencer",     icon: "alert-circle",     color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
-  overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,   bg: ShojiPalette.alertWash },
-  defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger,  bg: ShojiPalette.dangerWash },
-  // 'inactive' é o valor atual do backend; 'suspended' fica mapeado igual
-  // para compatibilidade retroativa (b1).
-  inactive:   { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
-  suspended:  { label: "Inativo",      icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  active:   { label: "Ativo",   icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
+  inactive: { label: "Inativo", icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
 } as const;
 
+/** Normaliza qualquer valor (inclui 'suspended' legado) para a view do dojô. */
+export function dojoStatusView(status?: string | null) {
+  const key: DojoStatus = status === "active" ? "active" : "inactive";
+  return { key, ...KarateDojoStatus[key] };
+}
+
 // ─────────────────────────────────────────────────────────────
-// Status do Praticante
+// Status do Praticante — apenas 'active'/'inactive' (derivado de is_active).
 // ─────────────────────────────────────────────────────────────
-export type AffiliationStatus = "active" | "pending" | "inactive";
+export type AffiliationStatus = "active" | "inactive";
 
 export const KarateAffiliationStatus: Record<AffiliationStatus, {
   label: string; icon: string; color: string; bg: string;
 }> = {
-  active:   { label: "Ativo",    icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
-  pending:  { label: "Pendente", icon: "time",             color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
-  inactive: { label: "Inativo",  icon: "close-circle",     color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+  active:   { label: "Ativo",   icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
+  inactive: { label: "Inativo", icon: "close-circle",     color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
 } as const;
+
+export function affiliationStatusView(status?: string | null) {
+  const key: AffiliationStatus = status === "active" ? "active" : "inactive";
+  return { key, ...KarateAffiliationStatus[key] };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Anuidade — estado EXIBIDO (derivado no backend). Vocabulário único e amigável:
+// Pago · A vencer · Vencido · Inadimplente · Sem cobrança.
+// Fonte única: colapsa 'suspended'(>180d) em Inadimplente, 'pending'→A vencer,
+// 'confirmed'→Pago; qualquer outro cai em 'Sem cobrança'. Elimina a duplicação
+// que existia em 4 telas com vocabulários levemente diferentes.
+// ─────────────────────────────────────────────────────────────
+export type AnnuityView = "paid" | "due" | "overdue" | "defaulting" | "no_charge";
+
+export const KarateAnnuityStatus: Record<AnnuityView, {
+  label: string; icon: string; color: string; bg: string;
+}> = {
+  paid:       { label: "Pago",         icon: "checkmark-circle",      color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
+  due:        { label: "A vencer",     icon: "time",                  color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
+  overdue:    { label: "Vencido",      icon: "warning",               color: ShojiPalette.alert,   bg: ShojiPalette.alertWash },
+  defaulting: { label: "Inadimplente", icon: "close-circle",          color: ShojiPalette.danger,  bg: ShojiPalette.dangerWash },
+  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralWash },
+} as const;
+
+/** Normaliza qualquer status de anuidade (armazenado OU computado) para a view. */
+export function annuityStatusView(status?: string | null) {
+  let key: AnnuityView;
+  switch (status) {
+    case "paid": case "confirmed":       key = "paid"; break;
+    case "due": case "pending":          key = "due"; break;
+    case "overdue":                      key = "overdue"; break;
+    case "defaulting": case "suspended": key = "defaulting"; break;
+    default:                             key = "no_charge";
+  }
+  return { key, ...KarateAnnuityStatus[key] };
+}
 
 // ─────────────────────────────────────────────────────────────
 // Faixas (Belt) — paleta DESSATURADA canônica (10 faixas Shotokan)

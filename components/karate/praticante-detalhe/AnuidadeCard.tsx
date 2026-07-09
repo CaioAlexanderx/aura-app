@@ -19,7 +19,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts, ShojiPalette, annuityStatusView } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { karateApi, AnnuityStatus, CpfAnnuity } from "@/services/karateApi";
 import { toast } from "@/components/Toast";
@@ -33,23 +33,9 @@ interface Props {
   allowed: boolean; // pode lançar anuidade (mesmo gate de escrita da ficha)
 }
 
-const STATUS_MAP: Partial<Record<AnnuityStatus, { label: string; icon: string; color: string; bg: string }>> = {
-  paid:       { label: "Pago",         icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okSoft },
-  pending:    { label: "Pendente",     icon: "time",             color: ShojiPalette.warn,    bg: ShojiPalette.warnSoft },
-  due:        { label: "A vencer",     icon: "time",             color: ShojiPalette.warn,    bg: ShojiPalette.warnSoft },
-  overdue:    { label: "Vencido",      icon: "warning",          color: ShojiPalette.alert,   bg: ShojiPalette.alertSoft },
-  defaulting: { label: "Inadimplente", icon: "close-circle",     color: ShojiPalette.danger,  bg: ShojiPalette.dangerSoft },
-  suspended:  { label: "Suspenso",     icon: "ban",              color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
-  no_charge:  { label: "Sem cobrança", icon: "remove-circle-outline", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
-  cancelled:  { label: "Cancelado",    icon: "close-circle",     color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft },
-};
-
-// Fallback neutro para status fora do STATUS_MAP (ex.: "Suspenso" ou qualquer
-// valor não mapeado) — evita crash (Cannot read properties of undefined
-// (reading 'bg')) que derrubava a ficha inteira pro error boundary.
-const STATUS_FALLBACK = { label: "\u2014", icon: "help-circle", color: ShojiPalette.neutral, bg: ShojiPalette.neutralSoft };
+// Estado da anuidade -> view canônica (fonte única: annuityStatusView).
 function sm(status: string) {
-  return (STATUS_MAP as any)[status] || { ...STATUS_FALLBACK, label: status || "\u2014" };
+  return annuityStatusView(status);
 }
 
 function formatCurrency(v: number) {

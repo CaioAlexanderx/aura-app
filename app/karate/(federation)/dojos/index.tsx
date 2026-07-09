@@ -54,12 +54,11 @@ const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannua
 // Todos os status reais (computeDojoStatus). b1: o backend agora manda
 // 'inactive' (baseado em is_active) em vez de 'suspended' — a key do filtro
 // precisa casar com o valor real que a API envia.
+// Status de dojô é só Ativo/Inativo (computeDojoStatus). Inadimplência é
+// métrica separada (anuidade), não filtra dojô aqui.
 const STATUS_FILTERS: { key: DojoStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "active", label: "Ativo" },
-  { key: "expiring", label: "A vencer" },
-  { key: "overdue", label: "Vencido" },
-  { key: "defaulting", label: "Inadimplente" },
   { key: "inactive", label: "Inativo" },
 ];
 
