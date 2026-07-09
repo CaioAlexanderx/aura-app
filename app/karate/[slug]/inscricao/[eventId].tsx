@@ -121,7 +121,7 @@ export default function InscricaoScreen() {
   const [fedName, setFedName] = useState("FPKT");
 
   const [step, setStep] = useState<Step>("evento");
-  const [guest, setGuest] = useState({ name: "", cpf: "", email: "", phone: "" });
+  const [guest, setGuest] = useState({ name: "", cpf: "", email: "", phone: "", birth_date: "", belt: "", dojo: "", professor: "" });
   const [err, setErr] = useState<Err>(null);
   const [errMsg, setErrMsg] = useState<string>("");
   const [cpf, setCpf] = useState("");
@@ -229,14 +229,27 @@ export default function InscricaoScreen() {
   };
 
   const doSubmitGuest = async () => {
-    if (!guest.name.trim()) { setErr("generic"); setErrMsg("Informe seu nome completo."); return; }
+    // Não-filiado: todos os campos abaixo são obrigatórios (pedido da federação).
+    // CPF permanece opcional. birth_date aceita dd/mm/aaaa ou aaaa-mm-dd (backend normaliza).
+    const missing: string[] = [];
+    if (!guest.name.trim()) missing.push("Nome completo");
+    if (!guest.birth_date.trim()) missing.push("Data de nascimento");
+    if (!guest.email.trim()) missing.push("E-mail");
+    if (!guest.phone.trim()) missing.push("Telefone");
+    if (!guest.belt.trim()) missing.push("Faixa");
+    if (!guest.dojo.trim()) missing.push("Dojô");
+    if (!guest.professor.trim()) missing.push("Professor");
+    if (missing.length) { setErr("generic"); setErrMsg(`Preencha os campos obrigatórios: ${missing.join(", ")}.`); return; }
     setBusy(true); setErr(null);
     try {
       const r = await karatePortalApi.submitInscricao(
         slugStr, eventIdStr, (guest.cpf.trim() || cpf.trim()),
         isCompetition ? undefined : responses,
         isCompetition ? selectedCategoryId || undefined : undefined,
-        { name: guest.name.trim(), cpf: guest.cpf.trim(), email: guest.email.trim(), phone: guest.phone.trim() }
+        {
+          name: guest.name.trim(), cpf: guest.cpf.trim(), email: guest.email.trim(), phone: guest.phone.trim(),
+          birth_date: guest.birth_date.trim(), belt: guest.belt.trim(), dojo: guest.dojo.trim(), professor: guest.professor.trim(),
+        }
       );
       setPayment(r.payment);
       setStep("pix");
@@ -410,6 +423,14 @@ export default function InscricaoScreen() {
               <TextInput style={styles.input} value={guest.email} onChangeText={(v) => setGuest({ ...guest, email: v })} placeholder="voce@email.com" placeholderTextColor={KarateColors.ink4} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
               <Text style={styles.label}>Telefone</Text>
               <TextInput style={styles.input} value={guest.phone} onChangeText={(v) => setGuest({ ...guest, phone: v })} placeholder="(11) 99999-9999" placeholderTextColor={KarateColors.ink4} keyboardType="phone-pad" />
+              <Text style={styles.label}>Data de nascimento</Text>
+              <TextInput style={styles.input} value={guest.birth_date} onChangeText={(v) => setGuest({ ...guest, birth_date: v })} placeholder="dd/mm/aaaa" placeholderTextColor={KarateColors.ink4} keyboardType="numeric" />
+              <Text style={styles.label}>Faixa</Text>
+              <TextInput style={styles.input} value={guest.belt} onChangeText={(v) => setGuest({ ...guest, belt: v })} placeholder="Ex.: Faixa Marrom" placeholderTextColor={KarateColors.ink4} />
+              <Text style={styles.label}>Dojô</Text>
+              <TextInput style={styles.input} value={guest.dojo} onChangeText={(v) => setGuest({ ...guest, dojo: v })} placeholder="Nome do seu dojô" placeholderTextColor={KarateColors.ink4} />
+              <Text style={styles.label}>Professor</Text>
+              <TextInput style={styles.input} value={guest.professor} onChangeText={(v) => setGuest({ ...guest, professor: v })} placeholder="Nome do seu professor" placeholderTextColor={KarateColors.ink4} />
               {err === "generic" ? <Text style={styles.inlineErr}>{errMsg}</Text> : null}
             </>
           ) : step === "confirma" ? (

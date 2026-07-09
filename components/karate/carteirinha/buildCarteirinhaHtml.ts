@@ -124,6 +124,9 @@ function qrImgUrl(data: string, size = 220): string {
     "&data=" + encodeURIComponent(data) + "&bgcolor=ffffff&color=1a1611&margin=1";
 }
 
+// Opacidade única da marca (frente = verso), por pedido da federação.
+const WM_OPACITY = 0.1;
+
 export type CarteirinhaBatchOptions = {
   federationName?: string;
 };
@@ -152,7 +155,9 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
         '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
         '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>' +
-      '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>'
+      '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
+      // Nº CBKT só aparece quando a pessoa tem o registro (senão o campo some).
+      (card.cbkt_number ? '<div class="fld reg-fld cbkt-fld"><div class="flabel">Nº CBKT</div><div class="fvalue mono cbkt-num">' + esc(card.cbkt_number) + '</div></div>' : '')
     )
     : (
       '<div class="grid2">' +
@@ -237,16 +242,8 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
   );
 }
 
-export function buildCarteirinhaHtml(cards: MembershipCard[], options?: CarteirinhaBatchOptions): string {
-  const total = cards.length;
-
-  const cells = cards.map(function (card) {
-    return renderFront(card, options) + "\n" + renderBack(card, options);
-  }).join("\n");
-
-  let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
-  html += '<title>Carteirinhas Aura - ' + total + ' carteirinha(s)</title>';
-  html += '<style>';
+function cardCss(): string {
+  let html = '';
   // Fontes do mock aprovado (Shippori Mincho / Zen Kaku Gothic New / DM Mono)
   html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap\');';
   html += '@page{size:A4;margin:10mm}';
@@ -258,8 +255,8 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.2mm 5.1mm 3.5mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
-  html += '.wm-front{left:70%;top:50%;width:52mm;opacity:0.12;transform:translate(-50%,-50%)}';
-  html += '.wm-back{left:50%;top:56%;width:41mm;opacity:0.05;transform:translate(-50%,-50%)}';
+  html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
+  html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
 
   // header
   html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
@@ -288,7 +285,7 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
   html += '.flabel{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New",sans-serif;font-size:6.4pt;font-weight:500;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.1;font-size:5.8pt}';
+  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm}';
   html += '.frow{display:flex;gap:2.6mm}';
   html += '.f-date{width:14mm;flex:none;min-width:0}';
   html += '.f-dojo{flex:1;min-width:0}';
@@ -303,6 +300,8 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.is-preta .name-fld{margin-bottom:0.2mm}';
   html += '.is-preta .reg-fld{margin-top:1.0mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:500;color:' + RED + ';letter-spacing:0.2pt}';
+  html += '.cbkt-fld{margin-top:1.0mm}';
+  html += '.cbkt-num{font-family:"DM Mono",monospace;font-weight:500;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
   html += '.belt-label{margin-top:0;font-weight:700}';
@@ -339,7 +338,38 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
   html += '.top-bar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;z-index:999;display:flex;align-items:center;justify-content:space-between;font-family:-apple-system,"Segoe UI",sans-serif}';
   html += '.top-bar span{color:#a78bfa;font-size:12px}.top-bar b{color:#e2e8f0;font-size:13px}';
   html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.grid{padding-top:0;padding-bottom:0}body{background:#fff}}';
+  return html;
+}
+
+// Preview de UM cartão (frente OU verso) usando exatamente o mesmo HTML/CSS
+// da impressão — usado pelo <iframe> do CarteirinhaPanel (preview = impressão).
+// Um pequeno script escala o cartão (tamanho físico em mm) para preencher a
+// largura do iframe, mantendo a proporção CR80.
+export function buildSingleCardHtml(card: MembershipCard, face: "front" | "back"): string {
+  const inner = face === "back" ? renderBack(card) : renderFront(card);
+  let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
+  html += '<style>' + cardCss();
+  html += 'html,body{background:transparent!important}';
+  html += 'body{margin:0;overflow:hidden}';
+  html += '#wrap{transform-origin:top left}';
+  html += '#wrap .cr80{box-shadow:0 6px 20px rgba(0,0,0,0.10)}';
   html += '</style></head><body>';
+  html += '<div id="wrap">' + inner + '</div>';
+  html += '<script>(function(){function fit(){var w=document.getElementById("wrap");if(!w)return;var c=w.firstElementChild;if(!c)return;var s=window.innerWidth/c.offsetWidth;w.style.transform="scale("+s+")";document.body.style.height=(c.offsetHeight*s)+"px";}window.addEventListener("resize",fit);fit();setTimeout(fit,60);setTimeout(fit,300);})();<\/script>';
+  html += '</body></html>';
+  return html;
+}
+
+export function buildCarteirinhaHtml(cards: MembershipCard[], options?: CarteirinhaBatchOptions): string {
+  const total = cards.length;
+
+  const cells = cards.map(function (card) {
+    return renderFront(card, options) + "\n" + renderBack(card, options);
+  }).join("\n");
+
+  let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
+  html += '<title>Carteirinhas Aura - ' + total + ' carteirinha(s)</title>';
+  html += '<style>' + cardCss() + '</style></head><body>';
 
   html += '<div class="top-bar"><div><span>Carteirinhas Aura — A4, ' + CARD_W_MM + 'mm x ' + CARD_H_MM + 'mm · frente e verso</span><br>';
   html += '<b>' + total + ' carteirinha' + (total > 1 ? 's' : '') + ' selecionada' + (total > 1 ? 's' : '') + ' (' + (total * 2) + ' cartões p/ impressão)</b></div></div>';

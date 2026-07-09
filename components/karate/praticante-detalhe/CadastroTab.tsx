@@ -1,10 +1,10 @@
 import React from "react";
 import {
-  View, Text, Image,
+  View, Text,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { PractitionerDetail } from "@/services/karateApi";
 import { formatIsoToBr } from "@/components/inputs/DateInput";
 import { formatEventDateNumeric } from "@/utils/eventDate";
@@ -61,25 +61,7 @@ export function CadastroTab({ practitioner }: Props) {
 
   return (
     <View style={tabStyles.tab}>
-      {// Foto / avatar
-        p.photo_url ? (
-          <View style={tabStyles.photoWrap}>
-            <Image
-              source={{ uri: p.photo_url }}
-              style={tabStyles.photo}
-              accessibilityLabel={`Foto de ${p.full_name}`}
-            />
-          </View>
-        ) : (
-          <View style={tabStyles.avatarWrap}>
-            <View style={tabStyles.avatar}>
-              <Text style={tabStyles.avatarTxt}>
-                {p.full_name[0]?.toUpperCase() || "?"}
-              </Text>
-            </View>
-          </View>
-        )}
-
+      {/* Foto movida para o avatar do cabeçalho da ficha (ao lado do nome). */}
       <SectionHeader title="DADOS PESSOAIS" />
       <Field label="Nome completo" value={p.full_name} />
       <Field label="CPF" value={formatCpfDisplay(p.cpf)} />
@@ -172,10 +154,5 @@ const fieldStyles = StyleSheet.create({
 
 const tabStyles = StyleSheet.create({
   tab:       { padding: 16, gap: 6 } as ViewStyle,
-  photoWrap: { alignItems: "center", marginBottom: 8 } as ViewStyle,
-  photo:     { width: 80, height: 80, borderRadius: 40, borderWidth: 2, borderColor: KarateColors.border2 } as any,
-  avatarWrap: { alignItems: "center", marginBottom: 8 } as ViewStyle,
-  avatar:   { width: 80, height: 80, borderRadius: 40, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  avatarTxt: { fontFamily: KarateFonts.heading, fontSize: 32, color: KarateColors.primary } as TextStyle,
 });
 

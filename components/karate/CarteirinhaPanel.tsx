@@ -38,7 +38,7 @@
 //   "Imprimir"; o usuário salva como PDF pelo diálogo de impressão do
 //   navegador — sem libs pesadas. Web-only (window/Blob); em nativo, toast.
 // ============================================================
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Platform, View, Text, TouchableOpacity, Alert, Modal, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
@@ -47,7 +47,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { notify } from "@/utils/webAlert";
 import { toast } from "@/components/Toast";
-import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
+import { buildCarteirinhaHtml, buildSingleCardHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { CarteirinhaCard } from "@/components/karate/CarteirinhaCard";
 import { karateCardApi, MembershipCard } from "@/services/karateCardApi";
@@ -56,6 +56,34 @@ import { karateApi } from "@/services/karateApi";
 interface CarteirinhaPanelProps {
   federationId: string;
   practitionerId: string;
+}
+
+// Preview do cartão. Na WEB, renderiza o MESMO HTML da impressão
+// (buildSingleCardHtml) num <iframe> — visualização 1:1 com a impressão.
+// Em nativo, cai no card RN (CarteirinhaCard).
+function CardPreviewFrame({ card, face }: { card: MembershipCard; face: "front" | "back" }) {
+  const hostRef = useRef<any>(null);
+  const isWeb = Platform.OS === "web";
+  useEffect(() => {
+    if (!isWeb) return;
+    const host: HTMLElement | null = hostRef.current;
+    if (!host) return;
+    host.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("title", face === "back" ? "Carteirinha — verso" : "Carteirinha — frente");
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    iframe.style.border = "0";
+    iframe.style.display = "block";
+    iframe.style.background = "transparent";
+    iframe.setAttribute("scrolling", "no");
+    iframe.srcdoc = buildSingleCardHtml(card, face);
+    host.appendChild(iframe);
+    return () => { host.innerHTML = ""; };
+  }, [card, face, isWeb]);
+
+  if (!isWeb) return <CarteirinhaCard card={card} face={face} />;
+  return <View ref={hostRef} style={{ width: "100%", maxWidth: 520, alignSelf: "center", aspectRatio: 85.6 / 54 }} />;
 }
 
 
@@ -264,8 +292,8 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
         ))}
       </View>
 
-      {/* o cartão */}
-      <CarteirinhaCard card={card} face={face} />
+      {/* o cartão — preview idêntico à impressão (mesmo HTML) na web */}
+      <CardPreviewFrame card={card} face={face} />
 
       {/* meta */}
       <View style={styles.meta}>

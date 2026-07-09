@@ -102,7 +102,7 @@ export function EventInstructorsManager({ federationId, eventId }: { federationI
               <Text style={s.lbl}>Nome</Text>
               <TextInput style={s.input} value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="Ex.: Kazuo Nagamine" placeholderTextColor={P.ink4} />
               <Text style={s.lbl}>Cargo (opcional)</Text>
-              <TextInput style={s.input} value={form.role} onChangeText={(v) => setForm({ ...form, role: v })} placeholder="Ex.: Presidente FPKT / Ministrante" placeholderTextColor={P.ink4} />
+              <TextInput style={s.input} value={form.role} onChangeText={(v) => setForm({ ...form, role: v })} placeholder="Ex.: Diretor Técnico FPKT" placeholderTextColor={P.ink4} />
               <Text style={s.lbl}>Assinatura (PNG, opcional)</Text>
               <View style={s.sigUpload}>
                 {form.signature_url ? <Image source={{ uri: form.signature_url }} style={s.sigBig} resizeMode="contain" /> : <View style={[s.sigBig, s.sigPh]}><Text style={s.sigPhTxt}>sem imagem</Text></View>}

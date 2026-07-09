@@ -23,6 +23,8 @@ export interface MembershipCard {
   /** Apenas contexto autenticado (admin/holder) — NUNCA no verify público. */
   cpf?: string | null;
   card_number: string | null;
+  /** Nº CBKT da faixa vigente (aparece na carteirinha do faixa-preta). */
+  cbkt_number?: string | null;
   belt: string | null;        // nível (ex.: "2dan")
   belt_name: string | null;   // nome PT (ex.: "Preta")
   dojo_id: string | null;

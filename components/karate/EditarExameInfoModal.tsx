@@ -28,6 +28,8 @@ interface Props {
   federationId: string;
   onClose: () => void;
   onSaved: (updated: BeltExam) => void;
+  /** Chamado após excluir o evento (para a lista recarregar/fechar detalhe). */
+  onDeleted?: () => void;
 }
 
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
@@ -49,7 +51,7 @@ function isoToBr(iso?: string | null): string {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
-export function EditarExameInfoModal({ visible, exam, federationId, onClose, onSaved }: Props) {
+export function EditarExameInfoModal({ visible, exam, federationId, onClose, onSaved, onDeleted }: Props) {
   const { width } = useWindowDimensions();
   const cardW = Math.min(520, width - 24);
 
@@ -60,6 +62,7 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
   const [targetBelt, setTargetBelt] = useState("");
   const [hours, setHours] = useState(""); // carga horária (curso)
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isCurso = exam?.exam_type === "curso";
@@ -78,6 +81,23 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
   }, [visible, exam]);
 
   const dateBad = examDate.length === 10 && parseBrDate(examDate) === null;
+
+  const confirmAndDelete = async () => {
+    if (!exam) return;
+    const ok = (typeof window !== "undefined" && (window as any).confirm)
+      ? (window as any).confirm("Excluir este evento? A ação não pode ser desfeita. Só é possível excluir eventos sem inscritos e sem certificados emitidos.")
+      : true;
+    if (!ok) return;
+    setError(null); setDeleting(true);
+    try {
+      await karateApi.deleteBeltExam(federationId, exam.id);
+      (onDeleted || onClose)();
+    } catch (e: any) {
+      setError(e?.message ?? "Não foi possível excluir o evento.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (!visible || !exam) return null;
 
@@ -220,8 +240,21 @@ export function EditarExameInfoModal({ visible, exam, federationId, onClose, onS
             </View>
           </ScrollView>
 
+          {onDeleted ? (
+            <TouchableOpacity
+              onPress={confirmAndDelete}
+              disabled={deleting || saving}
+              style={styles.deleteRow}
+              accessibilityRole="button"
+              accessibilityLabel="Excluir evento"
+            >
+              <Icon name="trash" size={15} color={P.red} />
+              <Text style={styles.deleteTxt}>{deleting ? "Excluindo…" : "Excluir evento"}</Text>
+            </TouchableOpacity>
+          ) : null}
+
           <View style={styles.footer}>
-            <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} style={{ flex: 1 }} disabled={saving} />
+            <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} style={{ flex: 1 }} disabled={saving || deleting} />
             <KarateButton
               label={saving ? "Salvando..." : "Salvar alterações"}
               variant="primary"
@@ -262,4 +295,6 @@ const styles = StyleSheet.create({
   errorText: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
 
   footer: { flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
+  deleteRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, borderTopWidth: 1, borderTopColor: P.line } as ViewStyle,
+  deleteTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.red } as TextStyle,
 });

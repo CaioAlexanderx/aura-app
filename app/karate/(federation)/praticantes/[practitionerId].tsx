@@ -146,7 +146,15 @@ export default function FichaPraticanteScreen() {
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
           <View style={styles.avatar}>
-            <Icon name="users" size={24} color={KarateColors.ink3} />
+            {data.photo_url ? (
+              <Image
+                source={{ uri: data.photo_url }}
+                style={styles.avatarPhoto}
+                accessibilityLabel={`Foto de ${data.full_name}`}
+              />
+            ) : (
+              <Icon name="users" size={24} color={KarateColors.ink3} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.regNum}>{data.karate_registration_number}</Text>
@@ -265,7 +273,8 @@ const styles = StyleSheet.create({
   editBtnText: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   deleteBtn:  { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
   deleteBtnText: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  avatar:     { width: 52, height: 52, borderRadius: 26, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  avatar:     { width: 52, height: 52, borderRadius: 26, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center", overflow: "hidden" } as ViewStyle,
+  avatarPhoto:{ width: 52, height: 52, borderRadius: 26 } as any,
   regNum:     { fontSize: 11, fontWeight: "800", color: KarateColors.primary, letterSpacing: 0.8, fontFamily: KarateFonts.mono } as TextStyle,
   fullName:   { fontFamily: KarateFonts.heading, fontSize: 20, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   tabBar:     { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: "#fff" } as ViewStyle,
