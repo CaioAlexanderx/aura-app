@@ -648,6 +648,20 @@ export interface UpdateCandidateResultInput {
   notes?: string | null;
 }
 
+/**
+ * Resultado do ajuste de matrícula ao aprovar uma graduação de faixa-preta.
+ * - "updated":       o sufixo do Dan foi trocado automaticamente (2º–6º Dan).
+ * - "notify_create": Shodan (1º Dan) — a federação precisa criar a matrícula NNN-Y-SHO.
+ * - "review":        7º Dan+ ou formato inesperado — revisar a matrícula manualmente.
+ */
+export interface CandidateRegistrationOutcome {
+  action: "updated" | "notify_create" | "review";
+  dan?: number | null;
+  from?: string | null;
+  to?: string | null;
+  message?: string | null;
+}
+
 /** Requisito de graduação — karate_belt_requirements (DECISÃO FPKT #2: pode ser provisório) */
 export interface BeltRequirement {
   id: string;
@@ -1507,7 +1521,7 @@ export const karateApi = {
     examId: string,
     candidateId: string,
     body: UpdateCandidateResultInput
-  ): Promise<ExamCandidate> =>
+  ): Promise<ExamCandidate & { registration?: CandidateRegistrationOutcome | null }> =>
     request(`/federation/${federationId}/belt-exams/${examId}/candidates/${candidateId}`, {
       method: "PATCH",
       body,

@@ -16,7 +16,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
-import { karateApi, ExamCandidate, CandidateResult } from "@/services/karateApi";
+import { karateApi, ExamCandidate, CandidateResult, CandidateRegistrationOutcome } from "@/services/karateApi";
 
 interface Props {
   visible:           boolean;
@@ -27,7 +27,7 @@ interface Props {
   examId:            string;
 }
 
-type ResultState = Record<string, { result: CandidateResult; notes: string; saving: boolean }>;
+type ResultState = Record<string, { result: CandidateResult; notes: string; saving: boolean; registration?: CandidateRegistrationOutcome | null }>;
 
 export function LancarResultadosModal({
   visible, candidates, onClose, onUpdateCandidate, federationId, examId,
@@ -57,6 +57,10 @@ export function LancarResultadosModal({
         notes: state.notes || null,
       });
       onUpdateCandidate(updated);
+      setResultState(prev => ({
+        ...prev,
+        [candidate.id]: { ...prev[candidate.id], registration: updated.registration ?? null },
+      }));
     } catch (e: any) {
       Alert.alert("Não foi possível salvar o resultado", e?.message ?? "Tente novamente.");
     } finally {
@@ -139,6 +143,17 @@ export function LancarResultadosModal({
                     />
                   )}
                 </View>
+
+                {/* Resultado do ajuste de matrícula (só faixa-preta) */}
+                {state.registration ? (
+                  <View style={[styles.regNote, state.registration.action === "updated" ? styles.regNoteOk : styles.regNoteWarn]}>
+                    <Text style={[styles.regNoteTxt, { color: state.registration.action === "updated" ? KarateColors.ok : KarateColors.warn }]}>
+                      {state.registration.action === "updated"
+                        ? `✓ Matrícula atualizada: ${state.registration.from} → ${state.registration.to}`
+                        : `⚠ ${state.registration.message ?? "Revise a matrícula."}`}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             );
           })}
@@ -170,6 +185,10 @@ const styles = StyleSheet.create({
   candidateName: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   candidateMeta: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   resultToggle: { flexDirection: "row", gap: 8 } as ViewStyle,
+  regNote: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1 } as ViewStyle,
+  regNoteOk: { backgroundColor: "rgba(74,122,72,0.10)", borderColor: KarateColors.ok } as ViewStyle,
+  regNoteWarn: { backgroundColor: KarateColors.warnSoft, borderColor: KarateColors.warn } as ViewStyle,
+  regNoteTxt: { fontSize: 12, fontWeight: "600" } as TextStyle,
   toggleBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm,
