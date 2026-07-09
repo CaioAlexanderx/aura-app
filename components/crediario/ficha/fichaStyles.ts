@@ -2,7 +2,8 @@ import { StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 
 export const m = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 16 },
+  // F3: backdrop unificado (0.72) — mesmo peso dos demais modais do fluxo.
+  backdrop: { flex: 1, backgroundColor: "rgba(3,5,14,0.72)", justifyContent: "center", alignItems: "center", padding: 16 },
   // Item 3 (16/06): maxWidth 480 -> 700 para acomodar melhor o volume de info.
   // width "100%" mantem mobile full-bleed; maxWidth so morde no desktop.
   sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 700, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
@@ -195,7 +196,7 @@ export const m = StyleSheet.create({
   previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
   previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
 
-  // ── Item 2 (16/06): renegociacao de parcelas ──────────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ──────────────────────
   // Botao "Renegociar" (acao secundaria, estilo outline violeta).
   renegActionBtn: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   renegActionTxt: { color: Colors.violet3 },

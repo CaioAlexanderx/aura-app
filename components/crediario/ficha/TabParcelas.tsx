@@ -1,46 +1,60 @@
-import { useState, useEffect } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+// ============================================================
+// TabParcelas — Aura · Crediário (F3 do redesign; spec §2.3)
+//
+// ANTES: 3 blocos de JSX quase idênticos (carnê expandido, órfãs,
+// sem-carnê), breakdown de encargos + 4 botões SEMPRE visíveis por
+// parcela, e o card "Receber valor livre" fixo no fim do scroll.
+//
+// AGORA:
+//  - <ParcelaRow> único (compacto; breakdown + ações via accordion)
+//  - Carnês com Collapsible animado + chevron; "Receber" é o único
+//    CTA primário do carnê, demais ações viram botões ghost sm
+//  - "Receber valor livre" SAIU daqui — vive no sheet "Receber
+//    pagamento" do shell (CTA fixo no rodapé da ficha)
+// Toda a lógica (prefill, pix, renegociar, editar data) permanece no
+// shell e chega por props — este arquivo é só apresentação.
+// ============================================================
+import { useState } from "react";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Animated } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import {
   printCarne,
-  type CreditAccount, type CreditInstallment, type PaymentPlan,
+  type CreditAccount, type CreditInstallment,
 } from "@/services/creditApi";
-import { DateInput } from "@/components/inputs/DateInput";
-import {
-  fmt, fmtDate, parseAmount, periodLabel,
-  PAYMENT_METHODS,
-} from "./fichaHelpers";
+import { Collapsible } from "@/components/anim";
+import { Button } from "@/components/Button";
+import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
+import { fmt, fmtDate, periodLabel } from "./fichaHelpers";
 import { m } from "./fichaStyles";
-
-function translateStatus(status: string): string {
-  if (status === "paid") return "Quitada";
-  if (status === "partial") return "Parcial";
-  if (status === "overdue") return "Em atraso";
-  if (status === "pending") return "Em aberto";
-  if (status === "cancelled") return "Cancelada";
-  return status;
-}
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
 function sumRemaining(list: CreditInstallment[]): number {
   return list.reduce((s, i) => s + (i.remaining ?? (i.amount_due - (i.covered_amount || 0))), 0);
 }
 
+/** Monta o breakdown de encargos da parcela para o ParcelaRow. */
+function buildBreakdown(ins: CreditInstallment, rem: number, hasCharges: boolean, chargesTotal: number): ParcelaBreakdownLine[] {
+  if (!hasCharges) {
+    return [{ label: "Valor da parcela", value: fmt(rem), total: true }];
+  }
+  const lines: ParcelaBreakdownLine[] = [{ label: "Principal em aberto", value: fmt(rem) }];
+  if ((ins.late_fee ?? 0) > 0) lines.push({ label: "Multa", value: fmt(ins.late_fee ?? 0) });
+  if ((ins.late_interest ?? 0) > 0) {
+    lines.push({
+      label: `Mora${(ins.days_charged ?? 0) > 0 ? ` · ${ins.days_charged}d` : ""}`,
+      value: fmt(ins.late_interest ?? 0),
+    });
+  }
+  lines.push({ label: "Total a pagar hoje", value: fmt(ins.total_due ?? (rem + chargesTotal)), total: true });
+  return lines;
+}
+
 export type TabParcelasProps = {
-  profile: any;
-  detail: any;
   accounts: CreditAccount[];
   openInst: CreditInstallment[];
   instByAccount: Map<string | null, CreditInstallment[]>;
   useCarneLayout: boolean;
-  realCarnes: CreditAccount[];
-  totalBalance: number;
-  nextDueDate: string;
-  scoreLabel: string | null;
-  availableLimit: number | undefined;
-  isBlocked: boolean;
-  hasOverdue: boolean;
   handleCreateAccount: () => void;
   showNewAccount: boolean;
   setShowNewAccount: (fn: (v: boolean) => boolean) => void;
@@ -50,25 +64,10 @@ export type TabParcelasProps = {
   expandedAccountId: string | null | undefined;
   setExpandedAccountId: (v: string | null | undefined) => void;
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
-  /** Item 2 (16/06): abre o sheet de renegociacao para um escopo (carne ou geral). */
   onRenegociar: (accountId: string | null | undefined, scopeLabel: string, openRemaining: number) => void;
   openInstallmentPix: (id: string) => void;
-  /** Pix para o recebimento de valor livre (B3). Passa o valor em reais. */
-  openFreePix: (amount: number) => void;
-  freeAmt: string;
-  setFreeAmt: (v: string) => void;
-  freeMethod: string;
-  setFreeMethod: (v: string) => void;
-  freeDateBr: string;
-  setFreeDateBr: (v: string) => void;
-  freeAccountId: string | null | undefined;
-  setFreeAccountId: (v: string | null | undefined) => void;
-  freePreview: PaymentPlan | null;
-  freePreviewLoading: boolean;
-  confirmFreePayment: () => void;
-  freeSubmitting: boolean;
+  /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido. */
   prefill: (v: number) => void;
-  triggerPreview: (amtStr: string, accountId?: string | null) => void;
   companyId: string;
   customerId: string;
   phone: string | null;
@@ -77,25 +76,41 @@ export type TabParcelasProps = {
 };
 
 export function TabParcelas({
-  profile, detail, accounts, openInst, instByAccount, useCarneLayout, realCarnes,
-  totalBalance, nextDueDate, scoreLabel, availableLimit, isBlocked, hasOverdue,
+  accounts, openInst, instByAccount, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, openFreePix,
-  freeAmt, setFreeAmt, freeMethod, setFreeMethod, freeDateBr, setFreeDateBr,
-  freeAccountId, setFreeAccountId, freePreview, freePreviewLoading,
-  confirmFreePayment, freeSubmitting, prefill, triggerPreview,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, prefill,
   companyId, customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
-  const hasAccounts = accounts.length > 0;
-  const freeAmtValue = parseAmount(freeAmt);
+  // Parcela expandida (uma por vez — progressive disclosure)
+  const [expandedInstId, setExpandedInstId] = useState<string | null>(null);
 
-  // ── Gate de confirmação de recebimento (2-step) ────────────────────────
-  // Step 0: botão normal "Confirmar R$ X"
-  // Step 1: banner de confirmação + "Sim, confirmar" / "Cancelar"
-  // Qualquer mudança em valor, método ou data reseta para step 0.
-  const [confirmStep, setConfirmStep] = useState<0 | 1>(0);
-  useEffect(() => { setConfirmStep(0); }, [freeAmt, freeMethod, freeDateBr]);
+  const renderParcela = (ins: CreditInstallment) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = ins.status === "overdue";
+    const chargesTotal = ins.charges_total ?? 0;
+    const hasCharges = late && chargesTotal > 0;
+    const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
+    return (
+      <ParcelaRow
+        key={ins.id}
+        title={`Parcela ${ins.installment_number}/${ins.total_installments}`}
+        subtitle={late ? `venceu ${fmtDate(ins.due_date)}${(ins.days_charged ?? 0) > 0 ? ` · ${ins.days_charged}d de atraso` : ""}` : `vence ${fmtDate(ins.due_date)} · no prazo`}
+        amount={fmt(totalHoje)}
+        overdue={late}
+        expanded={expandedInstId === ins.id}
+        onToggle={() => setExpandedInstId(prev => prev === ins.id ? null : ins.id)}
+        breakdown={buildBreakdown(ins, rem, hasCharges, chargesTotal)}
+        actions={
+          <>
+            <Button title="Alterar data" variant="ghost" size="sm" full onPress={() => handleEditDueDateOpen(ins)} />
+            <Button title="Pix" variant="success" size="sm" full onPress={() => openInstallmentPix(ins.id)} />
+            <Button title="Receber" variant="primary" size="sm" full onPress={() => prefill(totalHoje)} />
+          </>
+        }
+      />
+    );
+  };
 
   return (
 <>
@@ -142,29 +157,30 @@ export function TabParcelas({
         const accInst = instByAccount.get(acc.id) || [];
         return (
           <View key={accKey} style={m.accCard}>
-            <View style={m.accTop}>
-              <Pressable
-                style={{ flex: 1 }}
-                onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}
-              >
+            {/* Cabeçalho do carnê (accordion) — colapsado mostra só o essencial */}
+            <Pressable
+              style={m.accTop}
+              onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Carnê ${acc.name}, saldo ${fmt(acc.balance)}. Toque para ${isExpanded ? "recolher" : "expandir"}`}
+            >
+              <View style={{ flex: 1 }}>
                 <Text style={m.accName}>{acc.name}</Text>
                 <View style={m.accMeta}>
+                  <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
+                    <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
+                  </View>
                   {periodLabel(acc) ? (
                     <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
                       <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
                     </View>
                   ) : null}
-                  <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
-                    <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
-                  </View>
                   {accInst.length > 0 && (
-                    <View style={[m.accBadge, { backgroundColor: Colors.amber + "18", borderColor: Colors.amber + "33" }]}>
-                      <Text style={[m.accBadgeTxt, { color: Colors.amber }]}>{accInst.length} parcela{accInst.length !== 1 ? "s" : ""}</Text>
-                    </View>
+                    <Text style={m.accNextDue}>{accInst.length} parcela{accInst.length !== 1 ? "s" : ""}</Text>
                   )}
                 </View>
-              </Pressable>
-              <View style={{ alignItems: "flex-end" }}>
+              </View>
+              <View style={{ alignItems: "flex-end", gap: 2 }}>
                 <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
                   {fmt(acc.balance)}
                 </Text>
@@ -172,110 +188,28 @@ export function TabParcelas({
                   <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
                 )}
               </View>
-            </View>
+              <Animated.View style={isExpanded ? ({ transform: [{ rotate: "90deg" }] } as any) : undefined}>
+                <Icon name="chevron_right" size={15} color={isExpanded ? Colors.violet3 : Colors.ink3} />
+              </Animated.View>
+            </Pressable>
 
-            {isExpanded && accInst.length > 0 && (
-              <View style={m.accInstList}>
-                {accInst.map((ins) => {
-                  const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-                  const late = ins.status === "overdue";
-                  const chargesTotal = ins.charges_total ?? 0;
-                  const hasCharges = late && chargesTotal > 0;
-                  return (
-                    <View key={ins.id} style={m.parc}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={m.parcT}>
-                          Parcela {ins.installment_number}/{ins.total_installments}
-                          {hasCharges
-                            ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                            : " · " + fmt(rem)}
-                        </Text>
-                        <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-                        {hasCharges && (
-                          <View style={m.chargesBreakdown}>
-                            <View style={m.chargesRow}>
-                              <Text style={m.chargesLbl}>Principal em aberto</Text>
-                              <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                            </View>
-                            {(ins.late_fee ?? 0) > 0 && (
-                              <View style={m.chargesRow}>
-                                <Text style={m.chargesLbl}>Multa</Text>
-                                <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                              </View>
-                            )}
-                            {(ins.late_interest ?? 0) > 0 && (
-                              <View style={m.chargesRow}>
-                                <Text style={m.chargesLbl}>
-                                  Mora
-                                  {(ins.days_charged ?? 0) > 0 && (
-                                    <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                                  )}
-                                </Text>
-                                <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                              </View>
-                            )}
-                            <View style={[m.chargesRow, m.chargesTotalRow]}>
-                              <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                              <Text style={m.chargesTotalVal}>
-                                {fmt(ins.total_due ?? (rem + chargesTotal))}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ alignItems: "flex-end", gap: 6 }}>
-                        <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                          <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
-                        </View>
-                        <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                          <Icon name="edit" size={13} color={Colors.violet} />
-                        </Pressable>
-                        <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                          <Text style={m.pixBtnTxt}>Pix</Text>
-                        </Pressable>
-                        <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                          <Text style={m.receberTxt}>Receber</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })}
+            <Collapsible open={isExpanded}>
+              <View style={{ marginTop: 10 }}>
+                {accInst.length > 0
+                  ? accInst.map(renderParcela)
+                  : <Text style={m.emptyTxt}>Sem parcelas abertas neste carnê.</Text>}
+                <View style={m.accActions}>
+                  <Button title="Receber" variant="primary" size="sm" onPress={() => prefill(acc.balance)} />
+                  {accInst.length > 0 && (
+                    <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))} />
+                  )}
+                  <Button title="Imprimir" variant="ghost" size="sm" onPress={() => printCarne(companyId, customerId!)} />
+                  {!!phone && (
+                    <Button title="Cobrar" variant="success" size="sm" onPress={() => onCobrar?.(customerId!, name, phone)} />
+                  )}
+                </View>
               </View>
-            )}
-            {isExpanded && accInst.length === 0 && (
-              <Text style={[m.emptyTxt, { marginTop: 8 }]}>Sem parcelas abertas neste carnê.</Text>
-            )}
-
-            <View style={m.accActions}>
-              <Pressable
-                style={m.accActionBtn}
-                onPress={() => prefill(acc.balance)}
-              >
-                <Text style={m.accActionTxt}>Receber</Text>
-              </Pressable>
-              {accInst.length > 0 && (
-                <Pressable
-                  style={[m.accActionBtn, m.renegActionBtn]}
-                  onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))}
-                >
-                  <Text style={[m.accActionTxt, m.renegActionTxt]}>Renegociar</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={[m.accActionBtn, { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 }]}
-                onPress={() => printCarne(companyId, customerId!)}
-              >
-                <Text style={[m.accActionTxt, { color: Colors.violet3 }]}>Imprimir</Text>
-              </Pressable>
-              {!!phone && (
-                <Pressable
-                  style={[m.accActionBtn, m.accActionWa]}
-                  onPress={() => onCobrar?.(customerId!, name, phone)}
-                >
-                  <Text style={[m.accActionTxt, { color: Colors.green }]}>Cobrar</Text>
-                </Pressable>
-              )}
-            </View>
+            </Collapsible>
           </View>
         );
       })}
@@ -285,78 +219,10 @@ export function TabParcelas({
         if (!orphan.length) return null;
         return (
           <View style={[m.accCard, { borderTopColor: Colors.border }]}>
-            <Text style={[m.accName, { color: Colors.ink3 }]}>Sem carnê</Text>
-            {orphan.map((ins) => {
-              const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-              const late = ins.status === "overdue";
-              const chargesTotal = ins.charges_total ?? 0;
-              const hasCharges = late && chargesTotal > 0;
-              return (
-                <View key={ins.id} style={m.parc}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={m.parcT}>
-                      Parcela {ins.installment_number}/{ins.total_installments}
-                      {hasCharges
-                        ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                        : " · " + fmt(rem)}
-                    </Text>
-                    <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-                    {hasCharges && (
-                      <View style={m.chargesBreakdown}>
-                        <View style={m.chargesRow}>
-                          <Text style={m.chargesLbl}>Principal em aberto</Text>
-                          <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                        </View>
-                        {(ins.late_fee ?? 0) > 0 && (
-                          <View style={m.chargesRow}>
-                            <Text style={m.chargesLbl}>Multa</Text>
-                            <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                          </View>
-                        )}
-                        {(ins.late_interest ?? 0) > 0 && (
-                          <View style={m.chargesRow}>
-                            <Text style={m.chargesLbl}>
-                              Mora
-                              {(ins.days_charged ?? 0) > 0 && (
-                                <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                              )}
-                            </Text>
-                            <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                          </View>
-                        )}
-                        <View style={[m.chargesRow, m.chargesTotalRow]}>
-                          <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                          <Text style={m.chargesTotalVal}>
-                            {fmt(ins.total_due ?? (rem + chargesTotal))}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ alignItems: "flex-end", gap: 6 }}>
-                    <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                      <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Atraso" : "OK"}</Text>
-                    </View>
-                    <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                      <Icon name="edit" size={13} color={Colors.violet} />
-                    </Pressable>
-                    <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                      <Text style={m.pixBtnTxt}>Pix</Text>
-                    </Pressable>
-                    <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                      <Text style={m.receberTxt}>Receber</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
+            <Text style={[m.accName, { color: Colors.ink3, marginBottom: 8 }]}>Sem carnê</Text>
+            {orphan.map(renderParcela)}
             <View style={m.accActions}>
-              <Pressable
-                style={[m.accActionBtn, m.renegActionBtn]}
-                onPress={() => onRenegociar(null, "Sem carnê", sumRemaining(orphan))}
-              >
-                <Text style={[m.accActionTxt, m.renegActionTxt]}>Renegociar</Text>
-              </Pressable>
+              <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(null, "Sem carnê", sumRemaining(orphan))} />
             </View>
           </View>
         );
@@ -385,252 +251,15 @@ export function TabParcelas({
           </Pressable>
         </View>
       </View>
-      {openInst.map((ins) => {
-        const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-        const late = ins.status === "overdue";
-        const chargesTotal = ins.charges_total ?? 0;
-        const hasCharges = late && chargesTotal > 0;
-        return (
-          <View key={ins.id} style={m.parc}>
-            <View style={{ flex: 1 }}>
-              <Text style={m.parcT}>
-                Parcela {ins.installment_number}/{ins.total_installments}
-                {hasCharges
-                  ? " · " + fmt(ins.total_due ?? (rem + chargesTotal))
-                  : " · " + fmt(rem)}
-              </Text>
-              <Text style={m.parcS}>Vence {fmtDate(ins.due_date)}</Text>
-              {hasCharges && (
-                <View style={m.chargesBreakdown}>
-                  <View style={m.chargesRow}>
-                    <Text style={m.chargesLbl}>Principal em aberto</Text>
-                    <Text style={m.chargesVal}>{fmt(rem)}</Text>
-                  </View>
-                  {(ins.late_fee ?? 0) > 0 && (
-                    <View style={m.chargesRow}>
-                      <Text style={m.chargesLbl}>Multa</Text>
-                      <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_fee ?? 0)}</Text>
-                    </View>
-                  )}
-                  {(ins.late_interest ?? 0) > 0 && (
-                    <View style={m.chargesRow}>
-                      <Text style={m.chargesLbl}>
-                        Mora
-                        {(ins.days_charged ?? 0) > 0 && (
-                          <Text style={m.chargesDaysChip}> {ins.days_charged}d</Text>
-                        )}
-                      </Text>
-                      <Text style={[m.chargesVal, { color: Colors.red }]}>{fmt(ins.late_interest ?? 0)}</Text>
-                    </View>
-                  )}
-                  <View style={[m.chargesRow, m.chargesTotalRow]}>
-                    <Text style={m.chargesTotalLbl}>Total a pagar</Text>
-                    <Text style={m.chargesTotalVal}>
-                      {fmt(ins.total_due ?? (rem + chargesTotal))}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-            <View style={{ alignItems: "flex-end", gap: 6 }}>
-              <View style={[m.badge, { backgroundColor: (late ? Colors.red : Colors.green) + "1A", borderColor: (late ? Colors.red : Colors.green) + "44" }]}>
-                <Text style={[m.badgeTxt, { color: late ? Colors.red : Colors.green }]}>{late ? "Em atraso" : "No prazo"}</Text>
-              </View>
-              <Pressable style={m.calBtn} onPress={() => handleEditDueDateOpen(ins)}>
-                <Icon name="edit" size={13} color={Colors.violet} />
-              </Pressable>
-              <Pressable style={m.pixBtn} onPress={() => openInstallmentPix(ins.id)}>
-                <Text style={m.pixBtnTxt}>Pix</Text>
-              </Pressable>
-              <Pressable style={m.receberBtn} onPress={() => prefill(hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem)}>
-                <Text style={m.receberTxt}>Receber</Text>
-              </Pressable>
-            </View>
-          </View>
-        );
-      })}
+      {openInst.map(renderParcela)}
     </View>
   )}
 
-  <View style={m.card}>
-    <Text style={m.cardTitle}>Receber valor livre</Text>
-    <Text style={[m.termsHint, { marginBottom: 10 }]}>
-      Digite um valor e vamos simular como ele é aplicado nas parcelas antes de confirmar.
-    </Text>
-
-    {realCarnes.length > 1 && (
-      <View style={{ marginBottom: 12 }}>
-        <Text style={m.fieldLabel}>Carnê</Text>
-        <View style={m.chipRow}>
-          <Pressable
-            style={[m.chip, freeAccountId === undefined && m.chipOn]}
-            onPress={() => { setFreeAccountId(undefined); triggerPreview(freeAmt, undefined); }}
-          >
-            <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
-          </Pressable>
-          {realCarnes.map(acc => (
-            <Pressable
-              key={acc.id!}
-              style={[m.chip, freeAccountId === acc.id && m.chipOn]}
-              onPress={() => { setFreeAccountId(acc.id); triggerPreview(freeAmt, acc.id); }}
-            >
-              <Text style={[m.chipTxt, freeAccountId === acc.id && m.chipTxtOn]}>{acc.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    )}
-
-    <Text style={m.fieldLabel}>Valor recebido</Text>
-    <View style={m.amountIn}>
-      <Text style={m.amountPrefix}>R$</Text>
-      <TextInput
-        style={m.amountInput}
-        value={freeAmt}
-        onChangeText={(v) => {
-          const clean = v.replace(/[^\d,.]/g, "");
-          setFreeAmt(clean);
-          triggerPreview(clean, freeAccountId);
-        }}
-        placeholder="0,00"
-        placeholderTextColor={Colors.ink3}
-        keyboardType="decimal-pad"
-      />
+  {!useCarneLayout && openInst.length === 0 && (
+    <View style={[m.card, { alignItems: "center", paddingVertical: 26 }]}>
+      <Text style={m.emptyTxt}>Nenhuma parcela em aberto. 🎉</Text>
     </View>
-    <View style={m.quickRow}>
-      {[50, 100, 200].map(v => (
-        <Pressable key={v} style={m.qChip} onPress={() => prefill(v)}>
-          <Text style={m.qChipTxt}>{fmt(v)}</Text>
-        </Pressable>
-      ))}
-      {totalBalance > 0 && (
-        <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
-          <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
-        </Pressable>
-      )}
-    </View>
-
-    <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
-    <DateInput
-      value={freeDateBr}
-      onChangeText={setFreeDateBr}
-      placeholder="dd/mm/aaaa"
-      style={m.dateInput}
-    />
-    <Text style={m.dateHint}>Use uma data anterior para registrar um recebimento retroativo.</Text>
-
-    <Text style={[m.fieldLabel, { marginTop: 12 }]}>Forma</Text>
-    <View style={m.methods}>
-      {PAYMENT_METHODS.map(pm => (
-        <Pressable
-          key={pm.key}
-          style={[m.method, freeMethod === pm.key && m.methodActive]}
-          onPress={() => setFreeMethod(pm.key)}
-        >
-          <Text style={[m.methodTxt, freeMethod === pm.key && { color: "#fff" }]}>{pm.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-
-    {freePreviewLoading && (
-      <View style={{ alignItems: "center", marginTop: 14 }}>
-        <ActivityIndicator size="small" color={Colors.violet3} />
-        <Text style={[m.termsHint, { textAlign: "center", marginTop: 4 }]}>Calculando distribuição...</Text>
-      </View>
-    )}
-    {!freePreviewLoading && freePreview && (
-      <View style={m.previewBox}>
-        <Text style={m.previewTitle}>Como o valor vai ser aplicado</Text>
-        {freePreview.applied.map((line, i) => (
-          <View key={line.installment_id + i} style={m.previewRow}>
-            <Text style={m.previewLbl}>
-              Parcela {line.number ?? "?"}
-            </Text>
-            <View style={{ alignItems: "flex-end" }}>
-              {line.charges_paid > 0 && (
-                <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
-                  Encargos: {fmt(line.charges_paid)}
-                </Text>
-              )}
-              <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
-              <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
-                {translateStatus(line.status_after)}
-              </Text>
-            </View>
-          </View>
-        ))}
-        <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
-          <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
-          <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
-            {fmt(freePreview.new_balance)}
-          </Text>
-        </View>
-        {freePreview.credit_generated > 0 && (
-          <View style={m.previewRow}>
-            <Text style={m.previewLbl}>Crédito gerado</Text>
-            <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
-          </View>
-        )}
-      </View>
-    )}
-
-    {/* ── Botões de ação: Gerar Pix (B3) + Confirmar recebimento (gate 2-step) ── */}
-    {confirmStep === 0 ? (
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-        <Pressable
-          style={[
-            m.pixBtn,
-            { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
-            freeAmtValue <= 0 && { opacity: 0.4 },
-          ]}
-          disabled={freeAmtValue <= 0}
-          onPress={() => openFreePix(freeAmtValue)}
-        >
-          <Text style={m.pixBtnTxt}>Gerar Pix</Text>
-        </Pressable>
-        <Pressable
-          style={[m.cta, { flex: 2 }, freeAmtValue <= 0 && { opacity: 0.45 }]}
-          disabled={freeAmtValue <= 0}
-          onPress={() => setConfirmStep(1)}
-        >
-          <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
-            {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
-          </Text>
-        </Pressable>
-      </View>
-    ) : (
-      <View style={{ marginTop: 14, gap: 8 }}>
-        <View style={{
-          flexDirection: "row", alignItems: "center", gap: 8,
-          backgroundColor: Colors.amber + "18", borderRadius: 8,
-          padding: 10, borderWidth: 1, borderColor: Colors.amber + "44",
-        }}>
-          <Icon name="alert_triangle" size={14} color={Colors.amber} />
-          <Text style={{ fontSize: 13, color: Colors.ink2, flex: 1 }}>
-            Confirmar recebimento de{" "}
-            <Text style={{ fontWeight: "700", color: Colors.ink }}>{fmt(freeAmtValue)}</Text>?
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", gap: 9 }}>
-          <Pressable
-            style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-            onPress={() => setConfirmStep(0)}
-          >
-            <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
-          </Pressable>
-          <Pressable
-            style={[m.cta, { flex: 2 }, freeSubmitting && { opacity: 0.5 }]}
-            disabled={freeSubmitting}
-            onPress={() => { setConfirmStep(0); confirmFreePayment(); }}
-          >
-            {freeSubmitting
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={m.ctaTxt}>Sim, confirmar</Text>}
-          </Pressable>
-        </View>
-      </View>
-    )}
-  </View>
+  )}
 </>
   );
 }
