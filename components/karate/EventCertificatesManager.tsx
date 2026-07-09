@@ -24,6 +24,19 @@ const SIZES: { key: SizeMode; label: string }[] = [
 const SIZE_SCALE: Record<Exclude<SizeMode, "auto">, number> = { P: 0.9, M: 1, G: 1.15 };
 const VERIFY_BASE = "https://app.getaura.com.br/karate/verify/cert";
 
+// Etiquetas do texto personalizado — clicáveis (inserem a tag no texto).
+const CERT_TAGS: { tag: string; label: string }[] = [
+  { tag: "nome", label: "Nome" },
+  { tag: "curso", label: "Curso" },
+  { tag: "carga_horaria", label: "Carga horária" },
+  { tag: "ministrantes", label: "Ministrantes" },
+  { tag: "datas", label: "Datas" },
+  { tag: "local", label: "Local" },
+  { tag: "data_emissao", label: "Data de emissão" },
+];
+const DEFAULT_BODY_TEMPLATE =
+  "Certificamos que {nome} participou do {curso}, com duração de {carga_horaria}, ministrado por {ministrantes} nos dias {datas}.";
+
 function pickPng(): Promise<{ base64: string; ct: string } | null> {
   return new Promise((resolve) => {
     if (Platform.OS !== "web") return resolve(null);
@@ -108,6 +121,13 @@ export function EventCertificatesManager({ federationId, event, federationName }
   };
   const removeSeal = (idx: number) => setSeals((s) => s.filter((_, i) => i !== idx));
 
+  const insertTag = (tag: string) =>
+    setBodyText((t) => (t && !/\s$/.test(t) ? t + " " : t) + `{${tag}}`);
+  const toggleCustom = (on: boolean) => {
+    setCustomText(on);
+    if (on && !bodyText.trim()) setBodyText(DEFAULT_BODY_TEMPLATE);
+  };
+
   const emit = async () => {
     setBusy(true); setErr(null); setMsg(null);
     try {
@@ -175,13 +195,26 @@ export function EventCertificatesManager({ federationId, event, federationName }
       <View style={s.toggleRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.lbl}>Texto personalizado</Text>
-          <Text style={s.hint}>Desligado usa o texto padrão do modelo. Ligado, edite com tags: {"{nome} {curso} {carga_horaria} {ministrantes} {datas} {local} {data_emissao}"}</Text>
+          <Text style={s.hint}>Desligado usa o texto padrão. Ligado, você escreve o texto e insere etiquetas — cada etiqueta é trocada pelo dado real do participante.</Text>
         </View>
-        <Switch value={customText} onValueChange={setCustomText} trackColor={{ false: P.border, true: P.primary }} thumbColor={P.bg} />
+        <Switch value={customText} onValueChange={toggleCustom} trackColor={{ false: P.border, true: P.primary }} thumbColor={P.bg} />
       </View>
       {customText ? (
-        <TextInput style={[s.input, { minHeight: 80, textAlignVertical: "top" }]} value={bodyText} onChangeText={setBodyText} multiline
-          placeholder="Certificamos que {nome} concluiu {curso}..." placeholderTextColor={P.ink4} />
+        <>
+          <Text style={[s.hint, { marginTop: 8 }]}>Toque para inserir uma etiqueta:</Text>
+          <View style={s.tagRow}>
+            {CERT_TAGS.map((t) => (
+              <TouchableOpacity key={t.tag} onPress={() => insertTag(t.tag)} style={s.tagChip}>
+                <Text style={s.tagChipTxt}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setBodyText(DEFAULT_BODY_TEMPLATE)} style={s.tplChip}>
+              <Text style={s.tplChipTxt}>↺ Modelo padrão</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput style={[s.input, { minHeight: 90, textAlignVertical: "top" }]} value={bodyText} onChangeText={setBodyText} multiline
+            placeholder="Ex.: Certificamos que {nome} participou do {curso}…" placeholderTextColor={P.ink4} />
+        </>
       ) : null}
 
       {/* Preview */}
@@ -224,6 +257,11 @@ const s = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: P.border, backgroundColor: P.bg },
   chipOn: { backgroundColor: P.primarySoft, borderColor: P.primaryLine },
   chipTxt: { fontSize: 12.5, color: P.ink2 }, chipTxtOn: { color: P.primary, fontWeight: "700" },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4, marginBottom: 2 },
+  tagChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: P.border, backgroundColor: P.bg },
+  tagChipTxt: { fontSize: 11.5, color: P.ink2 },
+  tplChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: P.primaryLine, backgroundColor: P.primarySoft },
+  tplChipTxt: { fontSize: 11.5, color: P.primary, fontWeight: "600" },
   sealRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   sealItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: P.border, backgroundColor: P.bg },
   sealTxt: { fontSize: 12, color: P.ink2 },

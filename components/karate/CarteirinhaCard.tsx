@@ -63,6 +63,9 @@ const LINE_2 = "rgba(43,38,32,0.17)";
 const LINE = "rgba(43,38,32,0.10)";
 const BLACK_BAR = "#141210";
 
+// Opacidade única da marca (frente = verso), por pedido da federação.
+const WM_OPACITY = 0.1;
+
 const CARD_W = 640;
 const CARD_H = 404;
 const RATIO = CARD_H / CARD_W; // 0.63125
@@ -178,7 +181,7 @@ function Watermark({ f, side }: { f: (n: number) => number; side: "front" | "bac
       <View
         pointerEvents="none"
         style={{
-          position: "absolute", left: "70%", top: "50%", width: f(300), opacity: 0.12,
+          position: "absolute", left: "70%", top: "50%", width: f(300), opacity: WM_OPACITY,
           transform: [{ translateX: -f(300) / 2 }, { translateY: -f(300) * 0.475 * 0.5 }],
         }}
       >
@@ -190,7 +193,7 @@ function Watermark({ f, side }: { f: (n: number) => number; side: "front" | "bac
     <View
       pointerEvents="none"
       style={{
-        position: "absolute", left: "50%", top: "56%", width: f(260), opacity: 0.05,
+        position: "absolute", left: "50%", top: "56%", width: f(260), opacity: WM_OPACITY,
         transform: [{ translateX: -f(260) / 2 }, { translateY: -f(260) * 0.475 * 0.5 }],
       }}
     >
@@ -342,7 +345,19 @@ function Front({ card, f, isPreta }: { card: MembershipCard; f: (n: number) => n
                   </Text>
                 </View>
               </View>
-              <View><BeltField card={card} f={f} /></View>
+              {card.cbkt_number ? (
+                <View style={{ flexDirection: "row", gap: f(20) }}>
+                  <View style={{ flex: 1 }}><BeltField card={card} f={f} /></View>
+                  <View style={{ flex: 1 }}>
+                    <FieldLabel f={f}>Nº CBKT</FieldLabel>
+                    <Text style={{ fontFamily: KarateFonts.mono, fontSize: f(15), fontWeight: "500", marginTop: f(6), color: INK, letterSpacing: f(0.5) }}>
+                      {card.cbkt_number}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View><BeltField card={card} f={f} /></View>
+              )}
             </View>
           ) : (
             // Design 01: grid 2x2 [Data nasc · Dojô / CPF · Nº registro FPKT]

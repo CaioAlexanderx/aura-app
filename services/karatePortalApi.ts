@@ -201,7 +201,11 @@ export interface PublicEvent {
 export interface LookupResult {
   found: boolean;
   already_enrolled: boolean;
-  practitioner: { id: string; name: string; current_belt: string | null; current_belt_name: string | null };
+  practitioner: {
+    id: string; name: string;
+    current_belt: string | null; current_belt_name: string | null;
+    birth_date?: string | null; email?: string | null; phone?: string | null; dojo_name?: string | null;
+  };
   event: { id: string; name: string; kind: string; fee_amount: number | null; requires: string[] };
 }
 
@@ -328,7 +332,7 @@ export const karatePortalApi = {
     identifier: string,
     responses?: Record<string, unknown>,
     categoryId?: string,
-    guest?: { name: string; cpf?: string; email?: string; phone?: string }
+    guest?: { name: string; cpf?: string; email?: string; phone?: string; birth_date?: string; belt?: string; dojo?: string; professor?: string }
   ): Promise<InscricaoResult> =>
     pub(`/public/karate/${enc(slug)}/inscricao/${enc(eventId)}`, {
       method: "POST",

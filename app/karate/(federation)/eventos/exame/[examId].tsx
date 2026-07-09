@@ -688,6 +688,7 @@ export default function ExameDetalhe() {
         federationId={federationId}
         onClose={() => setShowEditInfo(false)}
         onSaved={handleExamInfoUpdated}
+        onDeleted={() => { setShowEditInfo(false); router.back(); }}
       />
 
       {/* F6.2 — confirmação inline de "Fechar exame" (window.confirm trava a aba no web) */}

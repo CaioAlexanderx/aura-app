@@ -70,6 +70,7 @@ export interface CertData {
   hours?: number | null;
   instructors_text?: string;    // "Sensei X, Sensei Y e Sensei Z"
   dates_text?: string;          // "01 e 02 de Novembro de 2025"
+  days_count?: number | null;   // nº de dias do curso (1 → singular "no dia"; 2+ → "nos dias")
   location?: string;            // "São Paulo"
   issued_date_text?: string;    // "02 de Novembro de 2025"
   federation_name?: string;     // "FEDERAÇÃO PAULISTA DE KARATÊ-DÔ TRADICIONAL"
@@ -98,12 +99,27 @@ function fillTags(tpl: string, d: CertData): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => (k in map ? map[k] : `{${k}}`));
 }
 
+// "no dia" (singular) vs "nos dias" (plural) conforme o nº de dias do curso.
+function diaPreposicao(d: CertData): string {
+  let multi: boolean;
+  if (typeof d.days_count === "number") {
+    multi = d.days_count >= 2;
+  } else {
+    const t = d.dates_text || "";
+    const numericDates = (t.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/g) || []).length;
+    if (numericDates >= 2) multi = true;
+    else if (numericDates === 1) multi = false;
+    else multi = /\b\d{1,2}\s+e\s+\d{1,2}\b/i.test(t) || /,/.test(t);
+  }
+  return multi ? "nos dias" : "no dia";
+}
+
 // Corpo padrão (o do modelo aprovado). Nome/curso/valores em negrito.
 function defaultBody(d: CertData): string {
   const carga = d.hours ? `<b>${d.hours} horas/aula</b>` : "";
   const cargaFrag = carga ? `, com duração de ${carga}` : "";
   const minFrag = d.instructors_text ? `, ministrado por <b>${esc(d.instructors_text)}</b>` : "";
-  const datasFrag = d.dates_text ? ` nos dias <b>${esc(d.dates_text)}</b>` : "";
+  const datasFrag = d.dates_text ? ` ${diaPreposicao(d)} <b>${esc(d.dates_text)}</b>` : "";
   return `Certificamos que <b>${esc(d.participant_name)}</b> participou do <b>${esc(d.course_name)}</b>${cargaFrag}${minFrag}${datasFrag}.`;
 }
 

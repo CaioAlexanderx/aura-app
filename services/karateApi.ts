@@ -1474,6 +1474,10 @@ export const karateApi = {
   updateBeltExam: (federationId: string, examId: string, body: Partial<BeltExamInput>): Promise<BeltExam> =>
     request(`/federation/${federationId}/belt-exams/${examId}`, { method: "PATCH", body }),
 
+  // Exclui o evento (só permitido sem inscritos/certificados — backend guarda).
+  deleteBeltExam: (federationId: string, examId: string): Promise<{ ok: boolean; deleted: string }> =>
+    request(`/federation/${federationId}/belt-exams/${examId}`, { method: "DELETE" }),
+
   listExaminers: (federationId: string, examId: string): Promise<Examiner[]> =>
     request(`/federation/${federationId}/belt-exams/${examId}/examiners`),
 
