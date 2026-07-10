@@ -13,6 +13,7 @@ import { toast } from "@/components/Toast";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
+import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -21,22 +22,24 @@ function paymentLabel(key: string): string {
   return PAYMENTS.find(p => p.key === key)?.label || key;
 }
 
-async function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
+function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
   if (!token || !companyId) { toast.error("Sessao expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressao disponivel apenas na versao web");
     return;
   }
-  try {
+  // Fix 10/07 (relato Davi): janela abre SINCRONA no clique (printWindow) —
+  // window.open depois do await perdia a user activation e o Chrome
+  // bloqueava o pop-up de forma intermitente ("nem sempre imprime").
+  openPrintWindow(async () => {
     const res = await fetch(`${BASE_URL}/companies/${companyId}/print/receipt/${saleId}/preview`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) { toast.error("Erro ao gerar cupom"); return; }
-    const html = await res.text();
-    const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
-    if (win) { win.document.write(html); win.document.close(); }
-    else toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
-  } catch { toast.error("Erro ao gerar cupom"); }
+    if (!res.ok) return { ok: false as const, error: "Erro ao gerar cupom" };
+    return { ok: true as const, html: await res.text() };
+  }).then((r) => {
+    if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
+  });
 }
 
 type Props = {

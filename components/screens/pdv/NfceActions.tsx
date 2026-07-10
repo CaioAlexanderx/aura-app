@@ -19,6 +19,7 @@ import { nfceApi, type EmitResponse, type NfcePaymentEntry } from "@/services/nf
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { QrCode } from "@/components/QrCode";
+import { openPrintWindow } from "@/services/printWindow";
 import { Linking } from "react-native";
 
 export type NfceActionsItem = {
@@ -76,26 +77,27 @@ async function copyToClipboard(text: string): Promise<boolean> {
   } catch { return false; }
 }
 
-async function openPrintNfceTermica(companyId: string, nfceId: string, token: string | null) {
+function openPrintNfceTermica(companyId: string, nfceId: string, token: string | null) {
   if (!token || !companyId) { toast.error("Sessao expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressao disponivel apenas na versao web");
     return;
   }
-  try {
+  // Fix 10/07 (relato Davi): janela abre SINCRONA no clique (printWindow).
+  // Bonus: o erro do backend (ex.: 409 "DANFE so pode ser impressa quando
+  // autorizada") agora aparece DENTRO da janela, nao num toast perdivel.
+  openPrintWindow(async () => {
     const res = await fetch(`${BASE_URL}/companies/${companyId}/nfce/${nfceId}/danfe-termica`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      toast.error(txt || "Erro ao gerar NFCe");
-      return;
+      return { ok: false as const, error: txt || "Erro ao gerar NFCe" };
     }
-    const html = await res.text();
-    const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
-    if (win) { win.document.write(html); win.document.close(); }
-    else toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
-  } catch { toast.error("Erro ao gerar NFCe"); }
+    return { ok: true as const, html: await res.text() };
+  }).then((r) => {
+    if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
+  });
 }
 
 export function NfceActions({
@@ -206,7 +208,11 @@ export function NfceActions({
           pollTimer.current = null;
           return;
         }
-        if (attempt >= maxAttempts) { pollTimer.current = null; return; }
+        if (attempt >= maxAttempts) {
+          pollTimer.current = null;
+          toast.info("SEFAZ ainda processando a nota — acompanhe na aba Notas.");
+          return;
+        }
         pollTimer.current = setTimeout(tick, 3000);
       } catch { pollTimer.current = null; }
     };
