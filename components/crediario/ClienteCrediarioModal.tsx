@@ -18,14 +18,22 @@
 //  Vencimento) ganharam ScrollView interno cobrindo INCLUSIVE os botões,
 //  e flexShrink — em telas baixas o CTA ficava cortado pelo overflow
 //  hidden do modal, sem como rolar (cliente travada em produção).
+// F4.3 (10/07): maxHeight 90vh no web — o ModalPop (pai sem altura
+//  definida) fazia o maxHeight:"90%" ser ignorado e o modal crescia
+//  além da tela.
 // Histórico anterior: C-2 (12/06) header fixo; A2-FE paid_at no preview;
 // B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, Modal, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Clipboard,
+  TextInput, ActivityIndicator, Clipboard, Platform,
 } from "react-native";
+
+// F4.3: o ModalPop (pai sem altura definida) faz o maxHeight:"90%" do sheet
+// ser ignorado no web — o modal crescia além da tela, cortado e sem rolagem.
+// 90vh é resolvido contra a viewport, independente da cadeia de pais.
+const SHEET_MAX_H = Platform.OS === "web" ? ({ maxHeight: "90vh" } as any) : null;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -581,7 +589,7 @@ export function ClienteCrediarioModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={m.backdrop} onPress={onClose}>
         <ModalPop visible={visible} style={{ width: "100%", maxWidth: 700, alignItems: "center" } as any}>
-        <Pressable style={[m.sheet, { width: "100%" }]} onPress={() => {}}>
+        <Pressable style={[m.sheet, { width: "100%" }, SHEET_MAX_H]} onPress={() => {}}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>
