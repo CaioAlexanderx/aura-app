@@ -40,10 +40,13 @@ interface ParcelaRowProps {
   breakdown?: ParcelaBreakdownLine[];
   /** Botões de ação (Alterar data · Pix · Receber) — <Button size="sm" full/>. */
   actions?:   React.ReactNode;
+  /** Lápis SEMPRE visível no cabeçalho para alterar o vencimento —
+   *  restaurado a pedido das lojistas (escondido no accordion = "sumiu"). */
+  onEditDate?: () => void;
 }
 
 export function ParcelaRow({
-  title, subtitle, amount, overdue, expanded, onToggle, breakdown, actions,
+  title, subtitle, amount, overdue, expanded, onToggle, breakdown, actions, onEditDate,
 }: ParcelaRowProps) {
   const chevron = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
@@ -76,6 +79,17 @@ export function ParcelaRow({
           <Text style={s.sub} numberOfLines={1}>{subtitle}</Text>
         </View>
         <Text style={[s.amount, { color: overdue ? Colors.red : Colors.ink }]}>{amount}</Text>
+        {!!onEditDate && (
+          <Pressable
+            onPress={(e: any) => { e?.stopPropagation?.(); onEditDate(); }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Alterar data de vencimento da ${title}`}
+            style={s.editBtn}
+          >
+            <Icon name="edit" size={14} color={Colors.violet3} />
+          </Pressable>
+        )}
         <Animated.View style={{ transform: [{ rotate }] }}>
           <Icon name="chevron_right" size={15} color={expanded ? Colors.violet3 : Colors.ink3} />
         </Animated.View>
@@ -118,6 +132,11 @@ const s = StyleSheet.create({
   bValue: { fontSize: 12, color: Colors.ink2, fontVariant: ["tabular-nums"] as any },
   bStrong: { fontWeight: "800", color: Colors.ink },
   actions: { flexDirection: "row", gap: 8, paddingHorizontal: 14, paddingBottom: 14, paddingTop: 8 },
+  editBtn: {
+    width: 34, height: 34, borderRadius: 9,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center",
+  },
 });
 
 export default ParcelaRow;
