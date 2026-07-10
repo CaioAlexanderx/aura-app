@@ -7,12 +7,10 @@
 //
 // AGORA:
 //  - <ParcelaRow> único (compacto; breakdown + ações via accordion)
-//  - Carnês com Collapsible animado + chevron
+//  - Carnês com Collapsible animado + chevron; "Receber" é o único
+//    CTA primário do carnê, demais ações viram botões ghost sm
 //  - "Receber valor livre" SAIU daqui — vive no sheet "Receber
 //    pagamento" do shell (CTA fixo no rodapé da ficha)
-// F4.3 (10/07 — pente-fino): ações do carnê (Receber/Renegociar/
-// Imprimir/Cobrar) voltaram a ficar SEMPRE visíveis, fora do accordion —
-// escondidas na F3, lojistas acharam que a renegociação tinha sumido.
 // Toda a lógica (prefill, pix, renegociar, editar data) permanece no
 // shell e chega por props — este arquivo é só apresentação.
 // ============================================================
@@ -102,6 +100,7 @@ export function TabParcelas({
         overdue={late}
         expanded={expandedInstId === ins.id}
         onToggle={() => setExpandedInstId(prev => prev === ins.id ? null : ins.id)}
+        onEditDate={() => handleEditDueDateOpen(ins)}
         breakdown={buildBreakdown(ins, rem, hasCharges, chargesTotal)}
         actions={
           <>
