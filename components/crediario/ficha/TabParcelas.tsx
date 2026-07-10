@@ -68,6 +68,9 @@ export type TabParcelasProps = {
   openInstallmentPix: (id: string) => void;
   /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido. */
   prefill: (v: number) => void;
+  /** Saldo total em aberto do ledger — pode ser > 0 SEM nenhuma parcela
+   *  (venda no crediário em 1x/fiado não gera agenda de parcelas). */
+  openBalance: number;
   companyId: string;
   customerId: string;
   phone: string | null;
@@ -79,7 +82,7 @@ export function TabParcelas({
   accounts, openInst, instByAccount, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, prefill,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, prefill, openBalance,
   companyId, customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
@@ -259,7 +262,23 @@ export function TabParcelas({
     </View>
   )}
 
-  {!useCarneLayout && openInst.length === 0 && (
+  {/* Fix 10/07 (relato Jenniffer): saldo > 0 SEM parcelas (venda 1x/fiado não
+      gera agenda) mostrava "Nenhuma parcela em aberto 🎉" — contradizia o
+      EM ABERTO do topo e escondia o caminho para receber. */}
+  {!useCarneLayout && openInst.length === 0 && openBalance > 0 && (
+    <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
+      <Text style={m.cardTitle}>Saldo em aberto sem parcelas</Text>
+      <Text style={[m.emptyTxt, { textAlign: "center", marginTop: 6, lineHeight: 18 }]}>
+        Este cliente tem {fmt(openBalance)} em aberto de venda no crediário sem
+        parcelamento. Registre recebimentos de qualquer valor pelo botão abaixo.
+      </Text>
+      <View style={{ marginTop: 14, alignSelf: "stretch" }}>
+        <Button title={`Receber ${fmt(openBalance)}`} variant="primary" size="sm" full onPress={() => prefill(openBalance)} />
+      </View>
+    </View>
+  )}
+
+  {!useCarneLayout && openInst.length === 0 && openBalance <= 0 && (
     <View style={[m.card, { alignItems: "center", paddingVertical: 26 }]}>
       <Text style={m.emptyTxt}>Nenhuma parcela em aberto. 🎉</Text>
     </View>
