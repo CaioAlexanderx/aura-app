@@ -155,9 +155,14 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
         '<div class="fld"><div class="flabel">CPF</div><div class="fvalue mono">' + esc(fmtCpf(card.cpf)) + '</div></div>' +
         '<div class="fld"><div class="flabel">Nº de registro FPKT</div><div class="fvalue mono reg-num">' + esc(card.card_number || "—") + '</div></div>' +
       '</div>' +
-      '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
-      // Nº CBKT só aparece quando a pessoa tem o registro (senão o campo some).
-      (card.cbkt_number ? '<div class="fld reg-fld cbkt-fld"><div class="flabel">Nº CBKT</div><div class="fvalue mono cbkt-num">' + esc(card.cbkt_number) + '</div></div>' : '')
+      // Faixa + Nº CBKT lado a lado (grid2) quando há CBKT — economiza altura e
+      // evita o corte no rodapé do cartão faixa-preta; senão, Faixa sozinha.
+      (card.cbkt_number
+        ? '<div class="grid2 reg-fld">' +
+            '<div class="fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>' +
+            '<div class="fld"><div class="flabel">Nº CBKT</div><div class="fvalue mono cbkt-num">' + esc(card.cbkt_number) + '</div></div>' +
+          '</div>'
+        : '<div class="fld reg-fld"><div class="flabel">Faixa</div><div class="belt-line"><span class="belt-sq"></span><span class="fvalue belt-label">' + beltDanLabel(card) + '</span></div></div>')
     )
     : (
       '<div class="grid2">' +
@@ -296,9 +301,12 @@ function cardCss(): string {
   html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.6mm 2.7mm}';
   html += '.reg-fld{margin-top:1.6mm}';
   html += '.is-preta .body-row{margin-top:1.7mm}';
-  html += '.is-preta .fields{gap:1.9mm}';
-  html += '.is-preta .name-fld{margin-bottom:0.2mm}';
-  html += '.is-preta .reg-fld{margin-top:1.0mm}';
+  html += '.is-preta .fields{gap:1.35mm}';
+  html += '.is-preta .name-fld{margin-bottom:0mm}';
+  html += '.is-preta .reg-fld{margin-top:0.6mm}';
+  html += '.is-preta .grid2{gap:1.7mm 2.7mm}';
+  html += '.is-preta .fvalue.dojo{height:5.0mm;-webkit-line-clamp:2}';
+  html += '.is-preta .belt-line{margin-top:0.5mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:500;color:' + RED + ';letter-spacing:0.2pt}';
   html += '.cbkt-fld{margin-top:1.0mm}';
   html += '.cbkt-num{font-family:"DM Mono",monospace;font-weight:500;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
