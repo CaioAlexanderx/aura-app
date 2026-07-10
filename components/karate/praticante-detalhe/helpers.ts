@@ -24,12 +24,28 @@ export function formatCpfDisplay(v: string | null | undefined): string | null {
   if (d.length !== 11) return String(v); // dado incompleto/estranho: mostra cru
   return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 }
+// bugfix (telefone sem máscara): formatPhoneDisplay só reconhecia dígitos
+// crus com EXATAMENTE 10 ou 11 posições; qualquer outra contagem (ex.: DDI
+// "55" residual de import/backfill deixando 12/13 dígitos) caía no fallback
+// "mostra como veio" e aparecia sem máscara nenhuma — sintoma reportado ao
+// inativar/reeditar praticantes com esse tipo de dado legado. A formatação é
+// SEMPRE derivada só dos dígitos (nunca do status do praticante — is_active
+// nunca entra nesta função), então o telefone deve aparecer mascarado tanto
+// para ativos quanto inativos. Normalizamos o DDI 55 redundante antes de
+// aplicar a máscara padrão BR.
+export function stripRedundantCountryCode(d: string): string {
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) {
+    const rest = d.slice(2);
+    if (rest.length === 10 || rest.length === 11) return rest;
+  }
+  return d;
+}
 export function formatPhoneDisplay(v: string | null | undefined): string | null {
   if (!v) return null;
-  const d = String(v).replace(/\D/g, "");
+  const d = stripRedundantCountryCode(String(v).replace(/\D/g, ""));
   if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
   if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-  return String(v); // fora do padrão BR: mostra como veio
+  return String(v); // dado incompleto/fora do padrão BR: mostra como veio
 }
 export function formatCepDisplay(v: string | null | undefined): string | null {
   if (!v) return null;
