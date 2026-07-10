@@ -34,6 +34,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView,
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
+  Platform, Alert,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { PressableScale } from "@/components/karate/anim/PressableScale";
@@ -128,6 +129,8 @@ export default function PraticantesScreen() {
   const [role, setRole] = useState<RoleFilter | null>(null);
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  // Exportar (.xlsx) — todos os praticantes da federação. Web-only (SheetJS + Blob).
+  const [exporting, setExporting] = useState(false);
 
   // Sincroniza busca quando o param `q` muda (ex.: nova busca vinda do shell).
   // Atualiza tanto o texto visível quanto o termo debounced (sem esperar).
@@ -177,6 +180,57 @@ export default function PraticantesScreen() {
     </View>
   );
 
+  // Exporta todos os praticantes da federação em .xlsx (uma aba "Praticantes").
+  // Espelha o padrão do DojoExportModal: web-only, import dinâmico do SheetJS,
+  // download via Blob (sem dependência nova).
+  const handleExportPractitioners = useCallback(async () => {
+    if (Platform.OS !== "web") {
+      Alert.alert("Use no computador", "A exportação de planilha funciona no Aura pelo navegador (desktop).");
+      return;
+    }
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const data = await karateApi.exportAllPractitioners(federationId);
+      // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
+      const xlsx = await import("xlsx");
+      const headers = ["Nome", "Nº FPKT", "CPF", "RG", "Nascimento", "E-mail", "Telefone", "Dojô", "Nº FPKT Dojô", "Faixa", "Situação"];
+      const rows = data.practitioners.map((p) => [
+        p.nome || "",
+        p.numero_fpkt || "",
+        p.cpf || "",
+        p.rg || "",
+        p.nascimento || "",
+        p.email || "",
+        p.telefone || "",
+        p.dojo || "",
+        p.dojo_fpkt || "",
+        p.faixa || "",
+        p.situacao || "",
+      ]);
+      const ws = xlsx.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, ws, "Praticantes");
+
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const fname = `FPKT_praticantes_${today}.xlsx`;
+      const out = xlsx.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e: any) {
+      Alert.alert("Erro ao exportar", e?.message || "Não foi possível exportar os praticantes. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }, [federationId, exporting]);
+
   // Cabeçalho da tela (título + CTAs). Fica acima da busca; não tem input.
   const pageHead = (
     <PageHead
@@ -184,6 +238,13 @@ export default function PraticantesScreen() {
       title="Praticantes"
       sub="Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
       actions={<>
+        <ShojiButton
+          label={exporting ? "Exportando…" : "Exportar"}
+          icon="download-outline"
+          variant="ghost"
+          onPress={handleExportPractitioners}
+          style={exporting ? { opacity: 0.6 } : undefined}
+        />
         <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={() => router.push("/karate/importacao" as any)} />
         <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
       </>}
