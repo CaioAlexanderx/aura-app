@@ -272,8 +272,11 @@ export function TabParcelas({
         Este cliente tem {fmt(openBalance)} em aberto de venda no crediário sem
         parcelamento. Registre recebimentos de qualquer valor pelo botão abaixo.
       </Text>
-      <View style={{ marginTop: 14, alignSelf: "stretch" }}>
+      <View style={{ marginTop: 14, alignSelf: "stretch", flexDirection: "row", gap: 8 }}>
         <Button title={`Receber ${fmt(openBalance)}`} variant="primary" size="sm" full onPress={() => prefill(openBalance)} />
+        {/* Parcelar saldo (10/07): conecta o fiado a um prazo — abre a renegociação
+            com base no saldo sem agenda (backend cai no getUnscheduledBalance). */}
+        <Button title="Parcelar saldo" variant="ghost" size="sm" full onPress={() => onRenegociar(null, "Saldo em aberto", openBalance)} />
       </View>
     </View>
   )}
