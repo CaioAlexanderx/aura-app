@@ -6,6 +6,8 @@
 // Segue o DNA visual de CriarLancamentoModal:
 //   Modal/KeyboardAvoidingView/backdrop + sheet, header com ícone,
 //   stepper, ScrollView, StyleSheet.create com objetos.
+// F4.3 (10/07): maxHeight 90vh no web (ModalPop quebrava o "90%") +
+// flexShrink nos ScrollViews — conteúdo sempre alcançável.
 // ============================================================
 import { useState, useCallback } from "react";
 import {
@@ -190,7 +192,8 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
           style={s.kvWrapper}
         >
           <ModalPop visible={visible}>
-          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+          {/* F4.3: 90vh no web — ModalPop quebrou o maxHeight:"90%" (pai sem altura) */}
+          <Pressable style={[s.sheet, IS_WEB ? ({ maxHeight: "90vh" } as any) : null]} onPress={(e) => e.stopPropagation()}>
 
             {/* ── Header ── */}
             <View style={s.header}>
@@ -240,7 +243,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
 
             {/* ── STEP 1: Selecionar itens ── */}
             {step === "select" && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 <Text style={s.sectionLabel}>Itens da venda</Text>
                 {(sale?.items || []).length === 0 && (
                   <Text style={s.emptyHint}>Esta venda não possui itens.</Text>
@@ -351,7 +354,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
 
             {/* ── STEP 2: Revisar ── */}
             {step === "review" && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 <Pressable style={s.backLink} onPress={() => setStep("select")}>
                   <Icon name="arrow-left" size={14} color={Colors.violet3} />
                   <Text style={s.backLinkText}>Voltar e editar</Text>
@@ -439,7 +442,7 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
 
             {/* ── STEP 3: Resultado ── */}
             {step === "done" && result && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 {/* Badge de sucesso */}
                 <View style={s.successBadge}>
                   <Icon name="check" size={22} color={Colors.green} />
