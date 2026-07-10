@@ -14,13 +14,6 @@
 //    "Receber pagamento", aberto pelo CTA fixo no rodapé da ficha ou
 //    por qualquer botão "Receber" (prefill). Gate 2-step âmbar migrou
 //    para <ConfirmGate> (padrão único).
-// F4.2 HOTFIX (09/07): todos os sheets inferiores (Receber/Pix/Renegociar/
-//  Vencimento) ganharam ScrollView interno cobrindo INCLUSIVE os botões,
-//  e flexShrink — em telas baixas o CTA ficava cortado pelo overflow
-//  hidden do modal, sem como rolar (cliente travada em produção).
-// F4.3 (10/07): maxHeight 90vh no web — o ModalPop (pai sem altura
-//  definida) fazia o maxHeight:"90%" ser ignorado e o modal crescia
-//  além da tela.
 // Histórico anterior: C-2 (12/06) header fixo; A2-FE paid_at no preview;
 // B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
@@ -105,7 +98,7 @@ export function ClienteCrediarioModal({
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   const [renegScope, setRenegScope] = useState<{ accountId: string | null | undefined; label: string; openRemaining: number } | null>(null);
   const [renegTotal, setRenegTotal] = useState("");
   const [renegCount, setRenegCount] = useState(1);
@@ -338,7 +331,7 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
@@ -530,7 +523,7 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // ── B3: Pix para recebimento de valor livre ───────────────────────
+  // ── B3: Pix para recebimento de valor livre ───────────────────────────
   async function openFreePix(amount: number) {
     if (!customerId) return;
     setPixInstId("free");
@@ -697,6 +690,7 @@ export function ClienteCrediarioModal({
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
                     openInstallmentPix={openInstallmentPix}
                     prefill={prefill}
+                    openBalance={totalBalance}
                     companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
                   />
                 )}
@@ -737,7 +731,7 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {/* ── Sheet "Receber pagamento" — F4.2: CTA/gate DENTRO do scroll ── */}
+          {/* ── Sheet "Receber pagamento" (ex-card "valor livre" da TabParcelas) ── */}
           {receberOpen && (
             <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
               <View style={m.editDueDateHeader}>
@@ -750,6 +744,7 @@ export function ClienteCrediarioModal({
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
               </Text>
 
+              {/* HOTFIX: CTA/gate DENTRO do scroll — em tela baixa nada fica inalcançável */}
               <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
                 {realCarnes.length > 1 && (
                   <View style={{ marginBottom: 12 }}>
