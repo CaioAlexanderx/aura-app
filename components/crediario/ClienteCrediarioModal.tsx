@@ -14,6 +14,10 @@
 //    "Receber pagamento", aberto pelo CTA fixo no rodapé da ficha ou
 //    por qualquer botão "Receber" (prefill). Gate 2-step âmbar migrou
 //    para <ConfirmGate> (padrão único).
+// F4.2 HOTFIX (09/07): todos os sheets inferiores (Receber/Pix/Renegociar/
+//  Vencimento) ganharam ScrollView interno cobrindo INCLUSIVE os botões,
+//  e flexShrink — em telas baixas o CTA ficava cortado pelo overflow
+//  hidden do modal, sem como rolar (cliente travada em produção).
 // Histórico anterior: C-2 (12/06) header fixo; A2-FE paid_at no preview;
 // B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
@@ -725,9 +729,9 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {/* ── Sheet "Receber pagamento" (ex-card "valor livre" da TabParcelas) ── */}
+          {/* ── Sheet "Receber pagamento" — F4.2: CTA/gate DENTRO do scroll ── */}
           {receberOpen && (
-            <View style={m.editDueDateSheet}>
+            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
               <View style={m.editDueDateHeader}>
                 <Text style={m.editDueDateTitle}>Receber pagamento</Text>
                 <Pressable onPress={() => { setReceberOpen(false); setReceberGate(false); }} style={m.xBtn}>
@@ -738,7 +742,7 @@ export function ClienteCrediarioModal({
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
               </Text>
 
-              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
                 {realCarnes.length > 1 && (
                   <View style={{ marginBottom: 12 }}>
                     <Text style={m.fieldLabel}>Carnê</Text>
@@ -854,51 +858,52 @@ export function ClienteCrediarioModal({
                     )}
                   </View>
                 )}
-              </ScrollView>
 
-              {/* ConfirmGate — padrão único (substitui o 2-step manual) */}
-              <ConfirmGate
-                visible={receberGate}
-                message={`Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`}
-                onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
-                onCancel={() => setReceberGate(false)}
-                loading={freeSubmitting}
-              />
-              {!receberGate && (
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-                  <Pressable
-                    style={[
-                      m.pixBtn,
-                      { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
-                      freeAmtValue <= 0 && { opacity: 0.4 },
-                    ]}
-                    disabled={freeAmtValue <= 0}
-                    onPress={() => openFreePix(freeAmtValue)}
-                  >
-                    <Text style={m.pixBtnTxt}>Gerar Pix</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[m.cta, { flex: 2 }, freeAmtValue <= 0 && { opacity: 0.45 }]}
-                    disabled={freeAmtValue <= 0}
-                    onPress={() => setReceberGate(true)}
-                  >
-                    <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
-                      {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
+                {/* ConfirmGate — padrão único (substitui o 2-step manual) */}
+                <ConfirmGate
+                  visible={receberGate}
+                  message={`Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`}
+                  onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
+                  onCancel={() => setReceberGate(false)}
+                  loading={freeSubmitting}
+                />
+                {!receberGate && (
+                  <View style={{ flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 4 }}>
+                    <Pressable
+                      style={[
+                        m.pixBtn,
+                        { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
+                        freeAmtValue <= 0 && { opacity: 0.4 },
+                      ]}
+                      disabled={freeAmtValue <= 0}
+                      onPress={() => openFreePix(freeAmtValue)}
+                    >
+                      <Text style={m.pixBtnTxt}>Gerar Pix</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[m.cta, { flex: 2 }, freeAmtValue <= 0 && { opacity: 0.45 }]}
+                      disabled={freeAmtValue <= 0}
+                      onPress={() => setReceberGate(true)}
+                    >
+                      <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>
+                        {freeAmtValue > 0 ? `Confirmar ${fmt(freeAmtValue)}` : "Confirmar recebimento"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </ScrollView>
             </View>
           )}
 
           {!!pixInstId && (
-            <View style={m.pixOverlay}>
+            <View style={[m.pixOverlay, { flexShrink: 1, minHeight: 0 }]}>
               <View style={m.pixOverlayHeader}>
                 <Text style={m.editDueDateTitle}>{pixOverlayTitle}</Text>
                 <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
+              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
               {pixLoading && (
                 <View style={{ alignItems: "center", paddingVertical: 20 }}>
                   <ActivityIndicator color={Colors.violet3} />
@@ -921,7 +926,7 @@ export function ClienteCrediarioModal({
                     <Text style={m.pixEmvTxt} selectable numberOfLines={3}>{pixData.emv}</Text>
                   </View>
                   <Pressable
-                    style={[m.cta, { marginTop: 10 }]}
+                    style={[m.cta, { marginTop: 10, marginBottom: 4 }]}
                     onPress={() => {
                       Clipboard.setString(pixData.emv);
                       toast.success("Código Pix copiado!");
@@ -931,17 +936,19 @@ export function ClienteCrediarioModal({
                   </Pressable>
                 </>
               )}
+              </ScrollView>
             </View>
           )}
 
           {renegScope && (
-            <View style={m.editDueDateSheet}>
+            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
               <View style={m.editDueDateHeader}>
                 <Text style={m.editDueDateTitle}>Renegociar parcelas</Text>
                 <Pressable onPress={() => setRenegScope(null)} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
+              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão substituídas por este novo cronograma.
               </Text>
@@ -1034,17 +1041,19 @@ export function ClienteCrediarioModal({
                     : <Text style={m.ctaTxt}>Confirmar renegociação</Text>}
                 </Pressable>
               </View>
+              </ScrollView>
             </View>
           )}
 
           {editingDueDateInst && (
-            <View style={m.editDueDateSheet}>
+            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
               <View style={m.editDueDateHeader}>
                 <Text style={m.editDueDateTitle}>Alterar Vencimento</Text>
                 <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
+              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
               </Text>
@@ -1075,6 +1084,7 @@ export function ClienteCrediarioModal({
                     : <Text style={m.ctaTxt}>Confirmar</Text>}
                 </Pressable>
               </View>
+              </ScrollView>
             </View>
           )}
 
