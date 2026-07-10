@@ -37,6 +37,7 @@ import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { openPrintWindow } from "@/services/printWindow";
 import { useAuthStore } from "@/stores/auth";
 import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow, PaymentSplit } from "./types";
@@ -173,21 +174,18 @@ export function Step5Success({
       Linking.openURL(previewUrl).catch(() => {});
       return;
     }
-    try {
+    // Fix 10/07 (relato Davi): janela sincrona no clique (printWindow).
+    openPrintWindow(async () => {
       const resp = await fetch(previewUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!resp.ok) {
         let msg = "Nao foi possivel gerar o cupom da troca.";
         try { const j = await resp.json(); if (j?.error) msg = j.error; } catch {}
-        window.alert(msg);
-        return;
+        return { ok: false as const, error: msg };
       }
-      const html = await resp.text();
-      const win = window.open("", "_blank", "width=420,height=700,scrollbars=yes");
-      if (win) { win.document.write(html); win.document.close(); }
-      else window.alert("Pop-up bloqueado. Permita pop-ups para imprimir o cupom.");
-    } catch {
-      window.alert("Erro ao gerar o cupom da troca.");
-    }
+      return { ok: true as const, html: await resp.text() };
+    }).then((r) => {
+      if (r === "blocked") window.alert("Pop-up bloqueado. Permita pop-ups para imprimir o cupom.");
+    });
   }
 
   // 29/05/2026: DANFE da NF-e 55 de devolucao. A rota exige auth, entao
@@ -196,7 +194,18 @@ export function Step5Success({
   async function openDanfe() {
     if (!trocaSaleId) return;
     const url = `${getApiBase()}/companies/${fiscalCompanyId}/print/danfe/devolucao/${trocaSaleId}`;
-    try {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      // nativo: comportamento anterior (download + Linking)
+      try {
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!resp.ok) return;
+        const blobUrl = URL.createObjectURL(await resp.blob());
+        Linking.openURL(blobUrl).catch(() => {});
+      } catch {}
+      return;
+    }
+    // Fix 10/07 (relato Davi): janela sincrona no clique; blob navega a janela.
+    openPrintWindow(async () => {
       const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!resp.ok) {
         let msg = "Nao foi possivel gerar o DANFE da devolucao.";
@@ -204,19 +213,12 @@ export function Step5Success({
           const j = await resp.json();
           if (j?.error) msg = j.error;
         } catch {}
-        if (Platform.OS === "web") window.alert(msg);
-        return;
+        return { ok: false as const, error: msg };
       }
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      if (Platform.OS === "web") {
-        window.open(blobUrl, "_blank");
-      } else {
-        Linking.openURL(blobUrl).catch(() => {});
-      }
-    } catch {
-      if (Platform.OS === "web") window.alert("Erro ao baixar o DANFE da devolucao.");
-    }
+      return { ok: true as const, url: URL.createObjectURL(await resp.blob()) };
+    }).then((r) => {
+      if (r === "blocked") window.alert("Pop-up bloqueado. Permita pop-ups para abrir o DANFE.");
+    });
   }
 
   // Texto do subtitulo baseado no resultado fiscal real.
