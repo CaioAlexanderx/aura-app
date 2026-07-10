@@ -6,6 +6,8 @@
 // F4 (08/07/2026 — spec §2.4): ModalPop na entrada, backdrop token
 // único (0.72), hover/pressed nos botões (antes zero feedback) e
 // reset da mensagem ao reabrir (antes dependia do pai).
+// F4.3 (10/07): maxHeight 88vh no web (ModalPop quebrava o "90%") +
+// ScrollView com flexShrink e indicador — conteúdo sempre alcançável.
 // ============================================================
 import { useEffect, useState } from "react";
 import {
@@ -62,7 +64,7 @@ export function CobrancaPreviewModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={cs.backdrop} onPress={onClose}>
         <ModalPop visible={visible} style={{ width: "100%", maxWidth: 480 } as any}>
-        <Pressable style={cs.sheet} onPress={() => {}}>
+        <Pressable style={[cs.sheet, IS_WEB ? ({ maxHeight: "88vh" } as any) : null]} onPress={() => {}}>
           {/* Header: X */}
           <View style={cs.headerRow}>
             <Text style={cs.headerTitle}>Prévia da cobrança</Text>
@@ -74,7 +76,7 @@ export function CobrancaPreviewModal({
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
             {/* Destinatário */}
             <View style={cs.recipientRow}>
               <View style={cs.avatar}>
