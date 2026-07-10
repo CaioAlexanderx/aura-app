@@ -7,10 +7,12 @@
 //
 // AGORA:
 //  - <ParcelaRow> único (compacto; breakdown + ações via accordion)
-//  - Carnês com Collapsible animado + chevron; "Receber" é o único
-//    CTA primário do carnê, demais ações viram botões ghost sm
+//  - Carnês com Collapsible animado + chevron
 //  - "Receber valor livre" SAIU daqui — vive no sheet "Receber
 //    pagamento" do shell (CTA fixo no rodapé da ficha)
+// F4.3 (10/07 — pente-fino): ações do carnê (Receber/Renegociar/
+// Imprimir/Cobrar) voltaram a ficar SEMPRE visíveis, fora do accordion —
+// escondidas na F3, lojistas acharam que a renegociação tinha sumido.
 // Toda a lógica (prefill, pix, renegociar, editar data) permanece no
 // shell e chega por props — este arquivo é só apresentação.
 // ============================================================
@@ -198,18 +200,21 @@ export function TabParcelas({
                 {accInst.length > 0
                   ? accInst.map(renderParcela)
                   : <Text style={m.emptyTxt}>Sem parcelas abertas neste carnê.</Text>}
-                <View style={m.accActions}>
-                  <Button title="Receber" variant="primary" size="sm" onPress={() => prefill(acc.balance)} />
-                  {accInst.length > 0 && (
-                    <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))} />
-                  )}
-                  <Button title="Imprimir" variant="ghost" size="sm" onPress={() => printCarne(companyId, customerId!)} />
-                  {!!phone && (
-                    <Button title="Cobrar" variant="success" size="sm" onPress={() => onCobrar?.(customerId!, name, phone)} />
-                  )}
-                </View>
               </View>
             </Collapsible>
+
+            {/* F4.3 (pente-fino): ações do carnê SEMPRE visíveis, como antes da F3 —
+                Renegociar escondido no accordion fez lojista achar que a função sumiu */}
+            <View style={m.accActions}>
+              <Button title="Receber" variant="primary" size="sm" onPress={() => prefill(acc.balance)} />
+              {accInst.length > 0 && (
+                <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))} />
+              )}
+              <Button title="Imprimir" variant="ghost" size="sm" onPress={() => printCarne(companyId, customerId!)} />
+              {!!phone && (
+                <Button title="Cobrar" variant="success" size="sm" onPress={() => onCobrar?.(customerId!, name, phone)} />
+              )}
+            </View>
           </View>
         );
       })}
