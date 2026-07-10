@@ -13,7 +13,10 @@ export const m = StyleSheet.create({
   crumbTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
   xBtn: { width: 30, height: 30, borderRadius: 9, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
 
-  body: { flexGrow: 0 },
+  // HOTFIX F4.2 (09/07): flexShrink 1 — quando um sheet inferior (Receber/Pix/
+  // Renegociar) abre em tela baixa, o body cede espaço em vez de empurrar
+  // o sheet para fora do modal (que tem overflow hidden).
+  body: { flexGrow: 0, flexShrink: 1, minHeight: 80 },
 
   fixedHeader: { paddingHorizontal: 18, paddingTop: 12, backgroundColor: Colors.bg2, borderBottomWidth: 1, borderBottomColor: Colors.border },
   fixedMeta: { flexDirection: "row", gap: 8, marginBottom: 12 },
