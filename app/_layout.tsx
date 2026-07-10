@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
 
@@ -237,6 +238,7 @@ export default function RootLayout() {
         <StudioThemeProvider>
           <AuthGuard />
           <LGPDConsent />
+          <UpdateBanner />
         </StudioThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
