@@ -19,6 +19,8 @@
 //
 // Os carnês são buscados do backend após a seleção do cliente
 // (via creditApi.getCustomerHistory), não dependem de prop.
+// F4.3 (10/07): maxHeight 90vh no web (ModalPop quebrava o "90%") +
+// flexShrink nos ScrollViews do passo 1 — conteúdo sempre alcançável.
 // ============================================================
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -428,7 +430,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
           style={s.kvWrapper}
         >
           <ModalPop visible={visible}>
-          <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+          {/* F4.3: 90vh no web — ModalPop quebrou o maxHeight:"90%" (pai sem altura) */}
+          <Pressable style={[s.sheet, Platform.OS === "web" ? ({ maxHeight: "90vh" } as any) : null]} onPress={(e) => e.stopPropagation()}>
             {/* Header */}
             <View style={s.header}>
               <View style={s.headerLeft}>
@@ -456,7 +459,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
 
             {/* STEP 1 — Cliente busca */}
             {step === "customer" && mode === "search" && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 <Text style={s.label}>Buscar cliente</Text>
                 <View style={s.searchRow}>
                   <Icon name="search" size={15} color={Colors.ink3} />
@@ -510,7 +513,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
 
             {/* STEP 1 — Cliente criar */}
             {step === "customer" && mode === "create" && (
-              <ScrollView style={s.body} keyboardShouldPersistTaps="handled">
+              <ScrollView style={[s.body, { flexGrow: 0, flexShrink: 1 }]} keyboardShouldPersistTaps="handled">
                 <Pressable
                   style={s.backLink}
                   onPress={() => setMode("search")}
