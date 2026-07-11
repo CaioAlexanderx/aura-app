@@ -4,8 +4,16 @@
 // Lista de anuidades por CPF com status, filtro e cobrança PIX.
 // Exibida na aba "Anuidades Praticantes".
 //
-// Wired: GET /financial/annuities/cpf
-//        POST /financial/annuities/cpf/{practitionerId}/pix (dados reais).
+// Wired: GET /financial/annuities/cpf (aceita ?year=YYYY — PR #353 do
+//        aura-backend; devolve transaction_id por linha)
+//        POST /financial/annuities/cpf/{practitionerId}/pix
+//        POST /financial/annuities/cpf/{practitionerId}/charge (dados reais).
+//
+// Paridade com DojoAnnuitiesTab (aba Dojô):
+//   - "Lançar anuidade" para linhas sem cobrança (no_charge).
+//   - Vencimento + dias em atraso exibidos na linha e no CSV.
+//   - wa.me NÃO depende de transaction_id (o backend monta a mensagem
+//     localmente; só cria intent PIX real é que precisa do transaction_id).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -26,6 +34,8 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import { WhatsAppChargeModal } from "@/components/karate/WhatsAppChargeModal";
+import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/LancarAnuidadeModal";
+import { formatIsoToBr } from "@/components/inputs/DateInput";
 import { downloadCsv } from "./EntriesTab";
 import { karateApi, CpfAnnuity, AnnuityStatus } from "@/services/karateApi";
 
@@ -43,14 +53,21 @@ function sm(status: string) {
   return annuityStatusView(status);
 }
 
-// Extended type that carries transaction_id from the list response.
-// The contract CpfAnnuity schema doesn't include transaction_id but
-// POST /cpf/{id}/pix requires it. If the backend starts returning it
-// in the list, it can be promoted to the base CpfAnnuity type.
-type CpfAnnuityWithTx = CpfAnnuity & { transaction_id?: string | null };
-
 function formatCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// GET /financial/annuities/cpf não devolve days_overdue pronto (diferente da
+// listagem de dojôs, que já calcula server-side — ver karateAnnuities.js).
+// Calculamos aqui com a MESMA regra usada no backend para dojôs: só conta
+// atraso quando o status já é overdue/defaulting/suspended (ausência de
+// cobrança — no_charge — nunca é atraso).
+function computeDaysOverdue(status: AnnuityStatus, dueDate: string | null | undefined): number {
+  if (!dueDate) return 0;
+  if (status !== "overdue" && status !== "defaulting" && status !== "suspended") return 0;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(dueDate) ? new Date(dueDate + "T12:00:00") : new Date(dueDate);
+  if (isNaN(d.getTime())) return 0;
+  return Math.max(0, Math.round((Date.now() - d.getTime()) / 86400000));
 }
 
 const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
@@ -60,21 +77,22 @@ const STATUS_CSV_LABEL: Partial<Record<AnnuityStatus, string>> = {
 interface Props { federationId: string; }
 
 export function CpfAnnuitiesTab({ federationId }: Props) {
-  const [annuities, setAnnuities] = useState<CpfAnnuityWithTx[]>([]);
+  const [annuities, setAnnuities] = useState<CpfAnnuity[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]       = useState<AnnuityStatus | "all">("all");
   const [search, setSearch]       = useState("");
-  const [pixTarget, setPixTarget] = useState<CpfAnnuityWithTx | null>(null);
-  const [waTarget, setWaTarget] = useState<CpfAnnuityWithTx | null>(null);
+  const [pixTarget, setPixTarget] = useState<CpfAnnuity | null>(null);
+  const [waTarget, setWaTarget] = useState<CpfAnnuity | null>(null);
+  const [chargeTarget, setChargeTarget] = useState<CpfAnnuity | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
       const res = await karateApi.listCpfAnnuities(federationId, { status: filter === "all" ? undefined : filter });
-      setAnnuities(res.data as CpfAnnuityWithTx[]);
+      setAnnuities(res.data);
     } catch {
       setError(true);
     } finally {
@@ -89,19 +107,22 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
   const filtered = annuities.filter((a) =>
     search === "" ||
     a.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    a.karate_registration_number.toLowerCase().includes(search.toLowerCase())
+    (a.karate_registration_number ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   // Export CSV das anuidades JÁ filtradas (busca + status). Client-side.
+  // Vencimento + dias em atraso em paridade com a aba Dojô.
   const handleExport = () => {
     if (filtered.length === 0) return;
-    const header = ["Praticante", "Registro", "Período", "Valor", "Status"];
+    const header = ["Praticante", "Registro", "Período", "Vencimento", "Valor", "Status", "Dias em atraso"];
     const rows = filtered.map((a) => [
       a.full_name ?? "",
       a.karate_registration_number ?? "",
       a.reference_period ?? "",
+      formatIsoToBr(a.due_date) || "",
       a.amount.toFixed(2).replace(".", ","),
       STATUS_CSV_LABEL[a.status] ?? a.status,
+      String(computeDaysOverdue(a.status, a.due_date)),
     ]);
     downloadCsv("anuidades_praticantes", header, rows);
   };
@@ -169,21 +190,46 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         <KarateEmptyState icon="person-outline" title="Nenhum praticante encontrado" />
       ) : (
         filtered.map((ann) => {
-          const s = sm(ann.status);
-          const canPay = ann.status !== "paid" && !!ann.transaction_id;
+          const sKey = sm(ann.status).key;
+          const daysOverdue = computeDaysOverdue(ann.status, ann.due_date);
+          // wa.me NÃO depende de transaction_id — a mensagem é montada
+          // localmente (nome, competência, valor, vencimento/status). Só a
+          // criação de intent PIX real precisa do transaction_id.
+          const canWhatsApp = ann.status !== "paid" && ann.status !== "no_charge";
+          const canPix = ["due", "overdue", "defaulting"].includes(sKey) && !!ann.transaction_id;
+          const canLaunch = sKey === "no_charge";
           return (
             <View key={ann.practitioner_id} style={st.card}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={st.name}>{ann.full_name}</Text>
                 <Text style={st.meta}>{ann.karate_registration_number} · {ann.reference_period}</Text>
+                {ann.due_date ? (
+                  <Text style={st.meta}>Vencimento: {formatIsoToBr(ann.due_date)}</Text>
+                ) : null}
+                {daysOverdue > 0 && (
+                  <Text style={st.overdue}>
+                    <Icon name="warning" size={11} color={KarateColors.danger} /> {daysOverdue}d em atraso
+                  </Text>
+                )}
               </View>
               <View style={{ alignItems: "flex-end", gap: 6 }}>
                 <Text style={st.amount}>{formatCurrency(ann.amount)}</Text>
-                <View style={[st.badge, { backgroundColor: s.bg }]} accessibilityLabel={s.label}>
-                  <Icon name={s.icon as any} size={11} color={s.color} />
-                  <Text style={[st.badgeText, { color: s.color }]}>{s.label}</Text>
+                <View style={[st.badge, { backgroundColor: sm(ann.status).bg }]} accessibilityLabel={sm(ann.status).label}>
+                  <Icon name={sm(ann.status).icon as any} size={11} color={sm(ann.status).color} />
+                  <Text style={[st.badgeText, { color: sm(ann.status).color }]}>{sm(ann.status).label}</Text>
                 </View>
-                {canPay && (
+                {canLaunch && (
+                  <TouchableOpacity
+                    style={st.launchBtn}
+                    onPress={() => setChargeTarget(ann)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Lançar anuidade de ${ann.full_name}`}
+                  >
+                    <Icon name="add" size={13} color="#fff" />
+                    <Text style={st.launchBtnLabel}>Lançar anuidade</Text>
+                  </TouchableOpacity>
+                )}
+                {canPix && (
                   <TouchableOpacity
                     style={st.pixBtn}
                     onPress={() => setPixTarget(ann)}
@@ -194,7 +240,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
                     <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
                   </TouchableOpacity>
                 )}
-                {canPay && (
+                {canWhatsApp && (
                   <TouchableOpacity
                     style={st.waBtn}
                     onPress={() => setWaTarget(ann)}
@@ -211,7 +257,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         })
       )}
 
-      {/* PIX Modal — only shown when we have a transaction_id to pass */}
+      {/* PIX Modal — só quando há transaction_id (POST .../pix exige) */}
       {pixTarget && pixTarget.transaction_id && (
         <PixPaymentModal
           visible={!!pixTarget}
@@ -228,7 +274,7 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
         />
       )}
 
-      {/* Cobrança manual via WhatsApp */}
+      {/* Cobrança manual via WhatsApp — independe de transaction_id */}
       {waTarget && (
         <WhatsAppChargeModal
           visible={!!waTarget}
@@ -242,6 +288,22 @@ export function CpfAnnuitiesTab({ federationId }: Props) {
             status: waTarget.status,
           }}
           onClose={() => setWaTarget(null)}
+        />
+      )}
+
+      {/* Lançar anuidade (nova cobrança CPF) — mesmo endpoint/modal usado na
+          ficha do praticante (AnuidadeCard). */}
+      {chargeTarget && (
+        <LancarAnuidadeModal
+          visible={!!chargeTarget}
+          federationId={federationId}
+          practitionerId={chargeTarget.practitioner_id}
+          practitionerName={chargeTarget.full_name}
+          onClose={() => setChargeTarget(null)}
+          onDone={() => {
+            setChargeTarget(null);
+            load(true);
+          }}
         />
       )}
     </ScrollView>
@@ -260,12 +322,15 @@ const st = StyleSheet.create({
   card:              { flexDirection: "row", backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 12, gap: 8 } as ViewStyle,
   name:              { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   meta:              { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  overdue:           { fontSize: 11, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
   amount:            { fontFamily: KarateFonts.mono, fontSize: 15, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   badge:             { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: KarateRadius.sm } as ViewStyle,
   badgeText:         { fontSize: 10, fontWeight: "700" } as TextStyle,
   pixBtn:            { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
   pixBtnLabel:       { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
   waBtn:             { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#25D366", borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
+  launchBtn:         { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.ink, borderRadius: KarateRadius.sm, paddingVertical: 5, paddingHorizontal: 10 } as ViewStyle,
+  launchBtnLabel:    { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
   exportRow:         { flexDirection: "row", justifyContent: "flex-end", marginBottom: 4 } as ViewStyle,
   exportBtn:         { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
   exportLabel:       { fontSize: 12, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
