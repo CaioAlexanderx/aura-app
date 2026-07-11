@@ -276,7 +276,7 @@ function cardCss(): string {
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:11.5mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.4pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.26}';
+  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:8.6pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.16}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.3pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
@@ -286,8 +286,8 @@ function cardCss(): string {
   html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
   // réguas
-  html += '.ruler-red{margin:2.2mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
-  html += '.black-bar{margin:0.6mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
+  html += '.ruler-red{margin:1.3mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
+  html += '.black-bar{margin:0.3mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
 
   // body
   html += '.body-row{display:flex;gap:4.3mm;margin-top:2.4mm;flex:1;min-height:0;align-items:flex-start}';
@@ -339,13 +339,13 @@ function cardCss(): string {
   html += '.kun-dot{width:2.3mm;flex-shrink:0;text-align:center;font-size:5.6pt;line-height:1.2;font-weight:700;color:' + RED + '}';
   html += '.kun-text{flex:1;min-width:0;font-size:5.4pt;font-weight:700;line-height:1.2;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
-  html += '.verify-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + '}';
-  html += '.verify-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.8pt;font-weight:700;margin-top:0.9mm;color:' + INK + '}';
-  html += '.qr{width:14.2mm;height:14.2mm;margin-top:1.6mm;background:#fff;image-rendering:pixelated}';
-  html += '.verify-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:5.2pt;font-weight:700;color:' + INK + ';margin-top:1.2mm;letter-spacing:0.2pt}';
-  html += '.issued-col{margin-top:1.5mm}';
-  html += '.issued-label{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.4pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
-  html += '.issued-value{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:5.2pt;font-weight:700;margin-top:0.5mm;color:' + INK + '}';
+  html += '.verify-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.15}';
+  html += '.verify-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.8pt;font-weight:700;margin-top:0.6mm;color:' + INK + ';line-height:1.15}';
+  html += '.qr{width:12.5mm;height:12.5mm;margin-top:1.0mm;background:#fff;image-rendering:pixelated}';
+  html += '.verify-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:5.2pt;font-weight:700;color:' + INK + ';margin-top:0.8mm;letter-spacing:0.2pt;line-height:1.15}';
+  html += '.issued-col{margin-top:0.8mm}';
+  html += '.issued-label{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.4pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.15}';
+  html += '.issued-value{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:5.2pt;font-weight:700;margin-top:0.3mm;color:' + INK + ';line-height:1.15}';
 
   // ── Controles de tela (escondidos na impressão) ──
   html += '.print-fab{position:fixed;bottom:20px;right:20px;z-index:999;background:#7c3aed;color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.35);font-family:-apple-system,"Segoe UI",sans-serif}';
@@ -386,7 +386,7 @@ function cardCss(): string {
   html += '.fvalue{font-weight:700;color:' + INK + '}';
   html += '.fvalue.mono{font-weight:700}';
   html += '.fvalue.name{font-weight:700}';
-  html += '.reg-num{font-weight:700}';
+  html += '.reg-num{font-weight:700;color:' + RED + '}';
   html += '.cbkt-num{font-weight:700}';
   html += '.belt-label{font-weight:700}';
   html += '.verify-num{font-weight:700;color:' + INK + '}';
