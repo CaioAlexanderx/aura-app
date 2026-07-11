@@ -137,6 +137,31 @@ export interface RosterSubmitResult {
   skipped: { student_id: string | null; reason: string }[];
 }
 
+/**
+ * Input de POST /public/roster-update/:token/practitioner — novo
+ * praticante cadastrado pelo sensei direto do portal. `name` e
+ * `belt_level` são obrigatórios; o backend exige ainda pelo menos um
+ * contato (`phone` OU `email`). dojo_id/federation_id NUNCA vão no
+ * body — vêm sempre do token no backend.
+ */
+export interface AddPractitionerInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  belt_level: string;
+  belt_name: string;
+}
+
+/** Retorno de POST /public/roster-update/:token/practitioner. */
+export interface AddPractitionerResult {
+  id: string;
+  name: string;
+  karate_registration_number: string | null;
+  belt_name: string | null;
+  belt_level: string;
+  is_active: true;
+}
+
 // ─────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────
@@ -188,4 +213,19 @@ export const karatePublicApi = {
    */
   getRosterExportUrl: (token: string): string =>
     `${apiBase()}/public/roster-update/${enc(token)}/export`,
+
+  /**
+   * Adiciona um novo praticante ao dojô do token, direto do portal do
+   * sensei. NÃO expira o token — o sensei pode adicionar vários e só
+   * confirmar o quadro depois (submitPublicRoster). 422 = validação
+   * (nome/faixa/contato faltando); 404/410 = link inválido/expirado.
+   */
+  addPublicPractitioner: (
+    token: string,
+    input: AddPractitionerInput
+  ): Promise<AddPractitionerResult> =>
+    pub(`/public/roster-update/${enc(token)}/practitioner`, {
+      method: "POST",
+      body: input,
+    }),
 };
