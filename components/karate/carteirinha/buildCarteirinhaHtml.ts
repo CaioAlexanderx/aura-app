@@ -132,7 +132,7 @@ function qrImgUrl(data: string, size = 220): string {
 }
 
 // Opacidade única da marca (frente = verso), por pedido da federação.
-const WM_OPACITY = 0.1;
+const WM_OPACITY = 0.18;
 
 export type CarteirinhaBatchOptions = {
   federationName?: string;
@@ -265,7 +265,7 @@ function cardCss(): string {
 
   // ── cartão CR80 ──
   html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
-  html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.2mm 5.1mm 3.5mm}';
+  html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.8mm 6.2mm 4.2mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
   html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
@@ -275,19 +275,19 @@ function cardCss(): string {
   html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:11.5mm;height:auto;object-fit:contain}';
-  html += '.logo-fallback{font-size:4mm;color:' + RED + '}';
+  html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
   html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.4pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.26}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.3pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
-  html += '.hd-sub{font-size:3.7pt;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
+  html += '.hd-sub{font-size:3.7pt;font-weight:600;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
   html += '.hd-badge{font-size:5pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:600;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
   html += '.badge-sq{width:1.3mm;height:1.3mm;background:' + BLACK_BAR + ';display:inline-block}';
-  html += '.hd-verso{font-size:3.7pt;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
+  html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
   // réguas
-  html += '.ruler-red{margin:2.4mm -5.1mm 0;height:0.3mm;background:' + RED + '}';
-  html += '.black-bar{margin:0.8mm -5.1mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
+  html += '.ruler-red{margin:2.2mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
+  html += '.black-bar{margin:0.6mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
 
   // body
   html += '.body-row{display:flex;gap:4.3mm;margin-top:2.4mm;flex:1;min-height:0;align-items:flex-start}';
@@ -307,8 +307,8 @@ function cardCss(): string {
   html += '.name-fld{margin-bottom:0.4mm}';
   html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.6mm 2.7mm}';
   html += '.reg-fld{margin-top:1.6mm}';
-  html += '.is-preta .body-row{margin-top:1.7mm}';
-  html += '.is-preta .fields{gap:1.35mm}';
+  html += '.is-preta .body-row{margin-top:1.3mm}';
+  html += '.is-preta .fields{gap:1.1mm}';
   html += '.is-preta .name-fld{margin-bottom:0mm}';
   html += '.is-preta .reg-fld{margin-top:0.6mm}';
   html += '.is-preta .grid2{gap:1.7mm 2.7mm}';
@@ -337,7 +337,7 @@ function cardCss(): string {
   html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:0.95mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
   html += '.kun-dot{width:2.3mm;flex-shrink:0;text-align:center;font-size:5.6pt;line-height:1.2;font-weight:700;color:' + RED + '}';
-  html += '.kun-text{flex:1;min-width:0;font-size:5pt;line-height:1.2;color:' + INK + '}';
+  html += '.kun-text{flex:1;min-width:0;font-size:5.4pt;font-weight:700;line-height:1.2;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
   html += '.verify-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.verify-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.8pt;font-weight:700;margin-top:0.9mm;color:' + INK + '}';
@@ -393,6 +393,10 @@ function cardCss(): string {
   html += '.issued-value{font-weight:700;color:' + INK + '}';
   // logo — cor/contraste garantidos mesmo se o raster for de baixo contraste
   html += '.logo-img{filter:contrast(1.12) saturate(1.05)}';
+  // marca d'água — impressão clareia tons claros; sobe um pouco mais que a
+  // tela para permanecer perceptível no papel, sem competir com o texto
+  // (a marca fica em z-index:1, sempre atrás de .face-pad z-index:2).
+  html += '.wm-front,.wm-back{opacity:0.22}';
   html += '}';
 
   return html;
