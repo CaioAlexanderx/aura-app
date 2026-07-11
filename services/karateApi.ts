@@ -1178,7 +1178,13 @@ export const karateApi = {
     dojoId: string,
     body: RedistributeDojoInput
   ): Promise<RedistributeDojoResult> =>
-    request(`/federation/${federationId}/dojos/${dojoId}/redistribute`, { method: "POST", body }),
+    // Mutação — nunca fazer retry (risco de reaplicar transferência/inativação).
+    // Dojôs grandes (ex.: 667 praticantes) ainda levam alguns segundos mesmo
+    // com o backend em lote; timeout maior para dar folga (ver RequestOpts
+    // em services/api.ts — há precedentes com timeout: 60000).
+    request(`/federation/${federationId}/dojos/${dojoId}/redistribute`, {
+      method: "POST", body, timeout: 60000, retry: 0,
+    }),
 
   /** Export de dados do dojô no formato do import (abas Academias/Alunos/Histórico). */
   exportDojoData: (
