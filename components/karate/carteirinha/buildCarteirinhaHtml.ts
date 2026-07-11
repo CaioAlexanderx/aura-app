@@ -57,6 +57,13 @@ const LINE = "rgba(43,38,32,0.10)";
 const LINE_2 = "rgba(43,38,32,0.17)";
 const BLACK_BAR = "#141210";
 
+// Tokens exclusivos de @media print — impressoras clareiam cinzas claros e
+// afinam linhas finas; estes tons/larguras só entram no bloco @media print
+// (não afetam a prévia em tela, que já foi aprovada).
+const PRINT_LABEL = "#4a4335";
+const PRINT_LINE = "rgba(43,38,32,0.55)";
+const PRINT_LINE_2 = "rgba(43,38,32,0.78)";
+
 const CARD_W_MM = 85.6;
 const CARD_H_MM = 54;
 
@@ -209,7 +216,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
   const qr = qrImgUrl(verifyUrl, 220);
   const blackBar = isPreta ? '<div class="black-bar"></div>' : '';
   const kunList = DOJO_KUN.map(function (line) {
-    return '<div class="kun-item"><span class="kun-dot"></span><span class="kun-text">' + esc(line) + '</span></div>';
+    return '<div class="kun-item"><span class="kun-dot" aria-hidden="true">&#8226;</span><span class="kun-text">' + esc(line) + '</span></div>';
   }).join("");
 
   return (
@@ -252,7 +259,7 @@ function cardCss(): string {
   // Fontes do mock aprovado (Shippori Mincho / Zen Kaku Gothic New / DM Mono)
   html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap\');';
   html += '@page{size:A4;margin:10mm}';
-  html += '*{margin:0;padding:0;box-sizing:border-box}';
+  html += '*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
   html += 'body{font-family:"Zen Kaku Gothic New",system-ui,sans-serif;background:#f5f5f5;color:' + INK + '}';
   html += '.grid{display:grid;grid-template-columns:repeat(2, ' + CARD_W_MM + 'mm);gap:6mm 8mm;justify-content:center;padding-top:64px;padding-bottom:80px}';
 
@@ -267,7 +274,7 @@ function cardCss(): string {
   html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
   html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
-  html += '.logo-img{width:10.2mm;height:auto;object-fit:contain}';
+  html += '.logo-img{width:11.5mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;color:' + RED + '}';
   html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:7.4pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.26}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
@@ -329,8 +336,8 @@ function cardCss(): string {
   html += '.kun-title{font-family:"Shippori Mincho",serif;font-size:6.4pt;font-weight:500;margin-top:0.4mm;color:' + INK + '}';
   html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:0.95mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
-  html += '.kun-dot{width:0.8mm;height:0.8mm;background:' + RED + ';margin-top:0.7mm;flex-shrink:0}';
-  html += '.kun-text{font-size:5pt;line-height:1.2;color:' + INK + '}';
+  html += '.kun-dot{width:2.3mm;flex-shrink:0;text-align:center;font-size:5.6pt;line-height:1.2;font-weight:700;color:' + RED + '}';
+  html += '.kun-text{flex:1;min-width:0;font-size:5pt;line-height:1.2;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
   html += '.verify-eyebrow{font-family:"DM Mono",monospace;font-size:3.9pt;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.verify-title{font-family:"Shippori Mincho",serif;font-size:6.8pt;font-weight:500;margin-top:0.9mm;color:' + INK + '}';
@@ -345,7 +352,49 @@ function cardCss(): string {
   html += '.print-fab:hover{background:#6d28d9}';
   html += '.top-bar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;z-index:999;display:flex;align-items:center;justify-content:space-between;font-family:-apple-system,"Segoe UI",sans-serif}';
   html += '.top-bar span{color:#a78bfa;font-size:12px}.top-bar b{color:#e2e8f0;font-size:13px}';
-  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.grid{padding-top:0;padding-bottom:0}body{background:#fff}}';
+  // ── Intensificações exclusivas de impressão (não tocam a prévia em tela) ──
+  // Sintoma 1 (fontes fracas): rótulos abaixo de ~4.5pt somem/ficam cinza
+  // claro no papel — sobe tamanho mínimo, peso e escurece p/ PRINT_LABEL.
+  // Sintoma 3 (linhas somem): bordas 0.15–0.18mm em cinza claro viram
+  // ≥0.3mm em PRINT_LINE/PRINT_LINE_2. Sintoma 5 (logo fraca): reforça
+  // contraste do logo-img (a marca-d'água .wm permanece intocada — opacidade
+  // baixa é intencional).
+  html += '@media print{';
+  html += '*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}';
+  html += '.print-fab{display:none!important}.top-bar{display:none!important}';
+  html += '.grid{padding-top:0;padding-bottom:0}body{background:#fff}';
+  // bordas e réguas
+  html += '.cr80{border-width:0.32mm;border-color:' + PRINT_LINE_2 + '}';
+  html += '.photo{border-width:0.32mm;border-color:' + PRINT_LINE_2 + '}';
+  html += '.verify-col{border-left-width:0.32mm;border-left-color:' + PRINT_LINE + '}';
+  html += '.ruler-red{height:0.4mm}';
+  html += '.black-bar{height:1.3mm}';
+  // rótulos pequenos — sobe tamanho mínimo (nada abaixo de 4.5pt), peso e escurece
+  html += '.hd-sub{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.hd-verso{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.flabel{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.kun-eyebrow{font-size:4.6pt;font-weight:700}';
+  html += '.verify-eyebrow{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.pres-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.valid-text{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.issued-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.photo-sub{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.photo-empty{font-size:4.8pt;font-weight:600;color:' + PRINT_LABEL + '}';
+  html += '.hd-badge{font-weight:600;color:' + INK_2 + '}';
+  html += '.hd-carteira{font-weight:600}';
+  // valores — cor sólida + peso >=600 (nome, faixa, nº registro, CBKT, etc.)
+  html += '.fvalue{font-weight:600;color:' + INK + '}';
+  html += '.fvalue.mono{font-weight:600}';
+  html += '.fvalue.name{font-weight:700}';
+  html += '.reg-num{font-weight:700}';
+  html += '.cbkt-num{font-weight:700}';
+  html += '.belt-label{font-weight:700}';
+  html += '.verify-num{font-weight:600;color:' + INK + '}';
+  html += '.issued-value{font-weight:600;color:' + INK + '}';
+  // logo — cor/contraste garantidos mesmo se o raster for de baixo contraste
+  html += '.logo-img{filter:contrast(1.12) saturate(1.05)}';
+  html += '}';
+
   return html;
 }
 
@@ -384,7 +433,22 @@ export function buildCarteirinhaHtml(cards: MembershipCard[], options?: Carteiri
 
   html += '<div class="grid">' + cells + '</div>';
 
-  html += '<button class="print-fab" onclick="window.print()">Imprimir</button>';
+  html += '<button class="print-fab" onclick="auraPrint()">Imprimir</button>';
+
+  // Sintoma 2 (fontes fracas por causa de web-font ainda não carregada): o
+  // botão Imprimir chama auraPrint() em vez de window.print() direto —
+  // aguarda document.fonts.ready (Shippori Mincho/Zen Kaku Gothic New/DM Mono)
+  // antes de abrir o diálogo, com timeout de segurança de 1.5s caso a API não
+  // exista ou a Promise nunca resolva (rede lenta/offline).
+  html += '<script>';
+  html += 'function auraPrint(){';
+  html += 'var done=false;function go(){if(done)return;done=true;window.print();}';
+  html += 'if(document.fonts&&document.fonts.ready){';
+  html += 'setTimeout(go,1500);';
+  html += 'document.fonts.ready.then(go,go);';
+  html += '}else{go();}';
+  html += '}';
+  html += '<\/script>';
 
   html += '</body></html>';
   return html;
