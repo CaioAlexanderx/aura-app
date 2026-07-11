@@ -290,6 +290,22 @@ export interface ExportDojoPayload {
   transfers?: object[];
 }
 
+// ── Fase 4: Roster do dojô (status + financeiro) ────────────────
+
+export type MemberFinanceiroStatus = "nao_aplicavel" | "sem_cobranca" | "em_dia" | "atrasado";
+
+export interface DojoMemberStanding {
+  student_id: string;
+  full_name: string;
+  karate_registration_number: string | null;
+  is_active: boolean;
+  belt_level: string | null;
+  belt_name: string | null;
+  is_black_belt: boolean;
+  financeiro: MemberFinanceiroStatus;
+  valor_em_aberto: number | null;
+}
+
 // ── Importação CSV / FPKT ──────────────────────────────────────
 
 export interface ImportResult {
@@ -1051,6 +1067,15 @@ export const karateApi = {
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/dojos/${dojoId}/export-data${query}`);
   },
+
+  /** Fase 4 — roster do dojô: praticantes com status (is_active) + financeiro (só faixa-preta). */
+  getDojoMembersStanding: (
+    federationId: string,
+    dojoId: string
+  ): Promise<DojoMemberStanding[]> =>
+    request<{ data: DojoMemberStanding[] }>(
+      `/federation/${federationId}/dojos/${dojoId}/members-standing`
+    ).then((res) => res.data),
 
   // Praticantes
   listPractitioners: (
