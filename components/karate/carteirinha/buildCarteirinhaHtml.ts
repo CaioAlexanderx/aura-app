@@ -271,12 +271,12 @@ function cardCss(): string {
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
 
   // header
-  html += '.head{display:flex;align-items:flex-start;justify-content:space-between;min-height:7.3mm}';
+  html += '.head{display:flex;align-items:center;justify-content:space-between;min-height:12.4mm}';
   html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
-  html += '.logo-img{width:11.5mm;height:auto;object-fit:contain}';
+  html += '.logo-img{width:13mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:8.6pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.16}';
+  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:10pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.16}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.3pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
@@ -286,11 +286,11 @@ function cardCss(): string {
   html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
   // réguas
-  html += '.ruler-red{margin:1.3mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
-  html += '.black-bar{margin:0.3mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
+  html += '.ruler-red{margin:0.9mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
+  html += '.black-bar{margin:0.2mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
 
   // body
-  html += '.body-row{display:flex;gap:4.3mm;margin-top:2.4mm;flex:1;min-height:0;align-items:flex-start}';
+  html += '.body-row{display:flex;gap:4.3mm;margin-top:1.8mm;flex:1;min-height:0;align-items:flex-start}';
   html += '.photo{width:21.7mm;height:28.9mm;flex-shrink:0;border-radius:1.4mm;border:0.15mm solid ' + LINE_2 + ';object-fit:cover;background:#faf8f3}';
   html += '.photo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;font-family:"DM Mono","Consolas","Courier New",monospace;font-size:4.6pt;font-weight:600;letter-spacing:0.5pt;color:' + INK_4 + '}';
   html += '.photo-sub{font-size:4.2pt}';
@@ -307,7 +307,7 @@ function cardCss(): string {
   html += '.name-fld{margin-bottom:0.4mm}';
   html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.6mm 2.7mm}';
   html += '.reg-fld{margin-top:1.6mm}';
-  html += '.is-preta .body-row{margin-top:1.3mm}';
+  html += '.is-preta .body-row{margin-top:0.5mm}';
   html += '.is-preta .fields{gap:1.1mm}';
   html += '.is-preta .name-fld{margin-bottom:0mm}';
   html += '.is-preta .reg-fld{margin-top:0.6mm}';
