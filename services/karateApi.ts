@@ -324,6 +324,28 @@ export interface DojoMemberStanding {
   valor_em_aberto: number | null;
 }
 
+/** Filtro de status do roster paginado (aba Todos / Ativos / Inativos). */
+export type RosterStatusFilter = "all" | "active" | "inactive";
+
+/**
+ * Contagens do quadro INTEIRO do dojo — vêm agregadas do banco e NÃO dependem
+ * da página/aba atual. É o que alimenta os KPIs do detalhe do dojô agora que a
+ * lista não vem mais inteira para o cliente.
+ */
+export interface DojoRosterSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  black_belt_total: number;
+  black_belt_paid: number;
+  black_belt_overdue: number;
+}
+
+/** Página do roster: Paginated<DojoMemberStanding> + summary do quadro inteiro. */
+export interface DojoRosterPage extends Paginated<DojoMemberStanding> {
+  summary: DojoRosterSummary;
+}
+
 // ── Cascata de inativação + validação de quadro (federação) ─────
 //
 // Fluxo:
@@ -1241,14 +1263,44 @@ export const karateApi = {
     return request(`/federation/${federationId}/dojos/${dojoId}/export-data${query}`);
   },
 
-  /** Fase 4 — roster do dojô: praticantes com status (is_active) + financeiro (só faixa-preta). */
+  /**
+   * Fase 4 — roster do dojô: praticantes com status (is_active) + financeiro
+   * (só faixa-preta). PAGINADO NO SERVIDOR (11/07/2026): dojôs grandes (~400
+   * praticantes) baixavam o quadro inteiro só para renderizar a seção.
+   * Devolve { data, total, page, pageSize, summary } — summary traz as
+   * contagens do quadro inteiro, independentes da página/aba.
+   */
   getDojoMembersStanding: (
     federationId: string,
-    dojoId: string
-  ): Promise<DojoMemberStanding[]> =>
-    request<{ data: DojoMemberStanding[] }>(
-      `/federation/${federationId}/dojos/${dojoId}/members-standing`
-    ).then((res) => res.data),
+    dojoId: string,
+    params?: { status?: RosterStatusFilter; page?: number; pageSize?: number; q?: string }
+  ): Promise<DojoRosterPage> => {
+    const qs = new URLSearchParams();
+    if (params?.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params?.page ?? 1));
+    qs.set("pageSize", String(params?.pageSize ?? 25));
+    if (params?.q) qs.set("q", params.q);
+    return request<DojoRosterPage>(
+      `/federation/${federationId}/dojos/${dojoId}/members-standing?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Roster COMPLETO (sem LIMIT) — usado só onde a lista inteira é requisito,
+   * hoje o modal de Redistribuição (precisa de todos os praticantes ativos
+   * para decidir um a um). Não usar para renderizar a seção Praticantes.
+   */
+  getDojoMembersStandingAll: (
+    federationId: string,
+    dojoId: string,
+    status: RosterStatusFilter = "all"
+  ): Promise<DojoMemberStanding[]> => {
+    const qs = new URLSearchParams({ all: "1" });
+    if (status !== "all") qs.set("status", status);
+    return request<{ data: DojoMemberStanding[] }>(
+      `/federation/${federationId}/dojos/${dojoId}/members-standing?${qs.toString()}`
+    ).then((res) => res.data || []);
+  },
 
   // Praticantes
   listPractitioners: (

@@ -51,7 +51,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import {
-  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1, KpiBand, BarRow,
+  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1, KpiBand, BarRow, Chip,
 } from "@/components/karate/shoji";
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
@@ -62,7 +62,7 @@ import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
-import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, RosterValidation } from "@/services/karateApi";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
@@ -75,6 +75,8 @@ const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "
 // touch usado em InactivateChoiceDialog/RedistribuirPraticantesModal.
 const MENU_IS_WEB = Platform.OS === "web";
 const OVERFLOW_MENU_WIDTH = 264;
+// Roster paginado no servidor (11/07/2026): 25 praticantes por página.
+const ROSTER_PAGE_SIZE = 25;
 
 type OverflowMenuItem =
   | { type: "action"; key: string; label: string; icon: string; onPress: () => void; destructive?: boolean; disabled?: boolean }
@@ -247,18 +249,44 @@ export default function DojoDetailScreen() {
 
   // Fase 4 — Roster do dojô (2 badges: status + financeiro). Busca própria
   // (independente do GET de detalhe) via VIEW karate_member_standing.
+  //
+  // PAGINAÇÃO NO SERVIDOR (11/07/2026): dojôs grandes (um deles com ~400
+  // praticantes) baixavam e renderizavam o quadro inteiro de uma vez — a
+  // página ficava gigantesca e lenta. Agora a tela pede UMA página por vez
+  // (LIMIT/OFFSET no backend) e recebe, junto, o `summary` com as contagens do
+  // quadro inteiro (total/ativos/inativos + faixas-pretas), para que os KPIs
+  // continuem corretos sem a lista completa em memória.
   const [roster, setRoster] = useState<DojoMemberStanding[]>([]);
+  const [rosterSummary, setRosterSummary] = useState<DojoRosterSummary | null>(null);
+  const [rosterSliceTotal, setRosterSliceTotal] = useState(0); // total do recorte (aba atual)
+  const [rosterTab, setRosterTab] = useState<RosterStatusFilter>("all");
+  const [rosterPage, setRosterPage] = useState(1);
   const [rosterLoading, setRosterLoading] = useState(true);
   const [rosterError, setRosterError] = useState(false);
-  const loadRoster = useCallback(() => {
+
+  const fetchRoster = useCallback((tab: RosterStatusFilter, page: number) => {
     if (!dojoId) return;
     setRosterLoading(true); setRosterError(false);
-    karateApi.getDojoMembersStanding(federationId, dojoId)
-      .then((rows) => setRoster(rows || []))
+    karateApi.getDojoMembersStanding(federationId, dojoId, { status: tab, page, pageSize: ROSTER_PAGE_SIZE })
+      .then((res) => {
+        setRoster(res.data || []);
+        setRosterSliceTotal(res.total ?? 0);
+        setRosterSummary(res.summary ?? null);
+      })
       .catch(() => setRosterError(true))
       .finally(() => setRosterLoading(false));
   }, [federationId, dojoId]);
-  useEffect(() => { loadRoster(); }, [loadRoster]);
+
+  // Recarrega a página ATUAL (usado depois de mutações: suspender, redistribuir…).
+  const loadRoster = useCallback(() => { fetchRoster(rosterTab, rosterPage); }, [fetchRoster, rosterTab, rosterPage]);
+  useEffect(() => { fetchRoster(rosterTab, rosterPage); }, [fetchRoster, rosterTab, rosterPage]);
+
+  // Trocar de aba sempre volta para a página 1 (senão a página 3 de "Ativos"
+  // pode não existir em "Inativos" e a lista viria vazia sem explicação).
+  const changeRosterTab = useCallback((tab: RosterStatusFilter) => {
+    setRosterTab(tab);
+    setRosterPage(1);
+  }, []);
 
   // Validação de quadro — GET roster-validation para o banner no topo do
   // detalhe (pending/validated). Falha silenciosa: o banner simplesmente
@@ -367,6 +395,30 @@ export default function DojoDetailScreen() {
     load(); loadRoster();
   }, [load, loadRoster]);
 
+  // Com o roster paginado, a lista da tela é só UMA página — mas o modal de
+  // Redistribuição precisa de TODOS os praticantes ativos (decide um a um).
+  // Buscamos a lista completa (all=1&status=active) sob demanda, só quando o
+  // usuário escolhe "Redistribuir".
+  const [redistribList, setRedistribList] = useState<DojoMemberStanding[]>([]);
+  const [redistribLoading, setRedistribLoading] = useState(false);
+  const openRedistribute = useCallback(async () => {
+    if (!dojoId) return;
+    setRedistribLoading(true);
+    try {
+      const rows = await karateApi.getDojoMembersStandingAll(federationId, dojoId, "active");
+      setRedistribList(rows);
+      setChoiceOpen(false);
+      // Dois <Modal> distintos: fecha o diálogo de escolha e só no próximo tick
+      // abre o Redistribuir (RN-Web: modal aberto sobre modal ainda no ar fica
+      // atrás / vira no-op).
+      setTimeout(() => setRedistribOpen(true), 0);
+    } catch (e: any) {
+      Alert.alert("Não foi possível carregar os praticantes", e?.message || "Tente novamente.");
+    } finally {
+      setRedistribLoading(false);
+    }
+  }, [federationId, dojoId]);
+
   // ── Excluir dojô ─────────────────────────────────────────────────
   const deleteDojo = useCallback(async () => {
     if (!data || busy) return;
@@ -463,22 +515,25 @@ export default function DojoDetailScreen() {
   const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
   const senseiIsPractitioner = !!(data as any).sensei_practitioner_id;
 
-  // Fase 4 — contadores do roster (topo da seção Praticantes).
-  const rosterActiveCount = roster.filter((m) => m.is_active).length;
+  // Fase 4/5 — contadores do roster (topo da seção Praticantes) + faixas-pretas.
+  //
+  // Com o roster paginado, estes números NÃO podem mais ser derivados da lista
+  // em memória (ela é só uma página): vêm do `summary` que o backend agrega no
+  // banco sobre o quadro INTEIRO do dojô. `rosterHasData` continua guardando
+  // contra mostrar contagem/percentual falso enquanto carrega ou se o standing
+  // falhar (degrade para "—", nunca um número inventado).
+  const rosterHasData = !rosterError && !!rosterSummary;
+  const rosterTotal = rosterSummary?.total ?? 0;
+  const rosterActiveCount = rosterSummary?.active ?? 0;
+  const rosterInactiveCount = rosterSummary?.inactive ?? 0;
+  const blackBeltTotal = rosterSummary?.black_belt_total ?? 0;
+  const blackBeltPaidCount = rosterSummary?.black_belt_paid ?? 0;
+  const blackBeltOverdueCount = rosterSummary?.black_belt_overdue ?? 0;
 
-  // Fase 5 — quebra Total/Ativos/Inativos + faixas-pretas (total e % com
-  // anuidade da federação em dia). Tudo derivado client-side do MESMO roster
-  // já buscado acima (VIEW karate_member_standing) — sem 2ª chamada e com a
-  // MESMA fonte que os badges por linha logo abaixo. `rosterHasData` guarda
-  // contra mostrar contagem/percentual falso enquanto carrega ou se o
-  // standing falhar (degrade para "—", nunca um número inventado).
-  const rosterHasData = !rosterLoading && !rosterError;
-  const rosterTotal = roster.length;
-  const rosterInactiveCount = rosterTotal - rosterActiveCount;
-  const blackBelts = roster.filter((m) => m.is_black_belt);
-  const blackBeltTotal = blackBelts.length;
-  const blackBeltPaidCount = blackBelts.filter((m) => m.financeiro === "em_dia").length;
-  const blackBeltOverdueCount = blackBelts.filter((m) => m.financeiro === "atrasado").length;
+  // Paginação do recorte (aba) atual.
+  const rosterPageCount = Math.max(1, Math.ceil(rosterSliceTotal / ROSTER_PAGE_SIZE));
+  const rosterRangeStart = rosterSliceTotal === 0 ? 0 : (rosterPage - 1) * ROSTER_PAGE_SIZE + 1;
+  const rosterRangeEnd = Math.min(rosterPage * ROSTER_PAGE_SIZE, rosterSliceTotal);
   // Uma casa decimal só quando necessário (22% em vez de 22,0%; 22,1% quando não é redondo).
   const fmtPctSmart = (v: number) => {
     const rounded = Math.round(v * 1000) / 10; // fração 0..1 → %, 1 casa
@@ -602,10 +657,10 @@ export default function DojoDetailScreen() {
           <KV k="Fundação" v={data.dojo_founded_year ? String(data.dojo_founded_year) : null} />
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
           <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
-          {/* Fase 5 / DJ-seg: fonte coerente com a seção Praticantes abaixo — usa a
-              contagem do standing (MESMO estado já buscado por getDojoMembersStanding,
-              sem 2ª chamada) quando disponível; cai para o campo do GET /dojo enquanto
-              o roster carrega ou se ele falhar — nunca mostra ativos/inativos "chutados". */}
+          {/* Fase 5 / DJ-seg: fonte coerente com a seção Praticantes abaixo — usa o
+              `summary` do roster paginado (contagens agregadas no banco, mesma chamada
+              da lista, sem 2ª ida) quando disponível; cai para o campo do GET /dojo
+              enquanto carrega ou se falhar — nunca mostra ativos/inativos "chutados". */}
           {rosterHasData ? (
             <View style={styles.praticantesRow}>
               <Text style={styles.praticantesKey}>Praticantes</Text>
@@ -662,23 +717,26 @@ export default function DojoDetailScreen() {
         </Card>
 
         {/* Fase 4/5 — Roster do dojô: praticantes com 2 badges (status + financeiro),
-            quebra Total/Ativos/Inativos e faixas-pretas com % de anuidade em dia. */}
+            quebra Total/Ativos/Inativos e faixas-pretas com % de anuidade em dia.
+            PAGINADO NO SERVIDOR (25/página): a lista abaixo é só a página atual;
+            os KPIs vêm do summary agregado no banco (quadro inteiro). */}
         <Card style={{ marginTop: SP[6] }}>
           <SectionHead
             title="Praticantes"
             sub={rosterHasData ? `${rosterTotal} cadastrado${rosterTotal === 1 ? "" : "s"}` : undefined}
           />
-          {rosterLoading ? (
-            <View>
-              {[1, 2, 3].map((k) => <Skeleton key={k} height={40} style={{ marginBottom: 8 }} />)}
-            </View>
-          ) : rosterError ? (
+          {rosterError ? (
             <KarateErrorState
               title="Não foi possível carregar os praticantes"
               message="Verifique sua conexão e tente novamente."
               onRetry={loadRoster}
             />
-          ) : roster.length === 0 ? (
+          ) : !rosterSummary ? (
+            /* Primeira carga: ainda não sabemos nem as contagens. */
+            <View>
+              {[1, 2, 3].map((k) => <Skeleton key={k} height={40} style={{ marginBottom: 8 }} />)}
+            </View>
+          ) : rosterTotal === 0 ? (
             <KarateEmptyState
               icon="people-outline"
               title="Nenhum praticante neste dojô"
@@ -686,7 +744,7 @@ export default function DojoDetailScreen() {
             />
           ) : (
             <>
-              {/* Fase 5: Total / Ativos / Inativos — mesma fonte (roster) dos badges por linha. */}
+              {/* Fase 5: Total / Ativos / Inativos — agregados do quadro inteiro (summary). */}
               <KpiBand
                 items={[
                   { label: "Total", value: rosterTotal },
@@ -711,26 +769,75 @@ export default function DojoDetailScreen() {
                 ) : null}
               </View>
 
-              {roster.map((m, i) => (
-              <View key={m.student_id} style={[styles.rosterRow, i === roster.length - 1 && styles.noBorder]}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.rosterName}>{m.full_name}</Text>
-                  <Body muted style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {m.karate_registration_number || "Sem matrícula"}
-                  </Body>
-                </View>
-                {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
-                <View style={styles.rosterBadges}>
-                  <Badge status={m.is_active ? "ok" : "neutral"} label={m.is_active ? "Ativo" : "Inativo"} />
-                  {m.is_black_belt && m.financeiro === "em_dia" ? (
-                    <Badge status="ok" label="Em dia" />
-                  ) : null}
-                  {m.is_black_belt && m.financeiro === "atrasado" ? (
-                    <Badge status="danger" label="Atrasado" />
-                  ) : null}
-                </View>
+              {/* Abas do quadro — o filtro roda no BACKEND (status=), não é
+                  .filter() sobre a página. Trocar de aba volta para a página 1. */}
+              <View style={styles.rosterTabs}>
+                <Chip label={`Todos (${rosterTotal})`} active={rosterTab === "all"} onPress={() => changeRosterTab("all")} />
+                <Chip label={`Ativos (${rosterActiveCount})`} active={rosterTab === "active"} onPress={() => changeRosterTab("active")} />
+                <Chip label={`Inativos (${rosterInactiveCount})`} active={rosterTab === "inactive"} onPress={() => changeRosterTab("inactive")} />
               </View>
-              ))}
+
+              {rosterLoading ? (
+                <View style={{ marginTop: SP[4] }}>
+                  {[1, 2, 3, 4, 5].map((k) => <Skeleton key={k} height={40} style={{ marginBottom: 8 }} />)}
+                </View>
+              ) : roster.length === 0 ? (
+                <Body muted style={{ marginTop: SP[4] }}>
+                  {rosterTab === "active" ? "Nenhum praticante ativo neste dojô." : "Nenhum praticante inativo neste dojô."}
+                </Body>
+              ) : (
+                roster.map((m, i) => (
+                  <View key={m.student_id} style={[styles.rosterRow, i === roster.length - 1 && styles.noBorder]}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.rosterName}>{m.full_name}</Text>
+                      <Body muted style={{ fontSize: 11.5, marginTop: 2 }}>
+                        {m.karate_registration_number || "Sem matrícula"}
+                      </Body>
+                    </View>
+                    {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
+                    <View style={styles.rosterBadges}>
+                      <Badge status={m.is_active ? "ok" : "neutral"} label={m.is_active ? "Ativo" : "Inativo"} />
+                      {m.is_black_belt && m.financeiro === "em_dia" ? (
+                        <Badge status="ok" label="Em dia" />
+                      ) : null}
+                      {m.is_black_belt && m.financeiro === "atrasado" ? (
+                        <Badge status="danger" label="Atrasado" />
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+              )}
+
+              {/* Pager — só aparece quando o recorte não cabe numa página. */}
+              {rosterSliceTotal > ROSTER_PAGE_SIZE ? (
+                <View style={styles.pagerRow}>
+                  <Text style={styles.pagerInfo}>
+                    {rosterRangeStart}–{rosterRangeEnd} de {rosterSliceTotal} · página {rosterPage} de {rosterPageCount}
+                  </Text>
+                  <View style={styles.pagerBtns}>
+                    <TouchableOpacity
+                      style={[styles.pagerBtn, (rosterPage <= 1 || rosterLoading) && styles.pagerBtnOff]}
+                      disabled={rosterPage <= 1 || rosterLoading}
+                      onPress={() => setRosterPage((p) => Math.max(1, p - 1))}
+                      accessibilityRole="button"
+                      accessibilityLabel="Página anterior"
+                    >
+                      <Icon name="chevron-back" size={13} color={C.ink} />
+                      <Text style={styles.pagerBtnTxt}>Anterior</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.pagerBtn, (rosterPage >= rosterPageCount || rosterLoading) && styles.pagerBtnOff]}
+                      disabled={rosterPage >= rosterPageCount || rosterLoading}
+                      onPress={() => setRosterPage((p) => Math.min(rosterPageCount, p + 1))}
+                      accessibilityRole="button"
+                      accessibilityLabel="Próxima página"
+                    >
+                      <Text style={styles.pagerBtnTxt}>Próxima</Text>
+                      <Icon name="chevron-forward" size={13} color={C.ink} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
             </>
           )}
         </Card>
@@ -837,7 +944,7 @@ export default function DojoDetailScreen() {
       <InactivateChoiceDialog
         visible={choiceOpen}
         onClose={() => !busy && setChoiceOpen(false)}
-        busy={busy}
+        busy={busy || redistribLoading}
         dojoName={data.name}
         activeCount={rosterActiveCount}
         hasChoice={rosterHasData && rosterActiveCount > 0}
@@ -846,7 +953,7 @@ export default function DojoDetailScreen() {
         // diálogo de escolha e só no próximo tick abre o Redistribuir (2
         // <Modal> distintos; sem o adiamento o novo modal pode abrir com o
         // anterior ainda no ar, mesmo risco de ficar atrás/invisível).
-        onRedistribute={() => { setChoiceOpen(false); setTimeout(() => setRedistribOpen(true), 0); }}
+        onRedistribute={openRedistribute}
         reducedMotion={reducedMotion}
       />
 
@@ -859,7 +966,7 @@ export default function DojoDetailScreen() {
         federationId={federationId}
         dojoId={dojoId!}
         dojoName={data.name}
-        practitioners={roster.filter((m) => m.is_active)}
+        practitioners={redistribList}
         onSuccess={onRedistributeSuccess}
       />
 
@@ -1388,6 +1495,14 @@ const styles = StyleSheet.create({
   // Fase 5 — bloco de resumo das faixas-pretas (texto + BarRow em dia/atrasado).
   blackBeltBlock: { paddingVertical: 4, marginBottom: SP[5], borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: SP[5] } as ViewStyle,
   blackBeltLine: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  // Roster paginado (11/07/2026) — abas (Todos/Ativos/Inativos) + pager.
+  rosterTabs: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: SP[2] } as ViewStyle,
+  pagerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, paddingTop: SP[4] } as ViewStyle,
+  pagerInfo: { fontFamily: F.body, fontSize: 11.5, color: C.ink3 } as TextStyle,
+  pagerBtns: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  pagerBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface } as ViewStyle,
+  pagerBtnOff: { opacity: 0.4 } as ViewStyle,
+  pagerBtnTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
