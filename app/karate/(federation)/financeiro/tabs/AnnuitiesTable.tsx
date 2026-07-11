@@ -38,6 +38,7 @@ import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/Date
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan,
 } from "@/services/karateApi";
+import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import type { SegKey } from "./AnnuitiesHub";
 
 const PAGE_SIZE = 50;
@@ -450,30 +451,55 @@ function AnnuityRowItem({
 const AnnuityRow = React.memo(AnnuityRowItem);
 
 // ── Barra de multi-seleção ────────────────────────────────────────
+// Fase F3: a mesma seleção agora alimenta DUAS ações, cada uma só olhando
+// pro subconjunto que faz sentido pra ela — "Registrar pagamento" ignora
+// linhas sem cobrança, "Lançar cobrança" (POST .../batch) ignora linhas
+// que já têm cobrança (o backend as devolveria em `skipped[]` de qualquer
+// forma, mas filtrar aqui deixa a intenção clara pro operador).
 function BulkBar({
-  count, onClear, onBulkPay, bulkPaying, onCopyMessage,
-}: { count: number; onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void }) {
+  count, payableCount, noChargeCount, onClear, onBulkPay, bulkPaying, onCopyMessage, onBulkLaunch,
+}: {
+  count: number; payableCount: number; noChargeCount: number;
+  onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void;
+  onBulkLaunch: () => void;
+}) {
   if (count === 0) return null;
+  // Mockup (.floatbar): pílula ESCURA (ink) flutuante, sombra, cantos
+  // arredondados — nunca uma barra clara edge-to-edge. Ordem dos botões
+  // segue o mockup (Registrar pagamento → Enviar por e-mail → Copiar
+  // mensagem), com "Lançar cobrança em lote" (aditivo da F3, sem
+  // equivalente no mockup) por último. "Limpar seleção" é texto no canto
+  // direito (mockup .clear), não um ícone X à esquerda.
   return (
     <View style={styles.bulkBar}>
-      <TouchableOpacity onPress={onClear} accessibilityRole="button" accessibilityLabel="Limpar seleção" style={styles.bulkClear}>
-        <Icon name="close" size={14} color={C.ink2} />
-      </TouchableOpacity>
       <Text style={styles.bulkCount}>{count} selecionado{count === 1 ? "" : "s"}</Text>
-      <View style={{ flex: 1 }} />
-      <TouchableOpacity style={styles.bulkBtn} onPress={onCopyMessage} accessibilityRole="button" accessibilityLabel="Copiar mensagem de cobrança">
-        <Icon name="copy-outline" size={13} color={C.ink} />
-        <Text style={styles.bulkBtnLabel}>Copiar mensagem</Text>
-      </TouchableOpacity>
+      {payableCount > 0 && (
+        <TouchableOpacity style={styles.bulkBtn} onPress={onBulkPay} disabled={bulkPaying} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
+          {bulkPaying ? <ActivityIndicator size="small" color={P.paperWarm} /> : <Icon name="checkmark" size={13} color={P.paperWarm} />}
+          <Text style={styles.bulkBtnLabel}>Registrar pagamento</Text>
+        </TouchableOpacity>
+      )}
+      {/* Envio por e-mail em lote fica pra F4 (decisão já registrada no PR
+          desta fase) — mockup mostra o botão ativo, mas habilitá-lo aqui
+          exigiria o disparo real de e-mail que ainda não existe pro hub. */}
       <View accessibilityLabel="Envio por e-mail — em breve">
-        <TouchableOpacity disabled style={[styles.bulkBtn, styles.bulkBtnOff]} accessibilityRole="button" accessibilityLabel="Enviar por e-mail (em breve)">
-          <Icon name="mail" size={13} color={C.ink4} />
-          <Text style={[styles.bulkBtnLabel, { color: C.ink4 }]}>E-mail · em breve</Text>
+        <TouchableOpacity disabled style={[styles.bulkBtn, styles.bulkBtnOff]} accessibilityRole="button" accessibilityLabel="Enviar cobrança por e-mail (em breve)">
+          <Icon name="mail" size={13} color="rgba(255,253,248,0.45)" />
+          <Text style={[styles.bulkBtnLabel, { color: "rgba(255,253,248,0.45)" }]}>Enviar por e-mail · em breve</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnPrimary]} onPress={onBulkPay} disabled={bulkPaying} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
-        {bulkPaying ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="checkmark" size={13} color="#fff" />}
-        <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Registrar pagamento</Text>
+      <TouchableOpacity style={styles.bulkBtn} onPress={onCopyMessage} accessibilityRole="button" accessibilityLabel="Copiar mensagem de cobrança">
+        <Icon name="copy-outline" size={13} color={P.paperWarm} />
+        <Text style={styles.bulkBtnLabel}>Copiar mensagem</Text>
+      </TouchableOpacity>
+      {noChargeCount > 0 && (
+        <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnWarn]} onPress={onBulkLaunch} accessibilityRole="button" accessibilityLabel="Lançar cobrança em lote">
+          <Icon name="add" size={13} color="#fff" />
+          <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Lançar cobrança{noChargeCount > 1 ? ` (${noChargeCount})` : ""}</Text>
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity onPress={onClear} accessibilityRole="button" accessibilityLabel="Limpar seleção" style={styles.bulkClear}>
+        <Text style={styles.bulkClearLabel}>Limpar seleção</Text>
       </TouchableOpacity>
     </View>
   );
@@ -497,8 +523,17 @@ const TableHeader = React.memo(function TableHeader(p: TableHeaderProps) {
           placeholder={p.seg === "dojo" ? "Buscar por nome do dojô ou código FPKT..." : "Buscar por nome ou matrícula..."}
           style={{ marginBottom: 14 }}
         />
+        {/* Chips de status (mockup .chips) — seleção única (rádio), mesmo
+            statusFilter que os KPIs do hub também dirigem (clicar aqui
+            reflete lá e vice-versa, uma fonte única de verdade). "Todos"
+            volta ao estado sem filtro. */}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          <Chip label="Sem cobrança" active={p.statusFilter === "no_charge"} onPress={() => p.onStatusFilter(p.statusFilter === "no_charge" ? "all" : "no_charge")} />
+          <Chip label="Todos" active={p.statusFilter === "all"} onPress={() => p.onStatusFilter("all")} />
+          <Chip label="Pago" active={p.statusFilter === "paid"} onPress={() => p.onStatusFilter("paid")} />
+          <Chip label="A vencer" active={p.statusFilter === "due"} onPress={() => p.onStatusFilter("due")} />
+          <Chip label="Vencido" active={p.statusFilter === "overdue"} onPress={() => p.onStatusFilter("overdue")} />
+          <Chip label="Inadimplente" active={p.statusFilter === "defaulting"} onPress={() => p.onStatusFilter("defaulting")} />
+          <Chip label="Sem cobrança" active={p.statusFilter === "no_charge"} onPress={() => p.onStatusFilter("no_charge")} />
         </View>
         <Body muted style={{ fontSize: 11.5, marginBottom: 6 }}>{p.total} {p.total === 1 ? "registro" : "registros"} na temporada</Body>
         {p.showThead && (
@@ -550,6 +585,9 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [chargeTargetKey, setChargeTargetKey] = useState<string | null>(null);
   const [pixTarget, setPixTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
   const [bulkPaying, setBulkPaying] = useState(false);
+  // Fase F3 — lançar cobrança em lote (POST .../batch) pras linhas
+  // selecionadas que ainda não têm cobrança nesta temporada.
+  const [batchLaunchOpen, setBatchLaunchOpen] = useState(false);
 
   // Volta pra página 1 sempre que o filtro/busca/segmento/ano muda; limpa
   // seleção (evita agir sobre linhas que já não estão na tela).
@@ -628,6 +666,11 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   }, []);
 
   const selectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && i.rowId), [items, selected]);
+  // Fase F3 — subconjunto sem cobrança da MESMA seleção: alimenta o
+  // "Lançar cobrança em lote" (BatchLaunchModal → POST .../batch). Linhas
+  // que já têm cobrança ficam de fora daqui (essas são o alvo de
+  // handleBulkPay acima) — cada ação olha só pro que faz sentido pra ela.
+  const noChargeSelectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && !i.rowId), [items, selected]);
 
   const handleBulkPay = useCallback(async () => {
     if (selectedRows.length === 0) return;
@@ -750,7 +793,13 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
               vm={item}
               wide={wide}
               selected={selected.has(item.key)}
-              selectable={!!item.rowId}
+              // Fase F3: seleção agora cobre TAMBÉM linhas sem cobrança
+              // (no_charge) — são o alvo real de "Lançar cobrança em lote"
+              // (POST .../batch). Linhas com cobrança seguem usáveis pra
+              // "Registrar pagamento em lote" (ambas as ações filtram a
+              // seleção pelo que fizer sentido pra cada uma — ver
+              // selectedRows / noChargeSelectedRows abaixo).
+              selectable
               expanded={expandedKey === item.key}
               onToggleSelect={() => toggleSelect(item.key)}
               onToggleExpand={() => setExpandedKey((k) => (k === item.key ? null : item.key))}
@@ -773,11 +822,31 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
 
       <BulkBar
         count={selected.size}
+        payableCount={selectedRows.length}
+        noChargeCount={noChargeSelectedRows.length}
         onClear={() => setSelected(new Set())}
         onBulkPay={handleBulkPay}
         bulkPaying={bulkPaying}
         onCopyMessage={handleCopyMessage}
+        onBulkLaunch={() => setBatchLaunchOpen(true)}
       />
+
+      {batchLaunchOpen && (
+        <BatchLaunchModal
+          visible={batchLaunchOpen}
+          federationId={federationId}
+          year={year}
+          seg={seg}
+          targets={noChargeSelectedRows.map((r) => ({ id: r.key, name: r.name }))}
+          onClose={() => setBatchLaunchOpen(false)}
+          onDone={() => {
+            setBatchLaunchOpen(false);
+            setSelected(new Set());
+            load(true);
+            onMutated();
+          }}
+        />
+      )}
 
       {pixTarget && (
         <PixPaymentModal
@@ -879,11 +948,22 @@ const styles = StyleSheet.create({
   pagerBtnOff: { opacity: 0.4 } as ViewStyle,
   pagerBtnTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
 
-  bulkBar: { flexDirection: "row", alignItems: "center", gap: 10, position: Platform.OS === "web" ? ("sticky" as any) : "relative", bottom: 0, backgroundColor: P.paperWarm, borderTopWidth: 1, borderTopColor: C.line2, paddingVertical: 12, paddingHorizontal: 24, flexWrap: "wrap" } as ViewStyle,
-  bulkClear: { width: 24, height: 24, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: P.glass2 } as ViewStyle,
-  bulkCount: { fontSize: 12.5, fontWeight: "700", color: C.ink } as TextStyle,
-  bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass } as ViewStyle,
-  bulkBtnOff: { opacity: 0.55 } as ViewStyle,
-  bulkBtnPrimary: { backgroundColor: P.ink, borderColor: P.ink } as ViewStyle,
-  bulkBtnLabel: { fontSize: 12, fontWeight: "700", color: C.ink } as TextStyle,
+  // Mockup .floatbar: pílula ink flutuante (não uma barra clara
+  // edge-to-edge) — cantos arredondados, sombra projetada, margem lateral
+  // (não cola nas bordas da tela) e sticky no rodapé da viewport.
+  bulkBar: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+    position: Platform.OS === "web" ? ("sticky" as any) : "relative", bottom: 16,
+    marginHorizontal: 24, marginTop: 18,
+    backgroundColor: P.ink, borderRadius: R.lg,
+    paddingVertical: 11, paddingHorizontal: 18, flexWrap: "wrap",
+    ...(Platform.OS === "web" ? ({ boxShadow: "0 8px 28px rgba(43,38,32,0.30)" } as any) : {}),
+  } as ViewStyle,
+  bulkCount: { fontSize: 12.5, fontWeight: "700", color: P.paperWarm, marginRight: 2 } as TextStyle,
+  bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: "rgba(255,253,248,0.22)", backgroundColor: "rgba(255,253,248,0.10)" } as ViewStyle,
+  bulkBtnOff: { opacity: 0.7 } as ViewStyle,
+  bulkBtnWarn: { backgroundColor: P.red, borderColor: P.red } as ViewStyle,
+  bulkBtnLabel: { fontSize: 12, fontWeight: "700", color: P.paperWarm } as TextStyle,
+  bulkClear: { marginLeft: "auto" } as ViewStyle,
+  bulkClearLabel: { fontSize: 12.5, color: P.paperWarm, opacity: 0.65 } as TextStyle,
 });

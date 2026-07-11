@@ -668,6 +668,91 @@ export interface VoidAnnuityGenericResult {
   transaction_ids?: string[];
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Fase F3 — Campanha anual de anuidades + cobrança em lote
+// (POST /financial/annuities/campaign/preview | /campaign | /batch —
+// ver src/routes/karateAnnuityCampaign.js no backend, PR #356.)
+//
+// Elegibilidade (replicada aqui só como documentação — a fonte real é o
+// backend): dojô = ativo E sem anuidade lançada na temporada; praticante =
+// ATIVO **E** faixa-preta **E** sem anuidade lançada na temporada. A UI
+// nunca decide elegibilidade sozinha — sempre reflete o preview/resultado
+// que o backend devolveu.
+// ─────────────────────────────────────────────────────────────────
+export type AnnuityCampaignScope = "dojos" | "practitioners" | "both";
+
+/** Um alvo de dojô no preview — `due_date`/`due_date_ajustada` já refletem
+ *  o vencimento que `/campaign` VAI usar (default seguro ou override). */
+export interface AnnuityCampaignPreviewDojo {
+  dojo_id: string;
+  name: string;
+  plan_default: AnnuityPlan;
+  amount: number;
+  due_date: string | null;
+  due_date_ajustada: boolean;
+}
+
+export interface AnnuityCampaignPreviewPractitioner {
+  practitioner_id: string;
+  name: string;
+  karate_registration_number: string | null;
+  amount: number;
+  due_date: string | null;
+  due_date_ajustada: boolean;
+}
+
+export interface AnnuityCampaignPreviewResponse {
+  dojos: AnnuityCampaignPreviewDojo[];
+  practitioners: AnnuityCampaignPreviewPractitioner[];
+  totals: {
+    dojos_count: number;
+    practitioners_count: number;
+    valor_previsto: number;
+  };
+}
+
+export type AnnuityCampaignTargetType = "dojo" | "practitioner";
+
+export interface AnnuityCampaignCreated {
+  type: AnnuityCampaignTargetType;
+  id: string;
+  name: string;
+  annuity_id: string;
+  plan: AnnuityPlan;
+  installments_count: number;
+  due_date: string | null;
+  due_date_ajustada: boolean;
+  total: number;
+}
+
+export interface AnnuityCampaignSkipped {
+  type: AnnuityCampaignTargetType;
+  id: string;
+  name: string;
+  /** Quase sempre 'already_has_annuity_this_season' — reexecução idempotente. */
+  reason: string;
+}
+
+export interface AnnuityCampaignError {
+  type: AnnuityCampaignTargetType;
+  id: string;
+  name: string | null;
+  reason: string;
+}
+
+/** Resposta comum de POST /campaign e POST /batch — nunca all-or-nothing:
+ *  um alvo que falha vai para `errors[]`, os demais continuam. */
+export interface AnnuityCampaignResult {
+  created: AnnuityCampaignCreated[];
+  skipped: AnnuityCampaignSkipped[];
+  errors: AnnuityCampaignError[];
+}
+
+export interface AnnuityBatchTarget {
+  type: AnnuityCampaignTargetType;
+  id: string;
+}
+
 export type AnnuityUpdateInput = Partial<{
   amount: number;
   due_date: string;
@@ -1948,6 +2033,64 @@ export const karateApi = {
     request(`/federation/${federationId}/financial/annuities/${annuityId}/void`, {
       method: "POST",
       body: {},
+    }),
+
+  // ── Fase F3 — Campanha anual + cobrança em lote ──────────────────
+  // Mesmo motor no backend (karateAnnuityCampaign.js): /campaign roda sobre
+  // TODOS os elegíveis da temporada (menos `exclude`), /batch roda sobre uma
+  // lista explícita de alvos (multi-seleção manual da tabela). Nenhum dos
+  // dois é all-or-nothing — resposta sempre { created, skipped, errors }.
+  //
+  // retry:0 nas mutações (campaign/batch): o request() core tenta de novo
+  // em erro de rede/timeout por padrão (retry:2), e reenviar um POST que
+  // criou cobranças do lado do servidor mas cuja resposta se perdeu na volta
+  // arriscaria duplo clique automático. O backend já é idempotente por
+  // conta do índice único (dojo_id/practitioner_id, reference_period) — uma
+  // reexecução manual do usuário cai em `skipped`, não duplica — mas evitar
+  // o retry automático do client remove a superfície de risco por completo.
+
+  /** POST .../campaign/preview — pré-visualização read-only. Mesma query de
+   *  elegibilidade e mesmo cálculo de parcelas que /campaign vai usar (com o
+   *  mesmo due_date, se informado) — é o preview que protege o usuário. */
+  previewAnnuityCampaign: (
+    federationId: string,
+    body: { year: string; scope: AnnuityCampaignScope; due_date?: string }
+  ): Promise<AnnuityCampaignPreviewResponse> =>
+    request(`/federation/${federationId}/financial/annuities/campaign/preview`, {
+      method: "POST",
+      body,
+    }),
+
+  /** POST .../campaign — dispara a campanha sobre todos os elegíveis da
+   *  temporada (menos `exclude`). `due_date` (opcional) sobrescreve o
+   *  vencimento da primeira parcela gerada de CADA alvo processado. */
+  runAnnuityCampaign: (
+    federationId: string,
+    body: {
+      year: string;
+      scope: AnnuityCampaignScope;
+      exclude?: { dojo_ids?: string[]; practitioner_ids?: string[] };
+      due_date?: string;
+    }
+  ): Promise<AnnuityCampaignResult> =>
+    request(`/federation/${federationId}/financial/annuities/campaign`, {
+      method: "POST",
+      body,
+      retry: 0,
+    }),
+
+  /** POST .../batch — mesmo motor da campanha, para a multi-seleção manual
+   *  da tabela do hub. `plan` (opcional, default 'anual') só afeta alvos
+   *  type='dojo'. Cada alvo é revalidado contra o banco no backend — a UI
+   *  não precisa (e não deve) filtrar elegibilidade sozinha antes de mandar. */
+  batchAnnuityCampaign: (
+    federationId: string,
+    body: { targets: AnnuityBatchTarget[]; year: string; plan?: AnnuityPlan; due_date?: string }
+  ): Promise<AnnuityCampaignResult> =>
+    request(`/federation/${federationId}/financial/annuities/batch`, {
+      method: "POST",
+      body,
+      retry: 0,
     }),
 
   // Fase 5 — valores em aberto segmentados (pretas CPF x dojôs). Somente
