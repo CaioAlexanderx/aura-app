@@ -246,7 +246,7 @@ export function RedistribuirPraticantesModal({
             </Pressable>
           </View>
 
-          <Animated.View style={{ opacity: stageOpacity, transform: [{ translateY: stageTranslateY }] }}>
+          <Animated.View style={[styles.stageWrap, { opacity: stageOpacity, transform: [{ translateY: stageTranslateY }] }]}>
           {displayStage === "success" ? (
             <SuccessPanel result={result} onDone={handleDismiss} reducedMotion={reducedMotion} />
           ) : (
@@ -276,7 +276,7 @@ export function RedistribuirPraticantesModal({
                 </PressableScale>
               </View>
 
-              <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+              <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator>
                 {practitioners.length === 0 ? (
                   <Text style={styles.emptyText}>Nenhum praticante ativo neste dojô — pode inativar direto.</Text>
                 ) : (
@@ -891,7 +891,18 @@ function DestinationPickerOverlay({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
-  card: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, width: "92%", maxWidth: 760, maxHeight: "85%", overflow: "hidden" } as ViewStyle,
+  // flexDirection column explícito: é o eixo principal que dá sentido ao
+  // flex:1/minHeight:0 do stageWrap/body abaixo (limita o card a 85% da tela
+  // e distribui o restante entre header fixo, ações em massa fixas, lista
+  // que rola e rodapé fixo).
+  card: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, width: "92%", maxWidth: 760, maxHeight: "85%", overflow: "hidden", flexDirection: "column" } as ViewStyle,
+  // Wrapper animado do conteúdo do estágio (massActions + lista + rodapé, ou
+  // o painel de sucesso). flex:1 faz ele ocupar o espaço restante do card
+  // abaixo do header; minHeight:0 permite encolher abaixo da altura natural
+  // do conteúdo — sem isso o ScrollView interno nunca fica limitado e o
+  // card, com overflow:hidden, simplesmente corta a lista sem barra de
+  // rolagem (bug relatado com dojôs de muitos praticantes).
+  stageWrap: { flex: 1, minHeight: 0 } as ViewStyle,
 
   header:      { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: 18, borderBottomWidth: 1, borderBottomColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
   headerTitle: { fontFamily: F.heading, fontSize: 19, color: P.ink } as TextStyle,
@@ -901,7 +912,11 @@ const styles = StyleSheet.create({
   massBtn:     { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
   massBtnTxt:  { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.ink } as TextStyle,
 
-  body:        { marginTop: 8 } as ViewStyle,
+  // fix/karate-dojo-praticantes-seg-e-scroll: flex:1 + minHeight:0 é o que
+  // realmente limita a altura do ScrollView no RN Web. Sem minHeight:0 o
+  // filho de um flex column nunca encolhe abaixo do seu conteúdo (default
+  // CSS min-height:auto), então a lista cresce além do card em vez de rolar.
+  body:        { marginTop: 8, flex: 1, minHeight: 0 } as ViewStyle,
   bodyContent: { paddingHorizontal: 16, paddingBottom: 24 } as ViewStyle,
   emptyText:   { textAlign: "center", color: P.ink3, paddingVertical: 24, fontSize: 13, fontFamily: F.body } as TextStyle,
 
