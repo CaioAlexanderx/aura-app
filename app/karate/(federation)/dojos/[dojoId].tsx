@@ -565,10 +565,27 @@ export default function DojoDetailScreen() {
           <KV k="Fundação" v={data.dojo_founded_year ? String(data.dojo_founded_year) : null} />
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
           <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
-          {/* Fase 5: fonte coerente com a seção Praticantes abaixo — usa a contagem
-              do standing quando disponível; cai para o campo do GET /dojo enquanto
-              o roster carrega ou se ele falhar. */}
-          <KV k="Praticantes" v={rosterHasData ? String(rosterTotal) : String(data.practitioner_count)} />
+          {/* Fase 5 / DJ-seg: fonte coerente com a seção Praticantes abaixo — usa a
+              contagem do standing (MESMO estado já buscado por getDojoMembersStanding,
+              sem 2ª chamada) quando disponível; cai para o campo do GET /dojo enquanto
+              o roster carrega ou se ele falhar — nunca mostra ativos/inativos "chutados". */}
+          {rosterHasData ? (
+            <View style={styles.praticantesRow}>
+              <Text style={styles.praticantesKey}>Praticantes</Text>
+              <View style={styles.praticantesValCol}>
+                <Text style={styles.praticantesValNum}>{rosterTotal}</Text>
+                {rosterTotal > 0 ? (
+                  <Text style={styles.praticantesSeg}>
+                    <Text style={styles.praticantesSegOk}>{rosterActiveCount} ativo{rosterActiveCount === 1 ? "" : "s"}</Text>
+                    <Text style={styles.praticantesSegDot}> · </Text>
+                    <Text style={styles.praticantesSegMuted}>{rosterInactiveCount} inativo{rosterInactiveCount === 1 ? "" : "s"}</Text>
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <KV k="Praticantes" v={String(data.practitioner_count)} />
+          )}
         </Card>
 
         {/* Endereço — estruturado ou texto legado */}
@@ -1297,6 +1314,19 @@ const styles = StyleSheet.create({
   senseiRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as ViewStyle,
   senseiChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: P.glass2, borderWidth: 1, borderColor: P.line2, borderRadius: 10, paddingVertical: 3, paddingHorizontal: 8, marginTop: 2 } as ViewStyle,
   senseiChipTxt: { fontFamily: F.body, fontSize: 10.5, color: C.ink2 } as TextStyle,
+
+  // DJ-seg: linha "Praticantes" do card Cadastro com segmentação ativos/inativos
+  // (mesma fonte do roster usado na seção Praticantes abaixo — sem 2ª chamada).
+  // Réplica visual do KV compartilhado (kvRow/kvKey/kvVal em shoji/index.tsx) com
+  // uma 2ª linha discreta para não poluir a lista de KVs do card.
+  praticantesRow: { flexDirection: "row", paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line, gap: 16 } as ViewStyle,
+  praticantesKey: { width: 140, fontFamily: F.body, fontSize: T.xs, color: C.ink3, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: "600" } as TextStyle,
+  praticantesValCol: { flex: 1 } as ViewStyle,
+  praticantesValNum: { fontFamily: F.body, fontSize: T.body, color: C.ink } as TextStyle,
+  praticantesSeg: { fontFamily: F.body, fontSize: 11.5, marginTop: 2 } as TextStyle,
+  praticantesSegOk: { color: C.ok, fontWeight: "600" } as TextStyle,
+  praticantesSegMuted: { color: C.ink3, fontWeight: "600" } as TextStyle,
+  praticantesSegDot: { color: C.ink4 } as TextStyle,
 
   // DJ4: cabeçalho da seção anuidades com botão "Lançar pagamento"
   annuityHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 } as ViewStyle,
