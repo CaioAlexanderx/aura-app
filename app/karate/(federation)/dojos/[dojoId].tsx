@@ -40,7 +40,7 @@
 // ============================================================
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert,
+  ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
   Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -57,11 +57,13 @@ import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
-import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding } from "@/services/karateApi";
+import RedistribuirPraticantesModal from "@/components/karate/RedistribuirPraticantesModal";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, RosterValidation } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
 import { DocumentosSection } from "@/components/karate/DocumentosSection";
+import { copyToClipboard } from "@/utils/clipboard";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
@@ -167,6 +169,11 @@ export default function DojoDetailScreen() {
   // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
   const [teamOpen, setTeamOpen] = useState(false);
 
+  // Cascata de inativação: diálogo de escolha (Inativar todos vs. Redistribuir)
+  // ao acionar "Suspender", e o modal de tabela editável do Redistribuir.
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [redistribOpen, setRedistribOpen] = useState(false);
+
   // Gestão da federação: estado das ações destrutivas / de ciclo de vida.
   const [busy, setBusy] = useState(false);
   const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null);
@@ -214,6 +221,57 @@ export default function DojoDetailScreen() {
   }, [federationId, dojoId]);
   useEffect(() => { loadRoster(); }, [loadRoster]);
 
+  // Validação de quadro — GET roster-validation para o banner no topo do
+  // detalhe (pending/validated). Falha silenciosa: o banner simplesmente
+  // não aparece se o endpoint não responder (nada quebra na tela).
+  const [rosterValidation, setRosterValidation] = useState<RosterValidation | null>(null);
+  const [requestingRoster, setRequestingRoster] = useState(false);
+  const loadRosterValidation = useCallback(() => {
+    if (!dojoId) return;
+    karateApi.getRosterValidation(federationId, dojoId)
+      .then(setRosterValidation)
+      .catch(() => setRosterValidation(null));
+  }, [federationId, dojoId]);
+  useEffect(() => { loadRosterValidation(); }, [loadRosterValidation]);
+
+  // Botão "Solicitar atualização cadastral" — independente da inativação do
+  // dojô. Gera/renova o link público e marca a validação como pendente.
+  const requestRosterUpdate = useCallback(async () => {
+    if (!dojoId || requestingRoster) return;
+    setRequestingRoster(true);
+    try {
+      const res = await karateApi.requestRosterUpdate(federationId, dojoId);
+      setRosterValidation({
+        status: res.status || "pending",
+        requested_at: res.requested_at || new Date().toISOString(),
+        validated_at: null,
+        validated_by: null,
+        url: res.url,
+      });
+      showToast("Solicitação enviada — link gerado");
+    } catch (e: any) {
+      Alert.alert("Não foi possível solicitar", e?.message || "Tente novamente.");
+    } finally {
+      setRequestingRoster(false);
+    }
+  }, [dojoId, federationId, requestingRoster, showToast]);
+
+  const copyRosterLink = useCallback(async () => {
+    if (!rosterValidation?.url) return;
+    const ok = await copyToClipboard(rosterValidation.url);
+    showToast(ok ? "Link copiado" : "Não foi possível copiar o link");
+  }, [rosterValidation, showToast]);
+
+  // Abre o wa.me com o link pré-preenchido — o envio em si é manual (o
+  // usuário confirma dentro do WhatsApp), nunca automático.
+  const shareRosterLinkWhatsApp = useCallback(() => {
+    if (!rosterValidation?.url) return;
+    const link = `https://wa.me/?text=${encodeURIComponent(rosterValidation.url)}`;
+    Linking.openURL(link).catch(() =>
+      Alert.alert("Não foi possível abrir", "Copie o link e envie manualmente.")
+    );
+  }, [rosterValidation]);
+
   // ── Suspender / Reativar ─────────────────────────────────────────
   // b1: o backend agora manda status "inactive" (baseado em is_active) em vez
   // de "suspended". Aceitamos os dois valores aqui por compatibilidade
@@ -221,21 +279,54 @@ export default function DojoDetailScreen() {
   const isSuspended = data
     ? (data.is_active !== undefined ? !data.is_active : (data.status === "inactive"))
     : false;
-  const toggleSuspend = useCallback(async () => {
+  // Reativar: fluxo direto (a cascata de restauração dos praticantes já é
+  // do backend). Suspender agora passa pelo diálogo de escolha abaixo
+  // (Inativar todos vs. Redistribuir) em vez de ir direto ao PATCH.
+  const reactivateDojo = useCallback(async () => {
     if (!data || busy) return;
-    const next = isSuspended;
-    const verb = next ? "reativar" : "suspender";
-    const title = next ? "Reativar dojô?" : "Suspender dojô?";
-    if (!(await confirmAsync({ title, message: `Deseja ${verb} o dojô "${data.name}"?`, confirmLabel: next ? "Reativar" : "Suspender", destructive: !next }))) return;
+    if (!(await confirmAsync({ title: "Reativar dojô?", message: `Deseja reativar o dojô "${data.name}"? Os praticantes inativados na cascata anterior serão restaurados.`, confirmLabel: "Reativar", destructive: false }))) return;
     setBusy(true);
     try {
-      await karateApi.updateDojo(federationId, dojoId!, { is_active: next });
-      showToast(next ? "Dojô reativado" : "Dojô suspenso");
-      load();
+      await karateApi.updateDojo(federationId, dojoId!, { is_active: true });
+      showToast("Dojô reativado");
+      load(); loadRoster();
     } catch (e: any) {
-      Alert.alert("Não foi possível", e?.message || `Falha ao ${verb} o dojô.`);
+      Alert.alert("Não foi possível", e?.message || "Falha ao reativar o dojô.");
     } finally { setBusy(false); }
-  }, [data, busy, isSuspended, federationId, dojoId, load, showToast]);
+  }, [data, busy, federationId, dojoId, load, loadRoster, showToast]);
+
+  // Diálogo de escolha "Inativar todos" vs. "Redistribuir" — acionado pelo
+  // botão "Suspender" quando o dojô está ativo. O próprio diálogo já mostra
+  // a contagem de praticantes ativos, servindo como a confirmação explícita
+  // exigida para ações irreversíveis.
+  const onSuspendPress = useCallback(() => {
+    if (!data || busy) return;
+    if (isSuspended) { reactivateDojo(); return; }
+    setChoiceOpen(true);
+  }, [data, busy, isSuspended, reactivateDojo]);
+
+  // Opção "Inativar todos os N praticantes" do diálogo de escolha — segue o
+  // PATCH is_active:false de sempre; a cascata do backend inativa o quadro.
+  const inactivateAllAndSuspend = useCallback(async () => {
+    if (!data || busy) return;
+    setBusy(true);
+    try {
+      await karateApi.updateDojo(federationId, dojoId!, { is_active: false });
+      setChoiceOpen(false);
+      showToast("Dojô e praticantes inativados");
+      load(); loadRoster();
+    } catch (e: any) {
+      Alert.alert("Não foi possível", e?.message || "Falha ao suspender o dojô.");
+    } finally { setBusy(false); }
+  }, [data, busy, federationId, dojoId, load, loadRoster, showToast]);
+
+  // Sucesso do modal de redistribuição — recarrega dojô + roster e fecha os
+  // dois modais (o próprio Redistribuir e o diálogo de escolha, se ainda aberto).
+  const onRedistributeSuccess = useCallback(() => {
+    setRedistribOpen(false);
+    setChoiceOpen(false);
+    load(); loadRoster();
+  }, [load, loadRoster]);
 
   // ── Excluir dojô ─────────────────────────────────────────────────
   const deleteDojo = useCallback(async () => {
@@ -360,11 +451,17 @@ export default function DojoDetailScreen() {
               />
               <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
+              <ShojiButton
+                label={requestingRoster ? "Solicitando..." : "Solicitar atualização cadastral"}
+                icon="refresh"
+                variant="ghost"
+                onPress={requestRosterUpdate}
+              />
 
               <TouchableOpacity
                 style={[styles.iconBtn, busy && styles.btnDisabled]}
                 disabled={busy}
-                onPress={toggleSuspend}
+                onPress={onSuspendPress}
                 accessibilityRole="button"
                 accessibilityLabel={isSuspended ? "Reativar dojô" : "Suspender dojô"}
               >
@@ -385,6 +482,39 @@ export default function DojoDetailScreen() {
             </View>
           </View>
         </View>
+
+        {/* Banner de estado da validação do quadro — GET roster-validation.
+            pending: link + copiar/whatsapp. validated: nota discreta. */}
+        {rosterValidation?.status === "pending" ? (
+          <Card style={{ marginTop: SP[6], borderColor: P.line2 }}>
+            <View style={styles.validationRow}>
+              <Icon name="alert-circle" size={16} color={P.warn} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.validationTitle}>
+                  Quadro pendente de validação — solicitado em {fmtDate(rosterValidation.requested_at) || "—"}
+                </Text>
+                {rosterValidation.url ? (
+                  <View style={styles.validationLinkRow}>
+                    <Text style={styles.validationLink} numberOfLines={1}>{rosterValidation.url}</Text>
+                    <TouchableOpacity style={styles.validationBtn} onPress={copyRosterLink} accessibilityRole="button" accessibilityLabel="Copiar link">
+                      <Icon name="copy-outline" size={13} color={C.ink} />
+                      <Text style={styles.validationBtnTxt}>Copiar link</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.validationBtn} onPress={shareRosterLinkWhatsApp} accessibilityRole="button" accessibilityLabel="Abrir no WhatsApp">
+                      <Icon name="logo-whatsapp" size={13} color={C.ink} />
+                      <Text style={styles.validationBtnTxt}>WhatsApp</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </Card>
+        ) : rosterValidation?.status === "validated" ? (
+          <Body muted style={{ marginTop: SP[4] }}>
+            Quadro validado em {fmtDate(rosterValidation.validated_at) || "—"}
+            {rosterValidation.validated_by ? ` por ${rosterValidation.validated_by}` : ""}
+          </Body>
+        ) : null}
 
         {/* DJ2: card Cadastro — "Sensei responsável" em vez de "CPF do sensei" */}
         <Card style={{ marginTop: SP[6] }}>
@@ -615,6 +745,63 @@ export default function DojoDetailScreen() {
         dojoName={data.name}
         currentTeamIds={data.technical_team.map((m) => m.practitioner_id)}
         onSaved={() => { load(); }}
+      />
+
+      {/* Diálogo de escolha ao inativar o dojô: Inativar todos vs. Redistribuir.
+          A contagem de praticantes ativos (rosterActiveCount) já serve como a
+          confirmação explícita exigida para ações irreversíveis. */}
+      <Modal visible={choiceOpen} transparent animationType="fade" onRequestClose={() => !busy && setChoiceOpen(false)}>
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setChoiceOpen(false)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalEyebrow}>空  FPKT · Inativar dojô</Text>
+            <Text style={styles.modalTitle}>Inativar "{data.name}"<Text style={{ color: P.red }}>.</Text></Text>
+            <Text style={styles.modalBody}>
+              {rosterHasData && rosterActiveCount > 0
+                ? `Este dojô tem ${rosterActiveCount} praticante${rosterActiveCount === 1 ? "" : "s"} ativo${rosterActiveCount === 1 ? "" : "s"}. Escolha o que fazer com eles antes de inativar o dojô.`
+                : "Este dojô será inativado."}
+            </Text>
+
+            <View style={styles.modalActions}>
+              {rosterHasData && rosterActiveCount > 0 ? (
+                <>
+                  <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={inactivateAllAndSuspend}>
+                    {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : (
+                      <Text style={styles.dangerBtnTxt}>Inativar todos os {rosterActiveCount} praticantes</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, busy && styles.btnDisabled]}
+                    disabled={busy}
+                    onPress={() => { setChoiceOpen(false); setRedistribOpen(true); }}
+                  >
+                    <Text style={styles.primaryBtnTxt}>Redistribuir praticantes</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={inactivateAllAndSuspend}>
+                  {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.dangerBtnTxt}>Inativar dojô</Text>}
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={() => setChoiceOpen(false)}>
+                <Text style={styles.ghostBtnTxt}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Redistribuir: tabela editável — uma linha por praticante ativo, com
+          seletor Destino (Inativar por padrão, ou → outro dojô). Confirma
+          via POST redistribute (decisions + inactivate_dojo:true). */}
+      <RedistribuirPraticantesModal
+        visible={redistribOpen}
+        onClose={() => setRedistribOpen(false)}
+        federationId={federationId}
+        dojoId={dojoId!}
+        dojoName={data.name}
+        practitioners={roster.filter((m) => m.is_active)}
+        onSuccess={onRedistributeSuccess}
       />
 
       {/* Modal HAS_HISTORY */}
@@ -1002,6 +1189,14 @@ const styles = StyleSheet.create({
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
+
+  // Banner de validação do quadro (pending) — icon + título + link/ações.
+  validationRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
+  validationTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  validationLinkRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 } as ViewStyle,
+  validationLink: { fontFamily: F.mono, fontSize: 12, color: C.ink2, flexShrink: 1, minWidth: 120, maxWidth: 320 } as TextStyle,
+  validationBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
+  validationBtnTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
 
   // DJ2: chip "praticante vinculado" ao lado do sensei
   senseiRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as ViewStyle,

@@ -90,7 +90,8 @@ function AuthGuard() {
         segments[2] === "inscricao" ||          // inscrição pública
         segments[2] === "ranking" ||              // ranking embed
         segments[2] === "consulta" ||          // consulta publica de praticante
-        segments[2] === "meus-certificados"    // participante: meus certificados
+        segments[2] === "meus-certificados" || // participante: meus certificados
+        segments[1] === "roster-update"        // portal do sensei: validação de quadro por token
       );
       if (!onPublicMicrosite) {
         if (typeof window !== "undefined") window.location.href = APP_URL;
@@ -127,6 +128,7 @@ function AuthGuard() {
     //   /karate/[slug]/p/[publicToken]   → p (perfil público reduzido)
     //   /karate/[slug]/inscricao/[id]    → inscricao
     //   /karate/[slug]/ranking           → ranking (embed público — Track E)
+    //   /karate/roster-update/[token]    → portal do sensei (validação de quadro por token)
     // As rotas do shell (dojos, eventos, financeiro, importacao, praticantes…)
     // nunca batem nesses marcadores.
     const onKaratePublic = segments[0] === "karate" && (
@@ -136,7 +138,8 @@ function AuthGuard() {
       segments[2] === "inscricao" ||
       segments[2] === "ranking" ||
       segments[2] === "consulta" ||
-      segments[2] === "meus-certificados"
+      segments[2] === "meus-certificados" ||
+      segments[1] === "roster-update"
     );
     if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 
