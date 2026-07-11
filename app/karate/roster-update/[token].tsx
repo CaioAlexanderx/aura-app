@@ -55,13 +55,12 @@ const IS_WEB = Platform.OS === "web";
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Faixas oferecidas no cadastro "Adicionar praticante" do portal do sensei.
-// Filtra por isLegacy (marca canônica em KarateBelts) e ainda exclui
-// 'amarela' explicitamente: a federação não usa mais essa cor para NOVAS
-// filiações, mas o mapa canônico não a marca isLegacy=true (só a Vermelha
-// é isLegacy hoje) — resultado: branca, laranja, verde, azul_claro, roxo,
+// Faixas oferecidas no cadastro: todas as NÃO-legadas de KarateBelts.
+// Hoje só a Vermelha é isLegacy=true — a Amarela é faixa ATUAL da FPKT e
+// deve aparecer. Resultado: branca, amarela, laranja, verde, azul_claro, roxo,
 // azul_escuro, marrom, preta.
 const NON_LEGACY_BELT_KEYS: BeltKey[] = (Object.keys(KarateBelts) as BeltKey[]).filter(
-  (k) => !KarateBelts[k].isLegacy && k !== "amarela"
+  (k) => !KarateBelts[k].isLegacy
 );
 
 function prefersReducedMotion(): boolean {
