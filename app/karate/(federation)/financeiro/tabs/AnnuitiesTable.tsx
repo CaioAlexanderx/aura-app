@@ -38,6 +38,7 @@ import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/Date
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan,
 } from "@/services/karateApi";
+import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import type { SegKey } from "./AnnuitiesHub";
 
 const PAGE_SIZE = 50;
@@ -450,9 +451,18 @@ function AnnuityRowItem({
 const AnnuityRow = React.memo(AnnuityRowItem);
 
 // ── Barra de multi-seleção ────────────────────────────────────────
+// Fase F3: a mesma seleção agora alimenta DUAS ações, cada uma só olhando
+// pro subconjunto que faz sentido pra ela — "Registrar pagamento" ignora
+// linhas sem cobrança, "Lançar cobrança" (POST .../batch) ignora linhas
+// que já têm cobrança (o backend as devolveria em `skipped[]` de qualquer
+// forma, mas filtrar aqui deixa a intenção clara pro operador).
 function BulkBar({
-  count, onClear, onBulkPay, bulkPaying, onCopyMessage,
-}: { count: number; onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void }) {
+  count, payableCount, noChargeCount, onClear, onBulkPay, bulkPaying, onCopyMessage, onBulkLaunch,
+}: {
+  count: number; payableCount: number; noChargeCount: number;
+  onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void;
+  onBulkLaunch: () => void;
+}) {
   if (count === 0) return null;
   return (
     <View style={styles.bulkBar}>
@@ -471,10 +481,18 @@ function BulkBar({
           <Text style={[styles.bulkBtnLabel, { color: C.ink4 }]}>E-mail · em breve</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnPrimary]} onPress={onBulkPay} disabled={bulkPaying} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
-        {bulkPaying ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="checkmark" size={13} color="#fff" />}
-        <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Registrar pagamento</Text>
-      </TouchableOpacity>
+      {noChargeCount > 0 && (
+        <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnAccent]} onPress={onBulkLaunch} accessibilityRole="button" accessibilityLabel="Lançar cobrança em lote">
+          <Icon name="add" size={13} color="#fff" />
+          <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Lançar cobrança{noChargeCount > 1 ? ` (${noChargeCount})` : ""}</Text>
+        </TouchableOpacity>
+      )}
+      {payableCount > 0 && (
+        <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnPrimary]} onPress={onBulkPay} disabled={bulkPaying} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
+          {bulkPaying ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="checkmark" size={13} color="#fff" />}
+          <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Registrar pagamento</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -550,6 +568,9 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [chargeTargetKey, setChargeTargetKey] = useState<string | null>(null);
   const [pixTarget, setPixTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
   const [bulkPaying, setBulkPaying] = useState(false);
+  // Fase F3 — lançar cobrança em lote (POST .../batch) pras linhas
+  // selecionadas que ainda não têm cobrança nesta temporada.
+  const [batchLaunchOpen, setBatchLaunchOpen] = useState(false);
 
   // Volta pra página 1 sempre que o filtro/busca/segmento/ano muda; limpa
   // seleção (evita agir sobre linhas que já não estão na tela).
@@ -628,6 +649,11 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   }, []);
 
   const selectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && i.rowId), [items, selected]);
+  // Fase F3 — subconjunto sem cobrança da MESMA seleção: alimenta o
+  // "Lançar cobrança em lote" (BatchLaunchModal → POST .../batch). Linhas
+  // que já têm cobrança ficam de fora daqui (essas são o alvo de
+  // handleBulkPay acima) — cada ação olha só pro que faz sentido pra ela.
+  const noChargeSelectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && !i.rowId), [items, selected]);
 
   const handleBulkPay = useCallback(async () => {
     if (selectedRows.length === 0) return;
@@ -750,7 +776,13 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
               vm={item}
               wide={wide}
               selected={selected.has(item.key)}
-              selectable={!!item.rowId}
+              // Fase F3: seleção agora cobre TAMBÉM linhas sem cobrança
+              // (no_charge) — são o alvo real de "Lançar cobrança em lote"
+              // (POST .../batch). Linhas com cobrança seguem usáveis pra
+              // "Registrar pagamento em lote" (ambas as ações filtram a
+              // seleção pelo que fizer sentido pra cada uma — ver
+              // selectedRows / noChargeSelectedRows abaixo).
+              selectable
               expanded={expandedKey === item.key}
               onToggleSelect={() => toggleSelect(item.key)}
               onToggleExpand={() => setExpandedKey((k) => (k === item.key ? null : item.key))}
@@ -773,11 +805,31 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
 
       <BulkBar
         count={selected.size}
+        payableCount={selectedRows.length}
+        noChargeCount={noChargeSelectedRows.length}
         onClear={() => setSelected(new Set())}
         onBulkPay={handleBulkPay}
         bulkPaying={bulkPaying}
         onCopyMessage={handleCopyMessage}
+        onBulkLaunch={() => setBatchLaunchOpen(true)}
       />
+
+      {batchLaunchOpen && (
+        <BatchLaunchModal
+          visible={batchLaunchOpen}
+          federationId={federationId}
+          year={year}
+          seg={seg}
+          targets={noChargeSelectedRows.map((r) => ({ id: r.key, name: r.name }))}
+          onClose={() => setBatchLaunchOpen(false)}
+          onDone={() => {
+            setBatchLaunchOpen(false);
+            setSelected(new Set());
+            load(true);
+            onMutated();
+          }}
+        />
+      )}
 
       {pixTarget && (
         <PixPaymentModal
@@ -885,5 +937,6 @@ const styles = StyleSheet.create({
   bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass } as ViewStyle,
   bulkBtnOff: { opacity: 0.55 } as ViewStyle,
   bulkBtnPrimary: { backgroundColor: P.ink, borderColor: P.ink } as ViewStyle,
+  bulkBtnAccent: { backgroundColor: P.red, borderColor: P.red } as ViewStyle,
   bulkBtnLabel: { fontSize: 12, fontWeight: "700", color: C.ink } as TextStyle,
 });

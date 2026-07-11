@@ -34,12 +34,16 @@ import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
 } from "@/constants/karateTheme";
-import { ShojiBackground, PageHead, Chip, Mono, RaisedHeader } from "@/components/karate/shoji";
+import { ShojiBackground, PageHead, Chip, Mono, RaisedHeader, Alert, ShojiButton } from "@/components/karate/shoji";
 import { Motion, webTransition } from "@/constants/motion";
 import { KarateErrorState } from "@/components/karate/ErrorState";
-import { karateApi, AnnuitySummaryResponse, AnnuitySummaryBucket, AnnuityStatusFilter } from "@/services/karateApi";
+import {
+  karateApi, AnnuitySummaryResponse, AnnuitySummaryBucket, AnnuityStatusFilter,
+  AnnuityCampaignPreviewResponse, AnnuityCampaignScope, AnnuityCampaignResult,
+} from "@/services/karateApi";
 import { AnnuitiesTable } from "./AnnuitiesTable";
 import { AnnuityPlansPanel } from "./AnnuityPlansPanel";
+import { CampaignWizard } from "@/components/karate/campaign/CampaignWizard";
 
 export type AreaKey = "cobrancas" | "planos";
 export type SegKey = "dojo" | "cpf";
@@ -108,12 +112,19 @@ function KpiCard({ def, active, onPress, loading }: { def: KpiDef; active: boole
 export function AnnuitiesSeasonHeader({
   area, seg, year, summary, summaryLoading, summaryError, onArea, onSeg, onYear, onRetrySummary,
   statusFilter, onStatusFilter,
+  onNovaCampanha, newMembersCount, newMembersLoading, onOpenCampaignFromBanner,
 }: {
   area: AreaKey; seg: SegKey; year: string;
   summary: AnnuitySummaryResponse | null; summaryLoading: boolean; summaryError: boolean;
   onArea: (a: AreaKey) => void; onSeg: (s: SegKey) => void; onYear: (y: string) => void;
   onRetrySummary: () => void;
   statusFilter: AnnuityStatusFilter; onStatusFilter: (s: AnnuityStatusFilter) => void;
+  /** Fase F3 — abre o CampaignWizard (botão "Nova campanha" e banner de
+   *  novos filiados sem cobrança compartilham o mesmo wizard). */
+  onNovaCampanha: () => void;
+  newMembersCount: number;
+  newMembersLoading: boolean;
+  onOpenCampaignFromBanner: () => void;
 }) {
   const segment = seg === "dojo" ? summary?.dojo : summary?.praticante;
   // Ordem por urgência (não pela ordem do "funil" financeiro): o gestor
@@ -140,28 +151,33 @@ export function AnnuitiesSeasonHeader({
         title="Anuidades"
         sub="Cobranças de dojô e de praticante faixa-preta da temporada — os mesmos valores do fechamento financeiro, sempre atualizados."
         actions={
-          <View style={styles.yearSwitcher} accessibilityRole="adjustable" accessibilityLabel={`Temporada ${year}`}>
-            <TouchableOpacity
-              onPress={() => canPrevYear && onYear(String(parseInt(year, 10) - 1))}
-              disabled={!canPrevYear}
-              style={[styles.yearBtn, !canPrevYear && styles.yearBtnOff]}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Temporada anterior"
-            >
-              <Icon name="chevron-back" size={14} color={C.ink} />
-            </TouchableOpacity>
-            <Mono style={styles.yearLabel}>{year}</Mono>
-            <TouchableOpacity
-              onPress={() => canNextYear && onYear(String(parseInt(year, 10) + 1))}
-              disabled={!canNextYear}
-              style={[styles.yearBtn, !canNextYear && styles.yearBtnOff]}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Próxima temporada"
-            >
-              <Icon name="chevron-forward" size={14} color={C.ink} />
-            </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {area === "cobrancas" && (
+              <ShojiButton label="Nova campanha" icon="send" variant="accent" onPress={onNovaCampanha} />
+            )}
+            <View style={styles.yearSwitcher} accessibilityRole="adjustable" accessibilityLabel={`Temporada ${year}`}>
+              <TouchableOpacity
+                onPress={() => canPrevYear && onYear(String(parseInt(year, 10) - 1))}
+                disabled={!canPrevYear}
+                style={[styles.yearBtn, !canPrevYear && styles.yearBtnOff]}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Temporada anterior"
+              >
+                <Icon name="chevron-back" size={14} color={C.ink} />
+              </TouchableOpacity>
+              <Mono style={styles.yearLabel}>{year}</Mono>
+              <TouchableOpacity
+                onPress={() => canNextYear && onYear(String(parseInt(year, 10) + 1))}
+                disabled={!canNextYear}
+                style={[styles.yearBtn, !canNextYear && styles.yearBtnOff]}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Próxima temporada"
+              >
+                <Icon name="chevron-forward" size={14} color={C.ink} />
+              </TouchableOpacity>
+            </View>
           </View>
         }
       />
@@ -200,6 +216,19 @@ export function AnnuitiesSeasonHeader({
           </>
         )}
       </View>
+
+      {/* Banner de novos filiados sem cobrança — tom neutro e propositivo
+          (nunca alarmista: ausência de cobrança nunca é inadimplência).
+          Só aparece na aba Cobranças, e só quando há alguém elegível. */}
+      {area === "cobrancas" && !newMembersLoading && newMembersCount > 0 && (
+        <View style={{ marginTop: 14 }}>
+          <Alert
+            title={`${newMembersCount} filiado${newMembersCount === 1 ? "" : "s"} ativo${newMembersCount === 1 ? "" : "s"} ainda não ${newMembersCount === 1 ? "tem" : "têm"} cobrança lançada para ${year}`}
+            desc="Lance a campanha anual pra gerar as cobranças da temporada de uma vez, com vencimento revisável antes de confirmar."
+            onPress={onOpenCampaignFromBanner}
+          />
+        </View>
+      )}
     </RaisedHeader>
   );
 }
@@ -240,6 +269,49 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
   }, [federationId, year]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
+  // ── Fase F3 — campanha anual de anuidades ────────────────────────
+  // Contagem de elegíveis pra o banner de novos filiados: MESMO preview
+  // (scope='both', sem due_date) que o CampaignWizard usa no passo 1 —
+  // números pequenos são o esperado (só faixa-preta ATIVA e dojô ATIVO
+  // sem cobrança na temporada), nunca somados a partir da listagem paginada.
+  const [newMembersPreview, setNewMembersPreview] = useState<AnnuityCampaignPreviewResponse | null>(null);
+  const [newMembersLoading, setNewMembersLoading] = useState(true);
+  const loadNewMembers = useCallback(async () => {
+    setNewMembersLoading(true);
+    try {
+      const res = await karateApi.previewAnnuityCampaign(federationId, { year, scope: "both" });
+      setNewMembersPreview(res);
+    } catch {
+      // Falha silenciosa aqui: o banner some (sem elegíveis aparentes) em
+      // vez de empurrar mais um KarateErrorState pra tela — a tabela e o
+      // summary já têm o próprio tratamento de erro.
+      setNewMembersPreview(null);
+    } finally {
+      setNewMembersLoading(false);
+    }
+  }, [federationId, year]);
+  useEffect(() => { loadNewMembers(); }, [loadNewMembers]);
+  const newMembersCount = newMembersPreview
+    ? newMembersPreview.totals.dojos_count + newMembersPreview.totals.practitioners_count
+    : 0;
+
+  const [wizardVisible, setWizardVisible] = useState(false);
+  const [wizardInitialScope, setWizardInitialScope] = useState<AnnuityCampaignScope | undefined>(undefined);
+  // Bump força remount da AnnuitiesTable (recarrega listagem + limpa seleção/
+  // busca/expansão) depois que uma campanha cria cobranças novas — mais
+  // simples e seguro do que replicar o load() interno dela aqui fora.
+  const [tableReloadToken, setTableReloadToken] = useState(0);
+
+  const openCampaignWizard = useCallback((scope?: AnnuityCampaignScope) => {
+    setWizardInitialScope(scope);
+    setWizardVisible(true);
+  }, []);
+  const handleCampaignSuccess = useCallback((_result: AnnuityCampaignResult) => {
+    loadSummary();
+    loadNewMembers();
+    setTableReloadToken((t) => t + 1);
+  }, [loadSummary, loadNewMembers]);
+
   // Header compartilhado (season + KPIs + chips), memoizado por props —
   // passado como ELEMENTO para a FlatList da tabela (nunca como função).
   const header = useMemo(() => (
@@ -248,8 +320,27 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
       summary={summary} summaryLoading={summaryLoading} summaryError={summaryError}
       onArea={setArea} onSeg={setSeg} onYear={setYear} onRetrySummary={loadSummary}
       statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+      onNovaCampanha={() => openCampaignWizard(undefined)}
+      newMembersCount={newMembersCount}
+      newMembersLoading={newMembersLoading}
+      onOpenCampaignFromBanner={() => openCampaignWizard("both")}
     />
-  ), [area, seg, year, summary, summaryLoading, summaryError, setArea, setSeg, setYear, loadSummary, statusFilter]);
+  ), [
+    area, seg, year, summary, summaryLoading, summaryError, setArea, setSeg, setYear, loadSummary, statusFilter,
+    newMembersCount, newMembersLoading, openCampaignWizard,
+  ]);
+
+  const wizard = (
+    <CampaignWizard
+      visible={wizardVisible}
+      federationId={federationId}
+      year={year}
+      initialScope={wizardInitialScope}
+      onClose={() => setWizardVisible(false)}
+      onSuccess={handleCampaignSuccess}
+      onOpenPlans={() => setArea("planos")}
+    />
+  );
 
   if (area === "planos") {
     return (
@@ -258,6 +349,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
           {header}
           <AnnuityPlansPanel federationId={federationId} />
         </ScrollView>
+        {wizard}
       </ShojiBackground>
     );
   }
@@ -265,6 +357,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
   return (
     <ShojiBackground>
       <AnnuitiesTable
+        key={tableReloadToken}
         federationId={federationId}
         seg={seg}
         year={year}
@@ -273,6 +366,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
         onMutated={loadSummary}
         headerElement={header}
       />
+      {wizard}
     </ShojiBackground>
   );
 }
