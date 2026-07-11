@@ -35,7 +35,7 @@ export function AfiliacaoCard({
     <View style={st.card}>
       <SectionRow
         title="Filiação da rede"
-        sub="Dojôs filiados · evolução anual"
+        sub="Quantos dojôs estão filiados à federação e como isso mudou ao longo do ano"
         onDetail={onDetail}
         csvData={{
           filename: "afiliacao-rede",
@@ -86,7 +86,7 @@ export function CoberturaCard({
     <View style={st.card}>
       <SectionRow
         title="Cobertura geográfica"
-        sub="Densidade de dojôs por região administrativa de SP"
+        sub="Quantos dojôs a federação tem em cada região de SP"
         onDetail={onDetail}
         csvData={{
           filename: "cobertura-geografica",
@@ -140,15 +140,15 @@ export function InadimplenciaCard({
   return (
     <View style={st.card}>
       <SectionRow
-        title="Inadimplência da rede"
-        sub="Dojôs filiados ativos · situação da anuidade (fonte: standing)"
+        title="Dojôs em atraso"
+        sub="Dojôs filiados ativos e a situação da anuidade de cada um"
         onDetail={onDetail}
         csvData={{
           filename: "inadimplencia-rede",
           headers: ["Status", "Dojôs", "Percentual"],
           rows: standing ? [
             ["Em dia", String(emDia), ativos > 0 ? fmtPct(emDia / ativos * 100) : "—"],
-            ["Atrasado", String(atrasado), ativos > 0 ? fmtPct(atrasado / ativos * 100) : "—"],
+            ["Em atraso", String(atrasado), ativos > 0 ? fmtPct(atrasado / ativos * 100) : "—"],
           ] : [],
         }}
       />
@@ -161,14 +161,14 @@ export function InadimplenciaCard({
               {fmtPct(pct)}
             </Text>
             <Text style={st.heroSub}>
-              {ativos > 0 ? `${atrasado} de ${ativos} filiados em atraso` : "das anuidades de filiação vencidas"}
+              {ativos > 0 ? `${atrasado} de ${ativos} filiados em atraso` : "nenhum dojô ativo com anuidade registrada"}
             </Text>
           </View>
           {/* Stack bar — em dia / atrasado (standing.dojos) */}
           <View style={st.stackBarWrap}>
             {[
               { label: "Em dia", n: emDia, color: P.ok },
-              { label: "Atrasado", n: atrasado, color: P.danger },
+              { label: "Em atraso", n: atrasado, color: P.danger },
             ].map((seg) => (
               ativos > 0 && (
                 <View
@@ -188,7 +188,7 @@ export function InadimplenciaCard({
           {/* Legend */}
           {[
             { label: "Em dia", n: emDia, color: P.ok },
-            { label: "Atrasado", n: atrasado, color: P.danger },
+            { label: "Em atraso", n: atrasado, color: P.danger },
           ].map((seg) => (
             <View key={seg.label} style={st.inadLegendRow}>
               <View style={[st.inadDot, { backgroundColor: seg.color }]} />
@@ -216,7 +216,7 @@ export function ProjecaoCard({
     <View style={st.card}>
       <SectionRow
         title="Projeção de receita"
-        sub="Por mês de vencimento de anuidade · próximos 8 meses"
+        sub="Quanto a federação recebe (ou espera receber) de anuidade, mês a mês — próximos 8 meses"
         onDetail={onDetail}
         csvData={{
           filename: "projecao-receita",
@@ -224,7 +224,7 @@ export function ProjecaoCard({
           rows: (data?.data || []).map((d) => [
             fmtMesAno(d.mes, d.ano),
             String(d.total),
-            d.kind === "proj" ? "Projetado" : "Realizado",
+            d.kind === "proj" ? "Previsto" : "Já recebido",
           ]),
         }}
       />
@@ -236,7 +236,7 @@ export function ProjecaoCard({
             <Text style={st.heroNum}>
               {fmtBRL(data.total_realized + data.total_projected)}
             </Text>
-            <Text style={st.heroSub}>total no período</Text>
+            <Text style={st.heroSub}>total esperado no período</Text>
           </View>
           <BarChart
             items={items.map((d) => ({
@@ -251,11 +251,11 @@ export function ProjecaoCard({
           <View style={st.legendRow}>
             <View style={st.legendItem}>
               <View style={[st.legendDot, { backgroundColor: C.ink2 }]} />
-              <Text style={st.legendLabel}>Realizado</Text>
+              <Text style={st.legendLabel}>Já recebido</Text>
             </View>
             <View style={st.legendItem}>
               <View style={[st.legendDot, { backgroundColor: P.redWash, borderWidth: 1, borderColor: P.red, borderStyle: "dashed" }]} />
-              <Text style={st.legendLabel}>Projetado</Text>
+              <Text style={st.legendLabel}>Previsto</Text>
             </View>
           </View>
         </FadeIn>
@@ -274,7 +274,7 @@ export function GraduacoesCard({
   return (
     <View style={st.card}>
       <SectionRow
-        title="Graduações registradas — YTD"
+        title="Graduações registradas no ano"
         sub="Exames Kyu → Dan registrados na federação"
         onDetail={onDetail}
         csvData={{
@@ -289,7 +289,7 @@ export function GraduacoesCard({
         <FadeIn>
           <View style={st.heroRow}>
             <Text style={st.heroNum}>{data.total}</Text>
-            <Text style={st.heroSub}>graduações YTD (no ano corrente)</Text>
+            <Text style={st.heroSub}>graduações neste ano</Text>
           </View>
           <BarChart
             items={items.map((d) => ({ label: fmtMesAno(d.mes, d.ano), value: d.total }))}
@@ -305,7 +305,7 @@ export function GraduacoesCard({
               <View style={[st.legendDot, { backgroundColor: C.ink }]} />
               <Text style={st.legendLabel}>Dan <Text style={{ fontFamily: F.mono, color: C.ink }}>{data.dan}</Text></Text>
             </View>
-            <Text style={st.gradNote}>Registro · não é gestão de dojô</Text>
+            <Text style={st.gradNote}>Registro da federação — não é dado de gestão do dojô</Text>
           </View>
         </FadeIn>
       )}
@@ -382,8 +382,8 @@ export function RelacaoFaixasCard({
   return (
     <View style={st.card}>
       <SectionRow
-        title="Relação de faixas"
-        sub="Distribuição atual de praticantes por graduação"
+        title="Distribuição por faixa"
+        sub="Quantos praticantes a rede tem em cada faixa, hoje"
         onDetail={onDetail}
         csvData={{
           filename: "relacao-faixas",

@@ -85,8 +85,8 @@ export function StandingCard({
   return (
     <View style={st.card}>
       <SectionRow
-        title="Standing da rede"
-        sub="Situação ativa/inativa e financeira de praticantes, faixas-pretas e dojôs"
+        title="Situação da rede"
+        sub="Quem está ativo, quem está em dia e quem está devendo — praticantes, faixas-pretas e dojôs"
         onDetail={onDetail}
         csvData={data ? {
           filename: "standing-rede",
@@ -94,12 +94,12 @@ export function StandingCard({
           rows: [
             ["Praticantes ativos", String(data.praticantes.ativos)],
             ["Praticantes inativos", String(data.praticantes.inativos)],
-            ["Pretas em dia", String(data.pretas.em_dia)],
-            ["Pretas atrasadas", String(data.pretas.atrasado)],
-            ["Pretas · R$ em aberto", fmtBRL(data.pretas.valor_em_aberto)],
+            ["Faixas-pretas em dia", String(data.pretas.em_dia)],
+            ["Faixas-pretas em atraso", String(data.pretas.atrasado)],
+            ["Faixas-pretas · R$ a receber", fmtBRL(data.pretas.valor_em_aberto)],
             ["Dojôs ativos", String(data.dojos.ativos)],
             ["Dojôs em dia", String(data.dojos.em_dia)],
-            ["Dojôs atrasados", String(data.dojos.atrasado)],
+            ["Dojôs em atraso", String(data.dojos.atrasado)],
             ["Dojôs inativos", String(data.dojos.inativos)],
           ],
         } : undefined}
@@ -108,7 +108,7 @@ export function StandingCard({
         <><Sk h={36} mb={8} /><Sk h={120} /></>
       ) : isEmpty ? (
         <View style={{ paddingVertical: 20, alignItems: "center" }}>
-          <Text style={{ fontFamily: "System", fontSize: 12, color: C.ink4 }}>Sem dados de standing ainda.</Text>
+          <Text style={{ fontFamily: "System", fontSize: 12, color: C.ink4 }}>Ainda não há dados de situação da rede.</Text>
         </View>
       ) : (
         <FadeIn style={{ gap: 18 }}>
@@ -123,13 +123,13 @@ export function StandingCard({
             ]}
           />
           <StandingSection
-            title="Faixas-pretas · financeiro"
+            title="Faixas-pretas · pagamento"
             unit="pretas"
             total={data.pretas.em_dia + data.pretas.atrasado}
-            meta={data.pretas.valor_em_aberto > 0 ? `${fmtBRL(data.pretas.valor_em_aberto)} em aberto` : "sem valor em aberto"}
+            meta={data.pretas.valor_em_aberto > 0 ? `${fmtBRL(data.pretas.valor_em_aberto)} a receber` : "nada a receber"}
             segments={[
               { label: "Em dia", n: data.pretas.em_dia, color: P.ok },
-              { label: "Atrasado", n: data.pretas.atrasado, color: P.danger },
+              { label: "Em atraso", n: data.pretas.atrasado, color: P.danger },
             ]}
           />
           <StandingSection
@@ -139,7 +139,7 @@ export function StandingCard({
             meta={`${data.dojos.ativos} ativo(s)`}
             segments={[
               { label: "Em dia", n: data.dojos.em_dia, color: P.ok },
-              { label: "Atrasado", n: data.dojos.atrasado, color: P.danger },
+              { label: "Em atraso", n: data.dojos.atrasado, color: P.danger },
               { label: "Inativo", n: data.dojos.inativos, color: C.ink3 },
             ]}
           />

@@ -34,7 +34,7 @@ export function ReportWidget({ federationId }: { federationId: string }) {
         <View style={{ flex: 1 }}>
           <Text style={st.shTitle}>Relatório periódico</Text>
           <View style={st.filete} />
-          <Text style={st.shSub}>Resume Saúde da Rede e envia por e-mail ao admin</Text>
+          <Text style={st.shSub}>Resume os números da Saúde da Rede e envia por e-mail para o administrador da federação</Text>
         </View>
       </View>
       <TouchableOpacity

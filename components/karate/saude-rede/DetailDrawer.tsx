@@ -52,7 +52,7 @@ export function DetailDrawer({
           {/* Header */}
           <View style={dst.drawerHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={dst.drawerEyebrow}>Registros por trás do indicador</Text>
+              <Text style={dst.drawerEyebrow}>O que está por trás deste número</Text>
               <Text style={dst.drawerTitle}>{title}</Text>
               <Text style={dst.drawerSub}>{sub}</Text>
             </View>
