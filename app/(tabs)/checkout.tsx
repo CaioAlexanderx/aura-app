@@ -18,6 +18,12 @@ var PLANS = [
 
 var ANNUAL_DISCOUNT = 1 / 6; // 2 meses grátis
 
+// Acesso extra de equipe: R$19/mês por seat acima do limite do plano.
+// Espelha SEAT_PRICE_BRL do backend (services/memberSeats.js). O seat é
+// cobrado CHEIO — NUNCA recebe o desconto anual do plano (regra confirmada
+// em 10/07/2026, ver services/billingPricing.js).
+var SEAT_PRICE_BRL = 19;
+
 function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
 
@@ -104,6 +110,14 @@ export default function CheckoutScreen() {
   var annualSavings = plan.monthly * 12 - annualTotal;
   // Sempre mostra mensalidade — o plano anual é cobrado mensalmente, não à vista.
   var price = isAnnual ? annualMonthly : plan.monthly;
+
+  // 11/07/2026: acessos extras entram no valor cobrado por /billing/subscribe
+  // (backend: getTotalValue = plano + 19 × seats). A tela mostrava só o plano e
+  // cobrava plano + seats — cliente com acesso extra via "R$ 74,17" e era
+  // debitado em "R$ 93,17". Agora o resumo e os botões exibem o total real.
+  var extraSeats = parseInt(String((company as any)?.extra_seats_granted ?? 0), 10) || 0;
+  var seatsPrice = extraSeats * SEAT_PRICE_BRL;
+  var totalPrice = Math.round((price + seatsPrice) * 100) / 100;
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
@@ -306,12 +320,24 @@ export default function CheckoutScreen() {
         {isAnnual && (
           <Text style={z.annualNote}>Cobrado mensalmente · economia de {fmt(annualSavings)}/ano</Text>
         )}
+        {extraSeats > 0 && (
+          <>
+            <View style={z.summaryRow}>
+              <Text style={z.summaryLabel}>{extraSeats} acesso{extraSeats > 1 ? "s" : ""} extra{extraSeats > 1 ? "s" : ""} de equipe</Text>
+              <Text style={z.summaryValue}>{fmtMo(seatsPrice)}</Text>
+            </View>
+            <View style={[z.summaryRow, z.summaryTotalRow]}>
+              <Text style={z.summaryTotalLabel}>Total</Text>
+              <Text style={z.summaryTotalValue}>{fmtMo(totalPrice)}</Text>
+            </View>
+          </>
+        )}
       </View>
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && { opacity: 0.6 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmtMo(price)}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmtMo(totalPrice)}</Text>}
           </Pressable>
         </View>
       )}
@@ -369,7 +395,7 @@ export default function CheckoutScreen() {
           </View>
 
           <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid} style={[z.payBtn, (tokenizing || !cardValid) && { opacity: 0.5 }]}>
-            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Assinar Agora</Text>}
+            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Assinar Agora - {fmtMo(totalPrice)}</Text>}
           </Pressable>
         </View>
       )}
@@ -417,6 +443,9 @@ var z = StyleSheet.create({
   annualNote: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   formCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
   payBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", width: "100%" },
+  summaryTotalRow: { borderTopWidth: 1, borderTopColor: Colors.line, paddingTop: 8, marginTop: 4 },
+  summaryTotalLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink1 },
+  summaryTotalValue: { fontSize: 15, fontWeight: "800", color: Colors.violet3 },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },
