@@ -14,19 +14,39 @@
 // Ação irreversível → confirmAsync mostrando a contagem de transferências e
 // inativações antes de disparar o POST (regra do time: ações irreversíveis
 // SEMPRE com confirmação explícita mostrando a contagem).
+//
+// Polish de motion (feat/karate-polish-federacao): barra de acento por
+// linha + Destino animam cor via Animated.Value.interpolate (mesmo padrão
+// do borderColor em competicoes/torneio/[id].tsx); hover só web com
+// fallback touch (padrão Button.tsx/ParcelaRow.tsx); entrada em stagger
+// limitada às primeiras linhas para não travar listas grandes; resumo do
+// rodapé virou dois chips com micro pop quando a contagem muda. Só
+// `Animated` do react-native — sem novas deps.
 // ============================================================
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Modal, View, Text, ScrollView, TouchableOpacity, TextInput,
+  Modal, View, Text, ScrollView, TextInput,
   ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Pressable,
+  Animated, Platform, Easing,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
+import { Motion, webTransition } from "@/constants/motion";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { BeltBadge } from "@/components/karate/BeltBadge";
+import { PressableScale } from "@/components/karate/anim/PressableScale";
+import { ModalPop } from "@/components/karate/anim/ModalPop";
+import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { karateApi, Dojo, DojoMemberStanding, RedistributeAction, RedistributeDecision } from "@/services/karateApi";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { toast } from "@/components/Toast";
+
+const IS_WEB = Platform.OS === "web";
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+// Entrada em stagger só nas primeiras N linhas — o resto aparece direto
+// (sem custo de animação) pra não travar dojôs com listas grandes.
+const STAGGER_LIMIT = 12;
+const OK = P.ok ?? "#2d8a4e";
 
 interface Props {
   visible: boolean;
@@ -46,6 +66,7 @@ const INACTIVATE_CHOICE: Choice = { action: "inactivate", destinationId: null, d
 export function RedistribuirPraticantesModal({
   visible, onClose, federationId, dojoId, dojoName, practitioners, onSuccess,
 }: Props) {
+  const reducedMotion = usePrefersReducedMotion();
   // Estado por praticante — default "Inativar" (mesmo comportamento de hoje).
   const [decisions, setDecisions] = useState<Record<string, Choice>>({});
   const [dojos, setDojos] = useState<Dojo[]>([]);
@@ -53,9 +74,13 @@ export function RedistribuirPraticantesModal({
   const [busy, setBusy] = useState(false);
   // Picker: null (fechado) | "ALL" (ação em massa) | student_id (linha)
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  // Incrementa a cada abertura do modal — usado como parte da key das linhas
+  // pra fazer a entrada em stagger tocar de novo em cada abertura.
+  const [openSeq, setOpenSeq] = useState(0);
 
   useEffect(() => {
     if (!visible) return;
+    setOpenSeq((s) => s + 1);
     const initial: Record<string, Choice> = {};
     practitioners.forEach((p) => { initial[p.student_id] = INACTIVATE_CHOICE; });
     setDecisions(initial);
@@ -132,69 +157,52 @@ export function RedistribuirPraticantesModal({
             <Text style={styles.headerTitle}>Redistribuir praticantes</Text>
             <Text style={styles.headerSub}>{dojoName} · o dojô será inativado ao confirmar</Text>
           </View>
-          <TouchableOpacity onPress={() => !busy && onClose()} accessibilityLabel="Fechar" hitSlop={10}>
+          <Pressable onPress={() => !busy && onClose()} accessibilityRole="button" accessibilityLabel="Fechar" hitSlop={10}>
             <Icon name="x" size={24} color={P.ink} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.massActions}>
-          <TouchableOpacity
+          <PressableScale
             style={styles.massBtn}
             disabled={busy || dojos.length === 0}
             onPress={() => setPickerFor("ALL")}
-            accessibilityRole="button"
+            accessibilityLabel="Transferir todos para…"
           >
             <Icon name="arrow-forward" size={13} color={P.ink} />
             <Text style={styles.massBtnTxt}>Transferir todos para…</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </PressableScale>
+          <PressableScale
             style={styles.massBtn}
             disabled={busy}
+            accessibilityLabel="Inativar todos"
             onPress={() => setDecisions((prev) => {
               const next: Record<string, Choice> = {};
               Object.keys(prev).forEach((id) => { next[id] = INACTIVATE_CHOICE; });
               return next;
             })}
-            accessibilityRole="button"
           >
             <Icon name="power" size={13} color={P.red} />
             <Text style={styles.massBtnTxt}>Inativar todos</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           {practitioners.length === 0 ? (
             <Text style={styles.emptyText}>Nenhum praticante ativo neste dojô — pode inativar direto.</Text>
           ) : (
-            practitioners.map((p) => {
+            practitioners.map((p, i) => {
               const choice = decisions[p.student_id] || INACTIVATE_CHOICE;
               return (
-                <View key={p.student_id} style={styles.row}>
-                  <View style={{ flex: 1, minWidth: 140 }}>
-                    <Text style={styles.rowName} numberOfLines={1}>{p.full_name}</Text>
-                    <Text style={styles.rowReg} numberOfLines={1}>
-                      {p.karate_registration_number || "Sem matrícula"}
-                    </Text>
-                  </View>
-                  {p.belt_level ? <BeltBadge beltLevel={p.belt_level} beltName={p.belt_name || undefined} /> : null}
-                  <TouchableOpacity
-                    style={[styles.destBtn, choice.action === "transfer" && styles.destBtnTransfer]}
-                    disabled={busy}
-                    onPress={() => setPickerFor(p.student_id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Destino de ${p.full_name}`}
-                  >
-                    {choice.action === "transfer" ? (
-                      <Icon name="arrow-forward" size={12} color={P.ok ?? "#2d8a4e"} />
-                    ) : (
-                      <Icon name="power" size={12} color={P.red} />
-                    )}
-                    <Text style={[styles.destBtnTxt, choice.action === "transfer" && styles.destBtnTxtTransfer]} numberOfLines={1}>
-                      {choice.action === "transfer" ? choice.destinationName : "Inativar"}
-                    </Text>
-                    <Icon name="chevron_down" size={12} color={P.ink3} />
-                  </TouchableOpacity>
-                </View>
+                <PractitionerRow
+                  key={`${openSeq}-${p.student_id}`}
+                  index={i}
+                  p={p}
+                  choice={choice}
+                  busy={busy}
+                  reducedMotion={reducedMotion}
+                  onPressDestino={() => setPickerFor(p.student_id)}
+                />
               );
             })
           )}
@@ -202,9 +210,22 @@ export function RedistribuirPraticantesModal({
 
         <View style={styles.footer}>
           <View style={styles.footerSummary}>
-            <Text style={styles.footerSummaryTxt}>
-              {transferCount} transferência{transferCount === 1 ? "" : "s"} · {inactivateCount} inativação{inactivateCount === 1 ? "" : "ões"}
-            </Text>
+            <SummaryChip
+              count={transferCount}
+              label={transferCount === 1 ? "transferência" : "transferências"}
+              color={OK}
+              bg="#f0faf2"
+              borderColor="#b7e0c2"
+              reducedMotion={reducedMotion}
+            />
+            <SummaryChip
+              count={inactivateCount}
+              label={inactivateCount === 1 ? "inativação" : "inativações"}
+              color={P.red}
+              bg={P.redWash}
+              borderColor={P.redLine}
+              reducedMotion={reducedMotion}
+            />
           </View>
           <View style={styles.footerBtns}>
             <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} disabled={busy} style={{ flex: 1 }} />
@@ -228,6 +249,7 @@ export function RedistribuirPraticantesModal({
         dojosLoading={dojosLoading}
         onPick={applyChoice}
         title={pickerTitle}
+        reducedMotion={reducedMotion}
       />
     </Modal>
   );
@@ -235,12 +257,146 @@ export function RedistribuirPraticantesModal({
 
 export default RedistribuirPraticantesModal;
 
+// ── Linha de praticante — acento + Destino animados, hover, stagger ───────
+function PractitionerRow({
+  index, p, choice, busy, onPressDestino, reducedMotion,
+}: {
+  index: number;
+  p: DojoMemberStanding;
+  choice: Choice;
+  busy: boolean;
+  onPressDestino: () => void;
+  reducedMotion: boolean;
+}) {
+  const isTransfer = choice.action === "transfer";
+  const willStagger = !reducedMotion && index < STAGGER_LIMIT;
+
+  // 0 = inativar (vermelho) · 1 = transferir (verde) — transiciona ao alternar.
+  const accent = useRef(new Animated.Value(isTransfer ? 1 : 0)).current;
+  // Entrada da lista: fade + slide sutil, só nas primeiras STAGGER_LIMIT linhas.
+  const enter = useRef(new Animated.Value(willStagger ? 0 : 1)).current;
+  const [hovered, setHovered] = useState(false);
+  const [destHovered, setDestHovered] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(accent, {
+      toValue: isTransfer ? 1 : 0,
+      duration: Motion.base,
+      useNativeDriver: false,
+    }).start();
+  }, [isTransfer, accent]);
+
+  useEffect(() => {
+    if (!willStagger) return;
+    const anim = Animated.timing(enter, {
+      toValue: 1,
+      duration: 220,
+      delay: index * 26,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => anim.stop();
+    // mount-only: a entrada toca uma vez quando a linha aparece.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const accentColor = accent.interpolate({ inputRange: [0, 1], outputRange: [P.red, OK] });
+  const destBorder = accent.interpolate({ inputRange: [0, 1], outputRange: [P.line2, "#b7e0c2"] });
+  const destBg = accent.interpolate({ inputRange: [0, 1], outputRange: [P.glass2, "#f0faf2"] });
+  const destTxt = accent.interpolate({ inputRange: [0, 1], outputRange: [P.red, OK] });
+
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+      }}
+    >
+      <Pressable
+        onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+        onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+        style={[
+          styles.row,
+          hovered && ({
+            transform: [{ translateY: -1 }],
+            backgroundColor: P.glassHi,
+            ...(IS_WEB ? ({ boxShadow: "0 4px 14px -6px rgba(43,38,32,0.22)" } as any) : null),
+          } as any),
+          IS_WEB ? (webTransition(["transform", "box-shadow", "background-color"], Motion.fast) as any) : null,
+        ]}
+      >
+        <Animated.View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
+        <View style={{ flex: 1, minWidth: 140 }}>
+          <Text style={styles.rowName} numberOfLines={1}>{p.full_name}</Text>
+          <Text style={styles.rowReg} numberOfLines={1}>
+            {p.karate_registration_number || "Sem matrícula"}
+          </Text>
+        </View>
+        {p.belt_level ? <BeltBadge beltLevel={p.belt_level} beltName={p.belt_name || undefined} /> : null}
+        <AnimatedPressable
+          disabled={busy}
+          onPress={onPressDestino}
+          onHoverIn={IS_WEB ? () => setDestHovered(true) : undefined}
+          onHoverOut={IS_WEB ? () => setDestHovered(false) : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={`Destino de ${p.full_name}`}
+          style={[
+            styles.destBtn,
+            { borderColor: destBorder, backgroundColor: destBg },
+            destHovered && !busy && ({
+              transform: [{ translateY: -1 }],
+              ...(IS_WEB ? ({ boxShadow: "0 3px 10px -4px rgba(43,38,32,0.28)" } as any) : null),
+            } as any),
+            IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
+          ]}
+        >
+          {isTransfer ? (
+            <Icon name="arrow-forward" size={12} color={OK} />
+          ) : (
+            <Icon name="power" size={12} color={P.red} />
+          )}
+          <Animated.Text style={[styles.destBtnTxt, { color: destTxt }]} numberOfLines={1}>
+            {isTransfer ? choice.destinationName : "Inativar"}
+          </Animated.Text>
+          <Icon name="chevron_down" size={12} color={P.ink3} />
+        </AnimatedPressable>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ── Chip de resumo (rodapé) — pop sutil quando a contagem muda ───────────
+function SummaryChip({
+  count, label, color, bg, borderColor, reducedMotion,
+}: {
+  count: number; label: string; color: string; bg: string; borderColor: string; reducedMotion: boolean;
+}) {
+  const pop = useRef(new Animated.Value(1)).current;
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    if (reducedMotion) return;
+    Animated.sequence([
+      Animated.timing(pop, { toValue: 1.14, duration: 90, useNativeDriver: false }),
+      Animated.timing(pop, { toValue: 1, duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+    ]).start();
+  }, [count, reducedMotion, pop]);
+
+  return (
+    <Animated.View style={[styles.chip, { backgroundColor: bg, borderColor, transform: [{ scale: pop }] }]}>
+      <Text style={[styles.chipTxt, { color }]}>{count} {label}</Text>
+    </Animated.View>
+  );
+}
+
 // ── Picker de destino compartilhado (linha individual e ação em massa) ────
 // "Inativar" ou um dos dojôs de destino, com busca — mesmo padrão do
 // DojoSelectSection (components/karate/praticante-ficha), num modal pequeno
-// para não brigar com o scroll da tabela.
+// para não brigar com o scroll da tabela. Card entra em scale+fade (ModalPop).
 function DestinationPickerModal({
-  visible, onClose, dojos, dojosLoading, onPick, title,
+  visible, onClose, dojos, dojosLoading, onPick, title, reducedMotion,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -248,6 +404,7 @@ function DestinationPickerModal({
   dojosLoading: boolean;
   onPick: (choice: Choice) => void;
   title: string;
+  reducedMotion: boolean;
 }) {
   const [q, setQ] = useState("");
   useEffect(() => { if (visible) setQ(""); }, [visible]);
@@ -261,17 +418,13 @@ function DestinationPickerModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={pickerStyles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={pickerStyles.card}>
+        <ModalPop visible={visible} style={pickerStyles.card} duration={reducedMotion ? 0 : 240}>
           <Text style={pickerStyles.title}>{title}</Text>
 
-          <TouchableOpacity
-            style={pickerStyles.inactivateOption}
-            onPress={() => onPick(INACTIVATE_CHOICE)}
-            accessibilityRole="button"
-          >
+          <PressableScale style={pickerStyles.inactivateOption} onPress={() => onPick(INACTIVATE_CHOICE)} accessibilityLabel="Inativar">
             <Icon name="power" size={14} color={P.red} />
             <Text style={pickerStyles.inactivateTxt}>Inativar</Text>
-          </TouchableOpacity>
+          </PressableScale>
 
           <TextInput
             style={pickerStyles.search}
@@ -290,23 +443,23 @@ function DestinationPickerModal({
           ) : (
             <ScrollView style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
               {filtered.map((d) => (
-                <TouchableOpacity
+                <PressableScale
                   key={d.id}
                   style={pickerStyles.item}
                   onPress={() => onPick({ action: "transfer", destinationId: d.id, destinationName: d.name })}
-                  accessibilityRole="button"
+                  accessibilityLabel={`Transferir para ${d.name}`}
                 >
                   <Icon name="arrow-forward" size={13} color={P.ink2} />
                   <Text style={pickerStyles.itemTxt} numberOfLines={1}>{d.name}</Text>
-                </TouchableOpacity>
+                </PressableScale>
               ))}
             </ScrollView>
           )}
 
-          <TouchableOpacity style={pickerStyles.cancelBtn} onPress={onClose}>
+          <Pressable style={pickerStyles.cancelBtn} onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancelar">
             <Text style={pickerStyles.cancelTxt}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+        </ModalPop>
       </View>
     </Modal>
   );
@@ -326,19 +479,20 @@ const styles = StyleSheet.create({
   bodyContent: { paddingHorizontal: 16, paddingBottom: 24 } as ViewStyle,
   emptyText:   { textAlign: "center", color: P.ink3, paddingVertical: 24, fontSize: 13, fontFamily: F.body } as TextStyle,
 
-  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: P.line, flexWrap: "wrap" } as ViewStyle,
+  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingLeft: 10, paddingRight: 2, borderBottomWidth: 1, borderBottomColor: P.line, flexWrap: "wrap", position: "relative" } as ViewStyle,
+  rowAccent: { position: "absolute", left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2 } as ViewStyle,
   rowName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
   rowReg:  { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 2 } as TextStyle,
 
-  destBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 10, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, minWidth: 118, maxWidth: 200 } as ViewStyle,
-  destBtnTransfer: { borderColor: "#b7e0c2", backgroundColor: "#f0faf2" } as ViewStyle,
-  destBtnTxt: { flex: 1, fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.red } as TextStyle,
-  destBtnTxtTransfer: { color: P.ok ?? "#2d8a4e" } as TextStyle,
+  destBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 10, borderRadius: R.md, borderWidth: 1, minWidth: 118, maxWidth: 200 } as ViewStyle,
+  destBtnTxt: { flex: 1, fontFamily: F.body, fontSize: 12.5, fontWeight: "600" } as TextStyle,
 
   footer:         { padding: 16, borderTopWidth: 1, borderTopColor: P.line, gap: 10 } as ViewStyle,
-  footerSummary:  { alignItems: "center" } as ViewStyle,
-  footerSummaryTxt: { fontFamily: F.body, fontSize: 12, color: P.ink2, fontWeight: "600" } as TextStyle,
+  footerSummary:  { flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 8 } as ViewStyle,
   footerBtns:     { flexDirection: "row", gap: 8 } as ViewStyle,
+
+  chip:    { flexDirection: "row", alignItems: "center", paddingVertical: 6, paddingHorizontal: 12, borderRadius: R.pill, borderWidth: 1 } as ViewStyle,
+  chipTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "700" } as TextStyle,
 });
 
 const pickerStyles = StyleSheet.create({

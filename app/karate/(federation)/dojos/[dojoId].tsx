@@ -58,6 +58,9 @@ import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
 import RedistribuirPraticantesModal from "@/components/karate/RedistribuirPraticantesModal";
+import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
+import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
+import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, RosterValidation } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
@@ -159,6 +162,7 @@ export default function DojoDetailScreen() {
   // só a federação chega aqui; não havia uma variável canEdit/allowed préexistente
   // nesta tela, então reaproveitamos o mesmo helper de papel do praticante.
   const canManage = canTransfer(karateRole);
+  const reducedMotion = usePrefersReducedMotion();
   const [data, setData] = useState<DojoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -484,36 +488,19 @@ export default function DojoDetailScreen() {
         </View>
 
         {/* Banner de estado da validação do quadro — GET roster-validation.
-            pending: link + copiar/whatsapp. validated: nota discreta. */}
-        {rosterValidation?.status === "pending" ? (
-          <Card style={{ marginTop: SP[6], borderColor: P.line2 }}>
-            <View style={styles.validationRow}>
-              <Icon name="alert-circle" size={16} color={P.warn} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.validationTitle}>
-                  Quadro pendente de validação — solicitado em {fmtDate(rosterValidation.requested_at) || "—"}
-                </Text>
-                {rosterValidation.url ? (
-                  <View style={styles.validationLinkRow}>
-                    <Text style={styles.validationLink} numberOfLines={1}>{rosterValidation.url}</Text>
-                    <TouchableOpacity style={styles.validationBtn} onPress={copyRosterLink} accessibilityRole="button" accessibilityLabel="Copiar link">
-                      <Icon name="copy-outline" size={13} color={C.ink} />
-                      <Text style={styles.validationBtnTxt}>Copiar link</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.validationBtn} onPress={shareRosterLinkWhatsApp} accessibilityRole="button" accessibilityLabel="Abrir no WhatsApp">
-                      <Icon name="logo-whatsapp" size={13} color={C.ink} />
-                      <Text style={styles.validationBtnTxt}>WhatsApp</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          </Card>
-        ) : rosterValidation?.status === "validated" ? (
-          <Body muted style={{ marginTop: SP[4] }}>
-            Quadro validado em {fmtDate(rosterValidation.validated_at) || "—"}
-            {rosterValidation.validated_by ? ` por ${rosterValidation.validated_by}` : ""}
-          </Body>
+            pending: link + copiar/whatsapp (com pulse no "Copiar link").
+            validated: nota discreta com check em scale-in. Componente
+            extraído — ver components/karate/RosterValidationBanner.tsx. */}
+        {rosterValidation?.status === "pending" || rosterValidation?.status === "validated" ? (
+          <RosterValidationBanner
+            status={rosterValidation.status}
+            requestedAtLabel={fmtDate(rosterValidation.requested_at)}
+            validatedAtLabel={fmtDate(rosterValidation.validated_at)}
+            validatedBy={rosterValidation.validated_by}
+            url={rosterValidation.url}
+            onCopyLink={copyRosterLink}
+            onShareWhatsApp={shareRosterLinkWhatsApp}
+          />
         ) : null}
 
         {/* DJ2: card Cadastro — "Sensei responsável" em vez de "CPF do sensei" */}
@@ -749,47 +736,20 @@ export default function DojoDetailScreen() {
 
       {/* Diálogo de escolha ao inativar o dojô: Inativar todos vs. Redistribuir.
           A contagem de praticantes ativos (rosterActiveCount) já serve como a
-          confirmação explícita exigida para ações irreversíveis. */}
-      <Modal visible={choiceOpen} transparent animationType="fade" onRequestClose={() => !busy && setChoiceOpen(false)}>
-        <View style={styles.backdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setChoiceOpen(false)} />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalEyebrow}>空  FPKT · Inativar dojô</Text>
-            <Text style={styles.modalTitle}>Inativar "{data.name}"<Text style={{ color: P.red }}>.</Text></Text>
-            <Text style={styles.modalBody}>
-              {rosterHasData && rosterActiveCount > 0
-                ? `Este dojô tem ${rosterActiveCount} praticante${rosterActiveCount === 1 ? "" : "s"} ativo${rosterActiveCount === 1 ? "" : "s"}. Escolha o que fazer com eles antes de inativar o dojô.`
-                : "Este dojô será inativado."}
-            </Text>
-
-            <View style={styles.modalActions}>
-              {rosterHasData && rosterActiveCount > 0 ? (
-                <>
-                  <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={inactivateAllAndSuspend}>
-                    {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : (
-                      <Text style={styles.dangerBtnTxt}>Inativar todos os {rosterActiveCount} praticantes</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.primaryBtn, busy && styles.btnDisabled]}
-                    disabled={busy}
-                    onPress={() => { setChoiceOpen(false); setRedistribOpen(true); }}
-                  >
-                    <Text style={styles.primaryBtnTxt}>Redistribuir praticantes</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={inactivateAllAndSuspend}>
-                  {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.dangerBtnTxt}>Inativar dojô</Text>}
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={() => setChoiceOpen(false)}>
-                <Text style={styles.ghostBtnTxt}>Cancelar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+          confirmação explícita exigida para ações irreversíveis. Componente
+          extraído — ver components/karate/InactivateChoiceDialog.tsx (dois
+          tiles grandes com hover-lift + entrada scale-in). */}
+      <InactivateChoiceDialog
+        visible={choiceOpen}
+        onClose={() => !busy && setChoiceOpen(false)}
+        busy={busy}
+        dojoName={data.name}
+        activeCount={rosterActiveCount}
+        hasChoice={rosterHasData && rosterActiveCount > 0}
+        onInactivateAll={inactivateAllAndSuspend}
+        onRedistribute={() => { setChoiceOpen(false); setRedistribOpen(true); }}
+        reducedMotion={reducedMotion}
+      />
 
       {/* Redistribuir: tabela editável — uma linha por praticante ativo, com
           seletor Destino (Inativar por padrão, ou → outro dojô). Confirma
