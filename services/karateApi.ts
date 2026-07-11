@@ -489,6 +489,15 @@ export interface DojoAnnuity {
   annuity_id?: string | null;
   annuity_history_id?: string | null;
   transaction_id?: string | null;
+  // Fase F2 (aditivo) — só populados quando a migration 222 (parcelas) já
+  // foi aplicada no ambiente (HAS_INSTALLMENTS em karateAnnuities.js).
+  // `amount`/`due_date`/`status` acima continuam vindo do rollup do header
+  // (sincronizado com as parcelas); `total`/`paid_total` são a soma real
+  // das parcelas (podem diferir de `amount` só em casos de correção manual).
+  plan?: AnnuityPlan | null;
+  installments?: AnnuityInstallment[];
+  paid_total?: number;
+  total?: number;
 }
 
 export interface CpfAnnuity {
@@ -509,6 +518,154 @@ export interface CpfAnnuity {
   // CpfAnnuitiesTab.tsx; promovido aqui conforme o próprio comentário
   // daquele workaround já previa.
   transaction_id?: string | null;
+  // Fase F2 (aditivo) — ver mesmo comentário em DojoAnnuity.
+  plan?: AnnuityPlan | null;
+  installments?: AnnuityInstallment[];
+  paid_total?: number;
+  total?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fase F2 — Hub de Anuidades (parcelas, planos, KPIs agregados)
+//
+// Wired against PR #354 (Fase F1 — modelo de parcelas) e #355 (Fase F2 —
+// KPIs do hub + paginação real + vigência por plano) do aura-backend.
+// Campos aditivos: só existem quando a migration 222 já foi aplicada no
+// ambiente (HAS_INSTALLMENTS em karateAnnuities.js) — por isso os campos
+// novos em DojoAnnuity/CpfAnnuity acima são todos opcionais; o backend cai
+// pro shape legado (single-row, sem installments) em deployment parcial.
+// ─────────────────────────────────────────────────────────────────
+
+/** Plano de anuidade — dojô usa os 3; praticante (cpf) só usa 'anual' (N=1). */
+export type AnnuityPlan = "anual" | "semestral" | "trimestral";
+
+/** Uma parcela de anuidade (karate_annuity_installments). status persistido é
+ *  SÓ 'pending'|'paid' — "vencida"/"a vencer"/"futura" são rótulos derivados
+ *  no cliente a partir de due_date, nunca persistidos. */
+export interface AnnuityInstallment {
+  id: string;
+  seq: number;
+  amount: number;
+  due_date: string | null;
+  paid_at: string | null;
+  status: "pending" | "paid";
+  transaction_id: string | null;
+}
+
+/** Alias de status aceitos pelo filtro `status` de /annuities/dojos e /cpf,
+ *  além do vocabulário de AnnuityStatus — espelham os buckets do summary
+ *  (STATUS_ALIASES em karateAnnuities.js): em_aberto = tudo não pago;
+ *  atrasado = não pago E já vencido. */
+export type AnnuityStatusFilter = AnnuityStatus | "em_aberto" | "atrasado" | "all";
+
+export interface AnnuitySummaryBucket {
+  valor: number;
+  count: number;
+}
+export interface AnnuitySummarySegment {
+  previsto: AnnuitySummaryBucket;
+  recebido: AnnuitySummaryBucket;
+  em_aberto: AnnuitySummaryBucket;
+  atrasado: AnnuitySummaryBucket;
+}
+/** GET /financial/annuities/summary — os 4 KPIs do hub, JÁ agregados no
+ *  banco (NUNCA somar no cliente — ver karateAnnuitySummary.js). */
+export interface AnnuitySummaryResponse {
+  year: string;
+  total: AnnuitySummarySegment;
+  dojo: AnnuitySummarySegment;
+  praticante: AnnuitySummarySegment;
+}
+
+/** Tabela de anuidades por PLANO (Fase F2) — karate_annual_fees com
+ *  plan/due_months (migration 222). Coexiste com o shape legado por
+ *  size_tier (AnnualFee/AnnualFeeInput acima, usados pela vigência antiga). */
+export interface AnnuityFeePlan {
+  id: string;
+  fee_type: "dojo" | "cpf";
+  size_tier: string | null;
+  plan: AnnuityPlan | null;
+  amount: number;
+  due_months: number[] | null;
+  effective_from: string;
+}
+
+/** Body de PUT /financial/fees no formato NOVO (plan-based). Vigência
+ *  append-only: NUNCA altera parcelas já geradas — só a próxima geração
+ *  (próximo /charge ou próxima temporada) usa o valor novo. */
+export interface AnnuityFeePlanInput {
+  fee_type: "dojo" | "cpf";
+  plan: AnnuityPlan;
+  amount: number;
+  due_months: number[];
+  /** Opcional — default hoje no backend. */
+  effective_from?: string;
+}
+
+/** Body de POST .../installments/:id/pay (baixa manual de UMA parcela). */
+export interface InstallmentPayInput {
+  paid_at?: string; // 'YYYY-MM-DD', default hoje no backend
+  payment_method?: "pix" | "dinheiro" | "transferencia" | "outro";
+  amount?: number;
+}
+
+/** Resposta de POST .../installments/:id/pay. */
+export interface InstallmentPayResult {
+  installment_id: string;
+  annuity_id: string;
+  seq: number;
+  amount: number;
+  paid_at: string;
+  payment_method: string | null;
+  status: "paid";
+  transaction_id: string | null;
+  annuity_status?: string | null;
+  idempotent_hit: boolean;
+}
+
+/** Body de PATCH .../installments/:id — corrige amount/due_date de UMA
+ *  parcela NÃO paga (409 se já paga). */
+export type InstallmentUpdateInput = Partial<{
+  amount: number;
+  due_date: string;
+}>;
+
+export interface InstallmentUpdateResult {
+  installment_id: string;
+  annuity_id: string;
+  seq: number;
+  amount: number;
+  due_date: string | null;
+  status: string;
+  transaction_id: string | null;
+  annuity_amount: number | null;
+  annuity_due_date: string | null;
+}
+
+/** Resposta de PATCH .../:annuityId/plan (troca de plano — só dojô; praticante
+ *  só tem 'anual' e recebe 422 VALIDATION_ERROR se tentado). */
+export interface AnnuityPlanChangeResult {
+  annuity_id: string;
+  dojo_id: string;
+  plan: AnnuityPlan;
+  amount: number;
+  due_date: string | null;
+  installments: AnnuityInstallment[];
+  paid_total: number;
+  total: number;
+}
+
+/** Resposta de POST /annuities/:annuityId/void — void GENÉRICO (funciona
+ *  para dojô OU praticante, só o annuityId; diferente do voidAnnuity()
+ *  legado, que exige dojoId no path e só cobre dojô). */
+export interface VoidAnnuityGenericResult {
+  voided: boolean;
+  idempotent_hit: boolean;
+  annuity_id: string;
+  dojo_id?: string | null;
+  practitioner_id?: string | null;
+  reference_period?: string;
+  transaction_ids?: string[];
 }
 
 export type AnnuityUpdateInput = Partial<{
@@ -1562,12 +1719,17 @@ export const karateApi = {
   ): Promise<AnnualFee[]> =>
     request(`/federation/${federationId}/financial/fees`, { method: "PUT", body }),
 
+  /** Fase F2 — aceita `year` (temporada) e `q` (busca por nome/código FPKT),
+   *  além de `status`, que agora aceita os aliases agregados do hub
+   *  (em_aberto/atrasado — ver AnnuityStatusFilter) e "all" (sem filtro). */
   listDojoAnnuities: (
     federationId: string,
-    params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
+    params?: { status?: AnnuityStatusFilter; year?: string; q?: string; page?: number; pageSize?: number }
   ): Promise<Paginated<DojoAnnuity>> => {
     const qs = new URLSearchParams();
-    if (params?.status) qs.set("status", params.status);
+    if (params?.status && params.status !== "all") qs.set("status", params.status);
+    if (params?.year) qs.set("year", params.year);
+    if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const query = qs.toString() ? `?${qs.toString()}` : "";
@@ -1663,12 +1825,15 @@ export const karateApi = {
       body: payload,
     }),
 
+  /** Fase F2 — mesma extensão de listDojoAnnuities (year/q + status alias). */
   listCpfAnnuities: (
     federationId: string,
-    params?: { status?: AnnuityStatus; page?: number; pageSize?: number }
+    params?: { status?: AnnuityStatusFilter; year?: string; q?: string; page?: number; pageSize?: number }
   ): Promise<Paginated<CpfAnnuity>> => {
     const qs = new URLSearchParams();
-    if (params?.status) qs.set("status", params.status);
+    if (params?.status && params.status !== "all") qs.set("status", params.status);
+    if (params?.year) qs.set("year", params.year);
+    if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const query = qs.toString() ? `?${qs.toString()}` : "";
@@ -1693,6 +1858,96 @@ export const karateApi = {
     request(`/federation/${federationId}/financial/annuities/cpf/${practitionerId}/pix`, {
       method: "POST",
       body,
+    }),
+
+  // ── Fase F2 — Hub de Anuidades ──────────────────────────────────
+
+  /** GET /financial/annuities/summary — os 4 KPIs do hub (previsto/recebido/
+   *  em_aberto/atrasado), segmentados por dojo/praticante/total. Fonte única
+   *  dos números do topo do hub — NUNCA somar a partir da listagem paginada. */
+  getAnnuitySummary: (
+    federationId: string,
+    params?: { year?: string }
+  ): Promise<AnnuitySummaryResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.year) qs.set("year", params.year);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/financial/annuities/summary${query}`);
+  },
+
+  /** GET /financial/fees no shape NOVO (por plano — Fase F2). Mesmo endpoint
+   *  de getAnnualFees; tipado à parte porque o shape (fee_type/plan/
+   *  due_months) difere do legado por size_tier. */
+  getFeePlans: (federationId: string): Promise<AnnuityFeePlan[]> =>
+    request(`/federation/${federationId}/financial/fees`),
+
+  /** PUT /financial/fees no formato NOVO (plan-based) — cria uma vigência
+   *  única (append-only). NÃO usar para o formato legado por size_tier
+   *  (updateAnnualFees, que manda { fees: [...] }). */
+  updateFeePlan: (
+    federationId: string,
+    body: AnnuityFeePlanInput
+  ): Promise<AnnuityFeePlan> =>
+    request(`/federation/${federationId}/financial/fees`, { method: "PUT", body }),
+
+  /** POST .../installments/:id/pay — baixa manual de UMA parcela (dojô ou
+   *  praticante). Idempotente (parcela já paga devolve idempotent_hit:true). */
+  payInstallment: (
+    federationId: string,
+    installmentId: string,
+    body?: InstallmentPayInput
+  ): Promise<InstallmentPayResult> =>
+    request(`/federation/${federationId}/financial/annuities/installments/${installmentId}/pay`, {
+      method: "POST",
+      body: body ?? {},
+    }),
+
+  /** POST .../installments/:id/pix — cria intent PIX para UMA parcela.
+   *  Resposta no mesmo shape de PixIntent (intent_id/payload/qr_image/...). */
+  pixInstallment: (
+    federationId: string,
+    installmentId: string
+  ): Promise<PixIntent> =>
+    request(`/federation/${federationId}/financial/annuities/installments/${installmentId}/pix`, {
+      method: "POST",
+      body: {},
+    }),
+
+  /** PATCH .../installments/:id — corrige amount/due_date de UMA parcela
+   *  ainda não paga (409 ALREADY_PAID se já paga). */
+  updateInstallment: (
+    federationId: string,
+    installmentId: string,
+    body: InstallmentUpdateInput
+  ): Promise<InstallmentUpdateResult> =>
+    request(`/federation/${federationId}/financial/annuities/installments/${installmentId}`, {
+      method: "PATCH",
+      body,
+    }),
+
+  /** PATCH .../:annuityId/plan — troca o plano de uma anuidade de DOJÔ
+   *  (praticante só tem 'anual', 422 se tentado). 409 HAS_PAID_INSTALLMENT
+   *  se alguma parcela já foi paga; 409 HAS_NFSE se já há nota emitida. */
+  updateAnnuityPlan: (
+    federationId: string,
+    annuityId: string,
+    plan: AnnuityPlan
+  ): Promise<AnnuityPlanChangeResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/plan`, {
+      method: "PATCH",
+      body: { plan },
+    }),
+
+  /** POST /annuities/:annuityId/void — void GENÉRICO (dojô OU praticante,
+   *  só o annuityId). Prefira este a voidAnnuity() no hub F2: dispensa o
+   *  dojoId no path e cobre também anuidades de praticante. Idempotente. */
+  voidAnnuityGeneric: (
+    federationId: string,
+    annuityId: string
+  ): Promise<VoidAnnuityGenericResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/void`, {
+      method: "POST",
+      body: {},
     }),
 
   // Fase 5 — valores em aberto segmentados (pretas CPF x dojôs). Somente
