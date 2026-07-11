@@ -290,6 +290,22 @@ export interface ExportDojoPayload {
   transfers?: object[];
 }
 
+// ── Fase 4: Roster do dojô (status + financeiro) ────────────────
+
+export type MemberFinanceiroStatus = "nao_aplicavel" | "sem_cobranca" | "em_dia" | "atrasado";
+
+export interface DojoMemberStanding {
+  student_id: string;
+  full_name: string;
+  karate_registration_number: string | null;
+  is_active: boolean;
+  belt_level: string | null;
+  belt_name: string | null;
+  is_black_belt: boolean;
+  financeiro: MemberFinanceiroStatus;
+  valor_em_aberto: number | null;
+}
+
 // ── Importação CSV / FPKT ──────────────────────────────────────
 
 export interface ImportResult {
@@ -445,6 +461,33 @@ export interface OverdueItem {
   amount: number;
   due_date: string;
   days_overdue: number;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fase 5 — Financeiro: valores em aberto segmentados
+//
+// GET /federation/:id/financial/open-items
+// Duas correntes de cobrança distintas (pretas CPF x dojôs), retornadas
+// SEGMENTADAS — nunca somadas num único número.
+// ─────────────────────────────────────────────────────────────────
+export interface OpenItemPreta {
+  student_id: string;
+  full_name: string;
+  karate_registration_number: string;
+  whatsapp: string | null;
+  dojo_nome: string | null;
+  valor_em_aberto: number;
+  annuity_due_date: string | null;
+}
+
+export interface OpenItemDojo {
+  dojo_id: string;
+  nome: string;
+}
+
+export interface OpenItemsResponse {
+  pretas: { count: number; total: number; items: OpenItemPreta[] };
+  dojos: { count: number; items: OpenItemDojo[] };
 }
 
 export interface Expense {
@@ -967,10 +1010,24 @@ export interface SenseiAnnuityResponse {
   pix: { key: string; key_type: string | null; holder_name: string | null } | null;
 }
 
+// ── Fase 6 — Painel + Saúde da rede: resumo de "standing" ──────────────
+// Deriva das views karate_member_standing / karate_dojo_standing.
+// financeiro de pretas ∈ {nao_aplicavel, sem_cobranca, em_dia, atrasado}
+// (só se aplica a faixa-preta); financeiro de dojôs ∈ {em_dia, atrasado, inativo}.
+export interface StandingSummary {
+  praticantes: { ativos: number; inativos: number; total: number };
+  pretas: { total: number; em_dia: number; atrasado: number; valor_em_aberto: number };
+  dojos: { ativos: number; em_dia: number; atrasado: number; inativos: number };
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
     request(`/federation/${federationId}/dashboard`),
+
+  /** GET /federation/:federationId/standing/summary — KPIs de standing (Fase 6) */
+  getStandingSummary: (federationId: string): Promise<StandingSummary> =>
+    request(`/federation/${federationId}/standing/summary`),
 
   getBeltDistribution: (federationId: string): Promise<BeltDistributionItem[]> =>
     request(`/federation/${federationId}/belt-distribution`),
@@ -1051,6 +1108,15 @@ export const karateApi = {
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/dojos/${dojoId}/export-data${query}`);
   },
+
+  /** Fase 4 — roster do dojô: praticantes com status (is_active) + financeiro (só faixa-preta). */
+  getDojoMembersStanding: (
+    federationId: string,
+    dojoId: string
+  ): Promise<DojoMemberStanding[]> =>
+    request<{ data: DojoMemberStanding[] }>(
+      `/federation/${federationId}/dojos/${dojoId}/members-standing`
+    ).then((res) => res.data),
 
   // Praticantes
   listPractitioners: (
@@ -1389,6 +1455,12 @@ export const karateApi = {
       method: "POST",
       body,
     }),
+
+  // Fase 5 — valores em aberto segmentados (pretas CPF x dojôs). Somente
+  // leitura: usado pela aba "Em aberto" para montar o workflow de cobrança
+  // (seleção + "preparar cobrança"), sem disparar e-mail nenhum.
+  getOpenItems: (federationId: string): Promise<OpenItemsResponse> =>
+    request(`/federation/${federationId}/financial/open-items`),
 
   listExpenses: (
     federationId: string,

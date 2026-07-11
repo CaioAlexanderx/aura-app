@@ -47,6 +47,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { KarateErrorState } from "@/components/karate/ErrorState";
+import { KarateEmptyState } from "@/components/karate/EmptyState";
+import { Badge } from "@/components/karate/Badge";
+import { BeltBadge } from "@/components/karate/BeltBadge";
 import {
   ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
 } from "@/components/karate/shoji";
@@ -54,7 +57,7 @@ import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
-import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts } from "@/services/karateApi";
+import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
@@ -196,6 +199,21 @@ export default function DojoDetailScreen() {
   }, [federationId, dojoId]);
   useEffect(() => { load(); }, [load]);
 
+  // Fase 4 — Roster do dojô (2 badges: status + financeiro). Busca própria
+  // (independente do GET de detalhe) via VIEW karate_member_standing.
+  const [roster, setRoster] = useState<DojoMemberStanding[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(true);
+  const [rosterError, setRosterError] = useState(false);
+  const loadRoster = useCallback(() => {
+    if (!dojoId) return;
+    setRosterLoading(true); setRosterError(false);
+    karateApi.getDojoMembersStanding(federationId, dojoId)
+      .then((rows) => setRoster(rows || []))
+      .catch(() => setRosterError(true))
+      .finally(() => setRosterLoading(false));
+  }, [federationId, dojoId]);
+  useEffect(() => { loadRoster(); }, [loadRoster]);
+
   // ── Suspender / Reativar ─────────────────────────────────────────
   // b1: o backend agora manda status "inactive" (baseado em is_active) em vez
   // de "suspended". Aceitamos os dois valores aqui por compatibilidade
@@ -283,6 +301,10 @@ export default function DojoDetailScreen() {
   // DJ2: nome do sensei responsável (praticante vinculado tem precedência).
   const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
   const senseiIsPractitioner = !!(data as any).sensei_practitioner_id;
+
+  // Fase 4 — contadores do roster (topo da seção Praticantes).
+  const rosterActiveCount = roster.filter((m) => m.is_active).length;
+  const rosterOverdueBlackBeltCount = roster.filter((m) => m.is_black_belt && m.financeiro === "atrasado").length;
 
   // b6: voltar para a lista de dojôs. router.back() quando há histórico de
   // navegação (ex.: veio da lista); fallback para a rota da lista quando a
@@ -401,6 +423,52 @@ export default function DojoDetailScreen() {
                 <BeltTag level={m.belt_level} />
               </View>
             ))}
+        </Card>
+
+        {/* Fase 4 — Roster do dojô: praticantes com 2 badges (status + financeiro). */}
+        <Card style={{ marginTop: SP[6] }}>
+          <SectionHead
+            title="Praticantes"
+            sub={`${rosterActiveCount} ativo${rosterActiveCount === 1 ? "" : "s"} · ${rosterOverdueBlackBeltCount} preta${rosterOverdueBlackBeltCount === 1 ? "" : "s"} atrasada${rosterOverdueBlackBeltCount === 1 ? "" : "s"}`}
+          />
+          {rosterLoading ? (
+            <View>
+              {[1, 2, 3].map((k) => <Skeleton key={k} height={40} style={{ marginBottom: 8 }} />)}
+            </View>
+          ) : rosterError ? (
+            <KarateErrorState
+              title="Não foi possível carregar os praticantes"
+              message="Verifique sua conexão e tente novamente."
+              onRetry={loadRoster}
+            />
+          ) : roster.length === 0 ? (
+            <KarateEmptyState
+              icon="people-outline"
+              title="Nenhum praticante neste dojô"
+              subtitle="Praticantes cadastrados neste dojô aparecerão aqui, com status e situação financeira."
+            />
+          ) : (
+            roster.map((m, i) => (
+              <View key={m.student_id} style={[styles.rosterRow, i === roster.length - 1 && styles.noBorder]}>
+                <View style={{ flex: 1, minWidth: 160 }}>
+                  <Text style={styles.rosterName}>{m.full_name}</Text>
+                  <Body muted style={{ fontSize: 11.5, marginTop: 2 }}>
+                    {m.karate_registration_number || "Sem matrícula"}
+                  </Body>
+                </View>
+                {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
+                <View style={styles.rosterBadges}>
+                  <Badge status={m.is_active ? "ok" : "neutral"} label={m.is_active ? "Ativo" : "Inativo"} />
+                  {m.is_black_belt && m.financeiro === "em_dia" ? (
+                    <Badge status="ok" label="Em dia" />
+                  ) : null}
+                  {m.is_black_belt && m.financeiro === "atrasado" ? (
+                    <Badge status="danger" label="Atrasado" />
+                  ) : null}
+                </View>
+              </View>
+            ))
+          )}
         </Card>
 
         {/* Fase 2: seção Documentos (anexos) — mesmo gate de edição das ações da federação */}
@@ -873,6 +941,9 @@ const styles = StyleSheet.create({
   teamRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   noBorder: { borderBottomWidth: 0 } as ViewStyle,
   teamName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
+  rosterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
+  rosterName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
+  rosterBadges: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,

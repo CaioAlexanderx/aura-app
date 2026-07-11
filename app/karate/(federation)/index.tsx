@@ -37,7 +37,7 @@ import {
   ShojiBackground, PageHead, SectionHead, Card, KpiBand, BarRow, Alert,
   ShojiButton, Body, Mono,
 } from "@/components/karate/shoji";
-import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert } from "@/services/karateApi";
+import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert, StandingSummary } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { formatEventDateCompact } from "@/utils/eventDate";
 
@@ -59,6 +59,15 @@ export default function KaratePainel() {
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Fase 6 — bloco de KPIs de "standing" (ativo/inativo + em dia/atrasado +
+  // R$ em aberto). Fonte ÚNICA: GET /federation/:id/standing/summary — a
+  // MESMA usada no drill-down da Saúde da Rede; nada é recomputado aqui.
+  // Carregado de forma independente do dashboard: uma falha aqui não deve
+  // derrubar o Painel inteiro (GET nunca bloqueia a tela — CLAUDE.md #3).
+  const [standing, setStanding] = useState<StandingSummary | null>(null);
+  const [standingLoading, setStandingLoading] = useState(true);
+  const [standingError, setStandingError] = useState(false);
+
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
@@ -68,7 +77,16 @@ export default function KaratePainel() {
     finally { isRefresh ? setRefreshing(false) : setLoading(false); }
   }, [federationId]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadStanding = useCallback(async () => {
+    setStandingLoading(true);
+    setStandingError(false);
+    try {
+      setStanding(await karateApi.getStandingSummary(federationId));
+    } catch { setStandingError(true); }
+    finally { setStandingLoading(false); }
+  }, [federationId]);
+
+  useEffect(() => { load(); loadStanding(); }, [load, loadStanding]);
 
   if (error) {
     return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
@@ -142,7 +160,7 @@ export default function KaratePainel() {
     <ShojiBackground>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { load(true); loadStanding(); }} tintColor={P.red} />}
       >
         {pageHead}
 
@@ -157,6 +175,31 @@ export default function KaratePainel() {
             { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: (Number(data!.kpis.overdue_rate) || 0) > 0, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
           ]} />
         )}
+
+        {/* Standing da rede (Fase 6) — ativo/inativo, financeiro de faixas-pretas
+            e de dojôs, R$ em aberto. Mesma fonte do drill-down da Saúde da Rede. */}
+        <View style={styles.section}>
+          <SectionHead
+            title="Saúde da rede"
+            sub="Ativos/inativos, financeiro de faixas-pretas e de dojôs"
+            actions={<TouchableOpacity onPress={() => router.push("/karate/saude-rede" as any)}><Text style={styles.linkText}>Ver detalhes</Text></TouchableOpacity>}
+          />
+          {standingLoading ? (
+            <Skeleton height={104} style={{ borderRadius: R.xl }} />
+          ) : standingError ? (
+            <Alert urgent title="Não foi possível carregar a saúde da rede" desc="Toque para tentar novamente." onPress={() => loadStanding()} />
+          ) : (
+            <KpiBand items={[
+              { label: "Praticantes ativos", value: standing?.praticantes.ativos ?? 0 },
+              { label: "Praticantes inativos", value: standing?.praticantes.inativos ?? 0 },
+              { label: "Pretas em dia", value: standing?.pretas.em_dia ?? 0 },
+              { label: "Pretas atrasadas", value: standing?.pretas.atrasado ?? 0, accent: (standing?.pretas.atrasado ?? 0) > 0 },
+              { label: "R$ em aberto (pretas)", value: fmtMoney(standing?.pretas.valor_em_aberto ?? 0), accent: (standing?.pretas.valor_em_aberto ?? 0) > 0 },
+              { label: "Dojôs em dia", value: standing?.dojos.em_dia ?? 0 },
+              { label: "Dojôs atrasados", value: standing?.dojos.atrasado ?? 0, accent: (standing?.dojos.atrasado ?? 0) > 0 },
+            ]} />
+          )}
+        </View>
 
         {/* Acompanhamento */}
         {!loading && (apiAlerts.length > 0 || overdue.length > 0 || events.length > 0) && (
@@ -256,4 +299,5 @@ const styles = StyleSheet.create({
   welcomeTitle: { fontFamily: F.heading, fontSize: 22, color: C.ink, textAlign: "center" } as TextStyle,
   welcomeSub: { fontSize: 13.5, textAlign: "center", maxWidth: 520, lineHeight: 20 } as TextStyle,
   welcomeActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 } as ViewStyle,
+  linkText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.red } as TextStyle,
 });

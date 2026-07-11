@@ -32,10 +32,12 @@ import {
   GraduacoesPayload,
   RelacaoFaixasPayload,
 } from "@/services/karateNetworkHealthApi";
+import { karateApi, StandingSummary } from "@/services/karateApi";
 import { st, fmtBRL, fmtPct, fmtN, dateSlice, downloadCsv } from "@/components/karate/saude-rede/shared";
 import { KpiStrip } from "@/components/karate/saude-rede/KpiStrip";
 import { DetailDrawer, DrawerCol, DrawerRow } from "@/components/karate/saude-rede/DetailDrawer";
 import { ReportWidget } from "@/components/karate/saude-rede/ReportWidget";
+import { StandingCard } from "@/components/karate/saude-rede/StandingCard";
 import {
   AfiliacaoCard, CoberturaCard, InadimplenciaCard, ProjecaoCard,
   GraduacoesCard, RelacaoFaixasCard,
@@ -43,7 +45,7 @@ import {
 
 type DrawerKey =
   | "afiliacao" | "cobertura" | "inadimplencia" | "projecao-receita"
-  | "graduacoes" | "relacao-faixas"
+  | "graduacoes" | "relacao-faixas" | "standing"
   | null;
 
 // Formata data ISO (ou dd/mm/yyyy de dateSlice) para "dd/mm" sem ano e sem
@@ -68,13 +70,14 @@ export default function SaudeRedeScreen() {
   const [projecao, setProjecao] = useState<ProjecaoPayload | null>(null);
   const [graduacoes, setGraduacoes] = useState<GraduacoesPayload | null>(null);
   const [faixas, setFaixas] = useState<RelacaoFaixasPayload | null>(null);
+  const [standing, setStanding] = useState<StandingSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(
     async (isRefresh = false) => {
       try {
         isRefresh ? setRefreshing(true) : setLoading(true);
-        const [s, a, cob, i, p, g, f] = await Promise.allSettled([
+        const [s, a, cob, i, p, g, f, st_] = await Promise.allSettled([
           karateNetworkHealthApi.getSummary(federationId),
           karateNetworkHealthApi.getAfiliacao(federationId),
           karateNetworkHealthApi.getCobertura(federationId),
@@ -82,6 +85,7 @@ export default function SaudeRedeScreen() {
           karateNetworkHealthApi.getProjecaoReceita(federationId),
           karateNetworkHealthApi.getGraduacoes(federationId),
           karateNetworkHealthApi.getRelacaoFaixas(federationId),
+          karateApi.getStandingSummary(federationId),
         ]);
         if (s.status === "fulfilled") setSummary(s.value);
         if (a.status === "fulfilled") setAfiliacao(a.value);
@@ -90,6 +94,7 @@ export default function SaudeRedeScreen() {
         if (p.status === "fulfilled") setProjecao(p.value);
         if (g.status === "fulfilled") setGraduacoes(g.value);
         if (f.status === "fulfilled") setFaixas(f.value);
+        if (st_.status === "fulfilled") setStanding(st_.value);
       } finally {
         isRefresh ? setRefreshing(false) : setLoading(false);
       }
@@ -227,6 +232,28 @@ export default function SaudeRedeScreen() {
         })),
       };
     }
+    if (drawerKey === "standing" && standing) {
+      return {
+        title: "Standing da rede",
+        sub: "Situação ativa/inativa e financeira agregada — praticantes, faixas-pretas e dojôs",
+        cols: [
+          { key: "indicador", label: "Indicador" },
+          { key: "valor", label: "Valor", align: "right" },
+        ],
+        rows: [
+          { indicador: "Praticantes ativos", valor: fmtN(standing.praticantes.ativos) },
+          { indicador: "Praticantes inativos", valor: fmtN(standing.praticantes.inativos) },
+          { indicador: "Praticantes · total", valor: fmtN(standing.praticantes.total) },
+          { indicador: "Pretas em dia", valor: fmtN(standing.pretas.em_dia) },
+          { indicador: "Pretas atrasadas", valor: fmtN(standing.pretas.atrasado) },
+          { indicador: "Pretas · R$ em aberto", valor: fmtBRL(standing.pretas.valor_em_aberto) },
+          { indicador: "Dojôs ativos", valor: fmtN(standing.dojos.ativos) },
+          { indicador: "Dojôs em dia", valor: fmtN(standing.dojos.em_dia) },
+          { indicador: "Dojôs atrasados", valor: fmtN(standing.dojos.atrasado) },
+          { indicador: "Dojôs inativos", valor: fmtN(standing.dojos.inativos) },
+        ],
+      };
+    }
     return { title: "", sub: "", cols: [], rows: [] };
   }
 
@@ -296,6 +323,14 @@ export default function SaudeRedeScreen() {
           loading={loading}
           onCsv={() => downloadCsv(federationId, "relacao-faixas")}
           onDetail={() => setDrawerKey("relacao-faixas")}
+        />
+
+        {/* Standing da rede (Fase 6) — drill-down segmentado (ativo/inativo,
+            em dia/atrasado, R$ em aberto), mesma fonte do bloco de KPIs do Painel */}
+        <StandingCard
+          data={standing}
+          loading={loading}
+          onDetail={() => setDrawerKey("standing")}
         />
 
         {/* Relatório periódico */}
