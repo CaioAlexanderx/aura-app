@@ -61,6 +61,37 @@ const ACCENT_OK = "#2f6b2c";
 const ROW_TINT_INACTIVATE = "rgba(184,70,58,0.055)";
 const ROW_TINT_TRANSFER = "rgba(47,107,44,0.06)";
 
+// ── Cross-fade + slide entre estágios (edit → confirm → success) ─────────
+// O conteúdo do card só troca de fato (displayStage) DEPOIS que o fade-out
+// termina — sem isso a troca de JSX seria instantânea e o fade ficaria só
+// decorativo por cima de um "corte seco". reduced-motion pula direto pro
+// próximo estágio, sem animação.
+function useStageCrossfade(stage: Stage, reducedMotion: boolean) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const [displayStage, setDisplayStage] = useState(stage);
+  const prevStage = useRef(stage);
+
+  useEffect(() => {
+    if (stage === prevStage.current) return;
+    prevStage.current = stage;
+    if (reducedMotion) {
+      setDisplayStage(stage);
+      return;
+    }
+    Animated.timing(opacity, { toValue: 0, duration: 110, easing: Easing.in(Easing.cubic), useNativeDriver: false }).start(() => {
+      setDisplayStage(stage);
+      translateY.setValue(8);
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 210, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(translateY, { toValue: 0, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]).start();
+    });
+  }, [stage, reducedMotion, opacity, translateY]);
+
+  return { displayStage, opacity, translateY };
+}
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -88,6 +119,7 @@ export function RedistribuirPraticantesModal({
   const [dojosLoading, setDojosLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<Stage>("edit");
+  const { displayStage, opacity: stageOpacity, translateY: stageTranslateY } = useStageCrossfade(stage, reducedMotion);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<RedistributeDojoResult | null>(null);
   // Picker: null (fechado) | "ALL" (ação em massa) | student_id (linha)
@@ -214,8 +246,9 @@ export function RedistribuirPraticantesModal({
             </Pressable>
           </View>
 
-          {stage === "success" ? (
-            <SuccessPanel result={result} onDone={handleDismiss} />
+          <Animated.View style={{ opacity: stageOpacity, transform: [{ translateY: stageTranslateY }] }}>
+          {displayStage === "success" ? (
+            <SuccessPanel result={result} onDone={handleDismiss} reducedMotion={reducedMotion} />
           ) : (
             <>
               <View style={styles.massActions}>
@@ -264,9 +297,11 @@ export function RedistribuirPraticantesModal({
                 )}
               </ScrollView>
 
-              {stage === "confirm" ? (
+              {displayStage === "confirm" ? (
                 <ConfirmBar
                   message={confirmMessage}
+                  transferCount={transferCount}
+                  inactivateCount={inactivateCount}
                   busy={busy}
                   errorMsg={errorMsg}
                   onBack={backToEdit}
@@ -307,6 +342,7 @@ export function RedistribuirPraticantesModal({
               )}
             </>
           )}
+          </Animated.View>
 
           {pickerFor && stage === "edit" ? (
             <DestinationPickerOverlay
@@ -333,44 +369,137 @@ export default RedistribuirPraticantesModal;
 // mesmo, com o botão virando "Tentar novamente" (mesmo Confirmar, sem sair
 // da etapa).
 function ConfirmBar({
-  message, busy, errorMsg, onBack, onConfirm,
+  message, transferCount, inactivateCount, busy, errorMsg, onBack, onConfirm,
 }: {
   message: string;
+  transferCount: number;
+  inactivateCount: number;
   busy: boolean;
   errorMsg: string | null;
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  // Erro entra com fade + shake bem sutil (chama atenção sem ser alarmista) —
+  // dispara só quando uma NOVA mensagem chega (não a cada re-render com
+  // busy/errorMsg inalterados).
+  const errOpacity = useRef(new Animated.Value(0)).current;
+  const errShakeX = useRef(new Animated.Value(0)).current;
+  const prevErrRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg && errorMsg !== prevErrRef.current) {
+      errOpacity.setValue(0);
+      errShakeX.setValue(0);
+      Animated.timing(errOpacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+      Animated.sequence([
+        Animated.timing(errShakeX, { toValue: 6, duration: 55, useNativeDriver: false }),
+        Animated.timing(errShakeX, { toValue: -5, duration: 55, useNativeDriver: false }),
+        Animated.timing(errShakeX, { toValue: 3, duration: 55, useNativeDriver: false }),
+        Animated.timing(errShakeX, { toValue: 0, duration: 55, useNativeDriver: false }),
+      ]).start();
+    }
+    prevErrRef.current = errorMsg;
+  }, [errorMsg, errOpacity, errShakeX]);
+
   return (
     <View style={styles.confirmBar}>
-      <View style={styles.confirmMsgRow}>
-        <Icon name="alert_circle" size={16} color={P.red} />
-        <Text style={styles.confirmMsgTxt}>{message}</Text>
+      <View style={styles.confirmEyebrowRow}>
+        <View style={styles.confirmDot}>
+          <Icon name="alert_circle" size={11} color="#fdf8f2" />
+        </View>
+        <Text style={styles.confirmEyebrow}>Ação irreversível</Text>
       </View>
-      {errorMsg ? (
-        <View style={styles.errBox}>
-          <Icon name="alert_circle" size={15} color={P.red} />
-          <Text style={styles.errTxt}>{errorMsg}</Text>
+
+      {transferCount > 0 || inactivateCount > 0 ? (
+        <View style={styles.confirmCountsRow}>
+          {transferCount > 0 ? (
+            <View style={styles.confirmCountBlock}>
+              <Text style={[styles.confirmCountNum, { color: OK }]}>{transferCount}</Text>
+              <Text style={styles.confirmCountLabel}>{transferCount === 1 ? "transferência" : "transferências"}</Text>
+            </View>
+          ) : null}
+          {inactivateCount > 0 ? (
+            <View style={styles.confirmCountBlock}>
+              <Text style={[styles.confirmCountNum, { color: P.red2 }]}>{inactivateCount}</Text>
+              <Text style={styles.confirmCountLabel}>{inactivateCount === 1 ? "inativação" : "inativações"}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
+
+      <Text style={styles.confirmMsgTxt}>{message}</Text>
+
+      {errorMsg ? (
+        <Animated.View style={[styles.errBox, { opacity: errOpacity, transform: [{ translateX: errShakeX }] }]}>
+          <Icon name="alert_circle" size={15} color={P.red} />
+          <Text style={styles.errTxt}>{errorMsg}</Text>
+        </Animated.View>
+      ) : null}
+
       <View style={styles.footerBtns}>
         <KarateButton label="Voltar" variant="ghost" size="md" onPress={onBack} disabled={busy} style={{ flex: 1 }} />
-        <KarateButton
+        <ConfirmActionButton
           label={busy ? "Redistribuindo..." : errorMsg ? "Tentar novamente" : "Confirmar"}
-          variant="primary"
-          size="md"
+          onPress={onConfirm}
           loading={busy}
           disabled={busy}
-          onPress={onConfirm}
-          style={{ flex: 2 }}
         />
       </View>
     </View>
   );
 }
 
-// ── Painel de sucesso — números reais da resposta do backend ──────────────
-function SuccessPanel({ result, onDone }: { result: RedistributeDojoResult | null; onDone: () => void }) {
+// ── Botão "Confirmar"/"Tentar novamente" — press-feedback (scale ~0.98) +
+//    hover só web. Vermelho contido (mesma família do acento de inativar),
+//    coerente com "ação irreversível" sem gritar mais que o necessário.
+function ConfirmActionButton({
+  label, onPress, loading, disabled,
+}: { label: string; onPress: () => void; loading?: boolean; disabled?: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
+  const blocked = !!(disabled || loading);
+
+  const to = (v: number, d: number) =>
+    Animated.timing(scale, { toValue: v, duration: d, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+
+  return (
+    <AnimatedPressable
+      onPress={blocked ? undefined : onPress}
+      disabled={blocked}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: blocked, busy: !!loading }}
+      onPressIn={() => to(0.98, 90)}
+      onPressOut={() => to(1, Motion.fast + 40)}
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        styles.confirmActionBtn,
+        { transform: [{ scale }] },
+        hovered && !blocked && ({
+          backgroundColor: ACCENT_RED,
+          ...(IS_WEB ? ({ boxShadow: "0 10px 26px -10px rgba(157,58,48,0.55)" } as any) : null),
+        } as any),
+        blocked && { opacity: 0.6 },
+        IS_WEB ? (webTransition(["transform", "box-shadow", "background-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      {loading
+        ? <ActivityIndicator color="#fdf8f2" size="small" />
+        : <Text style={styles.confirmActionBtnTxt}>{label}</Text>}
+    </AnimatedPressable>
+  );
+}
+
+// ── Painel de sucesso — o clímax do fluxo ──────────────────────────────────
+// Check entra com Animated.spring (leve overshoot) + um anel que expande e
+// desvanece uma única vez ao redor dele (mesmo padrão do portal do sensei em
+// app/karate/roster-update/[token].tsx). Os chips de resultado entram em pop
+// escalonado logo depois, e o aviso de "skipped" (se houver) chega por último,
+// discreto — a ordem conta uma pequena história: confirmado → números → ressalva.
+function SuccessPanel({
+  result, onDone, reducedMotion,
+}: { result: RedistributeDojoResult | null; onDone: () => void; reducedMotion: boolean }) {
   const transferred = Number(result?.transferred ?? 0);
   const inactivated = Number(result?.inactivated ?? 0);
   const dojoInactivated = !!result?.dojo_inactivated;
@@ -379,46 +508,123 @@ function SuccessPanel({ result, onDone }: { result: RedistributeDojoResult | nul
     Array.isArray(skippedRaw) ? skippedRaw : null;
   const skippedCount = skippedList ? skippedList.length : (typeof skippedRaw === "number" ? skippedRaw : 0);
 
+  const glyphScale = useRef(new Animated.Value(reducedMotion ? 1 : 0.5)).current;
+  const ringScale = useRef(new Animated.Value(1)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reducedMotion) { glyphScale.setValue(1); return; }
+    Animated.spring(glyphScale, { toValue: 1, friction: 5, tension: 140, useNativeDriver: false }).start();
+    ringScale.setValue(1);
+    ringOpacity.setValue(0.35);
+    Animated.parallel([
+      Animated.timing(ringScale, { toValue: 1.8, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(ringOpacity, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+    // mount-only: o painel remonta a cada vez que o estágio vira "success".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <View style={styles.successWrap}>
-      <View style={styles.successIconWrap}>
-        <Icon name="check_circle" size={28} color={OK} />
+      <View style={styles.successGlyphWrap}>
+        <Animated.View pointerEvents="none" style={[styles.successRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
+        <Animated.View style={[styles.successIconWrap, { transform: [{ scale: glyphScale }] }]}>
+          <Icon name="check_circle" size={28} color={OK} />
+        </Animated.View>
       </View>
       <Text style={styles.successTitle}>Redistribuição concluída</Text>
 
       <View style={styles.successChips}>
-        <View style={[styles.chip, { backgroundColor: "#f0faf2", borderColor: "#b7e0c2" }]}>
-          <Text style={[styles.chipTxt, { color: OK }]}>{transferred} transferido{transferred === 1 ? "" : "s"}</Text>
-        </View>
-        <View style={[styles.chip, { backgroundColor: P.redWash, borderColor: P.redLine }]}>
-          <Text style={[styles.chipTxt, { color: P.red }]}>{inactivated} inativado{inactivated === 1 ? "" : "s"}</Text>
-        </View>
+        <ResultChip
+          index={0}
+          reducedMotion={reducedMotion}
+          bg="#f0faf2"
+          borderColor="#b7e0c2"
+          color={OK}
+          text={`${transferred} transferido${transferred === 1 ? "" : "s"}`}
+        />
+        <ResultChip
+          index={1}
+          reducedMotion={reducedMotion}
+          bg={P.redWash}
+          borderColor={P.redLine}
+          color={P.red}
+          text={`${inactivated} inativado${inactivated === 1 ? "" : "s"}`}
+        />
         {dojoInactivated ? (
-          <View style={[styles.chip, { backgroundColor: P.glass2, borderColor: P.line2 }]}>
-            <Text style={[styles.chipTxt, { color: P.ink }]}>Dojô inativado</Text>
-          </View>
+          <ResultChip index={2} reducedMotion={reducedMotion} bg={P.glass2} borderColor={P.line2} color={P.ink} text="Dojô inativado" />
         ) : null}
       </View>
 
       {skippedCount > 0 ? (
-        <View style={styles.skippedBox}>
-          <Icon name="alert_circle" size={14} color={P.red2 ?? P.red} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.skippedTitle}>
-              {skippedCount} não p{"ô"}de{skippedCount === 1 ? "" : "ram"} ser processado{skippedCount === 1 ? "" : "s"}
-            </Text>
-            {skippedList ? skippedList.slice(0, 6).map((item, i) => (
-              <Text key={item.student_id || i} style={styles.skippedItem} numberOfLines={1}>
-                {(item?.full_name || item?.student_id || "Praticante")}{item?.reason ? ` — ${item.reason}` : ""}
+        <SkippedNotice reducedMotion={reducedMotion}>
+          <View style={styles.skippedBox}>
+            <Icon name="alert_circle" size={14} color={P.warn} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.skippedTitle}>
+                {skippedCount} não p{"ô"}de{skippedCount === 1 ? "" : "ram"} ser processado{skippedCount === 1 ? "" : "s"}
               </Text>
-            )) : null}
+              {skippedList ? skippedList.slice(0, 6).map((item, i) => (
+                <Text key={item.student_id || i} style={styles.skippedItem} numberOfLines={1}>
+                  {(item?.full_name || item?.student_id || "Praticante")}{item?.reason ? ` — ${item.reason}` : ""}
+                </Text>
+              )) : null}
+            </View>
           </View>
-        </View>
+        </SkippedNotice>
       ) : null}
 
       <KarateButton label="Concluir" variant="sumi" size="md" onPress={onDone} style={{ marginTop: 20, alignSelf: "stretch" }} />
     </View>
   );
+}
+
+// ── Chip de resultado — pop de entrada escalonado (0.6 → 1 com leve overshoot) ─
+function ResultChip({
+  text, color, bg, borderColor, index, reducedMotion,
+}: { text: string; color: string; bg: string; borderColor: string; index: number; reducedMotion: boolean }) {
+  const enter = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 260,
+      delay: 260 + index * 90,
+      easing: Easing.out(Easing.back(1.6)),
+      useNativeDriver: false,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.chip,
+        {
+          backgroundColor: bg,
+          borderColor,
+          opacity: enter,
+          transform: [{ scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+        },
+      ]}
+    >
+      <Text style={[styles.chipTxt, { color }]}>{text}</Text>
+    </Animated.View>
+  );
+}
+
+// ── Aviso de "skipped" — chega por último, com um fade discreto (não é
+//    alarme: só um adendo de que alguns registros não puderam ser processados).
+function SkippedNotice({ children, reducedMotion }: { children: React.ReactNode; reducedMotion: boolean }) {
+  const enter = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reducedMotion) return;
+    Animated.timing(enter, { toValue: 1, duration: 240, delay: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <Animated.View style={{ opacity: enter }}>{children}</Animated.View>;
 }
 
 // ── Linha de praticante — acento + Destino animados, hover, stagger ───────
@@ -566,6 +772,62 @@ function SummaryChip({
 // já que um <Modal> aninhado dentro do <Modal> de redistribuição renderiza
 // atrás dele no RN Web (causa raiz do bug original). Card entra em
 // scale+fade (ModalPop), mesmo primitivo de antes.
+// ── Opção "Inativar" do picker — vermelho distinto, hover + press-feedback ─
+function InactivateOption({ onPress }: { onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
+  const to = (v: number, d: number) => Animated.timing(scale, { toValue: v, duration: d, useNativeDriver: false }).start();
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Inativar"
+      onPressIn={() => to(0.98, 90)}
+      onPressOut={() => to(1, Motion.fast)}
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        pickerStyles.inactivateOption,
+        { transform: [{ scale }] },
+        hovered ? ({ backgroundColor: "#f5ded8", borderColor: P.red2 } as any) : null,
+        IS_WEB ? (webTransition(["background-color", "border-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      <Icon name="power" size={14} color={P.red} />
+      <Text style={pickerStyles.inactivateTxt}>Inativar</Text>
+    </AnimatedPressable>
+  );
+}
+
+// ── Item de dojô do picker — hover-lift, mesmo padrão da lista principal ──
+function DojoPickerItem({ dojo, onPress }: { dojo: Dojo; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
+  const to = (v: number, d: number) => Animated.timing(scale, { toValue: v, duration: d, useNativeDriver: false }).start();
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Transferir para ${dojo.name}`}
+      onPressIn={() => to(0.98, 90)}
+      onPressOut={() => to(1, Motion.fast)}
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        pickerStyles.item,
+        { transform: [{ scale }] },
+        hovered ? ({ backgroundColor: P.glassHi } as any) : null,
+        IS_WEB ? (webTransition(["background-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      <Icon name="arrow-forward" size={13} color={P.ink2} />
+      <Text style={pickerStyles.itemTxt} numberOfLines={1}>{dojo.name}</Text>
+    </AnimatedPressable>
+  );
+}
+
 function DestinationPickerOverlay({
   visible, onClose, dojos, dojosLoading, onPick, title, reducedMotion,
 }: {
@@ -591,10 +853,7 @@ function DestinationPickerOverlay({
       <ModalPop visible={visible} style={pickerStyles.card} duration={reducedMotion ? 0 : 200}>
         <Text style={pickerStyles.title}>{title}</Text>
 
-        <PressableScale style={pickerStyles.inactivateOption} onPress={() => onPick(INACTIVATE_CHOICE)} accessibilityLabel="Inativar">
-          <Icon name="power" size={14} color={P.red} />
-          <Text style={pickerStyles.inactivateTxt}>Inativar</Text>
-        </PressableScale>
+        <InactivateOption onPress={() => onPick(INACTIVATE_CHOICE)} />
 
         <TextInput
           style={pickerStyles.search}
@@ -613,15 +872,11 @@ function DestinationPickerOverlay({
         ) : (
           <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
             {filtered.map((d) => (
-              <PressableScale
+              <DojoPickerItem
                 key={d.id}
-                style={pickerStyles.item}
+                dojo={d}
                 onPress={() => onPick({ action: "transfer", destinationId: d.id, destinationName: d.name })}
-                accessibilityLabel={`Transferir para ${d.name}`}
-              >
-                <Icon name="arrow-forward" size={13} color={P.ink2} />
-                <Text style={pickerStyles.itemTxt} numberOfLines={1}>{d.name}</Text>
-              </PressableScale>
+              />
             ))}
           </ScrollView>
         )}
@@ -638,9 +893,9 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
   card: { backgroundColor: P.paper, borderRadius: R.xl, borderWidth: 1, borderColor: P.line2, width: "92%", maxWidth: 760, maxHeight: "85%", overflow: "hidden" } as ViewStyle,
 
-  header:      { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
+  header:      { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: 18, borderBottomWidth: 1, borderBottomColor: P.line, backgroundColor: P.glassHi } as ViewStyle,
   headerTitle: { fontFamily: F.heading, fontSize: 19, color: P.ink } as TextStyle,
-  headerSub:   { fontFamily: F.body, fontSize: 12.5, color: P.ink3, marginTop: 2 } as TextStyle,
+  headerSub:   { fontFamily: F.body, fontSize: 12.5, color: P.ink3, marginTop: 4, lineHeight: 17 } as TextStyle,
 
   massActions: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 12, flexWrap: "wrap" } as ViewStyle,
   massBtn:     { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
@@ -666,21 +921,34 @@ const styles = StyleSheet.create({
   chipTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "700" } as TextStyle,
 
   // Barra de confirmação inline (substitui o rodapé padrão em stage==="confirm").
-  confirmBar:     { padding: 16, borderTopWidth: 1, borderTopColor: P.redLine, backgroundColor: P.redWash, gap: 10 } as ViewStyle,
-  confirmMsgRow:  { flexDirection: "row", alignItems: "flex-start", gap: 8 } as ViewStyle,
-  confirmMsgTxt:  { flex: 1, fontFamily: F.body, fontSize: 12.5, color: P.ink, lineHeight: 18 } as TextStyle,
+  // Vermelho contido: fundo redWash já é sutil, o peso vem da contagem grande
+  // acima da frase, não de um vermelho mais forte.
+  confirmBar:         { padding: 16, borderTopWidth: 1, borderTopColor: P.redLine, backgroundColor: P.redWash, gap: 12 } as ViewStyle,
+  confirmEyebrowRow:  { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
+  confirmDot:         { width: 20, height: 20, borderRadius: 10, backgroundColor: P.red2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  confirmEyebrow:     { fontFamily: F.body, fontSize: 11, fontWeight: "700", color: P.red2, textTransform: "uppercase", letterSpacing: 0.5 } as TextStyle,
+  confirmCountsRow:   { flexDirection: "row", gap: 26 } as ViewStyle,
+  confirmCountBlock:  { alignItems: "flex-start" } as ViewStyle,
+  confirmCountNum:    { fontFamily: F.heading, fontSize: 30, fontWeight: "800", lineHeight: 34 } as TextStyle,
+  confirmCountLabel:  { fontFamily: F.body, fontSize: 11.5, color: P.ink2, marginTop: 1 } as TextStyle,
+  confirmMsgTxt:      { fontFamily: F.body, fontSize: 12.5, color: P.ink2, lineHeight: 18 } as TextStyle,
+  confirmActionBtn:   { flex: 2, backgroundColor: P.red, borderRadius: R.md, paddingVertical: 12, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  confirmActionBtnTxt:{ fontFamily: F.body, fontSize: 14, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
 
   errBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(184,70,58,0.08)", borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11 } as ViewStyle,
   errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
 
   // Painel de sucesso — substitui lista+rodapé quando stage==="success".
   successWrap:      { alignItems: "center", paddingHorizontal: 24, paddingVertical: 28 } as ViewStyle,
-  successIconWrap:  { width: 52, height: 52, borderRadius: 26, backgroundColor: "#f0faf2", alignItems: "center", justifyContent: "center", marginBottom: 12 } as ViewStyle,
+  successGlyphWrap: { alignItems: "center", justifyContent: "center", marginBottom: 12 } as ViewStyle,
+  successRing:      { position: "absolute", width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: OK } as ViewStyle,
+  successIconWrap:  { width: 52, height: 52, borderRadius: 26, backgroundColor: "#f0faf2", alignItems: "center", justifyContent: "center" } as ViewStyle,
   successTitle:     { fontFamily: F.heading, fontSize: 18, color: P.ink, textAlign: "center" } as TextStyle,
   successChips:     { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 14 } as ViewStyle,
 
-  skippedBox:   { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "rgba(184,70,58,0.08)", borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 12, marginTop: 16, width: "100%" } as ViewStyle,
-  skippedTitle: { fontFamily: F.body, fontSize: 12.5, fontWeight: "700", color: P.red2 } as TextStyle,
+  // Skipped: tom âmbar/neutro (P.warn) — é um adendo, não um alarme vermelho.
+  skippedBox:   { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.warnWash, borderWidth: 1, borderColor: "rgba(156,111,46,0.35)", borderRadius: 12, padding: 12, marginTop: 16, width: "100%" } as ViewStyle,
+  skippedTitle: { fontFamily: F.body, fontSize: 12.5, fontWeight: "700", color: P.warn } as TextStyle,
   skippedItem:  { fontFamily: F.body, fontSize: 11.5, color: P.ink3, marginTop: 3 } as TextStyle,
 });
 
