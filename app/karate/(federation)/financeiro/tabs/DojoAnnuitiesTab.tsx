@@ -114,6 +114,8 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   const [waTarget, setWaTarget] = useState<DojoAnnuity | null>(null);
   const [chargeTarget, setChargeTarget] = useState<DojoAnnuity | null>(null);
   const [editTarget, setEditTarget] = useState<DojoAnnuity | null>(null);
+  const [voidTarget, setVoidTarget] = useState<DojoAnnuity | null>(null);
+  const [voiding, setVoiding] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -139,8 +141,6 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   // que o TextInput não perca o foco entre teclas.
   const handleSearch = useCallback((t: string) => setQ(t), []);
 
-  if (error) return <KarateErrorState onRetry={() => load()} />;
-
   // Filtro derivado (status × texto), client-side. NÃO toca no endpoint:
   // o status já vai no fetch; aqui só refinamos por nome do dojô / código FPKT.
   const filteredAnnuities = useMemo(() => {
@@ -154,6 +154,13 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
       (a.fpkt_affiliation_id ?? "").toLowerCase().includes(needle)
     );
   }, [annuities, filter, q]);
+
+  // Regra dos hooks: o early-return de erro só pode vir DEPOIS de todos os
+  // hooks (useState/useCallback/useEffect/useMemo acima). Antes ficava entre
+  // handleSearch e o useMemo de filteredAnnuities — nos renders com error
+  // true, o useMemo deixava de ser chamado e o número/ordem de hooks mudava
+  // entre renders, violando a regra dos hooks do React.
+  if (error) return <KarateErrorState onRetry={() => load()} />;
 
   // Export CSV das cobranças JÁ filtradas (status + busca). Client-side.
   const handleExport = () => {
@@ -194,12 +201,35 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
     }
   };
 
-  // Id da cobrança (annuity_history_id) — só presente na resposta do POST
-  // .../charge, NÃO no GET de listagem (backend ainda não devolve id na
-  // listagem). Editar/Excluir só ficam disponíveis para linhas com id
-  // conhecido (ex.: cobrança lançada nesta sessão) — mesmo padrão defensivo
-  // de annuityId() em app/karate/(federation)/dojos/[dojoId].tsx.
+  // Id da cobrança (annuity_history_id / annuity_id — aliases idênticos ao
+  // mesmo registro de karate_dojo_annuity_history; ver PR #353 do
+  // aura-backend). Desde esse PR o GET de listagem já devolve o id por
+  // linha (antes só vinha na resposta do POST .../charge, o que deixava
+  // "Cobrar PIX" e "Editar" mortos na listagem). Editar, Cobrar PIX e
+  // Remover cobrança ficam disponíveis quando o id existe — ou seja,
+  // sempre que a linha não é "sem cobrança" (no_charge).
   const annuityRowId = (a: DojoAnnuity) => a.annuity_history_id || a.annuity_id || null;
+
+  // Remove (estorna) uma cobrança já lançada. voidAnnuity funciona mesmo
+  // para cobranças já pagas (reverte a conciliação) — a confirmação
+  // destrutiva abaixo é o único freio, por isso é explícita (mostra dojô +
+  // competência) em vez de um "tem certeza?" genérico.
+  const handleVoidAnnuity = async () => {
+    if (!voidTarget) return;
+    const id = annuityRowId(voidTarget);
+    if (!id) { setVoidTarget(null); return; }
+    setVoiding(true);
+    try {
+      await karateApi.voidAnnuity(federationId, voidTarget.dojo_id, id);
+      toast.success("Cobrança removida");
+      setVoidTarget(null);
+      load(true);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Não foi possível remover a cobrança.");
+    } finally {
+      setVoiding(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -332,7 +362,10 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
           title={q.trim() ? "Nenhum dojô encontrado" : "Sem cobranças neste filtro"}
         />
       ) : (
-        filteredAnnuities.map((ann) => (
+        filteredAnnuities.map((ann) => {
+          const rowId = annuityRowId(ann);
+          const confirmingVoid = voidTarget?.dojo_id === ann.dojo_id;
+          return (
           <View key={ann.dojo_id} style={st.annuityCard}>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={st.annuityName}>{ann.dojo_name}</Text>
@@ -348,54 +381,97 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
             <View style={{ alignItems: "flex-end", gap: 6 }}>
               <Text style={st.annuityAmount}>{formatCurrency(ann.amount)}</Text>
               <AnnuityStatusBadge status={ann.status} />
-              <View style={st.rowActions}>
-                {annuityStatusView(ann.status).key === "no_charge" && (
-                  <TouchableOpacity
-                    style={st.launchBtn}
-                    onPress={() => setChargeTarget(ann)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Lançar anuidade de ${ann.dojo_name}`}
-                  >
-                    <Icon name="add" size={13} color="#fff" />
-                    <Text style={st.launchBtnLabel}>Lançar anuidade</Text>
-                  </TouchableOpacity>
-                )}
-                {(["due", "overdue", "defaulting"].includes(annuityStatusView(ann.status).key)) && (
-                  <TouchableOpacity
-                    style={st.pixBtn}
-                    onPress={() => setPixTarget(ann)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Registrar pagamento PIX de ${ann.dojo_name}`}
-                  >
-                    <Icon name="qr-code-outline" size={13} color="#fff" />
-                    <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
-                  </TouchableOpacity>
-                )}
-                {ann.status !== "paid" && ann.status !== "no_charge" && (
-                  <TouchableOpacity
-                    style={st.waBtn}
-                    onPress={() => setWaTarget(ann)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Cobrar via WhatsApp de ${ann.dojo_name}`}
-                  >
-                    <Icon name="logo-whatsapp" size={13} color="#fff" />
-                    <Text style={st.waBtnLabel}>WhatsApp</Text>
-                  </TouchableOpacity>
-                )}
-                {ann.status !== "paid" && ann.status !== "no_charge" && (
-                  <TouchableOpacity
-                    style={st.iconBtn}
-                    onPress={() => setEditTarget(ann)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Editar anuidade de ${ann.dojo_name}`}
-                  >
-                    <Icon name="create-outline" size={14} color={KarateColors.ink2} />
-                  </TouchableOpacity>
-                )}
-              </View>
+              {confirmingVoid ? (
+                // Confirmação destrutiva INLINE (não um segundo <Modal> — no RN
+                // Web um Modal aninhado dentro de outro renderiza atrás do pai
+                // e vira no-op silencioso). Mostra explicitamente de quem/qual
+                // competência para evitar remoção por engano.
+                <View style={st.confirmVoidBox}>
+                  <Text style={st.confirmVoidText}>
+                    Remover a cobrança de {ann.dojo_name} — competência {ann.reference_period}?{"\n"}Esta ação não pode ser desfeita.
+                  </Text>
+                  <View style={st.confirmVoidActions}>
+                    <TouchableOpacity
+                      style={st.confirmVoidCancel}
+                      onPress={() => setVoidTarget(null)}
+                      disabled={voiding}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancelar remoção da cobrança"
+                    >
+                      <Text style={st.confirmVoidCancelLabel}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[st.confirmVoidDanger, voiding && { opacity: 0.6 }]}
+                      onPress={handleVoidAnnuity}
+                      disabled={voiding}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Confirmar remoção da cobrança de ${ann.dojo_name}`}
+                    >
+                      <Text style={st.confirmVoidDangerLabel}>{voiding ? "Removendo…" : "Remover"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={st.rowActions}>
+                  {annuityStatusView(ann.status).key === "no_charge" && (
+                    <TouchableOpacity
+                      style={st.launchBtn}
+                      onPress={() => setChargeTarget(ann)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Lançar anuidade de ${ann.dojo_name}`}
+                    >
+                      <Icon name="add" size={13} color="#fff" />
+                      <Text style={st.launchBtnLabel}>Lançar anuidade</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(["due", "overdue", "defaulting"].includes(annuityStatusView(ann.status).key)) && rowId && (
+                    <TouchableOpacity
+                      style={st.pixBtn}
+                      onPress={() => setPixTarget(ann)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Registrar pagamento PIX de ${ann.dojo_name}`}
+                    >
+                      <Icon name="qr-code-outline" size={13} color="#fff" />
+                      <Text style={st.pixBtnLabel}>Cobrar PIX</Text>
+                    </TouchableOpacity>
+                  )}
+                  {ann.status !== "paid" && ann.status !== "no_charge" && (
+                    <TouchableOpacity
+                      style={st.waBtn}
+                      onPress={() => setWaTarget(ann)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cobrar via WhatsApp de ${ann.dojo_name}`}
+                    >
+                      <Icon name="logo-whatsapp" size={13} color="#fff" />
+                      <Text style={st.waBtnLabel}>WhatsApp</Text>
+                    </TouchableOpacity>
+                  )}
+                  {ann.status !== "paid" && ann.status !== "no_charge" && rowId && (
+                    <TouchableOpacity
+                      style={st.iconBtn}
+                      onPress={() => setEditTarget(ann)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Editar anuidade de ${ann.dojo_name}`}
+                    >
+                      <Icon name="create-outline" size={14} color={KarateColors.ink2} />
+                    </TouchableOpacity>
+                  )}
+                  {rowId && (
+                    <TouchableOpacity
+                      style={st.iconBtnDanger}
+                      onPress={() => setVoidTarget(ann)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remover cobrança de ${ann.dojo_name}`}
+                    >
+                      <Icon name="trash-outline" size={14} color={KarateColors.danger} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           </View>
-        ))
+          );
+        })
       )}
 
       {/* PIX Payment Modal */}
@@ -509,6 +585,15 @@ const st = StyleSheet.create({
   launchBtnLabel: { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
 
   iconBtn:      { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  iconBtnDanger:{ alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.dangerSoft, backgroundColor: KarateColors.dangerSoft } as ViewStyle,
+
+  confirmVoidBox:     { width: 220, gap: 8, backgroundColor: KarateColors.dangerSoft, borderWidth: 1, borderColor: KarateColors.danger, borderRadius: KarateRadius.md, padding: 10 } as ViewStyle,
+  confirmVoidText:     { fontSize: 11.5, lineHeight: 16, color: KarateColors.ink2 } as TextStyle,
+  confirmVoidActions:  { flexDirection: "row", justifyContent: "flex-end", gap: 8 } as ViewStyle,
+  confirmVoidCancel:   { paddingVertical: 6, paddingHorizontal: 10, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
+  confirmVoidCancelLabel: { fontSize: 11.5, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
+  confirmVoidDanger:   { paddingVertical: 6, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.danger } as ViewStyle,
+  confirmVoidDangerLabel: { fontSize: 11.5, fontWeight: "700", color: "#fff" } as TextStyle,
 
   badge:        { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: KarateRadius.sm } as ViewStyle,
   badgeText:    { fontSize: 10, fontWeight: "700" } as TextStyle,

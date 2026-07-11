@@ -481,23 +481,34 @@ export interface DojoAnnuity {
   status: AnnuityStatus;
   days_overdue?: number;
   nfse_id?: string | null;
-  // Presentes apenas na resposta do POST .../charge (não na listagem).
-  annuity_id?: string;
-  annuity_history_id?: string;
-  transaction_id?: string;
+  // annuity_id / annuity_history_id (aliases idênticos — mesmo registro de
+  // karate_dojo_annuity_history) e transaction_id: desde o PR #353 do
+  // aura-backend o GET de listagem já devolve os três por linha (antes só
+  // vinham na resposta do POST .../charge, o que deixava "Cobrar PIX" e
+  // "Editar" mortos na aba Anuidades — os ids nunca chegavam à UI).
+  annuity_id?: string | null;
+  annuity_history_id?: string | null;
+  transaction_id?: string | null;
 }
 
 export interface CpfAnnuity {
   id: string;
   practitioner_id: string;
   full_name: string;
+  karate_registration_number?: string | null;
   whatsapp?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
   paid_at: string | null;
   status: AnnuityStatus;
-  created_at: string;
+  created_at?: string;
+  // transaction_id: GET /financial/annuities/cpf devolve isso por linha
+  // (ver karateAnnuities.js) — necessário para POST .../cpf/{id}/pix
+  // (createCpfPixIntent). Antes vivia num type local CpfAnnuityWithTx em
+  // CpfAnnuitiesTab.tsx; promovido aqui conforme o próprio comentário
+  // daquele workaround já previa.
+  transaction_id?: string | null;
 }
 
 export type AnnuityUpdateInput = Partial<{
@@ -507,6 +518,18 @@ export type AnnuityUpdateInput = Partial<{
   status: AnnuityStatus;
 }>;
 
+// Resposta real de POST .../dojos/:dojoId/:annuityId/void (karateAnnuities.js).
+// NÃO retorna a anuidade — o lançamento é apagado (ver comentário da rota).
+export interface VoidAnnuityResult {
+  voided: boolean;
+  idempotent_hit: boolean;
+  annuity_id: string;
+  dojo_id?: string;
+  reference_period?: string;
+  transaction_id?: string | null;
+  transaction_cancelled?: boolean;
+}
+
 export interface ChargeInput {
   reference_period: string;
   amount: number;
@@ -514,25 +537,33 @@ export interface ChargeInput {
   payment_method?: string;
 }
 
+// Body real de POST .../dojos/{dojoId}/pix (karateAnnuities.js) — cria PIX
+// intent para uma cobrança JÁ lançada. O backend deriva valor/descrição da
+// linha de karate_dojo_annuity_history; não recebe reference_period/amount.
 export interface DojoPixInput {
-  reference_period: string;
-  amount: number;
-  due_date?: string;
+  annuity_history_id: string;
 }
 
+// Body real de POST .../cpf/{practitionerId}/pix — idem, mas a cobrança CPF
+// não tem tabela de histórico própria; o intent referencia a transaction.
 export interface CpfPixInput {
-  reference_period: string;
-  amount: number;
-  due_date?: string;
+  transaction_id: string;
 }
 
+// Shape real da resposta de POST .../pix e do item retornado por
+// createDojoPixIntent/createCpfPixIntent (karateAnnuities.js). NÃO tem
+// `id`/`qr_code`/`amount` — é `intent_id`/`payload`/`qr_image`, consumidos
+// assim em PixPaymentModal.tsx (intent.intent_id, intent.payload, intent.qr_image).
 export interface PixIntent {
-  id: string;
-  qr_code: string;
-  qr_code_image?: string;
-  amount: number;
-  expires_at: string;
+  intent_id: string;
+  payment_intent_id?: string;
+  /** Copia-e-cola PIX (BR Code). */
+  payload: string;
+  /** Base64/data URL do QR, quando o provider devolve imagem pronta. */
+  qr_image?: string | null;
   status: "pending" | "paid" | "expired";
+  expires_at: string;
+  provider?: string;
 }
 
 export interface PixStatusResponse {
@@ -1585,12 +1616,15 @@ export const karateApi = {
       body: payload,
     }),
 
-  /** Anula (estorna) uma anuidade de dojô já lançada. */
+  /** Anula (estorna) uma anuidade de dojô já lançada. Retorno real NÃO é
+   * um DojoAnnuity — é { voided, idempotent_hit, annuity_id, ... } (ver
+   * VoidAnnuityResult / POST .../:annuityId/void em karateAnnuities.js).
+   * Funciona mesmo para cobranças já pagas (reverte a conciliação). */
   voidAnnuity: (
     federationId: string,
     dojoId: string,
     annuityId: string
-  ): Promise<DojoAnnuity> =>
+  ): Promise<VoidAnnuityResult> =>
     request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/${annuityId}/void`, {
       method: "POST",
       body: {},
