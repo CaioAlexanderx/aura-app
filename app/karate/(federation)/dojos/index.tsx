@@ -37,13 +37,12 @@ import {
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { PressableScale } from "@/components/karate/anim/PressableScale";
 import { useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
-  ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, Avatar, ShojiButton, Mono, Body,
+  ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, Avatar, ShojiButton, Mono, Body, RowPressable,
 } from "@/components/karate/shoji";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
@@ -175,11 +174,11 @@ export default function DojosScreen() {
   const renderHeader = useCallback(() => (
     showThead ? (
       <View style={[styles.tr, styles.thead]}>
-        <Text style={[styles.th, { flex: 2 }]}>Dojô</Text>
-        <Text style={[styles.th, { flex: 1.2 }]}>Região</Text>
-        <Text style={[styles.th, { width: 100 }]}>Modelo</Text>
-        <Text style={[styles.th, { width: 90, textAlign: "right" }]}>Pratic.</Text>
-        <Text style={[styles.th, { width: 130 }]}>Status</Text>
+        <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Dojô</Text></View>
+        <View style={[styles.colDivider, { flex: 1.2 }]}><Text style={styles.th}>Região</Text></View>
+        <View style={[styles.colDivider, { width: 100 }]}><Text style={styles.th}>Modelo</Text></View>
+        <View style={[styles.colDivider, { width: 90 }]}><Text style={[styles.th, { textAlign: "right" }]}>Pratic.</Text></View>
+        <View style={{ width: 130 }}><Text style={styles.th}>Status</Text></View>
         <View style={{ width: 18 }} />
       </View>
     ) : null
@@ -188,23 +187,23 @@ export default function DojosScreen() {
   function Row({ d }: { d: Dojo }) {
     const onPress = () => router.push(`/karate/dojos/${d.id}` as any);
     if (wide) return (
-      <PressableScale style={styles.tr} onPress={onPress} accessibilityRole="button">
-        <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
+      <RowPressable style={styles.tr} onPress={onPress} accessibilityRole="button">
+        <View style={[styles.colDivider, { flex: 2, flexDirection: "row", alignItems: "center", gap: 12 }]}>
           <Avatar name={d.name} size={34} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>{d.name}</Text>
             <Mono style={{ fontSize: 10, color: P.red }}>{d.fpkt_affiliation_id}</Mono>
           </View>
         </View>
-        <Body muted style={[styles.cell, { flex: 1.2 }]} >{d.region || "—"}</Body>
-        <Body muted style={[styles.cell, { width: 100 }]}>{MODEL_LABEL[d.affiliation_model] ?? "—"}</Body>
-        <Mono style={[styles.cellNum, { width: 90, textAlign: "right" }]}>{d.practitioner_count}</Mono>
+        <View style={[styles.colDivider, { flex: 1.2 }]}><Body muted style={styles.cell}>{d.region || "—"}</Body></View>
+        <View style={[styles.colDivider, { width: 100 }]}><Body muted style={styles.cell}>{MODEL_LABEL[d.affiliation_model] ?? "—"}</Body></View>
+        <View style={[styles.colDivider, { width: 90 }]}><Mono style={[styles.cellNum, { textAlign: "right" }]}>{d.practitioner_count}</Mono></View>
         <View style={{ width: 130 }}><ShojiBadge dojoStatus={d.status} /></View>
         <Icon name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
-      </PressableScale>
+      </RowPressable>
     );
     return (
-      <PressableScale style={styles.card} onPress={onPress} accessibilityRole="button">
+      <RowPressable style={styles.card} onPress={onPress} accessibilityRole="button">
         <View style={styles.cardTop}>
           <Avatar name={d.name} size={38} />
           <View style={{ flex: 1 }}>
@@ -218,7 +217,7 @@ export default function DojosScreen() {
           <Meta icon="people-outline" text={`${d.practitioner_count} praticantes`} />
           <Meta icon="ribbon-outline" text={MODEL_LABEL[d.affiliation_model] ?? "—"} />
         </View>
-      </PressableScale>
+      </RowPressable>
     );
   }
 
@@ -273,6 +272,10 @@ const styles = StyleSheet.create({
   clearTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: C.ink2 } as TextStyle,
   tr: { flexDirection: "row", alignItems: "center", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.line, gap: 8 } as ViewStyle,
   thead: { paddingVertical: 10 } as ViewStyle,
+  // Item 4 (motion pack Shoji): divisão MUITO sutil entre colunas — hairline
+  // de baixa opacidade, pensada pra profundidade/ritmo, não pra grade de
+  // planilha (metade da opacidade do hairline de linha, C.line).
+  colDivider: { borderRightWidth: 1, borderRightColor: "rgba(43,38,32,0.055)", paddingRight: 14 } as ViewStyle,
   th: { fontFamily: F.body, fontSize: 10, fontWeight: "600", color: C.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
   cell: { fontSize: 12.5 } as TextStyle,
   cellNum: { fontSize: 12.5, color: C.ink } as TextStyle,

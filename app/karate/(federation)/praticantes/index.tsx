@@ -46,13 +46,12 @@ import {
   Platform, Alert,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { PressableScale } from "@/components/karate/anim/PressableScale";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
-  ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body,
+  ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body, RowPressable,
 } from "@/components/karate/shoji";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerListItem } from "@/services/karateApi";
@@ -83,22 +82,24 @@ const DEBOUNCE_MS = 350;
 // Linha extraída do render (componente estável) — são remonta a cada tecla.
 function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; wide: boolean; onPress: () => void }) {
   if (wide) return (
-    <PressableScale style={styles.tr} onPress={onPress} accessibilityRole="button">
-      <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 8 }}>
+    <RowPressable style={styles.tr} onPress={onPress} accessibilityRole="button">
+      <View style={[styles.colDivider, { flex: 2, flexDirection: "row", alignItems: "center", gap: 12 }]}>
         <Avatar name={item.full_name} size={34} />
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>{item.full_name}</Text>
           <Mono style={{ fontSize: 10, color: P.red }}>{item.karate_registration_number}</Mono>
         </View>
       </View>
-      <Body muted style={[styles.cell, { flex: 1.4 }]}>{item.dojo_name || "—"}</Body>
-      <View style={{ width: 150 }}>{item.belt_name ? <BeltTag level={item.belt_name.toLowerCase().replace(/\s+/g, "_")} name={item.belt_name} /> : <Body muted>—</Body>}</View>
+      <View style={[styles.colDivider, { flex: 1.4 }]}>
+        <Body muted style={styles.cell}>{item.dojo_name || "—"}</Body>
+      </View>
+      <View style={[styles.colDivider, { width: 150 }]}>{item.belt_name ? <BeltTag level={item.belt_name.toLowerCase().replace(/\s+/g, "_")} name={item.belt_name} /> : <Body muted>—</Body>}</View>
       <View style={{ width: 120 }}><ShojiBadge affiliationStatus={item.affiliation_status} /></View>
       <Icon name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
-    </PressableScale>
+    </RowPressable>
   );
   return (
-    <PressableScale style={styles.card} onPress={onPress} accessibilityRole="button">
+    <RowPressable style={styles.card} onPress={onPress} accessibilityRole="button">
       <Avatar name={item.full_name} size={40} />
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={styles.name}>{item.full_name}</Text>
@@ -109,7 +110,7 @@ function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; 
         {item.belt_name ? <BeltTag level={item.belt_name.toLowerCase().replace(/\s+/g, "_")} name={item.belt_name} /> : null}
         <ShojiBadge affiliationStatus={item.affiliation_status} />
       </View>
-    </PressableScale>
+    </RowPressable>
   );
 }
 const Row = React.memo(PractitionerRow);
@@ -299,10 +300,10 @@ export default function PraticantesScreen() {
   const renderHeader = useCallback(() => (
     showThead ? (
       <View style={[styles.tr, styles.thead]}>
-        <Text style={[styles.th, { flex: 2 }]}>Praticante</Text>
-        <Text style={[styles.th, { flex: 1.4 }]}>Dojô</Text>
-        <Text style={[styles.th, { width: 150 }]}>Graduação</Text>
-        <Text style={[styles.th, { width: 120 }]}>Status</Text>
+        <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Praticante</Text></View>
+        <View style={[styles.colDivider, { flex: 1.4 }]}><Text style={styles.th}>Dojô</Text></View>
+        <View style={[styles.colDivider, { width: 150 }]}><Text style={styles.th}>Graduação</Text></View>
+        <View style={{ width: 120 }}><Text style={styles.th}>Status</Text></View>
         <View style={{ width: 18 }} />
       </View>
     ) : null
@@ -356,6 +357,10 @@ const styles = StyleSheet.create({
   chipDivider: { width: 1, height: 22, backgroundColor: C.line2, marginHorizontal: 4, alignSelf: "center" } as ViewStyle,
   tr: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line, gap: 8 } as ViewStyle,
   thead: { paddingVertical: 10 } as ViewStyle,
+  // Item 4 (motion pack Shoji): divisão MUITO sutil entre colunas — hairline
+  // de baixa opacidade, pensada pra profundidade/ritmo, não pra grade de
+  // planilha (metade da opacidade do hairline de linha, C.line).
+  colDivider: { borderRightWidth: 1, borderRightColor: "rgba(43,38,32,0.055)", paddingRight: 14 } as ViewStyle,
   th: { fontFamily: F.body, fontSize: 10, fontWeight: "600", color: C.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
   cell: { fontSize: 12.5 } as TextStyle,
   name: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
