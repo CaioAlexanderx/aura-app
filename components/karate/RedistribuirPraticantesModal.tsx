@@ -98,7 +98,9 @@ interface Props {
   federationId: string;
   dojoId: string;
   dojoName: string;
-  /** Praticantes ATIVOS deste dojô — a tela host já busca via getDojoMembersStanding. */
+  /** Praticantes ATIVOS deste dojô — lista COMPLETA (a tela host busca sob demanda
+   *  via getDojoMembersStandingAll(status="active"); a seção Praticantes do detalhe é
+   *  paginada e por isso não serve como fonte aqui). */
   practitioners: DojoMemberStanding[];
   /** Chamado após o redistribute ter sucesso — a tela host recarrega o dojô/roster e fecha os dois modais. */
   onSuccess: () => void;
