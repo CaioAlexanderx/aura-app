@@ -753,6 +753,63 @@ export interface AnnuityBatchTarget {
   id: string;
 }
 
+// ── Fase F4 — e-mail de cobrança (envio manual + lote) e remoção de
+//    cobrança em lote. Espelha o shape real de karateAnnuityBilling.js
+//    (aura-backend PR #359) — nunca all-or-nothing, sempre listas.
+export interface AnnuitySendEmailResult {
+  sent: true;
+  installment_id: string;
+  annuity_id: string;
+  recipient: string;
+  provider_id: string | null;
+}
+
+export interface AnnuityEmailBatchSent {
+  installment_id: string;
+  name: string;
+  recipient: string;
+  provider_id: string | null;
+}
+/** reason: 'sem_email' (sem e-mail cadastrado — estado normal, não é erro)
+ *  ou 'parcela_ja_paga'. */
+export interface AnnuityEmailBatchSkipped {
+  installment_id: string;
+  name: string;
+  reason: "sem_email" | "parcela_ja_paga" | string;
+}
+export interface AnnuityEmailBatchError {
+  installment_id: string;
+  name?: string;
+  reason: string;
+}
+export interface AnnuityEmailBatchResult {
+  sent: AnnuityEmailBatchSent[];
+  skipped: AnnuityEmailBatchSkipped[];
+  errors: AnnuityEmailBatchError[];
+}
+
+export interface AnnuityVoidBatchRemoved {
+  annuity_id: string;
+  dojo_id: string | null;
+  practitioner_id: string | null;
+  reference_period: string;
+  transaction_ids: unknown;
+}
+/** reason: 'has_paid_installment' | 'has_nfse' | 'not_found'. */
+export interface AnnuityVoidBatchSkipped {
+  annuity_id: string;
+  reason: "has_paid_installment" | "has_nfse" | "not_found" | string;
+}
+export interface AnnuityVoidBatchError {
+  annuity_id: string;
+  reason: string;
+}
+export interface AnnuityVoidBatchResult {
+  removed: AnnuityVoidBatchRemoved[];
+  skipped: AnnuityVoidBatchSkipped[];
+  errors: AnnuityVoidBatchError[];
+}
+
 export type AnnuityUpdateInput = Partial<{
   amount: number;
   due_date: string;
@@ -1193,8 +1250,21 @@ export interface ReminderConfig {
   enabled: boolean;
   channel: "email" | "whatsapp";
   offsets_days: number[];
+  // Fase F4 — texto livre editável pela federação (assunto/mensagem da
+  // régua e do envio manual). null = usa o default hardcoded do backend
+  // (karateReminderTemplate.js) — nunca string vazia (PUT normaliza
+  // "" -> null). Variáveis aceitas: ver KARATE_REMINDER_VARS abaixo.
+  subject_template?: string | null;
+  body_template?: string | null;
   updated_at?: string | null;
 }
+
+// Fase F4 — variáveis aceitas em subject_template/body_template (espelha
+// KNOWN_VARS de karateReminderTemplate.js no backend). Usado pelos chips
+// do editor e pelo render de pré-visualização client-side (dados de
+// exemplo — nunca chama o backend pra montar a prévia).
+export const KARATE_REMINDER_VARS = ["nome", "competencia", "valor", "vencimento", "planos", "pix_copia_cola"] as const;
+export type KarateReminderVar = typeof KARATE_REMINDER_VARS[number];
 
 export interface ReminderLogItem {
   id: string;
@@ -2093,6 +2163,53 @@ export const karateApi = {
       retry: 0,
     }),
 
+  // ── Fase F4 — e-mail de cobrança de anuidade ─────────────────────
+  // Envio manual (single ou lote) usa o MESMO template/blocos que a régua
+  // automática usaria (subject_template/body_template da federação, se
+  // configurados — senão o default hardcoded). Ausência de e-mail nunca é
+  // erro: single -> 422 EMAIL_MISSING (mensagem já pronta em português,
+  // sugerindo WhatsApp); lote -> entra em `skipped` (reason: 'sem_email').
+  // retry:0 nos três — reenviar e-mail em duplicidade por causa de um
+  // retry de rede é o cenário que a Fase F4 mais precisa evitar.
+
+  /** POST .../installments/:id/send-email — reenvio manual é permitido
+   *  (sem lock de idempotência; rule_code='manual' fica fora do índice
+   *  único da régua automática, migration 223). */
+  sendAnnuityInstallmentEmail: (
+    federationId: string,
+    installmentId: string
+  ): Promise<AnnuitySendEmailResult> =>
+    request(`/federation/${federationId}/financial/annuities/installments/${installmentId}/send-email`, {
+      method: "POST",
+      body: {},
+      retry: 0,
+    }),
+
+  /** POST .../send-email-batch { installment_ids: [] } — nunca all-or-nothing. */
+  sendAnnuityEmailBatch: (
+    federationId: string,
+    body: { installment_ids: string[] }
+  ): Promise<AnnuityEmailBatchResult> =>
+    request(`/federation/${federationId}/financial/annuities/send-email-batch`, {
+      method: "POST",
+      body,
+      retry: 0,
+    }),
+
+  /** POST .../void-batch { annuity_ids: [] } — retirada de cobrança em
+   *  lote (remoção do lançamento, NÃO estorno financeiro — a transaction
+   *  cancelada já preserva a trilha). Pula (não erra) anuidade com parcela
+   *  paga ou NFS-e emitida/em processamento (reason em `skipped`). */
+  voidAnnuitiesBatch: (
+    federationId: string,
+    body: { annuity_ids: string[] }
+  ): Promise<AnnuityVoidBatchResult> =>
+    request(`/federation/${federationId}/financial/annuities/void-batch`, {
+      method: "POST",
+      body,
+      retry: 0,
+    }),
+
   // Fase 5 — valores em aberto segmentados (pretas CPF x dojôs). Somente
   // leitura: usado pela aba "Em aberto" para montar o workflow de cobrança
   // (seleção + "preparar cobrança"), sem disparar e-mail nenhum.
@@ -2307,9 +2424,18 @@ export const karateApi = {
 
   updateReminderConfig: (
     federationId: string,
-    body: { enabled: boolean; channel?: "email" | "whatsapp"; offsets_days?: number[] }
+    body: {
+      enabled: boolean; channel?: "email" | "whatsapp"; offsets_days?: number[];
+      // Fase F4 — string vazia ou ausente volta pro default do backend
+      // (null); nunca precisa mandar as duas juntas.
+      subject_template?: string | null; body_template?: string | null;
+    }
   ): Promise<{ config: ReminderConfig }> =>
-    request(`/federation/${federationId}/reminder-config`, { method: "PUT", body }),
+    // retry:0 — reenviar um PUT de config por causa de erro de rede não é
+    // perigoso (idempotente por natureza, sempre sobrescreve o registro
+    // inteiro), mas evitamos mesmo assim: um 422 de variável desconhecida
+    // não deve ser mascarado por um retry que reenvia o MESMO body inválido.
+    request(`/federation/${federationId}/reminder-config`, { method: "PUT", body, retry: 0 }),
 
   getReminderLog: (
     federationId: string,
