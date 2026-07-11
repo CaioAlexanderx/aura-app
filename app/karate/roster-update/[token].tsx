@@ -14,31 +14,245 @@
 // app/_layout.tsx precisa reconhecer segments[1]==="roster-update" como
 // rota pública do karatê (bypass do AuthGuard) — ver onKaratePublic e
 // onPublicMicrosite lá.
+//
+// ── Polish de apresentação (DESIGN — portal do sensei) ──────────────
+// Superfície de maior impacto: primeira impressão da federação com o
+// sensei. Só apresentação/motion — nenhuma mudança na lógica de dados,
+// no fluxo do token de uso único ou nos estados 404/410/erro/confirmado.
+// Apenas `Animated` do RN (sem novas deps); hover é aditivo e só-web
+// (padrão components/Button.tsx); respeita prefers-reduced-motion no
+// web (padrão components/karate/KarateLoginTransition.tsx).
 // ============================================================
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Switch,
   Platform,
   Linking,
+  Animated,
+  Easing,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
-import { KarateColors as P, KarateRadius, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows } from "@/constants/karateTheme";
+import { Motion, webTransition } from "@/constants/motion";
 import { BeltBadge } from "@/components/karate/BeltBadge";
-import { KarateButton } from "@/components/karate/KarateButton";
 import {
   karatePublicApi,
   RosterPractitioner,
   RosterUpdateInput,
 } from "@/services/karatePublicApi";
+
+const IS_WEB = Platform.OS === "web";
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function prefersReducedMotion(): boolean {
+  if (!IS_WEB || typeof window === "undefined" || !window.matchMedia) return false;
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
+}
+
+// ── Botão "Confirmar quadro" — animado, self-contained ─────────────
+// Réplica visual do KarateButton (variant="sumi", size="lg") com
+// press-feedback (scale) + hover (só web). Local ao arquivo pra evitar
+// mexer no componente compartilhado (fora do escopo do polish).
+function ConfirmButton({
+  label, onPress, loading, disabled, style,
+}: { label: string; onPress: () => void; loading?: boolean; disabled?: boolean; style?: any }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
+  const blocked = !!(disabled || loading);
+
+  const to = (val: number, dur: number) =>
+    Animated.timing(scale, { toValue: val, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+
+  return (
+    <AnimatedPressable
+      onPress={blocked ? undefined : onPress}
+      disabled={blocked}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: blocked, busy: !!loading }}
+      onPressIn={() => to(0.98, 90)}
+      onPressOut={() => to(1, Motion.fast + 40)}
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        st.confirmBtn,
+        { transform: [{ scale }] },
+        hovered && !blocked && ({
+          backgroundColor: P.ink2,
+          ...(IS_WEB ? ({ boxShadow: "0 10px 28px -8px rgba(43,38,32,0.45)" } as any) : null),
+        } as any),
+        blocked && { opacity: 0.5 },
+        IS_WEB ? (webTransition(["transform", "box-shadow", "background-color"], Motion.fast) as any) : null,
+        style,
+      ]}
+    >
+      {loading
+        ? <ActivityIndicator color="#fdf8f2" size="small" />
+        : <Text style={st.confirmBtnText}>{label}</Text>}
+    </AnimatedPressable>
+  );
+}
+
+// ── Contador "X de Y ativos" com barra fina animada ─────────────────
+function ActiveProgress({ active, total }: { active: number; total: number }) {
+  const reduced = useMemo(prefersReducedMotion, []);
+  const ratio = total > 0 ? active / total : 0;
+  const barAnim = useRef(new Animated.Value(reduced ? ratio : 0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (reduced) { barAnim.setValue(ratio); return; }
+    Animated.timing(barAnim, { toValue: ratio, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    if (firstRun.current) { firstRun.current = false; return; }
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.14, duration: 90, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 1, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+  }, [ratio]);
+
+  return (
+    <View style={st.progressWrap}>
+      <View style={st.progressRow}>
+        <Text style={st.countLabel}>
+          <Animated.Text style={{ transform: [{ scale: pulse }], color: P.ink2, fontWeight: "800" }}>
+            {active}
+          </Animated.Text>
+          {" "}de {total} praticante{total !== 1 ? "s" : ""} ativo{active !== 1 ? "s" : ""}
+        </Text>
+      </View>
+      <View style={st.progressTrack}>
+        <Animated.View
+          style={[
+            st.progressFill,
+            { width: barAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ── Linha de praticante — entrada com stagger, hover-lift (web),
+//    tint animado ativo/inativo, cross-fade do rótulo ─────────────
+function PractitionerRow({
+  p, isActive, onToggle, index, disabled,
+}: { p: RosterPractitioner; isActive: boolean; onToggle: () => void; index: number; disabled?: boolean }) {
+  const reduced = useMemo(prefersReducedMotion, []);
+  const entryOpacity = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+  const entryY = useRef(new Animated.Value(reduced ? 0 : 10)).current;
+  const activeAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+  const labelOpacity = useRef(new Animated.Value(1)).current;
+  const [displayActive, setDisplayActive] = useState(isActive);
+  const [hovered, setHovered] = useState(false);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (reduced) return;
+    const delay = index < 12 ? index * 32 : 0;
+    Animated.parallel([
+      Animated.timing(entryOpacity, { toValue: 1, duration: 260, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(entryY, { toValue: 0, duration: 300, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    if (reduced) { activeAnim.setValue(isActive ? 1 : 0); setDisplayActive(isActive); return; }
+    Animated.timing(activeAnim, { toValue: isActive ? 1 : 0, duration: Motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(labelOpacity, { toValue: 0, duration: 90, useNativeDriver: false }).start(() => {
+      setDisplayActive(isActive);
+      Animated.timing(labelOpacity, { toValue: 1, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    });
+  }, [isActive]);
+
+  const tintBg = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [P.glass, "rgba(74,122,72,0.06)"] });
+  const tintBorder = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [P.border, P.okLine] });
+
+  return (
+    <Animated.View style={{ opacity: entryOpacity, transform: [{ translateY: entryY }] }}>
+      <Pressable
+        onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+        onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      >
+        <Animated.View
+          style={[
+            st.row,
+            { backgroundColor: tintBg, borderColor: hovered ? P.primaryLine : tintBorder },
+            hovered ? { transform: [{ translateY: -1 }], ...KarateShadows.sm } : null,
+            IS_WEB ? (webTransition(["transform", "box-shadow", "border-color"], Motion.fast) as any) : null,
+          ]}
+        >
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={st.rowName}>{p.name}</Text>
+            <View style={st.rowMeta}>
+              {p.karate_registration_number && (
+                <Text style={st.rowReg}>Nº {p.karate_registration_number}</Text>
+              )}
+              <BeltBadge beltLevel={p.belt_name || ""} beltName={p.belt_name || undefined} />
+            </View>
+          </View>
+          <View style={st.switchCol}>
+            <Animated.Text
+              style={[
+                st.switchLabel,
+                { color: displayActive ? P.ok : P.ink3, opacity: labelOpacity },
+              ]}
+            >
+              {displayActive ? "Ativo" : "Inativo"}
+            </Animated.Text>
+            <Switch
+              value={isActive}
+              onValueChange={onToggle}
+              disabled={disabled}
+              trackColor={{ false: P.border, true: P.okSoft }}
+              thumbColor={isActive ? P.ok : "#fff"}
+            />
+          </View>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ── Campo com borda animada no foco (busca / nome) ──────────────────
+function FocusField({
+  icon, value, onChangeText, placeholder, style, inputStyle, accessibilityLabel,
+}: {
+  icon?: string; value: string; onChangeText: (v: string) => void; placeholder: string;
+  style?: any; inputStyle?: any; accessibilityLabel?: string;
+}) {
+  const focusAnim = useRef(new Animated.Value(0)).current;
+  const onFocus = () => Animated.timing(focusAnim, { toValue: 1, duration: Motion.fast, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  const onBlur = () => Animated.timing(focusAnim, { toValue: 0, duration: Motion.fast, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  const borderColor = focusAnim.interpolate({ inputRange: [0, 1], outputRange: [P.border, P.primary] });
+
+  return (
+    <Animated.View style={[style, { borderColor }, IS_WEB ? (webTransition(["border-color"], Motion.fast) as any) : null]}>
+      {!!icon && <Icon name={icon} size={16} color={P.ink3} />}
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        placeholderTextColor={P.ink4}
+        accessibilityLabel={accessibilityLabel}
+        style={inputStyle}
+      />
+    </Animated.View>
+  );
+}
 
 export default function RosterUpdatePortalScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
@@ -108,6 +322,67 @@ export default function RosterUpdatePortalScreen() {
 
   const activeCount = activeMap ? Object.values(activeMap).filter(Boolean).length : 0;
 
+  // ── Fase da tela (loading / error / confirmed / form) — usada só
+  // pra orquestrar as animações de entrada, nada de lógica de dados ──
+  const phase: "loading" | "error" | "confirmed" | "form" =
+    isLoading ? "loading" : error ? "error" : confirmed ? "confirmed" : "form";
+
+  const reduced = useMemo(prefersReducedMotion, []);
+
+  // Entrada da página (fade + slide-up) — replica a cada troca de fase,
+  // dando sensação de "transição de página" entre loading → form/erro
+  // e form → confirmado.
+  const pageOpacity = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+  const pageY = useRef(new Animated.Value(reduced ? 0 : 14)).current;
+
+  // Glyph (ícone de estado) — scale-in ao entrar em erro/confirmado.
+  const glyphScale = useRef(new Animated.Value(reduced ? 1 : 0.5)).current;
+  // Anel de destaque do sucesso — expande e desvanece uma única vez.
+  const ringScale = useRef(new Animated.Value(1)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
+
+  // Filete sob o nome do dojô — cresce a partir do centro.
+  const ruleWidth = useRef(new Animated.Value(reduced ? 40 : 0)).current;
+
+  useEffect(() => {
+    if (phase === "loading") return;
+
+    if (reduced) {
+      pageOpacity.setValue(1);
+      pageY.setValue(0);
+      glyphScale.setValue(1);
+      ruleWidth.setValue(40);
+      return;
+    }
+
+    pageOpacity.setValue(0);
+    pageY.setValue(14);
+    Animated.parallel([
+      Animated.timing(pageOpacity, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(pageY, { toValue: 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+
+    if (phase === "error" || phase === "confirmed") {
+      glyphScale.setValue(0.5);
+      if (phase === "confirmed") {
+        Animated.spring(glyphScale, { toValue: 1, friction: 5, tension: 140, useNativeDriver: false }).start();
+        ringScale.setValue(1);
+        ringOpacity.setValue(0.35);
+        Animated.parallel([
+          Animated.timing(ringScale, { toValue: 1.8, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(ringOpacity, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        ]).start();
+      } else {
+        Animated.timing(glyphScale, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+      }
+    }
+
+    if (phase === "form") {
+      Animated.timing(ruleWidth, { toValue: 40, duration: 320, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
   // ── Loading ──────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -126,10 +401,10 @@ export default function RosterUpdatePortalScreen() {
     const isInvalid = status === 404;
     return (
       <View style={st.page}>
-        <View style={st.errorWrap}>
-          <View style={[st.glyph, { backgroundColor: isExpired ? P.warnSoft : P.dangerSoft }]}>
+        <Animated.View style={[st.errorWrap, { opacity: pageOpacity, transform: [{ translateY: pageY }] }]}>
+          <Animated.View style={[st.glyph, { backgroundColor: isExpired ? P.warnSoft : P.dangerSoft, transform: [{ scale: glyphScale }] }]}>
             <Icon name={isExpired ? "clock" : "alert-circle"} size={26} color={isExpired ? P.warn : P.danger} />
-          </View>
+          </Animated.View>
           <Text style={st.errorTitle}>
             {isExpired ? "Este link expirou" : isInvalid ? "Link inválido" : "Não foi possível carregar"}
           </Text>
@@ -141,15 +416,9 @@ export default function RosterUpdatePortalScreen() {
               : "Ocorreu um erro ao carregar os dados do seu dojô. Verifique sua conexão e tente novamente."}
           </Text>
           {!isExpired && !isInvalid && (
-            <TouchableOpacity onPress={() => refetch()} style={st.retryBtn} disabled={isRefetching}>
-              {isRefetching ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={st.retryBtnText}>Tentar novamente</Text>
-              )}
-            </TouchableOpacity>
+            <RetryButton onPress={() => refetch()} loading={isRefetching} />
           )}
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -159,9 +428,15 @@ export default function RosterUpdatePortalScreen() {
     const applied = submitMut.data?.applied?.length ?? 0;
     return (
       <View style={st.page}>
-        <View style={st.errorWrap}>
-          <View style={[st.glyph, { backgroundColor: P.okSoft }]}>
-            <Icon name="checkmark-circle" size={26} color={P.ok} />
+        <Animated.View style={[st.errorWrap, { opacity: pageOpacity, transform: [{ translateY: pageY }] }]}>
+          <View style={st.successGlyphWrap}>
+            <Animated.View
+              pointerEvents="none"
+              style={[st.successRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
+            />
+            <Animated.View style={[st.glyph, { backgroundColor: P.okSoft, transform: [{ scale: glyphScale }] }]}>
+              <Icon name="checkmark-circle" size={26} color={P.ok} />
+            </Animated.View>
           </View>
           <Text style={st.errorTitle}>Quadro confirmado, obrigado!</Text>
           <Text style={st.errorText}>
@@ -170,7 +445,7 @@ export default function RosterUpdatePortalScreen() {
               : `O quadro do ${data?.dojo_nome || "seu dojô"} foi confirmado sem alterações.`}
             {"\n"}Este link já foi utilizado e não pode ser reenviado.
           </Text>
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -178,97 +453,125 @@ export default function RosterUpdatePortalScreen() {
   // ── Formulário principal ─────────────────────────────────
   return (
     <ScrollView style={st.page} contentContainerStyle={st.content}>
-      <View style={st.header}>
-        <Text style={st.eyebrow}>Portal do sensei</Text>
-        <Text style={st.dojoName}>{data?.dojo_nome || "Seu dojô"}</Text>
-        <Text style={st.subtitle}>Confirme quem está ativo no seu dojô.</Text>
-      </View>
+      <Animated.View style={{ opacity: pageOpacity, transform: [{ translateY: pageY }] }}>
+        <View style={st.header}>
+          <Text style={st.eyebrow}>Portal do sensei</Text>
+          <Text style={st.dojoName}>{data?.dojo_nome || "Seu dojô"}</Text>
+          <Animated.View style={[st.headerRule, { width: ruleWidth }]} />
+          <Text style={st.subtitle}>Confirme quem está ativo no seu dojô.</Text>
+        </View>
 
-      <View style={st.searchBox}>
-        <Icon name="search" size={16} color={P.ink3} />
-        <TextInput
+        <FocusField
+          icon="search"
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar por nome ou registro"
-          placeholderTextColor={P.ink4}
-          style={st.searchInput}
-        />
-      </View>
-
-      <Text style={st.countLabel}>
-        {activeCount} de {praticantes.length} praticante{praticantes.length !== 1 ? "s" : ""} ativo{activeCount !== 1 ? "s" : ""}
-      </Text>
-
-      {filtered.length === 0 ? (
-        <View style={st.emptyCard}>
-          <Text style={st.emptyText}>Nenhum praticante encontrado.</Text>
-        </View>
-      ) : (
-        filtered.map((p) => {
-          const isActive = activeMap?.[p.id] ?? p.is_active;
-          return (
-            <View key={p.id} style={st.row}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={st.rowName}>{p.name}</Text>
-                <View style={st.rowMeta}>
-                  {p.karate_registration_number && (
-                    <Text style={st.rowReg}>Nº {p.karate_registration_number}</Text>
-                  )}
-                  <BeltBadge beltLevel={p.belt_name || ""} beltName={p.belt_name || undefined} />
-                </View>
-              </View>
-              <View style={st.switchCol}>
-                <Text style={[st.switchLabel, { color: isActive ? P.ok : P.ink3 }]}>
-                  {isActive ? "Ativo" : "Inativo"}
-                </Text>
-                <Switch
-                  value={isActive}
-                  onValueChange={() => toggleActive(p.id)}
-                  trackColor={{ false: P.border, true: P.okSoft }}
-                  thumbColor={isActive ? P.ok : "#fff"}
-                />
-              </View>
-            </View>
-          );
-        })
-      )}
-
-      <View style={st.footerCard}>
-        <Text style={st.fieldLabel}>Seu nome</Text>
-        <TextInput
-          value={validatedBy}
-          onChangeText={setValidatedBy}
-          placeholder="Quem está confirmando o quadro"
-          placeholderTextColor={P.ink4}
-          style={st.textInput}
+          accessibilityLabel="Buscar praticante por nome ou registro"
+          style={st.searchBox}
+          inputStyle={st.searchInput}
         />
 
-        {submitMut.isError && (
-          <Text style={st.submitError}>
-            {(submitMut.error as any)?.message || "Erro ao confirmar o quadro. Tente novamente."}
-          </Text>
+        <ActiveProgress active={activeCount} total={praticantes.length} />
+
+        {filtered.length === 0 ? (
+          <View style={st.emptyCard}>
+            <Text style={st.emptyText}>Nenhum praticante encontrado.</Text>
+          </View>
+        ) : (
+          filtered.map((p, index) => {
+            const isActive = activeMap?.[p.id] ?? p.is_active;
+            return (
+              <PractitionerRow
+                key={p.id}
+                p={p}
+                isActive={isActive}
+                onToggle={() => toggleActive(p.id)}
+                index={index}
+              />
+            );
+          })
         )}
 
-        <KarateButton
-          label={submitMut.isPending ? "Confirmando..." : "Confirmar quadro"}
-          onPress={() => submitMut.mutate()}
-          loading={submitMut.isPending}
-          disabled={submitMut.isPending || praticantes.length === 0}
-          size="lg"
-          style={{ marginTop: 12 }}
-        />
+        <View style={st.footerCard}>
+          <Text style={st.fieldLabel}>Seu nome</Text>
+          <FocusField
+            value={validatedBy}
+            onChangeText={setValidatedBy}
+            placeholder="Quem está confirmando o quadro"
+            accessibilityLabel="Seu nome, para registro da confirmação"
+            style={st.textInputWrap}
+            inputStyle={st.textInput}
+          />
 
-        <TouchableOpacity onPress={handleDownloadCsv} style={st.csvBtn} accessibilityRole="button" accessibilityLabel="Baixar planilha CSV">
-          <Icon name="download" size={16} color={P.primary} />
-          <Text style={st.csvBtnText}>Baixar planilha (CSV)</Text>
-        </TouchableOpacity>
-      </View>
+          {submitMut.isError && (
+            <Text style={st.submitError}>
+              {(submitMut.error as any)?.message || "Erro ao confirmar o quadro. Tente novamente."}
+            </Text>
+          )}
 
-      <View style={st.footer}>
-        <Text style={st.footerText}>Portal do sensei · Aura Karatê</Text>
-        <Text style={st.footerTextSmall}>Em caso de dúvidas, entre em contato com a federação.</Text>
-      </View>
+          <ConfirmButton
+            label={submitMut.isPending ? "Confirmando..." : "Confirmar quadro"}
+            onPress={() => submitMut.mutate()}
+            loading={submitMut.isPending}
+            disabled={submitMut.isPending || praticantes.length === 0}
+            style={{ marginTop: 12 }}
+          />
+
+          <DownloadCsvButton onPress={handleDownloadCsv} />
+        </View>
+
+        <View style={st.footer}>
+          <Text style={st.footerText}>Portal do sensei · Aura Karatê</Text>
+          <Text style={st.footerTextSmall}>Em caso de dúvidas, entre em contato com a federação.</Text>
+        </View>
+      </Animated.View>
     </ScrollView>
+  );
+}
+
+// ── "Tentar novamente" — hover só web ───────────────────────────────
+function RetryButton({ onPress, loading }: { onPress: () => void; loading?: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      accessibilityRole="button"
+      accessibilityLabel="Tentar novamente"
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        st.retryBtn,
+        hovered && !loading && ({ backgroundColor: P.ink2 } as any),
+        IS_WEB ? (webTransition(["background-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      {loading
+        ? <ActivityIndicator color="#fff" size="small" />
+        : <Text style={st.retryBtnText}>Tentar novamente</Text>}
+    </Pressable>
+  );
+}
+
+// ── "Baixar planilha (CSV)" — hover só web ──────────────────────────
+function DownloadCsvButton({ onPress }: { onPress: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Baixar planilha CSV"
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        st.csvBtn,
+        hovered && ({ opacity: 0.72 } as any),
+        IS_WEB ? (webTransition(["opacity"], Motion.fast) as any) : null,
+      ]}
+    >
+      <Icon name="download" size={16} color={P.primary} />
+      <Text style={st.csvBtnText}>Baixar planilha (CSV)</Text>
+    </Pressable>
   );
 }
 
@@ -280,25 +583,32 @@ const st = StyleSheet.create({
 
   errorWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 60, paddingHorizontal: 24, maxWidth: 440, alignSelf: "center" },
   glyph: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  successGlyphWrap: { alignItems: "center", justifyContent: "center" },
+  successRing: { position: "absolute", width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: P.ok },
   errorTitle: { fontFamily: KarateFonts.heading, fontSize: 20, color: P.ink, textAlign: "center" },
   errorText: { fontSize: 13, color: P.ink3, textAlign: "center", lineHeight: 20 },
   retryBtn: { backgroundColor: P.ink, borderRadius: KarateRadius.md, paddingVertical: 12, paddingHorizontal: 24, marginTop: 8 },
   retryBtnText: { color: "#fdf8f2", fontSize: 14, fontWeight: "700" },
 
-  header: { alignItems: "center", paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: P.border, marginBottom: 20 },
+  header: { alignItems: "center", paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: P.border, marginBottom: 22 },
   eyebrow: { fontSize: 11, color: P.primary, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
-  dojoName: { fontFamily: KarateFonts.heading, fontSize: 24, color: P.ink, marginTop: 8, textAlign: "center" },
-  subtitle: { fontSize: 13, color: P.ink3, marginTop: 6, textAlign: "center" },
+  dojoName: { fontFamily: KarateFonts.heading, fontSize: 26, color: P.ink, marginTop: 9, textAlign: "center" },
+  headerRule: { height: 2, borderRadius: 1, backgroundColor: P.primary, marginTop: 12, alignSelf: "center" },
+  subtitle: { fontSize: 13, color: P.ink3, marginTop: 12, textAlign: "center" },
 
-  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.glass, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.glass, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
   searchInput: { flex: 1, fontSize: 14, color: P.ink, ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}) },
 
-  countLabel: { fontSize: 11.5, color: P.ink3, fontWeight: "600", marginBottom: 10 },
+  progressWrap: { marginBottom: 14, gap: 6 },
+  progressRow: { flexDirection: "row", alignItems: "center" },
+  countLabel: { fontSize: 11.5, color: P.ink3, fontWeight: "600" },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: P.border, overflow: "hidden" },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: P.ok },
 
   emptyCard: { backgroundColor: P.glass, borderRadius: KarateRadius.md, padding: 20, borderWidth: 1, borderColor: P.border, alignItems: "center" },
   emptyText: { fontSize: 13, color: P.ink3 },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: P.glass, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: P.border, padding: 14, marginBottom: 8 },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: KarateRadius.md, borderWidth: 1, padding: 14, marginBottom: 8 },
   rowName: { fontSize: 14.5, fontWeight: "700", color: P.ink },
   rowMeta: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   rowReg: { fontFamily: KarateFonts.mono, fontSize: 11.5, color: P.ink3 },
@@ -307,8 +617,12 @@ const st = StyleSheet.create({
 
   footerCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginTop: 16 },
   fieldLabel: { fontSize: 11.5, fontWeight: "700", color: P.ink2, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
-  textInput: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: P.ink, backgroundColor: P.paperWarm },
+  textInputWrap: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm },
+  textInput: { paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: P.ink, ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}) },
   submitError: { fontSize: 12, color: P.danger, marginTop: 10, textAlign: "center" },
+
+  confirmBtn: { borderRadius: KarateRadius.md, alignItems: "center", justifyContent: "center", flexDirection: "row", backgroundColor: P.ink, paddingVertical: 14, paddingHorizontal: 28 },
+  confirmBtnText: { fontWeight: "700", letterSpacing: 0.2, color: "#fdf8f2", fontSize: 17 },
 
   csvBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, marginTop: 10 },
   csvBtnText: { fontSize: 13, fontWeight: "700", color: P.primary },
