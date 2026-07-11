@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
+import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 
 var isWeb = Platform.OS === "web";
@@ -567,9 +568,11 @@ export function ClientsAdmin() {
           </Pressable>
           <Text style={s.trialHint}>
             Define o numero ABSOLUTO de seats extras (R$ {SEAT_PRICE_BRL}/mes cada) acima do plano. Soma com
-            os inclusos pra expandir o limite de equipe. O cliente nao paga automaticamente — marque
-            apenas quando o pagamento for confirmado. Acao registrada em admin_audit_log.
+            os inclusos pra expandir o limite de equipe. Desde 15/06 o backend SINCRONIZA a assinatura no
+            Asaas (plano + R$ {SEAT_PRICE_BRL} x seats) — o cliente passa a pagar automaticamente no cartao
+            ja salvo, sem refazer checkout. Acao registrada em admin_audit_log.
           </Text>
+          <ResyncSubscriptionButton companyId={sc.id} />
         </View>
 
         {/* Seletor de modulo vertical */}
