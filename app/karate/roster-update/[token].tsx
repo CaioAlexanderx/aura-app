@@ -41,17 +41,27 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
-import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows } from "@/constants/karateTheme";
+import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Motion, webTransition } from "@/constants/motion";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import {
   karatePublicApi,
   RosterPractitioner,
   RosterUpdateInput,
+  AddPractitionerInput,
 } from "@/services/karatePublicApi";
 
 const IS_WEB = Platform.OS === "web";
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Faixas oferecidas no cadastro "Adicionar praticante" do portal do sensei.
+// Faixas oferecidas no cadastro: todas as NÃO-legadas de KarateBelts.
+// Hoje só a Vermelha é isLegacy=true — a Amarela é faixa ATUAL da FPKT e
+// deve aparecer. Resultado: branca, amarela, laranja, verde, azul_claro, roxo,
+// azul_escuro, marrom, preta.
+const NON_LEGACY_BELT_KEYS: BeltKey[] = (Object.keys(KarateBelts) as BeltKey[]).filter(
+  (k) => !KarateBelts[k].isLegacy
+);
 
 function prefersReducedMotion(): boolean {
   if (!IS_WEB || typeof window === "undefined" || !window.matchMedia) return false;
@@ -254,6 +264,154 @@ function FocusField({
   );
 }
 
+// ── "Adicionar praticante" — botão que abre o form inline ───────────
+function AddPractitionerToggle({ onPress, disabled }: { onPress: () => void; disabled?: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel="Adicionar praticante"
+      onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
+      style={[
+        st.addToggleBtn,
+        hovered && !disabled && ({ borderColor: P.primary, backgroundColor: P.primarySoft } as any),
+        disabled && { opacity: 0.5 },
+        IS_WEB ? (webTransition(["border-color", "background-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      <Icon name="person-add" size={16} color={P.primary} />
+      <Text style={st.addToggleBtnText}>Adicionar praticante</Text>
+    </Pressable>
+  );
+}
+
+// ── Form "Adicionar praticante" — seção inline expansível ───────────
+// Validação no cliente (nome + faixa + telefone-ou-e-mail), espelhando a
+// validação do backend (POST /:token/practitioner) pra dar feedback
+// imediato antes de bater na rede. Chips de faixa usam as cores canônicas
+// de KarateBelts (mesma paleta do BeltBadge da lista), sem as legadas.
+function AddPractitionerForm({
+  onSubmit, onCancel, submitting, apiError,
+}: {
+  onSubmit: (input: AddPractitionerInput) => void;
+  onCancel: () => void;
+  submitting: boolean;
+  apiError?: string | null;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [touched, setTouched] = useState(false);
+
+  const nameOk = !!name.trim();
+  const beltOk = !!beltKey;
+  const contactOk = !!(phone.trim() || email.trim());
+  const valid = nameOk && beltOk && contactOk;
+
+  function handleSubmit() {
+    setTouched(true);
+    if (!valid || submitting) return;
+    const belt = beltKey ? KarateBelts[beltKey] : null;
+    onSubmit({
+      name: name.trim(),
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
+      belt_level: beltKey as string,
+      belt_name: belt?.label || (beltKey as string),
+    });
+  }
+
+  return (
+    <View style={st.addCard}>
+      <Text style={st.addCardTitle}>Novo praticante</Text>
+
+      <Text style={st.fieldLabel}>Nome *</Text>
+      <FocusField
+        value={name}
+        onChangeText={setName}
+        placeholder="Nome completo do praticante"
+        accessibilityLabel="Nome do novo praticante"
+        style={st.textInputWrap}
+        inputStyle={st.textInput}
+      />
+      {touched && !nameOk && <Text style={st.addFieldError}>Informe o nome do praticante.</Text>}
+
+      <Text style={[st.fieldLabel, { marginTop: 12 }]}>Telefone</Text>
+      <FocusField
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="(00) 00000-0000"
+        accessibilityLabel="Telefone do novo praticante"
+        style={st.textInputWrap}
+        inputStyle={st.textInput}
+      />
+
+      <Text style={[st.fieldLabel, { marginTop: 12 }]}>E-mail</Text>
+      <FocusField
+        value={email}
+        onChangeText={setEmail}
+        placeholder="email@exemplo.com"
+        accessibilityLabel="E-mail do novo praticante"
+        style={st.textInputWrap}
+        inputStyle={st.textInput}
+      />
+      {touched && !contactOk && (
+        <Text style={st.addFieldError}>Informe pelo menos um contato (telefone ou e-mail).</Text>
+      )}
+
+      <Text style={[st.fieldLabel, { marginTop: 12 }]}>Faixa *</Text>
+      <View style={st.beltChipsRow}>
+        {NON_LEGACY_BELT_KEYS.map((key) => {
+          const belt = KarateBelts[key];
+          const selected = beltKey === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => setBeltKey(key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`Faixa ${belt.label}`}
+              style={[
+                st.beltChip,
+                { backgroundColor: belt.color, borderColor: selected ? P.ink : "rgba(0,0,0,0.12)" },
+                selected && st.beltChipSelected,
+              ]}
+            >
+              <Text style={[st.beltChipLabel, { color: belt.textColor }]}>{belt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {touched && !beltOk && <Text style={st.addFieldError}>Selecione a faixa do praticante.</Text>}
+
+      {!!apiError && <Text style={st.submitError}>{apiError}</Text>}
+
+      <View style={st.addFormActions}>
+        <Pressable
+          onPress={submitting ? undefined : onCancel}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Cancelar cadastro de praticante"
+          style={[st.addCancelBtn, submitting && { opacity: 0.5 }]}
+        >
+          <Text style={st.addCancelBtnText}>Cancelar</Text>
+        </Pressable>
+        <ConfirmButton
+          label={submitting ? "Adicionando..." : "Adicionar"}
+          onPress={handleSubmit}
+          loading={submitting}
+          disabled={submitting || (touched && !valid)}
+          style={st.addSubmitBtn}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function RosterUpdatePortalScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const tokenStr = Array.isArray(token) ? token[0] : token || "";
@@ -262,6 +420,18 @@ export default function RosterUpdatePortalScreen() {
   const [activeMap, setActiveMap] = useState<Record<string, boolean> | null>(null);
   const [validatedBy, setValidatedBy] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+
+  // Praticantes cadastrados pelo sensei nesta sessão do portal (POST
+  // /:token/practitioner). Somados aos do GET original — o token NÃO é
+  // consumido por esse POST, então o sensei pode adicionar vários antes
+  // de confirmar o quadro no final.
+  const [addedPracticantes, setAddedPracticantes] = useState<RosterPractitioner[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addFeedback, setAddFeedback] = useState<string | null>(null);
+  const addFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (addFeedbackTimer.current) clearTimeout(addFeedbackTimer.current);
+  }, []);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["karate-roster-update", tokenStr],
@@ -284,7 +454,7 @@ export default function RosterUpdatePortalScreen() {
 
   const submitMut = useMutation({
     mutationFn: () => {
-      const praticantes = data?.praticantes || [];
+      const praticantes = [...(data?.praticantes || []), ...addedPracticantes];
       const updates: RosterUpdateInput[] = praticantes.map((p) => ({
         student_id: p.id,
         is_active: activeMap?.[p.id] ?? p.is_active,
@@ -294,7 +464,28 @@ export default function RosterUpdatePortalScreen() {
     onSuccess: () => setConfirmed(true),
   });
 
-  const praticantes: RosterPractitioner[] = data?.praticantes || [];
+  const addMut = useMutation({
+    mutationFn: (input: AddPractitionerInput) => karatePublicApi.addPublicPractitioner(tokenStr, input),
+    onSuccess: (created) => {
+      const newPractitioner: RosterPractitioner = {
+        id: created.id,
+        name: created.name,
+        karate_registration_number: created.karate_registration_number,
+        belt_name: created.belt_name,
+        is_active: true,
+      };
+      // Anexa à lista local + já marca ativo no mapa de toggles, refletindo
+      // no contador (ActiveProgress) e na linha da lista imediatamente.
+      setAddedPracticantes((prev) => [...prev, newPractitioner]);
+      setActiveMap((prev) => ({ ...(prev || {}), [newPractitioner.id]: true }));
+      setShowAddForm(false);
+      setAddFeedback(`${newPractitioner.name} foi adicionado ao quadro.`);
+      if (addFeedbackTimer.current) clearTimeout(addFeedbackTimer.current);
+      addFeedbackTimer.current = setTimeout(() => setAddFeedback(null), 4000);
+    },
+  });
+
+  const praticantes: RosterPractitioner[] = [...(data?.praticantes || []), ...addedPracticantes];
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -473,6 +664,27 @@ export default function RosterUpdatePortalScreen() {
 
         <ActiveProgress active={activeCount} total={praticantes.length} />
 
+        {addFeedback && (
+          <View style={st.addFeedbackBanner}>
+            <Icon name="checkmark-circle" size={16} color={P.ok} />
+            <Text style={st.addFeedbackText}>{addFeedback}</Text>
+          </View>
+        )}
+
+        {showAddForm ? (
+          <AddPractitionerForm
+            submitting={addMut.isPending}
+            apiError={addMut.isError ? ((addMut.error as any)?.message || "Erro ao adicionar praticante. Tente novamente.") : null}
+            onSubmit={(input) => addMut.mutate(input)}
+            onCancel={() => { setShowAddForm(false); addMut.reset(); }}
+          />
+        ) : (
+          <AddPractitionerToggle
+            disabled={submitMut.isPending}
+            onPress={() => { addMut.reset(); setAddFeedback(null); setShowAddForm(true); }}
+          />
+        )}
+
         {filtered.length === 0 ? (
           <View style={st.emptyCard}>
             <Text style={st.emptyText}>Nenhum praticante encontrado.</Text>
@@ -607,6 +819,26 @@ const st = StyleSheet.create({
 
   emptyCard: { backgroundColor: P.glass, borderRadius: KarateRadius.md, padding: 20, borderWidth: 1, borderColor: P.border, alignItems: "center" },
   emptyText: { fontSize: 13, color: P.ink3 },
+
+  addFeedbackBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.okSoft, borderWidth: 1, borderColor: P.okLine, borderRadius: KarateRadius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
+  addFeedbackText: { fontSize: 12.5, color: P.ink, fontWeight: "600", flex: 1 },
+
+  addToggleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.md, backgroundColor: P.glass, paddingVertical: 12, marginBottom: 14 },
+  addToggleBtnText: { fontSize: 13.5, fontWeight: "700", color: P.primary },
+
+  addCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginBottom: 14 },
+  addCardTitle: { fontFamily: KarateFonts.heading, fontSize: 16, color: P.ink, marginBottom: 12 },
+  addFieldError: { fontSize: 11.5, color: P.danger, marginTop: 6 },
+
+  beltChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  beltChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1 },
+  beltChipSelected: { borderWidth: 2, ...KarateShadows.sm },
+  beltChipLabel: { fontSize: 12.5, fontWeight: "700" },
+
+  addFormActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 16 },
+  addCancelBtn: { paddingVertical: 12, paddingHorizontal: 16 },
+  addCancelBtnText: { fontSize: 13.5, fontWeight: "700", color: P.ink3 },
+  addSubmitBtn: { paddingVertical: 12, paddingHorizontal: 22 },
 
   row: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: KarateRadius.md, borderWidth: 1, padding: 14, marginBottom: 8 },
   rowName: { fontSize: 14.5, fontWeight: "700", color: P.ink },
