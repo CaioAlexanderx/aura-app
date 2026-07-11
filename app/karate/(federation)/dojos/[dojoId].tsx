@@ -41,7 +41,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
-  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated,
+  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
@@ -61,6 +61,7 @@ import RedistribuirPraticantesModal from "@/components/karate/RedistribuirPratic
 import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
+import { ModalPop } from "@/components/anim/ModalPop";
 import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, RosterValidation } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
@@ -70,6 +71,14 @@ import { copyToClipboard } from "@/utils/clipboard";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
+// Item 2 (menu de overflow do header): mesmo padrão hover-só-web + fallback
+// touch usado em InactivateChoiceDialog/RedistribuirPraticantesModal.
+const MENU_IS_WEB = Platform.OS === "web";
+const OVERFLOW_MENU_WIDTH = 264;
+
+type OverflowMenuItem =
+  | { type: "action"; key: string; label: string; icon: string; onPress: () => void; destructive?: boolean; disabled?: boolean }
+  | { type: "divider"; key: string };
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
 const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -172,6 +181,26 @@ export default function DojoDetailScreen() {
   const [exportOpen, setExportOpen] = useState(false);
   // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
   const [teamOpen, setTeamOpen] = useState(false);
+
+  // Item 2: menu de overflow do header (kebab). Ancorado no botão via
+  // measureInWindow — mesmo padrão de Modal transparent já usado nos demais
+  // diálogos desta tela, só que posicionado perto do gatilho em vez de
+  // centralizado.
+  const kebabRef = useRef<any>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [overflowPos, setOverflowPos] = useState<{ top: number; left: number } | null>(null);
+  const openOverflowMenu = useCallback(() => {
+    const node = kebabRef.current;
+    if (node && typeof node.measureInWindow === "function") {
+      node.measureInWindow((x: number, y: number, width: number, height: number) => {
+        setOverflowPos({ top: y + height + 6, left: Math.max(8, x + width - OVERFLOW_MENU_WIDTH) });
+        setOverflowOpen(true);
+      });
+    } else {
+      setOverflowPos({ top: 96, left: 24 });
+      setOverflowOpen(true);
+    }
+  }, []);
 
   // Cascata de inativação: diálogo de escolha (Inativar todos vs. Redistribuir)
   // ao acionar "Suspender", e o modal de tabela editável do Redistribuir.
@@ -447,42 +476,54 @@ export default function DojoDetailScreen() {
           <View style={styles.headActions}>
             <ShojiBadge dojoStatus={data.status} />
             <View style={styles.headBtns}>
+              {/* Item 2 (overflow do header): só os primários ficam soltos —
+                  Ver praticantes + Editar. O resto (Exportar, Solicitar
+                  atualização cadastral, Suspender, Excluir dojô) foi para o
+                  menu kebab abaixo, MESMOS handlers/estados de antes. */}
               <ShojiButton
                 label="Ver praticantes"
                 icon="people-outline"
                 variant="ghost"
                 onPress={() => router.push(("/karate/praticantes?dojo_id=" + encodeURIComponent(dojoId!)) as any)}
               />
-              <ShojiButton label="Exportar" icon="download-outline" variant="sumi" onPress={() => setExportOpen(true)} />
               <ShojiButton label="Editar" icon="create-outline" variant="ghost" onPress={() => setEditOpen(true)} />
-              <ShojiButton
-                label={requestingRoster ? "Solicitando..." : "Solicitar atualização cadastral"}
-                icon="refresh"
-                variant="ghost"
-                onPress={requestRosterUpdate}
+
+              <TouchableOpacity
+                ref={kebabRef}
+                style={styles.kebabBtn}
+                onPress={openOverflowMenu}
+                accessibilityRole="button"
+                accessibilityLabel="Mais ações"
+              >
+                <Icon name="ellipsis-vertical" size={16} color={C.ink} />
+              </TouchableOpacity>
+
+              <HeaderOverflowMenu
+                visible={overflowOpen}
+                position={overflowPos}
+                onClose={() => setOverflowOpen(false)}
+                items={[
+                  { type: "action", key: "export", label: "Exportar", icon: "download-outline", onPress: () => setExportOpen(true) },
+                  {
+                    type: "action", key: "roster",
+                    label: requestingRoster ? "Solicitando..." : "Solicitar atualização cadastral",
+                    icon: "refresh", onPress: requestRosterUpdate, disabled: requestingRoster,
+                  },
+                  { type: "divider", key: "div-danger" },
+                  {
+                    type: "action", key: "suspend",
+                    label: isSuspended ? "Reativar dojô" : "Suspender dojô",
+                    icon: "power", onPress: onSuspendPress, disabled: busy,
+                    // Só entra vermelho quando a ação é destrutiva (suspender);
+                    // reativar continua neutro.
+                    destructive: !isSuspended,
+                  },
+                  {
+                    type: "action", key: "delete", label: "Excluir dojô", icon: "trash",
+                    onPress: deleteDojo, disabled: busy, destructive: true,
+                  },
+                ]}
               />
-
-              <TouchableOpacity
-                style={[styles.iconBtn, busy && styles.btnDisabled]}
-                disabled={busy}
-                onPress={onSuspendPress}
-                accessibilityRole="button"
-                accessibilityLabel={isSuspended ? "Reativar dojô" : "Suspender dojô"}
-              >
-                <Icon name="power" size={14} color={C.ink} />
-                <Text style={styles.iconBtnTxt}>{isSuspended ? "Reativar" : "Suspender"}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.dangerBtn, busy && styles.btnDisabled]}
-                disabled={busy}
-                onPress={deleteDojo}
-                accessibilityRole="button"
-                accessibilityLabel="Excluir dojô"
-              >
-                <Icon name="trash" size={14} color="#fdf8f2" />
-                <Text style={styles.dangerBtnTxt}>Excluir dojô</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1129,6 +1170,100 @@ function RegisterPaymentModal({ visible, busy, onClose, onSave }: {
   );
 }
 
+// ── Item 2: menu de overflow do header (kebab) ─────────────────────────
+// Popover ancorado no botão via measureInWindow, dentro de um Modal
+// transparent (mesmo primitivo dos demais diálogos desta tela — funciona
+// igual em web/nativo) para capturar o clique-fora e fechar. Reaproveita o
+// ModalPop (scale+fade) já usado em InactivateChoiceDialog/Destino. Nenhum
+// handler muda de comportamento — só reorganiza a apresentação.
+function HeaderOverflowMenu({
+  visible, position, onClose, items,
+}: {
+  visible: boolean;
+  position: { top: number; left: number } | null;
+  onClose: () => void;
+  items: OverflowMenuItem[];
+}) {
+  if (!position) return null;
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={onClose}
+        accessibilityLabel="Fechar menu de ações"
+      />
+      <ModalPop
+        visible={visible}
+        duration={140}
+        style={[overflowStyles.menu, { top: position.top, left: position.left }]}
+      >
+        <View accessibilityRole="menu">
+          {items.map((it) =>
+            it.type === "divider" ? (
+              <View key={it.key} style={overflowStyles.divider} />
+            ) : (
+              <OverflowMenuRow
+                key={it.key}
+                item={it}
+                onSelect={() => { onClose(); it.onPress(); }}
+              />
+            )
+          )}
+        </View>
+      </ModalPop>
+    </Modal>
+  );
+}
+
+function OverflowMenuRow({ item, onSelect }: {
+  item: Extract<OverflowMenuItem, { type: "action" }>;
+  onSelect: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const tone = item.destructive ? P.red : C.ink;
+  return (
+    <Pressable
+      onPress={item.disabled ? undefined : onSelect}
+      disabled={item.disabled}
+      onHoverIn={MENU_IS_WEB ? () => setHovered(true) : undefined}
+      onHoverOut={MENU_IS_WEB ? () => setHovered(false) : undefined}
+      accessibilityRole="menuitem"
+      accessibilityLabel={item.label}
+      accessibilityState={{ disabled: !!item.disabled }}
+      style={[
+        overflowStyles.item,
+        hovered && !item.disabled && (item.destructive ? overflowStyles.itemHoverDanger : overflowStyles.itemHover),
+        item.disabled && overflowStyles.itemDisabled,
+      ]}
+    >
+      <Icon name={item.icon as any} size={15} color={item.disabled ? P.ink4 : tone} />
+      <Text style={[overflowStyles.itemTxt, { color: item.disabled ? P.ink4 : tone }]}>{item.label}</Text>
+    </Pressable>
+  );
+}
+
+const overflowStyles = StyleSheet.create({
+  menu: {
+    position: "absolute",
+    width: OVERFLOW_MENU_WIDTH,
+    backgroundColor: P.paper,
+    borderRadius: R.lg,
+    borderWidth: 1,
+    borderColor: P.line2,
+    paddingVertical: 6,
+    ...(Platform.OS === "web" ? ({ boxShadow: "0 1px 2px rgba(43,38,32,0.06), 0 18px 40px -20px rgba(43,38,32,0.45)" } as any) : null),
+  } as ViewStyle,
+  divider: { height: 1, backgroundColor: P.line, marginVertical: 6, marginHorizontal: 8 } as ViewStyle,
+  item: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    minHeight: 40, paddingVertical: 9, paddingHorizontal: 14,
+  } as ViewStyle,
+  itemHover: { backgroundColor: P.glass2 } as ViewStyle,
+  itemHoverDanger: { backgroundColor: P.redWash } as ViewStyle,
+  itemDisabled: { opacity: 0.5 } as ViewStyle,
+  itemTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600" } as TextStyle,
+});
+
 const styles = StyleSheet.create({
   content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 920, width: "100%", alignSelf: "center" } as ViewStyle,
   // b6: botão de voltar Shoji (icon + texto), acima do head.
@@ -1184,10 +1319,9 @@ const styles = StyleSheet.create({
   fieldOptional: { fontWeight: "400", color: P.ink3, fontFamily: F.body } as TextStyle,
   fieldRequired: { color: P.red, fontFamily: F.body } as TextStyle,
 
-  // Botões do header (toggle + excluir)
-  iconBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
-  iconBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
-  dangerBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, borderRadius: R.md, backgroundColor: P.red } as ViewStyle,
+  // Botão kebab do header (Item 2 — abre o menu de overflow)
+  kebabBtn: { width: 38, height: 38, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  // dangerBtnTxt segue usado no modal HAS_HISTORY ("Excluir definitivamente").
   dangerBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
   btnDisabled: { opacity: 0.5 } as ViewStyle,
 

@@ -39,6 +39,9 @@ const PATHS: Record<string, string> = {
   // Power / liga-desliga (Feather \"power\") — usado no toggle Suspender/Reativar
   power:          "M18.36 6.64a9 9 0 11-12.73 0 M12 2v10",
   drag_handle:    "M8 6h.01 M8 12h.01 M8 18h.01 M16 6h.01 M16 12h.01 M16 18h.01",
+  // Três pontos verticais (kebab de overflow) — mesmo truque de "ponto" do
+  // drag_handle acima (linha de comprimento 0 + stroke-linecap round).
+  more_vertical:  "M12 6h.01 M12 12h.01 M12 18h.01",
   // Setas direcionais — usadas em CTAs e onboarding do Studio
   arrow_right:    "M5 12h14 M12 5l7 7-7 7",
   arrow_left:     "M19 12H5 M12 19l-7-7 7-7",
@@ -229,6 +232,11 @@ const ALIASES: Record<string, string> = {
   // Power / liga-desliga (toggle Suspender/Reativar — dojo karate)
   "power-outline":        "power",
   "power-off":            "power",
+  // Kebab / overflow menu — variantes Ionicons/lucide comuns.
+  "ellipsis-vertical":    "more_vertical",
+  "ellipsis-vertical-outline": "more_vertical",
+  "more-vertical":        "more_vertical",
+  "more-horiz":           "more_vertical",
   // ── Ionicons karate status maps (fix/karate-icon-aliases) ───
   // checkmark / check variants
   "checkmark-circle":         "check_circle",
@@ -377,7 +385,7 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
     download: "D", upload: "U", copy: "C", refresh: "R", repeat: "T", eye: "O", menu: "=",
     grid: "#", clock: "T", tag: "#", barcode: "|||", qr_code: "[#]", camera: "O",
-    drag_handle: "=", eye_off: "O", shield: "U", power: "O",
+    drag_handle: "=", eye_off: "O", shield: "U", power: "O", more_vertical: ":",
     tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
     // Novos (25/05)
     shopping_bag: "B", shopping_cart: "C", credit_card: "$",

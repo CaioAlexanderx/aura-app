@@ -47,6 +47,14 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 // (sem custo de animação) pra não travar dojôs com listas grandes.
 const STAGGER_LIMIT = 12;
 const OK = P.ok ?? "#2d8a4e";
+// Item 3 (polish barra de acento): cores mais saturadas exclusivas da barra
+// lateral + tint de fundo bem leve da linha, na cor da decisão. Mantém OK/
+// P.red "puros" para o botão Destino (texto/ícone/borda), que já tinha
+// contraste suficiente — só a barra e o fundo da linha ficam mais fortes.
+const ACCENT_RED = P.red2 ?? "#9d3a30";
+const ACCENT_OK = "#2f6b2c";
+const ROW_TINT_INACTIVATE = "rgba(184,70,58,0.055)";
+const ROW_TINT_TRANSFER = "rgba(47,107,44,0.06)";
 
 interface Props {
   visible: boolean;
@@ -301,7 +309,8 @@ function PractitionerRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const accentColor = accent.interpolate({ inputRange: [0, 1], outputRange: [P.red, OK] });
+  const accentColor = accent.interpolate({ inputRange: [0, 1], outputRange: [ACCENT_RED, ACCENT_OK] });
+  const rowTint = accent.interpolate({ inputRange: [0, 1], outputRange: [ROW_TINT_INACTIVATE, ROW_TINT_TRANSFER] });
   const destBorder = accent.interpolate({ inputRange: [0, 1], outputRange: [P.line2, "#b7e0c2"] });
   const destBg = accent.interpolate({ inputRange: [0, 1], outputRange: [P.glass2, "#f0faf2"] });
   const destTxt = accent.interpolate({ inputRange: [0, 1], outputRange: [P.red, OK] });
@@ -313,11 +322,14 @@ function PractitionerRow({
         transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
       }}
     >
-      <Pressable
+      <AnimatedPressable
         onHoverIn={IS_WEB ? () => setHovered(true) : undefined}
         onHoverOut={IS_WEB ? () => setHovered(false) : undefined}
         style={[
           styles.row,
+          // Item 3: tint de fundo bem leve na cor da decisão (some quando o
+          // hover assume o destaque de P.glassHi abaixo).
+          { backgroundColor: rowTint },
           hovered && ({
             transform: [{ translateY: -1 }],
             backgroundColor: P.glassHi,
@@ -361,7 +373,7 @@ function PractitionerRow({
           </Animated.Text>
           <Icon name="chevron_down" size={12} color={P.ink3} />
         </AnimatedPressable>
-      </Pressable>
+      </AnimatedPressable>
     </Animated.View>
   );
 }
@@ -480,7 +492,7 @@ const styles = StyleSheet.create({
   emptyText:   { textAlign: "center", color: P.ink3, paddingVertical: 24, fontSize: 13, fontFamily: F.body } as TextStyle,
 
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingLeft: 10, paddingRight: 2, borderBottomWidth: 1, borderBottomColor: P.line, flexWrap: "wrap", position: "relative" } as ViewStyle,
-  rowAccent: { position: "absolute", left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2 } as ViewStyle,
+  rowAccent: { position: "absolute", left: 0, top: 6, bottom: 6, width: 4, borderRadius: 2 } as ViewStyle,
   rowName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
   rowReg:  { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 2 } as TextStyle,
 
