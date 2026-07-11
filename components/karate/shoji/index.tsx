@@ -508,7 +508,19 @@ const styles = StyleSheet.create({
   raisedHeaderSheen: { position: "absolute", top: 0, left: 18, right: 18, height: 1, backgroundColor: "rgba(255,253,247,0.65)" } as ViewStyle,
 
   // list well (plano rebaixado — Praticantes/Dojôs)
-  listWell: { backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderRadius: R.xl, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 } as ViewStyle,
+  // Fix regressão scrollbar: precisa de `flex: 1` (+ `minHeight: 0` no web,
+  // pra flexbox permitir encolher abaixo do conteúdo) — sem isso o ListWell
+  // vira uma View de altura "auto" entre o container flex:1 da página e a
+  // FlatList, quebrando a cadeia de altura limitada que a FlatList/ScrollView
+  // usa pra criar o PRÓPRIO scroll interno. Sem altura limitada, a lista
+  // simplesmente cresce pro tamanho do conteúdo e é cortada pelo
+  // `overflow: hidden` do shell (KarateShell.content) — sem scroll, sem
+  // scrollbar nenhuma. Com flex:1 aqui, o ListWell volta a repassar pra
+  // FlatList exatamente a mesma altura limitada que ela recebia antes de
+  // existir o ListWell (quando era filha direta do container flex:1 da
+  // tela) — e a FlatList (ScrollView por baixo) volta a ser o elemento que
+  // rola de fato, alcançado pela scrollbar Shoji escopada em `.karate-shoji-scroll`.
+  listWell: { flex: 1, minHeight: 0, backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderRadius: R.xl, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 } as ViewStyle,
 
   // kpi band
   kpiBand: { flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: C.line, borderRadius: R.xl, backgroundColor: P.glass, overflow: "hidden" } as ViewStyle,
