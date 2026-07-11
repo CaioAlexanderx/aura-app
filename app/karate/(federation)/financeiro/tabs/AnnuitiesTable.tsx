@@ -24,7 +24,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import {
-  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
+  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateShadows as SH,
   annuityStatusView,
 } from "@/constants/karateTheme";
 import { SearchField, Chip, Mono, Body, RowPressable } from "@/components/karate/shoji";
@@ -76,6 +76,27 @@ export interface AnnuityRowVM {
   referencePeriod: string;
 }
 
+// computeDaysOverdue: deriva "dias em atraso" a partir das PRÓPRIAS parcelas
+// (due_date x hoje), sem depender de um campo do backend. Corrige um buraco
+// real: CpfAnnuity nunca trouxe `days_overdue` (só DojoAnnuity tem esse campo
+// na API), então a linha de "Xd em atraso" nunca aparecia pra praticantes —
+// o segmento inteiro perdia essa informação, mesmo sendo a pergunta nº1 de
+// quem abre a tela ("quem está atrasado"). Mantém o campo do backend como
+// fonte preferencial pra dojô (autoridade do servidor), com fallback pro
+// cálculo local; pra CPF (que nunca teve o campo) usa sempre o cálculo local.
+function computeDaysOverdue(installments: AnnuityInstallment[]): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let max = 0;
+  for (const inst of installments) {
+    if (inst.status === "paid" || !inst.due_date) continue;
+    const due = new Date(`${inst.due_date}T00:00:00`);
+    const days = Math.floor((today.getTime() - due.getTime()) / 86400000);
+    if (days > max) max = days;
+  }
+  return max;
+}
+
 function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
   if (seg === "dojo") {
     const d = item as DojoAnnuity;
@@ -88,7 +109,7 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
       whatsapp: d.whatsapp ?? null,
       plan: d.plan ?? null,
       status: d.status,
-      daysOverdue: d.days_overdue ?? 0,
+      daysOverdue: d.days_overdue ?? computeDaysOverdue(d.installments ?? []),
       amount: d.amount ?? 0,
       total: d.total ?? d.amount ?? 0,
       paidTotal: d.paid_total ?? (d.status === "paid" ? (d.amount ?? 0) : 0),
@@ -106,7 +127,7 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
     whatsapp: p.whatsapp ?? null,
     plan: p.plan ?? null,
     status: p.status,
-    daysOverdue: 0,
+    daysOverdue: computeDaysOverdue(p.installments ?? []),
     amount: p.amount ?? 0,
     total: p.total ?? p.amount ?? 0,
     paidTotal: p.paid_total ?? (p.status === "paid" ? (p.amount ?? 0) : 0),
@@ -330,6 +351,7 @@ function AnnuityRowItem({
           <TouchableOpacity
             onPress={(e) => { e.stopPropagation?.(); onToggleSelect(); }}
             style={[styles.checkbox, selected && styles.checkboxOn]}
+            hitSlop={8}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: selected }}
             accessibilityLabel={`Selecionar ${vm.name}`}
@@ -390,7 +412,7 @@ function AnnuityRowItem({
                 <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.ink4} />
               )}
               {vm.rowId && (
-                <TouchableOpacity style={styles.iconBtnDanger} onPress={(e) => { e.stopPropagation?.(); onVoid(); }} accessibilityRole="button" accessibilityLabel={`Remover cobrança de ${vm.name}`}>
+                <TouchableOpacity style={styles.iconBtnDanger} onPress={(e) => { e.stopPropagation?.(); onVoid(); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remover cobrança de ${vm.name}`}>
                   <Icon name="trash-outline" size={14} color={P.red} />
                 </TouchableOpacity>
               )}
@@ -468,12 +490,12 @@ const TableHeader = React.memo(function TableHeader(p: TableHeaderProps) {
   return (
     <View>
       {p.headerElement}
-      <View style={styles.pocoCap}>
+      <View style={[styles.pocoCap, SH.sunken]}>
         <SearchField
           value={p.q}
           onChangeText={p.onChangeQ}
           placeholder={p.seg === "dojo" ? "Buscar por nome do dojô ou código FPKT..." : "Buscar por nome ou matrícula..."}
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 14 }}
         />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
           <Chip label="Sem cobrança" active={p.statusFilter === "no_charge"} onPress={() => p.onStatusFilter(p.statusFilter === "no_charge" ? "all" : "no_charge")} />
@@ -798,7 +820,10 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
 const styles = StyleSheet.create({
   pageScroll: { paddingHorizontal: 40, paddingTop: 48, paddingBottom: 96 } as ViewStyle,
 
-  pocoCap: { backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, paddingHorizontal: 24, paddingTop: 20, marginTop: 20 } as ViewStyle,
+  // marginTop propositalmente ausente: o espaçamento até o header vem do
+  // próprio RaisedHeader (marginBottom: 28, ver AnnuitiesHub) — mesma fonte
+  // única de verdade usada em Praticantes/Dojôs (pocoCap não duplica a margem).
+  pocoCap: { backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, paddingHorizontal: 24, paddingTop: 20 } as ViewStyle,
   pocoItem: { backgroundColor: P.paper2, paddingHorizontal: 24 } as ViewStyle,
   pocoFoot: { backgroundColor: P.paper2, borderBottomLeftRadius: R.xl, borderBottomRightRadius: R.xl, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24 } as ViewStyle,
 

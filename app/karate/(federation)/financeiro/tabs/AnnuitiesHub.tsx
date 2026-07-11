@@ -27,14 +27,15 @@
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
+  View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet, ViewStyle, TextStyle, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import {
-  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateShadows as SH,
+  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
 } from "@/constants/karateTheme";
-import { ShojiBackground, PageHead, Chip, Mono } from "@/components/karate/shoji";
+import { ShojiBackground, PageHead, Chip, Mono, RaisedHeader } from "@/components/karate/shoji";
+import { Motion, webTransition } from "@/constants/motion";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { karateApi, AnnuitySummaryResponse, AnnuitySummaryBucket, AnnuityStatusFilter } from "@/services/karateApi";
 import { AnnuitiesTable } from "./AnnuitiesTable";
@@ -59,11 +60,27 @@ type KpiDef = { key: AnnuityStatusFilter; label: string; bucket?: AnnuitySummary
 
 function KpiCard({ def, active, onPress, loading }: { def: KpiDef; active: boolean; onPress: () => void; loading: boolean }) {
   const color = def.accent === "ok" ? P.ok : def.accent === "danger" ? P.red : def.accent === "warn" ? P.warn : C.ink;
+  // Hover-web (leve elevação/tint, mesmo padrão de Chip no kit Shoji) — o
+  // card É clicável (filtra a lista pelo status), então precisa PARECER
+  // clicável (cursor + realce), não só reagir ao clique.
+  const [hovered, setHovered] = useState(false);
   return (
-    <TouchableOpacity
-      style={[styles.kpiCard, active && styles.kpiCardActive]}
+    // Pressable (não TouchableOpacity) — mesmo componente-base do Chip/
+    // RowPressable no kit Shoji, porque onHoverIn/onHoverOut só têm efeito
+    // garantido no web sobre Pressable (TouchableOpacity não expõe esses
+    // props de forma confiável).
+    <Pressable
+      style={({ pressed }) => [
+        styles.kpiCard,
+        active && styles.kpiCardActive,
+        !active && hovered && styles.kpiCardHover,
+        pressed && { opacity: 0.82 },
+        Platform.OS === "web" ? (webTransition(["background-color", "border-color", "box-shadow"], Motion.fast) as any) : null,
+        Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null,
+      ]}
       onPress={onPress}
-      activeOpacity={0.82}
+      onHoverIn={Platform.OS === "web" ? () => setHovered(true) : undefined}
+      onHoverOut={Platform.OS === "web" ? () => setHovered(false) : undefined}
       accessibilityRole="button"
       accessibilityLabel={`Filtrar por ${def.label}`}
       accessibilityState={{ selected: active }}
@@ -79,7 +96,7 @@ function KpiCard({ def, active, onPress, loading }: { def: KpiDef; active: boole
       <Text style={styles.kpiMeta}>
         {def.bucket?.count ?? 0} {def.bucket?.count === 1 ? "cobrança" : "cobranças"}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -99,29 +116,36 @@ export function AnnuitiesSeasonHeader({
   statusFilter: AnnuityStatusFilter; onStatusFilter: (s: AnnuityStatusFilter) => void;
 }) {
   const segment = seg === "dojo" ? summary?.dojo : summary?.praticante;
+  // Ordem por urgência (não pela ordem do "funil" financeiro): o gestor
+  // de federação quer ver quem deve e quanto está atrasado em segundos —
+  // "Previsto" é só o contexto/total e vem por último.
   const kpis: KpiDef[] = [
-    { key: "all", label: "Previsto", bucket: segment?.previsto },
-    { key: "paid", label: "Recebido", bucket: segment?.recebido, accent: "ok" },
-    { key: "em_aberto", label: "Em aberto", bucket: segment?.em_aberto, accent: "warn" },
     { key: "atrasado", label: "Atrasado", bucket: segment?.atrasado, accent: "danger" },
+    { key: "em_aberto", label: "Em aberto", bucket: segment?.em_aberto, accent: "warn" },
+    { key: "paid", label: "Recebido", bucket: segment?.recebido, accent: "ok" },
+    { key: "all", label: "Previsto", bucket: segment?.previsto },
   ];
 
   const canPrevYear = parseInt(year, 10) > YEAR_MIN;
   const canNextYear = parseInt(year, 10) < YEAR_MAX;
 
   return (
-    <View style={styles.raisedHeader}>
-      <View pointerEvents="none" style={styles.raisedHeaderSheen} />
+    // RaisedHeader (kit Shoji) — mesmo componente COMPARTILHADO de
+    // Praticantes/Dojôs (antes esta tela reimplementava o estilo
+    // "raisedHeader" localmente, com padding/margin levemente diferentes
+    // do canônico; usar o componente do kit elimina esse drift).
+    <RaisedHeader style={{ marginBottom: 28 }}>
       <PageHead
         eyebrow="Financeiro · Aura Karatê"
         title="Anuidades"
-        sub="Cobranças de dojô e de praticante faixa-preta na temporada, com os mesmos números do fechamento — nada é somado na tela."
+        sub="Cobranças de dojô e de praticante faixa-preta da temporada — os mesmos valores do fechamento financeiro, sempre atualizados."
         actions={
           <View style={styles.yearSwitcher} accessibilityRole="adjustable" accessibilityLabel={`Temporada ${year}`}>
             <TouchableOpacity
               onPress={() => canPrevYear && onYear(String(parseInt(year, 10) - 1))}
               disabled={!canPrevYear}
               style={[styles.yearBtn, !canPrevYear && styles.yearBtnOff]}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Temporada anterior"
             >
@@ -132,6 +156,7 @@ export function AnnuitiesSeasonHeader({
               onPress={() => canNextYear && onYear(String(parseInt(year, 10) + 1))}
               disabled={!canNextYear}
               style={[styles.yearBtn, !canNextYear && styles.yearBtnOff]}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Próxima temporada"
             >
@@ -175,7 +200,7 @@ export function AnnuitiesSeasonHeader({
           </>
         )}
       </View>
-    </View>
+    </RaisedHeader>
   );
 }
 
@@ -258,9 +283,6 @@ const styles = StyleSheet.create({
   // dessa faixa, mesmo padrão de RaisedHeader (kit Shoji) / Praticantes-Dojôs.
   scrollContent: { paddingHorizontal: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center", gap: 24 } as ViewStyle,
 
-  raisedHeader: { position: "relative", backgroundColor: P.paperWarm, borderWidth: 1, borderColor: C.line, borderRadius: R.xl, paddingHorizontal: 28, paddingTop: 26, paddingBottom: 22, ...(SH.raised as object) } as ViewStyle,
-  raisedHeaderSheen: { position: "absolute", top: 0, left: 18, right: 18, height: 1, backgroundColor: "rgba(255,253,247,0.65)" } as ViewStyle,
-
   yearSwitcher: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line2, borderRadius: R.pill, paddingHorizontal: 6, paddingVertical: 6 } as ViewStyle,
   yearBtn: { width: 26, height: 26, alignItems: "center", justifyContent: "center", borderRadius: R.pill } as ViewStyle,
   yearBtnOff: { opacity: 0.3 } as ViewStyle,
@@ -269,6 +291,11 @@ const styles = StyleSheet.create({
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 22 } as ViewStyle,
   kpiCard: { flexGrow: 1, flexBasis: 160, minWidth: 150, backgroundColor: P.glass, borderWidth: 1, borderColor: C.line, borderRadius: R.lg, paddingVertical: 16, paddingHorizontal: 16 } as ViewStyle,
   kpiCardActive: { borderColor: P.redLine, backgroundColor: P.redWash } as ViewStyle,
+  // Mesmo tratamento de hover do Chip (kit Shoji) — sinaliza que o card É
+  // clicável (filtra a lista pelo status correspondente).
+  kpiCardHover: Platform.OS === "web"
+    ? ({ backgroundColor: P.glassHi, borderColor: C.line2, boxShadow: "0 3px 8px rgba(43,38,32,0.09)" } as any)
+    : ({ backgroundColor: P.glassHi } as ViewStyle),
   kpiLabel: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", color: C.ink3, letterSpacing: 1 } as TextStyle,
   kpiValue: { fontFamily: F.heading, fontSize: 24, fontWeight: "400", marginTop: 10 } as TextStyle,
   kpiMeta: { fontFamily: F.body, fontSize: 11, color: C.ink3, marginTop: 6 } as TextStyle,
