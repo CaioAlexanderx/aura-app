@@ -46,9 +46,12 @@ import { CampaignResultSummary } from "./CampaignResultSummary";
 import { countForScope, referenceDueDate, rowsForScope } from "./types";
 import type { CampaignStep } from "./types";
 
+// Rótulos alinhados ao mockup ("1 · Escopo", "2 · Planos e valores",
+// "3 · Revisão") — o número vem do stepDot ao lado, não precisa repetir
+// aqui no texto.
 const STEP_LABELS: Record<Exclude<CampaignStep, 4>, string> = {
   1: "Escopo",
-  2: "Valores",
+  2: "Planos e valores",
   3: "Revisão",
 };
 

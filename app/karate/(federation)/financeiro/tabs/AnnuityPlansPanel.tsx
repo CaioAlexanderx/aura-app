@@ -95,25 +95,31 @@ function PlanCard({ federationId, def, fee, onSaved }: {
     }
   };
 
+  // Copy no padrão do mockup (.freq): "N cobrança(s) por ano" + total/ano
+  // quando há mais de uma parcela (ex.: "2 cobranças por ano · R$ 560/ano").
+  const yearTotal = amountOk ? Math.round(amount * def.count * 100) / 100 : null;
+  const freqText = def.count === 1
+    ? "1 cobrança por ano"
+    : `${def.count} cobranças por ano${yearTotal ? ` · ${fmtMoney(yearTotal)}/ano` : ""}`;
+
   return (
     <Card style={styles.card}>
       <View style={styles.cardHead}>
         <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardCount}>{def.count}× cobrança{def.count > 1 ? "s" : ""}/temporada</Text>
+        <Text style={styles.cardFreq}>{freqText}</Text>
       </View>
 
-      <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>Valor por parcela</Text>
-        <View style={styles.amountInputWrap}>
-          <Text style={styles.currencyPrefix}>R$</Text>
-          <TextInput
-            value={amountTxt}
-            onChangeText={(t) => { setAmountTxt(t); setDirty(true); }}
-            keyboardType="decimal-pad"
-            style={styles.amountInput}
-            accessibilityLabel={`Valor da anuidade ${title}`}
-          />
-        </View>
+      {/* Mockup .price: número grande serifado sublinhado (não uma caixa de
+          input comum) — continua editável (TextInput), só a pele muda. */}
+      <View style={styles.priceRow}>
+        <Text style={styles.priceCur}>R$</Text>
+        <TextInput
+          value={amountTxt}
+          onChangeText={(t) => { setAmountTxt(t); setDirty(true); }}
+          keyboardType="decimal-pad"
+          style={styles.priceInput}
+          accessibilityLabel={`Valor da anuidade ${title}`}
+        />
       </View>
 
       <Text style={styles.monthsLabel}>Meses de vencimento ({months.length}/{def.count})</Text>
@@ -212,17 +218,20 @@ export function AnnuityPlansPanel({ federationId }: { federationId: string }) {
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 } as ViewStyle,
-  card: { flexGrow: 1, flexBasis: 280, minWidth: 260, gap: 12 } as ViewStyle,
-  cardHead: { gap: 3 } as ViewStyle,
-  cardTitle: { fontFamily: F.heading, fontSize: 17, color: C.ink } as TextStyle,
-  cardCount: { fontFamily: F.body, fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: 0.6 } as TextStyle,
+  // Mockup .plans: coluna única, max-width 640 (não grid 2 colunas) — cards
+  // mais largos, foco na leitura sequencial dojô → praticante.
+  grid: { flexDirection: "column", gap: 16, maxWidth: 640, width: "100%" } as ViewStyle,
+  card: { gap: 4 } as ViewStyle,
+  cardHead: { gap: 2, marginBottom: 8 } as ViewStyle,
+  cardTitle: { fontFamily: F.heading, fontSize: 18, fontWeight: "400", color: C.ink } as TextStyle,
+  // Mockup .plan-card .freq — "N cobrança(s) por ano" (+ total/ano quando > 1).
+  cardFreq: { fontFamily: F.body, fontSize: 12, color: C.ink3 } as TextStyle,
 
-  amountRow: { gap: 6 } as ViewStyle,
-  amountLabel: { fontFamily: F.body, fontSize: 11, fontWeight: "600", color: C.ink3 } as TextStyle,
-  amountInputWrap: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: C.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: P.glass2 } as ViewStyle,
-  currencyPrefix: { fontFamily: F.mono, fontSize: 13, color: C.ink3 } as TextStyle,
-  amountInput: { flex: 1, fontFamily: F.mono, fontSize: 16, fontWeight: "700", color: C.ink } as TextStyle,
+  // Mockup .price: número grande serifado, sublinhado, moeda pequena muted
+  // à esquerda — substitui a antiga caixa de input com borda em volta.
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: 8, width: 180, marginBottom: 16 } as ViewStyle,
+  priceCur: { fontFamily: F.body, fontSize: 13, color: C.ink3 } as TextStyle,
+  priceInput: { flex: 1, fontFamily: F.heading, fontSize: 30, fontWeight: "400", color: C.ink, padding: 0 } as TextStyle,
 
   monthsLabel: { fontFamily: F.body, fontSize: 11, fontWeight: "600", color: C.ink3 } as TextStyle,
   monthsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 } as ViewStyle,
