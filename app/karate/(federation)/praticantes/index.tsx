@@ -52,6 +52,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body, RowPressable,
+  RaisedHeader, ListWell,
 } from "@/components/karate/shoji";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerListItem } from "@/services/karateApi";
@@ -328,20 +329,24 @@ export default function PraticantesScreen() {
   return (
     <ShojiBackground>
       <View style={styles.content}>
-        {pageHead}
-        {searchAndFilters}
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} />
-        ) : (
-          <FlatList
-            data={items} keyExtractor={(i) => i.id} ListHeaderComponent={renderHeader}
-            contentContainerStyle={styles.listContent}
-            style={{ width: "100%" }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
-            renderItem={renderItem}
-            ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
-          />
-        )}
+        <RaisedHeader style={{ marginBottom: 28 }}>
+          {pageHead}
+          {searchAndFilters}
+        </RaisedHeader>
+        <ListWell>
+          {loading ? (
+            <ActivityIndicator style={{ marginTop: 48, marginBottom: 48 }} size="large" color={P.red} />
+          ) : (
+            <FlatList
+              data={items} keyExtractor={(i) => i.id} ListHeaderComponent={renderHeader}
+              contentContainerStyle={styles.listContent}
+              style={{ width: "100%" }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+              renderItem={renderItem}
+              ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
+            />
+          )}
+        </ListWell>
       </View>
       {fichaModal}
     </ShojiBackground>
