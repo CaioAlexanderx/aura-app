@@ -29,6 +29,15 @@
 //   `role` e mapeia para is_instructor/is_examiner/is_arbiter). Como a API
 //   aceita UM papel por vez, os chips de papel são single-select e coexistem
 //   com o filtro de status e o pré-filtro dojo_id.
+//
+// Fix 11/07/2026 (bug de produção — export ignorava filtros): "Exportar"
+//   chamava karateApi.exportAllPractitioners(federationId) SEM filtro nenhum,
+//   então baixava a federação inteira mesmo com a tela filtrada por dojô (CTA
+//   "Ver praticantes" do detalhe do dojô, ?dojo_id=X) — confuso e pesado
+//   (~9.600 praticantes). Agora o export manda os MESMOS filtros ativos na
+//   tela (dojo_id do pré-filtro de rota, status e busca `q`), então baixa
+//   exatamente o que está listado. Quando filtrado por dojô, o botão e o
+//   nome do arquivo deixam isso explícito.
 // ============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -160,6 +169,12 @@ export default function PraticantesScreen() {
   }, [federationId, debouncedQ, status, role, dojoIdParam]);
   useEffect(() => { load(); }, [load]);
 
+  // Nome do dojô do pré-filtro (para o label do botão, o feedback e o nome
+  // do arquivo exportado). Derivado da própria lista já carregada — todos os
+  // itens compartilham o mesmo dojo_name quando dojo_id está fixado, então
+  // não é preciso um fetch extra só para isso.
+  const filteredDojoName = dojoIdParam ? items[0]?.dojo_name || null : null;
+
   // Submeter no teclado força a busca imediata (assenta o termo agora).
   const submitSearch = useCallback(() => { setDebouncedQ(q); }, [q]);
 
@@ -191,7 +206,13 @@ export default function PraticantesScreen() {
     if (exporting) return;
     setExporting(true);
     try {
-      const data = await karateApi.exportAllPractitioners(federationId);
+      // Fix bug de produção — manda os MESMOS filtros ativos na tela (dojo_id
+      // do pré-filtro de rota, status e busca), não mais a federação inteira.
+      const data = await karateApi.exportAllPractitioners(federationId, {
+        dojo_id: dojoIdParam || undefined,
+        status: status === "all" ? undefined : status,
+        q: debouncedQ || undefined,
+      });
       // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
       const xlsx = await import("xlsx");
       const headers = ["Nome", "Nº FPKT", "CPF", "RG", "Nascimento", "E-mail", "Telefone", "Dojô", "Nº FPKT Dojô", "Faixa", "Situação"];
@@ -213,7 +234,16 @@ export default function PraticantesScreen() {
       xlsx.utils.book_append_sheet(wb, ws, "Praticantes");
 
       const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const fname = `FPKT_praticantes_${today}.xlsx`;
+      // Nome do arquivo reflete o filtro de dojô quando presente (slug do
+      // nome do dojô, sem acentos/espaços) — evita baixar "praticantes" e o
+      // usuário achar que é a federação inteira.
+      const dojoSlug = filteredDojoName
+        ? "_" + filteredDojoName
+            .normalize("NFD").replace(/[̀-ͯ]/g, "")
+            .replace(/[^a-zA-Z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+        : "";
+      const fname = `FPKT_praticantes${dojoSlug}_${today}.xlsx`;
       const out = xlsx.write(wb, { bookType: "xlsx", type: "array" });
       const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -229,17 +259,29 @@ export default function PraticantesScreen() {
     } finally {
       setExporting(false);
     }
-  }, [federationId, exporting]);
+  }, [federationId, exporting, dojoIdParam, status, debouncedQ, filteredDojoName]);
 
   // Cabeçalho da tela (título + CTAs). Fica acima da busca; não tem input.
+  // Quando filtrada por dojô (dojoIdParam), o sub e o label do botão de
+  // export deixam claro que a exportação é só daquele dojô — não da
+  // federação inteira (bug de produção corrigido em 11/07/2026).
+  const exportLabel = exporting
+    ? "Exportando…"
+    : dojoIdParam
+      ? `Exportar dojô${filteredDojoName ? ` (${filteredDojoName})` : ""}`
+      : "Exportar";
   const pageHead = (
     <PageHead
       eyebrow={`${total} ${total === 1 ? "praticante" : "praticantes"} · carteirinha FPKT`}
       title="Praticantes"
-      sub="Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
+      sub={
+        dojoIdParam
+          ? `Exibindo somente os praticantes do dojô${filteredDojoName ? ` ${filteredDojoName}` : ""}. A exportação segue este filtro.`
+          : "Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
+      }
       actions={<>
         <ShojiButton
-          label={exporting ? "Exportando…" : "Exportar"}
+          label={exportLabel}
           icon="download-outline"
           variant="ghost"
           onPress={handleExportPractitioners}

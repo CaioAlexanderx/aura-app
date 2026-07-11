@@ -1221,8 +1221,21 @@ export const karateApi = {
     return request(`/federation/${federationId}/practitioners${query}`);
   },
 
-  /** Exporta todos os praticantes da federação (para .xlsx no FE). */
-  exportAllPractitioners: (federationId: string): Promise<{
+  /**
+   * Exporta praticantes da federação (para .xlsx no FE).
+   *
+   * 11/07/2026: fix bug de produção — a tela de Praticantes chamava esta
+   * função sem filtros, então o export SEMPRE baixava a federação inteira
+   * (~9.600 praticantes) mesmo quando a lista na tela estava filtrada por
+   * dojô (CTA "Ver praticantes" do detalhe do dojô, ?dojo_id=X). Agora
+   * aceita os mesmos filtros opcionais que a listagem (GET /federation/:id/
+   * practitioners aceita): dojo_id, status/affiliation_status, belt_level, q.
+   * Sem filtros → comportamento antigo preservado (exporta todos).
+   */
+  exportAllPractitioners: (
+    federationId: string,
+    filters?: { dojo_id?: string; status?: string; belt_level?: string; q?: string }
+  ): Promise<{
     total: number;
     practitioners: Array<{
       nome: string | null;
@@ -1237,7 +1250,15 @@ export const karateApi = {
       faixa: string | null;
       situacao: string;
     }>;
-  }> => request(`/federation/${federationId}/practitioners/export`, { method: "GET" }),
+  }> => {
+    const qs = new URLSearchParams();
+    if (filters?.dojo_id) qs.set("dojo_id", filters.dojo_id);
+    if (filters?.status) qs.set("status", filters.status);
+    if (filters?.belt_level) qs.set("belt_level", filters.belt_level);
+    if (filters?.q) qs.set("q", filters.q);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/practitioners/export${query}`, { method: "GET" });
+  },
 
   getPractitioner: (federationId: string, practitionerId: string): Promise<PractitionerDetail> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}`),
