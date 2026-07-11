@@ -1278,7 +1278,7 @@ export const karateApi = {
     const qs = new URLSearchParams();
     if (params?.status && params.status !== "all") qs.set("status", params.status);
     qs.set("page", String(params?.page ?? 1));
-    qs.set("pageSize", String(params?.pageSize ?? 25));
+    qs.set("pageSize", String(params?.pageSize ?? 50));
     if (params?.q) qs.set("q", params.q);
     return request<DojoRosterPage>(
       `/federation/${federationId}/dojos/${dojoId}/members-standing?${qs.toString()}`

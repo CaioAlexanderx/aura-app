@@ -76,7 +76,7 @@ const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "
 const MENU_IS_WEB = Platform.OS === "web";
 const OVERFLOW_MENU_WIDTH = 264;
 // Roster paginado no servidor (11/07/2026): 25 praticantes por página.
-const ROSTER_PAGE_SIZE = 25;
+const ROSTER_PAGE_SIZE = 50;
 
 type OverflowMenuItem =
   | { type: "action"; key: string; label: string; icon: string; onPress: () => void; destructive?: boolean; disabled?: boolean }
