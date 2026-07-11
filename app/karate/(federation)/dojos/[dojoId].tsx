@@ -51,7 +51,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import {
-  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1,
+  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1, KpiBand, BarRow,
 } from "@/components/karate/shoji";
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
@@ -304,7 +304,28 @@ export default function DojoDetailScreen() {
 
   // Fase 4 — contadores do roster (topo da seção Praticantes).
   const rosterActiveCount = roster.filter((m) => m.is_active).length;
-  const rosterOverdueBlackBeltCount = roster.filter((m) => m.is_black_belt && m.financeiro === "atrasado").length;
+
+  // Fase 5 — quebra Total/Ativos/Inativos + faixas-pretas (total e % com
+  // anuidade da federação em dia). Tudo derivado client-side do MESMO roster
+  // já buscado acima (VIEW karate_member_standing) — sem 2ª chamada e com a
+  // MESMA fonte que os badges por linha logo abaixo. `rosterHasData` guarda
+  // contra mostrar contagem/percentual falso enquanto carrega ou se o
+  // standing falhar (degrade para "—", nunca um número inventado).
+  const rosterHasData = !rosterLoading && !rosterError;
+  const rosterTotal = roster.length;
+  const rosterInactiveCount = rosterTotal - rosterActiveCount;
+  const blackBelts = roster.filter((m) => m.is_black_belt);
+  const blackBeltTotal = blackBelts.length;
+  const blackBeltPaidCount = blackBelts.filter((m) => m.financeiro === "em_dia").length;
+  const blackBeltOverdueCount = blackBelts.filter((m) => m.financeiro === "atrasado").length;
+  // Uma casa decimal só quando necessário (22% em vez de 22,0%; 22,1% quando não é redondo).
+  const fmtPctSmart = (v: number) => {
+    const rounded = Math.round(v * 1000) / 10; // fração 0..1 → %, 1 casa
+    return Number.isInteger(rounded) ? `${rounded.toFixed(0)}%` : `${rounded.toFixed(1).replace(".", ",")}%`;
+  };
+  const blackBeltPaidLabel = blackBeltTotal > 0
+    ? `${fmtPctSmart(blackBeltPaidCount / blackBeltTotal)} com anuidade paga (${blackBeltPaidCount} de ${blackBeltTotal})`
+    : "—";
 
   // b6: voltar para a lista de dojôs. router.back() quando há histórico de
   // navegação (ex.: veio da lista); fallback para a rota da lista quando a
@@ -386,7 +407,10 @@ export default function DojoDetailScreen() {
           <KV k="Fundação" v={data.dojo_founded_year ? String(data.dojo_founded_year) : null} />
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
           <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
-          <KV k="Praticantes" v={String(data.practitioner_count)} />
+          {/* Fase 5: fonte coerente com a seção Praticantes abaixo — usa a contagem
+              do standing quando disponível; cai para o campo do GET /dojo enquanto
+              o roster carrega ou se ele falhar. */}
+          <KV k="Praticantes" v={rosterHasData ? String(rosterTotal) : String(data.practitioner_count)} />
         </Card>
 
         {/* Endereço — estruturado ou texto legado */}
@@ -425,11 +449,12 @@ export default function DojoDetailScreen() {
             ))}
         </Card>
 
-        {/* Fase 4 — Roster do dojô: praticantes com 2 badges (status + financeiro). */}
+        {/* Fase 4/5 — Roster do dojô: praticantes com 2 badges (status + financeiro),
+            quebra Total/Ativos/Inativos e faixas-pretas com % de anuidade em dia. */}
         <Card style={{ marginTop: SP[6] }}>
           <SectionHead
             title="Praticantes"
-            sub={`${rosterActiveCount} ativo${rosterActiveCount === 1 ? "" : "s"} · ${rosterOverdueBlackBeltCount} preta${rosterOverdueBlackBeltCount === 1 ? "" : "s"} atrasada${rosterOverdueBlackBeltCount === 1 ? "" : "s"}`}
+            sub={rosterHasData ? `${rosterTotal} cadastrado${rosterTotal === 1 ? "" : "s"}` : undefined}
           />
           {rosterLoading ? (
             <View>
@@ -448,7 +473,33 @@ export default function DojoDetailScreen() {
               subtitle="Praticantes cadastrados neste dojô aparecerão aqui, com status e situação financeira."
             />
           ) : (
-            roster.map((m, i) => (
+            <>
+              {/* Fase 5: Total / Ativos / Inativos — mesma fonte (roster) dos badges por linha. */}
+              <KpiBand
+                items={[
+                  { label: "Total", value: rosterTotal },
+                  { label: "Ativos", value: rosterActiveCount },
+                  { label: "Inativos", value: rosterInactiveCount },
+                ]}
+                style={{ marginBottom: SP[5] }}
+              />
+
+              {/* Fase 5: faixas-pretas — total do dojô + % com a anuidade da
+                  federação em dia (financeiro === 'em_dia'). "—" quando não há
+                  faixa-preta cadastrada (evita divisão por zero e % falso). */}
+              <View style={styles.blackBeltBlock}>
+                <Text style={styles.blackBeltLine} numberOfLines={1}>
+                  Faixas-pretas: {blackBeltTotal} · {blackBeltPaidLabel}
+                </Text>
+                {blackBeltTotal > 0 ? (
+                  <View style={{ marginTop: 8 }}>
+                    <BarRow label="Anuidade em dia" value={blackBeltPaidCount} max={blackBeltTotal} color={P.ok} />
+                    <BarRow label="Atrasado" value={blackBeltOverdueCount} max={blackBeltTotal} color={P.danger} />
+                  </View>
+                ) : null}
+              </View>
+
+              {roster.map((m, i) => (
               <View key={m.student_id} style={[styles.rosterRow, i === roster.length - 1 && styles.noBorder]}>
                 <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.rosterName}>{m.full_name}</Text>
@@ -467,7 +518,8 @@ export default function DojoDetailScreen() {
                   ) : null}
                 </View>
               </View>
-            ))
+              ))}
+            </>
           )}
         </Card>
 
@@ -944,6 +996,9 @@ const styles = StyleSheet.create({
   rosterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   rosterName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   rosterBadges: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  // Fase 5 — bloco de resumo das faixas-pretas (texto + BarRow em dia/atrasado).
+  blackBeltBlock: { paddingVertical: 4, marginBottom: SP[5], borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: SP[5] } as ViewStyle,
+  blackBeltLine: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
   annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
   due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
