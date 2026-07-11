@@ -43,6 +43,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, Avatar, ShojiButton, Mono, Body, RowPressable,
+  RaisedHeader, ListWell,
 } from "@/components/karate/shoji";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
@@ -236,20 +237,24 @@ export default function DojosScreen() {
   return (
     <ShojiBackground>
       <View style={styles.content}>
-        {pageHead}
-        {searchAndFilters}
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} size="large" color={P.red} />
-        ) : (
-          <FlatList
-            data={dojos} keyExtractor={(d) => d.id} ListHeaderComponent={renderHeader}
-            contentContainerStyle={styles.listContent}
-            style={{ width: "100%" }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={P.red} />}
-            renderItem={({ item }) => <Row d={item} />}
-            ListEmptyComponent={<KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />}
-          />
-        )}
+        <RaisedHeader style={{ marginBottom: 28 }}>
+          {pageHead}
+          {searchAndFilters}
+        </RaisedHeader>
+        <ListWell>
+          {loading ? (
+            <ActivityIndicator style={{ marginTop: 48, marginBottom: 48 }} size="large" color={P.red} />
+          ) : (
+            <FlatList
+              data={dojos} keyExtractor={(d) => d.id} ListHeaderComponent={renderHeader}
+              contentContainerStyle={styles.listContent}
+              style={{ width: "100%" }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={P.red} />}
+              renderItem={({ item }) => <Row d={item} />}
+              ListEmptyComponent={<KarateEmptyState icon="home-outline" title="Nenhum dojô encontrado" subtitle="Ajuste a busca/filtros ou cadastre um novo dojô." style={{ paddingVertical: 40 }} />}
+            />
+          )}
+        </ListWell>
       </View>
       {fichaModal}
     </ShojiBackground>

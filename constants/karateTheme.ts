@@ -181,6 +181,20 @@ export const KarateShadows = {
     web:     { boxShadow: "4px 4px 0 rgba(43,38,32,0.10)" } as any,
     default: { shadowColor: "#2b2620", shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.10, shadowRadius: 0, elevation: 2 } as any,
   }),
+  // Item hierarquia (Praticantes/Dojôs): dois planos — header ELEVADO
+  // (`raised`, sombra projetada suave pra baixo) e lista REBAIXADA
+  // (`sunken`, sombra INTERNA no topo). Web usa `boxShadow` (inclui
+  // `inset` no sunken); nativo não tem inset — cai só no drop-shadow
+  // suave (raised) e em nenhuma sombra extra (sunken usa fundo+borda,
+  // ver ListWell no kit Shoji).
+  raised: Platform.select({
+    web:     { boxShadow: "0 16px 34px -24px rgba(43,38,32,0.30), 0 2px 5px rgba(43,38,32,0.05)" } as any,
+    default: { shadowColor: "#2b2620", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.10, shadowRadius: 16, elevation: 3 } as any,
+  }),
+  sunken: Platform.select({
+    web:     { boxShadow: "inset 0 10px 14px -12px rgba(43,38,32,0.22), inset 0 1px 0 rgba(43,38,32,0.05)" } as any,
+    default: {} as any,
+  }),
 } as const;
 
 // ─────────────────────────────────────────────────────────────

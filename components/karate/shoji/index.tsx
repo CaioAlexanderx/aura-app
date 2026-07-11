@@ -178,6 +178,36 @@ export function PageHead({ eyebrow, title, sub, actions, style }: {
   );
 }
 
+// ── RaisedHeader (plano ELEVADO) ──────────────────────────────
+// Item hierarquia (Praticantes/Dojôs): envolve PageHead + busca/filtros
+// como uma folha de papel ACIMA da página — fundo mais claro que o papel
+// de fundo (P.paperWarm vs P.paper), sombra projetada suave pra baixo
+// (KarateShadows.raised) e um fio de luz sutil na borda de cima (View
+// real, não CSS — funciona igual em web e nativo, sem depender de
+// `inset`). É o polo "elevado" da hierarquia de dois planos; o polo
+// rebaixado é o ListWell, abaixo.
+export function RaisedHeader({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={[styles.raisedHeader, SH.raised, style]}>
+      <View pointerEvents="none" style={styles.raisedHeaderSheen} />
+      {children}
+    </View>
+  );
+}
+
+// ── ListWell (plano REBAIXADO) ────────────────────────────────
+// Envolve o thead + a lista (FlatList) como um vão RECUADO: fundo
+// levemente mais escuro que o papel de fundo (P.paper2), borda superior
+// nítida (C.line2) e — no web — sombra INTERNA na borda de cima
+// (KarateShadows.sunken, com `inset`). A sombra é decoração do CONTAINER,
+// não do conteúdo que rola dentro da FlatList: continua visível na
+// fronteira enquanto a lista rola. No nativo, `inset` não existe — o
+// fallback aceito é fundo-recuado + borda nítida, sem gradient/overlay
+// extra (evita depender de libs de gradiente que o app não usa).
+export function ListWell({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.listWell, SH.sunken, style]}>{children}</View>;
+}
+
 // ── SectionHead (h2 serif + filete vermelho) ─────────────────
 export function SectionHead({ title, sub, actions, style }: {
   title: string; sub?: string; actions?: React.ReactNode; style?: StyleProp<ViewStyle>;
@@ -473,6 +503,12 @@ const styles = StyleSheet.create({
 
   // card
   card: { backgroundColor: P.glass, borderWidth: 1, borderColor: C.line, borderRadius: R.xl, padding: SP[6] } as ViewStyle,
+  // raised header (plano elevado — Praticantes/Dojôs)
+  raisedHeader: { position: "relative", backgroundColor: P.paperWarm, borderWidth: 1, borderColor: C.line, borderRadius: R.xl, paddingHorizontal: 28, paddingTop: 26, paddingBottom: 20 } as ViewStyle,
+  raisedHeaderSheen: { position: "absolute", top: 0, left: 18, right: 18, height: 1, backgroundColor: "rgba(255,253,247,0.65)" } as ViewStyle,
+
+  // list well (plano rebaixado — Praticantes/Dojôs)
+  listWell: { backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderRadius: R.xl, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 } as ViewStyle,
 
   // kpi band
   kpiBand: { flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: C.line, borderRadius: R.xl, backgroundColor: P.glass, overflow: "hidden" } as ViewStyle,
