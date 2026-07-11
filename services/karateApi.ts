@@ -1069,6 +1069,24 @@ export const karateApi = {
     return request(`/federation/${federationId}/practitioners${query}`);
   },
 
+  /** Exporta todos os praticantes da federação (para .xlsx no FE). */
+  exportAllPractitioners: (federationId: string): Promise<{
+    total: number;
+    practitioners: Array<{
+      nome: string | null;
+      numero_fpkt: string | null;
+      cpf: string | null;
+      rg: string | null;
+      nascimento: string | null;
+      email: string | null;
+      telefone: string | null;
+      dojo: string | null;
+      dojo_fpkt: string | null;
+      faixa: string | null;
+      situacao: string;
+    }>;
+  }> => request(`/federation/${federationId}/practitioners/export`, { method: "GET" }),
+
   getPractitioner: (federationId: string, practitionerId: string): Promise<PractitionerDetail> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}`),
 
