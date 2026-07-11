@@ -23,7 +23,7 @@ import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P, BeltKey } from "@/constants/karateTheme";
 import { karateApi } from "@/services/karateApi";
 import { request } from "@/services/api";
-import { parseBrDate } from "@/components/inputs/DateInput";
+import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
 import { stripRedundantCountryCode } from "@/components/karate/praticante-detalhe/helpers";
 import { pickFileWeb } from "@/services/studioUploadApi";
@@ -86,6 +86,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [beltKey, setBeltKey] = useState<BeltKey | null>("branca");
   const [danDeg, setDanDeg] = useState<number | null>(null);
   const [kyuDeg, setKyuDeg] = useState<number | null>(null);
+  // Data de último exame — só no cadastro (opcional). Se preenchida, vira o
+  // graduated_at da faixa inicial semeada em karate_belt_history; se em
+  // branco, o backend grava NULL (não inventa CURRENT_DATE/affiliation_since).
+  const [graduatedAtBr, setGraduatedAtBr] = useState("");
   // P6: File escolhido pelo usuário (web); null = nenhuma foto nova nesta sessão de edição
   const pendingPhotoFile = useRef<File | null>(null);
 
@@ -124,6 +128,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       // F-matricula: reseta sempre para "auto" ao abrir um cadastro novo
       setRegistrationMode("auto"); setManualRegistrationNumber("");
       setBeltKey("branca"); setDanDeg(null); setKyuDeg(null);
+      setGraduatedAtBr("");
       return;
     }
     setCanRepeat(false);
@@ -225,6 +230,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const birthIso = parseBrDate(form.birth_date);
   const dateComplete = form.birth_date.length === 10;
   const dateBad = dateComplete && birthIso === null;
+
+  // Data de último exame (cadastro): opcional; vazio = NULL no histórico.
+  const graduatedAtIso = parseBrDate(graduatedAtBr);
+  const graduatedAtComplete = graduatedAtBr.length === 10;
+  const graduatedAtBad = graduatedAtComplete && graduatedAtIso === null;
   const age = ageFromISO(birthIso);
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
 
@@ -265,6 +275,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (!form.full_name.trim()) { setErrorMsg("Informe o nome completo."); return; }
     if (!form.dojo_id) { setErrorMsg("Selecione o dojô."); return; }
     if (dateBad) { setErrorMsg("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
+    if (!isEdit && graduatedAtBad) { setErrorMsg("A data de último exame é inválida. Corrija ou deixe em branco."); return; }
     if (cpfBad) { setErrorMsg("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
     // P7: menor de idade sem responsável nomeado → bloqueia
     if (isMinor && !form.guardian_name.trim()) {
@@ -322,6 +333,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (!isEdit) {
       const fx = faixaToBody(beltKey, danDeg, kyuDeg);
       if (fx) { body.belt_level = fx.belt_level; body.belt_name = fx.belt_name; body.belt_schema = fx.belt_schema; }
+      // Data de último exame: SÓ envia quando preenchida e válida — vazio
+      // fica de fora do body (nunca string vazia) para o backend gravar NULL.
+      if (graduatedAtIso) { body.graduated_at = graduatedAtIso; }
     }
     // Edição: envia a matrícula só quando o valor mudou (evita 409 falso ao
     // revalidar contra o próprio registro).
@@ -488,14 +502,30 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
               {/* ── Seção: Faixa atual (só no cadastro) ── */}
               {!isEdit ? (
-                <FaixaSection
-                  beltKey={beltKey}
-                  danDeg={danDeg}
-                  kyuDeg={kyuDeg}
-                  onChangeBelt={(k) => { setBeltKey(k); setDanDeg(null); setKyuDeg(null); }}
-                  onChangeDan={setDanDeg}
-                  onChangeKyu={setKyuDeg}
-                />
+                <>
+                  <FaixaSection
+                    beltKey={beltKey}
+                    danDeg={danDeg}
+                    kyuDeg={kyuDeg}
+                    onChangeBelt={(k) => { setBeltKey(k); setDanDeg(null); setKyuDeg(null); }}
+                    onChangeDan={setDanDeg}
+                    onChangeKyu={setKyuDeg}
+                  />
+                  {/* Data de último exame — opcional; vira o graduated_at da faixa
+                      inicial no histórico. Só aparece no cadastro (criação). */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>Data de último exame</Text>
+                    <DateInput
+                      value={graduatedAtBr}
+                      onChangeText={setGraduatedAtBr}
+                      forceShowError={graduatedAtBad}
+                      errorMessage="Data inválida. Use dd/mm/aaaa ou deixe em branco."
+                    />
+                    <Text style={styles.note}>
+                      Se preenchida, vira a data da graduação no histórico. Em branco, o histórico fica sem data.
+                    </Text>
+                  </View>
+                </>
               ) : null}
 
               {/* ── Seção: Contato & endereço ── */}
