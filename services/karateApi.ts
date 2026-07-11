@@ -306,6 +306,59 @@ export interface DojoMemberStanding {
   valor_em_aberto: number | null;
 }
 
+// ── Cascata de inativação + validação de quadro (federação) ─────
+//
+// Fluxo:
+//   1. Federação pode SOLICITAR atualização cadastral (request-roster-update)
+//      a qualquer momento, independente de inativar o dojô — gera um link
+//      público (token) para o dojô confirmar/atualizar o quadro. NÃO mexe
+//      em is_active.
+//   2. GET roster-validation devolve o estado dessa solicitação (pending/
+//      validated/none) para o banner no topo do detalhe do dojô.
+//   3. Ao inativar o dojô, a federação escolhe entre "Inativar todos os
+//      praticantes" (PATCH is_active:false — a cascata do backend cuida do
+//      resto) ou "Redistribuir" (POST redistribute — decide, praticante a
+//      praticante, entre transferir para outro dojô ou inativar; o backend
+//      aplica as decisões E inativa o dojô numa chamada só).
+
+export type RosterValidationStatus = "none" | "pending" | "validated";
+
+export interface RosterValidation {
+  status: RosterValidationStatus;
+  requested_at: string | null;
+  validated_at: string | null;
+  validated_by: string | null;
+  url: string | null;
+}
+
+export interface RequestRosterUpdateResult {
+  status: RosterValidationStatus;
+  requested_at: string | null;
+  token: string | null;
+  url: string;
+}
+
+export type RedistributeAction = "transfer" | "inactivate";
+
+export interface RedistributeDecision {
+  student_id: string;
+  action: RedistributeAction;
+  /** Obrigatório quando action==='transfer'. */
+  destination_dojo_id?: string | null;
+}
+
+export interface RedistributeDojoInput {
+  decisions: RedistributeDecision[];
+  inactivate_dojo: boolean;
+}
+
+export interface RedistributeDojoResult {
+  transferred?: number;
+  inactivated?: number;
+  dojo_inactivated?: boolean;
+  [key: string]: unknown;
+}
+
 // ── Importação CSV / FPKT ──────────────────────────────────────
 
 export interface ImportResult {
@@ -1094,6 +1147,38 @@ export const karateApi = {
       request(`/federation/${federationId}/dojos/${dojoId}${query}`, { method: "DELETE" })
     );
   },
+
+  /**
+   * Solicita atualização cadastral ao dojô — gera/renova um token público e
+   * marca a validação do quadro como pendente. NÃO mexe em is_active (é
+   * independente da cascata de inativação). A tela mostra o link retornado
+   * com botão "Copiar link" (nunca envio automático de mensagem).
+   */
+  requestRosterUpdate: (
+    federationId: string,
+    dojoId: string
+  ): Promise<RequestRosterUpdateResult> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/request-roster-update`, { method: "POST" }),
+
+  /** Estado atual da validação do quadro (para o banner no topo do detalhe do dojô). */
+  getRosterValidation: (
+    federationId: string,
+    dojoId: string
+  ): Promise<RosterValidation> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/roster-validation`),
+
+  /**
+   * Redistribui os praticantes do dojô (transferir para outro dojô destino
+   * ou inativar, decisão por decisão) e inativa o dojô numa chamada só —
+   * usado pelo fluxo "Redistribuir praticantes" ao inativar o dojô, como
+   * alternativa a "Inativar todos" (PATCH is_active:false simples).
+   */
+  redistributeDojo: (
+    federationId: string,
+    dojoId: string,
+    body: RedistributeDojoInput
+  ): Promise<RedistributeDojoResult> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/redistribute`, { method: "POST", body }),
 
   /** Export de dados do dojô no formato do import (abas Academias/Alunos/Histórico). */
   exportDojoData: (
