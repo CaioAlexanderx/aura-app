@@ -65,9 +65,22 @@ type CpfPixTarget = {
   transactionId: string;
   dojoId?: never;
   annuityHistoryId?: never;
+  installmentId?: never;
 };
 
-export type PixTarget = DojoPixTarget | CpfPixTarget;
+// Fase F2 — alvo de UMA parcela (dojô ou praticante, tanto faz: o endpoint
+// .../installments/:id/pix não distingue, deriva do header). Preferível ao
+// alvo dojô/cpf legado quando a anuidade já tem parcelas (installments[]
+// presente em DojoAnnuity/CpfAnnuity) — cobra a parcela certa, não o total.
+type InstallmentPixTarget = {
+  installmentId: string;
+  dojoId?: never;
+  annuityHistoryId?: never;
+  practitionerId?: never;
+  transactionId?: never;
+};
+
+export type PixTarget = DojoPixTarget | CpfPixTarget | InstallmentPixTarget;
 
 interface PixPaymentModalProps {
   visible: boolean;
@@ -138,7 +151,10 @@ export function PixPaymentModal({
     setState({ phase: "creating" });
     try {
       let intent: PixIntent;
-      if (target.dojoId) {
+      if (target.installmentId) {
+        // Fase F2 — POST /financial/annuities/installments/{installmentId}/pix
+        intent = await karateApi.pixInstallment(federationId, target.installmentId);
+      } else if (target.dojoId) {
         // POST /financial/annuities/dojos/{dojoId}/pix
         intent = await karateApi.createDojoPixIntent(federationId, target.dojoId, {
           annuity_history_id: target.annuityHistoryId,
