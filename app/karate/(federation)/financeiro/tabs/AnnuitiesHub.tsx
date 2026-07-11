@@ -43,9 +43,10 @@ import {
 } from "@/services/karateApi";
 import { AnnuitiesTable } from "./AnnuitiesTable";
 import { AnnuityPlansPanel } from "./AnnuityPlansPanel";
+import { AnnuityReguaPanel } from "./AnnuityReguaPanel";
 import { CampaignWizard } from "@/components/karate/campaign/CampaignWizard";
 
-export type AreaKey = "cobrancas" | "planos";
+export type AreaKey = "cobrancas" | "planos" | "regua";
 export type SegKey = "dojo" | "cpf";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -198,9 +199,10 @@ export function AnnuitiesSeasonHeader({
 
       {/* Navegação de áreas (mockup .areas) — abas de sublinhado serifado,
           SEPARADAS do switch Dojôs/Praticantes (mockup .seg, mais abaixo).
-          Nota de escopo: o mockup tem uma 3ª área "Régua de e-mail" que não
-          existe nesta fase — não há endpoint de template/offsets/toggle no
-          backend ainda (fica pra F4); ver relatório da tarefa. */}
+          Fase F4 (11/07/2026) completa a 3ª área do mockup, "Régua de
+          e-mail" (AnnuityReguaPanel.tsx) — editor de assunto/mensagem,
+          preview ao vivo e offsets, sobre o mesmo endpoint de reminder-config
+          que já existia (agora com subject_template/body_template). */}
       <View style={styles.areaTabs}>
         <Pressable
           onPress={() => onArea("cobrancas")}
@@ -219,6 +221,15 @@ export function AnnuitiesSeasonHeader({
         >
           <Text style={[styles.areaTabLabel, area === "planos" && styles.areaTabLabelOn]}>Valores e planos</Text>
           {area === "planos" && <View style={styles.areaTabUnderline} />}
+        </Pressable>
+        <Pressable
+          onPress={() => onArea("regua")}
+          style={styles.areaTab}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: area === "regua" }}
+        >
+          <Text style={[styles.areaTabLabel, area === "regua" && styles.areaTabLabelOn]}>Régua de e-mail</Text>
+          {area === "regua" && <View style={styles.areaTabUnderline} />}
         </Pressable>
       </View>
 
@@ -301,7 +312,8 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
   const router = useRouter();
   const params = useLocalSearchParams<{ area?: string | string[]; seg?: string | string[]; year?: string | string[] }>();
 
-  const area: AreaKey = firstParam(params.area) === "planos" ? "planos" : "cobrancas";
+  const areaParam = firstParam(params.area);
+  const area: AreaKey = areaParam === "planos" ? "planos" : areaParam === "regua" ? "regua" : "cobrancas";
   const seg: SegKey = firstParam(params.seg) === "cpf" ? "cpf" : "dojo";
   const yearParam = firstParam(params.year);
   const year = yearParam && /^\d{4}$/.test(yearParam) ? yearParam : String(CURRENT_YEAR);
@@ -416,6 +428,18 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {header}
           <AnnuityPlansPanel federationId={federationId} />
+        </ScrollView>
+        {wizard}
+      </ShojiBackground>
+    );
+  }
+
+  if (area === "regua") {
+    return (
+      <ShojiBackground>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {header}
+          <AnnuityReguaPanel federationId={federationId} />
         </ScrollView>
         {wizard}
       </ShojiBackground>

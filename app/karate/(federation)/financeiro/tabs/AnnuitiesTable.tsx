@@ -15,7 +15,10 @@
 //   - Ausência de cobrança (no_charge) É NEUTRA — nunca vermelha/alerta.
 //   - em_dia = nenhuma parcela VENCIDA em aberto (parcela futura não conta).
 //   - Nada aqui inativa por falta de pagamento — só "Remover cobrança"
-//     (estorno/void), que é uma correção de lançamento, não uma penalidade.
+//     (retirada do lançamento, NÃO estorno financeiro — a transaction
+//     cancelada preserva a trilha), que é uma correção de lançamento, não
+//     uma penalidade. Fase F4 estende essa mesma ação pro lote (barra de
+//     seleção → VoidBatchModal, POST .../void-batch).
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -36,9 +39,12 @@ import { LancarAnuidadeDojoModal } from "@/components/karate/LancarAnuidadeDojoM
 import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/LancarAnuidadeModal";
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
-  karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan,
+  karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan, AnnuityStatus,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
+import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
+import { VoidBatchModal, VoidBatchTarget } from "@/components/karate/VoidBatchModal";
+import { WhatsAppChargeModal, WhatsAppChargeTarget } from "@/components/karate/WhatsAppChargeModal";
 import type { SegKey } from "./AnnuitiesHub";
 
 const PAGE_SIZE = 50;
@@ -180,12 +186,13 @@ function InstallmentPill({ inst, state, active, onPress }: { inst: AnnuityInstal
 
 // ── Painel expandido: detalhe de cada parcela + ações (pagar/pix/editar) ─
 function InstallmentDetailRow({
-  inst, state, onPay, onPix, onEdit,
+  inst, state, onPay, onPix, onEdit, onSendEmail,
 }: {
   inst: AnnuityInstallment; state: InstState;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
+  onSendEmail: (instId: string) => void;
 }) {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -276,6 +283,15 @@ function InstallmentDetailRow({
               <Icon name="edit" size={12} color={C.ink} />
               <Text style={styles.instActionLabel}>Editar</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.instActionBtn}
+              onPress={() => onSendEmail(inst.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Enviar e-mail de cobrança da parcela ${inst.seq}`}
+            >
+              <Icon name="mail" size={12} color={C.ink} />
+              <Text style={styles.instActionLabel}>E-mail</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -331,13 +347,14 @@ function InstallmentDetailRow({
 // ── Linha da tabela (dojô ou praticante) ─────────────────────────────
 function AnnuityRowItem({
   vm, wide, selected, selectable, expanded, onToggleSelect, onToggleExpand,
-  onPay, onPix, onEdit, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
+  onPay, onPix, onEdit, onSendEmail, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
 }: {
   vm: AnnuityRowVM; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean;
   onToggleSelect: () => void; onToggleExpand: () => void;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
+  onSendEmail: (instId: string) => void;
   onVoid: () => void; onLaunch: () => void;
   voidConfirming: boolean; onVoidConfirm: () => void; onVoidCancel: () => void; voiding: boolean;
 }) {
@@ -441,7 +458,7 @@ function AnnuityRowItem({
       {expanded && vm.installments.length > 0 && (
         <View style={styles.instPanel}>
           {trail.map(({ inst, state }) => (
-            <InstallmentDetailRow key={inst.id} inst={inst} state={state} onPay={onPay} onPix={onPix} onEdit={onEdit} />
+            <InstallmentDetailRow key={inst.id} inst={inst} state={state} onPay={onPay} onPix={onPix} onEdit={onEdit} onSendEmail={onSendEmail} />
           ))}
         </View>
       )}
@@ -457,11 +474,11 @@ const AnnuityRow = React.memo(AnnuityRowItem);
 // que já têm cobrança (o backend as devolveria em `skipped[]` de qualquer
 // forma, mas filtrar aqui deixa a intenção clara pro operador).
 function BulkBar({
-  count, payableCount, noChargeCount, onClear, onBulkPay, bulkPaying, onCopyMessage, onBulkLaunch,
+  count, payableCount, noChargeCount, emailCount, onClear, onBulkPay, bulkPaying, onCopyMessage, onBulkLaunch, onBulkEmail, onBulkVoid,
 }: {
-  count: number; payableCount: number; noChargeCount: number;
+  count: number; payableCount: number; noChargeCount: number; emailCount: number;
   onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void;
-  onBulkLaunch: () => void;
+  onBulkLaunch: () => void; onBulkEmail: () => void; onBulkVoid: () => void;
 }) {
   if (count === 0) return null;
   // Mockup (.floatbar): pílula ESCURA (ink) flutuante, sombra, cantos
@@ -479,19 +496,31 @@ function BulkBar({
           <Text style={styles.bulkBtnLabel}>Registrar pagamento</Text>
         </TouchableOpacity>
       )}
-      {/* Envio por e-mail em lote fica pra F4 (decisão já registrada no PR
-          desta fase) — mockup mostra o botão ativo, mas habilitá-lo aqui
-          exigiria o disparo real de e-mail que ainda não existe pro hub. */}
-      <View accessibilityLabel="Envio por e-mail — em breve">
-        <TouchableOpacity disabled style={[styles.bulkBtn, styles.bulkBtnOff]} accessibilityRole="button" accessibilityLabel="Enviar cobrança por e-mail (em breve)">
-          <Icon name="mail" size={13} color="rgba(255,253,248,0.45)" />
-          <Text style={[styles.bulkBtnLabel, { color: "rgba(255,253,248,0.45)" }]}>Enviar por e-mail · em breve</Text>
+      {/* Envio de e-mail em lote (Fase F4) — POST .../send-email-batch, via
+          SendEmailBatchModal (prévia + contagem antes de enviar, resultado
+          sent/skipped/errors — alvo sem e-mail cadastrado é pulado, nunca
+          erro). Só aparece quando ao menos 1 selecionado tem parcela
+          pendente pra cobrar (mesmo critério de "Registrar pagamento"). */}
+      {emailCount > 0 && (
+        <TouchableOpacity style={styles.bulkBtn} onPress={onBulkEmail} accessibilityRole="button" accessibilityLabel="Enviar cobrança por e-mail em lote">
+          <Icon name="mail" size={13} color={P.paperWarm} />
+          <Text style={styles.bulkBtnLabel}>Enviar por e-mail</Text>
         </TouchableOpacity>
-      </View>
+      )}
       <TouchableOpacity style={styles.bulkBtn} onPress={onCopyMessage} accessibilityRole="button" accessibilityLabel="Copiar mensagem de cobrança">
         <Icon name="copy-outline" size={13} color={P.paperWarm} />
         <Text style={styles.bulkBtnLabel}>Copiar mensagem</Text>
       </TouchableOpacity>
+      {/* Retirada de cobrança em lote (Fase F4) — POST .../void-batch, via
+          VoidBatchModal (confirmação destrutiva + contagem). É retirada do
+          lançamento, NÃO estorno financeiro — o backend já pula (não erra)
+          parcela paga ou NFS-e emitida, com motivo claro no resultado. */}
+      {payableCount > 0 && (
+        <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnWarn]} onPress={onBulkVoid} accessibilityRole="button" accessibilityLabel="Retirar cobrança em lote">
+          <Icon name="trash-outline" size={13} color="#fff" />
+          <Text style={[styles.bulkBtnLabel, { color: "#fff" }]}>Retirar cobrança</Text>
+        </TouchableOpacity>
+      )}
       {noChargeCount > 0 && (
         <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnWarn]} onPress={onBulkLaunch} accessibilityRole="button" accessibilityLabel="Lançar cobrança em lote">
           <Icon name="add" size={13} color="#fff" />
@@ -588,6 +617,18 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // Fase F3 — lançar cobrança em lote (POST .../batch) pras linhas
   // selecionadas que ainda não têm cobrança nesta temporada.
   const [batchLaunchOpen, setBatchLaunchOpen] = useState(false);
+  // Fase F4 — envio manual de e-mail (single via botão da parcela, lote via
+  // barra de seleção) e retirada de cobrança em lote. `emailModalTargets`
+  // não-nulo (mesmo vazio) é o sinal de "modal aberto" (mesmo padrão de
+  // batchLaunchOpen/voidModalTargets abaixo) — nunca reaproveitamos um
+  // array antigo depois de fechado (sempre null on close).
+  const [emailModalTargets, setEmailModalTargets] = useState<EmailBatchTarget[] | null>(null);
+  const [emailModalNoPending, setEmailModalNoPending] = useState(0);
+  const [voidModalTargets, setVoidModalTargets] = useState<VoidBatchTarget[] | null>(null);
+  // Alvo do WhatsApp aberto a partir de um "pulado" do SendEmailBatchModal
+  // (sem e-mail cadastrado) — nunca aberto com o SendEmailBatchModal ainda
+  // visível (armadilha Modal-dentro-de-Modal); ver onOpenWhatsApp abaixo.
+  const [waTarget, setWaTarget] = useState<WhatsAppChargeTarget | null>(null);
 
   // Volta pra página 1 sempre que o filtro/busca/segmento/ano muda; limpa
   // seleção (evita agir sobre linhas que já não estão na tela).
@@ -671,6 +712,69 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // que já têm cobrança ficam de fora daqui (essas são o alvo de
   // handleBulkPay acima) — cada ação olha só pro que faz sentido pra ela.
   const noChargeSelectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && !i.rowId), [items, selected]);
+
+  // Fase F4 — mesmo critério de "achar a parcela acionável" que
+  // handleBulkPay já usa (vencida ou a_vencer): é a parcela que faz
+  // sentido cobrar agora. Conta quantos dos selecionados TÊM essa parcela
+  // (emailPayableCount, alimenta o botão da barra) sem precisar abrir o
+  // modal — o modal em si recalcula na hora de montar os targets.
+  const emailPayableCount = useMemo(() => selectedRows.filter(
+    (vm) => classifyInstallments(vm.installments).some((c) => c.state === "vencida" || c.state === "a_vencer")
+  ).length, [selectedRows]);
+
+  // Envio manual — linha (parcela específica, já sabida pelo caller) ──
+  const handleOpenRowEmail = useCallback((vm: AnnuityRowVM, instId: string) => {
+    const inst = vm.installments.find((i) => i.id === instId);
+    if (!inst) return;
+    setEmailModalNoPending(0);
+    setEmailModalTargets([{
+      key: `${vm.key}-${inst.id}`,
+      instId: inst.id,
+      name: vm.name,
+      whatsapp: vm.whatsapp,
+      amount: inst.amount,
+      referencePeriod: vm.referencePeriod,
+      dueDate: inst.due_date,
+      status: vm.status as AnnuityStatus,
+    }]);
+  }, []);
+
+  // Envio manual — lote (barra de seleção) — mesma seleção de
+  // handleBulkPay, cada linha contribui com sua parcela vencida/a_vencer
+  // (uma por linha; se não tiver nenhuma pendente, entra em noPendingCount
+  // — informativo, não é erro, mostrado no modal antes de confirmar).
+  const handleOpenBulkEmail = useCallback(() => {
+    const targets: EmailBatchTarget[] = [];
+    let noPending = 0;
+    selectedRows.forEach((vm) => {
+      const c = classifyInstallments(vm.installments).find((x) => x.state === "vencida" || x.state === "a_vencer");
+      if (!c) { noPending += 1; return; }
+      targets.push({
+        key: `${vm.key}-${c.inst.id}`,
+        instId: c.inst.id,
+        name: vm.name,
+        whatsapp: vm.whatsapp,
+        amount: c.inst.amount,
+        referencePeriod: vm.referencePeriod,
+        dueDate: c.inst.due_date,
+        status: vm.status as AnnuityStatus,
+      });
+    });
+    setEmailModalNoPending(noPending);
+    setEmailModalTargets(targets);
+  }, [selectedRows]);
+
+  // Retirada de cobrança em lote — annuity_id de cada linha selecionada
+  // que tem cobrança (mesmo subconjunto de handleBulkPay). Não filtramos
+  // paga/NFS-e aqui: o backend já pula (não erra) esses casos com motivo
+  // claro (has_paid_installment / has_nfse) — filtrar client-side só
+  // duplicaria essa regra e poderia ficar desatualizado.
+  const handleOpenVoidBatch = useCallback(() => {
+    const targets: VoidBatchTarget[] = selectedRows
+      .filter((vm) => !!vm.rowId)
+      .map((vm) => ({ annuityId: vm.rowId as string, name: vm.name, referencePeriod: vm.referencePeriod }));
+    setVoidModalTargets(targets);
+  }, [selectedRows]);
 
   const handleBulkPay = useCallback(async () => {
     if (selectedRows.length === 0) return;
@@ -806,6 +910,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
               onPay={handlePayInstallment}
               onPix={(instId, amount, label) => setPixTarget({ installmentId: instId, amount, label: `${item.name} — ${label}` })}
               onEdit={handleEditInstallment}
+              onSendEmail={(instId) => handleOpenRowEmail(item, instId)}
               onVoid={() => setVoidTargetKey(item.key)}
               onLaunch={() => setChargeTargetKey(item.key)}
               voidConfirming={voidTargetKey === item.key}
@@ -824,11 +929,14 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
         count={selected.size}
         payableCount={selectedRows.length}
         noChargeCount={noChargeSelectedRows.length}
+        emailCount={emailPayableCount}
         onClear={() => setSelected(new Set())}
         onBulkPay={handleBulkPay}
         bulkPaying={bulkPaying}
         onCopyMessage={handleCopyMessage}
         onBulkLaunch={() => setBatchLaunchOpen(true)}
+        onBulkEmail={handleOpenBulkEmail}
+        onBulkVoid={handleOpenVoidBatch}
       />
 
       {batchLaunchOpen && (
@@ -880,6 +988,47 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
           practitionerName={chargeTargetVm.name}
           onClose={() => setChargeTargetKey(null)}
           onDone={() => { setChargeTargetKey(null); load(true); onMutated(); }}
+        />
+      )}
+
+      {/* Fase F4 — envio manual de e-mail (linha OU lote, mesmo modal —
+          reaproveita a confirmação com prévia + contagem e o resultado
+          sent/skipped/errors pros dois casos). "Concluir" recarrega a
+          lista (parcela pode ter mudado de estado no log da régua) e
+          limpa a seleção (relevante só no caso de lote). */}
+      {emailModalTargets && (
+        <SendEmailBatchModal
+          visible={!!emailModalTargets}
+          federationId={federationId}
+          targets={emailModalTargets}
+          noPendingCount={emailModalNoPending}
+          onClose={() => setEmailModalTargets(null)}
+          onDone={() => { setEmailModalTargets(null); setSelected(new Set()); load(true); onMutated(); }}
+          onOpenWhatsApp={(t) => { setEmailModalTargets(null); setWaTarget(t); }}
+        />
+      )}
+
+      {/* Fase F4 — retirada de cobrança em lote (destrutivo, com
+          confirmação + contagem antes de agir). */}
+      {voidModalTargets && (
+        <VoidBatchModal
+          visible={!!voidModalTargets}
+          federationId={federationId}
+          targets={voidModalTargets}
+          onClose={() => setVoidModalTargets(null)}
+          onDone={() => { setVoidModalTargets(null); setSelected(new Set()); load(true); onMutated(); }}
+        />
+      )}
+
+      {/* WhatsApp — só abre depois que o SendEmailBatchModal já fechou
+          (onOpenWhatsApp acima), nunca com os dois <Modal> montados ao
+          mesmo tempo (armadilha Modal-dentro-de-Modal no RN Web). */}
+      {waTarget && (
+        <WhatsAppChargeModal
+          visible={!!waTarget}
+          federationId={federationId}
+          target={waTarget}
+          onClose={() => setWaTarget(null)}
         />
       )}
     </View>
@@ -961,7 +1110,6 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   bulkCount: { fontSize: 12.5, fontWeight: "700", color: P.paperWarm, marginRight: 2 } as TextStyle,
   bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.sm, borderWidth: 1, borderColor: "rgba(255,253,248,0.22)", backgroundColor: "rgba(255,253,248,0.10)" } as ViewStyle,
-  bulkBtnOff: { opacity: 0.7 } as ViewStyle,
   bulkBtnWarn: { backgroundColor: P.red, borderColor: P.red } as ViewStyle,
   bulkBtnLabel: { fontSize: 12, fontWeight: "700", color: P.paperWarm } as TextStyle,
   bulkClear: { marginLeft: "auto" } as ViewStyle,
