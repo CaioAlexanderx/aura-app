@@ -515,9 +515,17 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                       inicial no histórico. Só aparece no cadastro (criação). */}
                   <View style={styles.field}>
                     <Text style={styles.label}>Data de último exame</Text>
+                    {/* DateInput usa por padrão a paleta genérica do app (Colors,
+                        que segue o tema claro/escuro global) — aqui forçamos o
+                        mesmo visual dos demais campos da ficha (styles.input do
+                        Shoji, igual ao campo Nascimento) via style/placeholderTextColor,
+                        senão o campo aparenta estar "escurecido" fora do padrão. */}
                     <DateInput
                       value={graduatedAtBr}
                       onChangeText={setGraduatedAtBr}
+                      placeholder="dd/mm/aaaa"
+                      placeholderTextColor={P.ink4}
+                      style={[styles.input, styles.mono, graduatedAtBad && styles.inputBad]}
                       forceShowError={graduatedAtBad}
                       errorMessage="Data inválida. Use dd/mm/aaaa ou deixe em branco."
                     />
