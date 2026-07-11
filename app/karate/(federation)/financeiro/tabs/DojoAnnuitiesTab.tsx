@@ -44,7 +44,6 @@ import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
 import { WhatsAppChargeModal } from "@/components/karate/WhatsAppChargeModal";
 import { LancarAnuidadeDojoModal } from "@/components/karate/LancarAnuidadeDojoModal";
 import { SearchField } from "@/components/karate/shoji";
-import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import { downloadCsv } from "./EntriesTab";
 import {
@@ -201,28 +200,6 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
   // conhecido (ex.: cobrança lançada nesta sessão) — mesmo padrão defensivo
   // de annuityId() em app/karate/(federation)/dojos/[dojoId].tsx.
   const annuityRowId = (a: DojoAnnuity) => a.annuity_history_id || a.annuity_id || null;
-
-  const handleVoid = async (ann: DojoAnnuity) => {
-    const id = annuityRowId(ann);
-    if (!id) {
-      toast.error("Não foi possível identificar esta cobrança para estorno.");
-      return;
-    }
-    const ok = await confirmAsync({
-      title: "Estornar anuidade?",
-      message: `Estornar a anuidade ${ann.reference_period} de ${ann.dojo_name}? O lançamento será cancelado.`,
-      confirmLabel: "Estornar",
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await karateApi.voidAnnuity(federationId, ann.dojo_id, id);
-      toast.success("Anuidade estornada");
-      load(true);
-    } catch (e: any) {
-      toast.error(e?.message || "Não foi possível estornar a anuidade.");
-    }
-  };
 
   return (
     <ScrollView
@@ -413,16 +390,6 @@ export function DojoAnnuitiesTab({ federationId }: Props) {
                     accessibilityLabel={`Editar anuidade de ${ann.dojo_name}`}
                   >
                     <Icon name="create-outline" size={14} color={KarateColors.ink2} />
-                  </TouchableOpacity>
-                )}
-                {ann.status !== "no_charge" && (
-                  <TouchableOpacity
-                    style={st.iconBtn}
-                    onPress={() => handleVoid(ann)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Excluir anuidade de ${ann.dojo_name}`}
-                  >
-                    <Icon name="trash" size={14} color={KarateColors.danger} />
                   </TouchableOpacity>
                 )}
               </View>

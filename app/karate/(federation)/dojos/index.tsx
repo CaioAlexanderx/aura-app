@@ -77,7 +77,7 @@ export default function DojosScreen() {
 
   // Filtros INDEPENDENTES — dois pedaços de estado ortogonais. Nenhum "gruda"
   // no outro: trocar `status` nunca mexe em `region`, e vice-versa.
-  const [status, setStatus] = useState<DojoStatus | "all">("all");
+  const [status, setStatus] = useState<DojoStatus | "all">("active");
   const [region, setRegion] = useState<string | "all">("all");
 
   // Catálogo de regiões — fetch INDEPENDENTE dos filtros, para a lista de regiões

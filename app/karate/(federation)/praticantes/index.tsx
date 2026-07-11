@@ -124,7 +124,7 @@ export default function PraticantesScreen() {
   // `debouncedQ` = termo "assentado" que efetivamente dispara o fetch.
   const [q, setQ] = useState(qParam);
   const [debouncedQ, setDebouncedQ] = useState(qParam);
-  const [status, setStatus] = useState<PractitionerStatusFilter>("all");
+  const [status, setStatus] = useState<PractitionerStatusFilter>("active");
   const [role, setRole] = useState<RoleFilter | null>(null);
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo praticante").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
