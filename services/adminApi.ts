@@ -66,7 +66,7 @@ export type AdminNote = {
 };
 export type AdminAuditLog = {
   id: number;
-  action: string;            // 'extend_trial' | 'set_extra_seats' | etc
+  action: string;            // 'extend_trial' | 'set_extra_seats' | 'resync_subscription' | etc
   payload: Record<string, any> | null;
   reason: string | null;
   created_at: string;
@@ -82,10 +82,29 @@ export type ExtendTrialResponse = {
   previous_trial_ends_at: string | null;
   days_added: number;
 };
+
+// Contrato do billing_sync (backend: services/seatSubscription.js).
+// O service e best-effort e NUNCA lanca: ou volta { updated: true, value, ... }
+// ou { updated: false, skipped: <motivo> }.
+export type BillingSync = {
+  updated: boolean;
+  skipped?: string;          // 'value_unchanged' | 'cancelled' | 'no_subscription' | 'invalid_plan' | 'fetch_failed' | 'subscription_<status>' | 'error'
+  value?: number;            // valor novo da assinatura (plano + 19 x seats)
+  previousValue?: number;    // valor que estava no Asaas antes do PUT
+  subscriptionId?: string;
+  seats?: number;
+  error?: string;
+};
 export type SetExtraSeatsResponse = {
   extra_seats_granted: number;
   previous_extra_seats_granted: number;
   changed: boolean;
+  billing_sync?: BillingSync;
+};
+export type ResyncSubscriptionResponse = {
+  extra_seats_granted: number;
+  billing_status: string | null;
+  billing_sync: BillingSync;
 };
 
 export var adminApi = {
@@ -141,10 +160,28 @@ export var adminApi = {
   // count e o numero absoluto desejado (0-100). Backend grava em
   // companies.extra_seats_granted e propaga pra summarizeSeats em
   // todas as rotas /members/*.
+  //
+  // 15/06/2026: o backend tambem sincroniza a assinatura no Asaas
+  // (plano + 19 x seats) e devolve o resultado em billing_sync.
   setExtraSeats: function(companyId: string, count: number, reason?: string) {
     return request<SetExtraSeatsResponse>(
       "/admin/clients/" + companyId + "/extra-seats",
       { method: "PATCH", body: { count: count, reason: reason || null }, retry: 0 }
+    );
+  },
+  // 11/07/2026 — Ressincronizar assinatura (Aura-backend#358)
+  // Re-dispara o PUT no Asaas com plano + 19 x extra_seats_granted a partir do
+  // estado ATUAL, sem alterar o count. Idempotente: se o valor ja bate, o
+  // backend responde skipped='value_unchanged' e nao faz PUT.
+  //
+  // Existe porque setExtraSeats faz no-op quando o count nao muda — entao,
+  // quando o sync falhava por motivo transitorio (empresa 'cancelled', Asaas
+  // fora do ar), a unica saida era salvar 0 e depois 1, o que dispara um PUT
+  // intermediario REMOVENDO o seat da assinatura.
+  resyncSubscription: function(companyId: string, reason?: string) {
+    return request<ResyncSubscriptionResponse>(
+      "/admin/clients/" + companyId + "/resync-subscription",
+      { method: "POST", body: { reason: reason || null }, retry: 0 }
     );
   },
   auditLog: function(params?: { company_id?: string; action?: string; limit?: number }) {
