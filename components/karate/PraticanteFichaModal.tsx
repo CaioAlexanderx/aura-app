@@ -25,6 +25,7 @@ import { karateApi } from "@/services/karateApi";
 import { request } from "@/services/api";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
+import { stripRedundantCountryCode } from "@/components/karate/praticante-detalhe/helpers";
 import { pickFileWeb } from "@/services/studioUploadApi";
 import { toast as toastGlobal } from "@/components/Toast";
 
@@ -134,7 +135,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         if (p.dojo_id && dojoName) syncLastDojo({ id: p.dojo_id, name: dojoName });
         setForm({
           full_name: p.full_name || "", cpf: p.cpf ? maskCpf(p.cpf) : "", rg: p.rg || "",
-          birth_date: fromISO(p.birth_date), email: p.email || "", phone: p.phone ? maskPhoneUtil(p.phone) : "",
+          // bugfix (telefone sem máscara): números com DDI "55" residual (12/13
+          // dígitos) eram truncados errado pelo slice(0,11) de maskPhone antes de
+          // mascarar, corrompendo o valor num próximo save. Normaliza o DDI antes.
+          birth_date: fromISO(p.birth_date), email: p.email || "",
+          phone: p.phone ? maskPhoneUtil(stripRedundantCountryCode(String(p.phone).replace(/\D/g, ""))) : "",
           dojo_id: p.dojo_id || "", dojo_name: dojoName,
           zip_code: p.zip_code ? maskCEP(p.zip_code) : "", street: p.street || "", number: p.number || "",
           complement: p.complement || "", neighborhood: p.neighborhood || "", city: p.city || "", state: p.state || "",
@@ -145,7 +150,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
           // P7
           guardian_name: p.guardian_name || "",
           guardian_cpf: p.guardian_cpf ? maskCpf(p.guardian_cpf) : "",
-          guardian_phone: p.guardian_phone ? maskPhoneUtil(p.guardian_phone) : "",
+          guardian_phone: p.guardian_phone ? maskPhoneUtil(stripRedundantCountryCode(String(p.guardian_phone).replace(/\D/g, ""))) : "",
           guardian_relationship: (p.guardian_relationship as any) || "",
           // F9
           sex: (p.sex as any) || "",

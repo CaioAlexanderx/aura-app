@@ -63,6 +63,10 @@ export default function FichaPraticanteScreen() {
   const [hasHistory, setHasHistory] = useState<Record<string, number> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [delBusy, setDelBusy] = useState<"deactivate" | "delete" | null>(null);
+  // Toggle rápido de status (Inativar/Ativar) — sem abrir o modal de edição.
+  // Envia SOMENTE is_active (PATCH parcial); nunca mexe em telefone ou
+  // qualquer outro campo da ficha (ver comentário na função abaixo).
+  const [toggling, setToggling] = useState(false);
 
   const allowed = canTransfer(karateRole); // admin/staff podem excluir/editar
 
@@ -98,6 +102,35 @@ export default function FichaPraticanteScreen() {
       }
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // Toggle rápido "Inativar/Ativar" no header do detalhe (fora do modal de
+  // edição completo). Espelha o padrão toggleSuspend do detalhe de dojô
+  // (app/karate/(federation)/dojos/[dojoId].tsx): PATCH parcial só com
+  // is_active + confirmação in-app (confirmAsync) + reload() ao final.
+  // IMPORTANTE: o body enviado tem SOMENTE { is_active }. Nunca inclui
+  // phone/telefone (ou qualquer outro campo) — evita o risco de reenviar o
+  // telefone sem máscara/errado por um update parcial mal-formado.
+  async function handleToggleActive() {
+    if (!practitionerId || !data || toggling) return;
+    const next = !data.is_active;
+    const verb = next ? "ativar" : "inativar";
+    const ok = await confirmAsync({
+      title: next ? "Ativar praticante?" : "Inativar praticante?",
+      message: `Deseja ${verb} "${data.full_name}"? Isso altera apenas o status do praticante — os demais dados da ficha permanecem intactos.`,
+      confirmLabel: next ? "Ativar" : "Inativar",
+      destructive: !next,
+    });
+    if (!ok) return;
+    setToggling(true);
+    try {
+      await karateApi.updatePractitioner(federationId, practitionerId, { is_active: next });
+      reload();
+    } catch (e: any) {
+      webAlert(e?.message || `Não foi possível ${verb} o praticante.`);
+    } finally {
+      setToggling(false);
     }
   }
 
@@ -179,6 +212,20 @@ export default function FichaPraticanteScreen() {
                 <Icon name="edit" size={15} color={KarateColors.primary} />
                 <Text style={styles.editBtnText}>Editar</Text>
               </TouchableOpacity>
+              {allowed && (
+                <TouchableOpacity
+                  style={styles.editBtn}
+                  onPress={handleToggleActive}
+                  disabled={toggling}
+                  accessibilityRole="button"
+                  accessibilityLabel={data.is_active ? "Inativar praticante" : "Ativar praticante"}
+                >
+                  {toggling
+                    ? <ActivityIndicator size="small" color={KarateColors.primary} />
+                    : <Icon name="power" size={15} color={KarateColors.primary} />}
+                  <Text style={styles.editBtnText}>{data.is_active ? "Inativar" : "Ativar"}</Text>
+                </TouchableOpacity>
+              )}
               {allowed && (
                 <TouchableOpacity
                   style={styles.deleteBtn}
