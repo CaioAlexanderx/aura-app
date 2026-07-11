@@ -109,7 +109,7 @@ export default function SaudeRedeScreen() {
     if (drawerKey === "afiliacao" && afiliacao) {
       return {
         title: "Filiação da rede",
-        sub: "Dojôs filiados · situação de filiação " + afiliacao.season,
+        sub: "Todos os dojôs filiados e a situação da anuidade de cada um em " + afiliacao.season,
         cols: [
           { key: "name", label: "Dojô" },
           { key: "city", label: "Cidade" },
@@ -129,12 +129,12 @@ export default function SaudeRedeScreen() {
     if (drawerKey === "cobertura" && cobertura) {
       return {
         title: "Cobertura geográfica",
-        sub: "Regiões administrativas de SP · densidade de dojôs ativos",
+        sub: "Quantos dojôs ativos a federação tem, região por região de SP",
         cols: [
           { key: "regiao", label: "Região" },
           { key: "dojos", label: "Dojôs", align: "right" },
-          { key: "mun_covered", label: "Mun. c/ dojô", align: "right" },
-          { key: "mun_total", label: "Mun. na região", align: "right" },
+          { key: "mun_covered", label: "Cidades com dojô", align: "right" },
+          { key: "mun_total", label: "Total de cidades", align: "right" },
           { key: "practitioners", label: "Praticantes", align: "right" },
           { key: "situacao", label: "Situação" },
         ],
@@ -146,14 +146,14 @@ export default function SaudeRedeScreen() {
             mun_covered: r.mun_covered,
             mun_total: r.mun_total,
             practitioners: fmtN(r.practitioners),
-            situacao: r.dojos === 0 ? "Sem dojô" : r.dojos < 3 ? "Cobertura baixa" : "Coberta",
+            situacao: r.dojos === 0 ? "Sem dojô ainda" : r.dojos < 3 ? "Poucos dojôs" : "Bem atendida",
           })),
       };
     }
     if (drawerKey === "inadimplencia" && inad) {
       return {
-        title: "Inadimplência da rede",
-        sub: "Anuidades de filiação dos dojôs · status de pagamento",
+        title: "Anuidades dos dojôs",
+        sub: "Quais dojôs estão com a anuidade em dia, vencendo ou em atraso",
         cols: [
           { key: "dojo_name", label: "Dojô" },
           { key: "city", label: "Cidade" },
@@ -174,12 +174,12 @@ export default function SaudeRedeScreen() {
       let acc = 0;
       return {
         title: "Projeção de receita",
-        sub: "Por mês de vencimento de anuidade",
+        sub: "Quanto a federação já recebeu e quanto ainda espera receber de anuidade, mês a mês",
         cols: [
           { key: "month", label: "Mês de vencimento" },
-          { key: "annuities", label: "Anuidades vencendo", align: "right" },
-          { key: "realized_fmt", label: "Realizado", align: "right" },
-          { key: "projected_fmt", label: "Projetado", align: "right" },
+          { key: "annuities", label: "Anuidades que vencem", align: "right" },
+          { key: "realized_fmt", label: "Já recebido", align: "right" },
+          { key: "projected_fmt", label: "Previsto", align: "right" },
           { key: "accum", label: "Acumulado", align: "right" },
         ],
         rows: projecao.data.map((d) => {
@@ -218,8 +218,8 @@ export default function SaudeRedeScreen() {
     }
     if (drawerKey === "relacao-faixas" && faixas) {
       return {
-        title: "Relação de faixas",
-        sub: "Distribuição atual da rede por graduação (snapshot)",
+        title: "Distribuição por faixa",
+        sub: "Quantos praticantes a rede tem em cada faixa, hoje",
         cols: [
           { key: "long", label: "Faixa de graduação" },
           { key: "praticantes", label: "Praticantes", align: "right" },
@@ -234,8 +234,8 @@ export default function SaudeRedeScreen() {
     }
     if (drawerKey === "standing" && standing) {
       return {
-        title: "Standing da rede",
-        sub: "Situação ativa/inativa e financeira agregada — praticantes, faixas-pretas e dojôs",
+        title: "Situação da rede",
+        sub: "Quem está ativo, quem está em dia e quem está devendo — praticantes, faixas-pretas e dojôs",
         cols: [
           { key: "indicador", label: "Indicador" },
           { key: "valor", label: "Valor", align: "right" },
@@ -244,12 +244,12 @@ export default function SaudeRedeScreen() {
           { indicador: "Praticantes ativos", valor: fmtN(standing.praticantes.ativos) },
           { indicador: "Praticantes inativos", valor: fmtN(standing.praticantes.inativos) },
           { indicador: "Praticantes · total", valor: fmtN(standing.praticantes.total) },
-          { indicador: "Pretas em dia", valor: fmtN(standing.pretas.em_dia) },
-          { indicador: "Pretas atrasadas", valor: fmtN(standing.pretas.atrasado) },
-          { indicador: "Pretas · R$ em aberto", valor: fmtBRL(standing.pretas.valor_em_aberto) },
+          { indicador: "Faixas-pretas em dia", valor: fmtN(standing.pretas.em_dia) },
+          { indicador: "Faixas-pretas em atraso", valor: fmtN(standing.pretas.atrasado) },
+          { indicador: "Faixas-pretas · R$ a receber", valor: fmtBRL(standing.pretas.valor_em_aberto) },
           { indicador: "Dojôs ativos", valor: fmtN(standing.dojos.ativos) },
           { indicador: "Dojôs em dia", valor: fmtN(standing.dojos.em_dia) },
-          { indicador: "Dojôs atrasados", valor: fmtN(standing.dojos.atrasado) },
+          { indicador: "Dojôs em atraso", valor: fmtN(standing.dojos.atrasado) },
           { indicador: "Dojôs inativos", valor: fmtN(standing.dojos.inativos) },
         ],
       };
@@ -274,7 +274,7 @@ export default function SaudeRedeScreen() {
         {/* Page head */}
         <PageHead
           title="Saúde da Rede"
-          sub="Visão institucional da rede de filiados. Indicadores numéricos derivados de dados que a federação possui — filiação de dojôs, anuidades, graduações registradas e cobertura geográfica. Cada número abre os registros por trás dele e exporta em CSV."
+          sub="Um retrato da sua rede: quantos dojôs estão filiados, quem está em dia com a anuidade, quantos praticantes vocês têm e como a rede está crescendo. Toque em qualquer número para ver os registros por trás dele e exportar em CSV."
         />
 
         {/* KPI strip */}
