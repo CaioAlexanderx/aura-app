@@ -56,12 +56,15 @@
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem ser
 //   objetos (cor/string solta crasha "Invalid value used as weak map key").
 // ============================================================
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
+  Animated,
+  Easing,
   StyleSheet,
   Platform,
   useWindowDimensions,
@@ -72,6 +75,8 @@ import {
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
+import { Motion, webTransition } from "@/constants/motion";
+import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 import { useAuthStore } from "@/stores/auth";
@@ -226,6 +231,109 @@ function Topbar() {
   );
 }
 
+// ── Motion pack Shoji — item 1 (hover sidebar) + item 2 (pulse seleção) ──
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const IS_WEB = Platform.OS === "web";
+
+// Item 1: hover só-web — leve realce de fundo + translateX(~2px) + cor do
+// ícone/texto transicionando. Item ativo mantém destaque próprio (hover
+// não se aplica quando `active`, pra não competir). Fallback touch: sem
+// hover, só press-feedback (scale ~0.97).
+// Item 2: ao SELECIONAR (active passa de false → true), um pulse sutil de
+// scale (1 → 1.035 → 1), uma vez só — nunca em loop.
+function SidebarNavItem({ item, active, onPress }: { item: NavItem; active: boolean; onPress: () => void }) {
+  const reducedMotion = usePrefersReducedMotion();
+  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pressAnim = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
+  const wasActive = useRef(active);
+
+  useEffect(() => {
+    if (active && !wasActive.current && !reducedMotion) {
+      pulseAnim.setValue(1);
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.035, duration: 110, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 1,     duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]).start();
+    }
+    wasActive.current = active;
+  }, [active, reducedMotion, pulseAnim]);
+
+  const setHover = (v: boolean) => {
+    if (!IS_WEB || active || reducedMotion) return;
+    setHovered(v);
+    Animated.timing(hoverAnim, { toValue: v ? 1 : 0, duration: v ? Motion.fast : 160, useNativeDriver: false }).start();
+  };
+
+  const translateX = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2] });
+  const hoverBg = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: ["rgba(184,70,58,0)", "rgba(184,70,58,0.055)"] });
+  const iconColor = active ? KarateColors.primary : hovered ? ShojiPalette.red2 : KarateColors.ink3;
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onHoverIn={() => setHover(true)}
+      onHoverOut={() => setHover(false)}
+      onPressIn={() => Animated.timing(pressAnim, { toValue: 0.97, duration: 90, useNativeDriver: false }).start()}
+      onPressOut={() => Animated.timing(pressAnim, { toValue: 1, duration: Motion.fast, useNativeDriver: false }).start()}
+      accessibilityRole="link"
+      accessibilityLabel={item.label}
+      accessibilityState={{ selected: active }}
+      style={[
+        styles.sidebarItem,
+        active && styles.sidebarItemActive,
+        !active && { backgroundColor: hoverBg as any },
+        { transform: [{ translateX }, { scale: Animated.multiply(pulseAnim, pressAnim) }] },
+        IS_WEB ? (webTransition(["background-color"], Motion.fast) as any) : null,
+      ]}
+    >
+      <Icon name={item.icon} size={18} color={iconColor} />
+      <Text
+        style={[
+          styles.sidebarItemLabel,
+          active && styles.sidebarItemLabelActive,
+          !active && hovered && { color: ShojiPalette.ink },
+          IS_WEB ? (webTransition(["color"], Motion.fast) as any) : null,
+        ]}
+      >
+        {item.label}
+      </Text>
+    </AnimatedPressable>
+  );
+}
+
+// Item 2 (aba mobile): mesmo pulse de seleção da sidebar, sem hover (touch).
+function BottomTabItem({ item, active, onPress }: { item: NavItem; active: boolean; onPress: () => void }) {
+  const reducedMotion = usePrefersReducedMotion();
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const wasActive = useRef(active);
+
+  useEffect(() => {
+    if (active && !wasActive.current && !reducedMotion) {
+      pulseAnim.setValue(1);
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 110, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]).start();
+    }
+    wasActive.current = active;
+  }, [active, reducedMotion, pulseAnim]);
+
+  return (
+    <AnimatedPressable
+      style={[styles.tabItem, { transform: [{ scale: pulseAnim }] }]}
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityLabel={item.label}
+      accessibilityState={{ selected: active }}
+    >
+      <Icon name={item.icon} size={22} color={active ? KarateColors.primary : KarateColors.ink4} />
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{item.label}</Text>
+    </AnimatedPressable>
+  );
+}
+
 function SidebarNav() {
   const router = useRouter();
   const path   = usePathname();
@@ -253,23 +361,12 @@ function SidebarNav() {
   const renderItem = (item: NavItem) => {
     const active = isItemActive(item, path);
     return (
-      <TouchableOpacity
+      <SidebarNavItem
         key={item.route}
-        style={[styles.sidebarItem, active && styles.sidebarItemActive]}
+        item={item}
+        active={active}
         onPress={() => router.push(item.route as any)}
-        accessibilityRole="link"
-        accessibilityLabel={item.label}
-        accessibilityState={{ selected: active }}
-      >
-        <Icon
-          name={item.icon}
-          size={18}
-          color={active ? KarateColors.primary : KarateColors.ink3}
-        />
-        <Text style={[styles.sidebarItemLabel, active && styles.sidebarItemLabelActive]}>
-          {item.label}
-        </Text>
-      </TouchableOpacity>
+      />
     );
   };
 
@@ -372,23 +469,12 @@ function BottomTabNav() {
       {MOBILE_TABS.map((item) => {
         const active = isItemActive(item, path);
         return (
-          <TouchableOpacity
+          <BottomTabItem
             key={item.route}
-            style={styles.tabItem}
+            item={item}
+            active={active}
             onPress={() => router.push(item.route as any)}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: active }}
-          >
-            <Icon
-              name={item.icon}
-              size={22}
-              color={active ? KarateColors.primary : KarateColors.ink4}
-            />
-            <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
+          />
         );
       })}
     </View>

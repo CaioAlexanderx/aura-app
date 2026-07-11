@@ -10,7 +10,7 @@
 // ============================================================
 import React, { useEffect } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform,
+  View, Text, TouchableOpacity, Pressable, StyleSheet, Platform,
   ViewStyle, TextStyle, StyleProp, Animated, Easing,
 } from "react-native";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -27,9 +27,14 @@ import {
   KarateStatus, KarateStatusKey, KarateDojoStatus, KarateAffiliationStatus,
   DojoStatus, AffiliationStatus, KarateBelts, resolveBeltKey,
 } from "@/constants/karateTheme";
+import { Motion, webTransition } from "@/constants/motion";
+import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 
 // ── tracking helper (em → px no RN) ─────────────────────────
 const track = (em: number, fontSize: number) => em * fontSize;
+
+// ── AnimatedPressable — base compartilhada (Chip, RowPressable) ─────
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // ── Fonts (web): injeta o stylesheet do Google Fonts uma vez ──
 const GF_HREF =
@@ -62,15 +67,56 @@ const NOISE =
 const TEA_WASH =
   "radial-gradient(1000px 760px at 88% 2%, rgba(184,70,58,0.05), transparent 60%), radial-gradient(820px 680px at 4% 100%, rgba(150,120,70,0.06), transparent 62%), radial-gradient(1200px 950px at 50% 42%, rgba(255,250,240,0.45), transparent 72%)";
 
+// ── Item 7 (motion pack): quadriculado Shoji ~45° (losangos) ────────
+// Duas repeating-linear-gradient cruzadas (45deg/-45deg) desenham a grade
+// rotacionada em losango. Opacidade base já MUITO baixa (0.04) — "wow" só
+// pra quem repara de perto, nunca chamativo. O pulsar é CSS puro
+// (@keyframes, só `opacity`, um único elemento) — custo de CPU ~0, roda no
+// compositor. Desliga com prefers-reduced-motion (classe estática, sem
+// @keyframes).
+const GRID_LOSANGO =
+  "repeating-linear-gradient(45deg, rgba(43,38,32,0.04) 0px, rgba(43,38,32,0.04) 1px, transparent 1px, transparent 30px), " +
+  "repeating-linear-gradient(-45deg, rgba(43,38,32,0.04) 0px, rgba(43,38,32,0.04) 1px, transparent 1px, transparent 30px)";
+const SHOJI_GRID_CSS_ID = "shoji-grid-bg-css";
+const SHOJI_GRID_CSS = `
+@keyframes shojiGridPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.shoji-grid-bg { animation: shojiGridPulse 8s ease-in-out infinite; }
+.shoji-grid-bg-static { opacity: 0.75; }
+`;
+
+function useShojiGridCss() {
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (document.getElementById(SHOJI_GRID_CSS_ID)) return;
+    const st = document.createElement("style");
+    st.id = SHOJI_GRID_CSS_ID;
+    st.textContent = SHOJI_GRID_CSS;
+    document.head.appendChild(st);
+  }, []);
+}
+
 export function ShojiBackground({ children, style }: { children?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   useShojiFonts();
+  useShojiGridCss();
+  const reducedMotion = usePrefersReducedMotion();
   return (
     <View style={[{ flex: 1, backgroundColor: P.paper }, style]}>
       {Platform.OS === "web" && (
         <>
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundImage: TEA_WASH } as any]} />
+          {/* Grade Shoji em losango — pulsar muito sutil (~8s), desliga com reduced-motion */}
+          <div
+            aria-hidden="true"
+            className={reducedMotion ? "shoji-grid-bg-static" : "shoji-grid-bg"}
+            style={{ position: "absolute", inset: 0, backgroundImage: GRID_LOSANGO, pointerEvents: "none" } as any}
+          />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundImage: NOISE, backgroundSize: "220px 220px", opacity: 0.1, mixBlendMode: "multiply" } as any]} />
         </>
+      )}
+      {Platform.OS !== "web" && (
+        // Fallback nativo: sem CSS/keyframes disponíveis — camada estática e
+        // muito discreta (tint plano), sem custo de animação.
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(43,38,32,0.012)" }]} />
       )}
       {children}
     </View>
@@ -288,11 +334,66 @@ export function SearchField({ value, onChangeText, placeholder, onSubmit, style 
 }
 
 // ── Chip (filtro) ────────────────────────────────────────────
+// Hover-web (leve elevação/tint/borda) + press-feedback (scale ~0.98) +
+// transição suave (CSS) ao alternar hover/ativo. Ativo não compete com
+// hover: o realce de hover só se aplica quando o chip NÃO está selecionado.
 export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = React.useState(false);
+  const to = (v: number, d: number) => Animated.timing(scale, { toValue: v, duration: d, useNativeDriver: false }).start();
   return (
-    <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: !!active }}>
+    <AnimatedPressable
+      style={[
+        styles.chip,
+        active && styles.chipActive,
+        !active && hovered && styles.chipHover,
+        { transform: [{ scale }] },
+        Platform.OS === "web" ? (webTransition(["background-color", "border-color", "box-shadow"], Motion.fast) as any) : null,
+      ]}
+      onPress={onPress}
+      onPressIn={() => to(0.98, 90)}
+      onPressOut={() => to(1, Motion.fast)}
+      onHoverIn={Platform.OS === "web" ? () => setHovered(true) : undefined}
+      onHoverOut={Platform.OS === "web" ? () => setHovered(false) : undefined}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+    >
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
+  );
+}
+
+// ── RowPressable (linhas de lista) ───────────────────────────
+// Wrapper de linha para as listas Shoji (Praticantes/Dojôs, item 4 do
+// pacote de motion): mantém o press-feedback tátil (scale, igual ao padrão
+// PressableScale) mas troca o realce por um TINT de fundo muito sutil
+// (papel levemente mais escuro — não opacity-dim) + cursor pointer no web.
+// Pensado pra profundidade/ritmo de leitura, não pra grade de planilha.
+export function RowPressable({ onPress, style, children, accessibilityRole = "button", accessibilityLabel }: {
+  onPress?: () => void; style?: StyleProp<ViewStyle>; children: React.ReactNode;
+  accessibilityRole?: "button" | "link"; accessibilityLabel?: string;
+}) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const hover = React.useRef(new Animated.Value(0)).current;
+  const anim = (a: Animated.Value, v: number, d: number) => Animated.timing(a, { toValue: v, duration: d, useNativeDriver: false }).start();
+  const bg = hover.interpolate({ inputRange: [0, 1], outputRange: ["rgba(43,38,32,0)", "rgba(43,38,32,0.028)"] });
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      onPressIn={() => anim(scale, 0.99, 90)}
+      onPressOut={() => anim(scale, 1, Motion.fast)}
+      onHoverIn={Platform.OS === "web" ? () => anim(hover, 1, Motion.fast) : undefined}
+      onHoverOut={Platform.OS === "web" ? () => anim(hover, 0, 170) : undefined}
+      style={[
+        style,
+        { backgroundColor: bg as any, transform: [{ scale }] },
+        Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null,
+      ]}
+    >
+      {children}
+    </AnimatedPressable>
   );
 }
 
@@ -409,6 +510,9 @@ const styles = StyleSheet.create({
   // chip
   chip: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: R.pill, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2 } as ViewStyle,
   chipActive: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  chipHover: Platform.OS === "web"
+    ? ({ backgroundColor: P.glassHi, borderColor: C.line2, boxShadow: "0 3px 8px rgba(43,38,32,0.09)" } as any)
+    : ({ backgroundColor: P.glassHi } as ViewStyle),
   chipText: { fontFamily: F.body, fontSize: T.sm, fontWeight: "500", color: C.ink3 } as TextStyle,
   chipTextActive: { color: P.red, fontWeight: "700" } as TextStyle,
 
