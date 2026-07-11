@@ -10,19 +10,27 @@
 //     • `dojo_id` — filtra pelos praticantes do dojô (vem do CTA "Ver
 //                   praticantes" no detalhe do dojô). A API já aceita dojo_id.
 //
-// Fix 6/8 (foco/busca) — CAUSA RAIZ corrigida na v2:
-//   O campo de busca perdia o foco a cada letra porque o SearchField (e os
-//   chips de filtro) viviam DENTRO do ListHeaderComponent da FlatList. Mesmo
-//   com useCallback, a FlatList reconcilia o elemento de header a cada render
-//   e o renderHeader trocava de identidade a cada tecla (deps q/status/role/…),
-//   o que DESMONTAVA o TextInput → foco perdido (a v1/PR #306, com debounce +
-//   header memoizado + Row memo, NÃO resolveu por isso).
-//   Correção definitiva: a busca e os filtros agora são um <View> PERSISTENTE,
-//   FORA da FlatList, montado UMA única vez no corpo da tela. Quando os dados/
-//   linhas re-renderizam, o input não é tocado e mantém o foco. O header da
-//   FlatList passou a conter SÓ o PageHead + o cabeçalho da tabela (thead).
-//     • o texto (`q`) atualiza imediatamente (responsivo ao digitar);
-//     • o fetch é DEBOUNCED (~350ms) — só o termo "assentado" dispara a busca.
+// Fix 6/8 (foco/busca) — histórico: numa versão anterior o campo de busca
+//   perdia o foco a cada letra porque o SearchField (e os chips) viviam
+//   dentro do ListHeaderComponent, passado como FUNÇÃO (useCallback com deps
+//   voláteis q/status/role/…) — cada tecla trocava a IDENTIDADE da função, e
+//   como ListHeaderComponent é tratado como um COMPONENTE (não um elemento),
+//   trocar de identidade = trocar de tipo = remount do TextInput → foco
+//   perdido. O workaround da época foi tirar a busca inteiramente de dentro
+//   da FlatList (bloco persistente fora dela) — só que isso criava uma janela
+//   de scroll pequena, com o header sempre fixo ocupando espaço.
+//
+// Fix scroll de página inteira (item 11/07/2026): a causa raiz nunca foi
+//   "a busca estar dentro da FlatList", foi "o header ser passado como
+//   FUNÇÃO com identidade instável". A correção definitiva é usar um
+//   componente ESTÁVEL (`PractitionersListHeader`, memoizado, declarado no
+//   module scope) e passá-lo como ELEMENTO (`<PractitionersListHeader .../>`)
+//   para `ListHeaderComponent`. Um elemento de mesmo TIPO em toda renderização
+//   nunca remonta — só atualiza props — então o TextInput mantém o foco
+//   mesmo com o header de volta dentro da FlatList. Isso permite a FlatList
+//   ser o ÚNICO scroller da página: título, busca, chips e o cabeçalho da
+//   tabela (thead) rolam junto com as linhas, e a lista aproveita a altura
+//   inteira da tela (sem "janelinha" interna).
 //
 // Fix 7 (filtros de papel): chips Instrutor/Examinador/Árbitro filtram
 //   server-side via ?role=instructor|examiner|arbiter (o backend GET já aceita
@@ -47,12 +55,12 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
+import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateShadows as SH } from "@/constants/karateTheme";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SearchField, Chip, ShojiBadge, BeltTag, Avatar, ShojiButton, Mono, Body, RowPressable,
-  RaisedHeader, ListWell,
+  RaisedHeader,
 } from "@/components/karate/shoji";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import { karateApi, PractitionerListItem } from "@/services/karateApi";
@@ -80,7 +88,7 @@ const firstParam = (v: string | string[] | undefined): string =>
 
 const DEBOUNCE_MS = 350;
 
-// Linha extraída do render (componente estável) — são remonta a cada tecla.
+// Linha extraída do render (componente estável) — não remonta a cada tecla.
 function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; wide: boolean; onPress: () => void }) {
   if (wide) return (
     <RowPressable style={styles.tr} onPress={onPress} accessibilityRole="button">
@@ -115,6 +123,86 @@ function PractitionerRow({ item, wide, onPress }: { item: PractitionerListItem; 
   );
 }
 const Row = React.memo(PractitionerRow);
+
+// ── Header da FlatList (título + busca + filtros + thead) ────────────
+// Componente ESTÁVEL, declarado no module scope: sua IDENTIDADE (tipo) nunca
+// muda entre renderizações, só as props mudam. É isso — e não "morar fora da
+// FlatList" — que garante que o TextInput da busca não perca foco a cada
+// tecla, mesmo agora que a busca voltou a rolar junto com a página dentro do
+// ListHeaderComponent. React.memo evita trabalho de diff redundante quando as
+// props não mudam (ex.: enquanto as linhas re-renderizam por outro motivo).
+type PractitionersListHeaderProps = {
+  total: number;
+  dojoIdParam: string;
+  filteredDojoName: string | null;
+  exportLabel: string;
+  exporting: boolean;
+  onExport: () => void;
+  onImport: () => void;
+  onNew: () => void;
+  q: string;
+  onChangeQ: (t: string) => void;
+  onSubmitSearch: () => void;
+  status: PractitionerStatusFilter;
+  onStatus: (s: PractitionerStatusFilter) => void;
+  role: RoleFilter | null;
+  onRole: (r: RoleFilter | null) => void;
+  showThead: boolean;
+};
+
+const PractitionersListHeader = React.memo(function PractitionersListHeader(p: PractitionersListHeaderProps) {
+  return (
+    <View>
+      <RaisedHeader style={{ marginBottom: 28 }}>
+        <PageHead
+          eyebrow={`${p.total} ${p.total === 1 ? "praticante" : "praticantes"} · carteirinha FPKT`}
+          title="Praticantes"
+          sub={
+            p.dojoIdParam
+              ? `Exibindo somente os praticantes do dojô${p.filteredDojoName ? ` ${p.filteredDojoName}` : ""}. A exportação segue este filtro.`
+              : "Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
+          }
+          actions={<>
+            <ShojiButton
+              label={p.exportLabel}
+              icon="download-outline"
+              variant="ghost"
+              onPress={p.onExport}
+              style={p.exporting ? { opacity: 0.6 } : undefined}
+            />
+            <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={p.onImport} />
+            <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={p.onNew} />
+          </>}
+        />
+        <View>
+          <SearchField value={p.q} onChangeText={p.onChangeQ} onSubmit={p.onSubmitSearch} placeholder="Buscar por nome, código FPKT, CPF ou RG..." style={{ marginBottom: 14 }} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {STATUS_FILTERS.map((s) => <Chip key={s.key} label={s.label} active={p.status === s.key} onPress={() => p.onStatus(s.key)} />)}
+            <View style={styles.chipDivider} />
+            {ROLE_FILTERS.map((r) => (
+              <Chip key={r.key} label={r.label} active={p.role === r.key} onPress={() => p.onRole(p.role === r.key ? null : r.key)} />
+            ))}
+          </ScrollView>
+        </View>
+      </RaisedHeader>
+      {/* Poço (plano rebaixado): a borda/sombra interna marca o início da
+          zona de dados. `pocoCap` só carrega o thead (modo wide); o corpo do
+          poço continua por baixo de cada linha (`pocoItem`, mesmo bg/padding)
+          e se fecha no `pocoFoot` (ListFooterComponent), lá embaixo. */}
+      <View style={[styles.pocoCap, SH.sunken]}>
+        {p.showThead && (
+          <View style={[styles.tr, styles.thead]}>
+            <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Praticante</Text></View>
+            <View style={[styles.colDivider, { flex: 1.4 }]}><Text style={styles.th}>Dojô</Text></View>
+            <View style={[styles.colDivider, { width: 150 }]}><Text style={styles.th}>Graduação</Text></View>
+            <View style={{ width: 120 }}><Text style={styles.th}>Status</Text></View>
+            <View style={{ width: 18 }} />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+});
 
 export default function PraticantesScreen() {
   const router = useRouter();
@@ -179,23 +267,6 @@ export default function PraticantesScreen() {
 
   // Submeter no teclado força a busca imediata (assenta o termo agora).
   const submitSearch = useCallback(() => { setDebouncedQ(q); }, [q]);
-
-  // ── Busca + filtros: bloco PERSISTENTE, FORA da FlatList ─────────────
-  // Montado UMA vez no corpo da tela. Como NÃO é o ListHeaderComponent, a
-  // FlatList nunca o reconcilia/remonta ao re-renderizar as linhas → o
-  // TextInput de busca mantém o foco entre teclas. (Causa raiz da v1.)
-  const searchAndFilters = (
-    <View>
-      <SearchField value={q} onChangeText={setQ} onSubmit={submitSearch} placeholder="Buscar por nome, código FPKT, CPF ou RG..." style={{ marginBottom: 14 }} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {STATUS_FILTERS.map((s) => <Chip key={s.key} label={s.label} active={status === s.key} onPress={() => setStatus(s.key)} />)}
-        <View style={styles.chipDivider} />
-        {ROLE_FILTERS.map((r) => (
-          <Chip key={r.key} label={r.label} active={role === r.key} onPress={() => setRole(role === r.key ? null : r.key)} />
-        ))}
-      </ScrollView>
-    </View>
-  );
 
   // Exporta todos os praticantes da federação em .xlsx (uma aba "Praticantes").
   // Espelha o padrão do DojoExportModal: web-only, import dinâmico do SheetJS,
@@ -263,55 +334,47 @@ export default function PraticantesScreen() {
     }
   }, [federationId, exporting, dojoIdParam, status, debouncedQ, filteredDojoName]);
 
-  // Cabeçalho da tela (título + CTAs). Fica acima da busca; não tem input.
-  // Quando filtrada por dojô (dojoIdParam), o sub e o label do botão de
-  // export deixam claro que a exportação é só daquele dojô — não da
-  // federação inteira (bug de produção corrigido em 11/07/2026).
+  // Cabeçalho da tela (título + CTAs). Quando filtrada por dojô (dojoIdParam),
+  // o sub e o label do botão de export deixam claro que a exportação é só
+  // daquele dojô — não da federação inteira (bug de produção corrigido em
+  // 11/07/2026).
   const exportLabel = exporting
     ? "Exportando…"
     : dojoIdParam
       ? `Exportar dojô${filteredDojoName ? ` (${filteredDojoName})` : ""}`
       : "Exportar";
-  const pageHead = (
-    <PageHead
-      eyebrow={`${total} ${total === 1 ? "praticante" : "praticantes"} · carteirinha FPKT`}
-      title="Praticantes"
-      sub={
-        dojoIdParam
-          ? `Exibindo somente os praticantes do dojô${filteredDojoName ? ` ${filteredDojoName}` : ""}. A exportação segue este filtro.`
-          : "Cadastro federativo de praticantes ativos e suas trajetórias de graduação."
-      }
-      actions={<>
-        <ShojiButton
-          label={exportLabel}
-          icon="download-outline"
-          variant="ghost"
-          onPress={handleExportPractitioners}
-          style={exporting ? { opacity: 0.6 } : undefined}
-        />
-        <ShojiButton label="Importar" icon="cloud-upload-outline" variant="ghost" onPress={() => router.push("/karate/importacao" as any)} />
-        <ShojiButton label="Novo praticante" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
-      </>}
+
+  // Thead (cabeçalho da tabela) só aparece no modo wide e com itens.
+  const showThead = wide && items.length > 0;
+
+  // Elemento de header da FlatList — mesmo TIPO (PractitionersListHeader) em
+  // toda renderização; só as props mudam. É isso que preserva o foco do
+  // TextInput (ver comentário acima do componente).
+  const listHeader = (
+    <PractitionersListHeader
+      total={total}
+      dojoIdParam={dojoIdParam}
+      filteredDojoName={filteredDojoName}
+      exportLabel={exportLabel}
+      exporting={exporting}
+      onExport={handleExportPractitioners}
+      onImport={() => router.push("/karate/importacao" as any)}
+      onNew={() => setModal({ open: true, id: null })}
+      q={q}
+      onChangeQ={setQ}
+      onSubmitSearch={submitSearch}
+      status={status}
+      onStatus={setStatus}
+      role={role}
+      onRole={setRole}
+      showThead={showThead}
     />
   );
 
-  // Header da FlatList: SÓ cabeçalho da tabela (thead) no modo wide. Sem
-  // input/chips aqui — por isso não há mais remontagem do TextInput.
-  const showThead = wide && items.length > 0;
-  const renderHeader = useCallback(() => (
-    showThead ? (
-      <View style={[styles.tr, styles.thead]}>
-        <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Praticante</Text></View>
-        <View style={[styles.colDivider, { flex: 1.4 }]}><Text style={styles.th}>Dojô</Text></View>
-        <View style={[styles.colDivider, { width: 150 }]}><Text style={styles.th}>Graduação</Text></View>
-        <View style={{ width: 120 }}><Text style={styles.th}>Status</Text></View>
-        <View style={{ width: 18 }} />
-      </View>
-    ) : null
-  ), [showThead]);
-
   const renderItem = useCallback(({ item }: { item: PractitionerListItem }) => (
-    <Row item={item} wide={wide} onPress={() => router.push(`/karate/praticantes/${item.id}` as any)} />
+    <View style={styles.pocoItem}>
+      <Row item={item} wide={wide} onPress={() => router.push(`/karate/praticantes/${item.id}` as any)} />
+    </View>
   ), [wide, router]);
 
   const fichaModal = (
@@ -326,27 +389,34 @@ export default function PraticantesScreen() {
 
   if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} />{fichaModal}</ShojiBackground>;
 
+  // A FlatList é o ÚNICO scroller da página: header (título/busca/filtros) +
+  // thead + linhas rolam juntos, e a lista ocupa a altura inteira da área de
+  // conteúdo (flex: 1). A FlatList permanece SEMPRE montada (nunca é trocada
+  // por um ActivityIndicator solto) — o loading vira só o ListEmptyComponent
+  // quando ainda não há itens — assim o header/busca nunca desmontam durante
+  // um fetch (mesmo o debounced), preservando o foco também nesse caso.
   return (
     <ShojiBackground>
       <View style={styles.content}>
-        <RaisedHeader style={{ marginBottom: 28 }}>
-          {pageHead}
-          {searchAndFilters}
-        </RaisedHeader>
-        <ListWell>
-          {loading ? (
-            <ActivityIndicator style={{ marginTop: 48, marginBottom: 48 }} size="large" color={P.red} />
-          ) : (
-            <FlatList
-              data={items} keyExtractor={(i) => i.id} ListHeaderComponent={renderHeader}
-              contentContainerStyle={styles.listContent}
-              style={{ width: "100%" }}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
-              renderItem={renderItem}
-              ListEmptyComponent={<KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />}
-            />
-          )}
-        </ListWell>
+        <FlatList
+          data={items}
+          keyExtractor={(i) => i.id}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={<View style={styles.pocoFoot} />}
+          ListEmptyComponent={
+            <View style={styles.pocoItem}>
+              {loading ? (
+                <ActivityIndicator style={{ marginTop: 48, marginBottom: 48 }} size="large" color={P.red} />
+              ) : (
+                <KarateEmptyState icon="people-outline" title="Nenhum praticante encontrado" subtitle="Ajuste a busca/filtros, cadastre ou importe uma planilha." style={{ paddingVertical: 40 }} />
+              )}
+            </View>
+          }
+          contentContainerStyle={styles.pageScroll}
+          style={{ flex: 1, width: "100%" }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}
+          renderItem={renderItem}
+        />
       </View>
       {fichaModal}
     </ShojiBackground>
@@ -354,12 +424,25 @@ export default function PraticantesScreen() {
 }
 
 const styles = StyleSheet.create({
-  // `content` agora envolve a tela inteira (head + busca + lista). A FlatList
-  // recebe `flex: 1` via listContent não-paddado; o padding externo mora aqui.
-  content: { flex: 1, padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
-  listContent: { paddingBottom: 24 } as ViewStyle,
+  // `content` só centraliza/limita a largura — o padding da página inteira
+  // agora mora em `pageScroll` (contentContainerStyle da FlatList), porque é
+  // ELE quem rola. A FlatList recebe `flex: 1` para preencher toda a área de
+  // conteúdo do shell (que tem `overflow: hidden` — a FlatList é quem cria a
+  // única região com scroll de fato).
+  content: { flex: 1, maxWidth: SP.contentMax, width: "100%", alignSelf: "center" } as ViewStyle,
+  pageScroll: { paddingHorizontal: 40, paddingTop: 48, paddingBottom: 72 } as ViewStyle,
   chips: { gap: 8, paddingBottom: 18, alignItems: "center" } as ViewStyle,
   chipDivider: { width: 1, height: 22, backgroundColor: C.line2, marginHorizontal: 4, alignSelf: "center" } as ViewStyle,
+
+  // Poço (plano rebaixado): `pocoCap` abre o poço logo abaixo do
+  // RaisedHeader (borda nítida + sombra interna, SH.sunken) e carrega o
+  // thead; `pocoItem` repete o mesmo fundo/padding em CADA linha (thead e
+  // linhas alinhados, mesma faixa contínua); `pocoFoot` fecha o poço com
+  // cantos arredondados depois da última linha.
+  pocoCap: { backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 } as ViewStyle,
+  pocoItem: { backgroundColor: P.paper2, paddingHorizontal: 24 } as ViewStyle,
+  pocoFoot: { backgroundColor: P.paper2, borderBottomLeftRadius: R.xl, borderBottomRightRadius: R.xl, height: 20 } as ViewStyle,
+
   tr: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line, gap: 8 } as ViewStyle,
   thead: { paddingVertical: 10 } as ViewStyle,
   // Item 4 (motion pack Shoji): divisão MUITO sutil entre colunas — hairline

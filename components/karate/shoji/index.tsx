@@ -185,7 +185,14 @@ export function PageHead({ eyebrow, title, sub, actions, style }: {
 // (KarateShadows.raised) e um fio de luz sutil na borda de cima (View
 // real, não CSS — funciona igual em web e nativo, sem depender de
 // `inset`). É o polo "elevado" da hierarquia de dois planos; o polo
-// rebaixado é o ListWell, abaixo.
+// rebaixado é o "poço" (fundo P.paper2 + borda superior nítida + sombra
+// interna KarateShadows.sunken). Desde o fix de scroll de página inteira
+// (11/07/2026), o header passou a rolar DENTRO da FlatList junto com a
+// lista — o antigo wrapper `ListWell` (que envolvia só a lista, separada
+// do header) deixou de fazer sentido nesse arranjo e foi removido; as
+// telas de Praticantes/Dojôs agora montam o poço direto (styles.pocoCap
+// no topo + pocoItem repetido em cada linha + pocoFoot no fechamento). O
+// efeito visual do poço continua idêntico, só mudou de implementação.
 export function RaisedHeader({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.raisedHeader, SH.raised, style]}>
@@ -193,19 +200,6 @@ export function RaisedHeader({ children, style }: { children: React.ReactNode; s
       {children}
     </View>
   );
-}
-
-// ── ListWell (plano REBAIXADO) ────────────────────────────────
-// Envolve o thead + a lista (FlatList) como um vão RECUADO: fundo
-// levemente mais escuro que o papel de fundo (P.paper2), borda superior
-// nítida (C.line2) e — no web — sombra INTERNA na borda de cima
-// (KarateShadows.sunken, com `inset`). A sombra é decoração do CONTAINER,
-// não do conteúdo que rola dentro da FlatList: continua visível na
-// fronteira enquanto a lista rola. No nativo, `inset` não existe — o
-// fallback aceito é fundo-recuado + borda nítida, sem gradient/overlay
-// extra (evita depender de libs de gradiente que o app não usa).
-export function ListWell({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.listWell, SH.sunken, style]}>{children}</View>;
 }
 
 // ── SectionHead (h2 serif + filete vermelho) ─────────────────
@@ -506,21 +500,6 @@ const styles = StyleSheet.create({
   // raised header (plano elevado — Praticantes/Dojôs)
   raisedHeader: { position: "relative", backgroundColor: P.paperWarm, borderWidth: 1, borderColor: C.line, borderRadius: R.xl, paddingHorizontal: 28, paddingTop: 26, paddingBottom: 20 } as ViewStyle,
   raisedHeaderSheen: { position: "absolute", top: 0, left: 18, right: 18, height: 1, backgroundColor: "rgba(255,253,247,0.65)" } as ViewStyle,
-
-  // list well (plano rebaixado — Praticantes/Dojôs)
-  // Fix regressão scrollbar: precisa de `flex: 1` (+ `minHeight: 0` no web,
-  // pra flexbox permitir encolher abaixo do conteúdo) — sem isso o ListWell
-  // vira uma View de altura "auto" entre o container flex:1 da página e a
-  // FlatList, quebrando a cadeia de altura limitada que a FlatList/ScrollView
-  // usa pra criar o PRÓPRIO scroll interno. Sem altura limitada, a lista
-  // simplesmente cresce pro tamanho do conteúdo e é cortada pelo
-  // `overflow: hidden` do shell (KarateShell.content) — sem scroll, sem
-  // scrollbar nenhuma. Com flex:1 aqui, o ListWell volta a repassar pra
-  // FlatList exatamente a mesma altura limitada que ela recebia antes de
-  // existir o ListWell (quando era filha direta do container flex:1 da
-  // tela) — e a FlatList (ScrollView por baixo) volta a ser o elemento que
-  // rola de fato, alcançado pela scrollbar Shoji escopada em `.karate-shoji-scroll`.
-  listWell: { flex: 1, minHeight: 0, backgroundColor: P.paper2, borderTopWidth: 1.5, borderTopColor: C.line2, borderRadius: R.xl, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 } as ViewStyle,
 
   // kpi band
   kpiBand: { flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: C.line, borderRadius: R.xl, backgroundColor: P.glass, overflow: "hidden" } as ViewStyle,
