@@ -102,6 +102,42 @@ export interface BannersResponse {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Tipos — Portal público do sensei (atualização de quadro por token)
+//
+// Consome GET/POST /public/roster-update/:token (karateRosterPortalPublic.js
+// no backend). Token opaco de uso único — NÃO é o mesmo token de auth do
+// usuário; nunca anexar Authorization aqui. 404 = token inválido,
+// 410 = token existe mas expirou (ou já foi usado — vira 'validated' e
+// token_expires_at é zerado no POST, então um novo GET some com 410).
+// ─────────────────────────────────────────────────────────────
+export interface RosterPractitioner {
+  id: string;
+  name: string;
+  karate_registration_number: string | null;
+  belt_name: string | null;
+  is_active: boolean;
+}
+
+export interface RosterUpdateResponse {
+  dojo_nome: string;
+  status: string;
+  praticantes: RosterPractitioner[];
+}
+
+export interface RosterUpdateInput {
+  student_id: string;
+  is_active: boolean;
+}
+
+export interface RosterSubmitResult {
+  status: string;
+  validated_at: string;
+  validated_by: string | null;
+  applied: { student_id: string; was_active: boolean }[];
+  skipped: { student_id: string | null; reason: string }[];
+}
+
+// ─────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────
 export const karatePublicApi = {
@@ -123,4 +159,33 @@ export const karatePublicApi = {
   myCerts: (slug: string, cpf: string): Promise<{ federation: { name: string }; certificates: { verify_token: string; course_name: string | null; participant_name: string | null; issued_at: string }[] }> =>
     pub(`/public/karate/${enc(slug)}/meus-certificados`, { method: "POST", body: { cpf } }),
 
+  /**
+   * Portal público do sensei — atualização de quadro por token.
+   * GET dados do dojô + praticantes. 404 = link inválido; 410 = link
+   * expirado (ou já usado, já que o POST expira o token — uso único).
+   */
+  getPublicRoster: (token: string): Promise<RosterUpdateResponse> =>
+    pub(`/public/roster-update/${enc(token)}`),
+
+  /**
+   * Aplica as alterações de is_active do quadro e expira o token (uso
+   * único). `validatedBy` é opcional (nome de quem confirmou no dojô).
+   */
+  submitPublicRoster: (
+    token: string,
+    updates: RosterUpdateInput[],
+    validatedBy?: string
+  ): Promise<RosterSubmitResult> =>
+    pub(`/public/roster-update/${enc(token)}`, {
+      method: "POST",
+      body: { updates, validated_by: validatedBy || undefined },
+    }),
+
+  /**
+   * URL do CSV de export do quadro (nome, registro, faixa, situação).
+   * Não faz fetch — é só a URL pronta pra <a href> / download direto,
+   * já que o backend manda Content-Disposition: attachment.
+   */
+  getRosterExportUrl: (token: string): string =>
+    `${apiBase()}/public/roster-update/${enc(token)}/export`,
 };
