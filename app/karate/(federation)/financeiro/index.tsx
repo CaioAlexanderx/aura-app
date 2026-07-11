@@ -28,14 +28,16 @@ import { OverviewTab }       from "./tabs/OverviewTab";
 import { DojoAnnuitiesTab }  from "./tabs/DojoAnnuitiesTab";
 import { CpfAnnuitiesTab }   from "./tabs/CpfAnnuitiesTab";
 import { EntriesTab }        from "./tabs/EntriesTab";
+import { OpenItemsTab }      from "./tabs/OpenItemsTab";
 
-type Tab = "overview" | "dojos" | "cpf" | "entries";
+type Tab = "overview" | "dojos" | "cpf" | "entries" | "open_items";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "overview", label: "Visão Geral" },
-  { key: "dojos",    label: "Anuidades Dojô" },
-  { key: "cpf",      label: "Anuidades Praticantes" },
-  { key: "entries",  label: "Lançamentos" },
+  { key: "overview",   label: "Visão Geral" },
+  { key: "dojos",      label: "Anuidades Dojô" },
+  { key: "cpf",        label: "Anuidades Praticantes" },
+  { key: "entries",    label: "Lançamentos" },
+  { key: "open_items", label: "Em aberto" },
 ];
 
 export default function FinanceiroScreen() {
@@ -77,10 +79,11 @@ export default function FinanceiroScreen() {
 
       {/* Tab content */}
       <View style={styles.content}>
-        {activeTab === "overview" && <OverviewTab      federationId={federationId} />}
-        {activeTab === "dojos"    && <DojoAnnuitiesTab federationId={federationId} />}
-        {activeTab === "cpf"      && <CpfAnnuitiesTab  federationId={federationId} />}
-        {activeTab === "entries"  && <EntriesTab       federationId={federationId} />}
+        {activeTab === "overview"   && <OverviewTab      federationId={federationId} />}
+        {activeTab === "dojos"      && <DojoAnnuitiesTab federationId={federationId} />}
+        {activeTab === "cpf"        && <CpfAnnuitiesTab  federationId={federationId} />}
+        {activeTab === "entries"    && <EntriesTab       federationId={federationId} />}
+        {activeTab === "open_items" && <OpenItemsTab     federationId={federationId} />}
       </View>
     </View>
   );

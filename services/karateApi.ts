@@ -447,6 +447,33 @@ export interface OverdueItem {
   days_overdue: number;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Fase 5 — Financeiro: valores em aberto segmentados
+//
+// GET /federation/:id/financial/open-items
+// Duas correntes de cobrança distintas (pretas CPF x dojôs), retornadas
+// SEGMENTADAS — nunca somadas num único número.
+// ─────────────────────────────────────────────────────────────────
+export interface OpenItemPreta {
+  student_id: string;
+  full_name: string;
+  karate_registration_number: string;
+  whatsapp: string | null;
+  dojo_nome: string | null;
+  valor_em_aberto: number;
+  annuity_due_date: string | null;
+}
+
+export interface OpenItemDojo {
+  dojo_id: string;
+  nome: string;
+}
+
+export interface OpenItemsResponse {
+  pretas: { count: number; total: number; items: OpenItemPreta[] };
+  dojos: { count: number; items: OpenItemDojo[] };
+}
+
 export interface Expense {
   id: string;
   description: string;
@@ -1389,6 +1416,12 @@ export const karateApi = {
       method: "POST",
       body,
     }),
+
+  // Fase 5 — valores em aberto segmentados (pretas CPF x dojôs). Somente
+  // leitura: usado pela aba "Em aberto" para montar o workflow de cobrança
+  // (seleção + "preparar cobrança"), sem disparar e-mail nenhum.
+  getOpenItems: (federationId: string): Promise<OpenItemsResponse> =>
+    request(`/federation/${federationId}/financial/open-items`),
 
   listExpenses: (
     federationId: string,
