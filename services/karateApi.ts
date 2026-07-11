@@ -967,10 +967,24 @@ export interface SenseiAnnuityResponse {
   pix: { key: string; key_type: string | null; holder_name: string | null } | null;
 }
 
+// ── Fase 6 — Painel + Saúde da rede: resumo de "standing" ──────────────
+// Deriva das views karate_member_standing / karate_dojo_standing.
+// financeiro de pretas ∈ {nao_aplicavel, sem_cobranca, em_dia, atrasado}
+// (só se aplica a faixa-preta); financeiro de dojôs ∈ {em_dia, atrasado, inativo}.
+export interface StandingSummary {
+  praticantes: { ativos: number; inativos: number; total: number };
+  pretas: { total: number; em_dia: number; atrasado: number; valor_em_aberto: number };
+  dojos: { ativos: number; em_dia: number; atrasado: number; inativos: number };
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
     request(`/federation/${federationId}/dashboard`),
+
+  /** GET /federation/:federationId/standing/summary — KPIs de standing (Fase 6) */
+  getStandingSummary: (federationId: string): Promise<StandingSummary> =>
+    request(`/federation/${federationId}/standing/summary`),
 
   getBeltDistribution: (federationId: string): Promise<BeltDistributionItem[]> =>
     request(`/federation/${federationId}/belt-distribution`),
