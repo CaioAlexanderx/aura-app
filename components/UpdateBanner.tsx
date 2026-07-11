@@ -13,10 +13,25 @@
 //  - mudou → toast fixo no rodapé com botão "Atualizar" (reload).
 //
 // Sem service worker, sem storage — estado só em memória da aba.
+//
+// ⚠️ DESLIGADO EM 11/07/2026 (ENABLED = false).
+// O bundle é ÚNICO para toda a Aura: o hash do entry-<hash>.js muda a cada
+// deploy, não importa qual vertical mudou. Durante a sequência intensa de
+// deploys da Aura Karatê, o cliente da Aura Negócio (PDV/varejo) via o toast
+// "Nova versão disponível" o dia inteiro — ruído puro, já que nada do produto
+// dele mudou. Como não dá para saber pelo hash O QUE mudou, não há como
+// segmentar o aviso; a saída é silenciar até a cadência de deploy normalizar.
+//
+// PARA REATIVAR: ENABLED = true (o resto da lógica está intacto).
+// Se o ruído voltar, a correção estrutural é o backend expor um /version com
+// um campo tipo `notify: true|false` (ou a vertical afetada), e o banner só
+// aparecer quando o deploy for relevante para o usuário logado.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
+
+const ENABLED = false;
 
 const IS_WEB = Platform.OS === "web";
 const POLL_MS = 5 * 60 * 1000;
@@ -56,6 +71,8 @@ export function UpdateBanner() {
   const lastCheck = useRef(0);
 
   useEffect(() => {
+    // Desligado: não faz baseline, não agenda poll, não faz fetch de "/".
+    if (!ENABLED) return;
     if (!IS_WEB || typeof window === "undefined") return;
     baseline.current = loadedEntryHash();
     let alive = true;
@@ -88,7 +105,7 @@ export function UpdateBanner() {
     };
   }, []);
 
-  if (!ready) return null;
+  if (!ENABLED || !ready) return null;
 
   return (
     <View style={s.wrap} pointerEvents="box-none">
