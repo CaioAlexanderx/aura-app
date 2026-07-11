@@ -290,6 +290,24 @@ export interface ExportDojoPayload {
   transfers?: object[];
 }
 
+// Linha da exportação em massa de dojôs (GET /federation/:id/dojos/export) —
+// NÃO confundir com ExportDojoPayload (export de UM dojô, round-trip com o
+// import em DojoExportModal). Mesmo padrão de exportAllPractitioners.
+export interface DojoExportRow {
+  nome: string | null;
+  codigo_fpkt: string | null;
+  status: string;
+  regiao: string | null;
+  modelo_filiacao: string | null;
+  cnpj: string | null;
+  telefone: string | null;
+  email: string | null;
+  cidade: string | null;
+  estado: string | null;
+  total_praticantes: number;
+  praticantes_ativos: number;
+}
+
 // ── Fase 4: Roster do dojô (status + financeiro) ────────────────
 
 export type MemberFinanceiroStatus = "nao_aplicavel" | "sem_cobranca" | "em_dia" | "atrasado";
@@ -1114,6 +1132,28 @@ export const karateApi = {
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/dojos${query}`);
+  },
+
+  /**
+   * Exporta dojôs da federação (para .xlsx no FE) — MESMO padrão de
+   * exportAllPractitioners: aceita os mesmos filtros opcionais que a
+   * listagem (GET /federation/:id/dojos aceita): status, region,
+   * affiliation_model, q. Sem filtros → exporta todos os dojôs da
+   * federação. O botão "Exportar" da tela de Dojôs manda os filtros
+   * ativos na tela (status e região), para o .xlsx bater exatamente com
+   * o que está listado.
+   */
+  exportDojos: (
+    federationId: string,
+    filters?: { status?: string; region?: string; affiliation_model?: string; q?: string }
+  ): Promise<{ total: number; dojos: DojoExportRow[] }> => {
+    const qs = new URLSearchParams();
+    if (filters?.status) qs.set("status", filters.status);
+    if (filters?.region) qs.set("region", filters.region);
+    if (filters?.affiliation_model) qs.set("affiliation_model", filters.affiliation_model);
+    if (filters?.q) qs.set("q", filters.q);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/dojos/export${query}`, { method: "GET" });
   },
 
   getDojo: (federationId: string, dojoId: string): Promise<DojoDetail> =>

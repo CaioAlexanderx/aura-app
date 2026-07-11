@@ -46,6 +46,7 @@ import {
   RaisedHeader, ListWell,
 } from "@/components/karate/shoji";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
+import DojosExportModal from "@/components/karate/DojosExportModal";
 import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
@@ -86,6 +87,10 @@ export default function DojosScreen() {
 
   // Modal da ficha: usado SÓ para cadastro rápido ("Novo dojô").
   const [modal, setModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+
+  // Modal seletor de export (.xlsx) — pré-preenchido com os filtros ativos
+  // da tela (status/região) e ajustável antes de confirmar.
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // Lista filtrada (status × região × busca), server-side.
   const load = useCallback(async (isRefresh = false) => {
@@ -130,7 +135,10 @@ export default function DojosScreen() {
       eyebrow={`${total} ${total === 1 ? "dojô filiado" : "dojôs filiados"} · ${allRegions.length || "—"} regiões`}
       title="Dojôs filiados"
       sub="Gestão da rede federativa. Cadastro, anuidades e estado de cada filiado."
-      actions={<ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />}
+      actions={<>
+        <ShojiButton label="Exportar" icon="download-outline" variant="ghost" onPress={() => setExportModalOpen(true)} />
+        <ShojiButton label="Novo dojô" icon="add" variant="sumi" onPress={() => setModal({ open: true, id: null })} />
+      </>}
     />
   );
 
@@ -232,7 +240,18 @@ export default function DojosScreen() {
     />
   );
 
-  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} />{fichaModal}</ShojiBackground>;
+  const exportModal = (
+    <DojosExportModal
+      federationId={federationId}
+      visible={exportModalOpen}
+      onClose={() => setExportModalOpen(false)}
+      initialStatus={status}
+      initialRegion={region}
+      regions={allRegions}
+    />
+  );
+
+  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} />{fichaModal}{exportModal}</ShojiBackground>;
 
   return (
     <ShojiBackground>
@@ -257,6 +276,7 @@ export default function DojosScreen() {
         </ListWell>
       </View>
       {fichaModal}
+      {exportModal}
     </ShojiBackground>
   );
 }
