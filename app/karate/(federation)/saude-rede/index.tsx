@@ -298,11 +298,14 @@ export default function SaudeRedeScreen() {
             />
           </View>
           <View style={{ flex: 1 }}>
+            {/* Fonte única: standing.dojos (mesma base do KpiBand do Painel e do
+                StandingCard abaixo) — não mais o payload /inadimplencia antigo, que
+                fica preso em 0,0% e contradiz o standing (18 dojôs atrasados).
+                "Ver detalhes" abre o drawer de standing, com a mesma fonte. */}
             <InadimplenciaCard
-              data={inad}
+              standing={standing}
               loading={loading}
-              onCsv={() => downloadCsv(federationId, "inadimplencia")}
-              onDetail={() => setDrawerKey("inadimplencia")}
+              onDetail={() => setDrawerKey("standing")}
             />
           </View>
         </View>

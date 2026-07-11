@@ -165,9 +165,12 @@ function KpiCell({ item, isLast }: { item: KpiItem; isLast: boolean }) {
   const display = isNumeric ? Math.round(animated).toLocaleString("pt-BR") : String(item.value);
   return (
     <View style={[styles.kpiCell, !isLast && styles.kpiCellDivider]}>
-      <Text style={styles.kpiLabel}>{item.label}</Text>
-      <Text style={[styles.kpiNum, item.accent && { color: P.red }]}>{display}</Text>
-      {item.meta ? <Text style={styles.kpiMeta}>{item.meta}</Text> : null}
+      <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
+      {/* numberOfLines={1}: defesa contra bandas com muitas colunas — sem isso um
+          valor monetário longo (ex. "R$ 37.465") pode quebrar NO MEIO do número
+          em vez de truncar de forma previsível. */}
+      <Text style={[styles.kpiNum, item.accent && { color: P.red }]} numberOfLines={1} adjustsFontSizeToFit>{display}</Text>
+      {item.meta ? <Text style={styles.kpiMeta} numberOfLines={1}>{item.meta}</Text> : null}
     </View>
   );
 }

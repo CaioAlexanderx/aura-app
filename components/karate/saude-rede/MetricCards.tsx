@@ -15,10 +15,11 @@ import {
   KarateColors as C, ShojiPalette as P, KarateFonts as F,
 } from "@/constants/karateTheme";
 import {
-  AfiliacaoPayload, CoberturaPayload, InadimplenciaPayload, ProjecaoPayload,
+  AfiliacaoPayload, CoberturaPayload, ProjecaoPayload,
   GraduacoesPayload, RelacaoFaixasPayload, RelacaoFaixasStatus,
   karateNetworkHealthApi,
 } from "@/services/karateNetworkHealthApi";
+import { StandingSummary } from "@/services/karateApi";
 import { BELT_HEX as CANONICAL_BELT_HEX } from "@/constants/karateBelts";
 import { Chip } from "@/components/karate/shoji";
 import { useKarateFederation } from "@/contexts/KarateFederation";
@@ -121,49 +122,61 @@ export function CoberturaCard({
 }
 
 // ── Inadimplência ────────────────────────────────────
+// Fonte ÚNICA (fix "Inadimplência 0,0%" contradizendo o standing): este
+// card usava o payload antigo /inadimplencia (cobrança de anuidade de dojô
+// "vencida"), que fica preso em 0,0% e contradiz karate_dojo_standing (18
+// dojôs atrasados). Passamos a ler diretamente StandingSummary.dojos —
+// a MESMA fonte do bloco de KPIs do Painel e do StandingCard abaixo — sem
+// recomputar nada aqui. O endpoint /inadimplencia antigo NÃO é alterado
+// (outros consumidores podem existir); só a fonte exibida neste card muda.
 export function InadimplenciaCard({
-  data, loading, onDetail,
-}: { data: InadimplenciaPayload | null; loading: boolean } & CardCallbacks) {
+  standing, loading, onDetail,
+}: { standing: StandingSummary | null; loading: boolean } & CardCallbacks) {
+  const ativos = standing?.dojos.ativos ?? 0;
+  const emDia = standing?.dojos.em_dia ?? 0;
+  const atrasado = standing?.dojos.atrasado ?? 0;
+  const pct = ativos > 0 ? (atrasado / ativos) * 100 : 0;
+
   return (
     <View style={st.card}>
       <SectionRow
         title="Inadimplência da rede"
-        sub="Status das anuidades de filiação dos dojôs"
+        sub="Dojôs filiados ativos · situação da anuidade (fonte: standing)"
         onDetail={onDetail}
         csvData={{
           filename: "inadimplencia-rede",
           headers: ["Status", "Dojôs", "Percentual"],
-          rows: data ? [
-            ["Em dia", String(data.em_dia ?? ""), fmtPct(data.em_dia / data.total * 100)],
-            ["Vencendo (7d)", String(data.vencendo ?? ""), fmtPct(data.vencendo / data.total * 100)],
-            ["Vencido", String(data.vencido ?? ""), fmtPct(data.vencido / data.total * 100)],
+          rows: standing ? [
+            ["Em dia", String(emDia), ativos > 0 ? fmtPct(emDia / ativos * 100) : "—"],
+            ["Atrasado", String(atrasado), ativos > 0 ? fmtPct(atrasado / ativos * 100) : "—"],
           ] : [],
         }}
       />
-      {loading || !data ? (
+      {loading || !standing ? (
         <><Sk h={36} mb={8} /><Sk h={60} /></>
       ) : (
         <FadeIn>
           <View style={st.heroRow}>
-            <Text style={[st.heroNum, { color: data.inad_pct > 0 ? C.danger : C.ink }]}>
-              {fmtPct(data.inad_pct)}
+            <Text style={[st.heroNum, { color: atrasado > 0 ? C.danger : C.ink }]}>
+              {fmtPct(pct)}
             </Text>
-            <Text style={st.heroSub}>das anuidades de filiação vencidas</Text>
+            <Text style={st.heroSub}>
+              {ativos > 0 ? `${atrasado} de ${ativos} filiados em atraso` : "das anuidades de filiação vencidas"}
+            </Text>
           </View>
-          {/* Stack bar */}
+          {/* Stack bar — em dia / atrasado (standing.dojos) */}
           <View style={st.stackBarWrap}>
             {[
-              { label: "Em dia", n: data.em_dia, color: P.ok },
-              { label: "Vencendo (7d)", n: data.vencendo, color: P.warn },
-              { label: "Vencido", n: data.vencido, color: P.danger },
+              { label: "Em dia", n: emDia, color: P.ok },
+              { label: "Atrasado", n: atrasado, color: P.danger },
             ].map((seg) => (
-              data.total > 0 && (
+              ativos > 0 && (
                 <View
                   key={seg.label}
                   style={[
                     st.stackBarSeg,
                     {
-                      flex: seg.n / data.total,
+                      flex: seg.n / ativos,
                       backgroundColor: seg.color,
                       opacity: seg.n === 0 ? 0 : 1,
                     },
@@ -174,16 +187,15 @@ export function InadimplenciaCard({
           </View>
           {/* Legend */}
           {[
-            { label: "Em dia", n: data.em_dia, color: P.ok },
-            { label: "Vencendo (7d)", n: data.vencendo, color: P.warn },
-            { label: "Vencido", n: data.vencido, color: P.danger },
+            { label: "Em dia", n: emDia, color: P.ok },
+            { label: "Atrasado", n: atrasado, color: P.danger },
           ].map((seg) => (
             <View key={seg.label} style={st.inadLegendRow}>
               <View style={[st.inadDot, { backgroundColor: seg.color }]} />
               <Text style={[st.inadLegLabel, { flex: 1 }]}>{seg.label}</Text>
               <Text style={st.inadLegN}>{seg.n} dojôs</Text>
               <Text style={st.inadLegPct}>
-                {data.total > 0 ? fmtPct(seg.n / data.total * 100) : "—"}
+                {ativos > 0 ? fmtPct(seg.n / ativos * 100) : "—"}
               </Text>
             </View>
           ))}

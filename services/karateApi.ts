@@ -475,6 +475,7 @@ export interface OpenItemPreta {
   full_name: string;
   karate_registration_number: string;
   whatsapp: string | null;
+  dojo_id: string | null;
   dojo_nome: string | null;
   valor_em_aberto: number;
   annuity_due_date: string | null;

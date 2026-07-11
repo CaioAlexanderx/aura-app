@@ -169,10 +169,26 @@ export default function KaratePainel() {
           <Skeleton height={104} style={{ borderRadius: R.xl }} />
         ) : (
           <KpiBand items={[
-            { label: "Dojôs filiados", value: data!.kpis.dojo_count },
+            {
+              label: "Dojôs filiados",
+              value: standing ? standing.dojos.ativos : data!.kpis.dojo_count,
+              meta: standing ? `de ${data!.kpis.dojo_count} cadastrados` : undefined,
+            },
             { label: "Praticantes", value: data!.kpis.practitioner_count.toLocaleString("pt-BR") },
             { label: "Receita YTD", value: fmtMoney(data!.kpis.revenue_ytd) },
-            { label: "Inadimplência", value: fmtPct(data!.kpis.overdue_rate), accent: (Number(data!.kpis.overdue_rate) || 0) > 0, meta: overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined },
+            // Fonte única (CLAUDE.md — Correção 1): inadimplência de dojô = standing.dojos.atrasado /
+            // standing.dojos.ativos — a MESMA base do drill-down de Saúde da Rede. O overdue_rate do
+            // /dashboard antigo só entra como fallback enquanto o standing carrega ou falha.
+            {
+              label: "Inadimplência",
+              value: standing && standing.dojos.ativos > 0
+                ? fmtPct(standing.dojos.atrasado / standing.dojos.ativos)
+                : standingLoading ? "…" : fmtPct(data!.kpis.overdue_rate),
+              accent: standing ? standing.dojos.atrasado > 0 : (Number(data!.kpis.overdue_rate) || 0) > 0,
+              meta: standing
+                ? `${standing.dojos.atrasado} de ${standing.dojos.ativos} filiados em atraso`
+                : (overdue.length ? `${overdue.length} dojô(s) em atraso` : undefined),
+            },
           ]} />
         )}
 
@@ -193,8 +209,15 @@ export default function KaratePainel() {
               { label: "Praticantes ativos", value: standing?.praticantes.ativos ?? 0 },
               { label: "Praticantes inativos", value: standing?.praticantes.inativos ?? 0 },
               { label: "Pretas em dia", value: standing?.pretas.em_dia ?? 0 },
-              { label: "Pretas atrasadas", value: standing?.pretas.atrasado ?? 0, accent: (standing?.pretas.atrasado ?? 0) > 0 },
-              { label: "R$ em aberto (pretas)", value: fmtMoney(standing?.pretas.valor_em_aberto ?? 0), accent: (standing?.pretas.valor_em_aberto ?? 0) > 0 },
+              {
+                // Correção 3: valor em R$ vive no `meta` (fonte pequena) em vez de virar
+                // o `value` (fonte grande de 48px) — evita o wrap no meio do número
+                // ("R$ 3" / "7.465") que a largura de 6-7 colunas causava.
+                label: "Pretas atrasadas",
+                value: standing?.pretas.atrasado ?? 0,
+                accent: (standing?.pretas.atrasado ?? 0) > 0,
+                meta: fmtMoney(standing?.pretas.valor_em_aberto ?? 0),
+              },
               { label: "Dojôs em dia", value: standing?.dojos.em_dia ?? 0 },
               { label: "Dojôs atrasados", value: standing?.dojos.atrasado ?? 0, accent: (standing?.dojos.atrasado ?? 0) > 0 },
             ]} />
