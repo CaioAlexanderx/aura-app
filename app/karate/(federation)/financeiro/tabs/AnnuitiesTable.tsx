@@ -233,6 +233,36 @@ function InstallmentPill({ inst, state, active, onPress }: { inst: AnnuityInstal
   );
 }
 
+// ── Trilha de parcelas x resumo — quando ela vale a pena mostrar ────
+// A trilha de pills existe pra revelar uma PROGRESSÃO (semestral/trimestral
+// de Dojô: 2/4 parcelas). Praticante paga sempre parcela única (regra de
+// negócio fixa — R$60, vencimento maio), então uma trilha de 1 pill só não
+// informa nada, só ocupa espaço e finge complexidade que não existe.
+//
+// A condição abaixo é sobre o DADO (installments.length > 1), não sobre o
+// segmento: se algum praticante tiver mais de uma parcela (dado legado,
+// correção manual), a trilha real volta a aparecer — a UI nunca esconde
+// informação por causa do segmento em que está.
+function shouldShowInstallmentTrail(seg: SegKey, trail: { inst: AnnuityInstallment; state: InstState }[]): boolean {
+  return seg === "dojo" || trail.length > 1;
+}
+
+// Substituto da trilha quando ela é ocultada (Praticantes, parcela única):
+// mostra a informação que de fato importa na linha — vencimento + situação
+// da parcela — em vez de uma pill que só repete o mês por extenso.
+function InstallmentSummary({ vm, state }: { vm: AnnuityRowVM; state: InstState | null }) {
+  const v = state ? INST_STATE_VIEW[state] : null;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+      {v && <Icon name={v.icon as any} size={12} color={v.color} />}
+      <Body muted style={{ fontSize: 11.5 }}>
+        {vm.dueDate ? `Vence ${formatIsoToBr(vm.dueDate)}` : "Sem vencimento"}
+        {v ? ` · ${v.label}` : ""}
+      </Body>
+    </View>
+  );
+}
+
 // ── Painel expandido: detalhe de cada parcela + ações (pagar/pix/editar) ─
 function InstallmentDetailRow({
   inst, state, federationId, onPay, onPix, onEdit, onSendEmail,
@@ -468,10 +498,10 @@ function InstallmentDetailRow({
 
 // ── Linha da tabela (dojô ou praticante) ─────────────────────────────
 function AnnuityRowItem({
-  vm, wide, selected, selectable, expanded, federationId, onToggleSelect, onToggleExpand,
+  vm, seg, wide, selected, selectable, expanded, federationId, onToggleSelect, onToggleExpand,
   onPay, onPix, onEdit, onSendEmail, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
 }: {
-  vm: AnnuityRowVM; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
+  vm: AnnuityRowVM; seg: SegKey; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
   onToggleSelect: () => void; onToggleExpand: () => void;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
@@ -483,6 +513,7 @@ function AnnuityRowItem({
   const sv = annuityStatusView(vm.status);
   const isNoCharge = vm.status === "no_charge";
   const trail = classifyInstallments(vm.installments);
+  const showTrail = shouldShowInstallmentTrail(seg, trail);
 
   return (
     <View style={styles.rowCard}>
@@ -516,10 +547,12 @@ function AnnuityRowItem({
         <View style={{ width: wide ? 220 : "100%", flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: wide ? 0 : 6 }}>
           {trail.length === 0 ? (
             <Body muted style={{ fontSize: 11 }}>Sem parcelas lançadas</Body>
-          ) : (
+          ) : showTrail ? (
             trail.map(({ inst, state }) => (
               <InstallmentPill key={inst.id} inst={inst} state={state} active={expanded} onPress={onToggleExpand} />
             ))
+          ) : (
+            <InstallmentSummary vm={vm} state={trail[0]?.state ?? null} />
           )}
         </View>
 
@@ -1045,6 +1078,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
           <View style={styles.pocoItem}>
             <AnnuityRow
               vm={item}
+              seg={seg}
               wide={wide}
               federationId={federationId}
               selected={selected.has(item.key)}
