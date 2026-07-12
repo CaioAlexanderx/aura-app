@@ -22,7 +22,7 @@ import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as
 import type { AnnuityCampaignPreviewDojo, AnnuityCampaignPreviewPractitioner, AnnuityFeeCatalogEntry, AnnuityPlan } from "@/services/karateApi";
 import {
   amountSum, fmtDueDateLong, fmtMoney,
-  ANNUITY_PLAN_LABELS, ANNUITY_PLANS, effectiveDojoAmount, effectiveDojoInstallments, effectiveDojoPlan,
+  ANNUITY_PLAN_LABELS, ANNUITY_PLANS, effectiveDojoAmount, effectiveDojoDueDate, effectiveDojoInstallments, effectiveDojoPlan,
 } from "./types";
 
 type Props = {
@@ -103,6 +103,7 @@ export function Step3Review({
             const effPlan = effectiveDojoPlan(d, dojoPlanOverrides);
             const effAmount = effectiveDojoAmount(d, dojoPlanOverrides, planCatalog);
             const effInstallments = effectiveDojoInstallments(d, dojoPlanOverrides, planCatalog);
+            const effDueDate = effectiveDojoDueDate(d, dojoPlanOverrides, planCatalog);
             const parcelasLabel = effInstallments > 1 ? `${effInstallments}x` : "1x";
             return (
               <View key={d.dojo_id} style={[styles.row, excluded && styles.rowExcluded, d.plano_indefinido && !excluded && styles.rowIndefinido]}>
@@ -116,8 +117,8 @@ export function Step3Review({
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.rowMeta}>
-                    {fmtMoney(effAmount)}{effInstallments > 1 ? ` no ano` : ""} · vence {fmtDueDateLong(d.due_date)}
+                  <Text style={[styles.rowMeta, d.plano_indefinido && effDueDate.due_date_ajustada && { color: P.warn }]}>
+                    {fmtMoney(effAmount)}{effInstallments > 1 ? ` no ano` : ""} · vence {fmtDueDateLong(effDueDate.due_date)}
                   </Text>
                   {d.plano_indefinido && !excluded && (
                     <View style={styles.planPickRow}>

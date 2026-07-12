@@ -50,15 +50,35 @@ export function amountSum(rows: { amount: number }[]): number {
   return Math.round(rows.reduce((s, r) => s + Number(r.amount || 0), 0) * 100) / 100;
 }
 
-/** Vencimento "de referência" a mostrar no passo 2 — prioriza dojô (mesma
- *  vigência costuma valer pros dois grupos); cai pra praticante quando não
- *  há dojô elegível no preview atual. */
+/** Vencimento "de referência" a mostrar no passo 2 — prioriza dojô com
+ *  plano DEFINIDO (mesma vigência costuma valer pros dois grupos); cai pra
+ *  praticante quando não há dojô com due_date resolvido no preview atual.
+ *
+ *  BUG P0 (achado em QA, produção — federação com os 101 dojôs SEM
+ *  karate_annuity_plan cadastrado): a versão antiga pegava CEGAMENTE
+ *  `preview.dojos[0]` — quando o primeiro dojô da lista (ordenada por nome)
+ *  é plano_indefinido, seu `due_date` vem null do backend (ver
+ *  karateAnnuityCampaign.js preview: só monta due_date pra quem tem plano
+ *  resolvido), e o campo "Vencimento que será usado" do Passo 2 ficava
+ *  preso em "—" pra sempre, mesmo com praticantes elegíveis tendo
+ *  due_date real e mesmo a campanha indo de fato cobrar os dojôs
+ *  indefinidos como Anual (ver buildDojoPlansPayload — default 'anual'
+ *  sempre entra explícito no POST /campaign). Agora: primeiro dojô/
+ *  praticante com due_date resolvido; se NINGUÉM no preview atual tem
+ *  (ex.: só dojôs indefinidos, sem praticante nesta rodada), cai no
+ *  plan_catalog do plano sugerido (Anual) — o MESMO número que o Passo 3
+ *  já mostra pra essas linhas via effectiveDojoDueDate abaixo. Nunca mais
+ *  "—" enquanto existir uma data que a campanha vá de fato usar. */
 export function referenceDueDate(preview: AnnuityCampaignPreviewResponse | null): { due_date: string | null; due_date_ajustada: boolean } {
   if (!preview) return { due_date: null, due_date_ajustada: false };
-  const d = preview.dojos[0];
+  const d = preview.dojos.find((x) => x.due_date);
   if (d) return { due_date: d.due_date, due_date_ajustada: d.due_date_ajustada };
-  const p = preview.practitioners[0];
+  const p = preview.practitioners.find((x) => x.due_date);
   if (p) return { due_date: p.due_date, due_date_ajustada: p.due_date_ajustada };
+  const catalogEntry = planCatalogEntry(preview.plan_catalog, DEFAULT_SUGGESTED_PLAN);
+  if (catalogEntry && catalogEntry.due_date) {
+    return { due_date: catalogEntry.due_date, due_date_ajustada: catalogEntry.due_date_ajustada };
+  }
   return { due_date: null, due_date_ajustada: false };
 }
 
@@ -114,6 +134,27 @@ export function effectiveDojoInstallments(
   if (!d.plano_indefinido) return d.installments_count;
   const entry = planCatalogEntry(catalog, effectiveDojoPlan(d, overrides));
   return entry?.installments_count ?? 0;
+}
+
+/** Vencimento EFETIVO de uma linha de dojô no passo 3 — mesmo raciocínio de
+ *  effectiveDojoAmount/effectiveDojoInstallments, agora aplicado ao
+ *  vencimento (BUG P0 corrigido: antes a linha usava `d.due_date` cru, que
+ *  o backend devolve null pra todo dojô plano_indefinido — as 18 linhas de
+ *  dojô da Revisão mostravam "vence —" mesmo o banner dizendo "vão usar
+ *  Anual por padrão" logo acima). Para plano definido, vem direto do
+ *  preview (já é o due_date real que /campaign vai usar). Para
+ *  plano_indefinido, vem do plan_catalog do plano efetivo (escolha do
+ *  gestor ou o default sugerido Anual) — o MESMO due_date que /campaign
+ *  vai gravar de fato quando esse dojô entrar em `dojo_plans` no submit
+ *  (ver buildDojoPlansPayload). */
+export function effectiveDojoDueDate(
+  d: AnnuityCampaignPreviewDojo,
+  overrides: Record<string, AnnuityPlan>,
+  catalog: AnnuityFeeCatalogEntry[]
+): { due_date: string | null; due_date_ajustada: boolean } {
+  if (!d.plano_indefinido) return { due_date: d.due_date, due_date_ajustada: d.due_date_ajustada };
+  const entry = planCatalogEntry(catalog, effectiveDojoPlan(d, overrides));
+  return { due_date: entry?.due_date ?? null, due_date_ajustada: entry?.due_date_ajustada ?? false };
 }
 
 /** Monta o mapa `dojo_plans` a enviar em /campaign e /batch: só entra ali
