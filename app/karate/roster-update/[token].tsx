@@ -15,8 +15,13 @@
 //      (reversível, com Desfazer — nunca clique acidental).
 //   2. Baratear cada item — abrir um praticante mostra SÓ o que falta
 //      (normalmente 1 campo: telefone). Ficha completa fica atrás de um link.
-//   3. Transferir o trabalho — planilha (baixar só quem falta, subir de
-//      volta) para os dojôs grandes.
+//   3. Transferir o trabalho — a alavanca de verdade pra um dojô de 400:
+//      SelfServiceShareCard (link + Copiar + WhatsApp, logo abaixo do
+//      cabeçalho, nunca escondido) manda a digitação para o próprio aluno.
+//      `data.self_service_url` já vem PRONTO do GET (karateRosterPortalPublic.js
+//      gera o token sob demanda se o dojô ainda não tinha um — nunca fica
+//      vazio). Planilha (baixar só quem falta, subir de volta) é o
+//      caminho alternativo pra quando o sensei prefere digitar ele mesmo.
 //   4. Fechar o ciclo — "Concluir atualização" confirma o quadro e avisa
 //      a federação (mesmo POST de antes, agora com autosave já persistido
 //      campo a campo, então essa etapa final é só formalidade).
@@ -59,6 +64,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows, KarateBelts, BeltKey } from "@/constants/karateTheme";
 import { Motion, webTransition } from "@/constants/motion";
 import { BeltBadge } from "@/components/karate/BeltBadge";
+import { copyToClipboard } from "@/utils/clipboard";
 import {
   karatePublicApi,
   RosterPractitioner,
@@ -514,10 +520,54 @@ function ListRow({
   );
 }
 
+// ── Link de auto-atendimento — a alavanca de escala do G1. É o sensei quem
+// compartilha com o dojô (cola no grupo do WhatsApp), não a federação, por
+// isso o bloco fica logo abaixo do cabeçalho — destaque, não rodapé. Uma
+// frase em linguagem de sensei (o que isso tira do colo dele), link, e os
+// dois botões que importam: Copiar e Compartilhar no WhatsApp. Some
+// silenciosamente (retorna null) só no caso raro de self_service_url vir
+// null (migration 225 ainda não aplicada no ambiente) — nunca mostra um
+// bloco quebrado. ─────────────────────────────────────────────────────
+function SelfServiceShareCard({ url, onCopy, onShareWhatsApp }: { url: string; onCopy: () => void; onShareWhatsApp: () => void }) {
+  return (
+    <View style={st.selfServiceCard}>
+      <View style={st.selfServiceHead}>
+        <Icon name="people" size={17} color={P.primary} />
+        <Text style={st.selfServiceTitle}>Deixe os alunos atualizarem sozinhos</Text>
+      </View>
+      <Text style={st.selfServiceDesc}>
+        Mande este link no grupo do dojô: cada aluno atualiza o próprio telefone e e-mail, e some da
+        sua lista.
+      </Text>
+      <View style={st.selfServiceLinkRow}>
+        <Text style={st.selfServiceLink} numberOfLines={1}>{url}</Text>
+      </View>
+      <View style={st.selfServiceActions}>
+        <Pressable onPress={onCopy} accessibilityRole="button" accessibilityLabel="Copiar link de auto-atendimento" style={st.selfServiceBtn}>
+          <Icon name="copy-outline" size={14} color={P.ink} />
+          <Text style={st.selfServiceBtnText}>Copiar link</Text>
+        </Pressable>
+        <Pressable onPress={onShareWhatsApp} accessibilityRole="button" accessibilityLabel="Compartilhar no WhatsApp" style={[st.selfServiceBtn, st.selfServiceBtnPrimary]}>
+          <Icon name="logo-whatsapp" size={14} color="#fdf8f2" />
+          <Text style={[st.selfServiceBtnText, st.selfServiceBtnTextPrimary]}>Compartilhar no WhatsApp</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ── Planilha — baixar (completo / só quem falta) e subir de volta. ─────
 function SpreadsheetPanel({
-  token, onImported,
-}: { token: string; onImported: (result: { atualizados: number; ignorados: number; erros: { row: number; motivo: string }[] }) => void }) {
+  token, onImported, hasSelfServiceLink,
+}: {
+  token: string;
+  onImported: (result: { atualizados: number; ignorados: number; erros: { row: number; motivo: string }[] }) => void;
+  /** Some o convite pra "auto-atendimento" quando o bloco de destaque
+   *  (SelfServiceShareCard) já está visível acima — evita pedir a mesma
+   *  coisa duas vezes na mesma tela. Só permanece (com o fallback antigo,
+   *  "peça à federação") no caso raro de self_service_url vir null. */
+  hasSelfServiceLink: boolean;
+}) {
   const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -579,10 +629,12 @@ function SpreadsheetPanel({
               </Pressable>
             )}
           </View>
-          <Text style={st.sheetHint}>
-            Prefere que os próprios alunos atualizem o contato deles? Peça à federação o link de
-            auto-atendimento do dojô.
-          </Text>
+          {!hasSelfServiceLink && (
+            <Text style={st.sheetHint}>
+              Prefere que os próprios alunos atualizem o contato deles? Peça à federação o link de
+              auto-atendimento do dojô.
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -830,6 +882,25 @@ export default function RosterUpdatePortalScreen() {
     setToast({ id: toastCounter.current, message, undoLabel: undo?.label, onUndo: undo?.onUndo });
   }, []);
 
+  // ── Link de auto-atendimento (item 3, "transferir o trabalho") — mesmo
+  // padrão de copiar/whatsapp já usado no bloco da federação
+  // (RosterValidationBanner / app/karate/(federation)/dojos/[dojoId].tsx),
+  // reaproveitando o utils/clipboard.ts (sem dependência nova). ─────────
+  const selfServiceUrl = data?.self_service_url || null;
+
+  const copySelfServiceLink = useCallback(async () => {
+    if (!selfServiceUrl) return;
+    const ok = await copyToClipboard(selfServiceUrl);
+    showToast(ok ? "Link copiado" : "Não foi possível copiar o link");
+  }, [selfServiceUrl, showToast]);
+
+  const shareSelfServiceLinkWhatsApp = useCallback(() => {
+    if (!selfServiceUrl) return;
+    const link = `https://wa.me/?text=${encodeURIComponent(selfServiceUrl)}`;
+    if (IS_WEB && typeof window !== "undefined") window.open(link, "_blank");
+    else Linking.openURL(link).catch(() => showToast("Não foi possível abrir o WhatsApp. Copie o link e envie manualmente."));
+  }, [selfServiceUrl, showToast]);
+
   const handleInactivate = useCallback(async (p: RosterPractitioner) => {
     try {
       await savePatch(p.id, { is_active: false });
@@ -1014,6 +1085,14 @@ export default function RosterUpdatePortalScreen() {
             </View>
           )}
 
+          {!!selfServiceUrl && (
+            <SelfServiceShareCard
+              url={selfServiceUrl}
+              onCopy={copySelfServiceLink}
+              onShareWhatsApp={shareSelfServiceLinkWhatsApp}
+            />
+          )}
+
           <View style={st.modeToggle}>
             <Pressable onPress={() => setMode("queue")} style={[st.modeBtn, mode === "queue" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo fila">
               <Icon name="layers" size={14} color={mode === "queue" ? "#fdf8f2" : P.ink2} />
@@ -1080,6 +1159,7 @@ export default function RosterUpdatePortalScreen() {
           <SpreadsheetPanel
             token={tokenStr}
             onImported={(result) => { setImportResult(result); refetch(); }}
+            hasSelfServiceLink={!!selfServiceUrl}
           />
           {importResult && (
             <View style={st.importBanner}>
@@ -1169,6 +1249,22 @@ const st = StyleSheet.create({
 
   alertBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.alertSoft, borderWidth: 1, borderColor: "rgba(168,84,58,0.25)", borderRadius: KarateRadius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
   alertBannerText: { fontSize: 12, color: P.ink2, flex: 1, lineHeight: 17 },
+
+  // Bloco de destaque — link de auto-atendimento (item 3, "transferir o
+  // trabalho"). primarySoft/primaryLine (vermelhão de carimbo, acento raro
+  // do Shoji) de propósito: é o único bloco da tela com esse tratamento,
+  // pra chamar atenção sem virar um segundo header.
+  selfServiceCard: { backgroundColor: P.primarySoft, borderWidth: 1, borderColor: P.primaryLine, borderRadius: KarateRadius.lg, padding: 16, marginBottom: 16 },
+  selfServiceHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  selfServiceTitle: { fontFamily: KarateFonts.heading, fontSize: 15.5, color: P.ink },
+  selfServiceDesc: { fontSize: 12.5, color: P.ink2, lineHeight: 18 },
+  selfServiceLinkRow: { marginTop: 10, marginBottom: 12, backgroundColor: P.glass2, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 10 },
+  selfServiceLink: { fontFamily: KarateFonts.mono, fontSize: 12, color: P.ink2 },
+  selfServiceActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selfServiceBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: P.primaryLine, borderRadius: KarateRadius.md, backgroundColor: P.glass2, paddingVertical: 9, paddingHorizontal: 12 },
+  selfServiceBtnText: { fontSize: 12.5, fontWeight: "700", color: P.ink },
+  selfServiceBtnPrimary: { backgroundColor: P.primary, borderColor: P.primary },
+  selfServiceBtnTextPrimary: { color: "#fdf8f2" },
 
   modeToggle: { flexDirection: "row", gap: 8, marginBottom: 16 },
   modeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.md, backgroundColor: P.glass, paddingVertical: 10 },

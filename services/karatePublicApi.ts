@@ -154,6 +154,16 @@ export interface RosterUpdateResponse {
   praticantes: RosterPractitioner[];
   counts: RosterCounts;
   progress: RosterProgress;
+  /**
+   * Link PRONTO (URL montada) de auto-atendimento do PRÓPRIO aluno — token
+   * SEPARADO do token do sensei (self_service_token, ver
+   * karateRosterSelfServicePublic.js). É o que o sensei cola no grupo de
+   * WhatsApp do dojô: cada aluno atualiza o próprio telefone/e-mail e some
+   * da fila dele. O backend gera o token sob demanda se o dojô ainda não
+   * tinha um (idempotente — nunca vem vazio por falta de token). Pode vir
+   * `null` só se a migration 225 ainda não foi aplicada no ambiente.
+   */
+  self_service_url: string | null;
 }
 
 /** Ficha completa — GET /public/roster-update/:token/practitioners/:studentId */
