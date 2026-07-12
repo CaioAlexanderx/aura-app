@@ -46,6 +46,16 @@
 //   karateApi.listPractitioners (debounce 300ms, a partir de 2 chars).
 //   Permite texto livre (sensei não cadastrado). Envia sensei_name +
 //   sensei_practitioner_id no create/patch (sem sensei_cpf).
+//
+// G2 (feat/karate-dojo-annuity-plan): "Plano de anuidade" — campo NOVO e
+//   DISTINTO de "Modelo de filiação" acima. affiliation_model é metadado
+//   legado/decorativo (nunca lido por rota de cobrança). karate_annuity_plan
+//   é o campo REAL que a campanha e o /charge individual passam a consultar
+//   (migration 226, aura-backend) — sem ele, um dojô trimestral era cobrado
+//   como anual, sem erro nenhum. OPCIONAL aqui (null = "a federação ainda
+//   não definiu", estado normal — nunca forçamos uma escolha no cadastro).
+//   Valores/vencimentos exibidos vêm de karateApi.getFeePlans (tabela de
+//   anuidades vigente) — NUNCA hardcoded, ao contrário de MODELS acima.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -56,7 +66,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
-import { karateApi, AffiliationModel, DojoInput, PractitionerListItem } from "@/services/karateApi";
+import { karateApi, AffiliationModel, AnnuityFeePlan, AnnuityPlan, DojoInput, PractitionerListItem } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { KARATE_REGIONS, KARATE_REGIONS_VALUES, REGION_OTHER } from "@/constants/karateRegions";
 
@@ -92,8 +102,26 @@ const EMPTY = {
   legacy_address: "",
   // status (edição): true = Ativo, false = Suspenso. Cadastro novo nasce ativo.
   active: true,
+  // Plano de anuidade REAL do dojô (migration 226) — null = "ainda não
+  // definido" (estado normal, não é erro; ver comentário G2 no topo do arquivo).
+  karate_annuity_plan: null as AnnuityPlan | null,
 };
 type Form = typeof EMPTY;
+
+// Nomes por extenso dos meses de vencimento (due_months vem como [5], [5,11]
+// etc. da tabela de anuidades vigente) — só formatação, nada hardcoded aqui,
+// os NÚMEROS dos meses vêm sempre da API.
+const MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function fmtDueMonths(months: number[] | null | undefined): string {
+  if (!months || months.length === 0) return "";
+  return months.map((m) => MONTH_NAMES[m - 1] ?? "?").join("/");
+}
+function fmtMoneyBRL(v: number): string {
+  return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+const ANNUITY_PLAN_LABELS: Record<AnnuityPlan, string> = {
+  anual: "Anual", semestral: "Semestral", trimestral: "Trimestral",
+};
 
 // ── máscaras / validações BR ─────────────────────────────────
 const onlyD = (v: string) => (v || "").replace(/\D/g, "");
@@ -173,6 +201,11 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   // dropdown de região: estado aberto/fechado
   const [regionOpen, setRegionOpen] = useState(false);
 
+  // Plano de anuidade (G2) — tabela de fees vigente (fee_type='dojo'), para
+  // mostrar valor/vencimento REAIS de cada plano no seletor. Nunca hardcoded.
+  const [feePlans, setFeePlans] = useState<AnnuityFeePlan[]>([]);
+  const [feePlansLoading, setFeePlansLoading] = useState(false);
+
   // ── Autocomplete de sensei ────────────────────────────────────
   // suggestions: lista de praticantes retornados pela busca
   // suggestionsOpen: dropdown visível
@@ -196,6 +229,15 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const emailRef = useRef<TextInput>(null);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!visible) return;
+    setFeePlansLoading(true);
+    karateApi.getFeePlans(federationId)
+      .then((rows) => setFeePlans(rows.filter((f) => f.fee_type === "dojo")))
+      .catch(() => setFeePlans([]))
+      .finally(() => setFeePlansLoading(false));
+  }, [visible, federationId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -230,6 +272,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
           city: d.address_city || "", state: d.address_state || "",
           legacy_address: hasStructured ? "" : (d.address || ""),
           active,
+          karate_annuity_plan: (d.karate_annuity_plan as AnnuityPlan | null) || null,
         });
         setFpkt(d.fpkt_affiliation_id || null);
         setStatusLabel(d.status || null);
@@ -387,6 +430,12 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       address_zip: onlyD(form.zip_code) || null,
       // texto legado: só preserva se NÃO houver estruturado preenchido
       address: hasStructured ? null : (form.legacy_address || null),
+      // Plano de anuidade REAL do dojô (G2/migration 226) — sempre enviado
+      // (mesmo null) para que limpar a seleção no formulário efetivamente
+      // limpe o campo salvo (PATCH trata `undefined` como "não mexer" e
+      // `null` como "limpar" — ver karateDojos.js). Campo OPCIONAL: nunca
+      // bloqueia o cadastro/edição do dojô.
+      karate_annuity_plan: form.karate_annuity_plan || null,
     } as any;
     // Status: só envia is_active na EDIÇÃO (cadastro novo nasce ativo no back).
     if (isEdit) body.is_active = form.active;
@@ -502,6 +551,46 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                   );
                 })}
               </View>
+
+              {/* Plano de anuidade (G2 — migration 226, OPCIONAL) — plano
+                  REAL de cobrança do dojô. Valores/vencimentos vêm da tabela
+                  de fees vigente (karateApi.getFeePlans), nunca hardcoded.
+                  Tocar no plano já selecionado desmarca (volta a "indefinido"). */}
+              <Text style={styles.label}>Plano de anuidade <Text style={styles.optionalHint}>(opcional — a federação pode definir depois)</Text></Text>
+              {feePlansLoading ? (
+                <Text style={styles.feePlanLoadingTxt}>Carregando valores vigentes…</Text>
+              ) : (
+                <View style={styles.models}>
+                  {(["anual", "semestral", "trimestral"] as AnnuityPlan[]).map((planKey) => {
+                    const fee = feePlans.find((f) => f.plan === planKey);
+                    const on = form.karate_annuity_plan === planKey;
+                    const detail = fee
+                      ? `${fmtMoneyBRL(fee.amount)} · ${fee.due_months && fee.due_months.length > 1 ? `${fee.due_months.length}x` : "1x"} · vence ${fmtDueMonths(fee.due_months)}`
+                      : "valor não configurado em Valores e planos";
+                    return (
+                      <TouchableOpacity
+                        key={planKey}
+                        style={[styles.model, on && styles.modelOn]}
+                        onPress={() => set("karate_annuity_plan", on ? null : planKey)}
+                        activeOpacity={0.8}
+                        accessibilityLabel={`Plano de anuidade ${ANNUITY_PLAN_LABELS[planKey]}`}
+                        accessibilityRole="button"
+                      >
+                        <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.modelLabel, on && { color: P.ink }]}>{ANNUITY_PLAN_LABELS[planKey]}</Text>
+                          <Text style={styles.modelDetail}>{detail}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {!form.karate_annuity_plan && (
+                <Text style={styles.feePlanUndefinedNote}>
+                  Sem plano definido, a campanha de anuidades vai sinalizar este dojô antes de cobrar — nunca lança como Anual sem confirmação.
+                </Text>
+              )}
 
               {/* ── Região — dropdown canônico ──────────────────────────────── */}
               <View style={styles.row2}>
@@ -858,6 +947,10 @@ const styles = StyleSheet.create({
   radioDot: { width: 9, height: 9, borderRadius: 999, backgroundColor: P.red } as ViewStyle,
   modelLabel: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink2 } as TextStyle,
   modelDetail: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: 1 } as TextStyle,
+
+  optionalHint: { fontFamily: F.body, fontSize: 10.5, fontWeight: "400", color: P.ink4 } as TextStyle,
+  feePlanLoadingTxt: { fontFamily: F.body, fontSize: 12, color: P.ink3, marginBottom: 11 } as TextStyle,
+  feePlanUndefinedNote: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: -4, marginBottom: 11, fontStyle: "italic" } as TextStyle,
 
   cepBox: { backgroundColor: P.glass, borderWidth: 1, borderColor: P.redLine, borderRadius: R.lg, padding: 14, marginBottom: 12 } as ViewStyle,
   cepLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.ink, marginBottom: 7 } as TextStyle,

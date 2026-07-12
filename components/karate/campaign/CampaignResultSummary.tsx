@@ -23,6 +23,18 @@ function skipLabel(reason: string): string {
   return SKIP_REASON_LABEL[reason] || reason;
 }
 
+// F2 (migration 226) — 'plano_indefinido' é o motivo mais comum de erro
+// aqui quando o alvo veio de fora do CampaignWizard (ex.: BatchLaunchModal,
+// que lança direto sem passar pelo preview/Step3Review — não tem como
+// avisar ANTES de confirmar). Mensagem em português explica o que fazer.
+const ERROR_REASON_LABEL: Record<string, string> = {
+  plano_indefinido: "sem plano de anuidade definido — cadastre o plano do dojô (Anual/Semestral/Trimestral) e tente de novo",
+};
+
+function errorLabel(reason: string): string {
+  return ERROR_REASON_LABEL[reason] || reason;
+}
+
 export function CampaignResultSummary({ result }: { result: AnnuityCampaignResult }) {
   const createdTotal = result.created.reduce((s, c) => s + Number(c.total || 0), 0);
   const hasErrors = result.errors.length > 0;
@@ -88,7 +100,7 @@ export function CampaignResultSummary({ result }: { result: AnnuityCampaignResul
           {result.errors.map((e, idx) => (
             <View key={`${e.type}-${e.id}-${idx}`} style={styles.row}>
               <Text style={styles.rowName} numberOfLines={1}>{e.name || "—"}</Text>
-              <Text style={[styles.rowMeta, { color: P.danger }]} numberOfLines={2}>{e.reason}</Text>
+              <Text style={[styles.rowMeta, { color: P.danger }]} numberOfLines={2}>{errorLabel(e.reason)}</Text>
             </View>
           ))}
         </View>

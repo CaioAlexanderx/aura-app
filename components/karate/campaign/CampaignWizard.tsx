@@ -38,12 +38,13 @@ import {
   AnnuityCampaignResult,
   AnnuityCampaignScope,
   AnnuityFeePlan,
+  AnnuityPlan,
 } from "@/services/karateApi";
 import { Step1Scope } from "./Step1Scope";
 import { Step2ValuesDueDate } from "./Step2ValuesDueDate";
 import { Step3Review } from "./Step3Review";
 import { CampaignResultSummary } from "./CampaignResultSummary";
-import { countForScope, referenceDueDate, rowsForScope } from "./types";
+import { buildDojoPlansPayload, countForScope, referenceDueDate, rowsForScope } from "./types";
 import type { CampaignStep } from "./types";
 
 // Rótulos alinhados ao mockup ("1 · Escopo", "2 · Planos e valores",
@@ -88,6 +89,15 @@ export function CampaignWizard({
   const [dueDateOverrideBr, setDueDateOverrideBr] = useState("");
   const [excludeDojoIds, setExcludeDojoIds] = useState<Set<string>>(new Set());
   const [excludePractitionerIds, setExcludePractitionerIds] = useState<Set<string>>(new Set());
+  // F2 (migration 226) — plano escolhido pelo gestor para dojôs SEM
+  // karate_annuity_plan cadastrado (plano_indefinido:true no preview).
+  // Default sugerido é 'anual' quando o gestor não mexe (ver
+  // buildDojoPlansPayload/effectiveDojoPlan em ./types) — mas fica
+  // EXPLÍCITO no request de /campaign, nunca um default escondido.
+  const [dojoPlanOverrides, setDojoPlanOverrides] = useState<Record<string, AnnuityPlan>>({});
+  const onChangeDojoPlan = useCallback((dojoId: string, plan: AnnuityPlan) => {
+    setDojoPlanOverrides((prev) => ({ ...prev, [dojoId]: plan }));
+  }, []);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AnnuityCampaignResult | null>(null);
@@ -115,6 +125,7 @@ export function CampaignWizard({
     setDueDateOverrideBr("");
     setExcludeDojoIds(new Set());
     setExcludePractitionerIds(new Set());
+    setDojoPlanOverrides({});
     setSubmitting(false);
     setResult(null);
     setShowExitConfirm(false);
@@ -187,6 +198,12 @@ export function CampaignWizard({
     if (!scope || includedCount === 0) return;
     setSubmitting(true);
     try {
+      // dojo_plans: só entram aqui os dojôs plano_indefinido do preview
+      // atual (excluídos ou não — mandar de mais não tem efeito colateral,
+      // o backend só usa dojo_plans pra quem de fato não tinha plano
+      // cadastrado). Default sugerido 'anual' quando o gestor não escolheu
+      // nada no passo 3 — ver aviso em Step3Review.
+      const dojoPlans = preview ? buildDojoPlansPayload(preview.dojos, dojoPlanOverrides) : {};
       const res = await karateApi.runAnnuityCampaign(federationId, {
         year,
         scope,
@@ -195,6 +212,7 @@ export function CampaignWizard({
           practitioner_ids: Array.from(excludePractitionerIds),
         },
         due_date: dueDateOverrideIso || undefined,
+        dojo_plans: Object.keys(dojoPlans).length > 0 ? dojoPlans : undefined,
       });
       setResult(res);
       setStep(4);
@@ -305,6 +323,9 @@ export function CampaignWizard({
               onTogglePractitioner={toggleExcludePractitioner}
               dueDateIso={refDueDate}
               dueDateAdjusted={refDueDateAdjusted}
+              planCatalog={preview?.plan_catalog ?? []}
+              dojoPlanOverrides={dojoPlanOverrides}
+              onChangeDojoPlan={onChangeDojoPlan}
             />
           )}
           {step === 4 && result && <CampaignResultSummary result={result} />}

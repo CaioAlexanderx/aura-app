@@ -70,6 +70,10 @@ import { DocumentosSection } from "@/components/karate/DocumentosSection";
 import { copyToClipboard } from "@/utils/clipboard";
 
 const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
+// G2 (migration 226) — plano de anuidade REAL do dojô (distinto de
+// affiliation_model/MODEL_LABEL acima, que é decorativo e não usado em
+// cobrança). Ver comentário em DojoFichaModal.tsx.
+const ANNUITY_PLAN_LABEL: Record<string, string> = { anual: "Anual", semestral: "Semestral", trimestral: "Trimestral" };
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
 // Item 2 (menu de overflow do header): mesmo padrão hover-só-web + fallback
 // touch usado em InactivateChoiceDialog/RedistribuirPraticantesModal.
@@ -657,6 +661,10 @@ export default function DojoDetailScreen() {
           <KV k="Fundação" v={data.dojo_founded_year ? String(data.dojo_founded_year) : null} />
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
           <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
+          <KV
+            k="Plano de anuidade"
+            v={data.karate_annuity_plan ? ANNUITY_PLAN_LABEL[data.karate_annuity_plan] ?? data.karate_annuity_plan : "Não definido — usará Anual na próxima campanha"}
+          />
           {/* Fase 5 / DJ-seg: fonte coerente com a seção Praticantes abaixo — usa o
               `summary` do roster paginado (contagens agregadas no banco, mesma chamada
               da lista, sem 2ª ida) quando disponível; cai para o campo do GET /dojo
