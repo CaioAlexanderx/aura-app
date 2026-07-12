@@ -13,6 +13,8 @@ import type {
   AnnuityCampaignPreviewPractitioner,
   AnnuityCampaignPreviewResponse,
   AnnuityCampaignScope,
+  AnnuityFeeCatalogEntry,
+  AnnuityPlan,
 } from "@/services/karateApi";
 
 export type CampaignStep = 1 | 2 | 3 | 4;
@@ -58,6 +60,76 @@ export function referenceDueDate(preview: AnnuityCampaignPreviewResponse | null)
   const p = preview.practitioners[0];
   if (p) return { due_date: p.due_date, due_date_ajustada: p.due_date_ajustada };
   return { due_date: null, due_date_ajustada: false };
+}
+
+// ── F2 do plano de anuidades (migration 226 — aura-backend): plano DO
+// dojô. Um dojô sem `karate_annuity_plan` cadastrado chega no preview com
+// plano_indefinido:true, amount:0 — NUNCA "Anual" por conta própria. O
+// wizard sinaliza isso com clareza no passo 3 e deixa o gestor escolher
+// (default sugerido: Anual) ANTES de confirmar — nunca descobre depois.
+export const ANNUITY_PLAN_LABELS: Record<AnnuityPlan, string> = {
+  anual: "Anual", semestral: "Semestral", trimestral: "Trimestral",
+};
+export const ANNUITY_PLANS: AnnuityPlan[] = ["anual", "semestral", "trimestral"];
+export const DEFAULT_SUGGESTED_PLAN: AnnuityPlan = "anual";
+
+/** Busca a entrada do catálogo (valor/parcelas reais) para um plano — vem
+ *  do MESMO preview (plan_catalog), nunca hardcoded/recalculado no cliente. */
+export function planCatalogEntry(catalog: AnnuityFeeCatalogEntry[], plan: AnnuityPlan): AnnuityFeeCatalogEntry | null {
+  return catalog.find((c) => c.plan === plan) || null;
+}
+
+/** Plano EFETIVO que a linha vai usar caso a campanha rode agora: o plano
+ *  já resolvido pelo backend quando definido, ou a escolha do gestor no
+ *  passo 3 (default sugerido 'anual') quando plano_indefinido. Nunca null
+ *  aqui — é sempre "o que vai acontecer se eu confirmar do jeito que está". */
+export function effectiveDojoPlan(
+  d: AnnuityCampaignPreviewDojo,
+  overrides: Record<string, AnnuityPlan>
+): AnnuityPlan {
+  if (!d.plano_indefinido && d.plan) return d.plan;
+  return overrides[d.dojo_id] ?? DEFAULT_SUGGESTED_PLAN;
+}
+
+/** Valor/parcelas EFETIVOS de uma linha de dojô no passo 3 — para linhas
+ *  com plano definido, vem direto do preview (d.amount/d.installments_count,
+ *  já calculados pelo backend). Para plano_indefinido, vem do plan_catalog
+ *  (valores reais da vigência, mesmos que /campaign vai usar de fato ao
+ *  receber esse plano em `dojo_plans`) — nunca um número inventado no cliente. */
+export function effectiveDojoAmount(
+  d: AnnuityCampaignPreviewDojo,
+  overrides: Record<string, AnnuityPlan>,
+  catalog: AnnuityFeeCatalogEntry[]
+): number {
+  if (!d.plano_indefinido) return d.amount;
+  const entry = planCatalogEntry(catalog, effectiveDojoPlan(d, overrides));
+  return entry?.amount ?? 0;
+}
+
+export function effectiveDojoInstallments(
+  d: AnnuityCampaignPreviewDojo,
+  overrides: Record<string, AnnuityPlan>,
+  catalog: AnnuityFeeCatalogEntry[]
+): number {
+  if (!d.plano_indefinido) return d.installments_count;
+  const entry = planCatalogEntry(catalog, effectiveDojoPlan(d, overrides));
+  return entry?.installments_count ?? 0;
+}
+
+/** Monta o mapa `dojo_plans` a enviar em /campaign e /batch: só entra ali
+ *  quem estava plano_indefinido no preview — dojô que já tem plano
+ *  cadastrado usa o dele automaticamente no backend, sem precisar mandar
+ *  nada. Default sugerido 'anual' quando o gestor não tocou no seletor —
+ *  fica EXPLÍCITO no request (não é mais um default escondido no backend). */
+export function buildDojoPlansPayload(
+  dojos: AnnuityCampaignPreviewDojo[],
+  overrides: Record<string, AnnuityPlan>
+): Record<string, AnnuityPlan> {
+  const out: Record<string, AnnuityPlan> = {};
+  for (const d of dojos) {
+    if (d.plano_indefinido) out[d.dojo_id] = overrides[d.dojo_id] ?? DEFAULT_SUGGESTED_PLAN;
+  }
+  return out;
 }
 
 export type ScopedRows = {

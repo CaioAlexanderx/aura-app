@@ -240,6 +240,12 @@ export interface Dojo {
   practitioner_count: number;
   created_at: string;
   dojo_name?: string | null;
+  /** Plano de anuidade REAL do dojô (migration 226 — aura-backend) —
+   *  anual|semestral|trimestral, `null` = federação ainda não definiu.
+   *  NÃO confundir com `affiliation_model` acima (decorativo, legado, nunca
+   *  lido pelas rotas de cobrança). Fonte de verdade para a campanha e
+   *  para POST .../annuities/dojos/:id/charge. */
+  karate_annuity_plan?: AnnuityPlan | null;
 }
 
 // Membro da equipe técnica do dojô (Sensei + corpo de auxiliares).
@@ -274,6 +280,9 @@ export interface DojoInput {
   email?: string | null;
   cnpj?: string | null;
   address?: string | null;
+  /** Plano de anuidade REAL do dojô (opcional no cadastro — `null`/omitido
+   *  fica indefinido, a federação decide depois). Ver Dojo.karate_annuity_plan. */
+  karate_annuity_plan?: AnnuityPlan | null;
 }
 
 export interface ExportDojoParams {
@@ -682,14 +691,26 @@ export interface VoidAnnuityGenericResult {
 export type AnnuityCampaignScope = "dojos" | "practitioners" | "both";
 
 /** Um alvo de dojô no preview — `due_date`/`due_date_ajustada` já refletem
- *  o vencimento que `/campaign` VAI usar (default seguro ou override). */
+ *  o vencimento que `/campaign` VAI usar (default seguro ou override).
+ *
+ *  F2 (migration 226 — plano DO dojô, aura-backend PR karate-dojo-annuity-
+ *  plan): `plan` é o plano EFETIVO resolvido pelo backend (precedência:
+ *  dojo_plans deste preview > karate_annuity_plan cadastrado no dojô > null).
+ *  `plano_indefinido:true` significa que o dojô NÃO tem plano cadastrado e
+ *  nenhum override foi passado em `dojo_plans` — nesse caso `plan` vem null,
+ *  `amount`/`installments_count` vêm 0, e o valor NÃO entra em
+ *  totals.valor_previsto. A UI precisa mostrar isso com clareza (nunca
+ *  tratar como "vai ser anual" silenciosamente — ver Step3Review). */
 export interface AnnuityCampaignPreviewDojo {
   dojo_id: string;
   name: string;
-  plan_default: AnnuityPlan;
+  plan: AnnuityPlan | null;
+  plano_indefinido: boolean;
   amount: number;
   due_date: string | null;
   due_date_ajustada: boolean;
+  installments_count: number;
+  fee_configurada?: boolean;
 }
 
 export interface AnnuityCampaignPreviewPractitioner {
@@ -701,11 +722,30 @@ export interface AnnuityCampaignPreviewPractitioner {
   due_date_ajustada: boolean;
 }
 
+/** Uma entrada do catálogo dos 3 planos de dojô (valor/parcelas REAIS da
+ *  vigência atual) — devolvida junto do preview para a UI montar um seletor
+ *  inline sem precisar de uma chamada separada. `fee_configurada:false`
+ *  significa que a federação ainda não cadastrou valor pra este plano em
+ *  "Valores e planos" (amount/due_date vêm zerados/null nesse caso). */
+export interface AnnuityFeeCatalogEntry {
+  plan: AnnuityPlan;
+  fee_configurada: boolean;
+  amount: number;
+  due_date: string | null;
+  due_date_ajustada: boolean;
+  installments_count: number;
+}
+
 export interface AnnuityCampaignPreviewResponse {
   dojos: AnnuityCampaignPreviewDojo[];
   practitioners: AnnuityCampaignPreviewPractitioner[];
+  /** Os 3 planos de dojô com valor/parcelas reais — ver AnnuityFeeCatalogEntry. */
+  plan_catalog: AnnuityFeeCatalogEntry[];
   totals: {
     dojos_count: number;
+    /** Quantos dos dojos_count acima ainda não têm plano definido (nem
+     *  cadastrado no dojô, nem via dojo_plans neste preview). */
+    dojos_plano_indefinido_count: number;
     practitioners_count: number;
     valor_previsto: number;
   };
@@ -2124,7 +2164,15 @@ export const karateApi = {
    *  mesmo due_date, se informado) — é o preview que protege o usuário. */
   previewAnnuityCampaign: (
     federationId: string,
-    body: { year: string; scope: AnnuityCampaignScope; due_date?: string }
+    body: {
+      year: string;
+      scope: AnnuityCampaignScope;
+      due_date?: string;
+      /** { [dojo_id]: plan } — define/simula o plano de um dojô SEM plano
+       *  cadastrado, direto no preview (não persiste nada — só recalcula os
+       *  números desta chamada). Ver AnnuityCampaignPreviewDojo.plano_indefinido. */
+      dojo_plans?: Record<string, AnnuityPlan>;
+    }
   ): Promise<AnnuityCampaignPreviewResponse> =>
     request(`/federation/${federationId}/financial/annuities/campaign/preview`, {
       method: "POST",
@@ -2141,6 +2189,14 @@ export const karateApi = {
       scope: AnnuityCampaignScope;
       exclude?: { dojo_ids?: string[]; practitioner_ids?: string[] };
       due_date?: string;
+      /** { [dojo_id]: plan } — mesmo mapa aceito pelo preview. Aqui é
+       *  definição DE VERDADE: se o dojô ainda não tinha karate_annuity_plan
+       *  salvo, o valor escolhido é PERSISTIDO em companies (a próxima
+       *  campanha já não vê esse dojô como indefinido). Dojô sem plano
+       *  cadastrado E sem entrada aqui vai para `errors[]`
+       *  (reason:'plano_indefinido') — nunca é lançado como 'anual' por
+       *  default silencioso. */
+      dojo_plans?: Record<string, AnnuityPlan>;
     }
   ): Promise<AnnuityCampaignResult> =>
     request(`/federation/${federationId}/financial/annuities/campaign`, {
