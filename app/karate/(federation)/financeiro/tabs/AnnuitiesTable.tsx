@@ -45,6 +45,7 @@ import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
 import { VoidBatchModal, VoidBatchTarget } from "@/components/karate/VoidBatchModal";
 import { WhatsAppChargeModal, WhatsAppChargeTarget } from "@/components/karate/WhatsAppChargeModal";
+import { BulkPayConfirmModal, BulkPayTarget } from "@/components/karate/BulkPayConfirmModal";
 import type { SegKey } from "./AnnuitiesHub";
 
 const PAGE_SIZE = 50;
@@ -474,10 +475,10 @@ const AnnuityRow = React.memo(AnnuityRowItem);
 // que já têm cobrança (o backend as devolveria em `skipped[]` de qualquer
 // forma, mas filtrar aqui deixa a intenção clara pro operador).
 function BulkBar({
-  count, payableCount, noChargeCount, emailCount, onClear, onBulkPay, bulkPaying, onCopyMessage, onBulkLaunch, onBulkEmail, onBulkVoid,
+  count, payableCount, noChargeCount, emailCount, onClear, onOpenBulkPay, onCopyMessage, onBulkLaunch, onBulkEmail, onBulkVoid,
 }: {
   count: number; payableCount: number; noChargeCount: number; emailCount: number;
-  onClear: () => void; onBulkPay: () => void; bulkPaying: boolean; onCopyMessage: () => void;
+  onClear: () => void; onOpenBulkPay: () => void; onCopyMessage: () => void;
   onBulkLaunch: () => void; onBulkEmail: () => void; onBulkVoid: () => void;
 }) {
   if (count === 0) return null;
@@ -487,12 +488,19 @@ function BulkBar({
   // mensagem), com "Lançar cobrança em lote" (aditivo da F3, sem
   // equivalente no mockup) por último. "Limpar seleção" é texto no canto
   // direito (mockup .clear), não um ícone X à esquerda.
+  //
+  // BUGFIX P0 (11/07/2026): "Registrar pagamento" NUNCA muta no clique
+  // direto — onOpenBulkPay só abre o BulkPayConfirmModal (contagem + valor
+  // total + confirmar/cancelar separados). Era o único botão da barra sem
+  // esse passo (todos os outros já abriam modal) e já causou baixa
+  // acidental de 3 anuidades reais em produção. A baixa em si (e o
+  // spinner) agora vivem dentro do modal, não aqui.
   return (
     <View style={styles.bulkBar}>
       <Text style={styles.bulkCount}>{count} selecionado{count === 1 ? "" : "s"}</Text>
       {payableCount > 0 && (
-        <TouchableOpacity style={styles.bulkBtn} onPress={onBulkPay} disabled={bulkPaying} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
-          {bulkPaying ? <ActivityIndicator size="small" color={P.paperWarm} /> : <Icon name="checkmark" size={13} color={P.paperWarm} />}
+        <TouchableOpacity style={styles.bulkBtn} onPress={onOpenBulkPay} accessibilityRole="button" accessibilityLabel="Registrar pagamento em lote">
+          <Icon name="checkmark" size={13} color={P.paperWarm} />
           <Text style={styles.bulkBtnLabel}>Registrar pagamento</Text>
         </TouchableOpacity>
       )}
@@ -555,13 +563,26 @@ const TableHeader = React.memo(function TableHeader(p: TableHeaderProps) {
         {/* Chips de status (mockup .chips) — seleção única (rádio), mesmo
             statusFilter que os KPIs do hub também dirigem (clicar aqui
             reflete lá e vice-versa, uma fonte única de verdade). "Todos"
-            volta ao estado sem filtro. */}
+            volta ao estado sem filtro.
+            BUGFIX P2 — taxonomia unificada (11/07/2026): existiam TRÊS
+            nomes pra "atrasado" no hub — o KPI dizia "Atrasado" (alias
+            overdue ∪ defaulting ∪ suspended, mesma regra de
+            karateAnnuitySummary.js), e esta linha de chips tinha "Vencido"
+            (só overdue, 0-90d) E "Inadimplente" (só defaulting, 91-180d) —
+            sem chip nenhum pra 'suspended' (>180d). Resultado: 3 rótulos
+            pro que o gestor lê como o mesmo conceito, com 3 números
+            diferentes. Agora o chip usa o MESMO alias 'atrasado' que o
+            KPI — mesmo nome, mesmo número, sempre (ver STATUS_ALIASES em
+            karateAnnuities.js, backend). O badge por LINHA continua
+            mostrando o estágio granular (Vencido/Inadimplente, ver
+            annuityStatusView em karateTheme.ts) — isso é detalhe
+            informativo por registro, não um filtro agregado, então não
+            reabre a confusão. */}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
           <Chip label="Todos" active={p.statusFilter === "all"} onPress={() => p.onStatusFilter("all")} />
           <Chip label="Pago" active={p.statusFilter === "paid"} onPress={() => p.onStatusFilter("paid")} />
           <Chip label="A vencer" active={p.statusFilter === "due"} onPress={() => p.onStatusFilter("due")} />
-          <Chip label="Vencido" active={p.statusFilter === "overdue"} onPress={() => p.onStatusFilter("overdue")} />
-          <Chip label="Inadimplente" active={p.statusFilter === "defaulting"} onPress={() => p.onStatusFilter("defaulting")} />
+          <Chip label="Atrasado" active={p.statusFilter === "atrasado"} onPress={() => p.onStatusFilter("atrasado")} />
           <Chip label="Sem cobrança" active={p.statusFilter === "no_charge"} onPress={() => p.onStatusFilter("no_charge")} />
         </View>
         <Body muted style={{ fontSize: 11.5, marginBottom: 6 }}>{p.total} {p.total === 1 ? "registro" : "registros"} na temporada</Body>
@@ -613,7 +634,13 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [voiding, setVoiding] = useState(false);
   const [chargeTargetKey, setChargeTargetKey] = useState<string | null>(null);
   const [pixTarget, setPixTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
-  const [bulkPaying, setBulkPaying] = useState(false);
+  // BUGFIX P0 (11/07/2026) — "Registrar pagamento" em lote agora exige
+  // confirmação (BulkPayConfirmModal), mesmo padrão de
+  // emailModalTargets/voidModalTargets abaixo: não-nulo (mesmo array
+  // vazio) é o sinal de "modal aberto", nunca reaproveita um array antigo
+  // depois de fechado.
+  const [bulkPayTargets, setBulkPayTargets] = useState<BulkPayTarget[] | null>(null);
+  const [bulkPayNoPending, setBulkPayNoPending] = useState(0);
   // Fase F3 — lançar cobrança em lote (POST .../batch) pras linhas
   // selecionadas que ainda não têm cobrança nesta temporada.
   const [batchLaunchOpen, setBatchLaunchOpen] = useState(false);
@@ -710,11 +737,11 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // Fase F3 — subconjunto sem cobrança da MESMA seleção: alimenta o
   // "Lançar cobrança em lote" (BatchLaunchModal → POST .../batch). Linhas
   // que já têm cobrança ficam de fora daqui (essas são o alvo de
-  // handleBulkPay acima) — cada ação olha só pro que faz sentido pra ela.
+  // handleOpenBulkPay acima) — cada ação olha só pro que faz sentido pra ela.
   const noChargeSelectedRows = useMemo(() => items.filter((i) => selected.has(i.key) && !i.rowId), [items, selected]);
 
   // Fase F4 — mesmo critério de "achar a parcela acionável" que
-  // handleBulkPay já usa (vencida ou a_vencer): é a parcela que faz
+  // handleOpenBulkPay já usa (vencida ou a_vencer): é a parcela que faz
   // sentido cobrar agora. Conta quantos dos selecionados TÊM essa parcela
   // (emailPayableCount, alimenta o botão da barra) sem precisar abrir o
   // modal — o modal em si recalcula na hora de montar os targets.
@@ -740,7 +767,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   }, []);
 
   // Envio manual — lote (barra de seleção) — mesma seleção de
-  // handleBulkPay, cada linha contribui com sua parcela vencida/a_vencer
+  // handleOpenBulkPay, cada linha contribui com sua parcela vencida/a_vencer
   // (uma por linha; se não tiver nenhuma pendente, entra em noPendingCount
   // — informativo, não é erro, mostrado no modal antes de confirmar).
   const handleOpenBulkEmail = useCallback(() => {
@@ -765,7 +792,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   }, [selectedRows]);
 
   // Retirada de cobrança em lote — annuity_id de cada linha selecionada
-  // que tem cobrança (mesmo subconjunto de handleBulkPay). Não filtramos
+  // que tem cobrança (mesmo subconjunto de handleOpenBulkPay). Não filtramos
   // paga/NFS-e aqui: o backend já pula (não erra) esses casos com motivo
   // claro (has_paid_installment / has_nfse) — filtrar client-side só
   // duplicaria essa regra e poderia ficar desatualizado.
@@ -776,29 +803,31 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
     setVoidModalTargets(targets);
   }, [selectedRows]);
 
-  const handleBulkPay = useCallback(async () => {
-    if (selectedRows.length === 0) return;
-    setBulkPaying(true);
-    const results = await Promise.allSettled(selectedRows.map(async (vm) => {
-      const pending = classifyInstallments(vm.installments).find((c) => c.state === "vencida" || c.state === "a_vencer");
-      if (!pending) throw new Error(`${vm.name}: nenhuma parcela pendente`);
-      await karateApi.payInstallment(federationId, pending.inst.id, { payment_method: "pix" });
-      return vm.name;
-    }));
-    setBulkPaying(false);
-    const ok = results.filter((r) => r.status === "fulfilled").length;
-    const fail = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
-    if (fail.length === 0) {
-      toast.success(`${ok} pagamento(s) registrado(s)`);
-    } else if (ok === 0) {
-      toast.error(`Nenhum pagamento registrado — ${fail.length} falharam.`);
-    } else {
-      toast.warning(`${ok} pagos, ${fail.length} falharam (${fail.map((f) => f.reason?.message ?? "erro").slice(0, 3).join("; ")})`);
-    }
-    setSelected(new Set());
-    load(true);
-    onMutated();
-  }, [selectedRows, federationId, load, onMutated]);
+  // BUGFIX P0 (11/07/2026) — antes disparava a baixa DIRETO no clique do
+  // botão da barra (handleBulkPay chamado por onBulkPay sem passo
+  // intermediário nenhum); um clique exploratório no QA marcou 3
+  // anuidades reais como pagas. Agora só MONTA os alvos (mesmo critério de
+  // handleOpenBulkEmail: parcela vencida ou a_vencer) e abre o
+  // BulkPayConfirmModal — a baixa em si só acontece depois do operador
+  // confirmar explicitamente lá dentro (contagem + valor total visíveis
+  // antes de mutar).
+  const handleOpenBulkPay = useCallback(() => {
+    const targets: BulkPayTarget[] = [];
+    let noPending = 0;
+    selectedRows.forEach((vm) => {
+      const c = classifyInstallments(vm.installments).find((x) => x.state === "vencida" || x.state === "a_vencer");
+      if (!c) { noPending += 1; return; }
+      targets.push({
+        key: `${vm.key}-${c.inst.id}`,
+        instId: c.inst.id,
+        name: vm.name,
+        amount: c.inst.amount,
+        referencePeriod: vm.referencePeriod,
+      });
+    });
+    setBulkPayNoPending(noPending);
+    setBulkPayTargets(targets);
+  }, [selectedRows]);
 
   const handleCopyMessage = useCallback(() => {
     const rows = items.filter((i) => selected.has(i.key));
@@ -931,8 +960,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
         noChargeCount={noChargeSelectedRows.length}
         emailCount={emailPayableCount}
         onClear={() => setSelected(new Set())}
-        onBulkPay={handleBulkPay}
-        bulkPaying={bulkPaying}
+        onOpenBulkPay={handleOpenBulkPay}
         onCopyMessage={handleCopyMessage}
         onBulkLaunch={() => setBatchLaunchOpen(true)}
         onBulkEmail={handleOpenBulkEmail}
@@ -953,6 +981,20 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
             load(true);
             onMutated();
           }}
+        />
+      )}
+
+      {/* BUGFIX P0 (11/07/2026) — confirmação antes de "Registrar
+          pagamento" em lote (contagem + valor total + confirmar/cancelar
+          separados). Ver comentário de handleOpenBulkPay acima. */}
+      {bulkPayTargets && (
+        <BulkPayConfirmModal
+          visible={!!bulkPayTargets}
+          federationId={federationId}
+          targets={bulkPayTargets}
+          noPendingCount={bulkPayNoPending}
+          onClose={() => setBulkPayTargets(null)}
+          onDone={() => { setBulkPayTargets(null); setSelected(new Set()); load(true); onMutated(); }}
         />
       )}
 

@@ -141,7 +141,19 @@ export function AnnuitiesSeasonHeader({
   newMembersPracts: number;
   onOpenCampaignFromBanner: () => void;
 }) {
-  const segment = seg === "dojo" ? summary?.dojo : summary?.praticante;
+  // BUGFIX P0 (11/07/2026): os KPIs usavam o bucket do SEGMENTO ativo
+  // (seg === "dojo" ? summary.dojo : summary.praticante) — o hub abre no
+  // segmento "Dojôs" por padrão, onde os KPIs mostravam R$ 0,00 em atraso
+  // (os 11 dojôs cobrados estavam todos pagos), escondendo os R$ 31.105,00
+  // de atraso REAL (que estão no segmento praticante) atrás de um clique
+  // no sub-toggle. O gestor abria a tela e concluía "tudo em dia".
+  //
+  // Fix: os KPIs do topo SEMPRE refletem `summary.total` (dojô + praticante
+  // somados — o backend já devolve pronto via GROUPING SETS, nunca somado
+  // no cliente, ver karateAnnuitySummary.js). O sub-toggle Dojôs/Praticantes
+  // (seg) continua filtrando só a TABELA abaixo — nunca mais redefine os
+  // KPIs do topo.
+  const segment = summary?.total;
   // Ordem por urgência (não pela ordem do "funil" financeiro): o gestor
   // de federação quer ver quem deve e quanto está atrasado em segundos —
   // "Previsto" é só o contexto/total e vem por último.
