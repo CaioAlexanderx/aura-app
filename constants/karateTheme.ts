@@ -50,18 +50,18 @@ export const ShojiPalette = {
   headRed:     "#a44c3e",   // faixa oxblood do header
 
   // Verde-chá — só "em dia / aprovado"
-  ok:          "#4a7a48",
+  ok:          "#3e673d",  // WCAG AA fix (G5): 3.50:1 -> 4.56:1 sobre okWash/paper2
   okWash:      "rgba(74,122,72,0.12)",
   okLine:      "rgba(74,122,72,0.30)",
 
   // Semânticos auxiliares (warm, dessaturados — coerência Shoji)
-  warn:        "#9c6f2e",
+  warn:        "#7a5724",  // WCAG AA fix (G5): 3.12:1 -> 4.59:1 sobre warnWash/paper2
   warnWash:    "rgba(156,111,46,0.12)",
-  alert:       "#a8543a",
+  alert:       "#904832",  // WCAG AA fix (G5): 3.62:1 -> 4.56:1 sobre alertWash/paper2
   alertWash:   "rgba(168,84,58,0.12)",
-  danger:      "#b8463a",
+  danger:      "#a13d33",  // WCAG AA fix (G5): 3.71:1 -> 4.57:1 sobre dangerWash/paper2
   dangerWash:  "rgba(184,70,58,0.10)",
-  neutral:     "#6a6154",
+  neutral:     "#685f52",  // WCAG AA fix (G5): 4.44:1 -> 4.59:1 sobre neutralWash/paper2
   neutralWash: "rgba(43,38,32,0.05)",
 
   // ── compat (nomes antigos *Soft) ──
