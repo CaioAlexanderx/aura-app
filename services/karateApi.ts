@@ -677,6 +677,27 @@ export interface VoidAnnuityGenericResult {
   transaction_ids?: string[];
 }
 
+/** Fase G3 — rastro de ações financeiras (quem fez, quando). Linha de
+ *  GET /financial/audit?target_id=. `action` espelha o vocabulário do
+ *  backend (karateFinanceAudit.js) — o front traduz pra linguagem de
+ *  gestor em `describeFinanceAuditEntry` (AnnuitiesTable.tsx), nunca
+ *  mostra o valor cru de `action`/`source` na tela. */
+export interface FinanceAuditEntry {
+  id: string;
+  federation_id: string;
+  action: string;
+  target_type: "annuity" | "installment";
+  target_id: string | null;
+  dojo_id: string | null;
+  practitioner_id: string | null;
+  actor_user_id: string | null;
+  actor_label: string;
+  source: "ui" | "batch" | "campaign" | "webhook" | "api";
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  created_at: string;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Fase F3 — Campanha anual de anuidades + cobrança em lote
 // (POST /financial/annuities/campaign/preview | /campaign | /batch —
@@ -2119,6 +2140,21 @@ export const karateApi = {
       method: "PATCH",
       body,
     }),
+
+  /** GET /financial/audit?target_id=&limit= — histórico curto de uma
+   *  parcela/anuidade específica (Fase G3). Usado ao expandir a parcela na
+   *  tabela de anuidades, pra mostrar "Pago por Fulano em dd/mm às hh:mm"
+   *  etc. Guard adminOnly no backend; degrada pra [] se a migration 227
+   *  ainda não foi aplicada. */
+  getFinanceAudit: (
+    federationId: string,
+    params: { targetId: string; limit?: number }
+  ): Promise<{ items: FinanceAuditEntry[] }> => {
+    const qs = new URLSearchParams();
+    qs.set("target_id", params.targetId);
+    if (params.limit) qs.set("limit", String(params.limit));
+    return request(`/federation/${federationId}/financial/audit?${qs.toString()}`);
+  },
 
   /** PATCH .../:annuityId/plan — troca o plano de uma anuidade de DOJÔ
    *  (praticante só tem 'anual', 422 se tentado). 409 HAS_PAID_INSTALLMENT

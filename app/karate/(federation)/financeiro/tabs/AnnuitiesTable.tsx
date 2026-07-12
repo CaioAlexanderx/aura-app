@@ -40,6 +40,7 @@ import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/Lanc
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan, AnnuityStatus,
+  FinanceAuditEntry,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
@@ -65,6 +66,53 @@ function monthAbbrOf(dueDate: string | null): string {
 }
 
 const PLAN_LABEL: Record<AnnuityPlan, string> = { anual: "Anual", semestral: "Semestral", trimestral: "Trimestral" };
+
+// ── Fase G3: histórico curto e legível (linguagem de gestor, não de log
+// de sistema) — traduz cada linha de karate_finance_audit_log pra uma
+// frase que a UI mostra ao expandir a parcela. `created_at` é
+// TIMESTAMPTZ (com offset) — new Date(iso) é seguro aqui, mesmo padrão
+// já usado em fmtExpiry (inscricao/[eventId].tsx).
+function fmtAuditWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const datePart = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const timePart = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${datePart} às ${timePart}`;
+}
+
+export function describeFinanceAuditEntry(entry: FinanceAuditEntry): string {
+  const when = fmtAuditWhen(entry.created_at);
+  const byWebhook = entry.actor_label === "webhook";
+  const who = byWebhook ? null : entry.actor_label;
+
+  switch (entry.action) {
+    case "installment_pay":
+    case "annuity_pay":
+    case "annuity_charge_and_pay":
+      if (byWebhook) return `Pago automaticamente via PIX em ${when}`;
+      return who ? `Pago por ${who} em ${when}` : `Pago em ${when}`;
+    case "intent_confirm":
+      if (byWebhook) return `Pagamento confirmado automaticamente em ${when}`;
+      return who ? `Pagamento confirmado por ${who} em ${when}` : `Pagamento confirmado em ${when}`;
+    case "charge_create":
+      if (entry.source === "campaign") return `Cobrança criada pela campanha em ${when}`;
+      if (entry.source === "batch") return `Cobrança criada em lote em ${when}`;
+      return who ? `Cobrança criada por ${who} em ${when}` : `Cobrança criada em ${when}`;
+    case "void":
+      if (entry.source === "batch") return `Removida em lote em ${when}`;
+      return who ? `Removida por ${who} em ${when}` : `Removida em ${when}`;
+    case "annuity_patch":
+    case "installment_patch":
+      return who ? `Valor ou vencimento alterado por ${who} em ${when}` : `Valor ou vencimento alterado em ${when}`;
+    case "plan_change":
+      return who ? `Plano alterado por ${who} em ${when}` : `Plano alterado em ${when}`;
+    case "email_send":
+      if (entry.source === "batch") return `E-mail de cobrança enviado em lote em ${when}`;
+      return who ? `E-mail de cobrança enviado por ${who} em ${when}` : `E-mail de cobrança enviado em ${when}`;
+    default:
+      return who ? `Atualizado por ${who} em ${when}` : `Atualizado em ${when}`;
+  }
+}
 
 // ── Normalização Dojô/CPF → view-model comum da tabela ──────────────
 export interface AnnuityRowVM {
@@ -187,9 +235,9 @@ function InstallmentPill({ inst, state, active, onPress }: { inst: AnnuityInstal
 
 // ── Painel expandido: detalhe de cada parcela + ações (pagar/pix/editar) ─
 function InstallmentDetailRow({
-  inst, state, onPay, onPix, onEdit, onSendEmail,
+  inst, state, federationId, onPay, onPix, onEdit, onSendEmail,
 }: {
-  inst: AnnuityInstallment; state: InstState;
+  inst: AnnuityInstallment; state: InstState; federationId: string;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
@@ -201,6 +249,35 @@ function InstallmentDetailRow({
   const [savingEdit, setSavingEdit] = useState(false);
   const [amountTxt, setAmountTxt] = useState(String(inst.amount).replace(".", ","));
   const [dueTxt, setDueTxt] = useState(formatIsoToBr(inst.due_date));
+
+  // Fase G3: histórico curto e legível — carrega só quando o operador pede
+  // (não em toda expansão de parcela, pra não disparar N requests por
+  // linha visível). Cache simples em estado local (fecha/reabre relança).
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyItems, setHistoryItems] = useState<FinanceAuditEntry[] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
+
+  const toggleHistory = async () => {
+    setPayOpen(false);
+    setEditOpen(false);
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryOpen(true);
+    if (historyItems !== null || historyLoading) return;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    try {
+      const res = await karateApi.getFinanceAudit(federationId, { targetId: inst.id, limit: 10 });
+      setHistoryItems(res.items ?? []);
+    } catch {
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const v = INST_STATE_VIEW[state];
   const isPending = inst.status !== "paid";
@@ -252,9 +329,20 @@ function InstallmentDetailRow({
         <Body muted style={{ fontSize: 11.5, width: 96 }}>{inst.due_date ? formatIsoToBr(inst.due_date) : "Sem data"}</Body>
         <Mono style={{ fontSize: 12.5, width: 88 }}>{fmtMoney(inst.amount)}</Mono>
         {inst.status === "paid" ? (
-          <Body muted style={{ fontSize: 11, flex: 1 }}>
-            Pago em {inst.paid_at ? formatIsoToBr(inst.paid_at.slice(0, 10)) : "—"}
-          </Body>
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1, justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+            <Body muted style={{ fontSize: 11 }}>
+              Pago em {inst.paid_at ? formatIsoToBr(inst.paid_at.slice(0, 10)) : "—"}
+            </Body>
+            <TouchableOpacity
+              style={styles.instActionBtn}
+              onPress={toggleHistory}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver histórico da parcela ${inst.seq}`}
+            >
+              <Icon name="clock" size={12} color={C.ink} />
+              <Text style={styles.instActionLabel}>Histórico</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={{ flexDirection: "row", gap: 6, flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
             <TouchableOpacity
@@ -292,6 +380,15 @@ function InstallmentDetailRow({
             >
               <Icon name="mail" size={12} color={C.ink} />
               <Text style={styles.instActionLabel}>E-mail</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.instActionBtn}
+              onPress={toggleHistory}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver histórico da parcela ${inst.seq}`}
+            >
+              <Icon name="clock" size={12} color={C.ink} />
+              <Text style={styles.instActionLabel}>Histórico</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -341,16 +438,40 @@ function InstallmentDetailRow({
           </View>
         </View>
       )}
+
+      {/* Fase G3: histórico curto e legível — "Pago por Fulano em dd/mm às
+          hh:mm", "Cobrança criada pela campanha em dd/mm", "Removida por
+          Fulano". Linguagem de gestor, não de log de sistema. */}
+      {historyOpen && (
+        <View style={styles.instSubPanel}>
+          {historyLoading ? (
+            <ActivityIndicator size="small" color={P.red} />
+          ) : historyError ? (
+            <Body muted style={{ fontSize: 11 }}>Não foi possível carregar o histórico agora.</Body>
+          ) : !historyItems || historyItems.length === 0 ? (
+            <Body muted style={{ fontSize: 11 }}>Sem histórico registrado para esta parcela ainda.</Body>
+          ) : (
+            <View style={{ gap: 6 }}>
+              {historyItems.map((entry) => (
+                <View key={entry.id} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Icon name="clock" size={11} color={C.ink4} />
+                  <Body muted style={{ fontSize: 11 }}>{describeFinanceAuditEntry(entry)}</Body>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
 // ── Linha da tabela (dojô ou praticante) ─────────────────────────────
 function AnnuityRowItem({
-  vm, wide, selected, selectable, expanded, onToggleSelect, onToggleExpand,
+  vm, wide, selected, selectable, expanded, federationId, onToggleSelect, onToggleExpand,
   onPay, onPix, onEdit, onSendEmail, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
 }: {
-  vm: AnnuityRowVM; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean;
+  vm: AnnuityRowVM; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
   onToggleSelect: () => void; onToggleExpand: () => void;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
@@ -459,7 +580,7 @@ function AnnuityRowItem({
       {expanded && vm.installments.length > 0 && (
         <View style={styles.instPanel}>
           {trail.map(({ inst, state }) => (
-            <InstallmentDetailRow key={inst.id} inst={inst} state={state} onPay={onPay} onPix={onPix} onEdit={onEdit} onSendEmail={onSendEmail} />
+            <InstallmentDetailRow key={inst.id} inst={inst} state={state} federationId={federationId} onPay={onPay} onPix={onPix} onEdit={onEdit} onSendEmail={onSendEmail} />
           ))}
         </View>
       )}
@@ -925,6 +1046,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
             <AnnuityRow
               vm={item}
               wide={wide}
+              federationId={federationId}
               selected={selected.has(item.key)}
               // Fase F3: seleção agora cobre TAMBÉM linhas sem cobrança
               // (no_charge) — são o alvo real de "Lançar cobrança em lote"
