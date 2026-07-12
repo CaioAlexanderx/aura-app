@@ -54,6 +54,7 @@ import {
 } from "@/components/karate/shoji";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojosExportModal from "@/components/karate/DojosExportModal";
+import RosterProgressPanel from "@/components/karate/RosterProgressPanel";
 import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
@@ -120,6 +121,7 @@ const DojoRow = React.memo(DojoRowItem);
 // TextInput da busca não perca foco a cada tecla mesmo com a busca de volta
 // dentro do ListHeaderComponent (ver comentário no topo do arquivo).
 type DojosListHeaderProps = {
+  federationId: string;
   total: number;
   allRegions: string[];
   onExport: () => void;
@@ -178,6 +180,14 @@ const DojosListHeader = React.memo(function DojosListHeader(p: DojosListHeaderPr
           )}
         </View>
       </RaisedHeader>
+
+      {/* Painel da federação (G1 item 8) — andamento do pedido de
+          atualização cadastral em todos os dojôs. Self-contained (busca os
+          próprios dados por federationId), então plugar aqui não repete o
+          bug de foco perdido do header (identidade estável, só props
+          mudam). */}
+      <RosterProgressPanel federationId={p.federationId} />
+
       {/* Poço (plano rebaixado): a borda/sombra interna marca o início da
           zona de dados. `pocoCap` só carrega o thead (modo wide); o corpo do
           poço continua por baixo de cada linha (`pocoItem`, mesmo bg/padding)
@@ -271,6 +281,7 @@ export default function DojosScreen() {
   // TextInput (ver comentário acima do componente).
   const listHeader = (
     <DojosListHeader
+      federationId={federationId}
       total={total}
       allRegions={allRegions}
       onExport={() => setExportModalOpen(true)}

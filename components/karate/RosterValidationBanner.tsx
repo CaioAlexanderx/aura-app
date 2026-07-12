@@ -41,11 +41,20 @@ interface Props {
   url: string | null;
   onCopyLink: () => void;
   onShareWhatsApp: () => void;
+  /**
+   * Link de auto-atendimento do PRÓPRIO praticante (G1 item 7) — token
+   * SEPARADO do link do sensei (`url` acima). Some quando o backend não
+   * tem a migration 225 aplicada ainda, ou quando expirou.
+   */
+  selfServiceUrl?: string | null;
+  onCopySelfServiceLink?: () => void;
+  onShareSelfServiceWhatsApp?: () => void;
   style?: ViewStyle;
 }
 
 export function RosterValidationBanner({
-  status, requestedAtLabel, validatedAtLabel, validatedBy, url, onCopyLink, onShareWhatsApp, style,
+  status, requestedAtLabel, validatedAtLabel, validatedBy, url, onCopyLink, onShareWhatsApp,
+  selfServiceUrl, onCopySelfServiceLink, onShareSelfServiceWhatsApp, style,
 }: Props) {
   const reducedMotion = usePrefersReducedMotion();
   const enter = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -72,6 +81,29 @@ export function RosterValidationBanner({
     opacity: enter,
     transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }],
   };
+
+  const selfServiceInner = selfServiceUrl ? (
+    <View style={styles.row}>
+      <Icon name="people" size={15} color={P.ink2} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.selfServiceTitle}>Link de auto-atendimento dos alunos</Text>
+        <Text style={styles.selfServiceDesc}>
+          Cada aluno confirma o próprio nome e atualiza telefone/e-mail sozinho — sem depender do
+          sensei. Envie este link ao dojô para compartilhar no grupo.
+        </Text>
+        <View style={styles.linkRow}>
+          <Text style={styles.link} numberOfLines={1}>{selfServiceUrl}</Text>
+          {onCopySelfServiceLink && (
+            <HoverButton icon="copy-outline" label="Copiar link" onPress={onCopySelfServiceLink} accessibilityLabel="Copiar link de auto-atendimento" />
+          )}
+          {onShareSelfServiceWhatsApp && (
+            <HoverButton icon="logo-whatsapp" label="WhatsApp" onPress={onShareSelfServiceWhatsApp} accessibilityLabel="Abrir link de auto-atendimento no WhatsApp" />
+          )}
+        </View>
+      </View>
+    </View>
+  ) : null;
+  const selfServiceBlock = selfServiceInner ? <View style={styles.selfServiceBlock}>{selfServiceInner}</View> : null;
 
   if (status === "pending") {
     return (
@@ -103,6 +135,7 @@ export function RosterValidationBanner({
               ) : null}
             </View>
           </View>
+          {selfServiceBlock}
         </Card>
       </Animated.View>
     );
@@ -119,6 +152,7 @@ export function RosterValidationBanner({
           Quadro validado em {validatedAtLabel || "—"}{validatedBy ? ` por ${validatedBy}` : ""}
         </Body>
       </View>
+      {selfServiceInner ? <Card style={{ borderColor: P.line2, marginTop: SP[3] }}>{selfServiceInner}</Card> : null}
     </Animated.View>
   );
 }
@@ -193,6 +227,9 @@ function HoverButton({
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
   title: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  selfServiceBlock: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: P.line } as ViewStyle,
+  selfServiceTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
+  selfServiceDesc: { fontFamily: F.body, fontSize: 11.5, color: C.ink3, marginTop: 3, lineHeight: 16, maxWidth: 420 } as TextStyle,
   linkRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 } as ViewStyle,
   link: { fontFamily: F.mono, fontSize: 12, color: C.ink2, flexShrink: 1, minWidth: 120, maxWidth: 320 } as TextStyle,
   btn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,

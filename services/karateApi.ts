@@ -378,6 +378,15 @@ export interface RosterValidation {
   validated_at: string | null;
   validated_by: string | null;
   url: string | null;
+  /**
+   * Link de auto-atendimento do PRÓPRIO praticante (G1 item 7) — token
+   * SEPARADO do `url` acima (self_service_token, migration 225). Nulo
+   * quando o backend ainda não aplicou a migration, ou quando expirado.
+   * Explique numa frase pro sensei: cada aluno atualiza o próprio contato
+   * sem passar pelo sensei — copie/compartilhe no grupo do dojô.
+   */
+  self_service_url: string | null;
+  last_accessed_at: string | null;
 }
 
 export interface RequestRosterUpdateResult {
@@ -385,6 +394,23 @@ export interface RequestRosterUpdateResult {
   requested_at: string | null;
   token: string | null;
   url: string;
+  self_service_token: string | null;
+  self_service_url: string | null;
+}
+
+// ── Painel da federação — andamento do quadro por dojô (G1 item 8) ──────
+export type RosterProgressStatus = "nao_aberto" | "em_andamento" | "validado";
+
+export interface DojoRosterProgress {
+  dojo_id: string;
+  dojo_nome: string;
+  status: RosterProgressStatus;
+  requested_at: string | null;
+  validated_at: string | null;
+  last_accessed_at: string | null;
+  praticantes_sem_contato: number;
+  essenciais_faltando: number;
+  total_praticantes: number;
 }
 
 export type RedistributeAction = "transfer" | "inactivate";
@@ -1632,6 +1658,16 @@ export const karateApi = {
     dojoId: string
   ): Promise<RosterValidation> =>
     request(`/federation/${federationId}/dojos/${dojoId}/roster-validation`),
+
+  /**
+   * Painel da federação (G1 item 8) — andamento do pedido de atualização
+   * cadastral em TODOS os dojôs: não abriu / em andamento / validado, e
+   * quantos praticantes ainda estão sem contato. Sem isso o pedido de
+   * atualização vira "pedido no vácuo" — a federação nunca sabe quem
+   * ainda não mexeu no link.
+   */
+  getRosterProgress: (federationId: string): Promise<{ data: DojoRosterProgress[] }> =>
+    request(`/federation/${federationId}/dojos/roster-progress`),
 
   /**
    * Redistribui os praticantes do dojô (transferir para outro dojô destino

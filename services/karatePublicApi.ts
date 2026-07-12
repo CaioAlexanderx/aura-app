@@ -116,12 +116,108 @@ export interface RosterPractitioner {
   karate_registration_number: string | null;
   belt_name: string | null;
   is_active: boolean;
+  phone: string | null;
+  email: string | null;
+  /** Campos essenciais faltando (hoje: 'telefone' e/ou 'email'). Vazio = ok. */
+  missing: string[];
+  /**
+   * 'a' faixa-preta ATIVA com anuidade em aberto · 'b' ativo sem NENHUM
+   * contato · 'c' o resto. Ordena/agrupa a fila (G1 item 2/4) — nunca
+   * reordenar no cliente por conta própria, é a mesma régua do backend.
+   */
+  priority_group: "a" | "b" | "c";
+}
+
+export interface RosterCounts {
+  essenciais: number;
+  demais: number;
+}
+
+/**
+ * Stateless por desenho (sem tabela de baseline no backend) —
+ * essenciais_total/essenciais_resolvidos cobrem TODOS os praticantes
+ * ativos (não só o grupo prioritário 'a'/'b'). A barra de progresso da
+ * fila (item 5) usa esses números como pano de fundo geral; o contador
+ * "X de Y" da fila em si é calculado no cliente a partir de quantos itens
+ * ainda têm `missing.length > 0` (ver [token].tsx) — os dois se resolvem
+ * sozinhos a cada refetch, sem estado adicional para "lembrar por onde
+ * o sensei parou".
+ */
+export interface RosterProgress {
+  essenciais_total: number;
+  essenciais_resolvidos: number;
 }
 
 export interface RosterUpdateResponse {
   dojo_nome: string;
   status: string;
   praticantes: RosterPractitioner[];
+  counts: RosterCounts;
+  progress: RosterProgress;
+}
+
+/** Ficha completa — GET /public/roster-update/:token/practitioners/:studentId */
+export interface RosterFullRecord {
+  id: string;
+  name: string;
+  karate_registration_number: string | null;
+  is_active: boolean;
+  phone: string | null;
+  email: string | null;
+  cpf_cnpj: string | null;
+  rg: string | null;
+  birth_date: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_relationship: string | null;
+  belt_name: string | null;
+  belt_level: string | null;
+}
+
+/**
+ * Autosave granular — PATCH /public/roster-update/:token/practitioners/:studentId.
+ * Só os campos presentes no objeto são alterados (idempotente); `is_active:
+ * false` é a implementação de "Não treina mais". Espelha
+ * PORTAL_EDITABLE_FIELDS do backend (karateRosterPortalPublic.js).
+ */
+export interface PatchPractitionerInput {
+  phone?: string | null;
+  email?: string | null;
+  cpf?: string | null;
+  rg?: string | null;
+  birth_date?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  is_active?: boolean;
+}
+
+export interface PatchPractitionerResult {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  is_active: boolean;
+  missing: string[];
+  progress: RosterProgress | null;
+}
+
+/** Resultado de POST /public/roster-update/:token/import — sem drama por linha. */
+export interface RosterImportResult {
+  atualizados: number;
+  ignorados: number;
+  erros: { row: number; motivo: string }[];
 }
 
 export interface RosterUpdateInput {
@@ -160,6 +256,34 @@ export interface AddPractitionerResult {
   belt_name: string | null;
   belt_level: string;
   is_active: true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tipos — Auto-atendimento do PRÓPRIO praticante (G1, item 7)
+//
+// Consome GET/POST /public/roster-self/:token (karateRosterSelfServicePublic.js).
+// Token SEPARADO do token do sensei (self_service_token) — só aceita
+// contato do PRÓPRIO praticante, nunca inativa/edita faixa/vê a lista
+// inteira do dojô.
+// ─────────────────────────────────────────────────────────────
+export interface SelfServiceSearchHit {
+  id: string;
+  name: string;
+}
+
+export interface SelfServiceUpdateInput {
+  student_id: string;
+  /** Informe UM dos dois para confirmar identidade (YYYY-MM-DD). */
+  birth_date?: string;
+  karate_registration_number?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface SelfServiceUpdateResult {
+  ok: true;
+  id: string;
+  name: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -225,6 +349,70 @@ export const karatePublicApi = {
     input: AddPractitionerInput
   ): Promise<AddPractitionerResult> =>
     pub(`/public/roster-update/${enc(token)}/practitioner`, {
+      method: "POST",
+      body: input,
+    }),
+
+  /**
+   * Ficha completa de um praticante — atrás do link "Ver ficha completa"
+   * da UI (item 1: a lista/fila só mostra o que falta, não os 20 campos).
+   */
+  getFullRecord: (token: string, studentId: string): Promise<RosterFullRecord> =>
+    pub(`/public/roster-update/${enc(token)}/practitioners/${enc(studentId)}`),
+
+  /**
+   * Autosave granular de UM praticante — a base do modo fila e da edição
+   * inline na lista (item 4/5). Idempotente; inclui is_active (item 3,
+   * "Não treina mais"). Nunca manda dojo_id/federation_id — o token já
+   * escopa isso no backend.
+   */
+  patchPractitioner: (
+    token: string,
+    studentId: string,
+    patch: PatchPractitionerInput
+  ): Promise<PatchPractitionerResult> =>
+    pub(`/public/roster-update/${enc(token)}/practitioners/${enc(studentId)}`, {
+      method: "PATCH",
+      body: patch,
+    }),
+
+  /**
+   * URL do CSV só de quem falta algo (matrícula + nome + telefone + e-mail),
+   * pronto pro sensei baixar/preencher/reenviar (item 6 — caminho dos
+   * dojôs grandes).
+   */
+  getRosterExportMissingUrl: (token: string): string =>
+    `${apiBase()}/public/roster-update/${enc(token)}/export-missing`,
+
+  /**
+   * Reimporta a planilha de export-missing preenchida. Casamento por
+   * matrícula FPKT (nunca por nome). Erro em uma linha não aborta o
+   * lote — o retorno já vem pronto pra UI mostrar sem drama.
+   */
+  importRosterCsv: (token: string, csvContent: string): Promise<RosterImportResult> =>
+    pub(`/public/roster-update/${enc(token)}/import`, {
+      method: "POST",
+      body: { csv_content: csvContent },
+    }),
+
+  /**
+   * Auto-atendimento do aluno — busca só por nome (nunca a lista inteira
+   * do dojô), no máximo 8 resultados. `token` aqui é o self_service_token
+   * (SEPARADO do token do sensei).
+   */
+  selfServiceSearch: (token: string, q: string): Promise<{ data: SelfServiceSearchHit[] }> =>
+    pub(`/public/roster-self/${enc(token)}/search?q=${enc(q)}`),
+
+  /**
+   * Grava o próprio telefone/e-mail após confirmar identidade (nascimento
+   * OU matrícula FPKT). Nunca toca is_active/faixa/status — o backend
+   * rejeita qualquer campo fora da whitelist com 422.
+   */
+  selfServiceUpdate: (
+    token: string,
+    input: SelfServiceUpdateInput
+  ): Promise<SelfServiceUpdateResult> =>
+    pub(`/public/roster-self/${enc(token)}/update`, {
       method: "POST",
       body: input,
     }),
