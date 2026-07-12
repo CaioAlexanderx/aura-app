@@ -318,6 +318,8 @@ export default function DojoDetailScreen() {
         validated_at: null,
         validated_by: null,
         url: res.url,
+        self_service_url: res.self_service_url || null,
+        last_accessed_at: null,
       });
       showToast("Solicitação enviada — link gerado");
     } catch (e: any) {
@@ -338,6 +340,22 @@ export default function DojoDetailScreen() {
   const shareRosterLinkWhatsApp = useCallback(() => {
     if (!rosterValidation?.url) return;
     const link = `https://wa.me/?text=${encodeURIComponent(rosterValidation.url)}`;
+    Linking.openURL(link).catch(() =>
+      Alert.alert("Não foi possível abrir", "Copie o link e envie manualmente.")
+    );
+  }, [rosterValidation]);
+
+  // Link de auto-atendimento do PRÓPRIO praticante (G1 item 7) — mesmo
+  // padrão de copiar/whatsapp do link do sensei acima, token separado.
+  const copySelfServiceLink = useCallback(async () => {
+    if (!rosterValidation?.self_service_url) return;
+    const ok = await copyToClipboard(rosterValidation.self_service_url);
+    showToast(ok ? "Link copiado" : "Não foi possível copiar o link");
+  }, [rosterValidation, showToast]);
+
+  const shareSelfServiceLinkWhatsApp = useCallback(() => {
+    if (!rosterValidation?.self_service_url) return;
+    const link = `https://wa.me/?text=${encodeURIComponent(rosterValidation.self_service_url)}`;
     Linking.openURL(link).catch(() =>
       Alert.alert("Não foi possível abrir", "Copie o link e envie manualmente.")
     );
@@ -637,6 +655,9 @@ export default function DojoDetailScreen() {
             url={rosterValidation.url}
             onCopyLink={copyRosterLink}
             onShareWhatsApp={shareRosterLinkWhatsApp}
+            selfServiceUrl={rosterValidation.self_service_url}
+            onCopySelfServiceLink={copySelfServiceLink}
+            onShareSelfServiceWhatsApp={shareSelfServiceLinkWhatsApp}
           />
         ) : null}
 
