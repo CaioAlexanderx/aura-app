@@ -622,7 +622,8 @@ export function ClientsAdmin() {
           <Text style={s.verticalHint}>
             Ativa uma tab dedicada no app do cliente com funcionalidades do segmento.
             {sc.suggested_vertical ? " Sugestao baseada no CNAE: " + sc.suggested_vertical + "." : ""}
-            {" "}Sem custo extra no alpha — R$69/mes no pricing oficial.
+            {" "}A vertical usa a precificacao do proprio plano — nao ha add-on separado.
+            {" "}O Aura Studio exige plano Negocio ou superior.
           </Text>
         </View>
 
