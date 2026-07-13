@@ -68,11 +68,31 @@ function addMonthsIso(base: Date, months: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// 13/07/2026: o checkout abria SEMPRE em "Negocio / mensal", ignorando o que a
+// empresa ja assina. Cliente que cai no checkout pra refazer a assinatura (cartao
+// recusado, cobranca reemitida) tinha que lembrar de trocar plano E ciclo na mao —
+// caso Encanto: Essencial anual (R$93,17 c/ 1 acesso extra) viraria Negocio mensal
+// (R$188) num clique de distancia, e so apareceria na fatura.
+// Agora pre-seleciona o plano e o ciclo que a empresa JA tem. Precedencia:
+//   1. ?plan= na URL (link explicito de upgrade — respeita a intencao de quem mandou)
+//   2. company.plan / company.billing_cycle (o que ela ja assina)
+//   3. fallback historico: negocio / mensal (empresa nova, sem plano definido)
+function planFromCompany(company: any): string | null {
+  var p = String(company?.plan || "").toLowerCase();
+  return PLANS.some(function (x) { return x.key === p; }) ? p : null;
+}
+function cycleFromCompany(company: any): Cycle | null {
+  var c = String(company?.billing_cycle || "").toLowerCase();
+  return c === "annual" || c === "monthly" ? (c as Cycle) : null;
+}
+
 export default function CheckoutScreen() {
   var params = useLocalSearchParams<{ plan?: string }>();
   var { company, hydrate, logout, trialActive, isDemo, isStaff } = useAuthStore();
-  var [selectedPlan, setSelectedPlan] = useState(params.plan || "negocio");
-  var [cycle, setCycle] = useState<Cycle>("monthly");
+  var [selectedPlan, setSelectedPlan] = useState(params.plan || planFromCompany(company) || "negocio");
+  var [cycle, setCycle] = useState<Cycle>(cycleFromCompany(company) || "monthly");
+  // Se o usuario ja escolheu na tela, o sync com a empresa para de sobrescrever.
+  var userPickedRef = useRef(false);
   var [method, setMethod] = useState<Method>("pix");
   var [loading, setLoading] = useState(false);
   var [tokenizing, setTokenizing] = useState(false);
@@ -202,6 +222,18 @@ export default function CheckoutScreen() {
 
   useEffect(function () { return function () { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
+  // O company costuma hidratar DEPOIS do mount (/auth/me), entao o valor inicial
+  // do useState pode ter sido calculado com company=null. Re-sincroniza assim que
+  // ele chega — mas nunca por cima de uma escolha que o usuario ja fez na tela,
+  // nem por cima de um ?plan= explicito na URL.
+  useEffect(function () {
+    if (userPickedRef.current || params.plan) return;
+    var p = planFromCompany(company);
+    var c = cycleFromCompany(company);
+    if (p) setSelectedPlan(p);
+    if (c) setCycle(c);
+  }, [company?.id, (company as any)?.plan, (company as any)?.billing_cycle]);
+
   useEffect(function () {
     var cepDigits = cardPostalCode.replace(/\D/g, "");
     if (cepDigits.length !== 8) return;
@@ -274,10 +306,10 @@ export default function CheckoutScreen() {
 
       {/* Ciclo */}
       <View style={z.cycleRow}>
-        <Pressable onPress={function () { setCycle("monthly"); }} style={[z.cycleBtn, cycle === "monthly" && z.cycleBtnActive]}>
+        <Pressable onPress={function () { userPickedRef.current = true; setCycle("monthly"); }} style={[z.cycleBtn, cycle === "monthly" && z.cycleBtnActive]}>
           <Text style={[z.cycleTxt, cycle === "monthly" && z.cycleTxtActive]}>Mensal</Text>
         </Pressable>
-        <Pressable onPress={function () { setCycle("annual"); }} style={[z.cycleBtn, cycle === "annual" && z.cycleBtnActive]}>
+        <Pressable onPress={function () { userPickedRef.current = true; setCycle("annual"); }} style={[z.cycleBtn, cycle === "annual" && z.cycleBtnActive]}>
           <Text style={[z.cycleTxt, cycle === "annual" && z.cycleTxtActive]}>Anual</Text>
           <View style={z.discBadge}><Text style={z.discText}>2 meses grátis!</Text></View>
         </Pressable>
@@ -290,7 +322,7 @@ export default function CheckoutScreen() {
           var pAnnualMo = Math.round(p.monthly * (1 - ANNUAL_DISCOUNT) * 100) / 100;
           var displayPrice = isAnnual ? pAnnualMo : p.monthly;
           return (
-            <Pressable key={p.key} onPress={function () { setSelectedPlan(p.key); }} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
+            <Pressable key={p.key} onPress={function () { userPickedRef.current = true; setSelectedPlan(p.key); }} style={[z.planCard, sel && z.planCardSel, p.popular && !sel && z.planCardPop]}>
               {p.popular && <View style={z.popBadge}><Text style={z.popText}>Mais popular</Text></View>}
               <Text style={[z.planName, sel && { color: "#fff" }]}>{p.label}</Text>
               <Text style={[z.planPrice, sel && { color: "#fff" }]}>{fmtMo(displayPrice)}</Text>
