@@ -38,7 +38,7 @@
 //   listas preservado integralmente (não havia debounce nesta tela — o fetch
 //   por mudança de `q` foi mantido como estava).
 // ============================================================
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView,
   useWindowDimensions, ActivityIndicator, StyleSheet, ViewStyle, TextStyle,
@@ -252,8 +252,18 @@ export default function DojosScreen() {
   // da tela (status/região) e ajustável antes de confirmar.
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
-  // Lista filtrada (status × região × busca), server-side.
+  // ⚠️ BUGFIX (13/07/2026) — CONDIÇÃO DE CORRIDA NA BUSCA.
+  // `load` disparava a cada tecla, sem debounce e sem cancelamento. Uma resposta
+  // LENTA de uma busca antiga chegava DEPOIS da resposta da busca atual e
+  // sobrescrevia a lista — e não se autocorrigia. Sintoma real reportado no QA:
+  // buscar "BUSHIKAN" devolvia 16 dojôs, nenhum deles BUSHIKAN.
+  // Correção: (1) cada requisição carrega um id incremental e só a MAIS RECENTE
+  // pode escrever no estado; (2) debounce de 300ms na busca (filtros continuam
+  // imediatos, porque clicar num chip não gera rajada de requisições).
+  const reqIdRef = useRef(0);
+
   const load = useCallback(async (isRefresh = false) => {
+    const myReq = ++reqIdRef.current;
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
@@ -263,12 +273,24 @@ export default function DojosScreen() {
         region: region === "all" ? undefined : region,
         pageSize: 100,
       });
+      if (myReq !== reqIdRef.current) return; // resposta obsoleta — descarta
       setDojos(res.data); setTotal(res.total ?? res.data.length);
-    } catch { setError(true); }
-    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
+    } catch {
+      if (myReq !== reqIdRef.current) return;
+      setError(true);
+    } finally {
+      if (myReq === reqIdRef.current) {
+        isRefresh ? setRefreshing(false) : setLoading(false);
+      }
+    }
   }, [federationId, q, status, region]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Sem busca digitada, não faz sentido esperar: carrega já.
+    if (!q) { load(); return; }
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+  }, [load, q]);
 
   // Catálogo de regiões: busca SEM filtros (só a federação inteira). Roda quando
   // muda a federação e em cada refresh manual, para captar regiões novas. NÃO
