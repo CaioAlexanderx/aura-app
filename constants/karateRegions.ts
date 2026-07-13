@@ -1,25 +1,35 @@
-// Regiões canônicas do estado de São Paulo para o cadastro de dojôs FPKT.
-// A opção "Outra…" (REGION_OTHER) habilita digitação livre de fallback —
-// usada quando o valor salvo não consta na lista ou quando o usuário opta
-// por informar uma subdivisão não prevista aqui.
+// Regiões canônicas da FPKT para o cadastro de dojôs.
 //
-// O valor persistido é sempre a string de texto (coluna `region` no back).
-// Ao carregar um registro, se o valor não estiver em KARATE_REGIONS_VALUES
-// o campo cai automaticamente em "Outra…" e exibe o texto do banco.
+// ⚠️ CORREÇÃO (13/07/2026): esta lista era INVENTADA e não batia com os dados
+// reais da federação. Resultado: 41 dos 101 dojôs tinham região fora da lista
+// e o modal caía no fallback "Outra…" + campo de texto livre — ou seja, dois
+// campos de região na tela ao mesmo tempo, o que parecia (e era) duplicidade.
+// Pior: o filtro de região (lista e exportação) oferecia opções que quase
+// nenhum dojô tinha.
+//
+// Agora a lista é o vocabulário REAL usado pela federação (extraído do banco):
+//   Capital — São Paulo (25) · Grande SP — ABC / Osasco / Guarulhos (12)
+//   Vale do Paraíba (14) · Campinas (13) · Bauru (8) · Sorocaba (2)
+//   Baixada Santista · Litoral Norte · Barretos · Araraquara — Central
+//
+// "Outra…" (REGION_OTHER) segue existindo para uma região nova que ainda não
+// esteja aqui — mas deixa de ser o caso da MAIORIA, que era o bug.
+//
+// O valor persistido continua sendo a string de texto (coluna `region`).
 
 export const REGION_OTHER = "Outra…";
 
 export const KARATE_REGIONS: string[] = [
-  "São Paulo",
-  "Grande São Paulo",
-  "Campinas",
+  "Capital — São Paulo",
+  "Grande SP — ABC / Osasco / Guarulhos",
   "Vale do Paraíba",
-  "Litoral",
-  "Sorocaba",
-  "Ribeirão Preto",
+  "Campinas",
   "Bauru",
-  "São José do Rio Preto",
-  "Presidente Prudente",
+  "Sorocaba",
+  "Baixada Santista",
+  "Litoral Norte",
+  "Araraquara — Central",
+  "Barretos",
   REGION_OTHER,
 ];
 
