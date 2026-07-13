@@ -361,7 +361,17 @@ export function SearchField({ value, onChangeText, placeholder, onSubmit, style 
 // Hover-web (leve elevação/tint/borda) + press-feedback (scale ~0.98) +
 // transição suave (CSS) ao alternar hover/ativo. Ativo não compete com
 // hover: o realce de hover só se aplica quando o chip NÃO está selecionado.
-export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+//
+// icon/style/hitSlop/accessibilityLabel são opcionais (aditivos — não
+// quebram os chamadores existentes, que só passam label/active/onPress).
+// icon aparece só quando active=true (ex.: check de papel selecionado em
+// GerirEquipeTecnicaModal). hitSlop tem default generoso pro alvo de
+// toque em telas de toggle denso.
+export function Chip({ label, active, onPress, icon, style, hitSlop, accessibilityLabel }: {
+  label: string; active?: boolean; onPress?: () => void; icon?: string;
+  style?: StyleProp<ViewStyle>; hitSlop?: number | { top?: number; bottom?: number; left?: number; right?: number };
+  accessibilityLabel?: string;
+}) {
   const scale = React.useRef(new Animated.Value(1)).current;
   const [hovered, setHovered] = React.useState(false);
   const to = (v: number, d: number) => Animated.timing(scale, { toValue: v, duration: d, useNativeDriver: false }).start();
@@ -373,15 +383,19 @@ export function Chip({ label, active, onPress }: { label: string; active?: boole
         !active && hovered && styles.chipHover,
         { transform: [{ scale }] },
         Platform.OS === "web" ? (webTransition(["background-color", "border-color", "box-shadow"], Motion.fast) as any) : null,
+        style,
       ]}
       onPress={onPress}
       onPressIn={() => to(0.98, 90)}
       onPressOut={() => to(1, Motion.fast)}
       onHoverIn={Platform.OS === "web" ? () => setHovered(true) : undefined}
       onHoverOut={Platform.OS === "web" ? () => setHovered(false) : undefined}
+      hitSlop={hitSlop ?? { top: 6, bottom: 6, left: 6, right: 6 }}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active }}
+      accessibilityLabel={accessibilityLabel}
     >
+      {icon && active ? <Icon name={icon as any} size={11} color={P.red} /> : null}
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </AnimatedPressable>
   );
@@ -535,7 +549,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontFamily: F.body, fontSize: 12.5, color: C.ink, minHeight: 22, outlineStyle: "none" } as any,
 
   // chip
-  chip: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: R.pill, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2 } as ViewStyle,
+  chip: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 7, paddingHorizontal: 13, borderRadius: R.pill, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2 } as ViewStyle,
   chipActive: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
   chipHover: Platform.OS === "web"
     ? ({ backgroundColor: P.glassHi, borderColor: C.line2, boxShadow: "0 3px 8px rgba(43,38,32,0.09)" } as any)
