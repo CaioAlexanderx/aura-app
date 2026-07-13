@@ -2,8 +2,10 @@
 // Cadastrar Dojô — Aura Karatê
 //
 // Wired ao endpoint POST /federation/{id}/dojos.
-// Campo "Região" é dropdown das regiões canônicas (KARATE_REGIONS),
-// com opção "Outra…" para texto livre — mesmo contrato que DojoFichaModal.
+// Campo "Região" é dropdown das regiões canônicas (KARATE_REGIONS) — sem
+// "Outra…"/texto livre (removido em 13/07/2026, mesmo contrato que
+// DojoFichaModal: as 10 regiões cobrem 100% do vocabulário real da
+// federação, ver constants/karateRegions.ts).
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -17,7 +19,7 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { Icon } from "@/components/Icon";
 import { karateApi, DojoInput } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { KARATE_REGIONS, KARATE_REGIONS_VALUES, REGION_OTHER } from "@/constants/karateRegions";
+import { KARATE_REGIONS } from "@/constants/karateRegions";
 
 export default function NovoDojo() {
   const router = useRouter();
@@ -27,21 +29,15 @@ export default function NovoDojo() {
     affiliation_model: "annual",
   });
 
-  // Região: valor do picker (uma das KARATE_REGIONS ou REGION_OTHER)
-  // e texto livre de fallback quando "Outra…" está selecionado.
+  // Região: valor do picker (uma das KARATE_REGIONS).
   const [regionPick, setRegionPick] = useState("");
-  const [regionCustom, setRegionCustom] = useState("");
   const [regionOpen, setRegionOpen] = useState(false);
 
-  const regionLabel = regionPick === REGION_OTHER
-    ? (regionCustom.trim() || REGION_OTHER)
-    : (regionPick || "Selecionar região…");
+  const regionLabel = regionPick || "Selecionar região…";
 
   // Resolve o valor final de região para envio
   function resolveRegion(): string | undefined {
-    if (!regionPick) return undefined;
-    if (regionPick === REGION_OTHER) return regionCustom.trim() || undefined;
-    return regionPick;
+    return regionPick || undefined;
   }
 
   const set = (key: keyof DojoInput, val: string) =>
@@ -112,7 +108,6 @@ export default function NovoDojo() {
                     onPress={() => {
                       setRegionPick(r);
                       setRegionOpen(false);
-                      if (r !== REGION_OTHER) setRegionCustom("");
                     }}
                     activeOpacity={0.75}
                     accessibilityRole="menuitem"
@@ -124,17 +119,6 @@ export default function NovoDojo() {
                 );
               })}
             </View>
-          )}
-
-          {/* Campo de texto livre — só visível quando "Outra…" selecionado */}
-          {regionPick === REGION_OTHER && (
-            <FormField
-              label=""
-              value={regionCustom}
-              onChangeText={setRegionCustom}
-              placeholder="Digite a região…"
-              style={{ marginTop: 8 }}
-            />
           )}
         </View>
 

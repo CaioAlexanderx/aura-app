@@ -55,25 +55,22 @@ import {
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojosExportModal from "@/components/karate/DojosExportModal";
 import RosterProgressPanel from "@/components/karate/RosterProgressPanel";
-import { karateApi, Dojo, DojoStatus, AffiliationModel } from "@/services/karateApi";
+import { karateApi, Dojo, DojoStatus } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
-
-// affiliation_model ("Modelo de filiação") é metadado decorativo, distinto
-// de karate_annuity_plan ("Plano de anuidade" — o que a campanha usa de
-// verdade, ver karateAnnuityService.resolveDojoPlan no backend e
-// DojoFichaModal.tsx). A coluna "Modelo" da listagem mostra o primeiro, mas
-// como os dois usam o mesmo vocabulário (Anual/Semestral/Trimestral), sem
-// aviso a lista parecia afirmar que TODO dojô já tem plano de anuidade
-// definido — mesmo quando karate_annuity_plan é null e a ficha do dojô já
-// diz "Não definido — usará Anual na próxima campanha" (achado de QA:
-// bug P0 do wizard de campanha). Este helper decide o texto auxiliar
-// exibido junto da coluna nesse caso — nunca escondido, nunca afirmado
-// como certeza que não existe.
-function annuityPlanNote(d: Dojo): string | null {
-  if (d.karate_annuity_plan) return null; // já definido — nada a avisar aqui
-  return "plano de anuidade: não definido";
+// 13/07/2026 — "Modelo" (affiliation_model) removido desta coluna: era
+// metadado decorativo, distinto de karate_annuity_plan ("Plano de
+// anuidade" — o que a campanha usa de verdade, ver
+// karateAnnuityService.resolveDojoPlan no backend e DojoFichaModal.tsx).
+// Como os dois usavam o mesmo vocabulário (Anual/Semestral/Trimestral), a
+// coluna "Modelo" fazia a lista parecer afirmar que TODO dojô já tinha
+// plano de anuidade definido — mesmo quando karate_annuity_plan era null e
+// a ficha do dojô já dizia "Não definido" (achado de QA: contradição na
+// mesma tela). A coluna agora mostra karate_annuity_plan diretamente, com
+// o estado honesto "Não definido" — nunca inventa "Anual".
+const ANNUITY_PLAN_LABEL: Record<string, string> = { anual: "Anual", semestral: "Semestral", trimestral: "Trimestral" };
+function annuityPlanLabel(d: Dojo): string {
+  return d.karate_annuity_plan ? (ANNUITY_PLAN_LABEL[d.karate_annuity_plan] ?? d.karate_annuity_plan) : "Não definido";
 }
 
 // Todos os status reais (computeDojoStatus). b1: o backend agora manda
@@ -105,9 +102,8 @@ function DojoRowItem({ d, wide, onPress }: { d: Dojo; wide: boolean; onPress: ()
         </View>
       </View>
       <View style={[styles.colDivider, { flex: 1.2 }]}><Body muted style={styles.cell}>{d.region || "—"}</Body></View>
-      <View style={[styles.colDivider, { width: 100 }]}>
-        <Body muted style={styles.cell}>{MODEL_LABEL[d.affiliation_model] ?? "—"}</Body>
-        {annuityPlanNote(d) && <Text style={styles.annuityNote} numberOfLines={1}>{annuityPlanNote(d)}</Text>}
+      <View style={[styles.colDivider, { width: 128 }]}>
+        <Body muted style={styles.cell} numberOfLines={1}>{annuityPlanLabel(d)}</Body>
       </View>
       <View style={[styles.colDivider, { width: 90 }]}><Mono style={[styles.cellNum, { textAlign: "right" }]}>{d.active_practitioner_count ?? d.practitioner_count}</Mono></View>
       <View style={{ width: 130 }}><ShojiBadge dojoStatus={d.status} /></View>
@@ -127,8 +123,7 @@ function DojoRowItem({ d, wide, onPress }: { d: Dojo; wide: boolean; onPress: ()
       <View style={styles.cardMeta}>
         <Meta icon="location-outline" text={d.region || "—"} />
         <Meta icon="people-outline" text={`${d.active_practitioner_count ?? d.practitioner_count} praticantes ativos`} />
-        <Meta icon="ribbon-outline" text={MODEL_LABEL[d.affiliation_model] ?? "—"} />
-        {annuityPlanNote(d) && <Meta icon="alert-circle-outline" text={annuityPlanNote(d)!} />}
+        <Meta icon="ribbon-outline" text={annuityPlanLabel(d)} />
       </View>
     </RowPressable>
   );
@@ -217,7 +212,7 @@ const DojosListHeader = React.memo(function DojosListHeader(p: DojosListHeaderPr
           <View style={[styles.tr, styles.thead]}>
             <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Dojô</Text></View>
             <View style={[styles.colDivider, { flex: 1.2 }]}><Text style={styles.th}>Região</Text></View>
-            <View style={[styles.colDivider, { width: 100 }]}><Text style={styles.th}>Modelo</Text></View>
+            <View style={[styles.colDivider, { width: 128 }]}><Text style={styles.th}>Plano de anuidade</Text></View>
             <View style={[styles.colDivider, { width: 90 }]}><Text style={[styles.th, { textAlign: "right" }]}>Ativos</Text></View>
             <View style={{ width: 130 }}><Text style={styles.th}>Status</Text></View>
             <View style={{ width: 18 }} />
@@ -415,7 +410,6 @@ const styles = StyleSheet.create({
   th: { fontFamily: F.body, fontSize: 10, fontWeight: "600", color: C.ink3, textTransform: "uppercase", letterSpacing: 1 } as TextStyle,
   cell: { fontSize: 12.5 } as TextStyle,
   cellNum: { fontSize: 12.5, color: C.ink } as TextStyle,
-  annuityNote: { fontFamily: F.body, fontSize: 9.5, color: P.warn, marginTop: 2 } as TextStyle,
   name: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
   card: { backgroundColor: P.glass, borderWidth: 1, borderColor: C.line, borderRadius: R.lg, padding: 14, gap: 10, marginBottom: 10 } as ViewStyle,
   cardTop: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,

@@ -12,12 +12,14 @@
 //   Vale do Paraíba (14) · Campinas (13) · Bauru (8) · Sorocaba (2)
 //   Baixada Santista · Litoral Norte · Barretos · Araraquara — Central
 //
-// "Outra…" (REGION_OTHER) segue existindo para uma região nova que ainda não
-// esteja aqui — mas deixa de ser o caso da MAIORIA, que era o bug.
+// 13/07/2026 (parte 2) — removido "Outra…" (REGION_OTHER) do seletor.
+// Auditoria no banco (100 dojôs): as 10 regiões abaixo cobrem 100% dos
+// registros com região preenchida (78) — os outros 22 têm region = NULL,
+// que é "—" (ausência normal, nunca erro), não "Outra…". Sem nenhum dojô
+// fora da lista, o fallback de texto livre só existia para abrir a mesma
+// duplicidade de campo que este arquivo corrigiu na primeira rodada.
 //
 // O valor persistido continua sendo a string de texto (coluna `region`).
-
-export const REGION_OTHER = "Outra…";
 
 export const KARATE_REGIONS: string[] = [
   "Capital — São Paulo",
@@ -30,11 +32,8 @@ export const KARATE_REGIONS: string[] = [
   "Litoral Norte",
   "Araraquara — Central",
   "Barretos",
-  REGION_OTHER,
 ];
 
-/** Conjunto das opções fixas (sem "Outra…") — usado para detectar
- *  se o valor salvo no banco precisa do fallback de texto livre. */
-export const KARATE_REGIONS_VALUES = new Set(
-  KARATE_REGIONS.filter((r) => r !== REGION_OTHER)
-);
+/** Conjunto das 10 regiões canônicas — usado para checar se um valor salvo
+ *  no banco (region) bate com a lista atual. */
+export const KARATE_REGIONS_VALUES = new Set(KARATE_REGIONS);

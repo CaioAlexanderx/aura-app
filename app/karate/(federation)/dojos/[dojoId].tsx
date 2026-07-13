@@ -62,18 +62,22 @@ import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
-import { karateApi, DojoDetail, AffiliationModel, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation } from "@/services/karateApi";
+import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
 import { DocumentosSection } from "@/components/karate/DocumentosSection";
 import { copyToClipboard } from "@/utils/clipboard";
+import { maskPhone } from "@/utils/masks";
 
-const MODEL_LABEL: Record<AffiliationModel, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
-// G2 (migration 226) — plano de anuidade REAL do dojô (distinto de
-// affiliation_model/MODEL_LABEL acima, que é decorativo e não usado em
-// cobrança). Ver comentário em DojoFichaModal.tsx.
+// G2 (migration 226) — plano de anuidade REAL do dojô. "Modelo"
+// (affiliation_model) foi removido de TODA superfície de leitura em
+// 13/07/2026: era decorativo/legado, nunca lido por rota de cobrança, e
+// chegava a contradizer esta mesma tela ("MODELO: Anual" ao lado de
+// "PLANO DE ANUIDADE: Não definido"). karate_annuity_plan é a fonte única.
 const ANNUITY_PLAN_LABEL: Record<string, string> = { anual: "Anual", semestral: "Semestral", trimestral: "Trimestral" };
+const annuityPlanLabel = (plan: string | null | undefined): string =>
+  plan ? (ANNUITY_PLAN_LABEL[plan] ?? plan) : "Não definido";
 const ROLE_LABEL: Record<string, string> = { instructor: "Instrutor", arbiter: "Árbitro", examiner: "Examinador", sensei: "Sensei", senpai: "Senpai", assistant: "Auxiliar" };
 // Item 2 (menu de overflow do header): mesmo padrão hover-só-web + fallback
 // touch usado em InactivateChoiceDialog/RedistribuirPraticantesModal.
@@ -585,7 +589,7 @@ export default function DojoDetailScreen() {
           <View style={{ flex: 1, minWidth: 240 }}>
             <Eyebrow>Detalhe · {data.fpkt_affiliation_id}</Eyebrow>
             <H1 dot style={{ marginTop: 12 }}>{data.name}</H1>
-            <Body muted style={{ marginTop: 12 }}>{data.region || "—"} · {MODEL_LABEL[data.affiliation_model] ?? "—"}</Body>
+            <Body muted style={{ marginTop: 12 }}>{data.region || "—"} · {annuityPlanLabel(data.karate_annuity_plan)}</Body>
           </View>
           <View style={styles.headActions}>
             <ShojiBadge dojoStatus={data.status} />
@@ -676,16 +680,17 @@ export default function DojoDetailScreen() {
               </View>
             ) : null}
           </View>
-          <KV k="Telefone" v={data.phone} />
+          <KV k="Telefone" v={data.phone ? maskPhone(data.phone) : null} />
+          <KV k="Celular" v={data.phone_mobile ? maskPhone(data.phone_mobile) : null} />
           <KV k="E-mail" v={data.email} />
           <KV k="Região" v={data.region} />
           <KV k="Fundação" v={data.dojo_founded_year ? String(data.dojo_founded_year) : null} />
           <KV k="Filiação desde" v={fmtDate(data.affiliation_since)} />
-          <KV k="Modelo" v={MODEL_LABEL[data.affiliation_model] ?? null} />
-          <KV
-            k="Plano de anuidade"
-            v={data.karate_annuity_plan ? ANNUITY_PLAN_LABEL[data.karate_annuity_plan] ?? data.karate_annuity_plan : "Não definido — usará Anual na próxima campanha"}
-          />
+          {/* "Modelo" (affiliation_model) removido — decorativo/legado, nunca
+              lido por rota de cobrança (ver comentário acima). Plano de
+              anuidade é a fonte única, com estado honesto "Não definido"
+              (nunca inventa "Anual" para dojô sem plano configurado). */}
+          <KV k="Plano de anuidade" v={annuityPlanLabel(data.karate_annuity_plan)} />
           {/* Fase 5 / DJ-seg: fonte coerente com a seção Praticantes abaixo — usa o
               `summary` do roster paginado (contagens agregadas no banco, mesma chamada
               da lista, sem 2ª ida) quando disponível; cai para o campo do GET /dojo
