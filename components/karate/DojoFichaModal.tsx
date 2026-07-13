@@ -68,7 +68,7 @@ import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi, AffiliationModel, AnnuityFeePlan, AnnuityPlan, DojoInput, PractitionerListItem } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
-import { KARATE_REGIONS, KARATE_REGIONS_VALUES, REGION_OTHER } from "@/constants/karateRegions";
+import { KARATE_REGIONS, KARATE_REGIONS_VALUES } from "@/constants/karateRegions";
 
 interface Props {
   federationId: string;
@@ -80,16 +80,16 @@ interface Props {
 
 const EMPTY = {
   name: "", affiliation_model: "" as AffiliationModel | "", region: "",
-  // região: valor do dropdown (um dos KARATE_REGIONS ou REGION_OTHER)
+  // região: valor do dropdown (uma das KARATE_REGIONS, ou o valor legado
+  // salvo no banco quando ele não bate com a lista atual — sem campo de
+  // texto livre paralelo, ver constants/karateRegions.ts).
   region_pick: "" as string,
-  // fallback de texto livre quando region_pick === REGION_OTHER
-  region_custom: "",
   cnpj: "",
   // sensei: nome (texto livre ou selecionado do autocomplete) + uuid do praticante vinculado
   sensei_name: "",
   sensei_practitioner_id: null as string | null,
   affiliation_since: "", dojo_founded_year: "",
-  phone: "", email: "",
+  phone: "", phone_mobile: "", email: "",
   // endereço estruturado (igual ao praticante)
   zip_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "",
   // só leitura: texto legado de registros antigos que ainda não migraram p/ campos
@@ -163,19 +163,18 @@ function maskDate(v: string) {
 }
 
 // ── Helpers do dropdown de região ──────────────────────────────
-// Dado o valor salvo no banco, devolve { region_pick, region_custom }.
-function resolveRegionPick(saved: string | null | undefined): { region_pick: string; region_custom: string } {
-  if (!saved) return { region_pick: "", region_custom: "" };
-  if (KARATE_REGIONS_VALUES.has(saved)) return { region_pick: saved, region_custom: "" };
-  // valor não está na lista → cai em "Outra…" e guarda o texto no custom
-  return { region_pick: REGION_OTHER, region_custom: saved };
+// Dado o valor salvo no banco, devolve o region_pick inicial do form. Sem
+// "Outra…": se o valor não bater com a lista atual (não deveria acontecer —
+// ver auditoria em constants/karateRegions.ts), preserva o texto tal como
+// está salvo (aparece no botão do dropdown, sem nenhuma opção marcada) em
+// vez de descartar o dado.
+function resolveRegionPick(saved: string | null | undefined): { region_pick: string } {
+  return { region_pick: saved || "" };
 }
 
 // Resolve a string final de região para envio (o que vai para `region` no back).
-function resolveRegionValue(pick: string, custom: string): string | undefined {
-  if (!pick) return undefined;
-  if (pick === REGION_OTHER) return custom.trim() || undefined;
-  return pick;
+function resolveRegionValue(pick: string): string | undefined {
+  return pick || undefined;
 }
 
 export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved }: Props) {
@@ -222,12 +221,12 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
   // refs p/ Enter avançar os campos de texto
   const nameRef = useRef<TextInput>(null);
-  const regionCustomRef = useRef<TextInput>(null);
   const cnpjRef = useRef<TextInput>(null);
   const senseiRef = useRef<TextInput>(null);
   const sinceRef = useRef<TextInput>(null);
   const foundedRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
+  const phoneMobileRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
@@ -259,15 +258,17 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
         // dois como "não ativo" por compatibilidade retroativa.
         // Se o backend expuser is_active, ele tem precedência.
         const active = d.is_active !== undefined ? !!d.is_active : (d.status !== "inactive");
-        const { region_pick, region_custom } = resolveRegionPick(d.region);
+        const { region_pick } = resolveRegionPick(d.region);
         setForm({
           name: d.name || "", affiliation_model: d.affiliation_model || "", region: d.region || "",
-          region_pick, region_custom,
+          region_pick,
           cnpj: d.cnpj ? maskCNPJ(d.cnpj) : "",
           sensei_name: d.sensei_name || "",
           sensei_practitioner_id: d.sensei_practitioner_id || null,
           affiliation_since: fromISO(d.affiliation_since), dojo_founded_year: d.dojo_founded_year ? String(d.dojo_founded_year) : "",
-          phone: d.phone ? maskPhone(d.phone) : "", email: d.email || "",
+          phone: d.phone ? maskPhone(d.phone) : "",
+          phone_mobile: d.phone_mobile ? maskPhone(d.phone_mobile) : "",
+          email: d.email || "",
           zip_code: d.address_zip ? maskCEP(d.address_zip) : "",
           street: d.address_street || "", number: d.address_number || "",
           complement: d.address_complement || "", neighborhood: d.address_neighborhood || "",
@@ -402,12 +403,12 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   // "Completar quando quiser" é só para opcionais, sem contradizer o subtítulo.
   const empties = useMemo(() => {
     const e: string[] = [];
-    const regionFinal = resolveRegionValue(form.region_pick, form.region_custom);
+    const regionFinal = resolveRegionValue(form.region_pick);
     if (!regionFinal) e.push("Região");
     if (!form.sensei_name) e.push("Sensei");
     if (!form.phone) e.push("Telefone");
     return e;
-  }, [form.region_pick, form.region_custom, form.sensei_name, form.phone]);
+  }, [form.region_pick, form.sensei_name, form.phone]);
 
   async function handleSave() {
     if (!form.name.trim()) { setErrorMsg("Informe o nome do dojô."); return; }
@@ -419,8 +420,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     // reenviamos o texto p/ não apagá-lo silenciosamente.
     const hasStructured = !!(form.street || form.number || form.complement ||
       form.neighborhood || form.city || form.state || form.zip_code);
-    // Região: resolve o valor final (string do picker ou texto livre de "Outra…")
-    const regionFinal = resolveRegionValue(form.region_pick, form.region_custom);
+    // Região: resolve o valor final (string do picker canônico).
+    const regionFinal = resolveRegionValue(form.region_pick);
     // O backend já aceita sensei_name + sensei_practitioner_id; o tipo DojoInput
     // ainda não reflete (será atualizado em follow-up), então usamos `as any`.
     const body: (DojoInput & { is_active?: boolean; sensei_name?: string | null; sensei_practitioner_id?: string | null }) = {
@@ -438,6 +439,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
       affiliation_since: sinceIso || undefined,
       dojo_founded_year: form.dojo_founded_year ? parseInt(form.dojo_founded_year, 10) : null,
       phone: onlyD(form.phone) || null,
+      phone_mobile: onlyD(form.phone_mobile) || null,
       email: form.email || null,
       // endereço estruturado
       address_street: form.street || null,
@@ -490,9 +492,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   }, [createdDojoId, onClose, router]);
 
   // Rótulo exibido no botão do dropdown de região
-  const regionLabel = form.region_pick === REGION_OTHER
-    ? (form.region_custom.trim() || REGION_OTHER)
-    : (form.region_pick || "Selecionar região…");
+  const regionLabel = form.region_pick || "Selecionar região…";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -628,11 +628,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                             key={r}
                             style={[styles.dropItem, selected && styles.dropItemOn]}
                             onPress={() => {
-                              setForm((p) => ({ ...p, region_pick: r, region_custom: r === REGION_OTHER ? p.region_custom : "" }));
+                              setForm((p) => ({ ...p, region_pick: r }));
                               setRegionOpen(false);
-                              if (r === REGION_OTHER) {
-                                setTimeout(() => regionCustomRef.current?.focus(), 80);
-                              }
                             }}
                             activeOpacity={0.75}
                             accessibilityRole="menuitem"
@@ -644,21 +641,6 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                         );
                       })}
                     </View>
-                  )}
-
-                  {/* Campo de texto livre — só visível quando "Outra…" está selecionado */}
-                  {form.region_pick === REGION_OTHER && (
-                    <TextInput
-                      ref={regionCustomRef}
-                      style={[styles.input, { marginTop: 8 }]}
-                      value={form.region_custom}
-                      onChangeText={(v) => set("region_custom", v)}
-                      placeholder="Digite a região…"
-                      placeholderTextColor={P.ink4}
-                      returnKeyType="next"
-                      onSubmitEditing={() => cnpjRef.current?.focus()}
-                      accessibilityLabel="Região (texto livre)"
-                    />
                   )}
                 </View>
 
@@ -782,11 +764,13 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
               <SectionTitle>Contato &amp; endereço</SectionTitle>
               <View style={styles.row2}>
-                <Field flex label="Telefone" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
-                  inputRef={phoneRef} returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
-                <Field flex label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="dojo@exemplo.com"
-                  inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
+                <Field flex label="Telefone" hint="fixo" mono value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))} keyboardType="numeric" placeholder="(00) 0000-0000"
+                  inputRef={phoneRef} returnKeyType="next" onSubmitEditing={() => phoneMobileRef.current?.focus()} />
+                <Field flex label="Celular" mono value={form.phone_mobile} onChangeText={(v) => set("phone_mobile", maskPhone(v))} keyboardType="numeric" placeholder="(00) 00000-0000"
+                  inputRef={phoneMobileRef} returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
               </View>
+              <Field label="E-mail" value={form.email} onChangeText={(v) => set("email", v)} keyboardType="email-address" autoCapitalize="none" placeholder="dojo@exemplo.com"
+                inputRef={emailRef} returnKeyType="done" onSubmitEditing={handleSave} />
 
               {/* CEP destacado — preenche os campos estruturados (igual praticante) */}
               <View style={styles.cepBox}>

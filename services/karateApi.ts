@@ -262,6 +262,9 @@ export interface TechnicalTeamMember {
 export interface DojoDetail extends Dojo {
   owner_id: string | null;
   phone: string | null;
+  /** Telefone CELULAR (migration 230, aura-backend), distinto de `phone`
+   *  (telefone FIXO). null = não informado — normal, nunca erro. */
+  phone_mobile: string | null;
   email: string | null;
   cnpj: string | null;
   address: string | null;
@@ -279,6 +282,9 @@ export interface DojoInput {
   affiliation_model: AffiliationModel;
   affiliation_since?: string | null;
   phone?: string | null;
+  /** Telefone CELULAR (migration 230, aura-backend), distinto de `phone`
+   *  (telefone FIXO). Ambos opcionais e independentes. */
+  phone_mobile?: string | null;
   email?: string | null;
   cnpj?: string | null;
   address?: string | null;
@@ -309,9 +315,15 @@ export interface DojoExportRow {
   codigo_fpkt: string | null;
   status: string;
   regiao: string | null;
-  modelo_filiacao: string | null;
+  /** Plano de anuidade REAL do dojô (anual|semestral|trimestral), null =
+   *  federação ainda não definiu — NÃO confundir com o extinto
+   *  "Modelo de Filiação" (affiliation_model, decorativo/legado, removido
+   *  da exportação em 13/07/2026). */
+  plano_anuidade: string | null;
   cnpj: string | null;
   telefone: string | null;
+  /** Telefone CELULAR (migration 230), distinto de `telefone` (fixo). */
+  telefone_celular: string | null;
   email: string | null;
   cidade: string | null;
   estado: string | null;

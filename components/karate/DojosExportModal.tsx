@@ -40,7 +40,12 @@ interface Props {
 }
 
 const STATUS_LABEL: Record<string, string> = { active: "Ativo", inactive: "Inativo" };
-const MODEL_LABEL_XLSX: Record<string, string> = { annual: "Anual", biannual: "Semestral", quarterly: "Trimestral" };
+// Plano de anuidade REAL (anual|semestral|trimestral) — NÃO confundir com o
+// extinto "Modelo de Filiação" (affiliation_model, decorativo/legado,
+// removido desta planilha em 13/07/2026: mostrava "Anual" pra dojô nenhum
+// plano definido, contradizendo a ficha do dojô). Sem plano → "Não definido",
+// nunca inventado.
+const ANNUITY_PLAN_LABEL_XLSX: Record<string, string> = { anual: "Anual", semestral: "Semestral", trimestral: "Trimestral" };
 
 const STATUS_CHIPS: { key: DojoStatus | "all"; label: string }[] = [
   { key: "all", label: "Todos" },
@@ -93,8 +98,8 @@ export function DojosExportModal({ federationId, visible, onClose, initialStatus
       // perf: xlsx (~1MB) carregado sob demanda, fora do bundle inicial
       const xlsx = await import("xlsx");
       const headers = [
-        "Dojô", "Código FPKT", "Status", "Região", "Modelo de Filiação",
-        "CNPJ", "Telefone", "E-mail", "Cidade", "Estado",
+        "Dojô", "Código FPKT", "Status", "Região", "Plano de Anuidade",
+        "CNPJ", "Telefone", "Celular", "E-mail", "Cidade", "Estado",
         "Total de Praticantes", "Praticantes Ativos",
       ];
       const rows = data.dojos.map((d) => [
@@ -102,9 +107,10 @@ export function DojosExportModal({ federationId, visible, onClose, initialStatus
         d.codigo_fpkt || "",
         STATUS_LABEL[d.status] || d.status || "",
         d.regiao || "",
-        MODEL_LABEL_XLSX[d.modelo_filiacao || ""] || d.modelo_filiacao || "",
+        d.plano_anuidade ? (ANNUITY_PLAN_LABEL_XLSX[d.plano_anuidade] || d.plano_anuidade) : "Não definido",
         d.cnpj || "",
         d.telefone || "",
+        d.telefone_celular || "",
         d.email || "",
         d.cidade || "",
         d.estado || "",

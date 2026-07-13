@@ -121,7 +121,11 @@ export default function DojoPortal() {
               <Row label="Registro FPKT" value={dojo.fpkt_affiliation_id || "—"} mono />
               <Row label="Situação" value={dojo.status === "active" ? "Ativo" : dojo.status === "pending" ? "Pendente" : "Inativo"} color={statusColor(dojo.status)} />
               {dojo.region && <Row label="Região" value={dojo.region} />}
-              {dojo.affiliation_model && <Row label="Modelo" value={dojo.affiliation_model} />}
+              {/* "Modelo" (affiliation_model) removido em 13/07/2026 — decorativo/
+                  legado, nunca lido por rota de cobrança. Este portal ainda não
+                  expõe karate_annuity_plan (GET /federation/:id/dojo/me só retorna
+                  id/name/phone/federation_id/auth_channel hoje), então não há
+                  substituto para mostrar aqui sem expandir esse endpoint. */}
               <Row label="Filiado desde" value={fmtDate(dojo.affiliation_since)} />
               <Row label="Praticantes" value={String(dojo.practitioner_count)} mono />
             </View>
