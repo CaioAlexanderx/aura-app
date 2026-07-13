@@ -92,7 +92,8 @@ function AuthGuard() {
         segments[2] === "consulta" ||          // consulta publica de praticante
         segments[2] === "meus-certificados" || // participante: meus certificados
         segments[1] === "roster-update" ||     // portal do sensei: validação de quadro por token
-        segments[1] === "roster-self"          // auto-atendimento do próprio praticante (G1 item 7)
+        segments[1] === "roster-self" ||       // auto-atendimento do próprio praticante (G1 item 7)
+        segments[1] === "pix"                  // página pública de pagamento PIX (Fase F4/PIX)
       );
       if (!onPublicMicrosite) {
         if (typeof window !== "undefined") window.location.href = APP_URL;
@@ -131,6 +132,7 @@ function AuthGuard() {
     //   /karate/[slug]/ranking           → ranking (embed público — Track E)
     //   /karate/roster-update/[token]    → portal do sensei (validação de quadro por token)
     //   /karate/roster-self/[token]      → auto-atendimento do próprio praticante (G1 item 7)
+    //   /karate/pix/[token]              → pagamento PIX da cobrança (Fase F4/PIX)
     // As rotas do shell (dojos, eventos, financeiro, importacao, praticantes…)
     // nunca batem nesses marcadores.
     const onKaratePublic = segments[0] === "karate" && (
@@ -142,7 +144,8 @@ function AuthGuard() {
       segments[2] === "consulta" ||
       segments[2] === "meus-certificados" ||
       segments[1] === "roster-update" ||
-      segments[1] === "roster-self"
+      segments[1] === "roster-self" ||
+      segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
     if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
 

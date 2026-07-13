@@ -121,6 +121,8 @@ export interface AnnuityRowVM {
   name: string;
   code: string | null;          // fpkt_affiliation_id (dojô) ou karate_registration_number (praticante)
   whatsapp: string | null;
+  /** Aditivo (Fase F4/PIX) — indicador de canal de contato na cobrança. */
+  email: string | null;
   plan: AnnuityPlan | null;
   status: string;                // computed_status do backend (paid/due/overdue/defaulting/no_charge)
   daysOverdue: number;
@@ -163,6 +165,7 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
       name: d.dojo_name,
       code: d.fpkt_affiliation_id ?? null,
       whatsapp: d.whatsapp ?? null,
+      email: d.email ?? null,
       plan: d.plan ?? null,
       status: d.status,
       daysOverdue: d.days_overdue ?? computeDaysOverdue(d.installments ?? []),
@@ -181,6 +184,7 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
     name: p.full_name,
     code: p.karate_registration_number ?? null,
     whatsapp: p.whatsapp ?? null,
+    email: p.email ?? null,
     plan: p.plan ?? null,
     status: p.status,
     daysOverdue: computeDaysOverdue(p.installments ?? []),
@@ -265,13 +269,16 @@ function InstallmentSummary({ vm, state }: { vm: AnnuityRowVM; state: InstState 
 
 // ── Painel expandido: detalhe de cada parcela + ações (pagar/pix/editar) ─
 function InstallmentDetailRow({
-  inst, state, federationId, onPay, onPix, onEdit, onSendEmail,
+  inst, state, federationId, onPay, onPix, onEdit, onSendEmail, hasEmail,
 }: {
   inst: AnnuityInstallment; state: InstState; federationId: string;
   onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
   onSendEmail: (instId: string) => void;
+  /** Aditivo (Fase F4/PIX) — sem e-mail cadastrado, o botão "E-mail" some
+   *  desabilitado com o motivo em texto, nunca um erro depois do clique. */
+  hasEmail: boolean;
 }) {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -403,13 +410,19 @@ function InstallmentDetailRow({
               <Text style={styles.instActionLabel}>Editar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.instActionBtn}
-              onPress={() => onSendEmail(inst.id)}
+              style={[styles.instActionBtn, !hasEmail && styles.instActionBtnDisabled]}
+              onPress={() => { if (hasEmail) onSendEmail(inst.id); }}
+              disabled={!hasEmail}
               accessibilityRole="button"
-              accessibilityLabel={`Enviar e-mail de cobrança da parcela ${inst.seq}`}
+              accessibilityState={{ disabled: !hasEmail }}
+              accessibilityLabel={
+                hasEmail
+                  ? `Enviar e-mail de cobrança da parcela ${inst.seq}`
+                  : "Sem e-mail cadastrado — use o WhatsApp ou peça a atualização cadastral"
+              }
             >
-              <Icon name="mail" size={12} color={C.ink} />
-              <Text style={styles.instActionLabel}>E-mail</Text>
+              <Icon name="mail" size={12} color={hasEmail ? C.ink : P.ink4} />
+              <Text style={[styles.instActionLabel, !hasEmail && styles.instActionLabelDisabled]}>E-mail</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.instActionBtn}
@@ -421,6 +434,11 @@ function InstallmentDetailRow({
               <Text style={styles.instActionLabel}>Histórico</Text>
             </TouchableOpacity>
           </View>
+        )}
+        {!hasEmail && isPending && (
+          <Text style={styles.emailHint}>
+            Sem e-mail cadastrado — use o WhatsApp ou peça a atualização cadastral.
+          </Text>
         )}
       </View>
 
@@ -612,11 +630,48 @@ function AnnuityRowItem({
 
       {expanded && vm.installments.length > 0 && (
         <View style={styles.instPanel}>
+          <ContactChannelsRow whatsapp={vm.whatsapp} email={vm.email} />
           {trail.map(({ inst, state }) => (
-            <InstallmentDetailRow key={inst.id} inst={inst} state={state} federationId={federationId} onPay={onPay} onPix={onPix} onEdit={onEdit} onSendEmail={onSendEmail} />
+            <InstallmentDetailRow
+              key={inst.id}
+              inst={inst}
+              state={state}
+              federationId={federationId}
+              onPay={onPay}
+              onPix={onPix}
+              onEdit={onEdit}
+              onSendEmail={onSendEmail}
+              hasEmail={!!vm.email}
+            />
           ))}
         </View>
       )}
+    </View>
+  );
+}
+
+// ── Canais de contato (Fase F4/PIX) ──────────────────────────────────
+// Ao expandir uma cobranca, o gestor ve ANTES de tentar enviar se aquela
+// pessoa/dojo tem WhatsApp e/ou e-mail cadastrado - hoje ele so descobria
+// depois de clicar e ver o "pulado" no modal. Ausencia de canal e o
+// estado NORMAL da maioria (das 549 faixas-pretas ativas, so 2 tem
+// e-mail e 523 tem telefone - ver CLAUDE.md) - por isso NUNCA vermelho/
+// alerta aqui, sempre neutro (mesmo tom de "Historico"/pilulas info).
+function ContactChannelsRow({ whatsapp, email }: { whatsapp: string | null; email: string | null }) {
+  return (
+    <View style={styles.channelsRow}>
+      <View style={[styles.channelPill, whatsapp ? styles.channelPillOn : styles.channelPillOff]}>
+        <Icon name="call-outline" size={11} color={whatsapp ? P.ok : C.ink3} />
+        <Text style={[styles.channelPillText, whatsapp ? styles.channelPillTextOn : styles.channelPillTextOff]}>
+          {whatsapp ? "WhatsApp cadastrado" : "Sem WhatsApp cadastrado"}
+        </Text>
+      </View>
+      <View style={[styles.channelPill, email ? styles.channelPillOn : styles.channelPillOff]}>
+        <Icon name="mail-outline" size={11} color={email ? P.ok : C.ink3} />
+        <Text style={[styles.channelPillText, email ? styles.channelPillTextOn : styles.channelPillTextOff]}>
+          {email ? "E-mail cadastrado" : "Sem e-mail cadastrado"}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -1281,6 +1336,24 @@ const styles = StyleSheet.create({
   instBadgeText: { fontSize: 10, fontWeight: "700" } as TextStyle,
   instActionBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: R.sm, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass } as ViewStyle,
   instActionLabel: { fontSize: 11, fontWeight: "600", color: C.ink } as TextStyle,
+  // Fase F4/PIX — botão de ação desabilitado (ex.: "E-mail" sem e-mail
+  // cadastrado). Nunca vermelho/alerta: opacidade reduzida + hint neutro
+  // abaixo (emailHint), mesmo princípio de "ausência de canal não é erro".
+  instActionBtnDisabled: { opacity: 0.5 } as ViewStyle,
+  instActionLabelDisabled: { color: P.ink4 } as TextStyle,
+  emailHint: { fontSize: 10.5, color: C.ink3, marginTop: 2, textAlign: "right" } as TextStyle,
+  // Indicadores de canal de contato (Fase F4/PIX) — pílulas neutras (nunca
+  // vermelho/alerta) mostradas ao expandir a cobrança, ANTES de qualquer
+  // tentativa de envio. "On" (canal cadastrado) usa o verde-chá ok* já
+  // usado pra "em dia/aprovado"; "off" é só tom neutro (ink3/glass), não
+  // um estado de erro — é o normal da maioria dos cadastros hoje.
+  channelsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 2 } as ViewStyle,
+  channelPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 4, paddingHorizontal: 9, borderRadius: R.pill, borderWidth: 1 } as ViewStyle,
+  channelPillOn: { backgroundColor: P.okWash, borderColor: P.okLine } as ViewStyle,
+  channelPillOff: { backgroundColor: P.glass, borderColor: C.line2 } as ViewStyle,
+  channelPillText: { fontSize: 10.5, fontWeight: "700" } as TextStyle,
+  channelPillTextOn: { color: P.ok } as TextStyle,
+  channelPillTextOff: { color: C.ink3 } as TextStyle,
   instSubPanel: { marginLeft: 92, gap: 8, backgroundColor: P.paperWarm, borderRadius: R.sm, padding: 8, borderWidth: 1, borderColor: C.line } as ViewStyle,
   instInput: { borderWidth: 1, borderColor: C.line2, borderRadius: R.sm, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12.5, color: C.ink, minWidth: 90 } as TextStyle,
   instSaveBtn: { backgroundColor: P.ink, borderRadius: R.sm, paddingVertical: 8, paddingHorizontal: 14, alignSelf: "flex-end" } as ViewStyle,

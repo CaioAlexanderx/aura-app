@@ -509,6 +509,8 @@ export interface DojoAnnuity {
   // nfse_ref/created_at) não batia com a resposta real da API.
   fpkt_affiliation_id?: string | null;
   whatsapp?: string | null;
+  /** Aditivo (Fase F4/PIX) — indicador de canal de contato na cobrança. */
+  email?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
@@ -541,6 +543,8 @@ export interface CpfAnnuity {
   full_name: string;
   karate_registration_number?: string | null;
   whatsapp?: string | null;
+  /** Aditivo (Fase F4/PIX) — indicador de canal de contato na cobrança. */
+  email?: string | null;
   reference_period: string;
   amount: number;
   due_date: string;
