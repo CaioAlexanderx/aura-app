@@ -5,6 +5,7 @@ import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { billingApi, ApiError } from "@/services/api";
+import type { ValidateCouponResponse } from "@/services/billingApi";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
@@ -26,6 +27,11 @@ var SEAT_PRICE_BRL = 19;
 
 function fmt(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtMo(v: number) { return fmt(v) + "/mes"; }
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
+  var p = String(iso).slice(0, 10).split("-");
+  return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : String(iso);
+}
 
 function maskCard(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 16);
@@ -93,6 +99,16 @@ export default function CheckoutScreen() {
   var [cycle, setCycle] = useState<Cycle>(cycleFromCompany(company) || "monthly");
   // Se o usuario ja escolheu na tela, o sync com a empresa para de sobrescrever.
   var userPickedRef = useRef(false);
+
+  // 13/07/2026 — cupom. Dois efeitos possiveis (access_codes ja tinha os dois
+  // campos, ambos mortos ate aqui):
+  //   discount_pct → desconto na 1a mensalidade (recorrencia segue cheia)
+  //   trial_days   → nenhuma cobranca hoje; cartao fica salvo e a 1a cobranca
+  //                  e agendada pra D+N (campanha de indicacao)
+  var [couponInput, setCouponInput] = useState("");
+  var [couponApplied, setCouponApplied] = useState<ValidateCouponResponse | null>(null);
+  var [couponError, setCouponError] = useState<string | null>(null);
+  var [couponLoading, setCouponLoading] = useState(false);
   var [method, setMethod] = useState<Method>("pix");
   var [loading, setLoading] = useState(false);
   var [tokenizing, setTokenizing] = useState(false);
@@ -139,6 +155,16 @@ export default function CheckoutScreen() {
   var seatsPrice = extraSeats * SEAT_PRICE_BRL;
   var totalPrice = Math.round((price + seatsPrice) * 100) / 100;
 
+  // Com cupom, o backend e a fonte da verdade do valor (ele recalcula com o
+  // plano/ciclo/seats reais da empresa). A tela so exibe o que ele devolveu.
+  var couponDiscountPct = couponApplied?.discount_pct || 0;
+  var couponTrialDays = couponApplied?.trial_days || 0;
+  var chargedNow = couponApplied
+    ? (couponApplied.first_charge_value ?? totalPrice)
+    : totalPrice;
+  var couponSavings = Math.round((totalPrice - chargedNow) * 100) / 100;
+  var isFreeTrialCoupon = couponTrialDays > 0;
+
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
   var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
@@ -148,11 +174,64 @@ export default function CheckoutScreen() {
 
   var annualEndDate = isAnnual ? addMonthsIso(new Date(), 12) : undefined;
 
+  async function handleApplyCoupon() {
+    if (!company?.id) return;
+    var code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      var res = await billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX");
+      if (res.valid) {
+        setCouponApplied(res);
+        setCouponError(null);
+        toast.success(res.trial_days ? res.trial_days + " dias gratis aplicados!" : "Cupom de " + res.discount_pct + "% aplicado!");
+      } else {
+        setCouponApplied(null);
+        setCouponError(res.error || "Cupom invalido");
+      }
+    } catch (err: any) {
+      setCouponApplied(null);
+      setCouponError(err instanceof ApiError ? err.message : "Erro ao validar cupom");
+    } finally { setCouponLoading(false); }
+  }
+
+  function handleRemoveCoupon() {
+    setCouponApplied(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
+
+  // Trocar plano/ciclo muda o valor — o cupom aplicado foi calculado em cima do
+  // valor antigo, entao revalida (nunca deixa na tela um total desatualizado).
+  useEffect(function () {
+    if (!couponApplied || !company?.id) return;
+    var code = couponApplied.code || couponInput;
+    if (!code) return;
+    var cancelled = false;
+    billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX")
+      .then(function (res) {
+        if (cancelled) return;
+        if (res.valid) setCouponApplied(res);
+        else { setCouponApplied(null); setCouponError(res.error || "Cupom invalido"); }
+      })
+      .catch(function () { });
+    return function () { cancelled = true; };
+  }, [selectedPlan, cycle, method]);
+
   async function handlePixSubscribe() {
     if (!company?.id) return;
     setLoading(true);
     try {
-      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined });
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code });
+      // Cupom de dias gratis no Pix: nao ha o que pagar hoje, entao nao vem QR.
+      if (couponApplied?.trial_days) {
+        setSuccess(true);
+        toast.success(res.message || couponApplied.trial_days + " dias gratis ativados!");
+        await hydrate();
+        setTimeout(function () { router.replace("/(tabs)/" as any); }, 2000);
+        return;
+      }
       if (res.pix_qr_code) {
         setPixQr(res.pix_qr_code);
         setPixCopyPaste(res.pix_copy_paste || null);
@@ -185,6 +264,7 @@ export default function CheckoutScreen() {
       await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", isAnnual ? "annual" : "monthly", {
         endDate: annualEndDate,
         totalCycles: isAnnual ? 12 : undefined,
+        accessCode: couponApplied?.code,
         creditCardToken: tokenRes.credit_card_token,
         holderName: cardName,
         holderCpf: cardCpf.replace(/\D/g, ""),
@@ -344,6 +424,53 @@ export default function CheckoutScreen() {
         </Pressable>
       </View>
 
+      {/* Cupom de desconto / indicação */}
+      <View style={z.couponCard}>
+        {!couponApplied ? (
+          <>
+            <View style={z.couponRow}>
+              <TextInput
+                style={z.couponInput}
+                value={couponInput}
+                onChangeText={function (v) { setCouponInput(v.toUpperCase()); setCouponError(null); }}
+                placeholder="CUPOM OU CÓDIGO DE INDICAÇÃO"
+                placeholderTextColor={Colors.ink3}
+                autoCapitalize="characters"
+                editable={!couponLoading}
+              />
+              <Pressable
+                onPress={handleApplyCoupon}
+                disabled={couponLoading || !couponInput.trim()}
+                style={[z.couponBtn, (couponLoading || !couponInput.trim()) && { opacity: 0.5 }]}
+              >
+                {couponLoading
+                  ? <ActivityIndicator size="small" color={Colors.violet3} />
+                  : <Text style={z.couponBtnText}>Aplicar</Text>}
+              </Pressable>
+            </View>
+            {couponError && <Text style={z.couponError}>{couponError}</Text>}
+          </>
+        ) : (
+          <View style={z.couponAppliedRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={z.couponAppliedTitle}>
+                {isFreeTrialCoupon
+                  ? couponTrialDays + " dias grátis · " + couponApplied.code
+                  : couponApplied.code + " · " + couponDiscountPct + "% na 1ª mensalidade"}
+              </Text>
+              <Text style={z.couponAppliedSub}>
+                {isFreeTrialCoupon
+                  ? "Cartão fica salvo. 1ª cobrança em " + fmtDate(couponApplied.first_charge_date)
+                  : "Você economiza " + fmt(couponSavings) + " hoje"}
+              </Text>
+            </View>
+            <Pressable onPress={handleRemoveCoupon} style={z.couponRemove}>
+              <Text style={z.couponRemoveText}>Remover</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <View style={z.summaryCard}>
         <View style={z.summaryRow}>
           <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
@@ -353,23 +480,37 @@ export default function CheckoutScreen() {
           <Text style={z.annualNote}>Cobrado mensalmente · economia de {fmt(annualSavings)}/ano</Text>
         )}
         {extraSeats > 0 && (
-          <>
-            <View style={z.summaryRow}>
-              <Text style={z.summaryLabel}>{extraSeats} acesso{extraSeats > 1 ? "s" : ""} extra{extraSeats > 1 ? "s" : ""} de equipe</Text>
-              <Text style={z.summaryValue}>{fmtMo(seatsPrice)}</Text>
-            </View>
-            <View style={[z.summaryRow, z.summaryTotalRow]}>
-              <Text style={z.summaryTotalLabel}>Total</Text>
-              <Text style={z.summaryTotalValue}>{fmtMo(totalPrice)}</Text>
-            </View>
-          </>
+          <View style={z.summaryRow}>
+            <Text style={z.summaryLabel}>{extraSeats} acesso{extraSeats > 1 ? "s" : ""} extra{extraSeats > 1 ? "s" : ""} de equipe</Text>
+            <Text style={z.summaryValue}>{fmtMo(seatsPrice)}</Text>
+          </View>
+        )}
+        {couponApplied && !isFreeTrialCoupon && (
+          <View style={z.summaryRow}>
+            <Text style={z.summaryLabel}>Cupom {couponApplied.code} (-{couponDiscountPct}% no plano)</Text>
+            <Text style={z.couponDiscountValue}>- {fmt(couponSavings)}</Text>
+          </View>
+        )}
+
+        <View style={[z.summaryRow, z.summaryTotalRow]}>
+          <Text style={z.summaryTotalLabel}>{isFreeTrialCoupon ? "Você paga hoje" : "Total hoje"}</Text>
+          <Text style={z.summaryTotalValue}>{isFreeTrialCoupon ? "R$ 0,00" : fmt(chargedNow)}</Text>
+        </View>
+        {(couponApplied || extraSeats > 0) && (
+          <Text style={z.annualNote}>
+            {isFreeTrialCoupon
+              ? "Depois: " + fmtMo(totalPrice) + " a partir de " + fmtDate(couponApplied?.first_charge_date)
+              : couponApplied
+                ? "Mensalidades seguintes: " + fmtMo(totalPrice)
+                : "Cobrado mensalmente"}
+          </Text>
         )}
       </View>
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
           <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && { opacity: 0.6 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Gerar Pix - {fmtMo(totalPrice)}</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis" : "Gerar Pix - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
       )}
@@ -427,7 +568,7 @@ export default function CheckoutScreen() {
           </View>
 
           <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid} style={[z.payBtn, (tokenizing || !cardValid) && { opacity: 0.5 }]}>
-            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>Assinar Agora - {fmtMo(totalPrice)}</Text>}
+            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis (sem cobrança hoje)" : "Assinar Agora - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
       )}
@@ -478,6 +619,18 @@ var z = StyleSheet.create({
   summaryTotalRow: { borderTopWidth: 1, borderTopColor: Colors.line, paddingTop: 8, marginTop: 4 },
   summaryTotalLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink1 },
   summaryTotalValue: { fontSize: 15, fontWeight: "800", color: Colors.violet3 },
+  couponCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
+  couponRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  couponInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, letterSpacing: 0.5 },
+  couponBtn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  couponBtnText: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  couponError: { fontSize: 11, color: Colors.red, marginTop: 8 },
+  couponAppliedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  couponAppliedTitle: { fontSize: 13, fontWeight: "700", color: Colors.green },
+  couponAppliedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  couponRemove: { paddingHorizontal: 10, paddingVertical: 6 },
+  couponRemoveText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  couponDiscountValue: { fontSize: 15, color: Colors.green, fontWeight: "800" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },
