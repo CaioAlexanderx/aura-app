@@ -109,7 +109,7 @@ function DojoRowItem({ d, wide, onPress }: { d: Dojo; wide: boolean; onPress: ()
         <Body muted style={styles.cell}>{MODEL_LABEL[d.affiliation_model] ?? "—"}</Body>
         {annuityPlanNote(d) && <Text style={styles.annuityNote} numberOfLines={1}>{annuityPlanNote(d)}</Text>}
       </View>
-      <View style={[styles.colDivider, { width: 90 }]}><Mono style={[styles.cellNum, { textAlign: "right" }]}>{d.practitioner_count}</Mono></View>
+      <View style={[styles.colDivider, { width: 90 }]}><Mono style={[styles.cellNum, { textAlign: "right" }]}>{d.active_practitioner_count ?? d.practitioner_count}</Mono></View>
       <View style={{ width: 130 }}><ShojiBadge dojoStatus={d.status} /></View>
       <Icon name="chevron-forward" size={16} color={C.ink4} style={{ width: 18 }} />
     </RowPressable>
@@ -126,7 +126,7 @@ function DojoRowItem({ d, wide, onPress }: { d: Dojo; wide: boolean; onPress: ()
       </View>
       <View style={styles.cardMeta}>
         <Meta icon="location-outline" text={d.region || "—"} />
-        <Meta icon="people-outline" text={`${d.practitioner_count} praticantes`} />
+        <Meta icon="people-outline" text={`${d.active_practitioner_count ?? d.practitioner_count} praticantes ativos`} />
         <Meta icon="ribbon-outline" text={MODEL_LABEL[d.affiliation_model] ?? "—"} />
         {annuityPlanNote(d) && <Meta icon="alert-circle-outline" text={annuityPlanNote(d)!} />}
       </View>
@@ -218,7 +218,7 @@ const DojosListHeader = React.memo(function DojosListHeader(p: DojosListHeaderPr
             <View style={[styles.colDivider, { flex: 2 }]}><Text style={styles.th}>Dojô</Text></View>
             <View style={[styles.colDivider, { flex: 1.2 }]}><Text style={styles.th}>Região</Text></View>
             <View style={[styles.colDivider, { width: 100 }]}><Text style={styles.th}>Modelo</Text></View>
-            <View style={[styles.colDivider, { width: 90 }]}><Text style={[styles.th, { textAlign: "right" }]}>Pratic.</Text></View>
+            <View style={[styles.colDivider, { width: 90 }]}><Text style={[styles.th, { textAlign: "right" }]}>Ativos</Text></View>
             <View style={{ width: 130 }}><Text style={styles.th}>Status</Text></View>
             <View style={{ width: 18 }} />
           </View>

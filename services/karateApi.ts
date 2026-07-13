@@ -237,7 +237,9 @@ export interface Dojo {
   is_active: boolean;
   sensei_name: string | null;
   sensei_practitioner_id: string | null;
-  practitioner_count: number;
+  practitioner_count: number;          // TOTAL (ativos + inativos)
+  active_practitioner_count?: number;  // ATIVOS — é o que a lista de dojôs exibe
+
   created_at: string;
   dojo_name?: string | null;
   /** Plano de anuidade REAL do dojô (migration 226 — aura-backend) —
