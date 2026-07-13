@@ -215,6 +215,9 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   // ref para cancelar a busca anterior (debounce manual)
   const senseiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // flag: praticante foi SELECIONADO pelo usuário (vinculado)
+  // true enquanto um item da lista está sendo tocado — impede que o onBlur
+  // do input feche o dropdown antes do toque registrar (RN Web).
+  const selectingSenseiRef = useRef(false);
   const senseiLinked = !!form.sensei_practitioner_id;
 
   // refs p/ Enter avançar os campos de texto
@@ -367,6 +370,19 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
   // Selecionar uma sugestão: vincula o praticante e fecha o dropdown.
   const onSelectSuggestion = useCallback((item: PractitionerListItem) => {
+    // BUGFIX (13/07/2026) — o sensei escolhido não "travava" no campo. Duas
+    // corridas concorriam:
+    //  (a) o debounce de 300ms da última tecla ainda estava pendente: ele
+    //      disparava DEPOIS da seleção, reabria o dropdown e sobrescrevia as
+    //      sugestões — a UI parecia voltar ao estado "buscando".
+    //  (b) no RN Web, o onBlur do TextInput fecha a lista antes do onPress do
+    //      item registrar, e o toque se perde (por isso o onPressIn abaixo).
+    // Aqui matamos (a); o onPressIn do item mata (b).
+    if (senseiDebounceRef.current) {
+      clearTimeout(senseiDebounceRef.current);
+      senseiDebounceRef.current = null;
+    }
+    selectingSenseiRef.current = true;
     setForm((p) => ({
       ...p,
       sensei_name: item.full_name,
@@ -676,8 +692,12 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                         if (suggestions.length > 0) setSuggestionsOpen(true);
                       }}
                       onBlur={() => {
-                        // pequeno delay para permitir que o tap na sugestão seja registrado
-                        setTimeout(() => setSuggestionsOpen(false), 160);
+                        // se o blur veio de um toque numa sugestão, NÃO feche: o
+                        // onPressIn já está tratando a seleção.
+                        if (selectingSenseiRef.current) return;
+                        setTimeout(() => {
+                          if (!selectingSenseiRef.current) setSuggestionsOpen(false);
+                        }, 160);
                       }}
                       placeholder="Nome do sensei…"
                       placeholderTextColor={P.ink4}
@@ -721,7 +741,8 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
                         <TouchableOpacity
                           key={item.id}
                           style={styles.senseiDropItem}
-                          onPress={() => onSelectSuggestion(item)}
+                          onPressIn={() => onSelectSuggestion(item)}
+                          onPress={() => { onSelectSuggestion(item); selectingSenseiRef.current = false; }}
                           activeOpacity={0.75}
                           accessibilityRole="menuitem"
                           accessibilityLabel={item.full_name}
