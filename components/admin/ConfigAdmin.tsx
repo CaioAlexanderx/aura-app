@@ -6,10 +6,13 @@ import { IS_WIDE } from "@/constants/helpers";
 
 // VER-03d: Settings (plans, access codes, integrations)
 
+// 13/07/2026: precos estavam DESATUALIZADOS (199/299 — valores anteriores a
+// 21/04). Fonte da verdade: src/services/billingPricing.js do backend
+// (PLANS: essencial 89, negocio 169, expansao 269) e GET /billing/plans.
 const PLANS = [
   { key: "essencial", name: "Essencial", price: 89, features: 8 },
-  { key: "negocio", name: "Negocio", price: 199, features: 16 },
-  { key: "expansao", name: "Expansao", price: 299, features: 22 },
+  { key: "negocio", name: "Negocio", price: 169, features: 16 },
+  { key: "expansao", name: "Expansao", price: 269, features: 22 },
 ];
 
 const CODES = [
@@ -44,7 +47,10 @@ export function ConfigAdmin() {
             </View>
           ))}
         </View>
-        <Text style={s.planHint}>Add-ons: Vertical R$ 69/mes | Usuario extra R$ 19/mes</Text>
+        {/* 13/07/2026: nao existem mais add-ons de vertical. A vertical usa a
+            precificacao do proprio plano (Studio = Negocio+). O texto antigo
+            anunciava R$69/mes que o getTotalValue nunca cobrou. */}
+        <Text style={s.planHint}>Acesso extra de equipe: R$ 19/mes por acesso acima do limite do plano. Verticais nao tem add-on — usam a precificacao do proprio plano.</Text>
       </HoverCard>
 
       {/* Access Codes */}
