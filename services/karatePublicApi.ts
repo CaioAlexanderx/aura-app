@@ -269,6 +269,21 @@ export interface AddPractitionerResult {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Tipos — Página pública de pagamento PIX (Fase F4/PIX)
+//
+// Consome GET /public/karate/pix/:token (karatePixPublic.js no backend).
+// Token stateless assinado (karatePixPublicToken.js) — carrega o próprio
+// conteúdo da cobrança, NUNCA nome/CPF/telefone/e-mail/id de dojô ou
+// praticante (decisão de privacidade documentada no PR do backend).
+// 404 = link inválido ou expirado (nunca diferencia o motivo).
+// ─────────────────────────────────────────────────────────────
+export interface PixPublicData {
+  amount: number;
+  reference_period: string;
+  pix_code: string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Tipos — Auto-atendimento do PRÓPRIO praticante (G1, item 7)
 //
 // Consome GET/POST /public/roster-self/:token (karateRosterSelfServicePublic.js).
@@ -300,6 +315,16 @@ export interface SelfServiceUpdateResult {
 // API
 // ─────────────────────────────────────────────────────────────
 export const karatePublicApi = {
+  /**
+   * Página pública de pagamento PIX de uma cobrança de anuidade — dados
+   * mínimos (valor, competência, BR Code). O QR é desenhado no cliente
+   * (components/karate/PixQRCode.tsx, já usa react-native-qrcode-svg —
+   * sem endpoint de imagem novo). 404 = link inválido ou expirado.
+   */
+  getPixPublic: (token: string): Promise<PixPublicData> =>
+    pub(`/public/karate/pix/${enc(token)}`),
+
+
   /**
    * Busca praticante por CPF, e-mail ou Número FPKT.
    * Lança ApiError com code='PRACTITIONER_NOT_FOUND' (404) se não achar.
