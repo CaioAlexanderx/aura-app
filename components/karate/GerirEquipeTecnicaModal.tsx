@@ -51,6 +51,25 @@
 //      proativa, não erro reativo).
 //   6. Sucesso → toast.success + onSaved() (a tela host refaz o load() do
 //      dojô, atualizando o card "Equipe técnica").
+//
+// ⚠️ BUG REAL #2 ENCONTRADO E CORRIGIDO (13/07/2026, mesmo dia, depois do
+// redesign acima) — sensei de outro dojô ficava sem linha nesta lista:
+// o passo 1 acima filtra por dojo_id, mas o vínculo de sensei
+// (companies.sensei_practitioner_id) NÃO exige que o sensei seja
+// praticante do PRÓPRIO dojô — o picker de sensei em DojoFichaModal busca
+// na federação inteira. Quando o sensei era praticante de outro dojô
+// (caso real em produção: ARMTEAM DOJÔ), ele não vinha na resposta de
+// listPractitioners(dojo_id) — zero linha, zero chip — mesmo aparecendo
+// no card "Equipe técnica" do detalhe (o backend inclui ele lá via um
+// push defensivo dojo_id-agnóstico, ver GET /dojos/:dojoId no backend).
+// Resultado: a única forma de dar um papel a ele era abrir a ficha dele
+// direto em Praticantes (busca federação inteira) e editar por lá — o
+// exato sintoma reportado. NÃO é (e nunca foi neste arquivo) um caso de
+// chips desabilitados: o passo 5 acima sempre deixou os 4 chips tocáveis
+// para qualquer linha, sensei incluso; o problema era a linha não existir.
+// Corrigido buscando (getPractitioner) a ficha de qualquer id de
+// currentTeamIds ausente da lista filtrada por dojo_id e injetando como
+// linha extra, com os mesmos 4 chips e a mesma nota do passo 5.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
@@ -145,7 +164,7 @@ export function GerirEquipeTecnicaModal({
     if (!dojoId) return;
     setLoading(true); setErrorMsg(null);
     karateApi.listPractitioners(federationId, { dojo_id: dojoId, pageSize: 200 })
-      .then((res) => {
+      .then(async (res) => {
         const list: Row[] = (res.data || []).map((p) => ({
           id: p.id,
           name: p.full_name,
@@ -157,6 +176,46 @@ export function GerirEquipeTecnicaModal({
           snapshot: null,
           removeErr: null,
         }));
+
+        // CAUSA RAIZ do bug "não dá pra tornar o sensei instrutor por aqui":
+        // esta listagem é filtrada por dojo_id (só praticantes DESTE dojô),
+        // mas o vínculo de sensei (companies.sensei_practitioner_id) NÃO
+        // exige que o sensei seja praticante do próprio dojô — o picker de
+        // sensei no cadastro do dojô busca na federação inteira (ver
+        // DojoFichaModal). Quando o sensei é praticante de OUTRO dojô (caso
+        // real em produção: ARMTEAM DOJÔ), ele nunca aparece nesta lista —
+        // zero linha, zero chip pra tocar — mesmo aparecendo no card
+        // "Equipe técnica" do detalhe (o backend inclui ele lá via um push
+        // defensivo dojo_id-agnóstico). Por isso a única forma de dar papel
+        // a ele era editar a ficha dele direto em Praticantes (busca
+        // federação inteira). Corrigido buscando a ficha de qualquer membro
+        // de currentTeamIds que não veio na lista acima e injetando como
+        // linha extra — mesma lógica do backend, do lado do FE.
+        const missingIds = Array.from(teamSet).filter((id) => !list.some((r) => r.id === id));
+        if (missingIds.length) {
+          const extras = await Promise.allSettled(
+            missingIds.map((id) => karateApi.getPractitioner(federationId, id))
+          );
+          for (const settled of extras) {
+            if (settled.status === "fulfilled") {
+              const p = settled.value;
+              list.push({
+                id: p.id,
+                name: p.full_name,
+                registration: p.karate_registration_number,
+                initial: toRoleFlags(p),
+                current: toRoleFlags(p),
+                saving: false,
+                confirming: false,
+                snapshot: null,
+                removeErr: null,
+              });
+            }
+            // fulfilled === false (praticante sumiu/404, etc.): ignora — a
+            // linha simplesmente não aparece, sem quebrar o resto da lista.
+          }
+        }
+
         // Membros atuais da equipe primeiro; dentro de cada grupo, ordem alfabética.
         list.sort((a, b) => {
           const aTeam = teamSet.has(a.id) ? 0 : 1;
