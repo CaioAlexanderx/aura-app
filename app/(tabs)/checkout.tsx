@@ -92,10 +92,30 @@ function cycleFromCompany(company: any): Cycle | null {
   return c === "annual" || c === "monthly" ? (c as Cycle) : null;
 }
 
+// 13/07/2026 — o Aura Studio NAO tem plano Essencial: a vertical exige Negocio+
+// (mesmo gate de app/studio/(estudio)/_layout.tsx). O checkout oferecia Essencial
+// pra todo mundo — um cliente Studio podia assinar R$89 e cair num app que nao
+// carrega o Studio: pagou e nao recebeu. A regra tambem vive no backend
+// (/billing/subscribe devolve 400), esta aqui e so pra nao oferecer o que nao existe.
+var VERTICAL_MIN_PLANS: Record<string, string[]> = {
+  studio: ["negocio", "expansao"],
+};
+function allowedPlanKeys(company: any): string[] {
+  var v = String(company?.vertical_active || "").toLowerCase();
+  return VERTICAL_MIN_PLANS[v] || PLANS.map(function (p) { return p.key; });
+}
+
 export default function CheckoutScreen() {
   var params = useLocalSearchParams<{ plan?: string }>();
   var { company, hydrate, logout, trialActive, isDemo, isStaff } = useAuthStore();
-  var [selectedPlan, setSelectedPlan] = useState(params.plan || planFromCompany(company) || "negocio");
+  var allowedPlans = allowedPlanKeys(company);
+  var visiblePlans = PLANS.filter(function (p) { return allowedPlans.indexOf(p.key) >= 0; });
+  var restrictedByVertical = visiblePlans.length < PLANS.length;
+
+  // Plano inicial: nunca um plano que a vertical da empresa nao aceita.
+  var initialPlan = params.plan || planFromCompany(company) || "negocio";
+  if (allowedPlans.indexOf(initialPlan) < 0) initialPlan = allowedPlans[0];
+  var [selectedPlan, setSelectedPlan] = useState(initialPlan);
   var [cycle, setCycle] = useState<Cycle>(cycleFromCompany(company) || "monthly");
   // Se o usuario ja escolheu na tela, o sync com a empresa para de sobrescrever.
   var userPickedRef = useRef(false);
@@ -139,7 +159,7 @@ export default function CheckoutScreen() {
   var accessCodeUsed = !!(company as any)?.access_code_used;
   var hasActiveBilling = billingStatus === "active" || trialActive || accessCodeUsed || isDemo || isStaff;
 
-  var plan = PLANS.find(function (p) { return p.key === selectedPlan; }) || PLANS[1];
+  var plan = PLANS.find(function (p) { return p.key === selectedPlan; }) || PLANS[1];  // PLANS[1] = negocio
   var isAnnual = cycle === "annual";
   var annualTotal = Math.round(plan.monthly * 12 * (1 - ANNUAL_DISCOUNT) * 100) / 100;
   var annualMonthly = Math.round(annualTotal / 12 * 100) / 100;
@@ -310,9 +330,16 @@ export default function CheckoutScreen() {
     if (userPickedRef.current || params.plan) return;
     var p = planFromCompany(company);
     var c = cycleFromCompany(company);
-    if (p) setSelectedPlan(p);
+    if (p && allowedPlans.indexOf(p) >= 0) setSelectedPlan(p);
     if (c) setCycle(c);
   }, [company?.id, (company as any)?.plan, (company as any)?.billing_cycle]);
+
+  // Rede de seguranca: se o plano selecionado nao for aceito pela vertical
+  // (ex: company.plan='essencial' num cliente Studio), corrige na hora — a tela
+  // nunca deixa o cliente clicar em "assinar" num plano que o backend vai recusar.
+  useEffect(function () {
+    if (allowedPlans.indexOf(selectedPlan) < 0) setSelectedPlan(allowedPlans[0]);
+  }, [selectedPlan, (company as any)?.vertical_active]);
 
   useEffect(function () {
     var cepDigits = cardPostalCode.replace(/\D/g, "");
@@ -396,8 +423,13 @@ export default function CheckoutScreen() {
       </View>
 
       {/* Cards de Planos */}
+      {restrictedByVertical && (
+        <Text style={z.verticalNote}>
+          O Aura Studio exige o plano Negócio ou superior — o Essencial não inclui o Studio.
+        </Text>
+      )}
       <View style={z.plansRow}>
-        {PLANS.map(function (p) {
+        {visiblePlans.map(function (p) {
           var sel = selectedPlan === p.key;
           var pAnnualMo = Math.round(p.monthly * (1 - ANNUAL_DISCOUNT) * 100) / 100;
           var displayPrice = isAnnual ? pAnnualMo : p.monthly;
@@ -619,6 +651,7 @@ var z = StyleSheet.create({
   summaryTotalRow: { borderTopWidth: 1, borderTopColor: Colors.line, paddingTop: 8, marginTop: 4 },
   summaryTotalLabel: { fontSize: 13, fontWeight: "700", color: Colors.ink1 },
   summaryTotalValue: { fontSize: 15, fontWeight: "800", color: Colors.violet3 },
+  verticalNote: { fontSize: 11, color: Colors.violet3, backgroundColor: Colors.violetD, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 10, fontWeight: "600", lineHeight: 15 },
   couponCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   couponRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   couponInput: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, letterSpacing: 0.5 },
