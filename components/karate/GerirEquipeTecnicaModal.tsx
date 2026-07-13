@@ -156,6 +156,43 @@ export function GerirEquipeTecnicaModal({
     }
   };
 
+  // BUGFIX (13/07/2026) — não havia forma explícita de remover alguém da
+  // equipe técnica: a única via era desmarcar manualmente os 4 chips (pouco
+  // descobrível) e dependia da listagem trazer os papéis certos (ver fix no
+  // backend, GET /federation/:id/practitioners). Este botão cobre o caso
+  // comum (papel de verdade em algum dos 4 chips) com a mesma confirmação
+  // destrutiva de saveRow. Quem está na equipe SÓ por ser o sensei
+  // responsável do dojô (nenhum dos 4 papéis) não pode ser removido por
+  // aqui — o vínculo mora no cadastro do dojô, não no praticante — e o
+  // botão avisa isso em vez de fingir sucesso.
+  const removeFromTeam = async (row: Row) => {
+    if (row.saving) return;
+    const hasRoleFlags = ROLES.some((r) => row.initial[r.key]);
+    if (!hasRoleFlags) {
+      toast.error(`${row.name} está na equipe como sensei responsável do dojô — para remover, troque o campo "Sensei responsável" em Editar dojô.`);
+      return;
+    }
+    const ok = await confirmAsync({
+      title: "Remover da equipe técnica?",
+      message: `${row.name} perderá todos os papéis técnicos (${ROLES.filter((r) => row.initial[r.key]).map((r) => r.label).join(", ")}) neste dojô.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    const clearedFlags: Record<RoleKey, boolean> = { is_arbiter: false, is_instructor: false, is_examiner: false, is_assistant: false };
+    setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, current: clearedFlags, saving: true } : r));
+    try {
+      await karateApi.updatePractitioner(federationId, row.id, clearedFlags);
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, initial: clearedFlags, current: clearedFlags, saving: false } : r));
+      toast.success(`${row.name} removido(a) da equipe técnica`);
+      onSaved();
+    } catch (e: any) {
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, saving: false } : r));
+      toast.error(e?.message || "Erro ao remover. Tente novamente.");
+    }
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -216,6 +253,19 @@ export function GerirEquipeTecnicaModal({
                       </View>
                       {row.registration ? <Text style={styles.reg}>{row.registration}</Text> : null}
                     </View>
+                    {inTeam ? (
+                      <TouchableOpacity
+                        style={styles.removeBtn}
+                        onPress={() => removeFromTeam(row)}
+                        disabled={row.saving}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remover ${row.name} da equipe técnica`}
+                      >
+                        <Icon name="trash" size={14} color={KarateColors.danger} />
+                        <Text style={styles.removeBtnTxt}>Remover</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
 
                   <View style={styles.chipsRow}>
@@ -290,6 +340,8 @@ const styles = StyleSheet.create({
   reg:         { fontSize: 11, color: KarateColors.ink3, marginTop: 1, fontFamily: "monospace" } as TextStyle,
   teamBadge:   { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: KarateColors.okSoft, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 } as ViewStyle,
   teamBadgeTxt:{ fontSize: 10, fontWeight: "700", color: KarateColors.ok } as TextStyle,
+  removeBtn:   { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: KarateColors.dangerSoft } as ViewStyle,
+  removeBtnTxt:{ fontSize: 11, fontWeight: "700", color: KarateColors.danger } as TextStyle,
   chipsRow:    { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
   chip:        { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: "#fff" } as ViewStyle,
   chipActive:  { backgroundColor: KarateColors.sumi, borderColor: KarateColors.sumi } as ViewStyle,
