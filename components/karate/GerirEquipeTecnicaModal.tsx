@@ -71,7 +71,7 @@
 // currentTeamIds ausente da lista filtrada por dojo_id e injetando como
 // linha extra, com os mesmos 4 chips e a mesma nota do passo 5.
 // ============================================================
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, Pressable,
   useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
@@ -302,11 +302,59 @@ export function GerirEquipeTecnicaModal({
     }
   };
 
+  // ⚠️ BUGFIX (13/07/2026) — "praticante não é encontrado na equipe".
+  // A busca deste modal filtrava CLIENT-SIDE apenas as linhas já carregadas, e
+  // essas linhas vinham de listPractitioners({ dojo_id }) — só os praticantes
+  // DESTE dojô. Resultado: ninguém de fora do dojô podia ser encontrado, nunca.
+  // Isso incluía o sensei cadastrado em outro dojô (caso ARMTEAM), mas o
+  // problema é mais amplo: a equipe técnica de um dojô pode legitimamente
+  // incluir gente de outro dojô da federação.
+  // Agora a busca consulta o BACKEND na federação inteira (mesmo endpoint que o
+  // seletor de sensei usa), com debounce, e mescla os achados às linhas do dojô.
+  const [remoteRows, setRemoteRows] = useState<Row[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchReqRef = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setRemoteRows([]); setSearching(false); return; }
+    const myReq = ++searchReqRef.current;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await karateApi.listPractitioners(federationId, { q, pageSize: 20 });
+        if (myReq !== searchReqRef.current) return; // resposta obsoleta — descarta
+        setRemoteRows((res.data || []).map((p) => ({
+          id: p.id,
+          name: p.full_name,
+          registration: p.karate_registration_number,
+          initial: toRoleFlags(p),
+          current: toRoleFlags(p),
+          saving: false,
+          confirming: false,
+          snapshot: null,
+          removeErr: null,
+        })));
+      } catch {
+        if (myReq === searchReqRef.current) setRemoteRows([]);
+      } finally {
+        if (myReq === searchReqRef.current) setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, federationId]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((r) => r.name.toLowerCase().includes(q) || r.registration?.toLowerCase().includes(q));
-  }, [rows, query]);
+    const local = rows.filter((r) =>
+      r.name.toLowerCase().includes(q) || r.registration?.toLowerCase().includes(q));
+    // Mescla os achados da federação, sem duplicar quem já está na lista local
+    // (a linha local é a boa: carrega estado de edição/salvamento em curso).
+    const localIds = new Set(local.map((r) => r.id));
+    const extra = remoteRows.filter((r) => !localIds.has(r.id) && !rows.some((x) => x.id === r.id));
+    return [...local, ...extra];
+  }, [rows, query, remoteRows]);
 
   const anySaving = rows.some((r) => r.saving);
   const teamCount = currentTeamIds.length;
