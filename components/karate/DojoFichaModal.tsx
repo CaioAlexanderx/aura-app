@@ -11,7 +11,7 @@
 //  - CEP em destaque → preenche o endereço ESTRUTURADO (campos separados,
 //    igual à ficha do praticante) via ViaCEP: logradouro, bairro, cidade, UF.
 //  - FPKT-ID é gerado no backend — aqui só exibimos.
-//  - Modelo de filiação (obrigatório): Anual/Semestral/Trimestral, com os
+//  - Plano de anuidade (opcional): Anual/Semestral/Trimestral, com valores
 //    valores vigentes FPKT como referência.
 //  - Data validada de verdade: a conversão no envio usa parseBrDate (round-trip
 //    de Date → rejeita 31/02). A máscara de digitação continua dd/mm/aaaa.
@@ -24,7 +24,7 @@
 //   pode suspender/reativar daqui também, além do botão no detalhe). Em
 //   cadastro novo o controle não aparece — o dojô nasce ativo.
 //
-// D3.5.2 (copy coerente): os obrigatórios são Nome e Modelo de filiação. O
+// D3.5.2 (copy coerente): o único obrigatório é o Nome. O
 //   subtítulo reflete isso e o nudge "Completar quando quiser" lista APENAS
 //   campos realmente opcionais — nunca os obrigatórios — para não contradizer
 //   a mensagem.
@@ -55,7 +55,7 @@
 //   como anual, sem erro nenhum. OPCIONAL aqui (null = "a federação ainda
 //   não definiu", estado normal — nunca forçamos uma escolha no cadastro).
 //   Valores/vencimentos exibidos vêm de karateApi.getFeePlans (tabela de
-//   anuidades vigente) — NUNCA hardcoded, ao contrário de MODELS acima.
+//   anuidades vigente) — NUNCA hardcoded (o seletor legado exibia preços fixos).
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
@@ -77,12 +77,6 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
 }
-
-const MODELS: { key: AffiliationModel; label: string; detail: string }[] = [
-  { key: "annual", label: "Anual", detail: "R$ 500 · vence em Maio" },
-  { key: "biannual", label: "Semestral", detail: "R$ 280 · Maio e Novembro" },
-  { key: "quarterly", label: "Trimestral", detail: "R$ 150 · Fev / Mai / Ago / Nov" },
-];
 
 const EMPTY = {
   name: "", affiliation_model: "" as AffiliationModel | "", region: "",
@@ -119,6 +113,11 @@ function fmtDueMonths(months: number[] | null | undefined): string {
 function fmtMoneyBRL(v: number): string {
   return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+// Plano REAL (pt) -> modelo legado (chaves em inglês, como estão no banco).
+const AFFILIATION_FROM_PLAN: Record<string, string> = {
+  anual: "annual", semestral: "biannual", trimestral: "quarterly",
+};
+
 const ANNUITY_PLAN_LABELS: Record<AnnuityPlan, string> = {
   anual: "Anual", semestral: "Semestral", trimestral: "Trimestral",
 };
@@ -383,7 +382,7 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
   const sinceIso = parseBrDate(form.affiliation_since);
   const sinceBad = form.affiliation_since.length === 10 && sinceIso === null;
 
-  // D3.5.2: NÃO listamos os obrigatórios (Nome, Modelo de filiação) aqui — o
+  // D3.5.2: NÃO listamos o obrigatório (Nome) aqui — o
   // "Completar quando quiser" é só para opcionais, sem contradizer o subtítulo.
   const empties = useMemo(() => {
     const e: string[] = [];
@@ -396,7 +395,6 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
 
   async function handleSave() {
     if (!form.name.trim()) { setErrorMsg("Informe o nome do dojô."); return; }
-    if (!form.affiliation_model) { setErrorMsg("Escolha o modelo de filiação."); return; }
     if (cnpjBad) { setErrorMsg("O CNPJ informado é inválido. Corrija ou deixe em branco."); return; }
     if (sinceBad) { setErrorMsg("A data \"Filiado desde\" é inválida. Corrija ou deixe em branco."); return; }
     setErrorMsg(null); setSaving(true);
@@ -411,7 +409,12 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
     // ainda não reflete (será atualizado em follow-up), então usamos `as any`.
     const body: (DojoInput & { is_active?: boolean; sensei_name?: string | null; sensei_practitioner_id?: string | null }) = {
       name: form.name.trim(),
-      affiliation_model: form.affiliation_model as AffiliationModel,
+      // affiliation_model é metadado LEGADO/decorativo (nenhuma rota de cobrança
+      // o lê). O seletor dele foi removido da UI: aparecia duplicado ao lado do
+      // "Plano de anuidade" REAL, com as mesmas 3 opções e preços HARDCODED.
+      // Agora ele apenas ESPELHA o plano escolhido, para não quebrar quem ainda
+      // o lê. Sem plano definido, preserva o valor que já estava no dojô.
+      affiliation_model: (AFFILIATION_FROM_PLAN[form.karate_annuity_plan ?? ""] ?? form.affiliation_model ?? "annual") as AffiliationModel,
       cnpj: onlyD(form.cnpj) || null,
       sensei_name: form.sensei_name.trim() || null,
       sensei_practitioner_id: form.sensei_practitioner_id || null,
@@ -534,23 +537,6 @@ export function DojoFichaModal({ federationId, visible, dojoId, onClose, onSaved
               <SectionTitle>Identidade</SectionTitle>
               <Field label="Nome do dojô" req value={form.name} onChangeText={(v) => set("name", v)} placeholder="Ex.: Associação Shobu-Kan Karatê-Dô"
                 inputRef={nameRef} returnKeyType="next" onSubmitEditing={() => cnpjRef.current?.focus()} />
-
-              {/* Modelo de filiação (obrigatório) */}
-              <Text style={styles.label}>Modelo de filiação <Text style={{ color: P.red }}>*</Text></Text>
-              <View style={styles.models}>
-                {MODELS.map((m) => {
-                  const on = form.affiliation_model === m.key;
-                  return (
-                    <TouchableOpacity key={m.key} style={[styles.model, on && styles.modelOn]} onPress={() => set("affiliation_model", m.key)} activeOpacity={0.8} accessibilityLabel={`Modelo ${m.label}`}>
-                      <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modelLabel, on && { color: P.ink }]}>{m.label}</Text>
-                        <Text style={styles.modelDetail}>{m.detail}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
 
               {/* Plano de anuidade (G2 — migration 226, OPCIONAL) — plano
                   REAL de cobrança do dojô. Valores/vencimentos vêm da tabela
