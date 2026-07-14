@@ -81,6 +81,8 @@ import {
   NewRequestForm,
   StatusList,
   PractitionerRequestBody,
+  PractitionerRequestRow,
+  RequestPrefill,
 } from "@/components/karate/PractitionerRequestForm";
 
 const IS_WEB = Platform.OS === "web";
@@ -713,7 +715,13 @@ function SelfServiceShareCard({ url, onCopy, onShareWhatsApp }: { url: string; o
   );
 }
 
-// ── Planilha — baixar (completo / só quem falta) e subir de volta. ─────
+// ── Planilha — baixar (completo / só quem falta) e subir de volta. Item
+// 1 (decisão do Caio): junto com o link do aluno, é um dos DOIS
+// redutores de trabalho reais do portal — por isso mora no topo, aberta
+// por padrão (não mais um accordion fechado escondido no rodapé). Bom
+// caminho pra dojôs grandes: baixa só quem falta, preenche numa
+// planilha de verdade e sobe de volta — sem digitar campo a campo na
+// tela. ──────────────────────────────────────────────────────────────
 function SpreadsheetPanel({
   token, onImported, hasSelfServiceLink,
 }: {
@@ -726,7 +734,7 @@ function SpreadsheetPanel({
   hasSelfServiceLink: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   function openUrl(url: string) {
     if (IS_WEB && typeof window !== "undefined") window.open(url, "_blank");
@@ -759,9 +767,9 @@ function SpreadsheetPanel({
 
   return (
     <View style={st.sheetCard}>
-      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel="Planilha" style={st.sheetHead}>
+      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel={open ? "Recolher planilha" : "Planilha"} style={st.sheetHead}>
         <Icon name="layers" size={16} color={P.primary} />
-        <Text style={st.sheetTitle}>Prefere planilha?</Text>
+        <Text style={st.sheetTitle}>Preencher por planilha</Text>
         <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={P.ink3} />
       </Pressable>
       {open && (
@@ -843,6 +851,17 @@ function RequestPractitionerSection({ token }: { token: string }) {
   const [expanded, setExpanded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // ── "Corrigir e reenviar" (item 2) — StatusList devolve a linha
+  // rejeitada aqui (onCorrect); repovoamos o formulário (prefill +
+  // prefillKey, ver PractitionerRequestForm.tsx), garantimos que ele
+  // esteja expandido e rolamos até ele. `anchorRef` aponta pro card que
+  // envolve o formulário — no web, o próprio nó DOM sabe se rolar até a
+  // view (scrollIntoView); é auto-scroll, nunca deixa o sensei procurando
+  // onde a correção foi parar (mesmo princípio dos tours/spotlight). ────
+  const [prefill, setPrefill] = useState<RequestPrefill | undefined>(undefined);
+  const [prefillKey, setPrefillKey] = useState(0);
+  const anchorRef = useRef<View>(null);
+
   const handleSubmit = useCallback(
     (body: PractitionerRequestBody) => karatePublicApi.addPublicPractitioner(token, body),
     [token]
@@ -856,10 +875,27 @@ function RequestPractitionerSection({ token }: { token: string }) {
     (status?: PractitionerRequestStatus) => karatePublicApi.listPractitionerRequests(token, status),
     [token]
   );
+  const handleCorrect = useCallback((r: PractitionerRequestRow) => {
+    setPrefill({
+      full_name: r.full_name,
+      birth_date: r.birth_date,
+      claimed_belt: r.claimed_belt,
+      fpkt_number_claimed: r.fpkt_number_claimed,
+      reject_reason: r.reject_reason,
+    });
+    setPrefillKey((k) => k + 1);
+    setExpanded(true);
+    if (IS_WEB) {
+      requestAnimationFrame(() => {
+        // RN Web repassa o ref pro nó DOM real — scrollIntoView existe nele.
+        (anchorRef.current as any)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, []);
 
   return (
     <View style={{ marginBottom: 14, gap: 12 }}>
-      <View style={st.requestCard}>
+      <View ref={anchorRef} style={st.requestCard}>
         <Pressable
           onPress={() => setExpanded((e) => !e)}
           accessibilityRole="button"
@@ -882,6 +918,8 @@ function RequestPractitionerSection({ token }: { token: string }) {
               onSubmit={handleSubmit}
               onLookupFpkt={handleLookupFpkt}
               onCreated={handleCreated}
+              prefill={prefill}
+              prefillKey={prefillKey}
               confirmTitle={(alreadyPending) => (alreadyPending ? "Já havia uma solicitação para essa pessoa" : "Enviado à federação")}
               confirmText={(alreadyPending) =>
                 alreadyPending
@@ -893,7 +931,7 @@ function RequestPractitionerSection({ token }: { token: string }) {
         )}
       </View>
 
-      <StatusList fetchRequests={fetchRequests} refreshKey={refreshKey} title="Status das solicitações deste dojô" />
+      <StatusList fetchRequests={fetchRequests} refreshKey={refreshKey} title="Status das solicitações deste dojô" onCorrect={handleCorrect} />
     </View>
   );
 }
@@ -945,6 +983,7 @@ function CompletenessGrid({
             onPress={() => onOpenPractitioner(p.id)}
             accessibilityRole="button"
             accessibilityLabel={`Abrir ficha de ${p.name}`}
+            hitSlop={{ top: 4, bottom: 4 }}
             style={st.gridRow}
           >
             <Text style={st.gridRowName} numberOfLines={1}>{p.name}</Text>
@@ -1303,12 +1342,6 @@ export default function RosterUpdatePortalScreen() {
     }
   }, [practitioners, tokenStr, validatedBy]);
 
-  function handleDownloadCsv() {
-    const url = karatePublicApi.getRosterExportUrl(tokenStr);
-    if (IS_WEB && typeof window !== "undefined") window.open(url, "_blank");
-    else Linking.openURL(url).catch(() => {});
-  }
-
   const reduced = useMemo(prefersReducedMotion, []);
   const pageOpacity = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   const pageY = useRef(new Animated.Value(reduced ? 0 : 14)).current;
@@ -1395,7 +1428,7 @@ export default function RosterUpdatePortalScreen() {
             <Text style={st.eyebrow}>Portal do sensei</Text>
             <Text style={st.dojoName}>{data?.dojo_nome || "Seu dojô"}</Text>
             <View style={st.headerRule} />
-            <Text style={st.subtitle}>Só o que falta pra fechar o quadro — o resto pode esperar.</Text>
+            <Text style={st.subtitle}>A federação precisa do quadro em dia — mas você não precisa digitar tudo à mão.</Text>
           </View>
 
           <View style={st.countsRow}>
@@ -1432,13 +1465,34 @@ export default function RosterUpdatePortalScreen() {
             </View>
           )}
 
-          {!!selfServiceUrl && (
-            <SelfServiceShareCard
-              url={selfServiceUrl}
-              onCopy={copySelfServiceLink}
-              onShareWhatsApp={shareSelfServiceLinkWhatsApp}
+          <View style={st.quickExitsWrap}>
+            <Text style={st.quickExitsEyebrow}>Comece por aqui</Text>
+            <Text style={st.quickExitsSub}>
+              Resolve sem digitar aluno por aluno — a fila/lista/grade logo abaixo é só pro que sobrar.
+            </Text>
+            {!!selfServiceUrl && (
+              <SelfServiceShareCard
+                url={selfServiceUrl}
+                onCopy={copySelfServiceLink}
+                onShareWhatsApp={shareSelfServiceLinkWhatsApp}
+              />
+            )}
+            <SpreadsheetPanel
+              token={tokenStr}
+              onImported={(result) => { setImportResult(result); refetch(); }}
+              hasSelfServiceLink={!!selfServiceUrl}
             />
-          )}
+            {importResult && (
+              <View style={st.importBanner}>
+                <Icon name="checkmark-circle" size={15} color={P.ok} />
+                <Text style={st.importBannerText}>
+                  Planilha importada: {importResult.atualizados} atualizado{importResult.atualizados !== 1 ? "s" : ""}
+                  {importResult.ignorados > 0 ? `, ${importResult.ignorados} sem alteração` : ""}
+                  {importResult.erros.length > 0 ? `, ${importResult.erros.length} linha${importResult.erros.length !== 1 ? "s" : ""} com erro (sem problema, o resto entrou)` : ""}.
+                </Text>
+              </View>
+            )}
+          </View>
 
           <View style={st.modeToggle}>
             <Pressable onPress={() => setMode("queue")} style={[st.modeBtn, mode === "queue" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo fila">
@@ -1509,22 +1563,6 @@ export default function RosterUpdatePortalScreen() {
 
           <RequestPractitionerSection token={tokenStr} />
 
-          <SpreadsheetPanel
-            token={tokenStr}
-            onImported={(result) => { setImportResult(result); refetch(); }}
-            hasSelfServiceLink={!!selfServiceUrl}
-          />
-          {importResult && (
-            <View style={st.importBanner}>
-              <Icon name="checkmark-circle" size={15} color={P.ok} />
-              <Text style={st.importBannerText}>
-                Planilha importada: {importResult.atualizados} atualizado{importResult.atualizados !== 1 ? "s" : ""}
-                {importResult.ignorados > 0 ? `, ${importResult.ignorados} sem alteração` : ""}
-                {importResult.erros.length > 0 ? `, ${importResult.erros.length} linha${importResult.erros.length !== 1 ? "s" : ""} com erro (sem problema, o resto entrou)` : ""}.
-              </Text>
-            </View>
-          )}
-
           <View style={st.footerCard}>
             {confirmingFinish ? (
               <InlineConfirm
@@ -1548,10 +1586,6 @@ export default function RosterUpdatePortalScreen() {
                 {!!finishError && <Text style={st.submitError}>{finishError}</Text>}
                 <Pressable onPress={() => setConfirmingFinish(true)} accessibilityRole="button" accessibilityLabel="Concluir atualização" style={[st.confirmBtn, { marginTop: 12 }]}>
                   <Text style={st.confirmBtnText}>Concluir atualização</Text>
-                </Pressable>
-                <Pressable onPress={handleDownloadCsv} accessibilityRole="button" accessibilityLabel="Baixar quadro completo CSV" style={st.csvBtn}>
-                  <Icon name="download" size={16} color={P.primary} />
-                  <Text style={st.csvBtnText}>Baixar quadro completo (CSV)</Text>
                 </Pressable>
               </>
             )}
@@ -1612,6 +1646,16 @@ const st = StyleSheet.create({
 
   alertBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.alertSoft, borderWidth: 1, borderColor: "rgba(168,84,58,0.25)", borderRadius: KarateRadius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
   alertBannerText: { fontSize: 12, color: P.ink2, flex: 1, lineHeight: 17 },
+
+  // "Comece por aqui" (item 1, decisão do Caio 14/07/2026) — envolve os
+  // DOIS redutores de trabalho reais (link do aluno + planilha) num único
+  // bloco logo acima do modo fila/lista/grade. Antes eles viviam
+  // separados (link no meio da tela, planilha escondida no rodapé); juntos
+  // e em destaque, o sensei vê as duas saídas rápidas ANTES de encarar a
+  // digitação manual.
+  quickExitsWrap: { marginBottom: 6 },
+  quickExitsEyebrow: { fontSize: 11, fontWeight: "800", color: P.primary, textTransform: "uppercase", letterSpacing: 1.1 },
+  quickExitsSub: { fontSize: 12, color: P.ink3, lineHeight: 17, marginTop: 4, marginBottom: 12 },
 
   // Bloco de destaque — link de auto-atendimento (item 3, "transferir o
   // trabalho"). primarySoft/primaryLine (vermelhão de carimbo, acento raro
@@ -1688,7 +1732,7 @@ const st = StyleSheet.create({
   inlineConfirmBtn: { backgroundColor: P.ink, borderRadius: KarateRadius.sm, paddingVertical: 10, paddingHorizontal: 16, minWidth: 90, alignItems: "center" },
   inlineConfirmBtnText: { fontSize: 13, fontWeight: "700", color: "#fdf8f2" },
 
-  sheetCard: { backgroundColor: P.glass, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: P.border, marginBottom: 14, overflow: "hidden" },
+  sheetCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border2, marginBottom: 16, overflow: "hidden" },
   sheetHead: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14 },
   sheetTitle: { flex: 1, fontSize: 13.5, fontWeight: "700", color: P.ink },
   sheetBody: { padding: 14, paddingTop: 0 },
@@ -1711,9 +1755,6 @@ const st = StyleSheet.create({
   confirmBtn: { borderRadius: KarateRadius.md, alignItems: "center", justifyContent: "center", flexDirection: "row", backgroundColor: P.ink, paddingVertical: 14, paddingHorizontal: 28 },
   confirmBtnText: { fontWeight: "700", letterSpacing: 0.2, color: "#fdf8f2", fontSize: 17 },
 
-  csvBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, marginTop: 10 },
-  csvBtnText: { fontSize: 13, fontWeight: "700", color: P.primary },
-
   footer: { marginTop: 32, paddingTop: 20, borderTopWidth: 1, borderTopColor: P.border, alignItems: "center", gap: 4 },
   footerText: { fontSize: 11, color: P.ink3, fontWeight: "600" },
   footerTextSmall: { fontSize: 10, color: P.ink4, textAlign: "center", maxWidth: 320 },
@@ -1726,22 +1767,22 @@ const st = StyleSheet.create({
 
   // ── Grade de completude (H2 — item 2, "a peça central") ─────────────
   gridCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 12, marginBottom: 14 },
-  gridCaption: { fontSize: 11, color: P.ink3, lineHeight: 15, marginBottom: 10 },
+  gridCaption: { fontSize: 11.5, color: P.ink3, lineHeight: 16, marginBottom: 10 },
   gridHeaderRow: { flexDirection: "row", alignItems: "center", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: P.border, marginBottom: 2 },
   gridHeaderName: { flex: 1, fontSize: 10, fontWeight: "800", color: P.ink3, textTransform: "uppercase", letterSpacing: 0.3 },
-  gridHeaderCol: { width: 30, fontSize: 8.5, fontWeight: "800", color: P.ink3, textAlign: "center", textTransform: "uppercase" },
-  gridRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.04)" },
+  gridHeaderCol: { width: 30, fontSize: 9.5, fontWeight: "800", color: P.ink2, textAlign: "center", textTransform: "uppercase" },
+  gridRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.05)" },
   gridRowName: { flex: 1, fontSize: 12, fontWeight: "600", color: P.ink, paddingRight: 6 },
-  gridCell: { width: 30, alignItems: "center", justifyContent: "center" },
-  dotEmpty: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.4, borderColor: P.ink4, backgroundColor: "transparent" },
-  dotFilled: { width: 9, height: 9, borderRadius: 5, backgroundColor: P.ok },
-  dotRecent: { width: 11, height: 11, borderRadius: 6, backgroundColor: P.primary, borderWidth: 2, borderColor: P.primaryLine },
-  dotNa: { width: 5, height: 1.4, borderRadius: 1, backgroundColor: P.border },
+  gridCell: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  dotEmpty: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.6, borderColor: P.ink3, backgroundColor: "transparent" },
+  dotFilled: { width: 10, height: 10, borderRadius: 5, backgroundColor: P.ok },
+  dotRecent: { width: 12, height: 12, borderRadius: 6, backgroundColor: P.primary, borderWidth: 2, borderColor: P.primaryLine },
+  dotNa: { width: 6, height: 1.6, borderRadius: 1, backgroundColor: P.ink4 },
   gridLoadingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 10 },
   gridLoadingText: { fontSize: 11, color: P.ink3 },
-  gridLegend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: P.border },
-  gridLegendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  gridLegendText: { fontSize: 10.5, color: P.ink3 },
+  gridLegend: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: P.border },
+  gridLegendItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 3 },
+  gridLegendText: { fontSize: 11, color: P.ink2 },
 
   // ── Modal da ficha aberta pela grade (único <Modal> da tela) ─────────
   fichaBackdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", justifyContent: "flex-end" },
