@@ -33,7 +33,7 @@ import { toast } from "@/components";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { Skeleton } from "@/components/karate/Skeleton";
-import { ShojiBackground, Card, ShojiButton, Avatar, Body, KV } from "@/components/karate/shoji";
+import { ShojiBackground, Card, ShojiButton, Avatar, Body, KV, Mono } from "@/components/karate/shoji";
 import {
   karateApi, PractitionerRequestAdminRow, PossibleMatch, EditPractitionerRequestBody,
 } from "@/services/karateApi";
@@ -292,15 +292,27 @@ export default function SolicitacaoDetalhe() {
         <View style={[st.grid, wide && st.gridWide]}>
           <Card style={[st.gridCol, { marginTop: 16 }]}>
             <Text style={st.cardTitle}>Dados do sensei</Text>
-            <Body muted style={{ fontSize: 11.5, marginBottom: 6 }}>Ficha enviada pelo dojô — a federação confere, não redigita.</Body>
+            <Body muted style={{ fontSize: 11.5, marginBottom: 10 }}>Ficha enviada pelo dojô — a federação confere, não redigita.</Body>
+            <View style={st.identityStrip}>
+              <View style={st.identityChip}>
+                <Icon name="calendar-outline" size={12} color={C.ink3} />
+                <Text style={st.identityChipText}>{fmtDate(detail.birth_date)}</Text>
+              </View>
+              <View style={[st.identityChip, st.identityChipClaimed]}>
+                <Icon name="ribbon-outline" size={12} color={P.red} />
+                <Text style={st.identityChipClaimedText}>{detail.claimed_belt || "Faixa não alegada"}</Text>
+                <Text style={st.identityChipTag}>ALEGADA</Text>
+              </View>
+              <View style={st.identityChip}>
+                <Icon name="barcode" size={12} color={C.ink3} />
+                <Mono style={st.identityChipMono}>{detail.fpkt_number_claimed || "Sem número alegado"}</Mono>
+              </View>
+            </View>
             <KV k="Nome completo" v={detail.full_name} />
-            <KV k="Nascimento" v={fmtDate(detail.birth_date)} />
             <KV k="CPF" v={detail.cpf} />
             <KV k="RG" v={detail.rg} />
             <KV k="Telefone" v={detail.phone} />
             <KV k="E-mail" v={detail.email} />
-            <KV k="Faixa alegada" v={detail.claimed_belt} />
-            <KV k="Número FPKT alegado" v={detail.fpkt_number_claimed || "Não tem"} />
             <KV k="Endereço" v={enderecoLine} />
             <KV k="Responsável" v={guardianLine} />
             <KV k="Canal" v={detail.requested_by_label || detail.requested_by_channel} />
@@ -308,7 +320,10 @@ export default function SolicitacaoDetalhe() {
 
           <Card style={[st.gridCol, { marginTop: 16 }]}>
             <Text style={st.cardTitle}>Possíveis correspondências</Text>
-            <Body muted style={{ fontSize: 11.5, marginBottom: 10 }}>Sugestão de correspondência — a federação decide, nunca é automático.</Body>
+            <Body muted style={{ fontSize: 11.5, marginBottom: 10 }}>
+              Sugestão de correspondência — a federação decide, nunca é automático. Compare nome e nascimento com a
+              ficha ao lado antes de escolher.
+            </Body>
             {(!detail.possible_matches || detail.possible_matches.length === 0) ? (
               <Body muted style={{ paddingVertical: 8 }}>Nenhuma correspondência encontrada — provável criação nova.</Body>
             ) : (
@@ -463,6 +478,13 @@ const st = StyleSheet.create({
   statusPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 5, paddingHorizontal: 11, borderRadius: R.pill } as ViewStyle,
   statusPillTxt: { fontFamily: F.body, fontSize: 11.5, fontWeight: "700" } as TextStyle,
   cardTitle: { fontFamily: F.heading, fontSize: 16, fontWeight: "400", color: C.ink } as TextStyle,
+  identityStrip: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
+  identityChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: P.glass2, borderWidth: 1, borderColor: C.line2, borderRadius: R.pill, paddingVertical: 6, paddingHorizontal: 11 } as ViewStyle,
+  identityChipText: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
+  identityChipClaimed: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  identityChipClaimedText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.red } as TextStyle,
+  identityChipTag: { fontFamily: F.body, fontSize: 8.5, fontWeight: "800", color: P.red, opacity: 0.75, letterSpacing: 0.5 } as TextStyle,
+  identityChipMono: { fontSize: 12, color: C.ink } as TextStyle,
   grid: { flexDirection: "column", gap: 0 } as ViewStyle,
   gridWide: { flexDirection: "row", gap: 16 } as ViewStyle,
   gridCol: { flex: 1 } as ViewStyle,

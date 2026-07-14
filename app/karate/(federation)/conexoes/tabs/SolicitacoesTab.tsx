@@ -210,10 +210,15 @@ export function SolicitacoesTab() {
                       <Avatar name={r.full_name} size={36} />
                       <View style={{ flex: 1, minWidth: 160 }}>
                         <Text style={st.name} numberOfLines={1}>{r.full_name}</Text>
-                        <Body muted style={{ fontSize: 11.5 }} numberOfLines={1}>
-                          {r.dojo_name || "Dojô sem nome"}
-                          {r.status === "pendente" ? ` · ${diasLabel(ageDays)}` : ""}
-                        </Body>
+                        <View style={st.nameMetaRow}>
+                          <Body muted style={{ fontSize: 11.5 }} numberOfLines={1}>{r.dojo_name || "Dojô sem nome"}</Body>
+                          {r.status === "pendente" && (
+                            <View style={st.waitChip}>
+                              <Icon name="time-outline" size={10} color={C.ink2} />
+                              <Mono style={st.waitChipText}>{diasLabel(ageDays)}</Mono>
+                            </View>
+                          )}
+                        </View>
                       </View>
                       <StatusPill status={r.status} />
                       <Icon name="chevron-forward" size={16} color={C.ink4} />
@@ -221,7 +226,7 @@ export function SolicitacoesTab() {
                     <View style={st.rowMeta}>
                       <View style={st.metaItem}>
                         <Icon name="ribbon" size={12} color={C.ink3} />
-                        <Text style={st.metaTxt}>{r.claimed_belt || "Faixa não informada"}</Text>
+                        <Text style={st.metaTxt}>{r.claimed_belt ? `Faixa alegada: ${r.claimed_belt}` : "Faixa não alegada"}</Text>
                       </View>
                       <View style={st.metaItem}>
                         <Icon name="barcode" size={12} color={C.ink3} />
@@ -258,6 +263,9 @@ const st = StyleSheet.create({
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5 } as ViewStyle,
   metaTxt: { fontFamily: F.body, fontSize: 12, color: C.ink3 } as TextStyle,
   name: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
+  nameMetaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 2 } as ViewStyle,
+  waitChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: C.bg2, borderRadius: R.pill, paddingVertical: 2, paddingHorizontal: 7 } as ViewStyle,
+  waitChipText: { fontSize: 10.5, color: C.ink2, fontWeight: "600" } as TextStyle,
   statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 9, borderRadius: R.pill, alignSelf: "flex-start" } as ViewStyle,
   statusPillTxt: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700" } as TextStyle,
 });

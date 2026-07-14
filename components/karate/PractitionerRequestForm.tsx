@@ -31,8 +31,8 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors as P, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey } from "@/constants/karateTheme";
-import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
+import { KarateColors as P, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey, resolveBeltKey } from "@/constants/karateTheme";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
 
 const NON_LEGACY_BELT_KEYS: BeltKey[] = (Object.keys(KarateBelts) as BeltKey[]).filter(
@@ -120,6 +120,22 @@ export interface PractitionerRequestCreateResult {
   fpkt_lookup?: FpktLookupHint | null;
 }
 
+// ── "Corrigir e reenviar" (item 2 — rejeição corrigível) ─────────────
+// Subconjunto dos campos de uma PractitionerRequestRow REJEITADA que dá
+// pra devolver pro formulário sem o sensei redigitar do zero: nome,
+// nascimento, faixa alegada e número FPKT alegado — os únicos campos que
+// a LISTAGEM de solicitações já devolve (a ficha completa, com
+// telefone/CPF/endereço/responsável, não vem na listagem — o sensei
+// preenche esses de novo, o resto já vem pronto).
+export interface RequestPrefill {
+  full_name?: string | null;
+  birth_date?: string | null; // ISO (yyyy-mm-dd)
+  claimed_belt?: string | null; // label (ex.: "Roxa")
+  fpkt_number_claimed?: string | null;
+  /** Motivo da rejeição original — só pra reforçar o aviso no topo do formulário durante a correção. */
+  reject_reason?: string | null;
+}
+
 export type PractitionerRequestStatus = "pendente" | "aprovada" | "rejeitada";
 
 export interface PractitionerRequestRow {
@@ -138,10 +154,14 @@ export interface PractitionerRequestRow {
   resolved_at: string | null;
 }
 
+// "rejeitada" aqui é reenquadrada como "Precisa de ajuste" (decisão do
+// Caio, item 2): construtiva, não punitiva — nunca vermelho de alarme.
+// O sensei vê o motivo e corrige ali mesmo (ver RequestStatusRow +
+// onCorrect); "Rejeitada" tecnicamente é só o rótulo do FILTRO acima.
 const STATUS_META: Record<PractitionerRequestStatus, { label: string; color: string; soft: string; icon: string }> = {
   pendente: { label: "Pendente", color: P.warn, soft: P.warnSoft, icon: "time" },
   aprovada: { label: "Aprovada", color: P.ok, soft: P.okSoft, icon: "checkmark-circle" },
-  rejeitada: { label: "Rejeitada", color: P.danger, soft: P.dangerSoft, icon: "close-circle" },
+  rejeitada: { label: "Precisa de ajuste", color: P.warn, soft: P.warnSoft, icon: "edit" },
 };
 
 // ── Formulário de nova solicitação ──────────────────────────
@@ -184,9 +204,18 @@ export interface NewRequestFormProps {
   /** Texto do estágio de confirmação — default cobre o caso genérico; cada tela ajusta a redação. */
   confirmTitle?: (alreadyPending: boolean) => string;
   confirmText?: (alreadyPending: boolean) => string;
+  /**
+   * "Corrigir e reenviar" (item 2): quando `prefillKey` MUDA (o caller
+   * incrementa um contador), o formulário é limpo e repovoado com
+   * `prefill` — nome/nascimento/faixa/FPKT de uma solicitação rejeitada,
+   * pro sensei não redigitar do zero. Sem `prefillKey` novo, não faz nada
+   * (evita reaplicar o mesmo prefill a cada render).
+   */
+  prefill?: RequestPrefill;
+  prefillKey?: number;
 }
 
-export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle, confirmText }: NewRequestFormProps) {
+export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle, confirmText, prefill, prefillKey }: NewRequestFormProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -201,6 +230,39 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<{ alreadyPending: boolean; lookup: FpktLookupHint | null } | null>(null);
+  // Local (não deriva de prefillKey direto): liga no efeito abaixo,
+  // desliga em resetAll — sem isso o aviso "Corrigindo..." ficaria preso
+  // depois de "Fazer outra solicitação".
+  const [correcting, setCorrecting] = useState(false);
+
+  // ── Aplica o prefill de "Corrigir e reenviar" (item 2) — só quando
+  // `prefillKey` MUDA (nunca a cada render; sem isso um novo digitar do
+  // sensei seria apagado a cada re-render do pai). Repovoa nome,
+  // nascimento (ISO → BR), faixa (label → BeltKey via resolveBeltKey) e
+  // número FPKT alegado; o resto (contato, endereço, responsável) fica
+  // em branco — não veio na listagem, o sensei preenche de novo. ───────
+  useEffect(() => {
+    if (!prefillKey) return;
+    setForm({
+      ...EMPTY_FORM,
+      full_name: prefill?.full_name || "",
+      birth_date_br: formatIsoToBr(prefill?.birth_date) || "",
+      belt_key: prefill?.claimed_belt ? resolveBeltKey(prefill.claimed_belt) : null,
+    });
+    if (prefill?.fpkt_number_claimed) {
+      setFpktMode("tem");
+      setFpktNumber(prefill.fpkt_number_claimed);
+    } else {
+      setFpktMode("unset");
+      setFpktNumber("");
+    }
+    setFpktLookup(null);
+    setTouched(false);
+    setSubmitError(null);
+    setResult(null);
+    setCorrecting(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillKey]);
 
   const birthIso = parseBrDate(form.birth_date_br);
   const birthComplete = form.birth_date_br.length === 10;
@@ -249,6 +311,7 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
     setTouched(false);
     setSubmitError(null);
     setResult(null);
+    setCorrecting(false);
   }
 
   async function handleSubmit() {
@@ -327,6 +390,20 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
 
   return (
     <View style={fs.card}>
+      {correcting && (
+        <View style={fs.correctingBanner}>
+          <Icon name="edit" size={14} color={P.warn} />
+          <View style={{ flex: 1 }}>
+            <Text style={fs.correctingBannerTitle}>Corrigindo a solicitação de {prefill?.full_name || "praticante"}</Text>
+            {!!prefill?.reject_reason && (
+              <Text style={fs.correctingBannerText}>Motivo da federação: {prefill.reject_reason}</Text>
+            )}
+            <Text style={fs.correctingBannerText}>
+              Nome, nascimento, faixa e número FPKT já vieram preenchidos — confira, ajuste o que pedirem e complete o resto.
+            </Text>
+          </View>
+        </View>
+      )}
       <Text style={fs.cardTitle}>Solicitar praticante novo</Text>
       <Text style={fs.cardSubtitle}>
         Preencha a ficha completa. A federação analisa e registra o número FPKT — o sensei nunca cadastra o
@@ -609,7 +686,7 @@ const FILTERS: { key: PractitionerRequestStatus | "todas"; label: string }[] = [
   { key: "todas", label: "Todas" },
   { key: "pendente", label: "Pendentes" },
   { key: "aprovada", label: "Aprovadas" },
-  { key: "rejeitada", label: "Rejeitadas" },
+  { key: "rejeitada", label: "Precisam de ajuste" },
 ];
 
 function fmtDate(iso: string | null): string {
@@ -619,31 +696,54 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
-function RequestStatusRow({ r }: { r: PractitionerRequestRow }) {
+function RequestStatusRow({ r, onCorrect }: { r: PractitionerRequestRow; onCorrect?: (r: PractitionerRequestRow) => void }) {
   const meta = STATUS_META[r.status];
+  const isRejected = r.status === "rejeitada";
   return (
-    <View style={rs.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={rs.name}>{r.full_name}</Text>
-        <Text style={rs.meta}>
-          {r.claimed_belt ? `Faixa alegada: ${r.claimed_belt} · ` : ""}
-          Enviada em {fmtDate(r.created_at)}
-        </Text>
-        {r.status === "aprovada" && (
-          <Text style={rs.resolvedOk}>
-            Registrado{r.resolved_fpkt_number ? ` como Nº ${r.resolved_fpkt_number}` : ""}
-            {r.resolved_practitioner_name && r.resolved_practitioner_name !== r.full_name ? ` — ${r.resolved_practitioner_name}` : ""}
+    <View style={[rs.row, isRejected && rs.rowCorrection]}>
+      <View style={rs.rowTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={rs.name}>{r.full_name}</Text>
+          <Text style={rs.meta}>
+            {r.claimed_belt ? `Faixa alegada: ${r.claimed_belt} · ` : ""}
+            Enviada em {fmtDate(r.created_at)}
           </Text>
-        )}
-        {r.status === "rejeitada" && (
-          <Text style={rs.resolvedBad}>{r.reject_reason ? `Motivo: ${r.reject_reason}` : "Sem motivo informado."}</Text>
-        )}
-        {r.status === "pendente" && <Text style={rs.pendingNote}>Aguardando análise da federação.</Text>}
+          {r.status === "aprovada" && (
+            <Text style={rs.resolvedOk}>
+              Registrado{r.resolved_fpkt_number ? ` como Nº ${r.resolved_fpkt_number}` : ""}
+              {r.resolved_practitioner_name && r.resolved_practitioner_name !== r.full_name ? ` — ${r.resolved_practitioner_name}` : ""}
+            </Text>
+          )}
+          {r.status === "pendente" && <Text style={rs.pendingNote}>Aguardando análise da federação.</Text>}
+        </View>
+        <View style={[rs.badge, { backgroundColor: meta.soft }]}>
+          <Icon name={meta.icon as any} size={12} color={meta.color} />
+          <Text style={[rs.badgeText, { color: meta.color }]}>{meta.label}</Text>
+        </View>
       </View>
-      <View style={[rs.badge, { backgroundColor: meta.soft }]}>
-        <Icon name={meta.icon as any} size={12} color={meta.color} />
-        <Text style={[rs.badgeText, { color: meta.color }]}>{meta.label}</Text>
-      </View>
+      {/* Item 2 — "rejeição corrigível no link": nunca um beco. O motivo
+          fica visível e "Corrigir e reenviar" abre o formulário ACIMA já
+          preenchido (ver onCorrect → RequestPractitionerSection, que
+          expande + rola até o form). Nunca vermelho de alarme — mesmo
+          tom construtivo do badge acima. */}
+      {isRejected && (
+        <View style={rs.correctionBox}>
+          <Text style={rs.correctionReason}>
+            {r.reject_reason ? r.reject_reason : "A federação não registrou um motivo — entre em contato se tiver dúvida."}
+          </Text>
+          {onCorrect && (
+            <Pressable
+              onPress={() => onCorrect(r)}
+              accessibilityRole="button"
+              accessibilityLabel={`Corrigir e reenviar solicitação de ${r.full_name}`}
+              style={rs.correctionBtn}
+            >
+              <Icon name="send" size={13} color={P.ink} />
+              <Text style={rs.correctionBtnText}>Corrigir e reenviar</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -654,9 +754,11 @@ export interface StatusListProps {
   /** Incremente pra forçar um reload (ex.: depois de criar uma solicitação nova). */
   refreshKey: number;
   title?: string;
+  /** "Corrigir e reenviar" (item 2) — chamado quando o sensei toca no botão de uma linha REJEITADA. O caller decide o que fazer (abrir/prefillar o formulário acima). Sem esta prop, a linha rejeitada mostra o motivo mas sem o botão de correção. */
+  onCorrect?: (r: PractitionerRequestRow) => void;
 }
 
-export function StatusList({ fetchRequests, refreshKey, title }: StatusListProps) {
+export function StatusList({ fetchRequests, refreshKey, title, onCorrect }: StatusListProps) {
   const [filter, setFilter] = useState<PractitionerRequestStatus | "todas">("todas");
   const [rows, setRows] = useState<PractitionerRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -708,7 +810,7 @@ export function StatusList({ fetchRequests, refreshKey, title }: StatusListProps
       ) : rows.length === 0 ? (
         <View style={rs.emptyBox}><Text style={rs.emptyText}>Nenhuma solicitação por aqui ainda.</Text></View>
       ) : (
-        rows.map((r) => <RequestStatusRow key={r.id} r={r} />)
+        rows.map((r) => <RequestStatusRow key={r.id} r={r} onCorrect={onCorrect} />)
       )}
     </View>
   );
@@ -716,6 +818,9 @@ export function StatusList({ fetchRequests, refreshKey, title }: StatusListProps
 
 const fs = StyleSheet.create({
   card: { backgroundColor: P.glass, borderRadius: R.lg, borderWidth: 1, borderColor: P.border, padding: 16 } as ViewStyle,
+  correctingBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.warnSoft, borderWidth: 1, borderColor: "rgba(122,87,36,0.28)", borderRadius: R.md, padding: 11, marginBottom: 14 } as ViewStyle,
+  correctingBannerTitle: { fontSize: 12.5, fontWeight: "700", color: P.ink } as TextStyle,
+  correctingBannerText: { fontSize: 11.5, color: P.ink2, lineHeight: 16, marginTop: 3 } as TextStyle,
   cardTitle: { fontFamily: F.heading, fontSize: 16, color: P.ink } as TextStyle,
   cardSubtitle: { fontSize: 12, color: P.ink3, lineHeight: 17, marginTop: 4, marginBottom: 14 } as TextStyle,
   sectionLabel: { fontSize: 11, fontWeight: "800", color: P.ink2, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 14, marginBottom: 8 } as TextStyle,
@@ -770,12 +875,20 @@ const rs = StyleSheet.create({
   filterChipText: { fontSize: 11.5, fontWeight: "700", color: P.ink2 } as TextStyle,
   filterChipTextActive: { color: "#fdf8f2" } as TextStyle,
 
-  row: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: P.border } as ViewStyle,
+  row: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: P.border } as ViewStyle,
+  rowCorrection: { paddingBottom: 12 } as ViewStyle,
+  rowTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
   name: { fontSize: 14, fontWeight: "700", color: P.ink } as TextStyle,
   meta: { fontSize: 11, color: P.ink3, marginTop: 2 } as TextStyle,
   resolvedOk: { fontSize: 11.5, color: P.ok, fontWeight: "700", marginTop: 4 } as TextStyle,
-  resolvedBad: { fontSize: 11.5, color: P.danger, marginTop: 4, lineHeight: 15 } as TextStyle,
   pendingNote: { fontSize: 11, color: P.ink4, marginTop: 4 } as TextStyle,
+
+  // "Precisa de ajuste" (item 2) — caixa construtiva, nunca vermelha:
+  // motivo + convite claro pra corrigir e reenviar ali mesmo.
+  correctionBox: { marginTop: 10, backgroundColor: P.warnSoft, borderWidth: 1, borderColor: "rgba(122,87,36,0.25)", borderRadius: R.md, padding: 10 } as ViewStyle,
+  correctionReason: { fontSize: 12, color: P.ink, lineHeight: 17 } as TextStyle,
+  correctionBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 8, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.border, borderRadius: R.pill, paddingVertical: 7, paddingHorizontal: 12 } as ViewStyle,
+  correctionBtnText: { fontSize: 12, fontWeight: "700", color: P.ink } as TextStyle,
 
   badge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: R.pill, paddingVertical: 4, paddingHorizontal: 9 } as ViewStyle,
   badgeText: { fontSize: 10.5, fontWeight: "800" } as TextStyle,
