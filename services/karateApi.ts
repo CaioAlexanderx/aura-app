@@ -1648,6 +1648,100 @@ export interface PractitionerRequestRow {
   resolved_at: string | null;
 }
 
+// ── H3 — Federação: fila de solicitações de praticante (lado admin) ────
+// Consumido em app/karate/(federation)/conexoes/ (aba "Solicitações" +
+// detalhe). Complementa PractitionerRequestRow (visão do PRÓPRIO dojô,
+// acima) com o que só a federação vê: dados completos do sensei
+// (cpf/rg/telefone/e-mail/payload), dojo_name e possible_matches
+// (sugestão de dedup — NUNCA decide sozinha, a federação escolhe).
+
+/** Sugestão de correspondência com um praticante já cadastrado (dedup). */
+export interface PossibleMatch {
+  practitioner_id: string;
+  name: string;
+  karate_registration_number: string | null;
+  dojo_id: string | null;
+  dojo_name: string | null;
+  matched_on: string[];
+  score: number;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface PractitionerRequestAdminRow {
+  id: string;
+  federation_id: string;
+  dojo_id: string;
+  dojo_name: string | null;
+  status: PractitionerRequestStatus;
+  resolution: string | null;
+  reject_reason: string | null;
+  full_name: string;
+  birth_date: string | null;
+  cpf: string | null;
+  rg: string | null;
+  phone: string | null;
+  email: string | null;
+  claimed_belt: string | null;
+  fpkt_number_claimed: string | null;
+  payload: Record<string, any>;
+  requested_by_channel: string | null;
+  requested_by_label: string | null;
+  resolved_practitioner_id: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  /** Sugestões de dedup — a UI mostra, a federação decide (nunca automático). */
+  possible_matches: PossibleMatch[];
+}
+
+/** GET /federation/:id/practitioner-requests/metrics — item 5 do H3. */
+export interface PractitionerRequestMetrics {
+  pendentes: number;
+  mais_antiga: { criada_em: string; dias: number } | null;
+  /** Pendentes SEM fpkt_number_claimed — provável criação nova, número a emitir do zero. */
+  aguardando_numero_fpkt: number;
+  por_dojo: {
+    dojo_id: string;
+    dojo_nome: string | null;
+    pendentes: number;
+    mais_antiga_dias: number | null;
+  }[];
+}
+
+export interface ApproveCreateResult {
+  request_id: string;
+  status: string;
+  resolution: string;
+  practitioner: { id: string; name: string; karate_registration_number: string; dojo_id: string };
+}
+
+export interface ApproveTransferResult {
+  request_id: string;
+  status: string;
+  resolution: string;
+  practitioner_id: string;
+  transfer: { id: string; transferred_at: string } | null;
+}
+
+export interface RejectRequestResult {
+  request_id: string;
+  status: string;
+  reject_reason: string;
+  /** Item 4 do H3: se true, o link público do dojô foi reaberto/estendido. */
+  dojo_access_reopened: boolean;
+}
+
+export interface EditPractitionerRequestBody {
+  full_name?: string;
+  birth_date?: string | null;
+  cpf?: string | null;
+  rg?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  claimed_belt?: string | null;
+  fpkt_number_claimed?: string | null;
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -2807,6 +2901,100 @@ export const karateApi = {
    */
   lookupFpktNumber: (federationId: string, number: string): Promise<FpktLookupHint> =>
     request(`/federation/${federationId}/dojo/practitioner-requests/lookup-fpkt?number=${encodeURIComponent(number)}`),
+
+  // ── H3 — Federação: fila de solicitações de praticante (lado admin) ──
+  // Consumido pela aba "Solicitações" de Conexões e pela tela de
+  // detalhe/decisão. Smartform pronto: a federação confere, numera e
+  // aprova — nunca redigita do zero (edição existe, mas é ato deliberado
+  // via editPractitionerRequestAdmin, nunca automático).
+
+  /**
+   * Fila de solicitações da federação, com possible_matches JÁ EMBUTIDOS
+   * por item (sugestão de dedup). `status` omitido = todas. `dojoId`
+   * filtra por dojô de origem da solicitação.
+   */
+  listPractitionerRequestsAdmin: (
+    federationId: string,
+    params?: { status?: PractitionerRequestStatus; dojoId?: string }
+  ): Promise<{ data: PractitionerRequestAdminRow[] }> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.dojoId) qs.set("dojo_id", params.dojoId);
+    const query = qs.toString();
+    return request(`/federation/${federationId}/practitioner-requests${query ? `?${query}` : ""}`);
+  },
+
+  /**
+   * Métricas da fila (item 5 do H3): pendentes, idade da mais antiga,
+   * "aguardando número FPKT" e quebra por dojô — pro cabeçalho da aba
+   * "Solicitações" e pro badge de pendentes na tab bar de Conexões.
+   */
+  getPractitionerRequestMetrics: (federationId: string): Promise<PractitionerRequestMetrics> =>
+    request(`/federation/${federationId}/practitioner-requests/metrics`),
+
+  /** Detalhe completo de UMA solicitação (ficha do sensei + possible_matches), para a tela de decisão. */
+  getPractitionerRequestAdmin: (federationId: string, requestId: string): Promise<PractitionerRequestAdminRow> =>
+    request(`/federation/${federationId}/practitioner-requests/${requestId}`),
+
+  /**
+   * Edita a solicitação ANTES de aprovar — ato DELIBERADO e auditado
+   * (a federação escolhe corrigir), nunca efeito colateral de aprovar.
+   * Só permitido enquanto status==='pendente'.
+   */
+  editPractitionerRequestAdmin: (
+    federationId: string,
+    requestId: string,
+    body: EditPractitionerRequestBody
+  ): Promise<PractitionerRequestAdminRow> =>
+    request(`/federation/${federationId}/practitioner-requests/${requestId}`, { method: "PATCH", body }),
+
+  /**
+   * Aprova como CRIAÇÃO — exige fpktNumber (o número é emitido pela
+   * federação, nunca gerado pelo sistema). Cria no dojô da solicitação,
+   * ativo; a faixa alegada vira histórico NOVO (é criação — aí pode).
+   * Não gera cobrança.
+   */
+  approveCreatePractitionerRequest: (
+    federationId: string,
+    requestId: string,
+    fpktNumber: string
+  ): Promise<ApproveCreateResult> =>
+    request(`/federation/${federationId}/practitioner-requests/${requestId}/approve-create`, {
+      method: "POST",
+      body: { fpkt_number: fpktNumber },
+    }),
+
+  /**
+   * Aprova como TRANSFERÊNCIA — vincula a um praticante JÁ EXISTENTE
+   * (practitionerId, tipicamente de possible_matches) e move para o dojô
+   * da solicitação. REGRA CRÍTICA: nunca sobrescreve karate_belt_history
+   * nem anuidade — a faixa alegada aqui é só para COMPARAR, nunca é
+   * aplicada. Não gera cobrança.
+   */
+  approveTransferPractitionerRequest: (
+    federationId: string,
+    requestId: string,
+    practitionerId: string
+  ): Promise<ApproveTransferResult> =>
+    request(`/federation/${federationId}/practitioner-requests/${requestId}/approve-transfer`, {
+      method: "POST",
+      body: { practitioner_id: practitionerId },
+    }),
+
+  /**
+   * Rejeita com motivo (obrigatório — o sensei precisa ver). O backend
+   * reabre/estende o acesso do link público do dojô (dojo_access_reopened
+   * na resposta) para o sensei conseguir voltar, ver o motivo e reenviar.
+   */
+  rejectPractitionerRequestAdmin: (
+    federationId: string,
+    requestId: string,
+    reason: string
+  ): Promise<RejectRequestResult> =>
+    request(`/federation/${federationId}/practitioner-requests/${requestId}/reject`, {
+      method: "POST",
+      body: { reason },
+    }),
 
   /** Lista todos os pedidos de certificado da federação (visão admin). */
   listCertOrders: (

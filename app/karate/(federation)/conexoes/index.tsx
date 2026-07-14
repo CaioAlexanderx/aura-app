@@ -1,127 +1,168 @@
 // ============================================================
 // Conexões — Aura Karatê (federação) · Shoji
-// Como cada dojô se conecta à federação. Dados reais; estados honestos.
+//
+// Tela com abas de nível superior (H3, mesmo padrão de
+// app/karate/(federation)/dojos/index.tsx):
+//   1. "Conexões" (ConexoesTab)       — como cada dojô se conecta à
+//      federação. Conteúdo INALTERADO — só virou aba (era rota única).
+//   2. "Solicitações" (SolicitacoesTab) — NOVA, aba PRINCIPAL: fila de
+//      solicitações de praticante (criação/transferência) vindas dos
+//      dojôs, pra federação conferir/numerar/aprovar.
+//
+// Sub-navegação por QUERY PARAM (mesmo padrão do hub de Anuidades e da
+// tela de Dojôs): ?tab=solicitacoes já abre a aba nova no boot.
+//
+// Badge de pendentes na aba "Solicitações": busca leve (só
+// getPractitionerRequestMetrics) independente do fetch completo que
+// SolicitacoesTab faz pra si mesma — cada aba cuida do próprio dado,
+// mesma separação de responsabilidade de DojosListTab/CadastralTab.
+// Refaz no foco da tela (useFocusEffect) pra não ficar com número stale
+// depois de aprovar/rejeitar uma solicitação e voltar pra cá.
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
-  StyleSheet, ViewStyle, TextStyle,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ViewStyle, TextStyle,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Icon } from "@/components/Icon";
-import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
-import { KarateEmptyState } from "@/components/karate/EmptyState";
-import { KarateErrorState } from "@/components/karate/ErrorState";
-import {
-  ShojiBackground, PageHead, SectionHead, Card, ShojiBadge, ShojiButton, Avatar, Mono, Body,
-} from "@/components/karate/shoji";
-import { ConectarDojoModal } from "@/components/karate/ConectarDojoModal";
-import { karateConnectionsApi, Connection } from "@/services/karateConnectionsApi";
+import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { KarateColors, ShojiPalette } from "@/constants/karateTheme";
+import { ConexoesTab } from "./tabs/ConexoesTab";
+import { SolicitacoesTab } from "./tabs/SolicitacoesTab";
+import { karateApi } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { notify } from "@/utils/webAlert";
 
-export function connView(c: Connection): { label: string; tone: "ok" | "warn" | "danger" | "neutral" } {
-  if (c.status === "connected" && c.via === "native") return { label: "Conectado · atualiza sozinho", tone: "ok" };
-  if (c.status === "connected" && c.via === "manual") return { label: "A federação cuida", tone: "neutral" };
-  if (c.status === "pending") return { label: "Esperando o dojô aceitar", tone: "warn" };
-  if (c.status === "error") return { label: "Conexão caiu", tone: "danger" };
-  return { label: "Desligado", tone: "neutral" };
-}
+type Tab = "conexoes" | "solicitacoes";
 
-export default function ConexoesIndex() {
-  const router = useRouter();
+const firstParam = (v: string | string[] | undefined): string | undefined =>
+  Array.isArray(v) ? v[0] : v;
+
+export default function ConexoesScreen() {
   const { federationId } = useKarateFederation();
-  const [requests, setRequests] = useState<Connection[]>([]);
-  const [conns, setConns] = useState<Connection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showConnect, setShowConnect] = useState(false);
 
-  const load = useCallback(async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
-    setError(false);
-    try {
-      const [list, reqs] = await Promise.all([karateConnectionsApi.listConnections(federationId), karateConnectionsApi.listRequests(federationId)]);
-      setConns((list?.data ?? []).filter((c) => c.status !== "pending")); setRequests(reqs ?? []);
-    } catch { setError(true); }
-    finally { isRefresh ? setRefreshing(false) : setLoading(false); }
-  }, [federationId]);
-  useEffect(() => { load(); }, [load]);
+  // Deep-link: ?tab=solicitacoes já abre a aba nova no boot (lazy
+  // useState initializer, mesmo padrão do hub de Anuidades/Dojôs) —
+  // depois disso o usuário navega livremente pelas abas.
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const [activeTab, setActiveTab] = useState<Tab>(() =>
+    firstParam(params.tab) === "solicitacoes" ? "solicitacoes" : "conexoes"
+  );
 
-  const accept = async (c: Connection) => { try { await karateConnectionsApi.approve(federationId, c.id); load(true); } catch (e: any) { notify("Não foi possível aceitar", e?.message ?? "Tente novamente."); } };
-  const refuse = async (c: Connection) => { try { await karateConnectionsApi.reject(federationId, c.id); setRequests((p) => p.filter((r) => r.id !== c.id)); } catch (e: any) { notify("Não foi possível recusar", e?.message ?? "Tente novamente."); } };
+  const [pendentes, setPendentes] = useState<number | null>(null);
 
-  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
-  const connected = conns.filter((c) => c.status === "connected").length;
-  const problems = conns.filter((c) => c.status === "error").length;
+  useFocusEffect(useCallback(() => {
+    if (!federationId) return;
+    let cancelled = false;
+    karateApi.getPractitionerRequestMetrics(federationId)
+      .then((m) => { if (!cancelled) setPendentes(m.pendentes); })
+      .catch(() => { if (!cancelled) setPendentes(null); });
+    return () => { cancelled = true; };
+  }, [federationId]));
 
   return (
-    <ShojiBackground>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={P.red} />}>
-        <PageHead
-          eyebrow="Dojôs da federação"
-          title="Conexões"
-          sub="Cada dojô se conecta de um jeito: ou usa o Aura Karatê e tudo se atualiza sozinho, ou a federação cuida de tudo."
-          actions={<ShojiButton label="Conectar dojô" icon="link-outline" variant="sumi" onPress={() => setShowConnect(true)} />}
-        />
+    <View style={styles.screen}>
+      {/* Sub-tab bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabBar}
+        contentContainerStyle={styles.tabBarContent}
+      >
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === "conexoes" && styles.tabItemActive]}
+          onPress={() => setActiveTab("conexoes")}
+          accessibilityRole="tab"
+          accessibilityLabel="Conexões"
+          accessibilityState={{ selected: activeTab === "conexoes" }}
+        >
+          <Text style={[styles.tabLabel, activeTab === "conexoes" && styles.tabLabelActive]}>
+            Conexões
+          </Text>
+        </TouchableOpacity>
 
-        {problems > 0 && (
-          <View style={styles.warn}>
-            <Icon name="warning" size={18} color={P.red} />
-            <Body style={{ flex: 1, color: C.ink }}>{problems === 1 ? "1 dojô parou de enviar atualizações" : `${problems} dojôs pararam de enviar atualizações`}. Abra o dojô e toque em Reconectar.</Body>
-          </View>
-        )}
-
-        {requests.length > 0 && (
-          <Card style={{ marginTop: SP[4] }}>
-            <SectionHead title="Dojôs querendo entrar" sub="Esperando você aceitar." />
-            {requests.map((r) => (
-              <View key={r.id} style={styles.reqRow}>
-                <Avatar name={r.dojo_name ?? "Dojô"} size={34} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dojoName}>{r.dojo_name}</Text>
-                  <Body muted style={{ fontSize: 11.5 }}>{r.fpkt_affiliation_id}{r.notes ? ` · ${r.notes}` : ""}</Body>
-                </View>
-                <ShojiButton label="Aceitar" variant="sumi" onPress={() => accept(r)} />
-                <TouchableOpacity onPress={() => refuse(r)} style={{ paddingHorizontal: 6, paddingVertical: 8 }}><Text style={styles.refuse}>Recusar</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === "solicitacoes" && styles.tabItemActive]}
+          onPress={() => setActiveTab("solicitacoes")}
+          accessibilityRole="tab"
+          accessibilityLabel="Solicitações"
+          accessibilityState={{ selected: activeTab === "solicitacoes" }}
+        >
+          <View style={styles.tabLabelRow}>
+            <Text style={[styles.tabLabel, activeTab === "solicitacoes" && styles.tabLabelActive]}>
+              Solicitações
+            </Text>
+            {!!pendentes && pendentes > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{pendentes > 99 ? "99+" : pendentes}</Text>
               </View>
-            ))}
-          </Card>
-        )}
-
-        <View style={styles.section}>
-          <SectionHead title="Dojôs conectados" sub={`${connected} conectado(s)`} />
-          {loading ? <ActivityIndicator style={{ marginTop: 24 }} size="large" color={P.red} />
-            : conns.length === 0 ? <Card><KarateEmptyState icon="link-outline" title="Nenhum dojô conectado ainda" subtitle="Use “Conectar dojô” para começar." style={{ paddingVertical: 28 }} /></Card>
-            : conns.map((c) => {
-              const v = connView(c);
-              return (
-                <TouchableOpacity key={c.id} onPress={() => router.push(`/karate/conexoes/${c.id}` as any) } activeOpacity={0.85}>
-                  <Card style={{ marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }}>
-                    <Avatar name={c.dojo_name ?? "Dojô"} size={36} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.dojoName}>{c.dojo_name}</Text>
-                      <Mono style={{ fontSize: 10, color: P.red, marginTop: 1 }}>{c.fpkt_affiliation_id}</Mono>
-                    </View>
-                    <ShojiBadge status={v.tone} label={v.label} />
-                    <Icon name="chevron-forward" size={16} color={C.ink4} />
-                  </Card>
-                </TouchableOpacity>
-              );
-            })}
-        </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </ScrollView>
-      <ConectarDojoModal visible={showConnect} onClose={() => setShowConnect(false)} federationId={federationId} onDone={() => load(true)} />
-    </ShojiBackground>
+
+      {/* Tab content */}
+      <View style={styles.content}>
+        {activeTab === "conexoes" && <ConexoesTab />}
+        {activeTab === "solicitacoes" && <SolicitacoesTab />}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 40, paddingTop: 48, paddingBottom: 72, maxWidth: 1000, width: "100%", alignSelf: "center" } as ViewStyle,
-  warn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.md, padding: 14, marginTop: SP[4] } as ViewStyle,
-  section: { marginTop: SP[8] } as ViewStyle,
-  reqRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
-  dojoName: { fontFamily: F.body, fontSize: 14, fontWeight: "600", color: C.ink } as TextStyle,
-  refuse: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink3 } as TextStyle,
+  screen: {
+    flex: 1,
+    backgroundColor: KarateColors.bg,
+  } as ViewStyle,
+  tabBar: {
+    backgroundColor: KarateColors.bg2,
+    borderBottomWidth: 1,
+    borderBottomColor: KarateColors.border,
+    flexGrow: 0,
+  } as ViewStyle,
+  tabBarContent: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    gap: 4,
+  } as ViewStyle,
+  tabItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 2.5,
+    borderBottomColor: "transparent",
+  } as ViewStyle,
+  tabItemActive: {
+    borderBottomColor: KarateColors.primary,
+  } as ViewStyle,
+  tabLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  } as ViewStyle,
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: KarateColors.ink3,
+    letterSpacing: 0.1,
+  } as TextStyle,
+  tabLabelActive: {
+    color: KarateColors.primary,
+    fontWeight: "800",
+  } as TextStyle,
+  badge: {
+    backgroundColor: ShojiPalette.red,
+    borderRadius: 999,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  } as ViewStyle,
+  badgeTxt: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#fdf8f2",
+  } as TextStyle,
+  content: {
+    flex: 1,
+  } as ViewStyle,
 });
