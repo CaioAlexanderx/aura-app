@@ -114,6 +114,8 @@ const CLEARED_FLAGS: Record<RoleKey, boolean> = {
 // de save + estágio de confirmação inline de remoção (ver nota grande no
 // topo do arquivo sobre por que não é confirmAsync).
 type Row = {
+  /** veio da busca na federação (não é praticante deste dojô) */
+  fromSearch?: boolean;
   id: string;
   name: string;
   registration: string;
@@ -311,32 +313,47 @@ export function GerirEquipeTecnicaModal({
   // incluir gente de outro dojô da federação.
   // Agora a busca consulta o BACKEND na federação inteira (mesmo endpoint que o
   // seletor de sensei usa), com debounce, e mescla os achados às linhas do dojô.
-  const [remoteRows, setRemoteRows] = useState<Row[]>([]);
   const [searching, setSearching] = useState(false);
   const searchReqRef = useRef(0);
 
+  // ⚠️ BUGFIX (14/07/2026) — "não dá pra atribuir função ao praticante achado
+  // na busca". A versão anterior guardava os achados da federação numa lista
+  // PARALELA (remoteRows) e só os concatenava na hora de renderizar. Mas TODA
+  // mutação (toggleRole, saveRow, remover) escreve em `rows` — a linha vinda da
+  // busca não existia lá, então tocar num chip dela era um NO-OP silencioso:
+  // a linha aparecia, e simplesmente não respondia.
+  // Agora a busca MESCLA o achado dentro de `rows` (fonte única e editável),
+  // marcando-o com `fromSearch` para poder sumir da lista quando a busca é
+  // limpa — a menos que a pessoa já tenha ganhado papel/entrado na equipe.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setRemoteRows([]); setSearching(false); return; }
+    if (q.length < 2) { setSearching(false); return; }
     const myReq = ++searchReqRef.current;
     setSearching(true);
     const t = setTimeout(async () => {
       try {
         const res = await karateApi.listPractitioners(federationId, { q, pageSize: 20 });
         if (myReq !== searchReqRef.current) return; // resposta obsoleta — descarta
-        setRemoteRows((res.data || []).map((p) => ({
-          id: p.id,
-          name: p.full_name,
-          registration: p.karate_registration_number,
-          initial: toRoleFlags(p),
-          current: toRoleFlags(p),
-          saving: false,
-          confirming: false,
-          snapshot: null,
-          removeErr: null,
-        })));
+        setRows((prev) => {
+          const known = new Set(prev.map((r) => r.id));
+          const extras: Row[] = (res.data || [])
+            .filter((p) => !known.has(p.id))
+            .map((p) => ({
+              id: p.id,
+              name: p.full_name,
+              registration: p.karate_registration_number,
+              initial: toRoleFlags(p),
+              current: toRoleFlags(p),
+              saving: false,
+              confirming: false,
+              snapshot: null,
+              removeErr: null,
+              fromSearch: true,
+            }));
+          return extras.length ? [...prev, ...extras] : prev;
+        });
       } catch {
-        if (myReq === searchReqRef.current) setRemoteRows([]);
+        /* busca é auxiliar — falhar não pode derrubar a lista do dojô */
       } finally {
         if (myReq === searchReqRef.current) setSearching(false);
       }
@@ -346,15 +363,15 @@ export function GerirEquipeTecnicaModal({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    const local = rows.filter((r) =>
+    // Sem busca: esconde os "achados" que não viraram nada (sem papel e fora da
+    // equipe). Quem ganhou papel fica — passou a pertencer à equipe deste dojô.
+    if (!q) {
+      return rows.filter((r) =>
+        !r.fromSearch || teamSet.has(r.id) || Object.values(r.current).some(Boolean));
+    }
+    return rows.filter((r) =>
       r.name.toLowerCase().includes(q) || r.registration?.toLowerCase().includes(q));
-    // Mescla os achados da federação, sem duplicar quem já está na lista local
-    // (a linha local é a boa: carrega estado de edição/salvamento em curso).
-    const localIds = new Set(local.map((r) => r.id));
-    const extra = remoteRows.filter((r) => !localIds.has(r.id) && !rows.some((x) => x.id === r.id));
-    return [...local, ...extra];
-  }, [rows, query, remoteRows]);
+  }, [rows, query, teamSet]);
 
   const anySaving = rows.some((r) => r.saving);
   const teamCount = currentTeamIds.length;
@@ -410,7 +427,14 @@ export function GerirEquipeTecnicaModal({
             ) : errorMsg ? (
               <KarateErrorState message={errorMsg} onRetry={load} style={{ paddingVertical: 32 } as any} />
             ) : filtered.length === 0 ? (
-              rows.length === 0 ? (
+              searching ? (
+                <KarateEmptyState
+                  icon="search"
+                  title="Buscando na federação…"
+                  subtitle="A equipe técnica pode incluir praticantes de outros dojôs."
+                  style={{ paddingVertical: 32 } as any}
+                />
+              ) : rows.length === 0 ? (
                 <KarateEmptyState
                   icon="users"
                   title="Nenhum praticante cadastrado neste dojô."
@@ -420,7 +444,7 @@ export function GerirEquipeTecnicaModal({
                 <KarateEmptyState
                   icon="search"
                   title="Nenhum praticante encontrado"
-                  subtitle={`Nada bate com "${query}".`}
+                  subtitle={`Nada bate com "${query}" — nem neste dojô, nem na federação.`}
                   style={{ paddingVertical: 32 } as any}
                 />
               )
