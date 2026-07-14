@@ -78,10 +78,12 @@ function annuityPlanLabel(d: Dojo): string {
 // precisa casar com o valor real que a API envia.
 // Status de dojô é só Ativo/Inativo (computeDojoStatus). Inadimplência é
 // métrica separada (anuidade), não filtra dojô aqui.
-const STATUS_FILTERS: { key: DojoStatus | "all"; label: string }[] = [
-  { key: "all", label: "Todos" },
-  { key: "active", label: "Ativo" },
-  { key: "inactive", label: "Inativo" },
+// A lista é DIVIDIDA em duas visualizações (não é mais um filtro com "Todos"):
+// Ativos e Inativos. Dojô inativo é ex-filiado — misturá-lo aos ativos só
+// polui a leitura de quem gerencia a rede. Default: Ativos.
+const STATUS_SEGMENTS: { key: DojoStatus; label: string }[] = [
+  { key: "active", label: "Ativos" },
+  { key: "inactive", label: "Inativos" },
 ];
 
 function Meta({ icon, text }: { icon: string; text: string }) {
@@ -144,8 +146,8 @@ type DojosListHeaderProps = {
   q: string;
   onChangeQ: (t: string) => void;
   onSubmit: () => void;
-  status: DojoStatus | "all";
-  onStatus: (s: DojoStatus | "all") => void;
+  status: DojoStatus;
+  onStatus: (s: DojoStatus) => void;
   region: string | "all";
   onRegion: (r: string | "all") => void;
   hasFilters: boolean;
@@ -171,7 +173,7 @@ const DojosListHeader = React.memo(function DojosListHeader(p: DojosListHeaderPr
 
           {/* Linha de STATUS (independente) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {STATUS_FILTERS.map((s) => (
+            {STATUS_SEGMENTS.map((s) => (
               <Chip key={s.key} label={s.label} active={p.status === s.key} onPress={() => p.onStatus(s.key)} />
             ))}
           </ScrollView>
@@ -238,7 +240,7 @@ export default function DojosScreen() {
 
   // Filtros INDEPENDENTES — dois pedaços de estado ortogonais. Nenhum "gruda"
   // no outro: trocar `status` nunca mexe em `region`, e vice-versa.
-  const [status, setStatus] = useState<DojoStatus | "all">("active");
+  const [status, setStatus] = useState<DojoStatus>("active");
   const [region, setRegion] = useState<string | "all">("all");
 
   // Catálogo de regiões — fetch INDEPENDENTE dos filtros, para a lista de regiões
@@ -269,7 +271,7 @@ export default function DojosScreen() {
     try {
       const res = await karateApi.listDojos(federationId, {
         q: q || undefined,
-        status: status === "all" ? undefined : status,
+        status,
         region: region === "all" ? undefined : region,
         pageSize: 100,
       });
@@ -307,8 +309,9 @@ export default function DojosScreen() {
 
   const refreshAll = useCallback(() => { load(true); loadRegions(); }, [load, loadRegions]);
 
-  const hasFilters = status !== "all" || region !== "all" || !!q;
-  const clearFilters = useCallback(() => { setStatus("all"); setRegion("all"); setQ(""); }, []);
+  // "Ativos" é o padrão da tela, não um filtro — só conta como filtro sair dele.
+  const hasFilters = status !== "active" || region !== "all" || !!q;
+  const clearFilters = useCallback(() => { setStatus("active"); setRegion("all"); setQ(""); }, []);
 
   // Thead (cabeçalho da tabela) só aparece no modo wide e com itens.
   const showThead = wide && dojos.length > 0;
