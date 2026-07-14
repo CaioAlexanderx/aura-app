@@ -59,7 +59,7 @@ import {
   Pressable,
   Modal,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows } from "@/constants/karateTheme";
@@ -75,7 +75,13 @@ import {
   RosterFullRecord,
   PatchPractitionerInput,
   PatchPractitionerResult,
+  PractitionerRequestStatus,
 } from "@/services/karatePublicApi";
+import {
+  NewRequestForm,
+  StatusList,
+  PractitionerRequestBody,
+} from "@/components/karate/PractitionerRequestForm";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -821,35 +827,73 @@ function FocusField({
   );
 }
 
-// ── Cadastro de praticante NOVO agora é SOLICITAÇÃO, nunca criação direta
-// pelo portal (regra fechada com o Caio, H2). Este link público (token
-// opaco, sem JWT) não consegue chamar as rotas de solicitação — elas são
-// token-gated por requireDojoAccess (JWT do sensei logado, Canal A/B), um
-// mecanismo de auth diferente do token deste link. Por isso a ação mora
-// no Portal do Sensei autenticado (app/karate/sensei/solicitacoes.tsx),
-// e aqui só aparece um convite claro pra chegar lá — nunca escondido. ──
-function RequestPractitionerRedirectCard() {
-  const router = useRouter();
+// ── Cadastro de praticante NOVO é SOLICITAÇÃO, nunca criação direta pelo
+// portal (regra fechada com o Caio, H1/H2). E mora AQUI, no link público
+// (decisão do Caio, 14/07/2026, H2b) — não atrás de JWT: exigir login pra
+// abrir uma ficha de matrícula nova condenava a feature a não ser usada
+// pelos senseis que só têm o link. Reaproveita o MESMO componente de
+// ficha do Portal do Sensei autenticado
+// (components/karate/PractitionerRequestForm.tsx) — fonte única, o que
+// muda é só QUEM injeta o backend: aqui é o token opaco do link
+// (karatePublicApi), lá é o JWT do sensei logado (karateApi). Inline,
+// nunca Modal (armadilha conhecida: Modal dentro de Modal no RN Web
+// renderiza atrás, no-op silencioso) — expandir/recolher é só estado
+// local trocando o conteúdo do próprio card.
+function RequestPractitionerSection({ token }: { token: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleSubmit = useCallback(
+    (body: PractitionerRequestBody) => karatePublicApi.addPublicPractitioner(token, body),
+    [token]
+  );
+  const handleLookupFpkt = useCallback(
+    (number: string) => karatePublicApi.lookupFpktNumber(token, number),
+    [token]
+  );
+  const handleCreated = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const fetchRequests = useCallback(
+    (status?: PractitionerRequestStatus) => karatePublicApi.listPractitionerRequests(token, status),
+    [token]
+  );
+
   return (
-    <View style={st.redirectCard}>
-      <View style={st.redirectHead}>
-        <Icon name="user-plus" size={17} color={P.primary} />
-        <Text style={st.redirectTitle}>Praticante novo? Isso agora é uma solicitação</Text>
+    <View style={{ marginBottom: 14, gap: 12 }}>
+      <View style={st.requestCard}>
+        <Pressable
+          onPress={() => setExpanded((e) => !e)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? "Recolher solicitar novo praticante" : "Solicitar novo praticante"}
+          style={st.requestCardHead}
+        >
+          <Icon name="user-plus" size={17} color={P.primary} />
+          <Text style={st.requestCardTitle}>Solicitar novo praticante</Text>
+          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={P.ink3} />
+        </Pressable>
+        {!expanded && (
+          <Text style={st.requestCardDesc}>
+            Matricular alguém novo? Preencha a ficha completa aqui mesmo — a federação analisa e emite o
+            número FPKT.
+          </Text>
+        )}
+        {expanded && (
+          <View style={{ marginTop: 12 }}>
+            <NewRequestForm
+              onSubmit={handleSubmit}
+              onLookupFpkt={handleLookupFpkt}
+              onCreated={handleCreated}
+              confirmTitle={(alreadyPending) => (alreadyPending ? "Já havia uma solicitação para essa pessoa" : "Enviado à federação")}
+              confirmText={(alreadyPending) =>
+                alreadyPending
+                  ? "Uma solicitação pendente com o mesmo nome e nascimento já existia neste dojô — não duplicamos, a federação já está com ela."
+                  : "Ela vai validar e emitir o número FPKT."
+              }
+            />
+          </View>
+        )}
       </View>
-      <Text style={st.redirectDesc}>
-        Este link só atualiza quem já está cadastrado. Pra matricular alguém novo, entre na sua conta Aura
-        (Portal do Sensei) e use "Solicitar novo praticante" — a federação analisa a ficha e registra o
-        número FPKT.
-      </Text>
-      <Pressable
-        onPress={() => router.push("/karate/sensei/solicitacoes" as any)}
-        accessibilityRole="button"
-        accessibilityLabel="Ir para o Portal do Sensei"
-        style={st.redirectBtn}
-      >
-        <Text style={st.redirectBtnText}>Ir para o Portal do Sensei</Text>
-        <Icon name="chevron-forward" size={14} color={P.primary} />
-      </Pressable>
+
+      <StatusList fetchRequests={fetchRequests} refreshKey={refreshKey} title="Status das solicitações deste dojô" />
     </View>
   );
 }
@@ -1463,7 +1507,7 @@ export default function RosterUpdatePortalScreen() {
             )
           )}
 
-          <RequestPractitionerRedirectCard />
+          <RequestPractitionerSection token={tokenStr} />
 
           <SpreadsheetPanel
             token={tokenStr}
@@ -1674,13 +1718,11 @@ const st = StyleSheet.create({
   footerText: { fontSize: 11, color: P.ink3, fontWeight: "600" },
   footerTextSmall: { fontSize: 10, color: P.ink4, textAlign: "center", maxWidth: 320 },
 
-  // ── Convite pra "solicitar novo praticante" no Portal do Sensei (H2) ──
-  redirectCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginBottom: 14 },
-  redirectHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
-  redirectTitle: { fontFamily: KarateFonts.heading, fontSize: 14.5, color: P.ink, flex: 1 },
-  redirectDesc: { fontSize: 12, color: P.ink3, lineHeight: 17, marginBottom: 12 },
-  redirectBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: P.primaryLine, borderRadius: KarateRadius.md, backgroundColor: P.glass2, paddingVertical: 10 },
-  redirectBtnText: { fontSize: 13, fontWeight: "700", color: P.primary },
+  // ── "Solicitar novo praticante" inline (H2b — mora aqui, no link público) ──
+  requestCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16 },
+  requestCardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  requestCardTitle: { fontFamily: KarateFonts.heading, fontSize: 14.5, color: P.ink, flex: 1 },
+  requestCardDesc: { fontSize: 12, color: P.ink3, lineHeight: 17, marginTop: 6 },
 
   // ── Grade de completude (H2 — item 2, "a peça central") ─────────────
   gridCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 12, marginBottom: 14 },

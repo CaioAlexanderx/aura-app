@@ -244,28 +244,88 @@ export interface RosterSubmitResult {
 }
 
 /**
- * Input de POST /public/roster-update/:token/practitioner — novo
- * praticante cadastrado pelo sensei direto do portal. `name` e
- * `belt_level` são obrigatórios; o backend exige ainda pelo menos um
- * contato (`phone` OU `email`). dojo_id/federation_id NUNCA vão no
- * body — vêm sempre do token no backend.
+ * H2b (decisão do Caio, 14/07/2026): "solicitar novo praticante" mora no
+ * link PÚBLICO, não atrás de JWT — o sensei que só tem o link nunca
+ * conseguiria abrir a conta Aura pra solicitar. Este é o mesmo shape de
+ * services/karateApi.ts#PractitionerRequestInput (canal autenticado) e de
+ * components/karate/PractitionerRequestForm.tsx#PractitionerRequestBody
+ * — os três ficam separados de propósito (não importar um do outro:
+ * cada arquivo é dono do seu próprio contrato, TypeScript casa
+ * estruturalmente), mas o CAMPO é sempre o mesmo.
+ *
+ * Input de POST /public/roster-update/:token/practitioner — abre uma
+ * SOLICITAÇÃO de praticante novo (NUNCA cria em customers direto — quem
+ * cria/atribui o número FPKT é a federação, ao aprovar). Só `full_name`
+ * é obrigatório. dojo_id/federation_id NUNCA vão no body — vêm sempre do
+ * token no backend.
  */
 export interface AddPractitionerInput {
-  name: string;
-  phone?: string;
-  email?: string;
-  belt_level: string;
-  belt_name: string;
+  full_name: string;
+  birth_date?: string | null;
+  sex?: "M" | "F" | "other" | null;
+  cpf?: string | null;
+  rg?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  claimed_belt?: string | null;
+  /** Número FPKT que o sensei digitou (opcional — "Não tem" = omitir). */
+  fpkt_number_claimed?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  guardian_name?: string | null;
+  guardian_cpf?: string | null;
+  guardian_phone?: string | null;
+  guardian_relationship?: string | null;
+}
+
+/** Achado do auto-localizar (GET .../fpkt-lookup) — nunca mais que nome + dojô atual do terceiro. */
+export interface FpktLookupHint {
+  found: boolean;
+  is_transfer?: boolean;
+  message?: string;
+  practitioner?: {
+    id: string;
+    name: string;
+    current_dojo_id: string | null;
+    current_dojo_name: string | null;
+    is_active: boolean;
+  };
 }
 
 /** Retorno de POST /public/roster-update/:token/practitioner. */
 export interface AddPractitionerResult {
   id: string;
-  name: string;
-  karate_registration_number: string | null;
-  belt_name: string | null;
-  belt_level: string;
-  is_active: true;
+  status: string;
+  created_at: string;
+  already_pending: boolean;
+  claimed_belt?: string | null;
+  message?: string;
+  fpkt_lookup?: FpktLookupHint | null;
+}
+
+export type PractitionerRequestStatus = "pendente" | "aprovada" | "rejeitada";
+
+/** Uma linha de GET /public/roster-update/:token/practitioner-requests. */
+export interface PractitionerRequestRow {
+  id: string;
+  status: PractitionerRequestStatus;
+  resolution: string | null;
+  reject_reason: string | null;
+  full_name: string;
+  birth_date: string | null;
+  claimed_belt: string | null;
+  fpkt_number_claimed: string | null;
+  resolved_practitioner_id: string | null;
+  /** Número REAL atribuído pela federação — só presente quando aprovada. */
+  resolved_fpkt_number: string | null;
+  resolved_practitioner_name: string | null;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -374,10 +434,13 @@ export const karatePublicApi = {
     `${apiBase()}/public/roster-update/${enc(token)}/export`,
 
   /**
-   * Adiciona um novo praticante ao dojô do token, direto do portal do
-   * sensei. NÃO expira o token — o sensei pode adicionar vários e só
-   * confirmar o quadro depois (submitPublicRoster). 422 = validação
-   * (nome/faixa/contato faltando); 404/410 = link inválido/expirado.
+   * Abre uma SOLICITAÇÃO de praticante novo pro dojô do token — NUNCA cria
+   * o praticante direto (H1/H2/H2b). NÃO expira o token — o sensei pode
+   * solicitar vários e só confirmar o quadro depois (submitPublicRoster).
+   * 422 = validação (full_name faltando); 404/410 = link inválido/expirado.
+   * Idempotente: reenviar os mesmos dados (nome + nascimento) enquanto a
+   * primeira solicitação segue pendente devolve `already_pending:true` em
+   * vez de duplicar.
    */
   addPublicPractitioner: (
     token: string,
@@ -387,6 +450,29 @@ export const karatePublicApi = {
       method: "POST",
       body: input,
     }),
+
+  /**
+   * Auto-localizar (H2b): dado um número FPKT digitado no formulário de
+   * solicitação, diz se já pertence a alguém NA FEDERAÇÃO do token (não
+   * só no dojô — pode ser outro dojô da mesma federação). Se `found:true`
+   * a UI deve deixar claro que isto vira TRANSFERÊNCIA, não criação
+   * (fpkt_lookup.is_transfer). Equivalente token-gated de
+   * karateApi.lookupFpktNumber (canal autenticado).
+   */
+  lookupFpktNumber: (token: string, number: string): Promise<FpktLookupHint> =>
+    pub(`/public/roster-update/${enc(token)}/fpkt-lookup?number=${enc(number)}`),
+
+  /**
+   * Status das solicitações do dojô do token — pendente/aprovada (com o
+   * número FPKT real atribuído) ou rejeitada (com o motivo), visível no
+   * link público SEM login. `status` omitido = todas. Equivalente
+   * token-gated de karateApi.listPractitionerRequests (canal autenticado).
+   */
+  listPractitionerRequests: (
+    token: string,
+    status?: PractitionerRequestStatus
+  ): Promise<{ data: PractitionerRequestRow[] }> =>
+    pub(`/public/roster-update/${enc(token)}/practitioner-requests${status ? `?status=${status}` : ""}`),
 
   /**
    * Ficha completa de um praticante — atrás do link "Ver ficha completa"
