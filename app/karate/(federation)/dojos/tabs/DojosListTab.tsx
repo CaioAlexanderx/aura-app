@@ -88,7 +88,10 @@ function annuityPlanLabel(d: Dojo): string {
 // A lista é DIVIDIDA em duas visualizações (não é mais um filtro com "Todos"):
 // Ativos e Inativos. Dojô inativo é ex-filiado — misturá-lo aos ativos só
 // polui a leitura de quem gerencia a rede. Default: Ativos.
-const STATUS_SEGMENTS: { key: DojoStatus; label: string }[] = [
+type StatusView = DojoStatus | "all";
+
+const STATUS_SEGMENTS: { key: StatusView; label: string }[] = [
+  { key: "all", label: "Todos" },
   { key: "active", label: "Ativos" },
   { key: "inactive", label: "Inativos" },
 ];
@@ -152,8 +155,8 @@ type DojosListHeaderProps = {
   q: string;
   onChangeQ: (t: string) => void;
   onSubmit: () => void;
-  status: DojoStatus;
-  onStatus: (s: DojoStatus) => void;
+  status: StatusView;
+  onStatus: (s: StatusView) => void;
   region: string | "all";
   onRegion: (r: string | "all") => void;
   hasFilters: boolean;
@@ -239,7 +242,7 @@ export function DojosListTab() {
 
   // Filtros INDEPENDENTES — dois pedaços de estado ortogonais. Nenhum "gruda"
   // no outro: trocar `status` nunca mexe em `region`, e vice-versa.
-  const [status, setStatus] = useState<DojoStatus>("active");
+  const [status, setStatus] = useState<StatusView>("active");
   const [region, setRegion] = useState<string | "all">("all");
 
   // Catálogo de regiões — fetch INDEPENDENTE dos filtros, para a lista de regiões
@@ -270,7 +273,7 @@ export function DojosListTab() {
     try {
       const res = await karateApi.listDojos(federationId, {
         q: q || undefined,
-        status,
+        status: status === "all" ? undefined : status,
         region: region === "all" ? undefined : region,
         pageSize: 100,
       });
