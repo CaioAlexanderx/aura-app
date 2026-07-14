@@ -1575,6 +1575,79 @@ export interface StandingSummary {
   dojos: { ativos: number; em_dia: number; atrasado: number; inativos: number };
 }
 
+// ── H2 — Portal do sensei: solicitação de praticante novo (H1 backend,
+// PR #381 do aura-backend, karateDojoPractitionerRequests.js) ──────────
+// Consumido em app/karate/sensei/solicitacoes.tsx. Usa o request() core
+// (Bearer JWT automático — Canal A, o sensei logado na própria conta
+// Aura). O número FPKT NUNCA é gerado aqui: é OPCIONAL na solicitação
+// ("Tenho o número" com auto-localizar, ou "Não tem"); quem emite/
+// registra o número real é sempre a federação, ao aprovar.
+export interface PractitionerRequestInput {
+  full_name: string;
+  birth_date?: string | null;
+  sex?: "M" | "F" | "other" | null;
+  cpf?: string | null;
+  rg?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  claimed_belt?: string | null;
+  /** Número FPKT que o sensei digitou (opcional — "Não tem" = omitir). */
+  fpkt_number_claimed?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  guardian_name?: string | null;
+  guardian_cpf?: string | null;
+  guardian_phone?: string | null;
+  guardian_relationship?: string | null;
+}
+
+/** Achado do auto-localizar embutido na resposta de criação (aviso amigável). */
+export interface FpktLookupHint {
+  found: boolean;
+  is_transfer?: boolean;
+  message?: string;
+  practitioner?: {
+    id: string;
+    name: string;
+    current_dojo_id: string | null;
+    current_dojo_name: string | null;
+    is_active: boolean;
+  };
+}
+
+export interface PractitionerRequestCreateResult {
+  id: string;
+  status: string;
+  created_at: string;
+  already_pending: boolean;
+  message?: string;
+  fpkt_lookup?: FpktLookupHint | null;
+}
+
+export type PractitionerRequestStatus = "pendente" | "aprovada" | "rejeitada";
+
+export interface PractitionerRequestRow {
+  id: string;
+  status: PractitionerRequestStatus;
+  resolution: string | null;
+  reject_reason: string | null;
+  full_name: string;
+  birth_date: string | null;
+  claimed_belt: string | null;
+  fpkt_number_claimed: string | null;
+  resolved_practitioner_id: string | null;
+  /** Número REAL atribuído pela federação — só presente quando aprovada. */
+  resolved_fpkt_number: string | null;
+  resolved_practitioner_name: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -2700,6 +2773,40 @@ export const karateApi = {
   /** Painel do sensei: anuidade do dojô (pendência, histórico e Pix). */
   getSenseiAnnuity: (federationId: string): Promise<SenseiAnnuityResponse> =>
     request(`/federation/${federationId}/dojo/annuity`),
+
+  /**
+   * Painel do sensei: cria uma SOLICITAÇÃO de praticante novo (nunca cria
+   * o praticante direto — H1/aura-backend#381). dojo_id/federation_id
+   * NUNCA vão no corpo, o backend deriva do JWT (requireDojoAccess).
+   * Idempotente: reenviar os mesmos dados (nome + nascimento) enquanto a
+   * primeira solicitação segue pendente devolve `already_pending:true` em
+   * vez de duplicar.
+   */
+  createPractitionerRequest: (
+    federationId: string,
+    body: PractitionerRequestInput
+  ): Promise<PractitionerRequestCreateResult> =>
+    request(`/federation/${federationId}/dojo/practitioner-requests`, { method: "POST", body }),
+
+  /**
+   * Painel do sensei: status das solicitações do PRÓPRIO dojô — o que
+   * está pendente, aprovado (com o número FPKT real atribuído) ou
+   * rejeitado (com o motivo). `status` omitido = todas.
+   */
+  listPractitionerRequests: (
+    federationId: string,
+    status?: PractitionerRequestStatus
+  ): Promise<{ data: PractitionerRequestRow[] }> =>
+    request(`/federation/${federationId}/dojo/practitioner-requests${status ? `?status=${status}` : ""}`),
+
+  /**
+   * Painel do sensei: auto-localizar um número FPKT digitado no formulário
+   * de solicitação. Se `found:true`, o número já pertence a alguém na
+   * federação — a UI deve deixar claro que isto vira TRANSFERÊNCIA, não
+   * criação (fpkt_lookup.is_transfer).
+   */
+  lookupFpktNumber: (federationId: string, number: string): Promise<FpktLookupHint> =>
+    request(`/federation/${federationId}/dojo/practitioner-requests/lookup-fpkt?number=${encodeURIComponent(number)}`),
 
   /** Lista todos os pedidos de certificado da federação (visão admin). */
   listCertOrders: (
