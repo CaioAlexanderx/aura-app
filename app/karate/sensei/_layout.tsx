@@ -38,6 +38,7 @@ const SENSEI_DOJO_FALLBACK = SENSEI_DOJO;
 
 const TABS = [
   { label: "Praticantes", route: "/karate/sensei" },
+  { label: "Solicitações",route: "/karate/sensei/solicitacoes" },
   { label: "Eventos",     route: "/karate/sensei/eventos" },
   { label: "Anuidade",    route: "/karate/sensei/anuidade" },
   { label: "Certificados",route: "/karate/sensei/certificados" },
@@ -66,10 +67,14 @@ function SenseiShell() {
             <Text style={styles.dojoSub} numberOfLines={1}>ID: {dojoId.slice(0, 8)}…</Text>
           )}
         </View>
-        <View style={styles.roPill}>
-          <Icon name="eye-outline" size={12} color={KarateColors.ink3} />
-          <Text style={styles.roText}>Somente leitura</Text>
-        </View>
+        {/* "Somente leitura" não se aplica à aba Solicitações (H2) — ali o
+            sensei ENVIA solicitação de praticante novo, uma escrita real. */}
+        {!path.startsWith("/karate/sensei/solicitacoes") && (
+          <View style={styles.roPill}>
+            <Icon name="eye-outline" size={12} color={KarateColors.ink3} />
+            <Text style={styles.roText}>Somente leitura</Text>
+          </View>
+        )}
       </View>
 
       {/* Sub-tabs */}

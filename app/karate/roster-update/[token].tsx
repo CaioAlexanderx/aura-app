@@ -57,28 +57,27 @@ import {
   Animated,
   Easing,
   Pressable,
+  Modal,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
-import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows, KarateBelts, BeltKey } from "@/constants/karateTheme";
+import { KarateColors as P, KarateRadius, KarateFonts, KarateShadows } from "@/constants/karateTheme";
 import { Motion, webTransition } from "@/constants/motion";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import { copyToClipboard } from "@/utils/clipboard";
+import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
 import {
   karatePublicApi,
   RosterPractitioner,
   RosterProgress,
   RosterFullRecord,
   PatchPractitionerInput,
-  AddPractitionerInput,
+  PatchPractitionerResult,
 } from "@/services/karatePublicApi";
 
 const IS_WEB = Platform.OS === "web";
-
-const NON_LEGACY_BELT_KEYS: BeltKey[] = (Object.keys(KarateBelts) as BeltKey[]).filter(
-  (k) => !KarateBelts[k].isLegacy
-);
 
 const GROUP_ORDER: Record<string, number> = { a: 0, b: 1, c: 2 };
 const MISSING_LABEL: Record<string, string> = { telefone: "Telefone", email: "E-mail" };
@@ -123,6 +122,51 @@ function missingSummary(missing: string[]): string {
   if (missing.length === 0) return "";
   return missing.map((m) => MISSING_LABEL[m] || m).join(" e ");
 }
+
+// ── Idade a partir de YYYY-MM-DD (para decidir se a seção "Responsável"
+// da ficha/grade se aplica — menor de 18). Parse local, sem UTC shift. ──
+function ageFromISO(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(d.getTime())) return null;
+  const t = new Date();
+  let a = t.getFullYear() - d.getFullYear();
+  const mm = t.getMonth() - d.getMonth();
+  if (mm < 0 || (mm === 0 && t.getDate() < d.getDate())) a--;
+  return a;
+}
+
+// ── Colunas essenciais da grade de completude (item 2, "a peça central").
+// Cada coluna sabe extrair seu valor do RosterFullRecord e decidir se está
+// preenchida. `applicable(rec)` deixa uma coluna NEUTRA (nem vazia nem
+// cheia) quando ela simplesmente não se aplica àquele praticante — ex.:
+// "Responsável" só faz sentido para menores de 18. Ausência de dado é
+// sempre neutra, nunca alerta (regra fechada com o Caio). ──────────────
+interface CompletenessColumn {
+  key: string;
+  label: string;
+  short: string;
+  applicable: (rec: RosterFullRecord) => boolean;
+  filled: (rec: RosterFullRecord) => boolean;
+}
+const COMPLETENESS_COLUMNS: CompletenessColumn[] = [
+  { key: "nascimento", label: "Nascimento", short: "Nasc.", applicable: () => true, filled: (r) => !!r.birth_date },
+  { key: "cpf", label: "CPF", short: "CPF", applicable: () => true, filled: (r) => !!(r.cpf_cnpj && r.cpf_cnpj.trim()) },
+  { key: "rg", label: "RG", short: "RG", applicable: () => true, filled: (r) => !!(r.rg && r.rg.trim()) },
+  { key: "telefone", label: "Telefone", short: "Tel.", applicable: () => true, filled: (r) => !!(r.phone && r.phone.trim()) },
+  { key: "email", label: "E-mail", short: "E-mail", applicable: () => true, filled: (r) => !!(r.email && r.email.trim()) },
+  {
+    key: "endereco", label: "Endereço", short: "End.", applicable: () => true,
+    filled: (r) => !!(r.street && r.street.trim() && r.city && r.city.trim() && r.state && r.state.trim()),
+  },
+  {
+    key: "responsavel", label: "Responsável (menores)", short: "Resp.",
+    applicable: (r) => (ageFromISO(r.birth_date) ?? 99) < 18,
+    filled: (r) => !!(r.guardian_name && r.guardian_name.trim() && r.guardian_phone && r.guardian_phone.trim()),
+  },
+];
 
 // ── Toast leve (rodapé) — usado pra "Não treina mais" com Desfazer.
 // Nunca Modal; fixo no rodapé da página, auto-some. ─────────────────────
@@ -224,58 +268,123 @@ const FieldInput = React.forwardRef<TextInput, {
   );
 });
 
-// ── Ficha completa — atrás do link "Ver ficha completa". Busca sob
-// demanda (item 1: não carregar 20 campos de cara pra todo mundo). ─────
-const FULL_FIELDS: { key: keyof RosterFullRecord & string; label: string; readOnly?: boolean }[] = [
-  { key: "cpf_cnpj", label: "CPF" },
-  { key: "rg", label: "RG" },
-  { key: "birth_date", label: "Nascimento (AAAA-MM-DD)" },
+// ── Ficha completa — atrás do link "Ver ficha completa" (e também o
+// conteúdo do modal da grade de completude, item 2/3 do H2). Busca sob
+// demanda (item 1: não carregar 20 campos de cara pra todo mundo) — MAS
+// se o chamador já tem o registro em cache (grade já pré-carregou via
+// ensureFullRecord), usa direto: fonte única, nunca um segundo fetch
+// divergente do mesmo praticante (armadilha "estado duplicado").
+function maskCEPLocal(v: string): string {
+  const d = (v || "").replace(/\D/g, "").slice(0, 8);
+  return d.length > 5 ? d.replace(/(\d{5})(\d+)/, "$1-$2") : d;
+}
+
+const ADDRESS_FIELDS: { key: keyof RosterFullRecord & string; label: string; keyboardType?: "numeric" | "default" }[] = [
   { key: "street", label: "Rua" },
-  { key: "number", label: "Número" },
+  { key: "number", label: "Número", keyboardType: "numeric" },
   { key: "complement", label: "Complemento" },
   { key: "neighborhood", label: "Bairro" },
   { key: "city", label: "Cidade" },
   { key: "state", label: "UF" },
-  { key: "zip_code", label: "CEP" },
 ];
 
+// Linha "Atual × Novo" — compacta, concatenada (item 3 do H2: o sensei vê
+// o que está no sistema e o que está mudando sem trocar de tela).
+function EditFieldRow({
+  label, current, value, onChangeText, onCommit, saving, saved, keyboardType, placeholder, dateMode, mono,
+}: {
+  label: string; current: string; value: string; onChangeText: (v: string) => void; onCommit: () => void;
+  saving?: boolean; saved?: boolean; keyboardType?: any; placeholder?: string; dateMode?: boolean; mono?: boolean;
+}) {
+  return (
+    <View style={st.fullGridItem}>
+      <Text style={st.fieldLabel}>{label}</Text>
+      <Text style={st.currentValueText} numberOfLines={1}>Atual: {current || "vazio"}</Text>
+      {dateMode ? (
+        <DateInput value={value} onChangeText={onChangeText} onBlur={onCommit} style={[st.fullInput, mono && { fontFamily: KarateFonts.mono }]} />
+      ) : (
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          onBlur={onCommit}
+          keyboardType={keyboardType}
+          placeholder={placeholder}
+          style={[st.fullInput, mono && { fontFamily: KarateFonts.mono }]}
+          accessibilityLabel={label}
+        />
+      )}
+      {saving ? <ActivityIndicator size="small" color={P.ink3} style={{ marginTop: 4 }} /> : saved ? <Text style={st.savedNote}>Salvo</Text> : null}
+    </View>
+  );
+}
+
 function FullRecordPanel({
-  token, studentId, onFieldSaved,
-}: { token: string; studentId: string; onFieldSaved: (patch: PatchPractitionerInput & { phone?: string | null; email?: string | null }) => void }) {
-  const [record, setRecord] = useState<RosterFullRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  token, studentId, cachedRecord, onLoaded, onFieldSaved,
+}: {
+  token: string;
+  studentId: string;
+  /** Já veio pronto da grade de completude (ensureFullRecord) — evita refetch. */
+  cachedRecord?: RosterFullRecord | null;
+  /** Avisa o pai que buscou um registro do zero, pra ele guardar no cache único. */
+  onLoaded?: (record: RosterFullRecord) => void;
+  onFieldSaved: (patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+}) {
+  const [fetched, setFetched] = useState<RosterFullRecord | null>(null);
+  const [loading, setLoading] = useState(!cachedRecord);
   const [error, setError] = useState(false);
+  const record = cachedRecord || fetched;
+
   const [values, setValues] = useState<Record<string, string>>({});
+  const [baseline, setBaseline] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (record) {
+      const v: Record<string, string> = { phone: record.phone || "", email: record.email || "", cpf_cnpj: record.cpf_cnpj || "" };
+      for (const f of ADDRESS_FIELDS) v[f.key] = (record as any)[f.key] || "";
+      v.zip_code = record.zip_code || "";
+      v.birth_date = formatIsoToBr(record.birth_date);
+      setValues(v);
+      setBaseline(v);
+      setLoading(false);
+      return;
+    }
     let alive = true;
     setLoading(true);
     setError(false);
     karatePublicApi.getFullRecord(token, studentId)
       .then((r) => {
         if (!alive) return;
-        setRecord(r);
-        const v: Record<string, string> = {};
-        for (const f of FULL_FIELDS) v[f.key] = (r as any)[f.key] || "";
-        v.phone = r.phone || "";
-        v.email = r.email || "";
-        setValues(v);
+        setFetched(r);
+        onLoaded?.(r);
       })
-      .catch(() => { if (alive) setError(true); })
-      .finally(() => { if (alive) setLoading(false); });
+      .catch(() => { if (alive) setError(true); setLoading(false); });
     return () => { alive = false; };
-  }, [token, studentId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, studentId, record?.id]);
 
-  const commit = useCallback(async (key: string, apiKey: string) => {
+  const commit = useCallback(async (key: string, apiKey: string, rawValue?: string) => {
+    const value = (rawValue !== undefined ? rawValue : values[key]) || "";
+    if (value === (baseline[key] || "")) return; // nada mudou — não bate a API à toa
     setSavingKey(key);
     try {
-      const patch: PatchPractitionerInput = { [apiKey]: values[key] || null } as any;
-      await karatePublicApi.patchPractitioner(token, studentId, patch);
-      if (apiKey === "phone" || apiKey === "email") onFieldSaved({ [apiKey]: values[key] || null } as any);
+      let sendValue: string | null = value || null;
+      if (key === "birth_date") {
+        const iso = parseBrDate(value);
+        if (value && !iso) { setSavingKey(null); return; } // data incompleta/inválida — não envia
+        sendValue = iso;
+      }
+      const patch: PatchPractitionerInput = { [apiKey]: sendValue } as any;
+      const result = await karatePublicApi.patchPractitioner(token, studentId, patch);
+      setBaseline((b) => ({ ...b, [key]: value }));
+      setSavedKey(key);
+      setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
+      const cachePatch: Partial<RosterFullRecord> = key === "birth_date" ? { birth_date: sendValue } : ({ [key]: sendValue } as any);
+      onFieldSaved(cachePatch, result);
     } catch { /* silencioso — o campo continua editável, sensei tenta de novo */ }
     finally { setSavingKey(null); }
-  }, [token, studentId, values, onFieldSaved]);
+  }, [token, studentId, values, baseline, onFieldSaved]);
 
   if (loading) {
     return <View style={{ paddingVertical: 16, alignItems: "center" }}><ActivityIndicator size="small" color={P.ink3} /></View>;
@@ -284,50 +393,84 @@ function FullRecordPanel({
     return <Text style={st.addFieldError}>Não foi possível carregar a ficha completa. Tente de novo.</Text>;
   }
 
+  const isMinor = (ageFromISO(record.birth_date) ?? 99) < 18;
+
   return (
     <View style={st.fullRecord}>
-      {!!(record.guardian_name || record.guardian_phone) && (
+      {/* Identificação — SEMPRE somente leitura: FPKT é emitido pela
+          federação (o sensei nunca edita) e faixa vive em karate_belt_history
+          (append-only), fora do escopo deste PATCH. */}
+      <View style={st.readonlyRow}>
+        <Icon name="lock-closed" size={13} color={P.ink3} />
+        <Text style={st.readonlyRowText}>
+          Matrícula FPKT: <Text style={st.readonlyRowStrong}>{record.karate_registration_number || "ainda sem número"}</Text> · emitida pela federação
+        </Text>
+      </View>
+      {!!record.belt_name && (
+        <View style={[st.readonlyRow, { marginTop: 6 }]}>
+          <BeltBadge beltLevel={record.belt_name || ""} beltName={record.belt_name || undefined} />
+          <Text style={st.readonlyRowText}>faixa atual — trajetória gerida pela federação</Text>
+        </View>
+      )}
+
+      <View style={st.fullGrid}>
+        <EditFieldRow
+          label="Telefone" current={baseline.phone} value={values.phone || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, phone: maskPhoneUtil(t) }))}
+          onCommit={() => commit("phone", "phone")}
+          keyboardType="phone-pad" saving={savingKey === "phone"} saved={savedKey === "phone"} mono
+        />
+        <EditFieldRow
+          label="E-mail" current={baseline.email} value={values.email || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, email: t }))}
+          onCommit={() => commit("email", "email")}
+          keyboardType="email-address" saving={savingKey === "email"} saved={savedKey === "email"}
+        />
+        <EditFieldRow
+          label="Nascimento" current={baseline.birth_date || ""} value={values.birth_date || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, birth_date: t }))}
+          onCommit={() => commit("birth_date", "birth_date")}
+          dateMode saving={savingKey === "birth_date"} saved={savedKey === "birth_date"} mono
+        />
+        <EditFieldRow
+          label="CPF" current={baseline.cpf_cnpj} value={values.cpf_cnpj || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, cpf_cnpj: maskCpf(t) }))}
+          onCommit={() => commit("cpf_cnpj", "cpf")}
+          keyboardType="numeric" saving={savingKey === "cpf_cnpj"} saved={savedKey === "cpf_cnpj"} mono
+        />
+        <EditFieldRow
+          label="RG" current={baseline.rg} value={values.rg || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, rg: t }))}
+          onCommit={() => commit("rg", "rg")}
+          saving={savingKey === "rg"} saved={savedKey === "rg"} mono
+        />
+        <EditFieldRow
+          label="CEP" current={baseline.zip_code} value={values.zip_code || ""}
+          onChangeText={(t) => setValues((v) => ({ ...v, zip_code: maskCEPLocal(t) }))}
+          onCommit={() => commit("zip_code", "zip_code")}
+          keyboardType="numeric" saving={savingKey === "zip_code"} saved={savedKey === "zip_code"} mono
+        />
+        {ADDRESS_FIELDS.map((f) => (
+          <EditFieldRow
+            key={f.key}
+            label={f.label} current={baseline[f.key]} value={values[f.key] || ""}
+            onChangeText={(t) => setValues((v) => ({ ...v, [f.key]: t }))}
+            onCommit={() => commit(f.key, f.key)}
+            keyboardType={f.keyboardType} saving={savingKey === f.key} saved={savedKey === f.key}
+          />
+        ))}
+      </View>
+
+      {/* Responsável — somente leitura aqui (o portal do sensei ainda não
+          libera PATCH desses campos); "ausência é neutra": nunca alerta,
+          só um lembrete de que a federação atualiza esse dado. */}
+      <View style={st.guardianReadonlyBox}>
         <Text style={st.fullRecordNote}>
-          Responsável: {record.guardian_name || "—"}{record.guardian_phone ? ` · ${record.guardian_phone}` : ""}
+          Responsável{isMinor ? " (menor de 18)" : ""}: {record.guardian_name || "—"}
+          {record.guardian_phone ? ` · ${record.guardian_phone}` : ""}
           {record.guardian_relationship ? ` (${record.guardian_relationship})` : ""}
         </Text>
-      )}
-      <View style={st.fullGrid}>
-        <View style={st.fullGridItem}>
-          <Text style={st.fieldLabel}>Telefone</Text>
-          <TextInput
-            value={values.phone}
-            onChangeText={(t) => setValues((v) => ({ ...v, phone: t }))}
-            onBlur={() => commit("phone", "phone")}
-            keyboardType="phone-pad"
-            style={st.fullInput}
-            accessibilityLabel="Telefone"
-          />
-        </View>
-        <View style={st.fullGridItem}>
-          <Text style={st.fieldLabel}>E-mail</Text>
-          <TextInput
-            value={values.email}
-            onChangeText={(t) => setValues((v) => ({ ...v, email: t }))}
-            onBlur={() => commit("email", "email")}
-            keyboardType="email-address"
-            style={st.fullInput}
-            accessibilityLabel="E-mail"
-          />
-        </View>
-        {FULL_FIELDS.map((f) => (
-          <View key={f.key} style={st.fullGridItem}>
-            <Text style={st.fieldLabel}>{f.label}</Text>
-            <TextInput
-              value={values[f.key] || ""}
-              onChangeText={(t) => setValues((v) => ({ ...v, [f.key]: t }))}
-              onBlur={() => commit(f.key, f.key === "cpf_cnpj" ? "cpf" : f.key)}
-              style={st.fullInput}
-              accessibilityLabel={f.label}
-            />
-            {savingKey === f.key && <ActivityIndicator size="small" color={P.ink3} style={{ marginTop: 4 }} />}
-          </View>
-        ))}
+        <Text style={st.guardianReadonlyHint}>Somente leitura neste portal — peça à federação para atualizar o responsável.</Text>
       </View>
     </View>
   );
@@ -335,11 +478,12 @@ function FullRecordPanel({
 
 // ── Card da FILA — um praticante, só os campos faltando, Enter avança. ──
 function QueueCard({
-  p, position, total, token, onPatch, onInactivate,
+  p, position, total, token, onPatch, onInactivate, onFichaFieldSaved,
 }: {
   p: RosterPractitioner; position: number; total: number; token: string;
   onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>;
   onInactivate: (p: RosterPractitioner) => void;
+  onFichaFieldSaved: (id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(() => ({ telefone: p.phone || "", email: p.email || "" }));
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -417,9 +561,10 @@ function QueueCard({
             <FullRecordPanel
               token={token}
               studentId={p.id}
-              onFieldSaved={(patch) => {
+              onFieldSaved={(patch, result) => {
                 if (patch.phone !== undefined) setValues((v) => ({ ...v, telefone: patch.phone || "" }));
                 if (patch.email !== undefined) setValues((v) => ({ ...v, email: patch.email || "" }));
+                onFichaFieldSaved(p.id, patch, result);
               }}
             />
           )}
@@ -436,8 +581,13 @@ function QueueCard({
 
 // ── Linha da LISTA — compacta, expande pra editar. ──────────────────────
 function ListRow({
-  p, token, onPatch, onInactivate,
-}: { p: RosterPractitioner; token: string; onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>; onInactivate: (p: RosterPractitioner) => void }) {
+  p, token, onPatch, onInactivate, onFichaFieldSaved,
+}: {
+  p: RosterPractitioner; token: string;
+  onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>;
+  onInactivate: (p: RosterPractitioner) => void;
+  onFichaFieldSaved: (id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(() => ({ telefone: p.phone || "", email: p.email || "" }));
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -502,9 +652,10 @@ function ListRow({
                 <FullRecordPanel
                   token={token}
                   studentId={p.id}
-                  onFieldSaved={(patch) => {
+                  onFieldSaved={(patch, result) => {
                     if (patch.phone !== undefined) setValues((v) => ({ ...v, telefone: patch.phone || "" }));
                     if (patch.email !== undefined) setValues((v) => ({ ...v, email: patch.email || "" }));
+                    onFichaFieldSaved(p.id, patch, result);
                   }}
                 />
               )}
@@ -670,124 +821,185 @@ function FocusField({
   );
 }
 
-function AddPractitionerForm({
-  onSubmit, onCancel, submitting, apiError,
-}: {
-  onSubmit: (input: AddPractitionerInput) => void;
-  onCancel: () => void;
-  submitting: boolean;
-  apiError?: string | null;
-}) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
-  const [touched, setTouched] = useState(false);
-
-  const nameOk = !!name.trim();
-  const beltOk = !!beltKey;
-  const contactOk = !!(phone.trim() || email.trim());
-  const valid = nameOk && beltOk && contactOk;
-
-  function handleSubmit() {
-    setTouched(true);
-    if (!valid || submitting) return;
-    const belt = beltKey ? KarateBelts[beltKey] : null;
-    onSubmit({
-      name: name.trim(),
-      phone: phone.trim() || undefined,
-      email: email.trim() || undefined,
-      belt_level: beltKey as string,
-      belt_name: belt?.label || (beltKey as string),
-    });
-  }
-
+// ── Cadastro de praticante NOVO agora é SOLICITAÇÃO, nunca criação direta
+// pelo portal (regra fechada com o Caio, H2). Este link público (token
+// opaco, sem JWT) não consegue chamar as rotas de solicitação — elas são
+// token-gated por requireDojoAccess (JWT do sensei logado, Canal A/B), um
+// mecanismo de auth diferente do token deste link. Por isso a ação mora
+// no Portal do Sensei autenticado (app/karate/sensei/solicitacoes.tsx),
+// e aqui só aparece um convite claro pra chegar lá — nunca escondido. ──
+function RequestPractitionerRedirectCard() {
+  const router = useRouter();
   return (
-    <View style={st.addCard}>
-      <Text style={st.addCardTitle}>Novo praticante</Text>
+    <View style={st.redirectCard}>
+      <View style={st.redirectHead}>
+        <Icon name="user-plus" size={17} color={P.primary} />
+        <Text style={st.redirectTitle}>Praticante novo? Isso agora é uma solicitação</Text>
+      </View>
+      <Text style={st.redirectDesc}>
+        Este link só atualiza quem já está cadastrado. Pra matricular alguém novo, entre na sua conta Aura
+        (Portal do Sensei) e use "Solicitar novo praticante" — a federação analisa a ficha e registra o
+        número FPKT.
+      </Text>
+      <Pressable
+        onPress={() => router.push("/karate/sensei/solicitacoes" as any)}
+        accessibilityRole="button"
+        accessibilityLabel="Ir para o Portal do Sensei"
+        style={st.redirectBtn}
+      >
+        <Text style={st.redirectBtnText}>Ir para o Portal do Sensei</Text>
+        <Icon name="chevron-forward" size={14} color={P.primary} />
+      </Pressable>
+    </View>
+  );
+}
 
-      <Text style={st.fieldLabel}>Nome *</Text>
-      <FocusField
-        value={name}
-        onChangeText={setName}
-        placeholder="Nome completo do praticante"
-        accessibilityLabel="Nome do novo praticante"
-        style={st.textInputWrap}
-        inputStyle={st.textInput}
-      />
-      {touched && !nameOk && <Text style={st.addFieldError}>Informe o nome do praticante.</Text>}
+// ── Grade de completude (item 2 do H2 — "a peça visual central") ───────
+// Praticantes nas LINHAS, campos essenciais nas COLUNAS, cada célula é um
+// ponto: vazio (falta), cheio (preenchido) ou destacado (acabou de
+// preencher — glow por alguns segundos). Numa tela só, sem paginação: pra
+// caber ~400 linhas sem virar planilha ilegível, a grade fica DENSA mas
+// só 7 colunas fixas (cabe sem scroll horizontal na maioria dos celulares)
+// e cada linha é compacta (28px) — a rolagem é a MESMA rolagem vertical
+// da página, não uma sub-lista paginada. Toque numa linha abre a ficha.
+function Dot({ state }: { state: "empty" | "filled" | "recent" | "na" }) {
+  if (state === "na") return <View style={st.dotNa} />;
+  if (state === "recent") return <View style={st.dotRecent} />;
+  if (state === "filled") return <View style={st.dotFilled} />;
+  return <View style={st.dotEmpty} />;
+}
 
-      <Text style={[st.fieldLabel, { marginTop: 12 }]}>Telefone</Text>
-      <FocusField
-        value={phone}
-        onChangeText={setPhone}
-        placeholder="(00) 00000-0000"
-        accessibilityLabel="Telefone do novo praticante"
-        style={st.textInputWrap}
-        inputStyle={st.textInput}
-      />
+function CompletenessGrid({
+  rows, fullRecords, loadedCount, totalToLoad, recentlyUpdated, onOpenPractitioner,
+}: {
+  rows: RosterPractitioner[];
+  fullRecords: Record<string, RosterFullRecord>;
+  loadedCount: number;
+  totalToLoad: number;
+  recentlyUpdated: Record<string, number>;
+  onOpenPractitioner: (id: string) => void;
+}) {
+  const stillLoading = loadedCount < totalToLoad;
+  return (
+    <View style={st.gridCard}>
+      <Text style={st.gridCaption}>
+        Toque numa linha pra abrir a ficha. Colunas: {COMPLETENESS_COLUMNS.map((c) => c.short).join(" · ")}.
+      </Text>
 
-      <Text style={[st.fieldLabel, { marginTop: 12 }]}>E-mail</Text>
-      <FocusField
-        value={email}
-        onChangeText={setEmail}
-        placeholder="email@exemplo.com"
-        accessibilityLabel="E-mail do novo praticante"
-        style={st.textInputWrap}
-        inputStyle={st.textInput}
-      />
-      {touched && !contactOk && (
-        <Text style={st.addFieldError}>Informe pelo menos um contato (telefone ou e-mail).</Text>
+      <View style={st.gridHeaderRow}>
+        <Text style={st.gridHeaderName}>Praticante</Text>
+        {COMPLETENESS_COLUMNS.map((col) => (
+          <Text key={col.key} style={st.gridHeaderCol} numberOfLines={1}>{col.short}</Text>
+        ))}
+      </View>
+
+      {rows.map((p) => {
+        const rec = fullRecords[p.id];
+        return (
+          <Pressable
+            key={p.id}
+            onPress={() => onOpenPractitioner(p.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Abrir ficha de ${p.name}`}
+            style={st.gridRow}
+          >
+            <Text style={st.gridRowName} numberOfLines={1}>{p.name}</Text>
+            {COMPLETENESS_COLUMNS.map((col) => {
+              if (!rec) {
+                return <View key={col.key} style={st.gridCell}><Dot state="na" /></View>;
+              }
+              if (!col.applicable(rec)) {
+                return <View key={col.key} style={st.gridCell}><Dot state="na" /></View>;
+              }
+              const recentTs = recentlyUpdated[`${p.id}:${col.key}`];
+              const isRecent = !!recentTs && Date.now() - recentTs < 4000;
+              const state = isRecent ? "recent" : col.filled(rec) ? "filled" : "empty";
+              return <View key={col.key} style={st.gridCell}><Dot state={state} /></View>;
+            })}
+          </Pressable>
+        );
+      })}
+
+      {stillLoading && (
+        <View style={st.gridLoadingRow}>
+          <ActivityIndicator size="small" color={P.ink3} />
+          <Text style={st.gridLoadingText}>Carregando ficha completa · {loadedCount} de {totalToLoad}</Text>
+        </View>
       )}
 
-      <Text style={[st.fieldLabel, { marginTop: 12 }]}>Faixa *</Text>
-      <View style={st.beltChipsRow}>
-        {NON_LEGACY_BELT_KEYS.map((key) => {
-          const belt = KarateBelts[key];
-          const selected = beltKey === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setBeltKey(key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`Faixa ${belt.label}`}
-              style={[
-                st.beltChip,
-                { backgroundColor: belt.color, borderColor: selected ? P.ink : "rgba(0,0,0,0.12)" },
-                selected && st.beltChipSelected,
-              ]}
-            >
-              <Text style={[st.beltChipLabel, { color: belt.textColor }]}>{belt.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {touched && !beltOk && <Text style={st.addFieldError}>Selecione a faixa do praticante.</Text>}
-
-      {!!apiError && <Text style={st.submitError}>{apiError}</Text>}
-
-      <View style={st.addFormActions}>
-        <Pressable
-          onPress={submitting ? undefined : onCancel}
-          disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Cancelar cadastro de praticante"
-          style={[st.addCancelBtn, submitting && { opacity: 0.5 }]}
-        >
-          <Text style={st.addCancelBtnText}>Cancelar</Text>
-        </Pressable>
-        <Pressable
-          onPress={submitting ? undefined : handleSubmit}
-          disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Adicionar praticante"
-          style={[st.confirmBtn, st.addSubmitBtn, submitting && { opacity: 0.6 }]}
-        >
-          {submitting ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={st.confirmBtnText}>Adicionar</Text>}
-        </Pressable>
+      <View style={st.gridLegend}>
+        <View style={st.gridLegendItem}><Dot state="empty" /><Text style={st.gridLegendText}>falta</Text></View>
+        <View style={st.gridLegendItem}><Dot state="filled" /><Text style={st.gridLegendText}>preenchido</Text></View>
+        <View style={st.gridLegendItem}><Dot state="recent" /><Text style={st.gridLegendText}>acabou de preencher</Text></View>
+        <View style={st.gridLegendItem}><Dot state="na" /><Text style={st.gridLegendText}>não se aplica</Text></View>
       </View>
     </View>
+  );
+}
+
+// ── Ficha detalhada, aberta pela grade — ÚNICO <Modal> da tela (a grade
+// em si não é um Modal, então este não aninha; a confirmação de "não
+// treina mais" dentro dele continua sendo um estágio inline, nunca um
+// segundo Modal). ───────────────────────────────────────────────────────
+function FichaDetailModal({
+  visible, token, practitioner, cachedRecord, onLoaded, onFieldSaved, onInactivate, onClose,
+}: {
+  visible: boolean;
+  token: string;
+  practitioner: RosterPractitioner | null;
+  cachedRecord?: RosterFullRecord | null;
+  onLoaded: (record: RosterFullRecord) => void;
+  onFieldSaved: (patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+  onInactivate: (p: RosterPractitioner) => void;
+  onClose: () => void;
+}) {
+  const [confirmingInactivate, setConfirmingInactivate] = useState(false);
+
+  if (!practitioner) return null;
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={st.fichaBackdrop}>
+        <View style={st.fichaCard}>
+          <View style={st.fichaHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={st.fichaName} numberOfLines={1}>{practitioner.name}</Text>
+              <View style={st.rowMeta}>
+                <BeltBadge beltLevel={practitioner.belt_name || ""} beltName={practitioner.belt_name || undefined} />
+              </View>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar ficha" style={st.fichaCloseBtn}>
+              <Icon name="close" size={18} color={P.ink2} />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {confirmingInactivate ? (
+              <InlineConfirm
+                message={`Confirma que ${practitioner.name} não treina mais? Some da lista — dá pra desfazer depois.`}
+                confirmLabel="Não treina mais"
+                onConfirm={() => { onInactivate(practitioner); setConfirmingInactivate(false); onClose(); }}
+                onCancel={() => setConfirmingInactivate(false)}
+                danger
+              />
+            ) : (
+              <>
+                <FullRecordPanel
+                  token={token}
+                  studentId={practitioner.id}
+                  cachedRecord={cachedRecord}
+                  onLoaded={onLoaded}
+                  onFieldSaved={onFieldSaved}
+                />
+                <Pressable onPress={() => setConfirmingInactivate(true)} accessibilityRole="button" accessibilityLabel="Não treina mais" style={st.inactivateLink}>
+                  <Icon name="ban" size={13} color={P.ink3} />
+                  <Text style={st.inactivateLinkText}>Não treina mais</Text>
+                </Pressable>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -795,7 +1007,7 @@ export default function RosterUpdatePortalScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const tokenStr = Array.isArray(token) ? token[0] : token || "";
 
-  const [mode, setMode] = useState<"queue" | "list">("queue");
+  const [mode, setMode] = useState<"queue" | "list" | "grade">("queue");
   const [search, setSearch] = useState("");
   const [overrides, setOverrides] = useState<Record<string, Partial<RosterPractitioner>>>({});
   const [progress, setProgress] = useState<RosterProgress | null>(null);
@@ -807,10 +1019,17 @@ export default function RosterUpdatePortalScreen() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastCounter = useRef(0);
 
-  const [addedPracticantes, setAddedPracticantes] = useState<RosterPractitioner[]>([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [addSubmitting, setAddSubmitting] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  // ── Ficha completa (H2) — FONTE ÚNICA de registros completos, usada
+  // tanto pela grade de completude quanto pelo modal de ficha aberto a
+  // partir dela E pelo painel "Ver ficha completa" da fila/lista (nunca
+  // uma estrutura paralela — armadilha "estado duplicado" já mordeu este
+  // produto). `recentlyUpdated` guarda `${id}:${campo} -> timestamp` só
+  // pra acender o "destacado" da grade por alguns segundos. ─────────────
+  const [fullRecords, setFullRecords] = useState<Record<string, RosterFullRecord>>({});
+  const [recentlyUpdated, setRecentlyUpdated] = useState<Record<string, number>>({});
+  const [openFichaId, setOpenFichaId] = useState<string | null>(null);
+  const fullRecordsLoadedRef = useRef<Set<string>>(new Set());
+  const gridLoadGenRef = useRef(0);
 
   const [importResult, setImportResult] = useState<{ atualizados: number; ignorados: number; erros: { row: number; motivo: string }[] } | null>(null);
 
@@ -826,7 +1045,7 @@ export default function RosterUpdatePortalScreen() {
     if (data?.progress) setProgress(data.progress);
   }, [data?.progress]);
 
-  const baseList = useMemo(() => [...(data?.praticantes || []), ...addedPracticantes], [data, addedPracticantes]);
+  const baseList = useMemo(() => data?.praticantes || [], [data]);
   const practitioners = useMemo<RosterPractitioner[]>(() => {
     return baseList.map((p) => {
       const ov = overrides[p.id];
@@ -916,31 +1135,114 @@ export default function RosterUpdatePortalScreen() {
     }
   }, [savePatch, showToast]);
 
-  const addMut = useCallback(async (input: AddPractitionerInput) => {
-    setAddSubmitting(true);
-    setAddError(null);
+  // ── ensureFullRecord — busca (ou reaproveita do cache) a ficha completa
+  // de UM praticante. Usada tanto pelo pré-carregamento em lote da grade
+  // quanto pela abertura direta da ficha (clique numa linha) — o cache é
+  // sempre o mesmo `fullRecords`, então o segundo caminho nunca refaz um
+  // fetch que o primeiro já resolveu. ───────────────────────────────────
+  const ensureFullRecord = useCallback(async (id: string) => {
+    if (fullRecordsLoadedRef.current.has(id)) return;
+    fullRecordsLoadedRef.current.add(id);
     try {
-      const created = await karatePublicApi.addPublicPractitioner(tokenStr, input);
-      const newPractitioner: RosterPractitioner = {
-        id: created.id,
-        name: created.name,
-        karate_registration_number: created.karate_registration_number,
-        belt_name: created.belt_name,
-        is_active: true,
-        phone: input.phone || null,
-        email: input.email || null,
-        missing: [!input.phone && "telefone", !input.email && "email"].filter(Boolean) as string[],
-        priority_group: "c",
-      };
-      setAddedPracticantes((prev) => [...prev, newPractitioner]);
-      setShowAddForm(false);
-      showToast(`${newPractitioner.name} foi adicionado ao quadro.`);
-    } catch (e: any) {
-      setAddError(e?.message || "Erro ao adicionar praticante. Tente novamente.");
-    } finally {
-      setAddSubmitting(false);
+      const rec = await karatePublicApi.getFullRecord(tokenStr, id);
+      setFullRecords((prev) => ({ ...prev, [id]: rec }));
+    } catch {
+      fullRecordsLoadedRef.current.delete(id); // falhou — libera pra tentar de novo depois
     }
-  }, [tokenStr, showToast]);
+  }, [tokenStr]);
+
+  // ── Pré-carregamento em lote pra grade de completude — só dispara quando
+  // o sensei realmente abre a aba "Grade" (não gasta ~400 requests à toa
+  // se ele nunca sai da fila). Concorrência limitada (6 por vez) + guarda
+  // de geração: se `workingList` mudar no meio do carregamento (ex.:
+  // alguém marcou "não treina mais"), a leva antiga para de escrever no
+  // cache — sem isso duas cargas concorrentes poderiam se pisar. ────────
+  useEffect(() => {
+    if (mode !== "grade") return;
+    const myGen = ++gridLoadGenRef.current;
+    const pending = workingList.map((p) => p.id).filter((id) => !fullRecordsLoadedRef.current.has(id));
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    async function worker() {
+      while (!cancelled && myGen === gridLoadGenRef.current) {
+        const idx = cursor++;
+        if (idx >= pending.length) return;
+        await ensureFullRecord(pending[idx]);
+      }
+    }
+    const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => worker());
+    Promise.all(workers).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, workingList, ensureFullRecord]);
+
+  const fullRecordsLoadedCount = useMemo(
+    () => workingList.filter((p) => !!fullRecords[p.id]).length,
+    [workingList, fullRecords]
+  );
+
+  // ── Handler ÚNICO de "campo da ficha completa salvo" — usado pela fila,
+  // pela lista E pelo modal da grade. Atualiza a MESMA fonte única
+  // (fullRecords) e, quando o campo também existe em RosterPractitioner
+  // (telefone/e-mail/is_active), reaproveita o `progress`/`missing` que o
+  // backend já devolveu no PATCH (result) — nunca recalcula isso no
+  // cliente por conta própria. Também acende o "destacado" da grade. ────
+  const handleFichaFieldSaved = useCallback((id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => {
+    setFullRecords((prev) => ({ ...prev, [id]: { ...(prev[id] as RosterFullRecord), ...patch } }));
+
+    // Chave da grade que cada campo do PATCH acende — vários campos de
+    // endereço convergem pra UMA coluna só ("endereco"), espelhando
+    // COMPLETENESS_COLUMNS.endereco.filled(). ────────────────────────
+    const now = Date.now();
+    const gridKeys = new Set<string>();
+    for (const key of Object.keys(patch)) {
+      if (key === "phone") gridKeys.add("telefone");
+      else if (key === "email") gridKeys.add("email");
+      else if (key === "birth_date") gridKeys.add("nascimento");
+      else if (key === "cpf_cnpj") gridKeys.add("cpf");
+      else if (key === "rg") gridKeys.add("rg");
+      else if (["street", "number", "complement", "neighborhood", "city", "state", "zip_code"].includes(key)) gridKeys.add("endereco");
+    }
+    if (gridKeys.size > 0) {
+      setRecentlyUpdated((prev) => {
+        const next = { ...prev };
+        for (const gridKey of gridKeys) next[`${id}:${gridKey}`] = now;
+        return next;
+      });
+      // Some o destaque sozinho depois de alguns segundos (a grade só lê o
+      // timestamp no render, então precisa de um novo render pra apagar).
+      setTimeout(() => {
+        setRecentlyUpdated((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          for (const gridKey of gridKeys) {
+            if (next[`${id}:${gridKey}`] === now) { delete next[`${id}:${gridKey}`]; changed = true; }
+          }
+          return changed ? next : prev;
+        });
+      }, 4200);
+    }
+
+    if (patch.phone !== undefined || patch.email !== undefined) {
+      setOverrides((prev) => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          phone: result?.phone !== undefined ? result.phone : patch.phone,
+          email: result?.email !== undefined ? result.email : patch.email,
+        },
+      }));
+    }
+    if (result?.progress) setProgress(result.progress);
+  }, []);
+
+  const handleFullRecordLoaded = useCallback((id: string, record: RosterFullRecord) => {
+    fullRecordsLoadedRef.current.add(id);
+    setFullRecords((prev) => ({ ...prev, [id]: record }));
+  }, []);
 
   const finishMut = useCallback(async () => {
     setFinishing(true);
@@ -1038,6 +1340,7 @@ export default function RosterUpdatePortalScreen() {
 
   const displayQueue = queueItems;
   const currentCard = displayQueue[0];
+  const openFichaPractitioner = openFichaId ? practitioners.find((p) => p.id === openFichaId) || null : null;
 
   // ── Formulário principal ─────────────────────────────────
   return (
@@ -1102,6 +1405,10 @@ export default function RosterUpdatePortalScreen() {
               <Icon name="grid" size={14} color={mode === "list" ? "#fdf8f2" : P.ink2} />
               <Text style={[st.modeBtnText, mode === "list" && st.modeBtnTextActive]}>Lista ({workingList.length})</Text>
             </Pressable>
+            <Pressable onPress={() => setMode("grade")} style={[st.modeBtn, mode === "grade" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Grade de completude">
+              <Icon name="bar-chart" size={14} color={mode === "grade" ? "#fdf8f2" : P.ink2} />
+              <Text style={[st.modeBtnText, mode === "grade" && st.modeBtnTextActive]}>Grade ({workingList.length})</Text>
+            </Pressable>
           </View>
 
           {mode === "queue" ? (
@@ -1114,6 +1421,7 @@ export default function RosterUpdatePortalScreen() {
                 token={tokenStr}
                 onPatch={savePatch}
                 onInactivate={handleInactivate}
+                onFichaFieldSaved={handleFichaFieldSaved}
               />
             ) : (
               <View style={st.emptyCard}>
@@ -1121,7 +1429,7 @@ export default function RosterUpdatePortalScreen() {
                 <Text style={st.emptyText}>Ninguém com contato faltando por aqui.</Text>
               </View>
             )
-          ) : (
+          ) : mode === "list" ? (
             <View>
               <FocusField
                 icon="search"
@@ -1136,25 +1444,26 @@ export default function RosterUpdatePortalScreen() {
                 <View style={st.emptyCard}><Text style={st.emptyText}>Nenhum praticante encontrado.</Text></View>
               ) : (
                 listFiltered.map((p) => (
-                  <ListRow key={p.id} p={p} token={tokenStr} onPatch={savePatch} onInactivate={handleInactivate} />
+                  <ListRow key={p.id} p={p} token={tokenStr} onPatch={savePatch} onInactivate={handleInactivate} onFichaFieldSaved={handleFichaFieldSaved} />
                 ))
               )}
             </View>
+          ) : (
+            workingList.length === 0 ? (
+              <View style={st.emptyCard}><Text style={st.emptyText}>Nenhum praticante ativo por aqui.</Text></View>
+            ) : (
+              <CompletenessGrid
+                rows={workingList}
+                fullRecords={fullRecords}
+                loadedCount={fullRecordsLoadedCount}
+                totalToLoad={workingList.length}
+                recentlyUpdated={recentlyUpdated}
+                onOpenPractitioner={(id) => { ensureFullRecord(id); setOpenFichaId(id); }}
+              />
+            )
           )}
 
-          {showAddForm ? (
-            <AddPractitionerForm
-              submitting={addSubmitting}
-              apiError={addError}
-              onSubmit={addMut}
-              onCancel={() => { setShowAddForm(false); setAddError(null); }}
-            />
-          ) : (
-            <Pressable onPress={() => setShowAddForm(true)} accessibilityRole="button" accessibilityLabel="Adicionar praticante" style={st.addToggleBtn}>
-              <Icon name="user-plus" size={16} color={P.primary} />
-              <Text style={st.addToggleBtnText}>Adicionar praticante</Text>
-            </Pressable>
-          )}
+          <RequestPractitionerRedirectCard />
 
           <SpreadsheetPanel
             token={tokenStr}
@@ -1211,6 +1520,16 @@ export default function RosterUpdatePortalScreen() {
         </Animated.View>
       </ScrollView>
       <Toast toast={toast} onDismiss={() => setToast(null)} />
+      <FichaDetailModal
+        visible={!!openFichaId}
+        token={tokenStr}
+        practitioner={openFichaPractitioner}
+        cachedRecord={openFichaId ? fullRecords[openFichaId] : null}
+        onLoaded={(record) => { if (openFichaId) handleFullRecordLoaded(openFichaId, record); }}
+        onFieldSaved={(patch, result) => { if (openFichaId) handleFichaFieldSaved(openFichaId, patch, result); }}
+        onInactivate={handleInactivate}
+        onClose={() => setOpenFichaId(null)}
+      />
     </View>
   );
 }
@@ -1305,6 +1624,14 @@ const st = StyleSheet.create({
   fullGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   fullGridItem: { width: "47%", minWidth: 130 },
   fullInput: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: P.ink },
+  currentValueText: { fontSize: 10.5, color: P.ink4, marginBottom: 4 },
+  savedNote: { fontSize: 10.5, color: P.ok, fontWeight: "700", marginTop: 4 },
+
+  readonlyRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 4 },
+  readonlyRowText: { fontSize: 11.5, color: P.ink3, flexShrink: 1 },
+  readonlyRowStrong: { fontFamily: KarateFonts.mono, color: P.ink2, fontWeight: "700" },
+  guardianReadonlyBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.border },
+  guardianReadonlyHint: { fontSize: 10.5, color: P.ink4, marginTop: 4 },
 
   inactivateLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14, alignSelf: "flex-start" },
   inactivateLinkText: { fontSize: 12, fontWeight: "600", color: P.ink3 },
@@ -1330,22 +1657,7 @@ const st = StyleSheet.create({
   importBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.okSoft, borderWidth: 1, borderColor: P.okLine, borderRadius: KarateRadius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 14 },
   importBannerText: { fontSize: 12, color: P.ink, flex: 1, lineHeight: 17 },
 
-  addToggleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.md, backgroundColor: P.glass, paddingVertical: 12, marginBottom: 14 },
-  addToggleBtnText: { fontSize: 13.5, fontWeight: "700", color: P.primary },
-
-  addCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginBottom: 14 },
-  addCardTitle: { fontFamily: KarateFonts.heading, fontSize: 16, color: P.ink, marginBottom: 12 },
   addFieldError: { fontSize: 11.5, color: P.danger, marginTop: 6 },
-
-  beltChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
-  beltChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: KarateRadius.sm, borderWidth: 1 },
-  beltChipSelected: { borderWidth: 2, ...KarateShadows.sm },
-  beltChipLabel: { fontSize: 12.5, fontWeight: "700" },
-
-  addFormActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 16 },
-  addCancelBtn: { paddingVertical: 12, paddingHorizontal: 16 },
-  addCancelBtnText: { fontSize: 13.5, fontWeight: "700", color: P.ink3 },
-  addSubmitBtn: { paddingVertical: 12, paddingHorizontal: 22 },
 
   footerCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginTop: 4 },
   textInputWrap: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm },
@@ -1361,6 +1673,40 @@ const st = StyleSheet.create({
   footer: { marginTop: 32, paddingTop: 20, borderTopWidth: 1, borderTopColor: P.border, alignItems: "center", gap: 4 },
   footerText: { fontSize: 11, color: P.ink3, fontWeight: "600" },
   footerTextSmall: { fontSize: 10, color: P.ink4, textAlign: "center", maxWidth: 320 },
+
+  // ── Convite pra "solicitar novo praticante" no Portal do Sensei (H2) ──
+  redirectCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginBottom: 14 },
+  redirectHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  redirectTitle: { fontFamily: KarateFonts.heading, fontSize: 14.5, color: P.ink, flex: 1 },
+  redirectDesc: { fontSize: 12, color: P.ink3, lineHeight: 17, marginBottom: 12 },
+  redirectBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: P.primaryLine, borderRadius: KarateRadius.md, backgroundColor: P.glass2, paddingVertical: 10 },
+  redirectBtnText: { fontSize: 13, fontWeight: "700", color: P.primary },
+
+  // ── Grade de completude (H2 — item 2, "a peça central") ─────────────
+  gridCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 12, marginBottom: 14 },
+  gridCaption: { fontSize: 11, color: P.ink3, lineHeight: 15, marginBottom: 10 },
+  gridHeaderRow: { flexDirection: "row", alignItems: "center", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: P.border, marginBottom: 2 },
+  gridHeaderName: { flex: 1, fontSize: 10, fontWeight: "800", color: P.ink3, textTransform: "uppercase", letterSpacing: 0.3 },
+  gridHeaderCol: { width: 30, fontSize: 8.5, fontWeight: "800", color: P.ink3, textAlign: "center", textTransform: "uppercase" },
+  gridRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.04)" },
+  gridRowName: { flex: 1, fontSize: 12, fontWeight: "600", color: P.ink, paddingRight: 6 },
+  gridCell: { width: 30, alignItems: "center", justifyContent: "center" },
+  dotEmpty: { width: 9, height: 9, borderRadius: 5, borderWidth: 1.4, borderColor: P.ink4, backgroundColor: "transparent" },
+  dotFilled: { width: 9, height: 9, borderRadius: 5, backgroundColor: P.ok },
+  dotRecent: { width: 11, height: 11, borderRadius: 6, backgroundColor: P.primary, borderWidth: 2, borderColor: P.primaryLine },
+  dotNa: { width: 5, height: 1.4, borderRadius: 1, backgroundColor: P.border },
+  gridLoadingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 10 },
+  gridLoadingText: { fontSize: 11, color: P.ink3 },
+  gridLegend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: P.border },
+  gridLegendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  gridLegendText: { fontSize: 10.5, color: P.ink3 },
+
+  // ── Modal da ficha aberta pela grade (único <Modal> da tela) ─────────
+  fichaBackdrop: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", justifyContent: "flex-end" },
+  fichaCard: { backgroundColor: P.bg, borderTopLeftRadius: KarateRadius.xl, borderTopRightRadius: KarateRadius.xl, maxHeight: "88%", borderWidth: 1, borderColor: P.border, borderBottomWidth: 0 },
+  fichaHead: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, borderBottomWidth: 1, borderBottomColor: P.border },
+  fichaName: { fontFamily: KarateFonts.heading, fontSize: 17, color: P.ink },
+  fichaCloseBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: P.glass2 },
 
   toastWrap: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", paddingBottom: 20, paddingHorizontal: 16 },
   toast: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: P.ink, borderRadius: KarateRadius.md, paddingVertical: 12, paddingHorizontal: 16, maxWidth: 480, ...KarateShadows.card },
