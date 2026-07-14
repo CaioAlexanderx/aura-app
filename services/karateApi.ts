@@ -427,6 +427,19 @@ export interface DojoRosterProgress {
   total_praticantes: number;
 }
 
+/**
+ * Resumo agregado do roster-progress (aba "Atualização cadastral" —
+ * KPIs no topo). Derivado, no backend, do MESMO array `data` que a lista
+ * usa (fonte única — nunca diverge dos números da tabela abaixo).
+ */
+export interface RosterProgressSummary {
+  total_dojos: number;
+  nao_abriram: number;
+  em_andamento: number;
+  validados: number;
+  praticantes_sem_contato: number;
+}
+
 export type RedistributeAction = "transfer" | "inactivate";
 
 export interface RedistributeDecision {
@@ -1679,13 +1692,19 @@ export const karateApi = {
 
   /**
    * Painel da federação (G1 item 8) — andamento do pedido de atualização
-   * cadastral em TODOS os dojôs: não abriu / em andamento / validado, e
-   * quantos praticantes ainda estão sem contato. Sem isso o pedido de
-   * atualização vira "pedido no vácuo" — a federação nunca sabe quem
-   * ainda não mexeu no link.
+   * cadastral em TODOS os dojôs ATIVOS (default do backend): não abriu /
+   * em andamento / validado, e quantos praticantes ainda estão sem
+   * contato. Sem isso o pedido de atualização vira "pedido no vácuo" — a
+   * federação nunca sabe quem ainda não mexeu no link.
+   * `status`: 'active' (default do backend, omitir aqui já basta) | 'all'
+   * (inclui ex-filiados — não usado pela aba "Atualização cadastral", que
+   * só faz sentido para quem ainda está na federação).
    */
-  getRosterProgress: (federationId: string): Promise<{ data: DojoRosterProgress[] }> =>
-    request(`/federation/${federationId}/dojos/roster-progress`),
+  getRosterProgress: (
+    federationId: string,
+    status?: "active" | "all"
+  ): Promise<{ data: DojoRosterProgress[]; summary: RosterProgressSummary }> =>
+    request(`/federation/${federationId}/dojos/roster-progress${status ? `?status=${status}` : ""}`),
 
   /**
    * Redistribui os praticantes do dojô (transferir para outro dojô destino
