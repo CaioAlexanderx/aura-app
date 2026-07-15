@@ -65,8 +65,22 @@ const MATCHED_ON_LABEL: Record<string, string> = {
   cpf: "mesmo CPF",
 };
 
+// ⚠️ BUGFIX (15/07/2026) — data de nascimento aparecia UM DIA ATRÁS.
+// `new Date("2011-04-18")` parseia como UTC meia-noite; no fuso de Brasília
+// (UTC-3) isso vira 17/04/2011 21:00 e o toLocaleDateString mostra "17/04/2011".
+// É a mesma família do P0 do backend (data do driver pg como Date), agora no
+// front. birth_date é DATA PURA (sem hora, sem fuso) — não pode passar por
+// new Date(iso). Isso é grave: elegibilidade de categoria infantil depende
+// da data de nascimento correta.
+// fmtDateTime abaixo continua usando new Date() de propósito: ali o valor é
+// timestamptz de verdade (created_at/resolved_at), onde o fuso local é o certo.
 function fmtDate(iso?: string | null): string {
   if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;   // sem Date, sem fuso, sem perder um dia
+  }
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });

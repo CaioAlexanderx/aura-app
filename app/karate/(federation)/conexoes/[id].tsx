@@ -58,6 +58,12 @@ export default function ConexaoDojoDetalhe() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const connId = String(id || "");
+  // Defesa em profundidade (15/07/2026): esta rota é CURINGA — qualquer
+  // segmento sob /karate/conexoes/ que não tenha rota própria cai aqui. Já
+  // aconteceu com "solicitacoes" (que virou /conexoes/solicitacoes/index.tsx):
+  // o id não-UUID ia para a API e voltava 500. Se não parece UUID, não chama
+  // a API — é 404 de rota, não erro de servidor.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connId);
 
   const [conn, setConn] = useState<ConnectionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,13 +73,14 @@ export default function ConexaoDojoDetalhe() {
 
   const load = useCallback(() => {
     if (!connId) return;
+    if (!isUuid) { setError(true); setLoading(false); return; }  // não chama a API com lixo
     setLoading(true);
     setError(false);
     karateConnectionsApi.getConnection(federationId, connId)
       .then(setConn)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [federationId, connId]);
+  }, [federationId, connId, isUuid]);
   useEffect(() => { load(); }, [load]);
 
   const reconnect = async () => {
