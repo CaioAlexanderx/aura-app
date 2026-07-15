@@ -94,6 +94,10 @@ const NAV_ITEMS = [
   { label: "Financeiro",      icon: "wallet",    route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
   // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
   { label: "Certificados",    icon: "ribbon",    route: "/karate/exames",        roles: null,          sidebarOnly: false },
+  // Sisteminha de gestão de impressão (fila A imprimir/Impressa/Entregue).
+  // Módulo próprio (não sub-tab de Certificados) — ver comentário no topo
+  // de app/karate/(federation)/carteirinhas/index.tsx.
+  { label: "Carteirinhas",    icon: "credit-card", route: "/karate/carteirinhas", roles: null,        sidebarOnly: false },
   { label: "Eventos",         icon: "calendar",  route: "/karate/eventos",       roles: null,          sidebarOnly: false },
   { label: "Competições",    icon: "trophy",    route: "/karate/competicoes",   roles: null,          sidebarOnly: false },
   { label: "Importar",        icon: "upload",    route: "/karate/importacao",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
