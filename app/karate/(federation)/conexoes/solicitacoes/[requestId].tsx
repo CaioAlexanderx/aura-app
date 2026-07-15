@@ -21,11 +21,17 @@
 // Depois de uma decisão bem-sucedida, router.back() — a fila
 // (SolicitacoesTab) refaz a busca sozinha no foco (useFocusEffect),
 // fonte única, sem tentar sincronizar estado entre as duas telas.
+// Exceção: rejeitar fica na tela (estágio "rejected-done") pra mostrar o
+// botão "Avisar o dojô no WhatsApp" (wa.me simples, click-to-chat — a
+// federação decide se clica, nada automático) antes do router.back(). O
+// mesmo botão também aparece depois, reabrindo o detalhe de uma
+// solicitação já rejeitada — a federação pode querer avisar depois, não
+// só no calor do momento.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, ScrollView, TextInput, Pressable,
-  useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
+  useWindowDimensions, StyleSheet, ViewStyle, TextStyle, Platform, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -35,9 +41,10 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { ShojiBackground, Card, ShojiButton, Avatar, Body, KV, Mono } from "@/components/karate/shoji";
 import {
-  karateApi, PractitionerRequestAdminRow, PossibleMatch, EditPractitionerRequestBody,
+  karateApi, PractitionerRequestAdminRow, PossibleMatch, EditPractitionerRequestBody, RejectRequestResult,
 } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { buildWaMeUrl } from "@/services/messaging";
 
 const STATUS_VIEW: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   pendente:  { label: "Pendente",  color: P.warn, bg: P.warnWash, icon: "hourglass" },
@@ -71,7 +78,7 @@ function fmtDateTime(iso?: string | null): string {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-type Stage = "none" | "create" | "transfer" | "edit" | "reject";
+type Stage = "none" | "create" | "transfer" | "edit" | "reject" | "rejected-done";
 
 function Field({ label, value, onChangeText, placeholder, multiline }: {
   label: string; value: string; onChangeText: (t: string) => void; placeholder?: string; multiline?: boolean;
@@ -91,10 +98,64 @@ function Field({ label, value, onChangeText, placeholder, multiline }: {
   );
 }
 
+// ── Botão "Avisar o dojô no WhatsApp" (pós-rejeição) ────────────────────
+// wa.me simples, click-to-chat — a federação decide se clica, nada
+// automático/agendado. Mensagem curta, linguagem de gestor (quem lê é o
+// sensei): identificação da federação, item que precisa de ajuste, motivo
+// escrito pela federação, e o link pra corrigir e reenviar (mesmo link do
+// sensei que a rejeição reabre no backend). Sem tecniquês, sem emoji.
+function buildDojoNoticeMessage(
+  federationName: string, fullName: string, reason: string, rosterUrl: string | null,
+): string {
+  const fed = federationName || "a federação";
+  return [
+    `Olá! Aqui é a ${fed}.`,
+    `A solicitação de cadastro de ${fullName} precisa de um ajuste antes de seguir.`,
+    `Motivo: ${reason}`,
+    rosterUrl
+      ? `Corrija e reenvie por aqui: ${rosterUrl}`
+      : "Entre em contato com a federação para reenviar a solicitação corrigida.",
+  ].join("\n\n");
+}
+
+function openWhatsapp(url: string) {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+  } else {
+    Linking.openURL(url);
+  }
+}
+
+// Reusado tanto logo após rejeitar (estágio "rejected-done") quanto ao
+// reabrir o detalhe de uma solicitação já rejeitada — mesma fonte de
+// verdade (dojo_whatsapp_phone/dojo_roster_update_url vêm sempre do
+// backend, celular > fixo já resolvido lá; nunca recalculado aqui).
+function DojoWhatsappNotice({ fullName, reason, whatsappPhone, rosterUrl, federationName }: {
+  fullName: string; reason: string | null; whatsappPhone: string | null | undefined;
+  rosterUrl: string | null | undefined; federationName: string;
+}) {
+  const message = buildDojoNoticeMessage(federationName, fullName, reason || "—", rosterUrl || null);
+  const url = buildWaMeUrl(whatsappPhone, message);
+  return (
+    <View style={{ marginTop: 10 }}>
+      <ShojiButton
+        label="Avisar o dojô no WhatsApp"
+        icon="logo-whatsapp"
+        variant="accent"
+        onPress={url ? () => openWhatsapp(url) : undefined}
+        style={[{ backgroundColor: "#25D366" }, !url && { opacity: 0.5 }]}
+      />
+      {!url && (
+        <Body muted style={{ fontSize: 11.5, marginTop: 6 }}>Dojô sem telefone cadastrado.</Body>
+      )}
+    </View>
+  );
+}
+
 export default function SolicitacaoDetalhe() {
   const { requestId } = useLocalSearchParams<{ requestId: string }>();
   const router = useRouter();
-  const { federationId } = useKarateFederation();
+  const { federationId, federationName } = useKarateFederation();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const id = String(requestId || "");
@@ -117,6 +178,10 @@ export default function SolicitacaoDetalhe() {
 
   // ── Estágio "Rejeitar" ───────────────────────────────────────
   const [rejectReason, setRejectReason] = useState("");
+  // Preenchido só após rejeitar com sucesso — alimenta o botão "Avisar o
+  // dojô no WhatsApp" no estágio "rejected-done". Não duplica `detail`:
+  // é um dado NOVO que só existe depois da rejeição confirmada.
+  const [rejectResult, setRejectResult] = useState<RejectRequestResult | null>(null);
 
   const load = useCallback(() => {
     if (!federationId || !id) return;
@@ -147,6 +212,7 @@ export default function SolicitacaoDetalhe() {
     setSelectedMatch(null);
     setManualPractitionerId("");
     setRejectReason("");
+    setRejectResult(null);
   }, []);
 
   const handleApproveCreate = useCallback(async () => {
@@ -208,13 +274,17 @@ export default function SolicitacaoDetalhe() {
           ? "Solicitação rejeitada — o link do dojô foi reaberto para o sensei ver o motivo e reenviar."
           : "Solicitação rejeitada."
       );
-      router.back();
+      // Fica na tela (estágio "rejected-done") pra mostrar o botão "Avisar
+      // o dojô no WhatsApp" — router.back() só depois, quando a federação
+      // decidir (botão "Voltar para Solicitações" abaixo).
+      setRejectResult(res);
+      setStage("rejected-done");
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível rejeitar a solicitação.");
     } finally {
       setSubmitting(false);
     }
-  }, [detail, rejectReason, federationId, router]);
+  }, [detail, rejectReason, federationId]);
 
   const payload = detail?.payload || {};
   const enderecoLine = useMemo(() => {
@@ -284,6 +354,15 @@ export default function SolicitacaoDetalhe() {
                 <Text style={st.cardTitle}>Solicitação rejeitada</Text>
                 <Body muted style={{ marginTop: 6 }}>Motivo: {detail.reject_reason || "—"}</Body>
                 <Body muted style={{ marginTop: 4, fontSize: 11.5 }}>Resolvida em {fmtDateTime(detail.resolved_at)}.</Body>
+                {/* Disponível depois, não só no calor do momento do reject — a
+                    federação pode voltar aqui e avisar o dojô mais tarde. */}
+                <DojoWhatsappNotice
+                  fullName={detail.full_name}
+                  reason={detail.reject_reason}
+                  whatsappPhone={detail.dojo_whatsapp_phone}
+                  rosterUrl={detail.dojo_roster_update_url}
+                  federationName={federationName}
+                />
               </>
             )}
           </Card>
@@ -455,6 +534,28 @@ export default function SolicitacaoDetalhe() {
                     onPress={rejectReason.trim() && !submitting ? handleReject : undefined}
                     style={!rejectReason.trim() ? { opacity: 0.5 } : undefined}
                   />
+                </View>
+              </View>
+            )}
+
+            {stage === "rejected-done" && rejectResult && (
+              <View>
+                <Text style={st.stageTitle}>Solicitação rejeitada</Text>
+                <Body muted style={{ marginBottom: 10 }}>
+                  Motivo enviado ao sensei: {rejectResult.reject_reason}
+                  {rejectResult.dojo_access_reopened
+                    ? " O link do dojô foi reaberto para ele ver e reenviar corrigido."
+                    : ""}
+                </Body>
+                <DojoWhatsappNotice
+                  fullName={detail.full_name}
+                  reason={rejectResult.reject_reason}
+                  whatsappPhone={rejectResult.dojo_whatsapp_phone}
+                  rosterUrl={rejectResult.dojo_roster_update_url}
+                  federationName={federationName}
+                />
+                <View style={st.stageActions}>
+                  <ShojiButton label="Voltar para Solicitações" variant="ghost" onPress={() => router.back()} />
                 </View>
               </View>
             )}
