@@ -1692,6 +1692,16 @@ export interface PractitionerRequestAdminRow {
   resolved_by: string | null;
   /** Sugestões de dedup — a UI mostra, a federação decide (nunca automático). */
   possible_matches: PossibleMatch[];
+  /**
+   * Contato do DOJÔ (não do praticante) + link do sensei — só preenchidos
+   * quando status==='rejeitada' (botão "Avisar o dojô no WhatsApp" na tela
+   * de decisão). dojo_whatsapp_phone já resolve celular > fixo no backend
+   * (WhatsApp não funciona em fixo); null quando o dojô não tem telefone.
+   */
+  dojo_phone?: string | null;
+  dojo_phone_mobile?: string | null;
+  dojo_whatsapp_phone?: string | null;
+  dojo_roster_update_url?: string | null;
 }
 
 /** GET /federation/:id/practitioner-requests/metrics — item 5 do H3. */
@@ -1729,6 +1739,16 @@ export interface RejectRequestResult {
   reject_reason: string;
   /** Item 4 do H3: se true, o link público do dojô foi reaberto/estendido. */
   dojo_access_reopened: boolean;
+  /**
+   * Contato do DOJÔ (celular > fixo já resolvido no backend) + a MESMA URL
+   * do link do sensei reaberto acima — para o botão "Avisar o dojô no
+   * WhatsApp" logo após a rejeição. null quando o dojô não tem telefone
+   * cadastrado (degrada com elegância — nunca erro).
+   */
+  dojo_phone: string | null;
+  dojo_phone_mobile: string | null;
+  dojo_whatsapp_phone: string | null;
+  dojo_roster_update_url: string | null;
 }
 
 export interface EditPractitionerRequestBody {
