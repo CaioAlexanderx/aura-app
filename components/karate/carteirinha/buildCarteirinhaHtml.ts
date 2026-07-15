@@ -265,7 +265,7 @@ function cardCss(): string {
 
   // ── cartão CR80 ──
   html += '.cr80{width:' + CARD_W_MM + 'mm;height:' + CARD_H_MM + 'mm;background:#ffffff;border-radius:2.6mm;border:0.18mm solid ' + LINE_2 + ';overflow:hidden;page-break-inside:avoid;break-inside:avoid;position:relative}';
-  html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:4.8mm 6.2mm 4.2mm}';
+  html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:2.85mm 6.2mm 4.2mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
   html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
@@ -276,7 +276,7 @@ function cardCss(): string {
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:13mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:10pt;font-weight:700;letter-spacing:0.05pt;color:' + INK + ';line-height:1.16}';
+  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:8pt;font-weight:700;letter-spacing:0.05pt;text-transform:uppercase;color:' + INK + ';line-height:1.2;min-width:0}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.3pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
@@ -286,7 +286,7 @@ function cardCss(): string {
   html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
   // réguas
-  html += '.ruler-red{margin:0.9mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
+  html += '.ruler-red{margin:2.85mm -6.2mm 0;height:0.3mm;background:' + RED + '}';
   html += '.black-bar{margin:0.2mm -6.2mm 0;height:1.05mm;background:' + BLACK_BAR + '}';
 
   // body
@@ -297,7 +297,7 @@ function cardCss(): string {
   html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
   html += '.flabel{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:6.4pt;font-weight:700;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm}';
+  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm;font-weight:800}';
   html += '.frow{display:flex;gap:2.6mm}';
   html += '.f-date{width:14mm;flex:none;min-width:0}';
   html += '.f-dojo{flex:1;min-width:0}';
@@ -319,7 +319,7 @@ function cardCss(): string {
   html += '.cbkt-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-weight:700;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
-  html += '.belt-label{margin-top:0;font-weight:700}';
+  html += '.belt-label{margin-top:0;font-weight:800}';
 
   // footer
   html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:flex-end}';
@@ -334,10 +334,10 @@ function cardCss(): string {
   html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
-  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:0.95mm}';
+  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:1.3mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
-  html += '.kun-dot{width:2.3mm;flex-shrink:0;text-align:center;font-size:5.6pt;line-height:1.2;font-weight:700;color:' + RED + '}';
-  html += '.kun-text{flex:1;min-width:0;font-size:5.4pt;font-weight:700;line-height:1.2;color:' + INK + '}';
+  html += '.kun-dot{width:2.6mm;flex-shrink:0;text-align:center;font-size:8pt;line-height:1.32;font-weight:700;color:' + RED + '}';
+  html += '.kun-text{flex:1;min-width:0;font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:5.4pt;font-weight:800;line-height:1.32;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
   html += '.verify-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.15}';
   html += '.verify-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.8pt;font-weight:700;margin-top:0.6mm;color:' + INK + ';line-height:1.15}';
@@ -374,6 +374,7 @@ function cardCss(): string {
   html += '.hd-verso{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.flabel{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.kun-eyebrow{font-size:4.6pt;font-weight:700}';
+  html += '.kun-dot{font-size:9.5pt}';
   html += '.verify-eyebrow{font-size:4.6pt;font-weight:700;color:' + PRINT_LABEL + '}';
   html += '.pres-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.valid-text{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
