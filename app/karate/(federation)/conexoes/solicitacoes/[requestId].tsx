@@ -475,7 +475,14 @@ export default function SolicitacaoDetalhe() {
                   <Body style={{ marginBottom: 10 }}>
                     Isso vincula a solicitação a <Text style={{ fontWeight: "700" }}>{selectedMatch.name}</Text>
                     {selectedMatch.karate_registration_number ? ` (matrícula ${selectedMatch.karate_registration_number})` : ""}
-                    , hoje em {selectedMatch.dojo_name || "outro dojô"}, e move para {detail.dojo_name || "o dojô da solicitação"}.{" "}
+                    {selectedMatch.dojo_id && selectedMatch.dojo_id === detail.dojo_id ? (
+                      // Origem === destino (ex.: recadastro, número FPKT bate com quem já
+                      // está no dojô do sensei) — "move para onde já está" soa erro de
+                      // cópia. Copy honesta: só vincula, sem mudança de dojô.
+                      <> — já está em {detail.dojo_name || "este dojô"}. A solicitação só será vinculada a esta pessoa, sem mudança de dojô.</>
+                    ) : (
+                      <>, hoje em {selectedMatch.dojo_name || "outro dojô"}, e move para {detail.dojo_name || "o dojô da solicitação"}.</>
+                    )}{" "}
                     <Text style={{ fontWeight: "700" }}>O histórico de faixa e a anuidade de {selectedMatch.name} NÃO mudam</Text> — a faixa alegada aqui
                     ({detail.claimed_belt || "não informada"}) é só para comparação, nunca é aplicada. Não gera cobrança.
                   </Body>
