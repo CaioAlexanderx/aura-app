@@ -403,6 +403,34 @@ export interface RosterValidation {
   last_accessed_at: string | null;
 }
 
+// ── Item 8 (revisão Atualização Cadastral, 15/07/2026) ──────────────────
+// A federação só via "atualizações concluídas" no dojô, nunca O QUE o
+// sensei mudou. GET .../roster-events achata karate_dojo_roster_events
+// (affected[]) numa linha por evento — cada `affected` item já vem com
+// `changes: [{field, from, to}]` quando o evento é uma edição de campo
+// (o PATCH granular do portal grava isso desde esta revisão).
+export interface RosterEventChange {
+  field: string;
+  from: string | boolean | null;
+  to: string | boolean | null;
+}
+export interface RosterEventAffected {
+  student_id?: string;
+  student_name?: string | null;
+  fields?: string[];
+  changes?: RosterEventChange[];
+  request_id?: string;
+  full_name?: string;
+  source?: string;
+}
+export interface RosterEvent {
+  id: string;
+  event: string;
+  created_at: string;
+  actor_id: string | null;
+  affected: RosterEventAffected[];
+}
+
 export interface RequestRosterUpdateResult {
   status: RosterValidationStatus;
   requested_at: string | null;
@@ -1878,6 +1906,30 @@ export const karateApi = {
     request(`/federation/${federationId}/dojos/${dojoId}/roster-validation`),
 
   /**
+   * Item 1 (revisão Atualização Cadastral, 15/07/2026): revoga o link do
+   * dojô — expira os DOIS tokens (sensei e auto-atendimento do aluno) na
+   * hora. Não apaga histórico (requested_at/validated_at continuam);
+   * gerar um novo pedido depois (requestRosterUpdate) cria um link novo
+   * normalmente. Destrutivo-ish — a UI deve confirmar antes de chamar.
+   */
+  revokeRosterUpdate: (
+    federationId: string,
+    dojoId: string
+  ): Promise<{ revoked: boolean }> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/revoke-roster-update`, { method: "POST" }),
+
+  /**
+   * Item 8: "o que o sensei mudou" no quadro deste dojô — de que valor
+   * para qual, quando. Mais recente primeiro.
+   */
+  getRosterEvents: (
+    federationId: string,
+    dojoId: string,
+    limit = 50
+  ): Promise<{ data: RosterEvent[] }> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/roster-events?limit=${limit}`),
+
+  /**
    * Painel da federação (G1 item 8) — andamento do pedido de atualização
    * cadastral em TODOS os dojôs ATIVOS (default do backend): não abriu /
    * em andamento / validado, e quantos praticantes ainda estão sem
@@ -2921,6 +2973,25 @@ export const karateApi = {
    */
   lookupFpktNumber: (federationId: string, number: string): Promise<FpktLookupHint> =>
     request(`/federation/${federationId}/dojo/practitioner-requests/lookup-fpkt?number=${encodeURIComponent(number)}`),
+
+  /**
+   * Item 9 (revisão Atualização Cadastral, 15/07/2026): foto do praticante
+   * NA SOLICITAÇÃO (antes de virar customer) — canal autenticado
+   * (Portal do Sensei). Mesmo mecanismo de uploadPractitionerPhoto (JSON +
+   * base64 → R2), só troca o destino: aqui é a solicitação, não um
+   * praticante já existente (que ainda não existe até a federação
+   * aprovar). Na aprovação, o backend copia a URL para
+   * customers.karate_photo_url automaticamente.
+   */
+  uploadPractitionerRequestPhoto: (
+    federationId: string,
+    requestId: string,
+    body: UploadPhotoInput
+  ): Promise<UploadPhotoResult> =>
+    request(`/federation/${federationId}/dojo/practitioner-requests/${requestId}/photo`, {
+      method: "POST",
+      body,
+    }),
 
   // ── H3 — Federação: fila de solicitações de praticante (lado admin) ──
   // Consumido pela aba "Solicitações" de Conexões e pela tela de

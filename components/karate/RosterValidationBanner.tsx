@@ -21,7 +21,7 @@
 // só o JSX final é que ramifica por status.
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, ViewStyle, TextStyle, Animated, Platform, Easing } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Animated, Platform, Easing } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP } from "@/constants/karateTheme";
 import { Motion, webTransition } from "@/constants/motion";
@@ -49,13 +49,24 @@ interface Props {
   selfServiceUrl?: string | null;
   onCopySelfServiceLink?: () => void;
   onShareSelfServiceWhatsApp?: () => void;
+  /**
+   * Item 1 (revisão Atualização Cadastral, 15/07/2026): "X" pra revogar o
+   * link quando a federação não quiser mais que o dojô acesse (link
+   * vazado, ciclo encerrado à força). Invalida os DOIS tokens (sensei +
+   * auto-atendimento) — a UI confirma antes de disparar (destrutivo-ish,
+   * mesmo padrão inline de CadastralTab.tsx: NUNCA <Modal>). Omitido =
+   * banner sem a opção de revogar (caller ainda não suporta).
+   */
+  onRevoke?: () => void;
+  revoking?: boolean;
   style?: ViewStyle;
 }
 
 export function RosterValidationBanner({
   status, requestedAtLabel, validatedAtLabel, validatedBy, url, onCopyLink, onShareWhatsApp,
-  selfServiceUrl, onCopySelfServiceLink, onShareSelfServiceWhatsApp, style,
+  selfServiceUrl, onCopySelfServiceLink, onShareSelfServiceWhatsApp, onRevoke, revoking, style,
 }: Props) {
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const enter = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
   const checkScale = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -105,37 +116,86 @@ export function RosterValidationBanner({
   ) : null;
   const selfServiceBlock = selfServiceInner ? <View style={styles.selfServiceBlock}>{selfServiceInner}</View> : null;
 
+  // Item 1: só faz sentido oferecer revogar quando existe ALGUM link ativo
+  // (sensei ou aluno) e o caller suporta a ação.
+  const canRevoke = !!onRevoke && !!(url || selfServiceUrl);
+  const revokeButton = canRevoke ? (
+    <Pressable
+      onPress={() => setConfirmingRevoke(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Revogar link de atualização cadastral"
+      style={styles.revokeX}
+    >
+      <Icon name="close-circle" size={17} color={P.ink3} />
+    </Pressable>
+  ) : null;
+
+  const revokeConfirm = confirmingRevoke ? (
+    <View style={styles.revokeConfirm}>
+      <Text style={styles.revokeConfirmText}>
+        Revogar este link? O sensei (e o aluno, se o link de auto-atendimento estava ativo) para de
+        conseguir acessar imediatamente. O histórico da solicitação continua salvo — dá pra gerar um
+        link novo depois em "Solicitar atualização cadastral".
+      </Text>
+      <View style={styles.revokeConfirmActions}>
+        <Pressable
+          onPress={revoking ? undefined : () => setConfirmingRevoke(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Cancelar"
+          style={styles.revokeCancelBtn}
+        >
+          <Text style={styles.revokeCancelText}>Cancelar</Text>
+        </Pressable>
+        <Pressable
+          onPress={revoking ? undefined : () => { onRevoke?.(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Confirmar revogação"
+          style={styles.revokeConfirmBtn}
+        >
+          {revoking ? <ActivityIndicator size="small" color="#fdf8f2" /> : <Text style={styles.revokeConfirmBtnText}>Revogar link</Text>}
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
+
   if (status === "pending") {
     return (
       <Animated.View style={[{ marginTop: SP[6] }, style, entryStyle]}>
         <Card style={{ borderColor: P.line2 }}>
-          <View style={styles.row}>
-            <Icon name="alert-circle" size={16} color={P.warn} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>
-                Quadro pendente de validação — solicitado em {requestedAtLabel || "—"}
-              </Text>
-              {url ? (
-                <View style={styles.linkRow}>
-                  <Text style={styles.link} numberOfLines={1}>{url}</Text>
-                  <PulsingLinkButton
-                    icon="copy-outline"
-                    label="Copiar link"
-                    onPress={onCopyLink}
-                    active={!reducedMotion}
-                    accessibilityLabel="Copiar link"
-                  />
-                  <HoverButton
-                    icon="logo-whatsapp"
-                    label="WhatsApp"
-                    onPress={onShareWhatsApp}
-                    accessibilityLabel="Abrir no WhatsApp"
-                  />
+          {confirmingRevoke ? (
+            revokeConfirm
+          ) : (
+            <>
+              <View style={styles.row}>
+                <Icon name="alert-circle" size={16} color={P.warn} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title}>
+                    Quadro pendente de validação — solicitado em {requestedAtLabel || "—"}
+                  </Text>
+                  {url ? (
+                    <View style={styles.linkRow}>
+                      <Text style={styles.link} numberOfLines={1}>{url}</Text>
+                      <PulsingLinkButton
+                        icon="copy-outline"
+                        label="Copiar link"
+                        onPress={onCopyLink}
+                        active={!reducedMotion}
+                        accessibilityLabel="Copiar link"
+                      />
+                      <HoverButton
+                        icon="logo-whatsapp"
+                        label="WhatsApp"
+                        onPress={onShareWhatsApp}
+                        accessibilityLabel="Abrir no WhatsApp"
+                      />
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
-          </View>
-          {selfServiceBlock}
+                {revokeButton}
+              </View>
+              {selfServiceBlock}
+            </>
+          )}
         </Card>
       </Animated.View>
     );
@@ -144,15 +204,22 @@ export function RosterValidationBanner({
   // validated
   return (
     <Animated.View style={[{ marginTop: SP[4] }, style, entryStyle]}>
-      <View style={styles.validatedRow}>
-        <Animated.View style={{ transform: [{ scale: checkScale }] }}>
-          <Icon name="checkmark-circle" size={15} color={OK} />
-        </Animated.View>
-        <Body muted>
-          Quadro validado em {validatedAtLabel || "—"}{validatedBy ? ` por ${validatedBy}` : ""}
-        </Body>
+      <View style={[styles.validatedRow, { justifyContent: "space-between" }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+            <Icon name="checkmark-circle" size={15} color={OK} />
+          </Animated.View>
+          <Body muted>
+            Quadro validado em {validatedAtLabel || "—"}{validatedBy ? ` por ${validatedBy}` : ""}
+          </Body>
+        </View>
+        {!confirmingRevoke && revokeButton}
       </View>
-      {selfServiceInner ? <Card style={{ borderColor: P.line2, marginTop: SP[3] }}>{selfServiceInner}</Card> : null}
+      {confirmingRevoke ? (
+        <Card style={{ borderColor: P.line2, marginTop: SP[3] }}>{revokeConfirm}</Card>
+      ) : (
+        selfServiceInner ? <Card style={{ borderColor: P.line2, marginTop: SP[3] }}>{selfServiceInner}</Card> : null
+      )}
     </Animated.View>
   );
 }
@@ -235,4 +302,14 @@ const styles = StyleSheet.create({
   btn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
   btnTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
   validatedRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+
+  // Item 1 — revogar link (X + confirmação inline, nunca Modal).
+  revokeX: { padding: 2, marginLeft: 8 } as ViewStyle,
+  revokeConfirm: { gap: 10 } as ViewStyle,
+  revokeConfirmText: { fontFamily: F.body, fontSize: 12.5, color: C.ink2, lineHeight: 18 } as TextStyle,
+  revokeConfirmActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 } as ViewStyle,
+  revokeCancelBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.sm } as ViewStyle,
+  revokeCancelText: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink3 } as TextStyle,
+  revokeConfirmBtn: { backgroundColor: P.red ?? "#b3432b", borderRadius: R.sm, paddingVertical: 8, paddingHorizontal: 14, minWidth: 100, alignItems: "center" } as ViewStyle,
+  revokeConfirmBtnText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
 });

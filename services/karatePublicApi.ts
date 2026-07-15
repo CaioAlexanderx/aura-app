@@ -308,6 +308,15 @@ export interface AddPractitionerResult {
   fpkt_lookup?: FpktLookupHint | null;
 }
 
+/** Item 9 — upload de foto (JSON base64), mesmo shape do canal autenticado (services/karateApi.ts#UploadPhotoInput/Result). */
+export interface PublicUploadPhotoInput {
+  content: string;
+  content_type?: "image/jpeg" | "image/png" | "image/webp";
+}
+export interface PublicUploadPhotoResult {
+  photo_url: string;
+}
+
 export type PractitionerRequestStatus = "pendente" | "aprovada" | "rejeitada";
 
 /** Uma linha de GET /public/roster-update/:token/practitioner-requests. */
@@ -447,6 +456,24 @@ export const karatePublicApi = {
     input: AddPractitionerInput
   ): Promise<AddPractitionerResult> =>
     pub(`/public/roster-update/${enc(token)}/practitioner`, {
+      method: "POST",
+      body: input,
+    }),
+
+  /**
+   * Item 9 (revisão Atualização Cadastral, 15/07/2026): foto do praticante
+   * NA SOLICITAÇÃO, pelo canal PÚBLICO (link do sensei, sem login) — o
+   * mesmo mecanismo de upload de karateApi.ts#uploadPractitionerPhoto
+   * (JSON + base64 → R2), token-gated como todo o resto deste arquivo.
+   * Chamar DEPOIS de addPublicPractitioner (precisa do `id` da solicitação
+   * já criada).
+   */
+  uploadPublicPractitionerPhoto: (
+    token: string,
+    requestId: string,
+    input: PublicUploadPhotoInput
+  ): Promise<PublicUploadPhotoResult> =>
+    pub(`/public/roster-update/${enc(token)}/practitioner/${enc(requestId)}/photo`, {
       method: "POST",
       body: input,
     }),

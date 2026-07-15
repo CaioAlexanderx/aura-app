@@ -27,13 +27,20 @@
 // ============================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, TextInput, Pressable, ActivityIndicator,
+  View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Image, Platform,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors as P, KarateRadius as R, KarateFonts as F, KarateBelts, BeltKey, resolveBeltKey } from "@/constants/karateTheme";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
+// Item 9 (revisão Atualização Cadastral, 15/07/2026): MESMO mecanismo de
+// upload de foto já usado pro praticante existente (PraticanteFichaModal.tsx)
+// — picker web + leitura base64. Nada novo inventado aqui.
+import { pickFileWeb } from "@/services/studioUploadApi";
+import { fileToBase64 } from "@/components/karate/praticante-ficha/FotoSection";
+
+const IS_WEB = Platform.OS === "web";
 
 const NON_LEGACY_BELT_KEYS: BeltKey[] = (Object.keys(KarateBelts) as BeltKey[]).filter(
   (k) => !KarateBelts[k].isLegacy
@@ -116,8 +123,19 @@ export interface FpktLookupHint {
 }
 
 export interface PractitionerRequestCreateResult {
+  /** Item 9: precisamos do id da solicitação recém-criada pra anexar a foto depois. */
+  id?: string;
   already_pending: boolean;
   fpkt_lookup?: FpktLookupHint | null;
+}
+
+/** Item 9 — upload de foto DEPOIS de criar a solicitação (precisa do id). Mesmo shape nos dois canais (karateApi.ts/karatePublicApi.ts). */
+export interface PhotoUploadInput {
+  content: string;
+  content_type?: "image/jpeg" | "image/png" | "image/webp";
+}
+export interface PhotoUploadResult {
+  photo_url: string;
 }
 
 // ── "Corrigir e reenviar" (item 2 — rejeição corrigível) ─────────────
@@ -192,6 +210,10 @@ const EMPTY_FORM: FormState = {
   guardian_name: "", guardian_cpf: "", guardian_phone: "", guardian_relationship: "",
 };
 
+// Item 9: preview local da foto (blob URL) — o File real fica num ref
+// (mesmo padrão de PraticanteFichaModal.tsx), sobe DEPOIS que a
+// solicitação existe (precisa de um id pra anexar em karate_practitioner_requests).
+
 type FpktMode = "unset" | "tem" | "nao_tem";
 
 export interface NewRequestFormProps {
@@ -201,6 +223,13 @@ export interface NewRequestFormProps {
   onLookupFpkt: (number: string) => Promise<FpktLookupHint>;
   /** Chamado após uma solicitação criada com sucesso (inclusive already_pending) — o caller decide o que refrescar. */
   onCreated: () => void;
+  /**
+   * Item 9: sobe a foto da solicitação recém-criada (base64 -> R2, mesmo
+   * mecanismo de karateApi.ts#uploadPractitionerPhoto). Opcional — quando
+   * ausente, a seção de foto não aparece (caller não suporta upload por
+   * este canal ainda).
+   */
+  onUploadPhoto?: (requestId: string, input: PhotoUploadInput) => Promise<PhotoUploadResult>;
   /** Texto do estágio de confirmação — default cobre o caso genérico; cada tela ajusta a redação. */
   confirmTitle?: (alreadyPending: boolean) => string;
   confirmText?: (alreadyPending: boolean) => string;
@@ -215,7 +244,7 @@ export interface NewRequestFormProps {
   prefillKey?: number;
 }
 
-export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle, confirmText, prefill, prefillKey }: NewRequestFormProps) {
+export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle, confirmText, prefill, prefillKey, onUploadPhoto }: NewRequestFormProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -234,6 +263,33 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
   // desliga em resetAll — sem isso o aviso "Corrigindo..." ficaria preso
   // depois de "Fazer outra solicitação".
   const [correcting, setCorrecting] = useState(false);
+
+  // ── Item 9: foto do praticante — mesmo padrão de PraticanteFichaModal.tsx
+  // (preview local via blob URL, File guardado num ref, upload real DEPOIS
+  // do submit, quando já existe um id de solicitação pra anexar). ───────
+  const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const pendingPhotoFile = useRef<File | null>(null);
+
+  const handlePickPhoto = useCallback(async () => {
+    if (!IS_WEB) return;
+    setPhotoLoading(true);
+    try {
+      const file = await pickFileWeb("image/*");
+      if (!file) return;
+      pendingPhotoFile.current = file;
+      setPhotoPreview(URL.createObjectURL(file));
+      setPhotoUploadError(null);
+    } catch { /* cancelado ou falha de leitura — silencioso */ }
+    finally { setPhotoLoading(false); }
+  }, []);
+
+  const handleRemovePhoto = useCallback(() => {
+    pendingPhotoFile.current = null;
+    setPhotoPreview("");
+    setPhotoUploadError(null);
+  }, []);
 
   // ── Aplica o prefill de "Corrigir e reenviar" (item 2) — só quando
   // `prefillKey` MUDA (nunca a cada render; sem isso um novo digitar do
@@ -261,6 +317,9 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
     setSubmitError(null);
     setResult(null);
     setCorrecting(true);
+    pendingPhotoFile.current = null;
+    setPhotoPreview("");
+    setPhotoUploadError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillKey]);
 
@@ -271,9 +330,25 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
   const isMinor = age !== null && age < 18;
   const cpfBad = form.cpf.length > 0 && !cpfValido(form.cpf);
 
+  // Item 6 (revisão Atualização Cadastral, 15/07/2026) — TODOS os campos
+  // da ficha são obrigatórios agora (antes só nome + um dos dois
+  // contatos). Espelha 1:1 validatePractitionerRequestPayload do backend
+  // (karatePractitionerRequestValidation.js) — complement continua
+  // opcional (modificador de endereço, nem toda casa tem apto/fundos);
+  // guardian_* só entra quando `isMinor`. O backend valida de novo mesmo
+  // se este front deixar passar algo (defesa em profundidade).
   const nameOk = !!form.full_name.trim();
-  const contactOk = !!(form.phone.trim() || form.email.trim());
-  const valid = nameOk && contactOk && !birthBad && !cpfBad;
+  const birthOk = birthComplete && !birthBad;
+  const sexOk = !!form.sex;
+  const cpfOk = form.cpf.trim().length > 0 && !cpfBad;
+  const rgOk = !!form.rg.trim();
+  const phoneOk = !!form.phone.trim();
+  const emailOk = !!form.email.trim();
+  const beltOk = !!form.belt_key;
+  const addressOk = !!(form.zip_code.trim() && form.street.trim() && form.number.trim() && form.neighborhood.trim() && form.city.trim() && form.state.trim());
+  const guardianOk = !isMinor || !!(form.guardian_name.trim() && form.guardian_phone.trim() && form.guardian_relationship);
+
+  const valid = nameOk && birthOk && sexOk && cpfOk && rgOk && phoneOk && emailOk && beltOk && addressOk && guardianOk;
 
   // ── Auto-localizar (debounced, guarda de corrida por id de requisição —
   // armadilha conhecida: descartar resposta obsoleta se o sensei já digitou
@@ -312,11 +387,15 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
     setSubmitError(null);
     setResult(null);
     setCorrecting(false);
+    pendingPhotoFile.current = null;
+    setPhotoPreview("");
+    setPhotoUploadError(null);
   }
 
   async function handleSubmit() {
     setTouched(true);
     setSubmitError(null);
+    setPhotoUploadError(null);
     if (!valid || submitting) return;
 
     const belt = form.belt_key ? KarateBelts[form.belt_key] : null;
@@ -348,6 +427,20 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
       const created = await onSubmit(body);
       setResult({ alreadyPending: !!created.already_pending, lookup: created.fpkt_lookup || fpktLookup });
       onCreated();
+
+      // ── Item 9: sobe a foto DEPOIS que a solicitação existe (precisa do
+      // id). Falha no upload não desfaz a solicitação já criada — mesmo
+      // princípio de PraticanteFichaModal.tsx (cadastro salvo mesmo se só a
+      // foto falhar), só que aqui o aviso fica junto da confirmação. ─────
+      const fileToUpload = pendingPhotoFile.current;
+      if (fileToUpload && created.id && onUploadPhoto) {
+        try {
+          const { content, content_type } = await fileToBase64(fileToUpload);
+          await onUploadPhoto(created.id, { content, content_type });
+        } catch {
+          setPhotoUploadError("Solicitação enviada, mas a foto não pôde ser anexada. A federação pode pedir de novo.");
+        }
+      }
     } catch (e: any) {
       setSubmitError(e?.message || "Não foi possível enviar a solicitação. Tente de novo.");
     } finally {
@@ -381,6 +474,12 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
             </Text>
           </View>
         )}
+        {!!photoUploadError && (
+          <View style={fs.transferBanner}>
+            <Icon name="alert-circle" size={15} color={P.warn} />
+            <Text style={fs.transferBannerText}>{photoUploadError}</Text>
+          </View>
+        )}
         <Pressable onPress={resetAll} accessibilityRole="button" accessibilityLabel="Nova solicitação" style={fs.confirmBtn}>
           <Text style={fs.confirmBtnText}>Fazer outra solicitação</Text>
         </Pressable>
@@ -410,36 +509,74 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
         praticante direto.
       </Text>
 
+      {/* Item 9 (revisão Atualização Cadastral, 15/07/2026): foto do
+          praticante novo, reusando o MESMO mecanismo de upload já usado
+          pro praticante existente (uploadPractitionerPhoto/uploadToR2,
+          nada novo). Só aparece quando o caller injeta onUploadPhoto —
+          hoje isso cobre os dois canais (link público do sensei e Portal
+          do Sensei autenticado); se algum canal futuro não puder subir
+          foto, a seção simplesmente não aparece (nunca quebra o resto do
+          formulário). Sobe DEPOIS do envio, quando já existe um id de
+          solicitação pra anexar. */}
+      {IS_WEB && onUploadPhoto && (
+        <View style={fs.photoRow}>
+          <Pressable onPress={handlePickPhoto} accessibilityRole="button" accessibilityLabel="Escolher foto" style={fs.photoCircle}>
+            {photoLoading ? (
+              <ActivityIndicator size="small" color={P.ink3} />
+            ) : photoPreview ? (
+              <Image source={{ uri: photoPreview }} style={fs.photoImg} />
+            ) : (
+              <Icon name="camera" size={20} color={P.ink3} />
+            )}
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={fs.fieldLabel}>Foto (opcional)</Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable onPress={handlePickPhoto} accessibilityRole="button" accessibilityLabel="Escolher foto">
+                <Text style={fs.fullLinkLike}>{photoPreview ? "Trocar" : "Escolher arquivo"}</Text>
+              </Pressable>
+              {!!photoPreview && (
+                <Pressable onPress={handleRemovePhoto} accessibilityRole="button" accessibilityLabel="Remover foto">
+                  <Text style={[fs.fullLinkLike, { color: P.warn }]}>Remover</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
       <Text style={fs.sectionLabel}>Identidade</Text>
       <Field label="Nome completo *" value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Nome completo do praticante" />
       {touched && !nameOk && <Text style={fs.errorText}>Informe o nome do praticante.</Text>}
 
       <Row>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>Nascimento{age !== null ? `  ·  ${age} anos` : ""}</Text>
+          <Text style={fs.fieldLabel}>Nascimento *{age !== null ? `  ·  ${age} anos` : ""}</Text>
           <DateInput value={form.birth_date_br} onChangeText={(v) => set("birth_date_br", v)} style={fs.dateInput} />
+          {touched && !birthOk && <Text style={fs.errorText}>{birthBad ? "Data inválida." : "Informe a data de nascimento."}</Text>}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>CPF</Text>
+          <Text style={fs.fieldLabel}>CPF *</Text>
           <TextInput
             value={form.cpf}
             onChangeText={(v) => set("cpf", maskCpf(v))}
             placeholder="000.000.000-00"
             keyboardType="numeric"
-            style={[fs.input, cpfBad && fs.inputBad]}
+            style={[fs.input, (cpfBad || (touched && !cpfOk)) && fs.inputBad]}
             accessibilityLabel="CPF"
           />
-          {cpfBad && <Text style={fs.errorText}>Dígitos não conferem.</Text>}
+          {cpfBad ? <Text style={fs.errorText}>Dígitos não conferem.</Text> : (touched && !cpfOk && <Text style={fs.errorText}>Informe o CPF.</Text>)}
         </View>
       </Row>
 
       <Row>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>RG</Text>
-          <TextInput value={form.rg} onChangeText={(v) => set("rg", v)} style={fs.input} accessibilityLabel="RG" />
+          <Text style={fs.fieldLabel}>RG *</Text>
+          <TextInput value={form.rg} onChangeText={(v) => set("rg", v)} style={[fs.input, touched && !rgOk && fs.inputBad]} accessibilityLabel="RG" />
+          {touched && !rgOk && <Text style={fs.errorText}>Informe o RG.</Text>}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>Sexo</Text>
+          <Text style={fs.fieldLabel}>Sexo *</Text>
           <View style={fs.chipsRow}>
             {SEX_OPTIONS.map((opt) => (
               <Pressable
@@ -453,59 +590,61 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
               </Pressable>
             ))}
           </View>
+          {touched && !sexOk && <Text style={fs.errorText}>Selecione o sexo.</Text>}
         </View>
       </Row>
 
       <Text style={fs.sectionLabel}>Contato</Text>
       <Row>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>Telefone</Text>
+          <Text style={fs.fieldLabel}>Telefone *</Text>
           <TextInput
             value={form.phone}
             onChangeText={(v) => set("phone", maskPhoneUtil(v))}
             placeholder="(00) 00000-0000"
             keyboardType="numeric"
-            style={fs.input}
+            style={[fs.input, touched && !phoneOk && fs.inputBad]}
             accessibilityLabel="Telefone"
           />
+          {touched && !phoneOk && <Text style={fs.errorText}>Informe o telefone.</Text>}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>E-mail</Text>
+          <Text style={fs.fieldLabel}>E-mail *</Text>
           <TextInput
             value={form.email}
             onChangeText={(v) => set("email", v)}
             placeholder="email@exemplo.com"
             keyboardType="email-address"
             autoCapitalize="none"
-            style={fs.input}
+            style={[fs.input, touched && !emailOk && fs.inputBad]}
             accessibilityLabel="E-mail"
           />
+          {touched && !emailOk && <Text style={fs.errorText}>Informe o e-mail.</Text>}
         </View>
       </Row>
-      {touched && !contactOk && <Text style={fs.errorText}>Informe pelo menos um contato (telefone ou e-mail).</Text>}
 
       <Text style={fs.sectionLabel}>Endereço</Text>
       <Row>
         <View style={{ width: 140 }}>
-          <Text style={fs.fieldLabel}>CEP</Text>
+          <Text style={fs.fieldLabel}>CEP *</Text>
           <TextInput
             value={form.zip_code}
             onChangeText={(v) => set("zip_code", maskCEP(v))}
             placeholder="00000-000"
             keyboardType="numeric"
-            style={fs.input}
+            style={[fs.input, touched && !form.zip_code.trim() && fs.inputBad]}
             accessibilityLabel="CEP"
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>Rua</Text>
-          <TextInput value={form.street} onChangeText={(v) => set("street", v)} style={fs.input} accessibilityLabel="Rua" />
+          <Text style={fs.fieldLabel}>Rua *</Text>
+          <TextInput value={form.street} onChangeText={(v) => set("street", v)} style={[fs.input, touched && !form.street.trim() && fs.inputBad]} accessibilityLabel="Rua" />
         </View>
       </Row>
       <Row>
         <View style={{ width: 90 }}>
-          <Text style={fs.fieldLabel}>Número</Text>
-          <TextInput value={form.number} onChangeText={(v) => set("number", v)} style={fs.input} keyboardType="numeric" accessibilityLabel="Número" />
+          <Text style={fs.fieldLabel}>Número *</Text>
+          <TextInput value={form.number} onChangeText={(v) => set("number", v)} style={[fs.input, touched && !form.number.trim() && fs.inputBad]} keyboardType="numeric" accessibilityLabel="Número" />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={fs.fieldLabel}>Complemento</Text>
@@ -514,33 +653,35 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
       </Row>
       <Row>
         <View style={{ flex: 1 }}>
-          <Text style={fs.fieldLabel}>Bairro</Text>
-          <TextInput value={form.neighborhood} onChangeText={(v) => set("neighborhood", v)} style={fs.input} accessibilityLabel="Bairro" />
+          <Text style={fs.fieldLabel}>Bairro *</Text>
+          <TextInput value={form.neighborhood} onChangeText={(v) => set("neighborhood", v)} style={[fs.input, touched && !form.neighborhood.trim() && fs.inputBad]} accessibilityLabel="Bairro" />
         </View>
         <View style={{ flex: 1.4 }}>
-          <Text style={fs.fieldLabel}>Cidade</Text>
-          <TextInput value={form.city} onChangeText={(v) => set("city", v)} style={fs.input} accessibilityLabel="Cidade" />
+          <Text style={fs.fieldLabel}>Cidade *</Text>
+          <TextInput value={form.city} onChangeText={(v) => set("city", v)} style={[fs.input, touched && !form.city.trim() && fs.inputBad]} accessibilityLabel="Cidade" />
         </View>
         <View style={{ width: 64 }}>
-          <Text style={fs.fieldLabel}>UF</Text>
+          <Text style={fs.fieldLabel}>UF *</Text>
           <TextInput
             value={form.state}
             onChangeText={(v) => set("state", v.toUpperCase().slice(0, 2))}
-            style={fs.input}
+            style={[fs.input, touched && !form.state.trim() && fs.inputBad]}
             maxLength={2}
             accessibilityLabel="UF"
           />
         </View>
       </Row>
+      {touched && !addressOk && <Text style={fs.errorText}>Preencha o endereço completo (complemento é o único campo opcional).</Text>}
 
       {isMinor && (
         <>
           <Text style={fs.sectionLabel}>Responsável</Text>
           <View style={fs.infoNote}>
             <Icon name="information-circle" size={13} color={P.ink3} />
-            <Text style={fs.infoNoteText}>Menor de 18 anos — dados do responsável ajudam a federação a validar.</Text>
+            <Text style={fs.infoNoteText}>Menor de 18 anos — nome, telefone e parentesco do responsável são obrigatórios.</Text>
           </View>
-          <Field label="Nome do responsável" value={form.guardian_name} onChangeText={(v) => set("guardian_name", v)} placeholder="Nome completo" />
+          <Field label="Nome do responsável *" value={form.guardian_name} onChangeText={(v) => set("guardian_name", v)} placeholder="Nome completo" />
+          {touched && !form.guardian_name.trim() && <Text style={fs.errorText}>Informe o nome do responsável.</Text>}
           <Row>
             <View style={{ flex: 1 }}>
               <Text style={fs.fieldLabel}>CPF do responsável</Text>
@@ -553,17 +694,18 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={fs.fieldLabel}>Telefone do responsável</Text>
+              <Text style={fs.fieldLabel}>Telefone do responsável *</Text>
               <TextInput
                 value={form.guardian_phone}
                 onChangeText={(v) => set("guardian_phone", maskPhoneUtil(v))}
                 keyboardType="numeric"
-                style={fs.input}
+                style={[fs.input, touched && !form.guardian_phone.trim() && fs.inputBad]}
                 accessibilityLabel="Telefone do responsável"
               />
+              {touched && !form.guardian_phone.trim() && <Text style={fs.errorText}>Informe o telefone do responsável.</Text>}
             </View>
           </Row>
-          <Text style={fs.fieldLabel}>Parentesco</Text>
+          <Text style={fs.fieldLabel}>Parentesco *</Text>
           <View style={fs.chipsRow}>
             {GUARDIAN_RELATIONSHIPS.map((rel) => (
               <Pressable
@@ -577,10 +719,11 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
               </Pressable>
             ))}
           </View>
+          {touched && !form.guardian_relationship && <Text style={fs.errorText}>Selecione o parentesco.</Text>}
         </>
       )}
 
-      <Text style={fs.sectionLabel}>Faixa alegada</Text>
+      <Text style={fs.sectionLabel}>Faixa alegada *</Text>
       <View style={fs.infoNote}>
         <Icon name="information-circle" size={13} color={P.ink3} />
         <Text style={fs.infoNoteText}>O que o dojô informa — a federação confere a graduação por conta própria, isto não é uma promessa de faixa.</Text>
@@ -602,6 +745,7 @@ export function NewRequestForm({ onSubmit, onLookupFpkt, onCreated, confirmTitle
           );
         })}
       </View>
+      {touched && !beltOk && <Text style={fs.errorText}>Selecione a faixa alegada.</Text>}
 
       <Text style={fs.sectionLabel}>Número FPKT</Text>
       <View style={fs.chipsRow}>
@@ -829,6 +973,12 @@ const fs = StyleSheet.create({
   inputBad: { borderColor: P.danger },
   dateInput: { borderWidth: 1, borderColor: P.border, borderRadius: R.sm, backgroundColor: P.paperWarm, paddingHorizontal: 11, paddingVertical: 9, fontSize: 14, color: P.ink } as TextStyle,
   errorText: { fontSize: 11, color: P.danger, marginTop: 4 } as TextStyle,
+
+  // Item 9 — foto (mesmo espírito visual do photoSlot de PraticanteFichaModal.tsx).
+  photoRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 } as ViewStyle,
+  photoCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: P.paperWarm, borderWidth: 1, borderColor: P.border, alignItems: "center", justifyContent: "center", overflow: "hidden" } as ViewStyle,
+  photoImg: { width: 56, height: 56, borderRadius: 28 },
+  fullLinkLike: { fontSize: 12.5, fontWeight: "700", color: P.primary } as TextStyle,
 
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 } as ViewStyle,
   chip: { paddingVertical: 7, paddingHorizontal: 11, borderRadius: R.pill, borderWidth: 1, borderColor: P.border, backgroundColor: P.paperWarm } as ViewStyle,
