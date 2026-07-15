@@ -12,14 +12,16 @@ import {
 import { CertOrderStatus } from "@/components/karate/EstadoSelo";
 
 // ── Sub-tabs ──────────────────────────────────────────────────
-// "Bancas" foi removida (fora do escopo atual). Restam Graduações,
-// Certificados e Carteirinhas (F5: impressão em lote, 30/06/2026).
-export type SubTab = "graduacoes" | "certificados" | "carteirinhas";
+// "Bancas" foi removida (fora do escopo atual). "Carteirinhas" (F5:
+// impressão em lote, 30/06/2026) foi promovida a tela própria —
+// /karate/carteirinhas (sisteminha de gestão da fila de impressão, ver
+// app/karate/(federation)/carteirinhas/index.tsx). Restam Graduações e
+// Certificados aqui.
+export type SubTab = "graduacoes" | "certificados";
 
 export const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: "graduacoes",   label: "Graduações" },
   { id: "certificados", label: "Certificados" },
-  { id: "carteirinhas", label: "Carteirinhas" },
 ];
 
 // ── Estado filter pills ───────────────────────────────────────

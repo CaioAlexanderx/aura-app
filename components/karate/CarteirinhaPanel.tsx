@@ -39,6 +39,7 @@
 //   navegador — sem libs pesadas. Web-only (window/Blob); em nativo, toast.
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import { Platform, View, Text, TouchableOpacity, Alert, Modal, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors } from "@/constants/karateTheme";
@@ -88,6 +89,7 @@ function CardPreviewFrame({ card, face }: { card: MembershipCard; face: "front" 
 
 
 export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPanelProps) {
+  const router = useRouter();
   const [card, setCard] = useState<MembershipCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
@@ -307,6 +309,18 @@ export function CarteirinhaPanel({ federationId, practitionerId }: CarteirinhaPa
             app.getaura.com.br/karate/verify/{card.verify_token}
           </Text>
         </View>
+        {/* Deep-link pro sisteminha de gestão de impressão, já filtrado
+            pelo dojô deste praticante (mesmo padrão de query param usado
+            em Dojôs/Anuidades). */}
+        <TouchableOpacity
+          onPress={() => router.push((`/karate/carteirinhas${card.dojo_id ? `?dojo=${card.dojo_id}` : ""}`) as any)}
+          accessibilityRole="link"
+          accessibilityLabel="Ver na fila de impressão"
+          style={styles.metaItem}
+        >
+          <Icon name="external-link" size={13} color={KarateColors.ink3} />
+          <Text style={[styles.metaTxt, { fontFamily: undefined, textDecorationLine: "underline" }]}>Ver na fila de impressão</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ações */}

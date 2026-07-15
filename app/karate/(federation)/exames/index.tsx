@@ -2,7 +2,8 @@
 // Exames — Federação (Track J) · Shoji
 //
 // Breadcrumb: FPKT / Exames / Certificados
-// Sub-tabs: Graduações | Certificados   (Bancas removida — fora de escopo)
+// Sub-tabs: Graduações | Certificados   (Bancas removida — fora de escopo;
+//   Carteirinhas promovida a tela própria — /karate/carteirinhas)
 //
 // Aba Certificados (Track J):
 //   — Caixa de certificados: todos os pedidos dos dojôs
@@ -46,7 +47,6 @@ import { RecusarModal } from "@/components/karate/certificados/RecusarModal";
 import { DetalheDrawer } from "@/components/karate/certificados/DetalheDrawer";
 import { OrderRow } from "@/components/karate/certificados/OrderRow";
 import { BatchBar } from "@/components/karate/certificados/BatchBar";
-import { CarteirinhaBatchTab } from "@/components/karate/carteirinha/CarteirinhaBatchTab";
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function ExamesScreen() {
@@ -188,8 +188,6 @@ export default function ExamesScreen() {
               Em breve, o histórico de graduações da rede aparecerá aqui.
             </Text>
           </View>
-        ) : sub === "carteirinhas" ? (
-          <CarteirinhaBatchTab />
         ) : (
           <>
             {/* Section header */}

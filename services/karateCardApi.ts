@@ -64,6 +64,58 @@ export interface IssueBatchResult {
   _note?: string;
 }
 
+// ── Fila de impressão (migration 233 — sisteminha de gestão) ────────
+// Três etapas sobre a MESMA linha de karate_membership_cards:
+//   'to_print' (gerada, esperando) -> 'printed' (clique em imprimir,
+//   NÃO é prova de impressão real) -> 'delivered' (só confirmação manual).
+export type PrintStatus = "to_print" | "printed" | "delivered";
+
+export interface QueueItem {
+  id: string;
+  student_id: string;
+  student_name: string;
+  card_number: string | null;
+  belt_name: string | null;
+  dojo_id: string | null;
+  dojo_name: string | null;
+  is_minor: boolean;
+  print_status: PrintStatus;
+  issued_at: string;
+  printed_at: string | null;
+  delivered_at: string | null;
+  /** Nº de vezes que a carteirinha foi de fato marcada como impressa. 1 = 1ª via. */
+  print_count: number;
+}
+
+export interface QueueCounters {
+  to_print: number;
+  printed: number;
+  delivered: number;
+}
+
+export interface QueueDojoBreakdown {
+  dojo_id: string | null;
+  dojo_name: string;
+  count: number;
+}
+
+export interface QueueListResult {
+  page: number;
+  page_size: number;
+  total: number;
+  print_status: PrintStatus;
+  counters: QueueCounters;
+  dojos: QueueDojoBreakdown[];
+  data: QueueItem[];
+}
+
+export interface QueueMutationResult {
+  ok: string[];
+  errors: Array<{ id: string; error: string }>;
+  total: number;
+  _note?: string;
+}
+
 /** Situação pública — derivada da ANUIDADE CPF (não do cartão; o cartão só vira revogada). */
 export type VerifyStatus = "valida" | "vencida" | "revogada";
 
@@ -129,6 +181,43 @@ export const karateCardApi = {
     request(`/federation/${federationId}/cards/issue-batch`, {
       method: "POST",
       body: body ?? { only_missing: true },
+    }),
+
+  // ── Fila de impressão ────────────────────────────────────────
+  /** GET /federation/{id}/cards/queue — lista de UMA etapa + contadores + dojôs. */
+  listQueue: (
+    federationId: string,
+    params?: { print_status?: PrintStatus; dojo_id?: string; search?: string; page?: number; pageSize?: number }
+  ): Promise<QueueListResult> => {
+    const qs = new URLSearchParams();
+    if (params?.print_status) qs.set("print_status", params.print_status);
+    if (params?.dojo_id) qs.set("dojo_id", params.dojo_id);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/federation/${federationId}/cards/queue${query}`);
+  },
+
+  /** POST /federation/{id}/cards/queue/mark-printed — "Imprimir selecionadas" (staffWrite). */
+  markPrinted: (federationId: string, cardIds: string[]): Promise<QueueMutationResult> =>
+    request(`/federation/${federationId}/cards/queue/mark-printed`, {
+      method: "POST",
+      body: { card_ids: cardIds },
+    }),
+
+  /** POST /federation/{id}/cards/queue/mark-delivered — confirmação manual (staffWrite). */
+  markDelivered: (federationId: string, cardIds: string[]): Promise<QueueMutationResult> =>
+    request(`/federation/${federationId}/cards/queue/mark-delivered`, {
+      method: "POST",
+      body: { card_ids: cardIds },
+    }),
+
+  /** POST /federation/{id}/cards/queue/return-to-queue — "não saiu" / reimprimir (staffWrite). */
+  returnToQueue: (federationId: string, cardIds: string[]): Promise<QueueMutationResult> =>
+    request(`/federation/${federationId}/cards/queue/return-to-queue`, {
+      method: "POST",
+      body: { card_ids: cardIds },
     }),
 
   /**
