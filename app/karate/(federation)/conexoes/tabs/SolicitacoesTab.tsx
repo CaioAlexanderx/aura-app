@@ -22,6 +22,13 @@
 //
 // Condição de corrida: cada fetch carrega um id incremental; só a
 // resposta MAIS RECENTE escreve no estado (mesmo padrão de CadastralTab).
+//
+// Lista e métricas falham de forma INDEPENDENTE (Promise.allSettled, não
+// Promise.all): um 500 no GET da lista não pode derrubar a faixa de KPIs
+// se as métricas responderam 200, e vice-versa — mesma separação de
+// responsabilidade que ../index.tsx já usa pro badge de pendentes. Sem
+// isso, a tela inteira caía em erro e a federação perdia até a
+// informação que estava disponível.
 // ============================================================
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -79,7 +86,10 @@ export function SolicitacoesTab() {
   const [statusFilter, setStatusFilter] = useState<PractitionerRequestStatus | "todas">("pendente");
   const [dojoFilter, setDojoFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  // Erros independentes: a lista pode falhar sem derrubar os KPIs (e
+  // vice-versa) — ver comentário de topo.
+  const [listError, setListError] = useState(false);
+  const [metricsError, setMetricsError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Condição de corrida: só a resposta MAIS RECENTE escreve no estado.
@@ -89,25 +99,35 @@ export function SolicitacoesTab() {
     if (!federationId) return;
     const myReq = ++reqIdRef.current;
     isRefresh ? setRefreshing(true) : setLoading(true);
-    setError(false);
     try {
-      const [listRes, metricsRes] = await Promise.all([
+      // allSettled (não Promise.all): lista e métricas são chamadas
+      // independentes — uma falhar não pode apagar o resultado da outra.
+      const [listRes, metricsRes] = await Promise.allSettled([
         karateApi.listPractitionerRequestsAdmin(federationId, {
           status: statusFilter === "todas" ? undefined : statusFilter,
         }),
         karateApi.getPractitionerRequestMetrics(federationId),
       ]);
       if (myReq !== reqIdRef.current) return; // resposta obsoleta — descarta
-      // Urgência: mais antiga primeiro, sempre — mesmo critério em
-      // qualquer filtro de status (não só pendente).
-      const sorted = [...(listRes.data || [])].sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      setRows(sorted);
-      setMetrics(metricsRes);
-    } catch {
-      if (myReq !== reqIdRef.current) return;
-      setError(true);
+
+      if (listRes.status === "fulfilled") {
+        // Urgência: mais antiga primeiro, sempre — mesmo critério em
+        // qualquer filtro de status (não só pendente).
+        const sorted = [...(listRes.value.data || [])].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        setRows(sorted);
+        setListError(false);
+      } else {
+        setListError(true);
+      }
+
+      if (metricsRes.status === "fulfilled") {
+        setMetrics(metricsRes.value);
+        setMetricsError(false);
+      } else {
+        setMetricsError(true);
+      }
     } finally {
       if (myReq === reqIdRef.current) {
         isRefresh ? setRefreshing(false) : setLoading(false);
@@ -142,8 +162,6 @@ export function SolicitacoesTab() {
     { label: "Aguardando número FPKT", value: metrics?.aguardando_numero_fpkt ?? 0 },
   ]), [metrics]);
 
-  if (error) return <ShojiBackground><KarateErrorState onRetry={() => load()} /></ShojiBackground>;
-
   return (
     <ShojiBackground>
       <ScrollView
@@ -157,9 +175,9 @@ export function SolicitacoesTab() {
 
         {loading && !metrics ? (
           <Skeleton height={100} style={{ marginTop: 16, marginBottom: 16, borderRadius: R.xl }} />
-        ) : (
+        ) : metrics ? (
           <KpiBand items={kpiItems} style={{ marginTop: 16, marginBottom: 16 }} />
-        )}
+        ) : null /* métricas indisponíveis (metricsError) — não bloqueia a tela, só some com a faixa */}
 
         <View style={st.filtersRow}>
           {STATUS_FILTERS.map((f) => (
@@ -192,6 +210,15 @@ export function SolicitacoesTab() {
         <View style={{ marginTop: 16 }}>
           {loading ? (
             <><Skeleton height={72} style={{ marginBottom: 10, borderRadius: R.lg }} /><Skeleton height={72} style={{ marginBottom: 10, borderRadius: R.lg }} /><Skeleton height={72} style={{ borderRadius: R.lg }} /></>
+          ) : listError ? (
+            <Card>
+              <KarateErrorState
+                title="Não foi possível carregar a fila"
+                message="Os KPIs acima continuam valendo, se tiverem vindo. Tente de novo pra ver as solicitações."
+                onRetry={() => load()}
+                style={{ paddingVertical: 28 }}
+              />
+            </Card>
           ) : visibleRows.length === 0 ? (
             <Card><KarateEmptyState icon="clipboard" title="Nenhuma solicitação aqui" subtitle="Quando um dojô enviar uma solicitação de praticante, ela aparece nesta fila." style={{ paddingVertical: 28 }} /></Card>
           ) : (
