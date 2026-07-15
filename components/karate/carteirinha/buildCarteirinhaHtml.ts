@@ -271,7 +271,14 @@ function cardCss(): string {
   html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
 
   // header
-  html += '.head{display:flex;align-items:center;justify-content:space-between;min-height:12.4mm}';
+  // gap:3mm (15/07/2026) — o Caio pediu respiro entre o nome da federação e o
+  // bloco "Carteira / FAIXA-PRETA". Com justify-content:space-between e
+  // .head-left{flex:1}, o nome crescia até ENCOSTAR no head-right. O gap tira
+  // largura do .fed-name, então foi medido antes: conteúdo 73.2mm − logo 13mm −
+  // gap-logo 2.1mm − head-right ~15mm = ~43mm para um nome que ocupa ~29.6mm na
+  // linha mais longa ("FEDERAÇÃO PAULISTA DE"). Folga ~13.5mm — 3mm cabe com
+  // sobra e o ellipsis do .fed-name segura qualquer nome maior.
+  html += '.head{display:flex;align-items:center;justify-content:space-between;gap:3mm;min-height:12.4mm}';
   html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:13mm;height:auto;object-fit:contain}';
