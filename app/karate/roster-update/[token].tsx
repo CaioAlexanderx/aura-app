@@ -88,42 +88,56 @@ import {
 const IS_WEB = Platform.OS === "web";
 
 const GROUP_ORDER: Record<string, number> = { a: 0, b: 1, c: 2 };
-const MISSING_LABEL: Record<string, string> = { telefone: "Telefone", email: "E-mail" };
+// Item 4 (revisão Atualização Cadastral, 15/07/2026) — completude cobre
+// TODOS os campos que o portal edita (não só telefone/e-mail — era esse
+// o bug: o Caio apagou nascimento e o sistema marcou "OK" só porque
+// telefone/e-mail estavam preenchidos). Espelha PORTAL_EDITABLE_FIELDS/
+// classifyPraticante do backend (karateRosterPortalPublic.js).
+const MISSING_LABEL: Record<string, string> = {
+  telefone: "Telefone", email: "E-mail", nascimento: "Nascimento", cpf: "CPF", rg: "RG", endereco: "Endereço",
+};
 const MISSING_PLACEHOLDER: Record<string, string> = { telefone: "(00) 00000-0000", email: "email@exemplo.com" };
 const MISSING_KEYBOARD: Record<string, "phone-pad" | "email-address" | "default"> = {
   telefone: "phone-pad",
   email: "email-address",
 };
+// Só telefone/e-mail têm editor RÁPIDO inline (FieldInput) na fila/lista —
+// os demais (nascimento/cpf/rg/endereço) exigem tipos de input que só a
+// "ficha completa" já tem prontos (DateInput, máscara de CPF, campos de
+// endereço) — reaproveitar isso em vez de duplicar editores. Um praticante
+// com só esses faltando ainda entra na fila/lista com o badge "falta X",
+// mas o card aponta pra "Ver ficha completa" em vez de um campo solto.
+const QUICK_EDIT_FIELDS = new Set(["telefone", "email"]);
 
 function prefersReducedMotion(): boolean {
   if (!IS_WEB || typeof window === "undefined" || !window.matchMedia) return false;
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 }
 
-// ── Reclassifica um praticante LOCALMENTE após um patch (phone/email/
-//    is_active), com a MESMA régua do backend (classifyPraticante em
-//    karateRosterPortalPublic.js) — sempre contra o snapshot ORIGINAL do
-//    servidor (`base`), nunca acumulando sobre um override anterior, então
-//    "grupo a" (faixa-preta com anuidade em atraso) nunca se perde nem se
-//    inventa por engano ao longo de várias edições. ─────────────────────
-function reclassify(
+// ── Grupo (a/b/c) LOCAL após um patch de phone/email/is_active — mesma
+//    régua do backend (classifyPraticante em karateRosterPortalPublic.js),
+//    sempre contra o snapshot ORIGINAL do servidor (`base.priority_group`),
+//    nunca acumulando sobre um override anterior: "grupo a" (faixa-preta
+//    com anuidade em atraso) nunca se perde nem se inventa por engano ao
+//    longo de várias edições.
+//
+//    Item 4/5 (revisão Atualização Cadastral, 15/07/2026): `missing` NÃO
+//    é mais recalculado aqui — o backend já devolve `missing` PRONTO em
+//    todo PATCH (PatchPractitionerResult.missing, calculado por
+//    classifyPraticante sobre TODOS os campos, não só phone/email). Um
+//    reclassify local só de phone/email ficaria cego pra nascimento/cpf/
+//    rg/endereço mudados pela ficha completa — usar sempre a resposta do
+//    servidor é a única fonte que não fica desatualizada. Ver
+//    applyPatchResult abaixo. ─────────────────────────────────────────
+function computeGroupAfterPatch(
   base: RosterPractitioner,
-  patch: Partial<Pick<RosterPractitioner, "phone" | "email" | "is_active">>
-): RosterPractitioner {
-  const merged: RosterPractitioner = { ...base, ...patch };
+  merged: { phone: string | null; email: string | null; is_active: boolean }
+): "a" | "b" | "c" {
   const hasPhone = !!(merged.phone && String(merged.phone).trim());
   const hasEmail = !!(merged.email && String(merged.email).trim());
-  const missing: string[] = [];
-  if (!hasPhone) missing.push("telefone");
-  if (!hasEmail) missing.push("email");
-
-  let group = base.priority_group;
-  if (!merged.is_active) {
-    group = "c";
-  } else if (base.priority_group !== "a") {
-    group = !hasPhone && !hasEmail ? "b" : "c";
-  }
-  return { ...merged, missing, priority_group: group };
+  if (!merged.is_active) return "c";
+  if (base.priority_group === "a") return "a";
+  return !hasPhone && !hasEmail ? "b" : "c";
 }
 
 function missingSummary(missing: string[]): string {
@@ -349,7 +363,17 @@ function FullRecordPanel({
 
   useEffect(() => {
     if (record) {
-      const v: Record<string, string> = { phone: record.phone || "", email: record.email || "", cpf_cnpj: record.cpf_cnpj || "" };
+      // BUG item 5 (revisão Atualização Cadastral, 15/07/2026): o RG do
+      // Caio estava intacto no banco (backend confirmado: GET ficha completa
+      // já seleciona c.rg), mas aparecia em branco no portal — a causa era
+      // AQUI: este objeto `v` (baseline/values iniciais do formulário)
+      // esquecia de semear `rg`, então `values.rg`/`baseline.rg` ficavam
+      // `undefined` e o campo sempre renderizava vazio, não importa o que
+      // viesse do servidor. Bug de LEITURA no front, nunca de escrita — o
+      // autosave (commit) só manda `{ [apiKey]: valor }` de UM campo por vez
+      // (nunca reenvia os outros), então mesmo com esse bug o RG nunca foi
+      // sobrescrito/apagado no banco por salvar outro campo.
+      const v: Record<string, string> = { phone: record.phone || "", email: record.email || "", cpf_cnpj: record.cpf_cnpj || "", rg: record.rg || "" };
       for (const f of ADDRESS_FIELDS) v[f.key] = (record as any)[f.key] || "";
       v.zip_code = record.zip_code || "";
       v.birth_date = formatIsoToBr(record.birth_date);
@@ -486,18 +510,25 @@ function FullRecordPanel({
 
 // ── Card da FILA — um praticante, só os campos faltando, Enter avança. ──
 function QueueCard({
-  p, position, total, token, onPatch, onInactivate, onFichaFieldSaved,
+  p, position, total, token, onPatch, onInactivate, onFichaFieldSaved, onReviewed,
 }: {
   p: RosterPractitioner; position: number; total: number; token: string;
   onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>;
   onInactivate: (p: RosterPractitioner) => void;
   onFichaFieldSaved: (id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+  /** Item 3: avança a fila sem editar nada — "olhei, está certo" (registro
+   *  já completo) ou "não tenho esse dado agora, deixa pra depois". */
+  onReviewed: (id: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(() => ({ telefone: p.phone || "", email: p.email || "" }));
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
   const [confirmingInactivate, setConfirmingInactivate] = useState(false);
-  const [showFull, setShowFull] = useState(false);
+  // Abre a ficha completa de cara quando não há campo rápido pra digitar
+  // (nada de telefone/e-mail faltando) — o sensei já chegou aqui pra
+  // REVISAR (item 3), não faz sentido esconder os dados atrás de um clique
+  // extra quando não há nada mais imediato pra fazer.
+  const [showFull, setShowFull] = useState(() => !p.missing.some((f) => QUICK_EDIT_FIELDS.has(f)));
   const refs = useRef<Record<string, TextInput | null>>({});
 
   useEffect(() => {
@@ -505,6 +536,11 @@ function QueueCard({
   }, [p.id]);
 
   const orderedMissing = useMemo(() => [...p.missing].sort((a, b) => (a === "telefone" ? -1 : b === "telefone" ? 1 : 0)), [p.missing]);
+  // Só telefone/e-mail têm editor inline aqui — o resto (nascimento/cpf/
+  // rg/endereço) mora exclusivamente na ficha completa (item 4: campos
+  // que não tinham lugar nenhum na fila antes de virarem obrigatórios).
+  const quickMissing = useMemo(() => orderedMissing.filter((f) => QUICK_EDIT_FIELDS.has(f)), [orderedMissing]);
+  const fichaOnlyMissing = useMemo(() => orderedMissing.filter((f) => !QUICK_EDIT_FIELDS.has(f)), [orderedMissing]);
 
   async function commit(field: string, focusNextOf?: string) {
     const apiKey = field === "telefone" ? "phone" : "email";
@@ -545,24 +581,26 @@ function QueueCard({
         />
       ) : (
         <>
-          <View style={{ marginTop: 14 }}>
-            {orderedMissing.map((field, idx) => (
-              <FieldInput
-                key={field}
-                ref={(r) => { refs.current[field] = r; }}
-                fieldKey={field}
-                value={values[field] || ""}
-                onChangeText={(t) => setValues((v) => ({ ...v, [field]: t }))}
-                onCommit={() => commit(field)}
-                onSubmitEditing={() => commit(field, orderedMissing[idx + 1])}
-                autoFocus={idx === 0}
-                saving={savingField === field}
-                saved={savedField === field}
-              />
-            ))}
-          </View>
+          {quickMissing.length > 0 && (
+            <View style={{ marginTop: 14 }}>
+              {quickMissing.map((field, idx) => (
+                <FieldInput
+                  key={field}
+                  ref={(r) => { refs.current[field] = r; }}
+                  fieldKey={field}
+                  value={values[field] || ""}
+                  onChangeText={(t) => setValues((v) => ({ ...v, [field]: t }))}
+                  onCommit={() => commit(field)}
+                  onSubmitEditing={() => commit(field, quickMissing[idx + 1])}
+                  autoFocus={idx === 0}
+                  saving={savingField === field}
+                  saved={savedField === field}
+                />
+              ))}
+            </View>
+          )}
 
-          <Pressable onPress={() => setShowFull((s) => !s)} accessibilityRole="button" accessibilityLabel="Ver ficha completa" style={{ marginTop: 2, marginBottom: showFull ? 10 : 0 }}>
+          <Pressable onPress={() => setShowFull((s) => !s)} accessibilityRole="button" accessibilityLabel="Ver ficha completa" style={{ marginTop: quickMissing.length > 0 ? 2 : 14, marginBottom: showFull ? 10 : 0 }}>
             <Text style={st.fullLink}>{showFull ? "Ocultar ficha completa" : "Ver ficha completa"}</Text>
           </Pressable>
           {showFull && (
@@ -575,6 +613,23 @@ function QueueCard({
                 onFichaFieldSaved(p.id, patch, result);
               }}
             />
+          )}
+
+          {/* Item 3: sem campo rápido pra digitar aqui — avançar exige uma
+              ação explícita do sensei (nunca sai da fila sozinho, mesmo que
+              já estivesse tudo preenchido desde o import). */}
+          {quickMissing.length === 0 && (
+            <View style={st.reviewPrompt}>
+              <Text style={st.reviewPromptText}>
+                {fichaOnlyMissing.length > 0
+                  ? `Falta ${missingSummary(fichaOnlyMissing)} — preencha na ficha completa acima ou deixe para depois.`
+                  : "Ficha completa — confira os dados acima e confirme."}
+              </Text>
+              <Pressable onPress={() => onReviewed(p.id)} accessibilityRole="button" accessibilityLabel="Está tudo certo, confirmar" style={st.reviewBtn}>
+                <Icon name="checkmark" size={14} color="#fdf8f2" />
+                <Text style={st.reviewBtnText}>{fichaOnlyMissing.length > 0 ? "Deixar para depois" : "Está tudo certo"}</Text>
+              </Pressable>
+            </View>
           )}
 
           <Pressable onPress={() => setConfirmingInactivate(true)} accessibilityRole="button" accessibilityLabel="Não treina mais" style={st.inactivateLink}>
@@ -643,7 +698,12 @@ function ListRow({
             />
           ) : (
             <>
-              {p.missing.map((field) => (
+              {/* Item 4: só telefone/e-mail têm editor rápido aqui — o
+                  resto (nascimento/cpf/rg/endereço) mora na ficha completa
+                  (FieldInput/commit deste componente só sabem gravar
+                  phone/email; mapear p.missing inteiro chamaria a API
+                  errada pros campos novos). */}
+              {p.missing.filter((f) => QUICK_EDIT_FIELDS.has(f)).map((field) => (
                 <FieldInput
                   key={field}
                   fieldKey={field}
@@ -653,6 +713,11 @@ function ListRow({
                   saving={savingField === field}
                 />
               ))}
+              {p.missing.some((f) => !QUICK_EDIT_FIELDS.has(f)) && (
+                <Text style={st.reviewPromptText}>
+                  Também falta: {missingSummary(p.missing.filter((f) => !QUICK_EDIT_FIELDS.has(f)))} — veja a ficha completa.
+                </Text>
+              )}
               <Pressable onPress={() => setShowFull((s) => !s)} accessibilityRole="button" accessibilityLabel="Ver ficha completa">
                 <Text style={st.fullLink}>{showFull ? "Ocultar ficha completa" : "Ver ficha completa"}</Text>
               </Pressable>
@@ -775,17 +840,18 @@ function SpreadsheetPanel({
       {open && (
         <View style={st.sheetBody}>
           <Text style={st.sheetDesc}>
-            Bom caminho pra dojôs grandes: baixe só quem falta, preencha telefone/e-mail na planilha e
-            suba de volta.
+            Bom caminho pra dojôs grandes: baixe o quadro completo, revise/preencha na planilha (mesmo
+            quem já está preenchido — vale conferir) e suba de volta.
           </Text>
           <View style={st.sheetActions}>
-            <Pressable onPress={() => openUrl(karatePublicApi.getRosterExportMissingUrl(token))} accessibilityRole="button" accessibilityLabel="Baixar só quem falta" style={st.sheetBtn}>
-              <Icon name="download" size={14} color={P.primary} />
-              <Text style={st.sheetBtnText}>Baixar só quem falta (CSV)</Text>
-            </Pressable>
+            {/* Item 2 (revisão Atualização Cadastral, 15/07/2026) — mudança de
+                premissa: nesta rodada é revisar TODO MUNDO, não só quem falta
+                algo (dado preenchido pode ter vindo errado de import). O botão
+                "baixar só quem falta" saiu da UI de propósito; o resto do
+                fluxo (planilha completa + reimportação) continua igual. */}
             <Pressable onPress={() => openUrl(karatePublicApi.getRosterExportUrl(token))} accessibilityRole="button" accessibilityLabel="Baixar quadro completo" style={st.sheetBtn}>
-              <Icon name="download" size={14} color={P.ink2} />
-              <Text style={[st.sheetBtnText, { color: P.ink2 }]}>Baixar quadro completo (CSV)</Text>
+              <Icon name="download" size={14} color={P.primary} />
+              <Text style={st.sheetBtnText}>Baixar quadro completo (CSV)</Text>
             </Pressable>
             {IS_WEB && (
               <Pressable onPress={uploading ? undefined : handleUpload} accessibilityRole="button" accessibilityLabel="Enviar planilha preenchida" style={st.sheetBtn}>
@@ -871,6 +937,12 @@ function RequestPractitionerSection({ token }: { token: string }) {
     [token]
   );
   const handleCreated = useCallback(() => setRefreshKey((k) => k + 1), []);
+  // Item 9: foto da solicitação nova, pelo canal PÚBLICO (mesmo token do link).
+  const handleUploadPhoto = useCallback(
+    (requestId: string, input: { content: string; content_type?: "image/jpeg" | "image/png" | "image/webp" }) =>
+      karatePublicApi.uploadPublicPractitionerPhoto(token, requestId, input),
+    [token]
+  );
   const fetchRequests = useCallback(
     (status?: PractitionerRequestStatus) => karatePublicApi.listPractitionerRequests(token, status),
     [token]
@@ -918,6 +990,7 @@ function RequestPractitionerSection({ token }: { token: string }) {
               onSubmit={handleSubmit}
               onLookupFpkt={handleLookupFpkt}
               onCreated={handleCreated}
+              onUploadPhoto={handleUploadPhoto}
               prefill={prefill}
               prefillKey={prefillKey}
               confirmTitle={(alreadyPending) => (alreadyPending ? "Já havia uma solicitação para essa pessoa" : "Enviado à federação")}
@@ -1129,10 +1202,36 @@ export default function RosterUpdatePortalScreen() {
   }, [data?.progress]);
 
   const baseList = useMemo(() => data?.praticantes || [], [data]);
+  const baseById = useMemo(() => new Map(baseList.map((p) => [p.id, p])), [baseList]);
+
+  // Item 4/5: aplica a resposta AUTORITATIVA do servidor após um PATCH —
+  // `missing` vem pronto (classifyPraticante sobre TODOS os campos), só o
+  // `priority_group` é recalculado localmente (o backend não devolve
+  // group no PATCH; ver computeGroupAfterPatch acima). Usado tanto pelo
+  // editor rápido (telefone/e-mail na fila/lista) quanto pela ficha
+  // completa (nascimento/cpf/rg/endereço) — UMA fonte, nunca dois
+  // caminhos divergentes de "o que ainda falta".
+  const applyPatchResult = useCallback((id: string, result: PatchPractitionerResult) => {
+    const base = baseById.get(id);
+    const group = base ? computeGroupAfterPatch(base, result) : undefined;
+    setOverrides((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        phone: result.phone,
+        email: result.email,
+        is_active: result.is_active,
+        missing: result.missing,
+        ...(group ? { priority_group: group } : {}),
+      },
+    }));
+    if (result.progress) setProgress(result.progress);
+  }, [baseById]);
+
   const practitioners = useMemo<RosterPractitioner[]>(() => {
     return baseList.map((p) => {
       const ov = overrides[p.id];
-      return ov ? reclassify(p, ov) : p;
+      return ov ? { ...p, ...ov } : p;
     });
   }, [baseList, overrides]);
 
@@ -1147,15 +1246,58 @@ export default function RosterUpdatePortalScreen() {
     () => workingList.filter((p) => p.priority_group === "a" && p.missing.length === 0),
     [workingList]
   );
+
+  // ── Item 3 (revisão Atualização Cadastral, 15/07/2026, mudança de
+  // premissa): a fila entra TODO MUNDO, não só quem tem campo faltando —
+  // "estar preenchido não significa estar correto" (o dado pode ter vindo
+  // de import ruim). `reviewedIds` é a marca de "já passei por aqui NESTA
+  // sessão" (session-only, de propósito — mesmo espírito stateless do
+  // resto desta tela: sem tabela de baseline, reabrir o link retoma do
+  // topo, o que é aceitável porque o objetivo é revisar todo mundo pelo
+  // menos uma vez por ciclo, não guardar um ponteiro exato).
+  //
+  // `initiallyComplete` é o snapshot de quem JÁ chegou sem nada faltando
+  // (server, no primeiro GET) — esses precisam de CONFIRMAÇÃO explícita
+  // do sensei (botão "Está tudo certo") pra sair da fila, porque não há
+  // edição nenhuma que dispare o auto-avanço. Quem tinha algo faltando e
+  // resolveu preenchendo continua com o auto-avanço de sempre (o efeito
+  // abaixo marca como revisado assim que `missing` zera por causa de uma
+  // edição).
+  const initiallyComplete = useMemo(
+    () => new Set(baseList.filter((p) => p.missing.length === 0).map((p) => p.id)),
+    [baseList]
+  );
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  const markReviewed = useCallback((id: string) => {
+    setReviewedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
+
+  useEffect(() => {
+    setReviewedIds((prev) => {
+      let next: Set<string> | null = null;
+      for (const p of practitioners) {
+        if (p.missing.length === 0 && !initiallyComplete.has(p.id) && !prev.has(p.id)) {
+          if (!next) next = new Set(prev);
+          next.add(p.id);
+        }
+      }
+      return next || prev;
+    });
+  }, [practitioners, initiallyComplete]);
+
   const queueItems = useMemo(() => {
     return workingList
-      .filter((p) => p.missing.length > 0)
+      .filter((p) => !reviewedIds.has(p.id))
       .sort((a, b) => {
         const gd = GROUP_ORDER[a.priority_group] - GROUP_ORDER[b.priority_group];
         if (gd !== 0) return gd;
+        // Quem ainda tem campo faltando vem antes de quem só precisa de
+        // confirmação — a fila continua priorizando trabalho de digitação.
+        const missingDiff = (b.missing.length > 0 ? 1 : 0) - (a.missing.length > 0 ? 1 : 0);
+        if (missingDiff !== 0) return missingDiff;
         return a.name.localeCompare(b.name, "pt-BR");
       });
-  }, [workingList]);
+  }, [workingList, reviewedIds]);
 
   const listFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1172,12 +1314,8 @@ export default function RosterUpdatePortalScreen() {
 
   const savePatch = useCallback(async (id: string, patch: PatchPractitionerInput) => {
     const result = await karatePublicApi.patchPractitioner(tokenStr, id, patch);
-    setOverrides((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], phone: result.phone, email: result.email, is_active: result.is_active },
-    }));
-    if (result.progress) setProgress(result.progress);
-  }, [tokenStr]);
+    applyPatchResult(id, result);
+  }, [tokenStr, applyPatchResult]);
 
   const showToast = useCallback((message: string, undo?: { label: string; onUndo: () => void }) => {
     toastCounter.current += 1;
@@ -1309,18 +1447,14 @@ export default function RosterUpdatePortalScreen() {
       }, 4200);
     }
 
-    if (patch.phone !== undefined || patch.email !== undefined) {
-      setOverrides((prev) => ({
-        ...prev,
-        [id]: {
-          ...prev[id],
-          phone: result?.phone !== undefined ? result.phone : patch.phone,
-          email: result?.email !== undefined ? result.email : patch.email,
-        },
-      }));
+    // Item 4/5: usa applyPatchResult (missing PRONTO do servidor) sempre
+    // que o PATCH devolveu resultado — cobre nascimento/cpf/rg/endereço,
+    // não só telefone/e-mail. Sem isso, corrigir o RG pela ficha completa
+    // deixava o badge "falta RG" preso na fila/lista até um refresh.
+    if (result) {
+      applyPatchResult(id, result);
     }
-    if (result?.progress) setProgress(result.progress);
-  }, []);
+  }, [applyPatchResult]);
 
   const handleFullRecordLoaded = useCallback((id: string, record: RosterFullRecord) => {
     fullRecordsLoadedRef.current.add(id);
@@ -1520,11 +1654,12 @@ export default function RosterUpdatePortalScreen() {
                 onPatch={savePatch}
                 onInactivate={handleInactivate}
                 onFichaFieldSaved={handleFichaFieldSaved}
+                onReviewed={markReviewed}
               />
             ) : (
               <View style={st.emptyCard}>
                 <Icon name="checkmark-circle" size={20} color={P.ok} />
-                <Text style={st.emptyText}>Ninguém com contato faltando por aqui.</Text>
+                <Text style={st.emptyText}>Quadro revisado — ninguém na fila.</Text>
               </View>
             )
           ) : mode === "list" ? (
@@ -1723,6 +1858,12 @@ const st = StyleSheet.create({
 
   inactivateLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14, alignSelf: "flex-start" },
   inactivateLinkText: { fontSize: 12, fontWeight: "600", color: P.ink3 },
+  // Item 3 — prompt de revisão manual (QueueCard, quando não há campo
+  // rápido pra digitar): confirma "olhei" e avança a fila.
+  reviewPrompt: { marginTop: 14, gap: 8 },
+  reviewPromptText: { fontSize: 12.5, color: P.ink2, lineHeight: 18 },
+  reviewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: P.primary, borderRadius: 10, paddingVertical: 11, alignSelf: "flex-start", paddingHorizontal: 16 },
+  reviewBtnText: { fontSize: 13, fontWeight: "700", color: "#fdf8f2" },
 
   inlineConfirm: { backgroundColor: P.dangerSoft, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: "rgba(184,70,58,0.25)", padding: 14, marginTop: 12 },
   inlineConfirmText: { fontSize: 13, color: P.ink, lineHeight: 19, marginBottom: 12 },

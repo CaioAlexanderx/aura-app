@@ -58,6 +58,14 @@ function SolicitacoesBody({ federationId }: { federationId: string }) {
     (status?: PractitionerRequestStatus) => karateApi.listPractitionerRequests(federationId, status),
     [federationId]
   );
+  // Item 9 (revisão Atualização Cadastral, 15/07/2026): foto da solicitação
+  // nova, pelo canal AUTENTICADO (JWT + federationId) — mesmo mecanismo de
+  // upload de karateApi.ts#uploadPractitionerPhoto, só troca o destino.
+  const handleUploadPhoto = useCallback(
+    (requestId: string, input: { content: string; content_type?: "image/jpeg" | "image/png" | "image/webp" }) =>
+      karateApi.uploadPractitionerRequestPhoto(federationId, requestId, input),
+    [federationId]
+  );
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
@@ -72,6 +80,7 @@ function SolicitacoesBody({ federationId }: { federationId: string }) {
         onSubmit={handleSubmit}
         onLookupFpkt={handleLookupFpkt}
         onCreated={handleCreated}
+        onUploadPhoto={handleUploadPhoto}
       />
       <View style={{ marginTop: 16 }}>
         <StatusList fetchRequests={fetchRequests} refreshKey={refreshKey} />

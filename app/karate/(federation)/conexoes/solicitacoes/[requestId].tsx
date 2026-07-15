@@ -467,7 +467,7 @@ export default function SolicitacaoDetalhe() {
                 <Text style={st.stageTitle}>Aprovar como criação</Text>
                 <Body muted style={{ marginBottom: 10 }}>
                   Isso cria {detail.full_name} como praticante NOVO no dojô {detail.dojo_name || "da solicitação"}, ativo, e a faixa alegada
-                  ({detail.claimed_belt || "não informada"}) vira o primeiro registro do histórico. Não gera cobrança.
+                  ({detail.claimed_belt || "não informada"}) vira o primeiro registro do histórico.
                 </Body>
                 <Field label="Número FPKT (obrigatório — emitido pela federação)" value={fpktNumber} onChangeText={setFpktNumber} placeholder="Ex.: 12345-D" />
                 <View style={st.stageActions}>
@@ -498,7 +498,7 @@ export default function SolicitacaoDetalhe() {
                       <>, hoje em {selectedMatch.dojo_name || "outro dojô"}, e move para {detail.dojo_name || "o dojô da solicitação"}.</>
                     )}{" "}
                     <Text style={{ fontWeight: "700" }}>O histórico de faixa e a anuidade de {selectedMatch.name} NÃO mudam</Text> — a faixa alegada aqui
-                    ({detail.claimed_belt || "não informada"}) é só para comparação, nunca é aplicada. Não gera cobrança.
+                    ({detail.claimed_belt || "não informada"}) é só para comparação, nunca é aplicada.
                   </Body>
                 ) : (
                   <>

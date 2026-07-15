@@ -62,7 +62,7 @@ import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
-import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation } from "@/services/karateApi";
+import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation, RosterEvent } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
@@ -332,6 +332,25 @@ export default function DojoDetailScreen() {
       setRequestingRoster(false);
     }
   }, [dojoId, federationId, requestingRoster, showToast]);
+
+  // Item 1 (revisão Atualização Cadastral, 15/07/2026): "X" no banner pra
+  // revogar o link quando a federação não quiser mais que o dojô acesse.
+  // Expira os DOIS tokens (backend) — aqui só limpamos o estado local pro
+  // banner sumir (mesmo efeito visual de um dojô que nunca solicitou).
+  const [revokingRoster, setRevokingRoster] = useState(false);
+  const revokeRosterLink = useCallback(async () => {
+    if (!dojoId || revokingRoster) return;
+    setRevokingRoster(true);
+    try {
+      await karateApi.revokeRosterUpdate(federationId, dojoId);
+      setRosterValidation(null);
+      showToast("Link revogado");
+    } catch (e: any) {
+      Alert.alert("Não foi possível revogar", e?.message || "Tente novamente.");
+    } finally {
+      setRevokingRoster(false);
+    }
+  }, [dojoId, federationId, revokingRoster, showToast]);
 
   const copyRosterLink = useCallback(async () => {
     if (!rosterValidation?.url) return;
@@ -662,8 +681,16 @@ export default function DojoDetailScreen() {
             selfServiceUrl={rosterValidation.self_service_url}
             onCopySelfServiceLink={copySelfServiceLink}
             onShareSelfServiceWhatsApp={shareSelfServiceLinkWhatsApp}
+            onRevoke={revokeRosterLink}
+            revoking={revokingRoster}
           />
         ) : null}
+
+        {/* Item 8 (revisão Atualização Cadastral, 15/07/2026): a federação só
+            via "atualizações concluídas", nunca O QUE o sensei mudou. Seção
+            compacta com o histórico de karate_dojo_roster_events (antes/
+            depois por campo). */}
+        {dojoId ? <RosterUpdatesSection federationId={federationId} dojoId={dojoId} /> : null}
 
         {/* DJ2: card Cadastro — "Sensei responsável" em vez de "CPF do sensei" */}
         <Card style={{ marginTop: SP[6] }}>
@@ -1159,6 +1186,103 @@ export default function DojoDetailScreen() {
         </Animated.View>
       ) : null}
     </ShojiBackground>
+  );
+}
+
+// ── Item 8 (revisão Atualização Cadastral, 15/07/2026) ──────────────────
+// "O que foi atualizado" — antes a federação só via que o quadro tinha
+// sido "concluído", nunca O QUE o sensei mudou (campo, de que valor para
+// qual, quando). Consome GET .../roster-events (karateRosterValidation.js),
+// que achata karate_dojo_roster_events.affected[] numa lista pronta.
+// Rótulos de campo espelham MISSING_LABEL de app/karate/roster-update/[token].tsx
+// (mesmos nomes que o sensei vê no portal).
+const ROSTER_EVENT_FIELD_LABEL: Record<string, string> = {
+  phone: "Telefone", email: "E-mail", birth_date: "Nascimento", cpf: "CPF", rg: "RG",
+  street: "Rua", number: "Número", complement: "Complemento", neighborhood: "Bairro",
+  city: "Cidade", state: "UF", zip_code: "CEP", is_active: "Situação",
+};
+const ROSTER_EVENT_TITLE: Record<string, string> = {
+  practitioner_updated: "Dados atualizados",
+  practitioner_reactivated: "Reativado",
+  practitioner_inactivated: "Marcado como \"não treina mais\"",
+  validated: "Quadro confirmado",
+  practitioner_request_created: "Solicitou praticante novo",
+  roster_imported: "Planilha importada",
+  validation_requested: "Atualização solicitada pela federação",
+  roster_link_revoked: "Link revogado pela federação",
+};
+
+function fmtEventValue(v: string | boolean | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "vazio";
+  if (typeof v === "boolean") return v ? "ativo" : "inativo";
+  // birth_date vem como YYYY-MM-DD — mesma exibição BR do resto da tela.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return isoToBr(v);
+  return v;
+}
+
+function RosterUpdatesSection({ federationId, dojoId }: { federationId: string; dojoId: string }) {
+  const [events, setEvents] = useState<RosterEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    karateApi.getRosterEvents(federationId, dojoId, 50)
+      .then((res) => { if (alive) setEvents(res.data || []); })
+      .catch(() => { if (alive) setEvents([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [federationId, dojoId]);
+
+  // Achata affected[] de cada evento numa linha "o que mudou" — eventos
+  // sem `changes` (ex.: solicitação de praticante, quadro confirmado)
+  // ainda aparecem, só sem o detalhe campo-a-campo.
+  const rows = events.flatMap((ev) =>
+    (ev.affected && ev.affected.length ? ev.affected : [{}]).map((aff, idx) => ({
+      key: `${ev.id}:${idx}`,
+      title: ROSTER_EVENT_TITLE[ev.event] || ev.event,
+      studentName: aff.student_name || aff.full_name || null,
+      changes: aff.changes || [],
+      createdAt: ev.created_at,
+    }))
+  );
+
+  if (loading) return null;
+  if (rows.length === 0) return null;
+
+  const visibleRows = expanded ? rows : rows.slice(0, 5);
+
+  return (
+    <Card style={{ marginTop: SP[6] }}>
+      <SectionHead title="Atualizações cadastrais recentes" />
+      {visibleRows.map((r) => (
+        <View key={r.key} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ fontFamily: F.body, fontSize: 12.5, fontWeight: "700", color: C.ink }}>
+              {r.studentName || "Praticante"} — {r.title}
+            </Text>
+            <Text style={{ fontFamily: F.body, fontSize: 11, color: C.ink3 }}>{fmtDate(r.createdAt)}</Text>
+          </View>
+          {r.changes.length > 0 && (
+            <View style={{ marginTop: 4, gap: 2 }}>
+              {r.changes.map((c, i) => (
+                <Text key={i} style={{ fontFamily: F.body, fontSize: 11.5, color: C.ink2 }}>
+                  {ROSTER_EVENT_FIELD_LABEL[c.field] || c.field}: {fmtEventValue(c.from)} → {fmtEventValue(c.to)}
+                </Text>
+              ))}
+            </View>
+          )}
+        </View>
+      ))}
+      {rows.length > 5 && (
+        <Pressable onPress={() => setExpanded((e) => !e)} accessibilityRole="button" accessibilityLabel={expanded ? "Ver menos" : "Ver mais"} style={{ paddingTop: 10 }}>
+          <Text style={{ fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.red }}>
+            {expanded ? "Ver menos" : `Ver mais (${rows.length - 5})`}
+          </Text>
+        </Pressable>
+      )}
+    </Card>
   );
 }
 
