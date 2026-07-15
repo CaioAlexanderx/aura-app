@@ -278,8 +278,17 @@ function cardCss(): string {
   // gap-logo 2.1mm − head-right ~15mm = ~43mm para um nome que ocupa ~29.6mm na
   // linha mais longa ("FEDERAÇÃO PAULISTA DE"). Folga ~13.5mm — 3mm cabe com
   // sobra e o ellipsis do .fed-name segura qualquer nome maior.
-  html += '.head{display:flex;align-items:center;justify-content:space-between;gap:3mm;min-height:12.4mm}';
-  html += '.head-left{display:flex;align-items:center;gap:2.1mm;flex:1;min-width:0}';
+  // ⚠️ MEDIDO (15/07/2026), não estimado — a estimativa anterior errou 45% e
+  // truncou o nome da federação na FRENTE ("FEDERAÇÃO PAULISTA…").
+  // Métricas de fonte serifada real a 8pt: o nome precisa de ~43.5mm.
+  //   conteúdo 73.2 − logo 13 − gap-logo 1.5 − gap 2 − head-right 15.5 = 42.2
+  //   + margin-left −3.5mm (folga que sobrava à esquerda) = 44.7mm  → cabe.
+  // Por que só a FRENTE truncava: o head-right dela é "Carteira/FAIXA-PRETA"
+  // (~16mm); no VERSO é só "VERSO" (~6mm) — daí o verso nunca truncar.
+  // O margin-left negativo usa o mesmo truque dos filetes (que sangram a
+  // −6.2mm); aqui puxa 3.5mm, deixando a logo a 2.7mm da borda do cartão.
+  html += '.head{display:flex;align-items:center;justify-content:space-between;gap:2mm;min-height:12.4mm;margin-left:-3.5mm}';
+  html += '.head-left{display:flex;align-items:center;gap:1.5mm;flex:1;min-width:0}';
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:13mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
@@ -288,7 +297,7 @@ function cardCss(): string {
   html += '.head-right{flex-shrink:0;text-align:right}';
   html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.6pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
   html += '.hd-sub{font-size:3.7pt;font-weight:600;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
-  html += '.hd-badge{font-size:4.6pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:600;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
+  html += '.hd-badge{font-size:4.6pt;letter-spacing:0.3pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:600;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
   html += '.badge-sq{width:1.15mm;height:1.15mm;background:' + BLACK_BAR + ';display:inline-block}';
   html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
