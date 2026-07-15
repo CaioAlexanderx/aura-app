@@ -39,12 +39,15 @@ const firstParam = (v: string | string[] | undefined): string | undefined =>
 export default function ConexoesScreen() {
   const { federationId } = useKarateFederation();
 
-  // Deep-link: ?tab=solicitacoes já abre a aba nova no boot (lazy
+  // Deep-link: ?tab=conexoes abre a lista de conexões no boot (lazy
   // useState initializer, mesmo padrão do hub de Anuidades/Dojôs) —
   // depois disso o usuário navega livremente pelas abas.
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const [activeTab, setActiveTab] = useState<Tab>(() =>
-    firstParam(params.tab) === "solicitacoes" ? "solicitacoes" : "conexoes"
+    // Solicitações é a PÁGINA PRINCIPAL de Conexões (14/07/2026): é a fila que
+    // a federação precisa trabalhar — sem ela, praticante solicitado fica em
+    // limbo. ?tab=conexoes leva para a lista de conexões.
+    firstParam(params.tab) === "conexoes" ? "conexoes" : "solicitacoes"
   );
 
   const [pendentes, setPendentes] = useState<number | null>(null);
@@ -68,18 +71,6 @@ export default function ConexoesScreen() {
         contentContainerStyle={styles.tabBarContent}
       >
         <TouchableOpacity
-          style={[styles.tabItem, activeTab === "conexoes" && styles.tabItemActive]}
-          onPress={() => setActiveTab("conexoes")}
-          accessibilityRole="tab"
-          accessibilityLabel="Conexões"
-          accessibilityState={{ selected: activeTab === "conexoes" }}
-        >
-          <Text style={[styles.tabLabel, activeTab === "conexoes" && styles.tabLabelActive]}>
-            Conexões
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={[styles.tabItem, activeTab === "solicitacoes" && styles.tabItemActive]}
           onPress={() => setActiveTab("solicitacoes")}
           accessibilityRole="tab"
@@ -97,6 +88,18 @@ export default function ConexoesScreen() {
             )}
           </View>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === "conexoes" && styles.tabItemActive]}
+          onPress={() => setActiveTab("conexoes")}
+          accessibilityRole="tab"
+          accessibilityLabel="Conexões"
+          accessibilityState={{ selected: activeTab === "conexoes" }}
+        >
+          <Text style={[styles.tabLabel, activeTab === "conexoes" && styles.tabLabelActive]}>
+            Conexões
+          </Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
       {/* Tab content */}
