@@ -257,7 +257,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
 function cardCss(): string {
   let html = '';
   // Fontes do mock aprovado (Shippori Mincho / Zen Kaku Gothic New / DM Mono)
-  html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;600;700&family=DM+Mono:wght@400;500;600;700&display=swap\');';
+  html += '@import url(\'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;600;700;900&family=DM+Mono:wght@400;500;600;700&display=swap\');';
   html += '@page{size:A4;margin:10mm}';
   html += '*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
   html += 'body{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;background:#f5f5f5;color:' + INK + '}';
@@ -276,13 +276,13 @@ function cardCss(): string {
   html += '.logo{flex-shrink:0;display:flex;align-items:center}';
   html += '.logo-img{width:13mm;height:auto;object-fit:contain}';
   html += '.logo-fallback{font-size:4mm;font-weight:700;color:' + RED + '}';
-  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:8pt;font-weight:700;letter-spacing:0.05pt;text-transform:uppercase;color:' + INK + ';line-height:1.2;min-width:0}';
+  html += '.fed-name{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:8pt;font-weight:800;letter-spacing:0.05pt;text-transform:uppercase;color:' + INK + ';line-height:1.2;min-width:0}';
   html += '.fed-name>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.head-right{flex-shrink:0;text-align:right}';
-  html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:7.3pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
+  html += '.hd-carteira{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.6pt;font-weight:600;color:' + INK_2 + ';text-align:right}';
   html += '.hd-sub{font-size:3.7pt;font-weight:600;letter-spacing:0.6pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;margin-top:0.6mm}';
-  html += '.hd-badge{font-size:5pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:600;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
-  html += '.badge-sq{width:1.3mm;height:1.3mm;background:' + BLACK_BAR + ';display:inline-block}';
+  html += '.hd-badge{font-size:4.6pt;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_2 + ';font-weight:600;display:flex;align-items:center;gap:0.8mm;justify-content:flex-end;margin-top:0.7mm}';
+  html += '.badge-sq{width:1.15mm;height:1.15mm;background:' + BLACK_BAR + ';display:inline-block}';
   html += '.hd-verso{font-size:3.7pt;font-weight:600;letter-spacing:0.7pt;text-transform:uppercase;color:' + INK_3 + '}';
 
   // réguas
@@ -297,7 +297,7 @@ function cardCss(): string {
   html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
   html += '.flabel{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:6.4pt;font-weight:700;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm;font-weight:800}';
+  html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm;font-weight:900}';
   html += '.frow{display:flex;gap:2.6mm}';
   html += '.f-date{width:14mm;flex:none;min-width:0}';
   html += '.f-dojo{flex:1;min-width:0}';
@@ -319,7 +319,7 @@ function cardCss(): string {
   html += '.cbkt-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-weight:700;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
-  html += '.belt-label{margin-top:0;font-weight:800}';
+  html += '.belt-label{margin-top:0;font-weight:900}';
 
   // footer
   html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:flex-end}';
@@ -334,10 +334,10 @@ function cardCss(): string {
   html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
-  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:1.3mm}';
+  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:1.05mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
-  html += '.kun-dot{width:2.6mm;flex-shrink:0;text-align:center;font-size:8pt;line-height:1.32;font-weight:700;color:' + RED + '}';
-  html += '.kun-text{flex:1;min-width:0;font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:5.4pt;font-weight:800;line-height:1.32;color:' + INK + '}';
+  html += '.kun-dot{width:2.6mm;flex-shrink:0;text-align:center;font-size:8pt;line-height:1.15;font-weight:700;color:' + RED + '}';
+  html += '.kun-text{flex:1;min-width:0;font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:5.7pt;font-weight:900;line-height:1.15;color:' + INK + '}';
   html += '.verify-col{flex:1;border-left:0.15mm solid ' + LINE + ';padding-left:3.2mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center}';
   html += '.verify-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.15}';
   html += '.verify-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.8pt;font-weight:700;margin-top:0.6mm;color:' + INK + ';line-height:1.15}';
@@ -389,7 +389,7 @@ function cardCss(): string {
   html += '.fvalue.name{font-weight:700}';
   html += '.reg-num{font-weight:700;color:' + RED + '}';
   html += '.cbkt-num{font-weight:700}';
-  html += '.belt-label{font-weight:700}';
+  html += '.belt-label{font-weight:900}';
   html += '.verify-num{font-weight:700;color:' + INK + '}';
   html += '.issued-value{font-weight:700;color:' + INK + '}';
   // logo — cor/contraste garantidos mesmo se o raster for de baixo contraste
