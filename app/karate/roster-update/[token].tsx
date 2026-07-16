@@ -524,11 +524,14 @@ function QueueCard({
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
   const [confirmingInactivate, setConfirmingInactivate] = useState(false);
-  // Abre a ficha completa de cara quando não há campo rápido pra digitar
-  // (nada de telefone/e-mail faltando) — o sensei já chegou aqui pra
-  // REVISAR (item 3), não faz sentido esconder os dados atrás de um clique
-  // extra quando não há nada mais imediato pra fazer.
-  const [showFull, setShowFull] = useState(() => !p.missing.some((f) => QUICK_EDIT_FIELDS.has(f)));
+  // ⚠️ (15/07/2026) "Não devemos interromper o preenchimento" — o Caio.
+  // A ficha completa agora é O CARD, sempre aberta. Antes, a fila mostrava só
+  // telefone/e-mail (QUICK_EDIT_FIELDS) e escondia nascimento/CPF/RG/endereço
+  // atrás de um link "ver ficha completa" — o sensei preenchia os dois campos
+  // rápidos e a fila dava a tarefa por encerrada, deixando o resto pra trás.
+  // Isso era o resquício da premissa morta ("mostrar só o que falta"): a
+  // regra agora é revisar TODO MUNDO, campo por campo, sem interrupção.
+  const [showFull] = useState(true);
   const refs = useRef<Record<string, TextInput | null>>({});
 
   useEffect(() => {
@@ -600,9 +603,6 @@ function QueueCard({
             </View>
           )}
 
-          <Pressable onPress={() => setShowFull((s) => !s)} accessibilityRole="button" accessibilityLabel="Ver ficha completa" style={{ marginTop: quickMissing.length > 0 ? 2 : 14, marginBottom: showFull ? 10 : 0 }}>
-            <Text style={st.fullLink}>{showFull ? "Ocultar ficha completa" : "Ver ficha completa"}</Text>
-          </Pressable>
           {showFull && (
             <FullRecordPanel
               token={token}
@@ -1719,9 +1719,38 @@ export default function RosterUpdatePortalScreen() {
                   inputStyle={st.textInput}
                 />
                 {!!finishError && <Text style={st.submitError}>{finishError}</Text>}
-                <Pressable onPress={() => setConfirmingFinish(true)} accessibilityRole="button" accessibilityLabel="Concluir atualização" style={[st.confirmBtn, { marginTop: 12 }]}>
-                  <Text style={st.confirmBtnText}>Concluir atualização</Text>
-                </Pressable>
+                {/* (15/07/2026) "Concluir apenas quando todos os itens forem
+                    preenchidos" — o Caio. Enquanto a fila tiver alguém com
+                    campo faltando, concluir é bloqueado: encerrar o link com
+                    ficha incompleta é justamente o que esta rodada existe para
+                    evitar. Saída para o caso impossível (dado que não existe):
+                    marcar "não treina mais", que tira a pessoa da fila. */}
+                {queueItems.length > 0 ? (
+                  <>
+                    <View style={st.finishBlocked}>
+                      <Icon name="alert-circle" size={13} color={P.ink3} />
+                      <Text style={st.finishBlockedText}>
+                        {queueItems.length === 1
+                          ? "Falta 1 praticante com ficha incompleta."
+                          : `Faltam ${queueItems.length} praticantes com ficha incompleta.`}
+                        {" "}Complete as fichas para concluir — quem não treina mais pode sair pela própria ficha.
+                      </Text>
+                    </View>
+                    <Pressable
+                      disabled
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: true }}
+                      accessibilityLabel="Concluir atualização (indisponível: há fichas incompletas)"
+                      style={[st.confirmBtn, { marginTop: 12, opacity: 0.45 }]}
+                    >
+                      <Text style={st.confirmBtnText}>Concluir atualização</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable onPress={() => setConfirmingFinish(true)} accessibilityRole="button" accessibilityLabel="Concluir atualização" style={[st.confirmBtn, { marginTop: 12 }]}>
+                    <Text style={st.confirmBtnText}>Concluir atualização</Text>
+                  </Pressable>
+                )}
               </>
             )}
           </View>
@@ -1888,6 +1917,9 @@ const st = StyleSheet.create({
 
   addFieldError: { fontSize: 11.5, color: P.danger, marginTop: 6 },
 
+  finishBlocked: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 12,
+    backgroundColor: P.paper2, borderWidth: 1, borderColor: P.border, borderRadius: 8, padding: 9 } as any,
+  finishBlockedText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: P.ink2 } as any,
   footerCard: { backgroundColor: P.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: P.border, padding: 16, marginTop: 4 },
   textInputWrap: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm },
   textInput: { paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: P.ink, ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}) },
