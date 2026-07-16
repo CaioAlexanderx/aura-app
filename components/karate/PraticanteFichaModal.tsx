@@ -115,14 +115,30 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
 
+  // Bugfix (16/07/2026): TODO erro de submit (validação client-side OU
+  // resposta do backend) precisa virar mensagem visível, sem depender de o
+  // usuário estar com o scroll no lugar certo. setErrorMsg sozinho só
+  // preenche o errBox lá embaixo do ScrollView (pode estar fora da
+  // viewport); o toast global é portal-renderizado em document.body,
+  // position fixed, sempre por cima do modal — cobre o caso cego. Usar
+  // SEMPRE showError (nunca setErrorMsg cru) em qualquer caminho de falha.
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    toastGlobal.error(msg);
+  }, []);
+
   // carrega ficha em edição
   useEffect(() => {
     if (!visible) return;
     setErrorMsg(null); setCepStatus(null); setToast(null);
     pendingPhotoFile.current = null; // limpa foto pendente ao abrir
     if (!practitionerId) {
-      // cadastro novo: pré-seleciona o último dojô da sessão (se houver)
-      setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
+      // cadastro novo: SEM default de dojô (bugfix 16/07/2026) — nenhum dojô vem
+      // pré-selecionado, mesmo que `lastDojo` esteja preenchido por causa de uma
+      // edição recente de outro praticante. Quem quer repetir o dojô do último
+      // CADASTRO usa o botão opt-in "Repetir dados do último cadastro" (lastShared,
+      // abaixo), que só existe depois de um cadastro bem-sucedido nesta sessão.
+      setForm(EMPTY);
       setFpkt(null); setBeltName(null);
       setCanRepeat(!!lastShared);
       // Matrícula: reseta o campo manual ao abrir um cadastro novo
@@ -165,7 +181,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         setManualRegistrationNumber(p.karate_registration_number || "");
         setBeltName(p.current_belt?.belt_name || null);
       })
-      .catch(() => setErrorMsg("Não foi possível carregar a ficha."))
+      .catch(() => showError("Não foi possível carregar a ficha."))
       .finally(() => setLoading(false));
   }, [visible, practitionerId, federationId, syncLastDojo]);
 
@@ -272,17 +288,17 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   }, [form]);
 
   async function handleSave() {
-    if (!form.full_name.trim()) { setErrorMsg("Informe o nome completo."); return; }
-    if (!form.dojo_id) { setErrorMsg("Selecione o dojô."); return; }
-    if (dateBad) { setErrorMsg("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
-    if (!isEdit && graduatedAtBad) { setErrorMsg("A data de último exame é inválida. Corrija ou deixe em branco."); return; }
-    if (cpfBad) { setErrorMsg("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
+    if (!form.full_name.trim()) { showError("Informe o nome completo."); return; }
+    if (!form.dojo_id) { showError("Selecione o dojô."); return; }
+    if (dateBad) { showError("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
+    if (!isEdit && graduatedAtBad) { showError("A data de último exame é inválida. Corrija ou deixe em branco."); return; }
+    if (cpfBad) { showError("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
     // P7: menor de idade sem responsável nomeado → bloqueia
     if (isMinor && !form.guardian_name.trim()) {
-      setErrorMsg("Para menores de 18 anos, o nome do responsável é obrigatório (LGPD Art. 14).");
+      showError("Para menores de 18 anos, o nome do responsável é obrigatório (LGPD Art. 14).");
       return;
     }
-    if (guardianCpfBad) { setErrorMsg("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
+    if (guardianCpfBad) { showError("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
     // Matrícula (FPKT): campo opcional em cadastro e edição — vazio não
     // bloqueia o salvamento (praticante pode existir sem matrícula).
     setErrorMsg(null); setSaving(true);
@@ -345,9 +361,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       }
     } catch (e: any) {
       setSaving(false);
-      const msg = e?.message || "Não foi possível salvar. Tente novamente.";
-      setErrorMsg(msg);
-      toastGlobal.error(msg);
+      showError(e?.message || "Não foi possível salvar. Tente novamente.");
       return;
     }
 
@@ -375,7 +389,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         // Cadastro salvo com sucesso; apenas a foto falhou → aviso sem reverter
         setSaving(false);
         showToast(isEdit ? "Alterações salvas" : "Praticante salvo");
-        setErrorMsg("Praticante salvo, mas a foto não pôde ser enviada. Tente trocar a foto novamente.");
+        showError("Praticante salvo, mas a foto não pôde ser enviada. Tente trocar a foto novamente.");
         onSaved();
         setTimeout(() => onClose(), 480);
         return;
@@ -384,7 +398,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       // Praticante criado mas o backend não retornou id — pula o upload
       setSaving(false);
       showToast("Praticante salvo");
-      setErrorMsg("Praticante salvo, mas a foto não pôde ser enviada (id não retornado pelo servidor).");
+      showError("Praticante salvo, mas a foto não pôde ser enviada (id não retornado pelo servidor).");
       onSaved();
       setTimeout(() => onClose(), 480);
       return;
