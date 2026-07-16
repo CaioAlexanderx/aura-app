@@ -7,3 +7,4 @@ export { EquipeAdmin } from './EquipeAdmin';
 export { SolicitacoesAdmin } from './SolicitacoesAdmin';
 export { AccessCodesCard } from './AccessCodesCard';
 export { ProspecaoAdmin } from './crm';
+export { AuraNotasAdmin } from './AuraNotasAdmin';
