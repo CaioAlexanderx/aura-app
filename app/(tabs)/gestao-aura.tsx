@@ -98,6 +98,14 @@ var SECTIONS: Section[] = [
     route: "/gestao-aura-endomarketing",
     color: "#8b5cf6",
   },
+  {
+    key: "aura_notas",
+    icon: "file_text",
+    title: "Aura Notas",
+    description: "Gestao fiscal das empresas — engine propria, CSC, certificado A1 e status SEFAZ.",
+    route: "/gestao-aura-notas",
+    color: Colors.violet,
+  },
 ];
 
 // ── Componente ────────────────────────────────────────────────
