@@ -414,6 +414,47 @@ export interface SelfServiceUpdateResult {
   name: string;
 }
 
+/**
+ * Corpo de POST .../record — EXATAMENTE o mesmo formato de
+ * SelfServiceUpdateInput, menos `fields` (é leitura, não grava nada).
+ */
+export interface SelfServiceRecordInput {
+  student_id: string;
+  identity: SelfServiceIdentity;
+}
+
+/** Campos travados — geridos pela federação, só leitura nesta tela. */
+export interface SelfServiceLocked {
+  name: string | null;
+  karate_registration_number: string | null;
+  belt_name: string | null;
+}
+
+/**
+ * Resposta de POST .../record. `fields` usa as MESMAS chaves de
+ * SelfServiceFields (string | null, nunca undefined — campo sem valor no
+ * banco vem null) pra dar pra comparar 1:1 com o que o aluno digitar e
+ * mandar só o que mudou em SelfServiceUpdateInput.fields.
+ */
+export interface SelfServiceRecordResult {
+  id: string;
+  locked: SelfServiceLocked;
+  fields: {
+    phone: string | null;
+    email: string | null;
+    cpf: string | null;
+    rg: string | null;
+    birth_date: string | null; // YYYY-MM-DD
+    street: string | null;
+    number: string | null;
+    complement: string | null;
+    neighborhood: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────
@@ -584,6 +625,22 @@ export const karatePublicApi = {
    */
   selfServiceSearch: (token: string, q: string): Promise<{ data: SelfServiceSearchHit[] }> =>
     pub(`/public/roster-self/${enc(token)}/search?q=${enc(q)}`),
+
+  /**
+   * Lê a PRÓPRIA ficha após confirmar identidade (MESMO gate do
+   * selfServiceUpdate). Existe pra a tela pré-preencher os campos — sem
+   * isso o aluno digita no escuro em vez de REVISAR o que já está
+   * cadastrado (intenção declarada da feature). Identidade errada → 403
+   * IDENTITY_MISMATCH (ApiError.code), sem vazar se o id existe.
+   */
+  selfServiceRecord: (
+    token: string,
+    input: SelfServiceRecordInput
+  ): Promise<SelfServiceRecordResult> =>
+    pub(`/public/roster-self/${enc(token)}/record`, {
+      method: "POST",
+      body: { student_id: input.student_id, identity: input.identity },
+    }),
 
   /**
    * Grava o próprio telefone/e-mail após confirmar identidade (nascimento
