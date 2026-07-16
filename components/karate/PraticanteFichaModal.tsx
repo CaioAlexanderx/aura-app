@@ -40,7 +40,7 @@ import { FotoSection, fileToBase64 } from "./praticante-ficha/FotoSection";
 import { EnderecoSection } from "./praticante-ficha/EnderecoSection";
 import { ResponsavelSection } from "./praticante-ficha/ResponsavelSection";
 import { PapeisSection } from "./praticante-ficha/PapeisSection";
-import { MatriculaSection, MatriculaEditField } from "./praticante-ficha/MatriculaSection";
+import { MatriculaField } from "./praticante-ficha/MatriculaSection";
 
 interface Props {
   federationId: string;
@@ -77,10 +77,12 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [canRepeat, setCanRepeat] = useState(false);
   // P6: estado de carregamento do upload de foto
   const [photoLoading, setPhotoLoading] = useState(false);
-  // F-matricula: modo de atribuição do nº de matrícula (registro FPKT) no CADASTRO.
-  // "auto" (padrão) = backend gera sozinho; "manual" = usuário informa o número.
-  // Só é relevante em modo criação — na edição a matrícula é somente leitura (já existente).
-  const [registrationMode, setRegistrationMode] = useState<"auto" | "manual">("auto");
+  // Matrícula (FPKT): preenchimento manual, campo OBRIGATÓRIO (decisão
+  // 16/07/2026 — reverte a tentativa de torná-la opcional). O backend não
+  // gera número automaticamente — 422 FPKT_NUMBER_REQUIRED no cadastro sem
+  // número, 422 "A matrícula não pode ficar vazia." na edição com o campo
+  // em branco. Quem não tem o número em mãos usa o fluxo de solicitação de
+  // praticante (o dojô solicita, a federação valida e emite).
   const [manualRegistrationNumber, setManualRegistrationNumber] = useState("");
   // Faixa inicial — só no cadastro; semeia a trajetória (karate_belt_history) no backend.
   const [beltKey, setBeltKey] = useState<BeltKey | null>("branca");
@@ -125,8 +127,8 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       setForm(lastDojo ? { ...EMPTY, dojo_id: lastDojo.id, dojo_name: lastDojo.name } : EMPTY);
       setFpkt(null); setBeltName(null);
       setCanRepeat(!!lastShared);
-      // F-matricula: reseta sempre para "auto" ao abrir um cadastro novo
-      setRegistrationMode("auto"); setManualRegistrationNumber("");
+      // Matrícula: reseta o campo manual ao abrir um cadastro novo
+      setManualRegistrationNumber("");
       setBeltKey("branca"); setDanDeg(null); setKyuDeg(null);
       setGraduatedAtBr("");
       return;
@@ -283,13 +285,15 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       return;
     }
     if (guardianCpfBad) { setErrorMsg("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
-    // F-matricula: no cadastro, se o modo manual foi escolhido, o número é obrigatório
-    // (senão o toggle "manual" ficaria sem efeito nenhum e o backend geraria vazio).
-    if (!isEdit && registrationMode === "manual" && !manualRegistrationNumber.trim()) {
-      setErrorMsg("Informe o número de matrícula ou volte para o modo automático.");
+    // Matrícula (FPKT): obrigatória em cadastro e edição — decisão 16/07/2026
+    // reverte a tentativa de torná-la opcional. O backend rejeita com 422 se
+    // vier vazia (FPKT_NUMBER_REQUIRED no cadastro; "A matrícula não pode
+    // ficar vazia." na edição) — validamos aqui para o usuário não descobrir
+    // isso só depois do submit.
+    if (!isEdit && !manualRegistrationNumber.trim()) {
+      setErrorMsg("Informe o número de matrícula (FPKT). Sem o número em mãos? Use o fluxo de solicitação de praticante.");
       return;
     }
-    // F-matricula (edição): a matrícula é editável, mas não pode ficar vazia.
     if (isEdit && !manualRegistrationNumber.trim()) {
       setErrorMsg("A matrícula não pode ficar vazia.");
       return;
@@ -323,10 +327,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       // P6: photo_url deliberadamente AUSENTE do body (blob inútil; URL permanente vem do /photo)
     };
 
-    // F-matricula: só no CADASTRO (não na edição — lá a matrícula é somente leitura) e
-    // só quando o modo é manual + campo preenchido. No modo automático o campo NÃO é
-    // enviado — o backend gera o número sozinho.
-    if (!isEdit && registrationMode === "manual" && manualRegistrationNumber.trim()) {
+    // Matrícula (FPKT): obrigatória — a validação acima já garante que
+    // manualRegistrationNumber está preenchida neste ponto no cadastro.
+    // Sempre trimada, nunca string vazia.
+    if (!isEdit) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
     // Faixa inicial (cadastro): backend semeia a trajetória e auto-emite a carteirinha.
@@ -424,7 +428,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {isEdit && fpkt ? (
                 <Text style={styles.subMono}>{fpkt}{beltName ? `  ·  ${beltName}` : ""}</Text>
               ) : (
-                <Text style={styles.sub}>Nome e dojô são obrigatórios — o resto você completa quando quiser.</Text>
+                <Text style={styles.sub}>Nome, dojô e matrícula (FPKT) são obrigatórios — o resto você completa quando quiser.</Text>
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
@@ -484,19 +488,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                   />
                 }
                 registrationSlot={
-                  isEdit ? (
-                    <MatriculaEditField
-                      value={manualRegistrationNumber}
-                      onChange={setManualRegistrationNumber}
-                    />
-                  ) : (
-                    <MatriculaSection
-                      mode={registrationMode}
-                      onChangeMode={setRegistrationMode}
-                      manualValue={manualRegistrationNumber}
-                      onChangeManualValue={setManualRegistrationNumber}
-                    />
-                  )
+                  <MatriculaField
+                    value={manualRegistrationNumber}
+                    onChange={setManualRegistrationNumber}
+                    isEdit={isEdit}
+                  />
                 }
               />
 
