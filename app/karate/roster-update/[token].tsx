@@ -84,6 +84,7 @@ import {
   PractitionerRequestRow,
   RequestPrefill,
 } from "@/components/karate/PractitionerRequestForm";
+import { confirmAlert } from "@/utils/webAlert";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -96,19 +97,6 @@ const GROUP_ORDER: Record<string, number> = { a: 0, b: 1, c: 2 };
 const MISSING_LABEL: Record<string, string> = {
   telefone: "Telefone", email: "E-mail", nascimento: "Nascimento", cpf: "CPF", rg: "RG", endereco: "Endereço",
 };
-const MISSING_PLACEHOLDER: Record<string, string> = { telefone: "(00) 00000-0000", email: "email@exemplo.com" };
-const MISSING_KEYBOARD: Record<string, "phone-pad" | "email-address" | "default"> = {
-  telefone: "phone-pad",
-  email: "email-address",
-};
-// Só telefone/e-mail têm editor RÁPIDO inline (FieldInput) na fila/lista —
-// os demais (nascimento/cpf/rg/endereço) exigem tipos de input que só a
-// "ficha completa" já tem prontos (DateInput, máscara de CPF, campos de
-// endereço) — reaproveitar isso em vez de duplicar editores. Um praticante
-// com só esses faltando ainda entra na fila/lista com o badge "falta X",
-// mas o card aponta pra "Ver ficha completa" em vez de um campo solto.
-const QUICK_EDIT_FIELDS = new Set(["telefone", "email"]);
-
 function prefersReducedMotion(): boolean {
   if (!IS_WEB || typeof window === "undefined" || !window.matchMedia) return false;
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
@@ -254,42 +242,6 @@ function InlineConfirm({
   );
 }
 
-// ── Campo de "só o que falta" — usado na fila e na lista. Ref exposta pra
-// encadear foco (Enter avança pro próximo campo faltando). ─────────────
-const FieldInput = React.forwardRef<TextInput, {
-  fieldKey: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  onCommit: () => void;
-  onSubmitEditing?: () => void;
-  autoFocus?: boolean;
-  saving?: boolean;
-  saved?: boolean;
-}>(function FieldInput({ fieldKey, value, onChangeText, onCommit, onSubmitEditing, autoFocus, saving, saved }, ref) {
-  return (
-    <View style={{ marginBottom: 10 }}>
-      <Text style={st.fieldLabel}>{MISSING_LABEL[fieldKey] || fieldKey}</Text>
-      <View style={st.fieldInputWrap}>
-        <TextInput
-          ref={ref}
-          value={value}
-          onChangeText={onChangeText}
-          onBlur={onCommit}
-          onSubmitEditing={() => { onCommit(); onSubmitEditing?.(); }}
-          placeholder={MISSING_PLACEHOLDER[fieldKey] || ""}
-          placeholderTextColor={P.ink4}
-          keyboardType={MISSING_KEYBOARD[fieldKey] || "default"}
-          autoFocus={autoFocus}
-          returnKeyType="next"
-          accessibilityLabel={MISSING_LABEL[fieldKey] || fieldKey}
-          style={st.fieldInput}
-        />
-        {saving ? <ActivityIndicator size="small" color={P.ink3} /> : saved ? <Icon name="checkmark-circle" size={16} color={P.ok} /> : null}
-      </View>
-    </View>
-  );
-});
-
 // ── Ficha completa — atrás do link "Ver ficha completa" (e também o
 // conteúdo do modal da grade de completude, item 2/3 do H2). Busca sob
 // demanda (item 1: não carregar 20 campos de cara pra todo mundo) — MAS
@@ -312,36 +264,41 @@ const ADDRESS_FIELDS: { key: keyof RosterFullRecord & string; label: string; key
 
 // Linha "Atual × Novo" — compacta, concatenada (item 3 do H2: o sensei vê
 // o que está no sistema e o que está mudando sem trocar de tela).
+// 16/07/2026 (decisão do Caio) — sem autosave: o campo só atualiza o
+// estado local (values, no FullRecordPanel). Quem grava é o botão "Salvar
+// ficha" do painel, que manda TODOS os campos alterados (diff contra
+// `baseline`) num único PATCH — mesmo padrão de
+// app/karate/roster-self/[token].tsx. `changed` acende um aviso visual
+// discreto de "ainda não salvo" pra cada campo mexido.
 function EditFieldRow({
-  label, current, value, onChangeText, onCommit, saving, saved, keyboardType, placeholder, dateMode, mono,
+  label, current, value, onChangeText, keyboardType, placeholder, dateMode, mono, changed,
 }: {
-  label: string; current: string; value: string; onChangeText: (v: string) => void; onCommit: () => void;
-  saving?: boolean; saved?: boolean; keyboardType?: any; placeholder?: string; dateMode?: boolean; mono?: boolean;
+  label: string; current: string; value: string; onChangeText: (v: string) => void;
+  keyboardType?: any; placeholder?: string; dateMode?: boolean; mono?: boolean; changed?: boolean;
 }) {
   return (
     <View style={st.fullGridItem}>
       <Text style={st.fieldLabel}>{label}</Text>
       <Text style={st.currentValueText} numberOfLines={1}>Atual: {current || "vazio"}</Text>
       {dateMode ? (
-        <DateInput value={value} onChangeText={onChangeText} onBlur={onCommit} style={[st.fullInput, mono && { fontFamily: KarateFonts.mono }]} />
+        <DateInput value={value} onChangeText={onChangeText} style={[st.fullInput, changed && st.fullInputChanged, mono && { fontFamily: KarateFonts.mono }]} />
       ) : (
         <TextInput
           value={value}
           onChangeText={onChangeText}
-          onBlur={onCommit}
           keyboardType={keyboardType}
           placeholder={placeholder}
-          style={[st.fullInput, mono && { fontFamily: KarateFonts.mono }]}
+          style={[st.fullInput, changed && st.fullInputChanged, mono && { fontFamily: KarateFonts.mono }]}
           accessibilityLabel={label}
         />
       )}
-      {saving ? <ActivityIndicator size="small" color={P.ink3} style={{ marginTop: 4 }} /> : saved ? <Text style={st.savedNote}>Salvo</Text> : null}
+      {changed ? <Text style={st.changedNote}>Alterado — ainda não salvo</Text> : null}
     </View>
   );
 }
 
 function FullRecordPanel({
-  token, studentId, cachedRecord, onLoaded, onFieldSaved,
+  token, studentId, cachedRecord, onLoaded, onFieldSaved, onDirtyChange,
 }: {
   token: string;
   studentId: string;
@@ -350,6 +307,10 @@ function FullRecordPanel({
   /** Avisa o pai que buscou um registro do zero, pra ele guardar no cache único. */
   onLoaded?: (record: RosterFullRecord) => void;
   onFieldSaved: (patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+  /** Avisa o pai se há edição não salva nesta ficha — sustenta o aviso de
+   *  "trocar de praticante"/"sair" antes de perder o que foi digitado
+   *  (item 4, 16/07/2026 — decisão do Caio de tirar o autosave). */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [fetched, setFetched] = useState<RosterFullRecord | null>(null);
   const [loading, setLoading] = useState(!cachedRecord);
@@ -358,8 +319,9 @@ function FullRecordPanel({
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [baseline, setBaseline] = useState<Record<string, string>>({});
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedPulse, setSavedPulse] = useState(false);
 
   useEffect(() => {
     if (record) {
@@ -369,10 +331,7 @@ function FullRecordPanel({
       // AQUI: este objeto `v` (baseline/values iniciais do formulário)
       // esquecia de semear `rg`, então `values.rg`/`baseline.rg` ficavam
       // `undefined` e o campo sempre renderizava vazio, não importa o que
-      // viesse do servidor. Bug de LEITURA no front, nunca de escrita — o
-      // autosave (commit) só manda `{ [apiKey]: valor }` de UM campo por vez
-      // (nunca reenvia os outros), então mesmo com esse bug o RG nunca foi
-      // sobrescrito/apagado no banco por salvar outro campo.
+      // viesse do servidor. Bug de LEITURA no front, nunca de escrita.
       const v: Record<string, string> = { phone: record.phone || "", email: record.email || "", cpf_cnpj: record.cpf_cnpj || "", rg: record.rg || "" };
       for (const f of ADDRESS_FIELDS) v[f.key] = (record as any)[f.key] || "";
       v.zip_code = record.zip_code || "";
@@ -396,27 +355,88 @@ function FullRecordPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, studentId, record?.id]);
 
-  const commit = useCallback(async (key: string, apiKey: string, rawValue?: string) => {
-    const value = (rawValue !== undefined ? rawValue : values[key]) || "";
-    if (value === (baseline[key] || "")) return; // nada mudou — não bate a API à toa
-    setSavingKey(key);
-    try {
-      let sendValue: string | null = value || null;
-      if (key === "birth_date") {
-        const iso = parseBrDate(value);
-        if (value && !iso) { setSavingKey(null); return; } // data incompleta/inválida — não envia
-        sendValue = iso;
+  // 16/07/2026 (decisão do Caio: "vamos tirar a confirmação automática da
+  // atualização cadastral... vamos colocar um botão pra confirmar envio")
+  // — nada de autosave por campo. Digitar só atualiza `values` local; quem
+  // grava é handleSave, disparado pelo botão "Salvar ficha", que manda
+  // TODOS os campos alterados (diff contra `baseline`) num único PATCH —
+  // mesmo padrão de app/karate/roster-self/[token].tsx (envio explícito +
+  // diff contra o valor carregado).
+  const KEY_TO_API: Record<string, string> = {
+    phone: "phone", email: "email", cpf_cnpj: "cpf", rg: "rg", zip_code: "zip_code",
+    street: "street", number: "number", complement: "complement", neighborhood: "neighborhood", city: "city", state: "state",
+  };
+
+  const isFieldChanged = useCallback(
+    (key: string) => (values[key] || "") !== (baseline[key] || ""),
+    [values, baseline]
+  );
+  const dirty = useMemo(
+    () => Object.keys(KEY_TO_API).concat(["birth_date"]).some((k) => (values[k] || "") !== (baseline[k] || "")),
+    [values, baseline]
+  );
+
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ao desmontar, some da lista de pendências do pai — evita um alerta de
+  // "saída sem salvar" fantasma depois que este painel já sumiu da tela
+  // (ex.: praticante que já foi salvo e a fila avançou sozinha).
+  useEffect(() => () => { onDirtyChange?.(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = useCallback(async () => {
+    if (!dirty || saving) return;
+    setSaveError(null);
+
+    // Valida a data (se mudou) antes de montar o patch.
+    let birthDateIso: string | null | undefined; // undefined = não mudou
+    if ((values.birth_date || "") !== (baseline.birth_date || "")) {
+      const raw = (values.birth_date || "").trim();
+      if (!raw) {
+        birthDateIso = null;
+      } else {
+        const iso = parseBrDate(raw);
+        if (!iso) { setSaveError("Data de nascimento inválida. Use o formato dd/mm/aaaa."); return; }
+        birthDateIso = iso;
       }
-      const patch: PatchPractitionerInput = { [apiKey]: sendValue } as any;
+    }
+
+    // Diff: só entra no PATCH o que MUDOU em relação a `baseline` — nunca
+    // o formulário inteiro, pra um campo intocado não correr risco de ser
+    // reescrito à toa.
+    const patch: PatchPractitionerInput = {};
+    const cachePatch: Partial<RosterFullRecord> = {};
+    const changedKeys: string[] = [];
+    for (const key of Object.keys(KEY_TO_API)) {
+      if ((values[key] || "") !== (baseline[key] || "")) {
+        const sendValue = values[key] || null;
+        (patch as any)[KEY_TO_API[key]] = sendValue;
+        (cachePatch as any)[key] = sendValue;
+        changedKeys.push(key);
+      }
+    }
+    if (birthDateIso !== undefined) {
+      (patch as any).birth_date = birthDateIso;
+      (cachePatch as any).birth_date = birthDateIso;
+      changedKeys.push("birth_date");
+    }
+    if (!changedKeys.length) return; // nada mudou de fato — botão já deveria estar desabilitado
+
+    setSaving(true);
+    try {
       const result = await karatePublicApi.patchPractitioner(token, studentId, patch);
-      setBaseline((b) => ({ ...b, [key]: value }));
-      setSavedKey(key);
-      setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
-      const cachePatch: Partial<RosterFullRecord> = key === "birth_date" ? { birth_date: sendValue } : ({ [key]: sendValue } as any);
+      setBaseline((b) => {
+        const next = { ...b };
+        for (const key of changedKeys) next[key] = values[key] || "";
+        return next;
+      });
+      setSavedPulse(true);
+      setTimeout(() => setSavedPulse(false), 2500);
       onFieldSaved(cachePatch, result);
-    } catch { /* silencioso — o campo continua editável, sensei tenta de novo */ }
-    finally { setSavingKey(null); }
-  }, [token, studentId, values, baseline, onFieldSaved]);
+    } catch (e: any) {
+      setSaveError(e?.message || "Não foi possível salvar a ficha agora. O que você digitou continua aqui — tente de novo.");
+    } finally {
+      setSaving(false);
+    }
+  }, [dirty, saving, values, baseline, token, studentId, onFieldSaved]);
 
   if (loading) {
     return <View style={{ paddingVertical: 16, alignItems: "center" }}><ActivityIndicator size="small" color={P.ink3} /></View>;
@@ -449,46 +469,39 @@ function FullRecordPanel({
         <EditFieldRow
           label="Telefone" current={baseline.phone} value={values.phone || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, phone: maskPhoneUtil(t) }))}
-          onCommit={() => commit("phone", "phone")}
-          keyboardType="phone-pad" saving={savingKey === "phone"} saved={savedKey === "phone"} mono
+          keyboardType="phone-pad" mono changed={isFieldChanged("phone")}
         />
         <EditFieldRow
           label="E-mail" current={baseline.email} value={values.email || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, email: t }))}
-          onCommit={() => commit("email", "email")}
-          keyboardType="email-address" saving={savingKey === "email"} saved={savedKey === "email"}
+          keyboardType="email-address" changed={isFieldChanged("email")}
         />
         <EditFieldRow
           label="Nascimento" current={baseline.birth_date || ""} value={values.birth_date || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, birth_date: t }))}
-          onCommit={() => commit("birth_date", "birth_date")}
-          dateMode saving={savingKey === "birth_date"} saved={savedKey === "birth_date"} mono
+          dateMode mono changed={isFieldChanged("birth_date")}
         />
         <EditFieldRow
           label="CPF" current={baseline.cpf_cnpj} value={values.cpf_cnpj || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, cpf_cnpj: maskCpf(t) }))}
-          onCommit={() => commit("cpf_cnpj", "cpf")}
-          keyboardType="numeric" saving={savingKey === "cpf_cnpj"} saved={savedKey === "cpf_cnpj"} mono
+          keyboardType="numeric" mono changed={isFieldChanged("cpf_cnpj")}
         />
         <EditFieldRow
           label="RG" current={baseline.rg} value={values.rg || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, rg: t }))}
-          onCommit={() => commit("rg", "rg")}
-          saving={savingKey === "rg"} saved={savedKey === "rg"} mono
+          mono changed={isFieldChanged("rg")}
         />
         <EditFieldRow
           label="CEP" current={baseline.zip_code} value={values.zip_code || ""}
           onChangeText={(t) => setValues((v) => ({ ...v, zip_code: maskCEPLocal(t) }))}
-          onCommit={() => commit("zip_code", "zip_code")}
-          keyboardType="numeric" saving={savingKey === "zip_code"} saved={savedKey === "zip_code"} mono
+          keyboardType="numeric" mono changed={isFieldChanged("zip_code")}
         />
         {ADDRESS_FIELDS.map((f) => (
           <EditFieldRow
             key={f.key}
             label={f.label} current={baseline[f.key]} value={values[f.key] || ""}
             onChangeText={(t) => setValues((v) => ({ ...v, [f.key]: t }))}
-            onCommit={() => commit(f.key, f.key)}
-            keyboardType={f.keyboardType} saving={savingKey === f.key} saved={savedKey === f.key}
+            keyboardType={f.keyboardType} changed={isFieldChanged(f.key)}
           />
         ))}
       </View>
@@ -504,61 +517,74 @@ function FullRecordPanel({
         </Text>
         <Text style={st.guardianReadonlyHint}>Somente leitura neste portal — peça à federação para atualizar o responsável.</Text>
       </View>
+
+      {/* 16/07/2026 — envio explícito por praticante: manda só o que mudou
+          (diff contra baseline) num único PATCH. Desabilitado quando não
+          há nada pra salvar; "Salvando..." enquanto a requisição está no
+          ar; erro fica inline (com o motivo) sem apagar o que foi digitado. */}
+      <View style={st.fullSaveBar}>
+        {!!saveError && <Text style={st.fullSaveError}>{saveError}</Text>}
+        {!saveError && savedPulse && <Text style={st.fullSaveSuccess}>Ficha salva.</Text>}
+        <Pressable
+          onPress={handleSave}
+          disabled={!dirty || saving}
+          accessibilityRole="button"
+          accessibilityLabel="Salvar ficha"
+          accessibilityState={{ disabled: !dirty || saving }}
+          style={[st.fullSaveBtn, (!dirty || saving) && st.fullSaveBtnDisabled]}
+        >
+          {saving ? (
+            <>
+              <ActivityIndicator size="small" color="#fdf8f2" />
+              <Text style={[st.fullSaveBtnText, { marginLeft: 8 }]}>Salvando...</Text>
+            </>
+          ) : (
+            <Text style={st.fullSaveBtnText}>{dirty ? "Salvar ficha" : "Nada para salvar"}</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-// ── Card da FILA — um praticante, só os campos faltando, Enter avança. ──
+// ── Card da FILA — um praticante, ficha inteira, avanço explícito. ──────
 function QueueCard({
-  p, position, total, token, onPatch, onInactivate, onFichaFieldSaved, onReviewed,
+  p, position, total, token, onInactivate, onFichaFieldSaved, onReviewed, onDirtyChange,
 }: {
   p: RosterPractitioner; position: number; total: number; token: string;
-  onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>;
   onInactivate: (p: RosterPractitioner) => void;
   onFichaFieldSaved: (id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
   /** Item 3: avança a fila sem editar nada — "olhei, está certo" (registro
    *  já completo) ou "não tenho esse dado agora, deixa pra depois". */
   onReviewed: (id: string) => void;
+  /** Sobe pro topo se esta ficha tem edição não salva — sustenta o aviso
+   *  de "trocar de visualização" (Fila/Lista/Grade) sem confirmação
+   *  (item 4, 16/07/2026 — fim do autosave, sem perder trabalho em
+   *  silêncio). */
+  onDirtyChange: (key: string, dirty: boolean) => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>(() => ({ telefone: p.phone || "", email: p.email || "" }));
-  const [savingField, setSavingField] = useState<string | null>(null);
-  const [savedField, setSavedField] = useState<string | null>(null);
   const [confirmingInactivate, setConfirmingInactivate] = useState(false);
-  // ⚠️ (15/07/2026) "Não devemos interromper o preenchimento" — o Caio.
-  // A ficha completa agora é O CARD, sempre aberta. Antes, a fila mostrava só
-  // telefone/e-mail (QUICK_EDIT_FIELDS) e escondia nascimento/CPF/RG/endereço
-  // atrás de um link "ver ficha completa" — o sensei preenchia os dois campos
-  // rápidos e a fila dava a tarefa por encerrada, deixando o resto pra trás.
-  // Isso era o resquício da premissa morta ("mostrar só o que falta"): a
-  // regra agora é revisar TODO MUNDO, campo por campo, sem interrupção.
-  const [showFull] = useState(true);
-  const refs = useRef<Record<string, TextInput | null>>({});
+  const [dirty, setDirty] = useState(false);
+  const dirtyKey = `queue:${p.id}`;
 
   useEffect(() => {
-    setValues({ telefone: p.phone || "", email: p.email || "" });
+    // key={p.id} no pai já remonta este card ao trocar de praticante —
+    // some da lista de pendências do pai ao sair, pra não deixar um
+    // falso-positivo de "há edição não salva" depois que já saiu daqui.
+    return () => onDirtyChange(dirtyKey, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.id]);
 
-  const orderedMissing = useMemo(() => [...p.missing].sort((a, b) => (a === "telefone" ? -1 : b === "telefone" ? 1 : 0)), [p.missing]);
-  // Só telefone/e-mail têm editor inline aqui — o resto (nascimento/cpf/
-  // rg/endereço) mora exclusivamente na ficha completa (item 4: campos
-  // que não tinham lugar nenhum na fila antes de virarem obrigatórios).
-  const quickMissing = useMemo(() => orderedMissing.filter((f) => QUICK_EDIT_FIELDS.has(f)), [orderedMissing]);
-  const fichaOnlyMissing = useMemo(() => orderedMissing.filter((f) => !QUICK_EDIT_FIELDS.has(f)), [orderedMissing]);
-
-  async function commit(field: string, focusNextOf?: string) {
-    const apiKey = field === "telefone" ? "phone" : "email";
-    const value = values[field]?.trim() || "";
-    const original = field === "telefone" ? (p.phone || "") : (p.email || "");
-    if (value === original) { if (focusNextOf) refs.current[focusNextOf]?.focus(); return; }
-    setSavingField(field);
-    try {
-      await onPatch(p.id, { [apiKey]: value || null } as any);
-      setSavedField(field);
-      setTimeout(() => setSavedField((f) => (f === field ? null : f)), 1500);
-    } catch { /* o campo segue editável — sensei tenta de novo no próximo blur/Enter */ }
-    finally {
-      setSavingField(null);
-      if (focusNextOf) refs.current[focusNextOf]?.focus();
+  function guardLeave(action: () => void) {
+    if (dirty) {
+      confirmAlert(
+        "Alterações não salvas",
+        `Você editou a ficha de ${p.name} e ainda não salvou. Sair mesmo assim descarta o que foi digitado.`,
+        "Sair sem salvar",
+        action
+      );
+    } else {
+      action();
     }
   }
 
@@ -584,53 +610,31 @@ function QueueCard({
         />
       ) : (
         <>
-          {quickMissing.length > 0 && (
-            <View style={{ marginTop: 14 }}>
-              {quickMissing.map((field, idx) => (
-                <FieldInput
-                  key={field}
-                  ref={(r) => { refs.current[field] = r; }}
-                  fieldKey={field}
-                  value={values[field] || ""}
-                  onChangeText={(t) => setValues((v) => ({ ...v, [field]: t }))}
-                  onCommit={() => commit(field)}
-                  onSubmitEditing={() => commit(field, quickMissing[idx + 1])}
-                  autoFocus={idx === 0}
-                  saving={savingField === field}
-                  saved={savedField === field}
-                />
-              ))}
-            </View>
-          )}
-
-          {showFull && (
+          <View style={{ marginTop: 14 }}>
             <FullRecordPanel
               token={token}
               studentId={p.id}
-              onFieldSaved={(patch, result) => {
-                if (patch.phone !== undefined) setValues((v) => ({ ...v, telefone: patch.phone || "" }));
-                if (patch.email !== undefined) setValues((v) => ({ ...v, email: patch.email || "" }));
-                onFichaFieldSaved(p.id, patch, result);
-              }}
+              onFieldSaved={(patch, result) => onFichaFieldSaved(p.id, patch, result)}
+              onDirtyChange={(d) => { setDirty(d); onDirtyChange(dirtyKey, d); }}
             />
-          )}
+          </View>
 
-          {/* Item 3: sem campo rápido pra digitar aqui — avançar exige uma
-              ação explícita do sensei (nunca sai da fila sozinho, mesmo que
-              já estivesse tudo preenchido desde o import). */}
-          {quickMissing.length === 0 && (
-            <View style={st.reviewPrompt}>
-              <Text style={st.reviewPromptText}>
-                {fichaOnlyMissing.length > 0
-                  ? `Falta ${missingSummary(fichaOnlyMissing)} — preencha na ficha completa acima ou deixe para depois.`
-                  : "Ficha completa — confira os dados acima e confirme."}
-              </Text>
-              <Pressable onPress={() => onReviewed(p.id)} accessibilityRole="button" accessibilityLabel="Está tudo certo, confirmar" style={st.reviewBtn}>
-                <Icon name="checkmark" size={14} color="#fdf8f2" />
-                <Text style={st.reviewBtnText}>{fichaOnlyMissing.length > 0 ? "Deixar para depois" : "Está tudo certo"}</Text>
-              </Pressable>
-            </View>
-          )}
+          {/* Item 3: avançar exige uma ação explícita do sensei (nunca sai
+              da fila sozinho, mesmo que já estivesse tudo preenchido desde
+              o import). Se há edição não salva na ficha acima, confirma
+              antes de sair — não deixar o preenchimento evaporar em
+              silêncio (item 4, 16/07/2026). */}
+          <View style={st.reviewPrompt}>
+            <Text style={st.reviewPromptText}>
+              {p.missing.length > 0
+                ? `Falta ${missingSummary(p.missing)} — preencha acima, salve, ou deixe para depois.`
+                : "Ficha completa — confira os dados acima e confirme."}
+            </Text>
+            <Pressable onPress={() => guardLeave(() => onReviewed(p.id))} accessibilityRole="button" accessibilityLabel="Está tudo certo, confirmar" style={st.reviewBtn}>
+              <Icon name="checkmark" size={14} color="#fdf8f2" />
+              <Text style={st.reviewBtnText}>{p.missing.length > 0 ? "Deixar para depois" : "Está tudo certo"}</Text>
+            </Pressable>
+          </View>
 
           <Pressable onPress={() => setConfirmingInactivate(true)} accessibilityRole="button" accessibilityLabel="Não treina mais" style={st.inactivateLink}>
             <Icon name="ban" size={13} color={P.ink3} />
@@ -642,35 +646,41 @@ function QueueCard({
   );
 }
 
-// ── Linha da LISTA — compacta, expande pra editar. ──────────────────────
+// ── Linha da LISTA — compacta, expande pra editar a ficha inteira. ──────
 function ListRow({
-  p, token, onPatch, onInactivate, onFichaFieldSaved,
+  p, token, onInactivate, onFichaFieldSaved, onDirtyChange,
 }: {
   p: RosterPractitioner; token: string;
-  onPatch: (id: string, patch: PatchPractitionerInput) => Promise<void>;
   onInactivate: (p: RosterPractitioner) => void;
   onFichaFieldSaved: (id: string, patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
+  onDirtyChange: (key: string, dirty: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>(() => ({ telefone: p.phone || "", email: p.email || "" }));
-  const [savingField, setSavingField] = useState<string | null>(null);
   const [confirmingInactivate, setConfirmingInactivate] = useState(false);
-  const [showFull, setShowFull] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const dirtyKey = `list:${p.id}`;
 
-  async function commit(field: string) {
-    const apiKey = field === "telefone" ? "phone" : "email";
-    const value = values[field]?.trim() || "";
-    const original = field === "telefone" ? (p.phone || "") : (p.email || "");
-    if (value === original) return;
-    setSavingField(field);
-    try { await onPatch(p.id, { [apiKey]: value || null } as any); }
-    catch { /* segue editável */ }
-    finally { setSavingField(null); }
+  function guardAction(action: () => void) {
+    if (dirty) {
+      confirmAlert(
+        "Alterações não salvas",
+        `Você editou a ficha de ${p.name} e ainda não salvou. Continuar mesmo assim descarta o que foi digitado.`,
+        "Continuar sem salvar",
+        action
+      );
+    } else {
+      action();
+    }
   }
 
   return (
     <View style={st.listRow}>
-      <Pressable onPress={() => setExpanded((e) => !e)} accessibilityRole="button" accessibilityLabel={`Editar ${p.name}`} style={st.listRowHead}>
+      <Pressable
+        onPress={() => guardAction(() => setExpanded((e) => !e))}
+        accessibilityRole="button"
+        accessibilityLabel={`Editar ${p.name}`}
+        style={st.listRowHead}
+      >
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={st.rowName}>{p.name}</Text>
           <View style={st.rowMeta}>
@@ -698,40 +708,12 @@ function ListRow({
             />
           ) : (
             <>
-              {/* Item 4: só telefone/e-mail têm editor rápido aqui — o
-                  resto (nascimento/cpf/rg/endereço) mora na ficha completa
-                  (FieldInput/commit deste componente só sabem gravar
-                  phone/email; mapear p.missing inteiro chamaria a API
-                  errada pros campos novos). */}
-              {p.missing.filter((f) => QUICK_EDIT_FIELDS.has(f)).map((field) => (
-                <FieldInput
-                  key={field}
-                  fieldKey={field}
-                  value={values[field] || ""}
-                  onChangeText={(t) => setValues((v) => ({ ...v, [field]: t }))}
-                  onCommit={() => commit(field)}
-                  saving={savingField === field}
-                />
-              ))}
-              {p.missing.some((f) => !QUICK_EDIT_FIELDS.has(f)) && (
-                <Text style={st.reviewPromptText}>
-                  Também falta: {missingSummary(p.missing.filter((f) => !QUICK_EDIT_FIELDS.has(f)))} — veja a ficha completa.
-                </Text>
-              )}
-              <Pressable onPress={() => setShowFull((s) => !s)} accessibilityRole="button" accessibilityLabel="Ver ficha completa">
-                <Text style={st.fullLink}>{showFull ? "Ocultar ficha completa" : "Ver ficha completa"}</Text>
-              </Pressable>
-              {showFull && (
-                <FullRecordPanel
-                  token={token}
-                  studentId={p.id}
-                  onFieldSaved={(patch, result) => {
-                    if (patch.phone !== undefined) setValues((v) => ({ ...v, telefone: patch.phone || "" }));
-                    if (patch.email !== undefined) setValues((v) => ({ ...v, email: patch.email || "" }));
-                    onFichaFieldSaved(p.id, patch, result);
-                  }}
-                />
-              )}
+              <FullRecordPanel
+                token={token}
+                studentId={p.id}
+                onFieldSaved={(patch, result) => onFichaFieldSaved(p.id, patch, result)}
+                onDirtyChange={(d) => { setDirty(d); onDirtyChange(dirtyKey, d); }}
+              />
               <Pressable onPress={() => setConfirmingInactivate(true)} accessibilityRole="button" accessibilityLabel="Não treina mais" style={st.inactivateLink}>
                 <Icon name="ban" size={13} color={P.ink3} />
                 <Text style={st.inactivateLinkText}>Não treina mais</Text>
@@ -744,14 +726,6 @@ function ListRow({
   );
 }
 
-// ── Link de auto-atendimento — a alavanca de escala do G1. É o sensei quem
-// compartilha com o dojô (cola no grupo do WhatsApp), não a federação, por
-// isso o bloco fica logo abaixo do cabeçalho — destaque, não rodapé. Uma
-// frase em linguagem de sensei (o que isso tira do colo dele), link, e os
-// dois botões que importam: Copiar e Compartilhar no WhatsApp. Some
-// silenciosamente (retorna null) só no caso raro de self_service_url vir
-// null (migration 225 ainda não aplicada no ambiente) — nunca mostra um
-// bloco quebrado. ─────────────────────────────────────────────────────
 function SelfServiceShareCard({ url, onCopy, onShareWhatsApp }: { url: string; onCopy: () => void; onShareWhatsApp: () => void }) {
   return (
     <View style={st.selfServiceCard}>
@@ -1098,7 +1072,7 @@ function CompletenessGrid({
 // treina mais" dentro dele continua sendo um estágio inline, nunca um
 // segundo Modal). ───────────────────────────────────────────────────────
 function FichaDetailModal({
-  visible, token, practitioner, cachedRecord, onLoaded, onFieldSaved, onInactivate, onClose,
+  visible, token, practitioner, cachedRecord, onLoaded, onFieldSaved, onInactivate, onClose, onDirtyChange,
 }: {
   visible: boolean;
   token: string;
@@ -1108,6 +1082,9 @@ function FichaDetailModal({
   onFieldSaved: (patch: Partial<RosterFullRecord>, result?: PatchPractitionerResult) => void;
   onInactivate: (p: RosterPractitioner) => void;
   onClose: () => void;
+  /** Chave global de dirty-tracking (item 4, 16/07/2026) — o pai decide
+   *  se pede confirmação antes de abrir outra ficha ou fechar esta. */
+  onDirtyChange: (key: string, dirty: boolean) => void;
 }) {
   const [confirmingInactivate, setConfirmingInactivate] = useState(false);
 
@@ -1145,6 +1122,7 @@ function FichaDetailModal({
                   cachedRecord={cachedRecord}
                   onLoaded={onLoaded}
                   onFieldSaved={onFieldSaved}
+                  onDirtyChange={(d) => onDirtyChange(`ficha:${practitioner.id}`, d)}
                 />
                 <Pressable onPress={() => setConfirmingInactivate(true)} accessibilityRole="button" accessibilityLabel="Não treina mais" style={st.inactivateLink}>
                   <Icon name="ban" size={13} color={P.ink3} />
@@ -1174,6 +1152,35 @@ export default function RosterUpdatePortalScreen() {
   const [finishError, setFinishError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastCounter = useRef(0);
+
+  // ── Item 4 (16/07/2026, decisão do Caio: tirar o autosave, colocar
+  // botão de confirmar envio) — proteção contra perda de trabalho. Cada
+  // FullRecordPanel aberto na página (fila, lista expandida, modal da
+  // grade) se registra aqui por uma chave própria (`queue:id`, `list:id`,
+  // `ficha:id`) sempre que tem edição não salva. Não é state React de
+  // propósito — só precisa estar correto NO MOMENTO em que uma ação de
+  // saída é disparada (troca de modo, trocar/fechar ficha, fechar a aba),
+  // nunca dispara re-render sozinho. ───────────────────────────────────
+  const dirtySetRef = useRef<Set<string>>(new Set());
+  const handleDirtyChange = useCallback((key: string, dirty: boolean) => {
+    if (dirty) dirtySetRef.current.add(key);
+    else dirtySetRef.current.delete(key);
+  }, []);
+
+  // beforeunload — fechar/recarregar a aba com edição pendente pede
+  // confirmação do navegador (mensagem é do próprio browser, não
+  // customizável). Só web: nativo não tem esse evento.
+  useEffect(() => {
+    if (!IS_WEB || typeof window === "undefined") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtySetRef.current.size > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
 
   // ── Ficha completa (H2) — FONTE ÚNICA de registros completos, usada
   // tanto pela grade de completude quanto pelo modal de ficha aberto a
@@ -1371,6 +1378,51 @@ export default function RosterUpdatePortalScreen() {
       fullRecordsLoadedRef.current.delete(id); // falhou — libera pra tentar de novo depois
     }
   }, [tokenStr]);
+
+  // ── Guardas de "trocar de praticante" (item 4, 16/07/2026) — trocar de
+  // modo (Fila/Lista/Grade) desmonta quem está com a ficha aberta na visão
+  // atual; trocar/fechar a ficha da grade troca o studentId do único
+  // FullRecordPanel do modal. Os dois casos destroem o formulário local
+  // (values/baseline) de quem estivesse sujo — por isso confirmam antes,
+  // igual ao beforeunload acima, só que síncrono (sem depender do
+  // navegador). `confirmAlert` já resolve web (window.confirm) x nativo
+  // (Alert.alert) — ver utils/webAlert.ts. ─────────────────────────────
+  const requestModeChange = useCallback((next: "queue" | "list" | "grade") => {
+    if (next === mode) return;
+    if (dirtySetRef.current.size === 0) { setMode(next); return; }
+    confirmAlert(
+      "Alterações não salvas",
+      "Há campos editados que ainda não foram salvos nesta visão. Trocar agora vai descartar o que foi digitado.",
+      "Trocar mesmo assim",
+      () => setMode(next)
+    );
+  }, [mode]);
+
+  const requestOpenFicha = useCallback((id: string) => {
+    const currentKey = openFichaId ? `ficha:${openFichaId}` : null;
+    if (!currentKey || !dirtySetRef.current.has(currentKey)) {
+      ensureFullRecord(id);
+      setOpenFichaId(id);
+      return;
+    }
+    confirmAlert(
+      "Alterações não salvas",
+      "A ficha aberta tem edições não salvas. Trocar de praticante agora vai descartar o que foi digitado.",
+      "Trocar mesmo assim",
+      () => { ensureFullRecord(id); setOpenFichaId(id); }
+    );
+  }, [openFichaId, ensureFullRecord]);
+
+  const requestCloseFicha = useCallback(() => {
+    const currentKey = openFichaId ? `ficha:${openFichaId}` : null;
+    if (!currentKey || !dirtySetRef.current.has(currentKey)) { setOpenFichaId(null); return; }
+    confirmAlert(
+      "Alterações não salvas",
+      "Você tem edições não salvas nesta ficha. Fechar agora vai descartá-las.",
+      "Fechar mesmo assim",
+      () => setOpenFichaId(null)
+    );
+  }, [openFichaId]);
 
   // ── Pré-carregamento em lote pra grade de completude — só dispara quando
   // o sensei realmente abre a aba "Grade" (não gasta ~400 requests à toa
@@ -1629,15 +1681,15 @@ export default function RosterUpdatePortalScreen() {
           </View>
 
           <View style={st.modeToggle}>
-            <Pressable onPress={() => setMode("queue")} style={[st.modeBtn, mode === "queue" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo fila">
+            <Pressable onPress={() => requestModeChange("queue")} style={[st.modeBtn, mode === "queue" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo fila">
               <Icon name="layers" size={14} color={mode === "queue" ? "#fdf8f2" : P.ink2} />
               <Text style={[st.modeBtnText, mode === "queue" && st.modeBtnTextActive]}>Fila ({queueItems.length})</Text>
             </Pressable>
-            <Pressable onPress={() => setMode("list")} style={[st.modeBtn, mode === "list" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo lista">
+            <Pressable onPress={() => requestModeChange("list")} style={[st.modeBtn, mode === "list" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Modo lista">
               <Icon name="grid" size={14} color={mode === "list" ? "#fdf8f2" : P.ink2} />
               <Text style={[st.modeBtnText, mode === "list" && st.modeBtnTextActive]}>Lista ({workingList.length})</Text>
             </Pressable>
-            <Pressable onPress={() => setMode("grade")} style={[st.modeBtn, mode === "grade" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Grade de completude">
+            <Pressable onPress={() => requestModeChange("grade")} style={[st.modeBtn, mode === "grade" && st.modeBtnActive]} accessibilityRole="button" accessibilityLabel="Grade de completude">
               <Icon name="bar-chart" size={14} color={mode === "grade" ? "#fdf8f2" : P.ink2} />
               <Text style={[st.modeBtnText, mode === "grade" && st.modeBtnTextActive]}>Grade ({workingList.length})</Text>
             </Pressable>
@@ -1651,10 +1703,10 @@ export default function RosterUpdatePortalScreen() {
                 position={1}
                 total={displayQueue.length}
                 token={tokenStr}
-                onPatch={savePatch}
                 onInactivate={handleInactivate}
                 onFichaFieldSaved={handleFichaFieldSaved}
                 onReviewed={markReviewed}
+                onDirtyChange={handleDirtyChange}
               />
             ) : (
               <View style={st.emptyCard}>
@@ -1677,7 +1729,7 @@ export default function RosterUpdatePortalScreen() {
                 <View style={st.emptyCard}><Text style={st.emptyText}>Nenhum praticante encontrado.</Text></View>
               ) : (
                 listFiltered.map((p) => (
-                  <ListRow key={p.id} p={p} token={tokenStr} onPatch={savePatch} onInactivate={handleInactivate} onFichaFieldSaved={handleFichaFieldSaved} />
+                  <ListRow key={p.id} p={p} token={tokenStr} onInactivate={handleInactivate} onFichaFieldSaved={handleFichaFieldSaved} onDirtyChange={handleDirtyChange} />
                 ))
               )}
             </View>
@@ -1691,7 +1743,7 @@ export default function RosterUpdatePortalScreen() {
                 loadedCount={fullRecordsLoadedCount}
                 totalToLoad={workingList.length}
                 recentlyUpdated={recentlyUpdated}
-                onOpenPractitioner={(id) => { ensureFullRecord(id); setOpenFichaId(id); }}
+                onOpenPractitioner={requestOpenFicha}
               />
             )
           )}
@@ -1770,7 +1822,8 @@ export default function RosterUpdatePortalScreen() {
         onLoaded={(record) => { if (openFichaId) handleFullRecordLoaded(openFichaId, record); }}
         onFieldSaved={(patch, result) => { if (openFichaId) handleFichaFieldSaved(openFichaId, patch, result); }}
         onInactivate={handleInactivate}
-        onClose={() => setOpenFichaId(null)}
+        onClose={requestCloseFicha}
+        onDirtyChange={handleDirtyChange}
       />
     </View>
   );
@@ -1876,8 +1929,22 @@ const st = StyleSheet.create({
   fullGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   fullGridItem: { width: "47%", minWidth: 130 },
   fullInput: { borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: P.ink },
+  // Borda de aviso — campo mexido, ainda não salvo (fim do autosave,
+  // 16/07/2026: sem isso o sensei não tem como saber o que já mandou e o
+  // que só está no rascunho local).
+  fullInputChanged: { borderColor: P.warn },
   currentValueText: { fontSize: 10.5, color: P.ink4, marginBottom: 4 },
   savedNote: { fontSize: 10.5, color: P.ok, fontWeight: "700", marginTop: 4 },
+  changedNote: { fontSize: 10.5, color: P.warn, fontWeight: "700", marginTop: 4 },
+
+  // ── Botão de envio explícito da ficha (item 2, 16/07/2026) — substitui
+  // o autosave campo a campo. Um só por praticante, manda o diff inteiro.
+  fullSaveBar: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: P.border, alignItems: "flex-end", gap: 8 },
+  fullSaveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: P.ink, borderRadius: KarateRadius.md, paddingVertical: 12, paddingHorizontal: 22, minWidth: 150 },
+  fullSaveBtnDisabled: { backgroundColor: P.border, opacity: 0.7 },
+  fullSaveBtnText: { fontSize: 13.5, fontWeight: "700", color: "#fdf8f2" },
+  fullSaveError: { fontSize: 12, color: P.danger, alignSelf: "stretch", textAlign: "right" },
+  fullSaveSuccess: { fontSize: 12, color: P.ok, fontWeight: "700", alignSelf: "stretch", textAlign: "right" },
 
   readonlyRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 4 },
   readonlyRowText: { fontSize: 11.5, color: P.ink3, flexShrink: 1 },
