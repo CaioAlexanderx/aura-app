@@ -1,95 +1,50 @@
 // ============================================================
-// Secao "Matricula (FPKT)" - SOMENTE no cadastro (modo criacao).
-// Permite escolher entre gerar o numero automaticamente (padrao, backend
-// atribui) ou informar manualmente um numero ja existente/reservado.
-// Na edicao a matricula e somente leitura (ver subMono no header do modal) -
-// este seletor nao aparece nesse modo.
+// Campo de matricula (FPKT) do praticante — cadastro e edicao.
+//
+// Decisao do Caio (16/07/2026): removida a geracao automatica de matricula
+// no modal. O backend nao gera mais numero nenhum (422 FPKT_NUMBER_REQUIRED
+// se enviado vazio); o numero e emitido pela federacao, fora do sistema —
+// aqui o app apenas registra o que ja foi emitido.
+//
+// Campo OPCIONAL em ambos os modos: o praticante pode existir sem FPKT
+// (quem nao tem o numero em maos usa o fluxo de solicitacao, onde a
+// federacao emite). Vazio nunca bloqueia o salvamento e nunca e enviado ao
+// backend como string vazia — o chamador (PraticanteFichaModal) omite o
+// campo do body quando em branco.
+//
+// Um unico componente serve cadastro e edicao (mesma UI: label + campo +
+// nota) — so o texto da nota muda (isEdit) porque o efeito de alterar um
+// numero ja existente é diferente de registrar um numero pela primeira vez.
 // ============================================================
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { Field, styles } from "./shared-styles";
 
-export type RegistrationMode = "auto" | "manual";
-
-interface MatriculaSectionProps {
-  mode: RegistrationMode;
-  onChangeMode: (m: RegistrationMode) => void;
-  manualValue: string;
-  onChangeManualValue: (v: string) => void;
+interface MatriculaFieldProps {
+  value: string;
+  onChange: (v: string) => void;
+  isEdit?: boolean;
 }
 
-export function MatriculaSection({ mode, onChangeMode, manualValue, onChangeManualValue }: MatriculaSectionProps) {
+export function MatriculaField({ value, onChange, isEdit }: MatriculaFieldProps) {
   return (
     <View style={{ marginBottom: 11 }}>
-      <Text style={styles.label}>Numero de matricula (FPKT)</Text>
-      <View style={styles.chipsRow}>
-        <TouchableOpacity
-          style={[styles.chip, mode === "auto" && styles.chipActive]}
-          onPress={() => onChangeMode("auto")}
-          activeOpacity={0.7}
-          accessibilityLabel="Gerar automatico"
-          accessibilityRole="radio"
-          accessibilityState={{ checked: mode === "auto" }}
-        >
-          <Text style={[styles.chipTxt, mode === "auto" && styles.chipTxtActive]}>Gerar automatico</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.chip, mode === "manual" && styles.chipActive]}
-          onPress={() => onChangeMode("manual")}
-          activeOpacity={0.7}
-          accessibilityLabel="Informar manualmente"
-          accessibilityRole="radio"
-          accessibilityState={{ checked: mode === "manual" }}
-        >
-          <Text style={[styles.chipTxt, mode === "manual" && styles.chipTxtActive]}>Informar manualmente</Text>
-        </TouchableOpacity>
-      </View>
-
-      {mode === "manual" ? (
-        <View style={{ marginTop: 9 }}>
-          <Field
-            label="Numero da matricula"
-            mono
-            value={manualValue}
-            onChangeText={onChangeManualValue}
-            placeholder="Ex.: 000123"
-          />
-          <View style={styles.guardianNote}>
-            <Icon name="info" size={13} color={P.ink3} />
-            <Text style={styles.guardianNoteTxt}>
-              Se o numero ja estiver em uso por outro praticante, o cadastro sera recusado.
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <Text style={{ fontSize: 11.5, color: P.ink3, marginTop: 2 }}>
-          O sistema atribui o proximo numero disponivel ao salvar.
-        </Text>
-      )}
-    </View>
-  );
-}
-
-// Campo editável de matrícula para o modo EDIÇÃO da ficha. Sem o seletor
-// auto/manual (a matrícula já existe) — apenas permite corrigir/trocar o
-// número. A unicidade é validada no backend (409 se já estiver em uso).
-export function MatriculaEditField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <View style={{ marginBottom: 11 }}>
-      <Text style={styles.label}>Numero de matricula (FPKT)</Text>
+      <Text style={styles.label}>Número de matrícula (FPKT)</Text>
       <Field
-        label="Numero da matricula"
+        label="Número da matrícula"
         mono
         value={value}
         onChangeText={onChange}
-        placeholder="Ex.: 000123"
+        placeholder="Ex.: 000123 (opcional)"
       />
       <View style={styles.guardianNote}>
         <Icon name="info" size={13} color={P.ink3} />
         <Text style={styles.guardianNoteTxt}>
-          Alterar a matricula muda o numero exibido na carteirinha. Se ja estiver em uso por outro praticante, a alteracao sera recusada.
+          {isEdit
+            ? "Emitida pela federação — alterar aqui muda o número exibido na carteirinha. Pode ficar em branco; sem matrícula, não há carteirinha."
+            : "Emitida pela federação (FPKT), fora do sistema — aqui você só registra. Sem o número em mãos? Deixe em branco e preencha depois; sem matrícula, a carteirinha não é emitida."}
         </Text>
       </View>
     </View>
