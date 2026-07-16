@@ -356,22 +356,56 @@ export interface PixPublicData {
 // Tipos — Auto-atendimento do PRÓPRIO praticante (G1, item 7)
 //
 // Consome GET/POST /public/roster-self/:token (karateRosterSelfServicePublic.js).
-// Token SEPARADO do token do sensei (self_service_token) — só aceita
-// contato do PRÓPRIO praticante, nunca inativa/edita faixa/vê a lista
-// inteira do dojô.
+// Token SEPARADO do token do sensei (self_service_token). (16/07/2026 —
+// decisão do Caio: agora aceita a FICHA INTEIRA do PRÓPRIO praticante
+// (mesmos campos de PORTAL_EDITABLE_FIELDS), nunca inativa/edita
+// faixa/status/dojo_id, nunca vê a lista inteira do dojô. Identidade
+// (SelfServiceIdentity) e o que muda (SelfServiceFields) são objetos
+// SEPARADOS no payload — ver comentário de topo do backend.
 // ─────────────────────────────────────────────────────────────
 export interface SelfServiceSearchHit {
   id: string;
   name: string;
 }
 
-export interface SelfServiceUpdateInput {
-  student_id: string;
-  /** Informe UM dos dois para confirmar identidade (YYYY-MM-DD). */
-  birth_date?: string;
+/**
+ * PROVA de identidade (2º fator) — sempre o valor ATUAL/correto que já
+ * está no banco. Informe UM dos dois. Nunca confundir com
+ * `SelfServiceFields.birth_date`, que é o valor NOVO (a correção).
+ */
+export interface SelfServiceIdentity {
+  birth_date?: string; // YYYY-MM-DD
   karate_registration_number?: string;
+}
+
+/**
+ * O QUE MUDA — mesmos campos de PORTAL_EDITABLE_FIELDS
+ * (karateRosterPortalPublic.js), espelhados aqui (16/07/2026: decisão do
+ * Caio de abrir a ficha inteira pro próprio aluno, não só contato).
+ * `karate_registration_number` PROPOSITALMENTE não existe aqui — o nº
+ * FPKT é emitido pela federação, só entra como `SelfServiceIdentity`.
+ * Só inclua no payload os campos que o aluno de fato preencheu — campo
+ * ausente aqui não é tocado no banco (omitir ≠ limpar).
+ */
+export interface SelfServiceFields {
   phone?: string;
   email?: string;
+  cpf?: string;
+  rg?: string;
+  birth_date?: string; // correção do nascimento — YYYY-MM-DD
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+}
+
+export interface SelfServiceUpdateInput {
+  student_id: string;
+  identity: SelfServiceIdentity;
+  fields: SelfServiceFields;
 }
 
 export interface SelfServiceUpdateResult {
@@ -562,6 +596,6 @@ export const karatePublicApi = {
   ): Promise<SelfServiceUpdateResult> =>
     pub(`/public/roster-self/${enc(token)}/update`, {
       method: "POST",
-      body: input,
+      body: { student_id: input.student_id, identity: input.identity, fields: input.fields },
     }),
 };
