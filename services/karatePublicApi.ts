@@ -356,28 +356,103 @@ export interface PixPublicData {
 // Tipos — Auto-atendimento do PRÓPRIO praticante (G1, item 7)
 //
 // Consome GET/POST /public/roster-self/:token (karateRosterSelfServicePublic.js).
-// Token SEPARADO do token do sensei (self_service_token) — só aceita
-// contato do PRÓPRIO praticante, nunca inativa/edita faixa/vê a lista
-// inteira do dojô.
+// Token SEPARADO do token do sensei (self_service_token). (16/07/2026 —
+// decisão do Caio: agora aceita a FICHA INTEIRA do PRÓPRIO praticante
+// (mesmos campos de PORTAL_EDITABLE_FIELDS), nunca inativa/edita
+// faixa/status/dojo_id, nunca vê a lista inteira do dojô. Identidade
+// (SelfServiceIdentity) e o que muda (SelfServiceFields) são objetos
+// SEPARADOS no payload — ver comentário de topo do backend.
 // ─────────────────────────────────────────────────────────────
 export interface SelfServiceSearchHit {
   id: string;
   name: string;
 }
 
-export interface SelfServiceUpdateInput {
-  student_id: string;
-  /** Informe UM dos dois para confirmar identidade (YYYY-MM-DD). */
-  birth_date?: string;
+/**
+ * PROVA de identidade (2º fator) — sempre o valor ATUAL/correto que já
+ * está no banco. Informe UM dos dois. Nunca confundir com
+ * `SelfServiceFields.birth_date`, que é o valor NOVO (a correção).
+ */
+export interface SelfServiceIdentity {
+  birth_date?: string; // YYYY-MM-DD
   karate_registration_number?: string;
+}
+
+/**
+ * O QUE MUDA — mesmos campos de PORTAL_EDITABLE_FIELDS
+ * (karateRosterPortalPublic.js), espelhados aqui (16/07/2026: decisão do
+ * Caio de abrir a ficha inteira pro próprio aluno, não só contato).
+ * `karate_registration_number` PROPOSITALMENTE não existe aqui — o nº
+ * FPKT é emitido pela federação, só entra como `SelfServiceIdentity`.
+ * Só inclua no payload os campos que o aluno de fato preencheu — campo
+ * ausente aqui não é tocado no banco (omitir ≠ limpar).
+ */
+export interface SelfServiceFields {
   phone?: string;
   email?: string;
+  cpf?: string;
+  rg?: string;
+  birth_date?: string; // correção do nascimento — YYYY-MM-DD
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+}
+
+export interface SelfServiceUpdateInput {
+  student_id: string;
+  identity: SelfServiceIdentity;
+  fields: SelfServiceFields;
 }
 
 export interface SelfServiceUpdateResult {
   ok: true;
   id: string;
   name: string;
+}
+
+/**
+ * Corpo de POST .../record — EXATAMENTE o mesmo formato de
+ * SelfServiceUpdateInput, menos `fields` (é leitura, não grava nada).
+ */
+export interface SelfServiceRecordInput {
+  student_id: string;
+  identity: SelfServiceIdentity;
+}
+
+/** Campos travados — geridos pela federação, só leitura nesta tela. */
+export interface SelfServiceLocked {
+  name: string | null;
+  karate_registration_number: string | null;
+  belt_name: string | null;
+}
+
+/**
+ * Resposta de POST .../record. `fields` usa as MESMAS chaves de
+ * SelfServiceFields (string | null, nunca undefined — campo sem valor no
+ * banco vem null) pra dar pra comparar 1:1 com o que o aluno digitar e
+ * mandar só o que mudou em SelfServiceUpdateInput.fields.
+ */
+export interface SelfServiceRecordResult {
+  id: string;
+  locked: SelfServiceLocked;
+  fields: {
+    phone: string | null;
+    email: string | null;
+    cpf: string | null;
+    rg: string | null;
+    birth_date: string | null; // YYYY-MM-DD
+    street: string | null;
+    number: string | null;
+    complement: string | null;
+    neighborhood: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -552,6 +627,22 @@ export const karatePublicApi = {
     pub(`/public/roster-self/${enc(token)}/search?q=${enc(q)}`),
 
   /**
+   * Lê a PRÓPRIA ficha após confirmar identidade (MESMO gate do
+   * selfServiceUpdate). Existe pra a tela pré-preencher os campos — sem
+   * isso o aluno digita no escuro em vez de REVISAR o que já está
+   * cadastrado (intenção declarada da feature). Identidade errada → 403
+   * IDENTITY_MISMATCH (ApiError.code), sem vazar se o id existe.
+   */
+  selfServiceRecord: (
+    token: string,
+    input: SelfServiceRecordInput
+  ): Promise<SelfServiceRecordResult> =>
+    pub(`/public/roster-self/${enc(token)}/record`, {
+      method: "POST",
+      body: { student_id: input.student_id, identity: input.identity },
+    }),
+
+  /**
    * Grava o próprio telefone/e-mail após confirmar identidade (nascimento
    * OU matrícula FPKT). Nunca toca is_active/faixa/status — o backend
    * rejeita qualquer campo fora da whitelist com 422.
@@ -562,6 +653,6 @@ export const karatePublicApi = {
   ): Promise<SelfServiceUpdateResult> =>
     pub(`/public/roster-self/${enc(token)}/update`, {
       method: "POST",
-      body: input,
+      body: { student_id: input.student_id, identity: input.identity, fields: input.fields },
     }),
 };
