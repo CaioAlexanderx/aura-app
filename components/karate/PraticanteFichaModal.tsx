@@ -77,10 +77,12 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [canRepeat, setCanRepeat] = useState(false);
   // P6: estado de carregamento do upload de foto
   const [photoLoading, setPhotoLoading] = useState(false);
-  // Matrícula (FPKT): preenchimento manual, campo opcional (o backend não gera
-  // número automaticamente — 422 FPKT_NUMBER_REQUIRED se enviado vazio). O
-  // praticante pode existir sem matrícula; quem não tem o número usa o fluxo
-  // de solicitação, onde a federação emite.
+  // Matrícula (FPKT): preenchimento manual, campo OBRIGATÓRIO (decisão
+  // 16/07/2026 — reverte a tentativa de torná-la opcional). O backend não
+  // gera número automaticamente — 422 FPKT_NUMBER_REQUIRED no cadastro sem
+  // número, 422 "A matrícula não pode ficar vazia." na edição com o campo
+  // em branco. Quem não tem o número em mãos usa o fluxo de solicitação de
+  // praticante (o dojô solicita, a federação valida e emite).
   const [manualRegistrationNumber, setManualRegistrationNumber] = useState("");
   // Faixa inicial — só no cadastro; semeia a trajetória (karate_belt_history) no backend.
   const [beltKey, setBeltKey] = useState<BeltKey | null>("branca");
@@ -299,8 +301,19 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       return;
     }
     if (guardianCpfBad) { showError("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
-    // Matrícula (FPKT): campo opcional em cadastro e edição — vazio não
-    // bloqueia o salvamento (praticante pode existir sem matrícula).
+    // Matrícula (FPKT): obrigatória em cadastro e edição — decisão 16/07/2026
+    // reverte a tentativa de torná-la opcional. O backend rejeita com 422 se
+    // vier vazia (FPKT_NUMBER_REQUIRED no cadastro; "A matrícula não pode
+    // ficar vazia." na edição) — validamos aqui para o usuário não descobrir
+    // isso só depois do submit.
+    if (!isEdit && !manualRegistrationNumber.trim()) {
+      showError("Informe o número de matrícula (FPKT). Sem o número em mãos? Use o fluxo de solicitação de praticante.");
+      return;
+    }
+    if (isEdit && !manualRegistrationNumber.trim()) {
+      showError("A matrícula não pode ficar vazia.");
+      return;
+    }
     setErrorMsg(null); setSaving(true);
 
     // P6: nunca envia blob URL no body do praticante.
@@ -330,9 +343,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       // P6: photo_url deliberadamente AUSENTE do body (blob inútil; URL permanente vem do /photo)
     };
 
-    // Matrícula (FPKT): só no CADASTRO e só quando preenchida — vazio fica de
-    // fora do body (nunca string vazia); o praticante pode ser criado sem número.
-    if (!isEdit && manualRegistrationNumber.trim()) {
+    // Matrícula (FPKT): obrigatória — a validação acima já garante que
+    // manualRegistrationNumber está preenchida neste ponto no cadastro.
+    // Sempre trimada, nunca string vazia.
+    if (!isEdit) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
     // Faixa inicial (cadastro): backend semeia a trajetória e auto-emite a carteirinha.
@@ -428,7 +442,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
               {isEdit && fpkt ? (
                 <Text style={styles.subMono}>{fpkt}{beltName ? `  ·  ${beltName}` : ""}</Text>
               ) : (
-                <Text style={styles.sub}>Nome e dojô são obrigatórios — o resto você completa quando quiser.</Text>
+                <Text style={styles.sub}>Nome, dojô e matrícula (FPKT) são obrigatórios — o resto você completa quando quiser.</Text>
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
