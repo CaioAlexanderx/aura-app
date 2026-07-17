@@ -46,6 +46,7 @@
 // ============================================================
 import { resolveBeltKey } from "@/constants/karateTheme";
 import { FPKT_LOGO_DATA_URI } from "./fpktLogoDataUri";
+import { DOJO_KUN_DATA_URI } from "./dojoKunDataUri";
 import type { MembershipCard } from "@/services/karateCardApi";
 
 const RED = "#b8463a";
@@ -221,7 +222,6 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
 
   return (
     '<div class="cr80">' +
-      '<img class="wm wm-back" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">' +
       '<div class="face-pad">' +
         '<div class="head">' +
           '<div class="head-left">' +
@@ -268,7 +268,6 @@ function cardCss(): string {
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:2.85mm 6.2mm 4.2mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
   html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
-  html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
 
   // header
   // gap:3mm (15/07/2026) — o Caio pediu respiro entre o nome da federação e o
@@ -347,7 +346,36 @@ function cardCss(): string {
 
   // verso body
   html += '.back-row{display:flex;flex:1;margin-top:1.8mm;min-height:0}';
-  html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
+  html += '.kun-col{position:relative;flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
+  // Marca d'água confinada a .kun-col (teste PR #597): pseudo-elemento em vez de
+  // <div>/<img> solto no card, para acompanhar a coluna se o layout mudar, sem
+  // coordenada mágica. Opacidade fica só no ::before (nunca em .kun-col, senão o
+  // texto -- .kun-eyebrow/.kun-title/.kun-list -- desbota junto).
+  //
+  // Deslocamento à esquerda (16/07/2026, iteração sobre o PR #597 -- "e se
+  // levar a marca mais para a esquerda?"): com background-size:contain a arte
+  // (866x516px, 1.678:1) já ocupa 100% da LARGURA de .kun-col -- a folga é só
+  // vertical. background-position:left é no-op horizontal nesse regime; NÃO
+  // usar. A única forma real de mover a marca é estender a própria caixa do
+  // ::before para além do .kun-col via inset negativo à esquerda, invadindo o
+  // padding-left de .face-pad (lado oposto ao QR).
+  //
+  // MEDIDO em Chrome headless (Puppeteer, getBoundingClientRect), não
+  // estimado -- ver cicatriz de estimar largura "a olho" nesta mesma
+  // carteirinha (PR anterior, erro de 45%, nome da federação truncou em
+  // produção): o padding real entre a borda esquerda do card e a borda
+  // esquerda de .kun-col é 6.46mm (face-pad padding-left 6.2mm + borda do
+  // .cr80). Testado -2mm/-4mm/-6.2mm: -2mm ainda sobrepõe o primeiro traço
+  // dos kanji nos bullets (•) do kun-list; -6.2mm usa quase todo o padding e
+  // fica a ~0.26mm da borda (sem sangrar -- .cr80 tem overflow:hidden, então
+  // qualquer excesso é cortado, nunca vaza pro card vizinho no grid A4).
+  // -4mm foi o escolhido: desloca a coluna de kanji mais à esquerda inteira
+  // (血気の勇を戒むること) para dentro do padding, sem tocar os bullets nem o
+  // texto do kun-list, com folga visível até a borda arredondada do cartão.
+  // Impacto no peso do HTML (50 carteirinhas/100 faces): +9 bytes (2.0475MB
+  // -> 2.0475MB) -- irrelevante, é só um valor CSS a mais na mesma string.
+  html += '.kun-col::before{content:"";position:absolute;inset:0 0 0 -4mm;background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain;opacity:' + WM_OPACITY + ';pointer-events:none;z-index:0}';
+  html += '.kun-col>*{position:relative;z-index:1}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
   html += '.kun-list{margin-top:0.5mm;display:flex;flex-direction:column;gap:1.05mm}';
@@ -413,7 +441,8 @@ function cardCss(): string {
   // marca d'água — impressão clareia tons claros; sobe um pouco mais que a
   // tela para permanecer perceptível no papel, sem competir com o texto
   // (a marca fica em z-index:1, sempre atrás de .face-pad z-index:2).
-  html += '.wm-front,.wm-back{opacity:0.22}';
+  html += '.wm-front{opacity:0.22}';
+  html += '.kun-col::before{opacity:0.22}';
   html += '}';
 
   return html;
