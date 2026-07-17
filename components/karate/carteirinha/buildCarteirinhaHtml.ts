@@ -351,7 +351,30 @@ function cardCss(): string {
   // <div>/<img> solto no card, para acompanhar a coluna se o layout mudar, sem
   // coordenada mágica. Opacidade fica só no ::before (nunca em .kun-col, senão o
   // texto -- .kun-eyebrow/.kun-title/.kun-list -- desbota junto).
-  html += '.kun-col::before{content:"";position:absolute;inset:0;background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain;opacity:' + WM_OPACITY + ';pointer-events:none;z-index:0}';
+  //
+  // Deslocamento à esquerda (16/07/2026, iteração sobre o PR #597 -- "e se
+  // levar a marca mais para a esquerda?"): com background-size:contain a arte
+  // (866x516px, 1.678:1) já ocupa 100% da LARGURA de .kun-col -- a folga é só
+  // vertical. background-position:left é no-op horizontal nesse regime; NÃO
+  // usar. A única forma real de mover a marca é estender a própria caixa do
+  // ::before para além do .kun-col via inset negativo à esquerda, invadindo o
+  // padding-left de .face-pad (lado oposto ao QR).
+  //
+  // MEDIDO em Chrome headless (Puppeteer, getBoundingClientRect), não
+  // estimado -- ver cicatriz de estimar largura "a olho" nesta mesma
+  // carteirinha (PR anterior, erro de 45%, nome da federação truncou em
+  // produção): o padding real entre a borda esquerda do card e a borda
+  // esquerda de .kun-col é 6.46mm (face-pad padding-left 6.2mm + borda do
+  // .cr80). Testado -2mm/-4mm/-6.2mm: -2mm ainda sobrepõe o primeiro traço
+  // dos kanji nos bullets (•) do kun-list; -6.2mm usa quase todo o padding e
+  // fica a ~0.26mm da borda (sem sangrar -- .cr80 tem overflow:hidden, então
+  // qualquer excesso é cortado, nunca vaza pro card vizinho no grid A4).
+  // -4mm foi o escolhido: desloca a coluna de kanji mais à esquerda inteira
+  // (血気の勇を戒むること) para dentro do padding, sem tocar os bullets nem o
+  // texto do kun-list, com folga visível até a borda arredondada do cartão.
+  // Impacto no peso do HTML (50 carteirinhas/100 faces): +9 bytes (2.0475MB
+  // -> 2.0475MB) -- irrelevante, é só um valor CSS a mais na mesma string.
+  html += '.kun-col::before{content:"";position:absolute;inset:0 0 0 -4mm;background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain;opacity:' + WM_OPACITY + ';pointer-events:none;z-index:0}';
   html += '.kun-col>*{position:relative;z-index:1}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
