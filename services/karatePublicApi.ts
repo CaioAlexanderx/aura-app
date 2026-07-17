@@ -118,7 +118,7 @@ export interface RosterPractitioner {
   is_active: boolean;
   phone: string | null;
   email: string | null;
-  /** Campos essenciais faltando (hoje: 'telefone' e/ou 'email'). Vazio = ok. */
+  /** Campos faltando (telefone, email, nascimento, cpf, rg, endereco — ver classifyPraticante em karateRosterPortalPublic.js). Vazio = ficha completa. */
   missing: string[];
   /**
    * 'a' faixa-preta ATIVA com anuidade em aberto · 'b' ativo sem NENHUM
@@ -136,12 +136,15 @@ export interface RosterCounts {
 /**
  * Stateless por desenho (sem tabela de baseline no backend) —
  * essenciais_total/essenciais_resolvidos cobrem TODOS os praticantes
- * ativos (não só o grupo prioritário 'a'/'b'). A barra de progresso da
- * fila (item 5) usa esses números como pano de fundo geral; o contador
- * "X de Y" da fila em si é calculado no cliente a partir de quantos itens
- * ainda têm `missing.length > 0` (ver [token].tsx) — os dois se resolvem
- * sozinhos a cada refetch, sem estado adicional para "lembrar por onde
- * o sensei parou".
+ * ativos (não só o grupo prioritário 'a'/'b'). "Resolvido" = ficha 100%
+ * completa (`missing.length === 0` sobre os 6 campos, não só contato —
+ * ver classifyPraticante em karateRosterPortalPublic.js). A barra do
+ * topo usa esses números; já o contador da FILA em si (item 3, mudança
+ * de premissa de 15/07/2026) é outra coisa — é calculado no cliente a
+ * partir de quem ainda não foi REVISADO (`reviewedIds`, ver [token].tsx),
+ * que inclui gente com ficha completa mas sem confirmação explícita do
+ * sensei. Os dois se resolvem sozinhos a cada refetch, sem estado
+ * adicional para "lembrar por onde o sensei parou".
  */
 export interface RosterProgress {
   essenciais_total: number;
@@ -577,8 +580,9 @@ export const karatePublicApi = {
     pub(`/public/roster-update/${enc(token)}/practitioner-requests${status ? `?status=${status}` : ""}`),
 
   /**
-   * Ficha completa de um praticante — atrás do link "Ver ficha completa"
-   * da UI (item 1: a lista/fila só mostra o que falta, não os 20 campos).
+   * Ficha completa de um praticante, usada pela fila/lista/grade (item
+   * 4/5, 15/07/2026: a ficha inteira abre inline pra revisão, não só um
+   * resumo do que falta).
    */
   getFullRecord: (token: string, studentId: string): Promise<RosterFullRecord> =>
     pub(`/public/roster-update/${enc(token)}/practitioners/${enc(studentId)}`),
