@@ -50,13 +50,23 @@ interface Props {
   onSaved: () => void;
 }
 
-// Lembra o último dojô selecionado na sessão (cadastro em massa do mesmo dojô).
-// Module-level simples — sem libs, vive enquanto o app está aberto.
+// ⚠️ NÃO usar para pré-selecionar dojô em cadastro novo (PR #592 removeu
+// exatamente esse uso — ver handleSave/useEffect abaixo para o porquê).
+// Serve só para o DojoSelectSection resolver o RÓTULO do dojô já vinculado
+// ao praticante em EDIÇÃO enquanto o fetch de detalhe do dojô não chega —
+// é escrito toda vez que uma ficha de edição é aberta (syncLastDojo, no
+// useEffect de carregar a ficha), então é "sujo" por natureza: qualquer
+// consulta o atualiza, não só cadastros.
 let lastDojo: { id: string; name: string } | null = null;
 
-// Lembra os campos COMPARTILHÁVEIS do último praticante criado nesta sessão
-// (dojô + endereço, que tendem a se repetir num mesmo dojô). NUNCA guarda
-// campos únicos: nome, CPF, RG, nascimento, telefone, e-mail.
+// Lembra os campos COMPARTILHÁVEIS do último praticante CRIADO (POST
+// bem-sucedido) nesta sessão (dojô + endereço, que tendem a se repetir num
+// mesmo dojô). NUNCA guarda campos únicos: nome, CPF, RG, nascimento,
+// telefone, e-mail. Ao contrário de lastDojo, só é escrito depois de um
+// cadastro concluído — nunca por abrir/consultar uma ficha de edição — por
+// isso é a fonte usada tanto pelo botão opt-in "Repetir dados do último
+// cadastro" quanto pela pré-seleção automática de dojô em cadastro novo
+// (pedido do Caio, 17/07/2026; ver useEffect de "cadastro novo" abaixo).
 let lastShared: SharedSnapshot | null = null;
 
 export function PraticanteFichaModal({ federationId, visible, practitionerId, onClose, onSaved }: Props) {
@@ -135,12 +145,28 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     setErrorMsg(null); setCepStatus(null); setToast(null);
     pendingPhotoFile.current = null; // limpa foto pendente ao abrir
     if (!practitionerId) {
-      // cadastro novo: SEM default de dojô (bugfix 16/07/2026) — nenhum dojô vem
-      // pré-selecionado, mesmo que `lastDojo` esteja preenchido por causa de uma
-      // edição recente de outro praticante. Quem quer repetir o dojô do último
-      // CADASTRO usa o botão opt-in "Repetir dados do último cadastro" (lastShared,
-      // abaixo), que só existe depois de um cadastro bem-sucedido nesta sessão.
-      setForm(EMPTY);
+      // cadastro novo: pré-seleciona o dojô do ÚLTIMO CADASTRO BEM-SUCEDIDO
+      // desta sessão (pedido do Caio, 17/07/2026 — agiliza cadastro em série
+      // no mesmo dojô). Fonte = lastShared, NUNCA lastDojo.
+      //
+      // Por quê: lastDojo é alimentado (syncLastDojo) toda vez que uma ficha
+      // de EDIÇÃO é aberta — foi exatamente essa fonte que causou o bug do
+      // PR #592 (Hasha Dojo aparecia pré-selecionado só de alguém ter
+      // CONSULTADO a ficha de um praticante do Hasha, sem cadastrar nada).
+      // lastShared só é escrito depois de um POST bem-sucedido (ver o bloco
+      // "guarda os campos compartilháveis" no handleSave, abaixo) — cache
+      // impossível de poluir por navegação/consulta.
+      //
+      // dojo_id e dojo_name são setados JUNTOS a partir da mesma fonte —
+      // nunca um sem o outro. Isso importa porque o DojoSelectSection deriva
+      // o rótulo visível de dojo_name e o handleSave valida dojo_id; se só
+      // um dos dois viesse preenchido, o seletor mostraria um dojô "selecionado"
+      // e o submit travaria mesmo assim (pior do que não pré-selecionar nada).
+      setForm(
+        lastShared
+          ? { ...EMPTY, dojo_id: lastShared.dojo_id, dojo_name: lastShared.dojo_name }
+          : EMPTY
+      );
       setFpkt(null); setBeltName(null);
       setCanRepeat(!!lastShared);
       // Matrícula: reseta o campo manual ao abrir um cadastro novo
