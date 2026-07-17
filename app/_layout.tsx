@@ -160,6 +160,14 @@ function AuthGuard() {
     const isStudio = (company as any)?.vertical_active === "studio";
     const isKarate = ["karate_federation", "karate_dojo"]
   .includes(((company as any)?.vertical_active ?? (company as any)?.vertical) as string);
+    // 2026-07-17 (hotfix FPKT): federação de karatê tem checkout próprio
+    // (KarateBillingGate, montado em app/karate/(federation)/_layout.tsx —
+    // valor único R$169, sem seletor de plano). NÃO reusar isKarate aqui:
+    // isKarate cobre karate_dojo também, e dojô não tem gate próprio
+    // (104 empresas karate_dojo em produção ficariam sem cobrança nenhuma
+    // se dojô fosse excluído do redirect genérico). Só federação sai.
+    const isKarateFederation =
+      (((company as any)?.vertical_active ?? (company as any)?.vertical) as string) === "karate_federation";
 
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
@@ -217,7 +225,13 @@ function AuthGuard() {
     const hasActiveBilling = billingStatus === "active" || trialActive;
     const memberRole       = (company as any)?.member_role || "owner";
     const isOwner          = memberRole === "owner";
-    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling;
+    // 2026-07-17 (hotfix FPKT): federação de karatê é excluída do checkout
+    // genérico — quem cobra é o KarateBillingGate (overlay bloqueante dentro
+    // de app/karate/(federation)/_layout.tsx). Sem essa exclusão o redirect
+    // de 2026-06-18 (dispara em QUALQUER rota autenticada) arranca o usuário
+    // de /karate antes do gate montar, e o overlay de R$169 nunca aparece —
+    // era exatamente o bug: a federação caía no seletor genérico de planos.
+    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling && !isKarateFederation;
 
     // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
     // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
