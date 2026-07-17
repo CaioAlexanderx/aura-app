@@ -56,7 +56,16 @@ export function DojoSelectSection({ federationId, valueId, valueName, onSelect, 
 
   useEffect(() => {
     if (valueName) { setLabel(valueName); return; }
-    if (valueId && lastDojoRef.current?.id === valueId) setLabel(lastDojoRef.current.name);
+    if (valueId && lastDojoRef.current?.id === valueId) { setLabel(lastDojoRef.current.name); return; }
+    // valueId vazio (form sem dojô, ex.: cadastro novo sem histórico de
+    // sessão) — zera o rótulo. Sem isto, o rótulo do dojô resolvido para
+    // uma ficha de EDIÇÃO anterior (via lastDojoRef, acima) fica "grudado"
+    // na tela ao trocar para um cadastro novo vazio, já que este componente
+    // não desmonta entre aberturas do modal (mesma instância, só o `visible`
+    // do <Modal> muda) — mostraria um dojô "selecionado" sem form.dojo_id
+    // correspondente (rótulo preenchido, id vazio: exatamente o estado que
+    // faria o submit travar de forma confusa).
+    if (!valueId) setLabel("");
   }, [valueName, valueId, lastDojoRef]);
 
   // includeInactive explícito (em vez de depender do state showInactive) porque
