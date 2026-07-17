@@ -7,7 +7,7 @@
 // elemento da seção de identidade, acima do nome).
 // ============================================================
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, LayoutChangeEvent } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { Dojo } from "@/services/karateApi";
@@ -31,6 +31,14 @@ interface DadosBasicosSectionProps {
   dateBad: boolean;
   age: number | null;
   cpfBad: boolean;
+  // Aponta-campo (16/07/2026): "nome" e "dojô" não têm validação de formato
+  // em tempo real (só ficam "ruins" quando vazios no submit) — diferente de
+  // dateBad/cpfBad, que já nascem prontos. Precisam da própria flag.
+  nameBad?: boolean;
+  dojoBad?: boolean;
+  // reporta a posição Y do seletor de dojô pro shell rolar até ele (não é
+  // TextInput, não dá pra usar .focus() — ver DojoSelectSection).
+  onDojoLayout?: (e: LayoutChangeEvent) => void;
   // refs Enter
   nameRef: React.RefObject<TextInput>;
   birthRef: React.RefObject<TextInput>;
@@ -47,7 +55,7 @@ interface DadosBasicosSectionProps {
 
 export function DadosBasicosSection({
   federationId, form, setField, lastDojoRef,
-  dateBad, age, cpfBad,
+  dateBad, age, cpfBad, nameBad, dojoBad, onDojoLayout,
   nameRef, birthRef, cpfRef, rgRef, onRgSubmit,
   photoSlot, registrationSlot,
 }: DadosBasicosSectionProps) {
@@ -64,6 +72,7 @@ export function DadosBasicosSection({
         placeholder="Ex.: Maria Tanaka de Souza"
         inputRef={nameRef} returnKeyType="next"
         onSubmitEditing={() => birthRef.current?.focus()}
+        bad={nameBad}
       />
 
       <DojoSelectSection
@@ -71,6 +80,8 @@ export function DadosBasicosSection({
         valueId={form.dojo_id}
         valueName={form.dojo_name}
         lastDojoRef={lastDojoRef}
+        bad={dojoBad}
+        onLayout={onDojoLayout}
         onSelect={(d: Dojo) => {
           lastDojoRef.current = { id: d.id, name: d.name };
           setField("dojo_id", d.id);
