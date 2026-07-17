@@ -9,18 +9,20 @@
 //
 // ── G1 — "400 praticantes vira gerenciável" ─────────────────────────
 // O problema não é digitação, é o PAREDÃO: um dojô grande abre a tela e vê
-// 400 nomes, não sabe o que falta em cada um, não vê fim, fecha a aba.
+// 400 nomes e não vê fim, fecha a aba.
 // Esta tela resolve isso em 4 movimentos, nesta ordem:
 //   1. Encolher o universo — "Não treina mais" tira gente da lista na hora
 //      (reversível, com Desfazer — nunca clique acidental).
-//   2. Baratear cada item — abrir um praticante mostra SÓ o que falta
-//      (normalmente 1 campo: telefone). Ficha completa fica atrás de um link.
+//   2. Baratear cada item — abrir um praticante mostra a FICHA INTEIRA
+//      inline (não só um resumo do que falta: mudança de premissa de
+//      15/07/2026, "pode abrir a ficha inteira" — nessa rodada é pra
+//      revisar TODO MUNDO, campo a campo, não só caçar lacuna).
 //   3. Transferir o trabalho — a alavanca de verdade pra um dojô de 400:
 //      SelfServiceShareCard (link + Copiar + WhatsApp, logo abaixo do
 //      cabeçalho, nunca escondido) manda a digitação para o próprio aluno.
 //      `data.self_service_url` já vem PRONTO do GET (karateRosterPortalPublic.js
 //      gera o token sob demanda se o dojô ainda não tinha um — nunca fica
-//      vazio). Planilha (baixar só quem falta, subir de volta) é o
+//      vazio). Planilha (baixar o quadro completo, subir de volta) é o
 //      caminho alternativo pra quando o sensei prefere digitar ele mesmo.
 //   4. Fechar o ciclo — "Concluir atualização" confirma o quadro e avisa
 //      a federação (mesmo POST de antes, agora com autosave já persistido
@@ -36,7 +38,8 @@
 // essenciais_total, devolvidos pelo backend a cada PATCH — sempre
 // corretos, mesmo se o sensei fechar a aba e voltar semana que vem. A fila
 // em si não guarda um índice "onde eu parei": ela é, a cada render, a
-// lista de quem ainda tem algo faltando — reabrir o link já É a retomada.
+// lista de quem ainda não foi REVISADO (reviewedIds, item 3) — reabrir o
+// link já É a retomada.
 //
 // ARMADILHA conhecida (não usar <Modal> aninhado): a confirmação de
 // "Não treina mais" e de "Concluir atualização" são ESTÁGIOS INLINE (texto
@@ -89,14 +92,6 @@ import { confirmAlert } from "@/utils/webAlert";
 const IS_WEB = Platform.OS === "web";
 
 const GROUP_ORDER: Record<string, number> = { a: 0, b: 1, c: 2 };
-// Item 4 (revisão Atualização Cadastral, 15/07/2026) — completude cobre
-// TODOS os campos que o portal edita (não só telefone/e-mail — era esse
-// o bug: o Caio apagou nascimento e o sistema marcou "OK" só porque
-// telefone/e-mail estavam preenchidos). Espelha PORTAL_EDITABLE_FIELDS/
-// classifyPraticante do backend (karateRosterPortalPublic.js).
-const MISSING_LABEL: Record<string, string> = {
-  telefone: "Telefone", email: "E-mail", nascimento: "Nascimento", cpf: "CPF", rg: "RG", endereco: "Endereço",
-};
 function prefersReducedMotion(): boolean {
   if (!IS_WEB || typeof window === "undefined" || !window.matchMedia) return false;
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
@@ -126,11 +121,6 @@ function computeGroupAfterPatch(
   if (!merged.is_active) return "c";
   if (base.priority_group === "a") return "a";
   return !hasPhone && !hasEmail ? "b" : "c";
-}
-
-function missingSummary(missing: string[]): string {
-  if (missing.length === 0) return "";
-  return missing.map((m) => MISSING_LABEL[m] || m).join(" e ");
 }
 
 // ── Idade a partir de YYYY-MM-DD (para decidir se a seção "Responsável"
@@ -623,16 +613,19 @@ function QueueCard({
               da fila sozinho, mesmo que já estivesse tudo preenchido desde
               o import). Se há edição não salva na ficha acima, confirma
               antes de sair — não deixar o preenchimento evaporar em
-              silêncio (item 4, 16/07/2026). */}
+              silêncio (item 4, 16/07/2026).
+              Item 4 (16/07/2026, decisão do Caio: tirar o enquadramento
+              "falta apenas X") — UM rótulo só, sempre o mesmo, com ou sem
+              campo pendente. O ato é confirmar que revisou a ficha inteira,
+              nunca "está tudo certo porque o sistema não achou buraco" —
+              essa segunda leitura convidava a pular o que ainda faltava. */}
           <View style={st.reviewPrompt}>
             <Text style={st.reviewPromptText}>
-              {p.missing.length > 0
-                ? `Falta ${missingSummary(p.missing)} — preencha acima, salve, ou deixe para depois.`
-                : "Ficha completa — confira os dados acima e confirme."}
+              Revise os dados acima e confirme.
             </Text>
-            <Pressable onPress={() => guardLeave(() => onReviewed(p.id))} accessibilityRole="button" accessibilityLabel="Está tudo certo, confirmar" style={st.reviewBtn}>
+            <Pressable onPress={() => guardLeave(() => onReviewed(p.id))} accessibilityRole="button" accessibilityLabel="Revisei esta ficha, confirmar" style={st.reviewBtn}>
               <Icon name="checkmark" size={14} color="#fdf8f2" />
-              <Text style={st.reviewBtnText}>{p.missing.length > 0 ? "Deixar para depois" : "Está tudo certo"}</Text>
+              <Text style={st.reviewBtnText}>Revisei esta ficha</Text>
             </Pressable>
           </View>
 
@@ -688,11 +681,11 @@ function ListRow({
             <BeltBadge beltLevel={p.belt_name || ""} beltName={p.belt_name || undefined} />
           </View>
         </View>
-        {p.missing.length > 0 ? (
-          <View style={st.missingChip}><Text style={st.missingChipText}>falta {missingSummary(p.missing)}</Text></View>
-        ) : (
-          <Icon name="checkmark-circle" size={16} color={P.ok} />
-        )}
+        {/* Item 4 (16/07/2026) — sem badge listando o que falta: a ficha
+            inteira é revisada, não só o campo vazio. O check só confirma
+            que os 6 campos já estão preenchidos; ausência de check não é
+            um alerta, é o estado normal até o sensei revisar a ficha. */}
+        {p.missing.length === 0 && <Icon name="checkmark-circle" size={16} color={P.ok} />}
         <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={P.ink3} />
       </Pressable>
 
@@ -754,13 +747,14 @@ function SelfServiceShareCard({ url, onCopy, onShareWhatsApp }: { url: string; o
   );
 }
 
-// ── Planilha — baixar (completo / só quem falta) e subir de volta. Item
-// 1 (decisão do Caio): junto com o link do aluno, é um dos DOIS
-// redutores de trabalho reais do portal — por isso mora no topo, aberta
-// por padrão (não mais um accordion fechado escondido no rodapé). Bom
-// caminho pra dojôs grandes: baixa só quem falta, preenche numa
-// planilha de verdade e sobe de volta — sem digitar campo a campo na
-// tela. ──────────────────────────────────────────────────────────────
+// ── Planilha — baixar o quadro completo e subir de volta. Item 1
+// (decisão do Caio): junto com o link do aluno, é um dos DOIS redutores
+// de trabalho reais do portal — por isso mora no topo, aberta por padrão
+// (não mais um accordion fechado escondido no rodapé). Bom caminho pra
+// dojôs grandes: baixa o quadro inteiro (revisão é de TODO MUNDO, não só
+// quem tem campo vazio — item 2 abaixo), preenche numa planilha de
+// verdade e sobe de volta — sem digitar campo a campo na tela.
+// ──────────────────────────────────────────────────────────────
 function SpreadsheetPanel({
   token, onImported, hasSelfServiceLink,
 }: {
@@ -985,7 +979,7 @@ function RequestPractitionerSection({ token }: { token: string }) {
 
 // ── Grade de completude (item 2 do H2 — "a peça visual central") ───────
 // Praticantes nas LINHAS, campos essenciais nas COLUNAS, cada célula é um
-// ponto: vazio (falta), cheio (preenchido) ou destacado (acabou de
+// ponto: vazio (não preenchido), cheio (preenchido) ou destacado (acabou de
 // preencher — glow por alguns segundos). Numa tela só, sem paginação: pra
 // caber ~400 linhas sem virar planilha ilegível, a grade fica DENSA mas
 // só 7 colunas fixas (cabe sem scroll horizontal na maioria dos celulares)
@@ -1058,7 +1052,7 @@ function CompletenessGrid({
       )}
 
       <View style={st.gridLegend}>
-        <View style={st.gridLegendItem}><Dot state="empty" /><Text style={st.gridLegendText}>falta</Text></View>
+        <View style={st.gridLegendItem}><Dot state="empty" /><Text style={st.gridLegendText}>vazio</Text></View>
         <View style={st.gridLegendItem}><Dot state="filled" /><Text style={st.gridLegendText}>preenchido</Text></View>
         <View style={st.gridLegendItem}><Dot state="recent" /><Text style={st.gridLegendText}>acabou de preencher</Text></View>
         <View style={st.gridLegendItem}><Dot state="na" /><Text style={st.gridLegendText}>não se aplica</Text></View>
@@ -1265,7 +1259,7 @@ export default function RosterUpdatePortalScreen() {
   //
   // `initiallyComplete` é o snapshot de quem JÁ chegou sem nada faltando
   // (server, no primeiro GET) — esses precisam de CONFIRMAÇÃO explícita
-  // do sensei (botão "Está tudo certo") pra sair da fila, porque não há
+  // do sensei (botão "Revisei esta ficha") pra sair da fila, porque não há
   // edição nenhuma que dispare o auto-avanço. Quem tinha algo faltando e
   // resolveu preenchendo continua com o auto-avanço de sempre (o efeito
   // abaixo marca como revisado assim que `missing` zera por causa de uma
@@ -1623,21 +1617,34 @@ export default function RosterUpdatePortalScreen() {
             <Text style={st.countsMuted}>{demais} depois</Text>
           </View>
 
+          {/* Item 3 (16/07/2026) — rótulo corrigido: o achado da revisão foi
+              que "com contato completo" já estava MENTINDO antes desta
+              tarefa. classifyPraticante (karateRosterPortalPublic.js) e
+              progress.essenciais_resolvidos contam missing.length === 0
+              sobre os 6 campos do portal (telefone, e-mail, nascimento,
+              CPF, RG, endereço) desde a revisão de item 4/5 — não só
+              contato. O texto agora descreve o que o número realmente
+              mede: ficha 100% preenchida, não só telefone/e-mail. */}
           {!!progress && progress.essenciais_total > 0 && (
             <View style={st.progressWrap}>
               <View style={st.progressTrack}>
                 <View style={[st.progressFill, { width: `${Math.min(100, Math.round((progress.essenciais_resolvidos / Math.max(1, progress.essenciais_total)) * 100))}%` }]} />
               </View>
               <Text style={st.progressLabel}>
-                {progress.essenciais_resolvidos} de {progress.essenciais_total} praticantes ativos com contato completo
+                {progress.essenciais_resolvidos} de {progress.essenciais_total} praticantes ativos com ficha completa
               </Text>
             </View>
           )}
 
+          {/* Item 4 (16/07/2026) — "o que sobrou pode ficar pra depois" saiu:
+              essenciais/demais é só ordem de triagem (faixa-preta em
+              atraso e sem-contato primeiro), não uma dispensa de revisão —
+              o "Concluir atualização" continua bloqueado até TODA a fila
+              (essencial + demais) ser revisada. */}
           {essenciais === 0 && workingList.length > 0 && (
             <View style={st.doneBanner}>
               <Icon name="checkmark-circle" size={16} color={P.ok} />
-              <Text style={st.doneBannerText}>Tudo essencial resolvido por aqui. O que sobrou pode ficar pra depois.</Text>
+              <Text style={st.doneBannerText}>Grupo prioritário revisado. Siga revisando o restante da lista abaixo.</Text>
             </View>
           )}
 
@@ -1772,27 +1779,37 @@ export default function RosterUpdatePortalScreen() {
                 />
                 {!!finishError && <Text style={st.submitError}>{finishError}</Text>}
                 {/* (15/07/2026) "Concluir apenas quando todos os itens forem
-                    preenchidos" — o Caio. Enquanto a fila tiver alguém com
-                    campo faltando, concluir é bloqueado: encerrar o link com
-                    ficha incompleta é justamente o que esta rodada existe para
-                    evitar. Saída para o caso impossível (dado que não existe):
-                    marcar "não treina mais", que tira a pessoa da fila. */}
+                    preenchidos" — o Caio. Enquanto a fila tiver alguém não
+                    revisado, concluir é bloqueado: encerrar o link sem
+                    revisar todo mundo é justamente o que esta rodada existe
+                    para evitar. Saída para o caso impossível (dado que não
+                    existe): marcar "não treina mais", que tira a pessoa da
+                    fila.
+                    Item 4 (16/07/2026) — texto trocado de "com ficha
+                    incompleta" pra "ainda não revisadas": queueItems é
+                    quem falta CONFIRMAR revisão (item 3, mudança de
+                    premissa de 15/07/2026), não só quem tem campo vazio —
+                    um praticante com os 6 campos preenchidos mas sem o
+                    sensei ter clicado "Revisei esta ficha" também conta
+                    aqui. "com ficha incompleta" estava errado pra esse
+                    caso; "ainda não revisadas" descreve exatamente o que
+                    trava o botão, sem sugerir que é pouco. */}
                 {queueItems.length > 0 ? (
                   <>
                     <View style={st.finishBlocked}>
                       <Icon name="alert-circle" size={13} color={P.ink3} />
                       <Text style={st.finishBlockedText}>
                         {queueItems.length === 1
-                          ? "Falta 1 praticante com ficha incompleta."
-                          : `Faltam ${queueItems.length} praticantes com ficha incompleta.`}
-                        {" "}Complete as fichas para concluir — quem não treina mais pode sair pela própria ficha.
+                          ? "Falta revisar a ficha de 1 praticante."
+                          : `Faltam revisar as fichas de ${queueItems.length} praticantes.`}
+                        {" "}Revise cada ficha para concluir — quem não treina mais pode sair pela própria ficha.
                       </Text>
                     </View>
                     <Pressable
                       disabled
                       accessibilityRole="button"
                       accessibilityState={{ disabled: true }}
-                      accessibilityLabel="Concluir atualização (indisponível: há fichas incompletas)"
+                      accessibilityLabel="Concluir atualização (indisponível: há fichas ainda não revisadas)"
                       style={[st.confirmBtn, { marginTop: 12, opacity: 0.45 }]}
                     >
                       <Text style={st.confirmBtnText}>Concluir atualização</Text>
@@ -1916,8 +1933,6 @@ const st = StyleSheet.create({
   rowName: { fontSize: 14.5, fontWeight: "700", color: P.ink },
   rowMeta: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   rowReg: { fontFamily: KarateFonts.mono, fontSize: 11.5, color: P.ink3 },
-  missingChip: { backgroundColor: P.warnSoft, borderRadius: KarateRadius.pill, paddingVertical: 4, paddingHorizontal: 9 },
-  missingChipText: { fontSize: 10.5, fontWeight: "700", color: P.warn },
 
   fieldLabel: { fontSize: 11.5, fontWeight: "700", color: P.ink2, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   fieldInputWrap: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: P.border, borderRadius: KarateRadius.sm, backgroundColor: P.paperWarm, paddingHorizontal: 12, paddingVertical: 4 },

@@ -289,7 +289,7 @@ export function CadastralTab() {
         <PageHead
           eyebrow={summary ? `${summary.total_dojos} ${summary.total_dojos === 1 ? "dojô ativo" : "dojôs ativos"}` : undefined}
           title="Atualização cadastral"
-          sub="Andamento do pedido de atualização cadastral por dojô — quem já abriu o link, quem confirmou o quadro e quem ainda falta contato."
+          sub="Andamento do pedido de atualização cadastral por dojô — quem já abriu o link, quem confirmou o quadro e quantos praticantes ainda estão sem contato registrado."
         />
 
         {loading ? (
