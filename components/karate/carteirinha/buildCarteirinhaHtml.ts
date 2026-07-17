@@ -46,6 +46,7 @@
 // ============================================================
 import { resolveBeltKey } from "@/constants/karateTheme";
 import { FPKT_LOGO_DATA_URI } from "./fpktLogoDataUri";
+import { DOJO_KUN_DATA_URI } from "./dojoKunDataUri";
 import type { MembershipCard } from "@/services/karateCardApi";
 
 const RED = "#b8463a";
@@ -221,7 +222,7 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
 
   return (
     '<div class="cr80">' +
-      '<img class="wm wm-back" src="' + esc(card.federation_logo || FPKT_LOGO_DATA_URI) + '" alt="">' +
+      '<div class="wm wm-back"></div>' +
       '<div class="face-pad">' +
         '<div class="head">' +
           '<div class="head-left">' +
@@ -268,7 +269,7 @@ function cardCss(): string {
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:2.85mm 6.2mm 4.2mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
   html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
-  html += '.wm-back{left:50%;top:56%;width:41mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
+  html += '.wm-back{left:50%;top:56%;width:60mm;height:35.75mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%);background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain}';
 
   // header
   // gap:3mm (15/07/2026) — o Caio pediu respiro entre o nome da federação e o
