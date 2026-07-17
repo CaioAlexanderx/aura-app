@@ -17,6 +17,10 @@ interface ResponsavelSectionProps {
   setField: <K extends keyof Form>(k: K, v: Form[K]) => void;
   isMinor: boolean;
   guardianCpfBad: boolean;
+  // Aponta-campo (16/07/2026): "nome do responsável" só é obrigatório
+  // condicionalmente (isMinor) e não tem validação de formato — precisa da
+  // própria flag, igual full_name/dojo_id.
+  guardianNameBad?: boolean;
   // refs Enter
   guardianNameRef: React.RefObject<TextInput>;
   guardianCpfRef: React.RefObject<TextInput>;
@@ -24,7 +28,7 @@ interface ResponsavelSectionProps {
 }
 
 export function ResponsavelSection({
-  form, setField, isMinor, guardianCpfBad,
+  form, setField, isMinor, guardianCpfBad, guardianNameBad,
   guardianNameRef, guardianCpfRef, guardianPhoneRef,
 }: ResponsavelSectionProps) {
   return (
@@ -49,6 +53,7 @@ export function ResponsavelSection({
         inputRef={guardianNameRef}
         returnKeyType="next"
         onSubmitEditing={() => guardianCpfRef.current?.focus()}
+        bad={guardianNameBad}
       />
 
       <Row2>

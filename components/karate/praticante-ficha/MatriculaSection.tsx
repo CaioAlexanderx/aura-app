@@ -24,7 +24,7 @@
 // numero ja existente é diferente de registrar um numero pela primeira vez.
 // ============================================================
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, TextInput } from "react-native";
 import { Icon } from "@/components/Icon";
 import { ShojiPalette as P } from "@/constants/karateTheme";
 import { Field, styles } from "./shared-styles";
@@ -33,9 +33,14 @@ interface MatriculaFieldProps {
   value: string;
   onChange: (v: string) => void;
   isEdit?: boolean;
+  // Aponta-campo (16/07/2026): a matrícula é um TextInput de verdade (via
+  // Field), então segue o mesmo mecanismo de ref + .focus() dos demais
+  // campos do shell — nada de estratégia paralela como no seletor de dojô.
+  inputRef?: React.RefObject<TextInput>;
+  bad?: boolean;
 }
 
-export function MatriculaField({ value, onChange, isEdit }: MatriculaFieldProps) {
+export function MatriculaField({ value, onChange, isEdit, inputRef, bad }: MatriculaFieldProps) {
   return (
     <View style={{ marginBottom: 11 }}>
       <Text style={styles.label}>
@@ -47,6 +52,8 @@ export function MatriculaField({ value, onChange, isEdit }: MatriculaFieldProps)
         value={value}
         onChangeText={onChange}
         placeholder="Ex.: 000123"
+        inputRef={inputRef}
+        bad={bad}
       />
       <View style={styles.guardianNote}>
         <Icon name="info" size={13} color={P.ink3} />

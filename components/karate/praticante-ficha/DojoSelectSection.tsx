@@ -20,7 +20,7 @@
 // ============================================================
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, ActivityIndicator, FlatList,
+  View, Text, TextInput, TouchableOpacity, ActivityIndicator, FlatList, LayoutChangeEvent,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateFonts as F, ShojiPalette as P } from "@/constants/karateTheme";
@@ -36,13 +36,20 @@ interface DojoSelectProps {
   onSelect: (d: Dojo) => void;
   /** Ref mutável para o lastDojo da sessão — atualizado quando o usuário seleciona */
   lastDojoRef: React.MutableRefObject<{ id: string; name: string } | null>;
+  /** Aponta-campo (16/07/2026): marca o seletor em vermelho quando o submit
+   * bloqueou por falta de dojô — some assim que o usuário seleciona um. */
+  bad?: boolean;
+  /** Aponta-campo: reporta a posição Y do seletor dentro do ScrollView pai
+   * (é um TouchableOpacity, não um TextInput — não dá pra usar .focus() pra
+   * rolar até ele, então o shell guarda este Y e chama scrollTo). */
+  onLayout?: (e: LayoutChangeEvent) => void;
 }
 
 // Item "pinado": o dojô atualmente selecionado, quando ele não aparece na
 // lista filtrada (por estar inativo e o toggle "mostrar inativos" desligado).
 type PinnedDojo = { id: string; name: string; is_active: boolean };
 
-export function DojoSelectSection({ federationId, valueId, valueName, onSelect, lastDojoRef }: DojoSelectProps) {
+export function DojoSelectSection({ federationId, valueId, valueName, onSelect, lastDojoRef, bad, onLayout }: DojoSelectProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [list, setList] = useState<Dojo[]>([]);
@@ -145,9 +152,9 @@ export function DojoSelectSection({ federationId, valueId, valueName, onSelect, 
   }, [onSelect]);
 
   return (
-    <View style={styles.field}>
+    <View style={styles.field} onLayout={onLayout}>
       <Text style={styles.label}>Dojô <Text style={{ color: P.red }}>*</Text></Text>
-      <TouchableOpacity style={styles.input} onPress={() => setOpen((o) => !o)} activeOpacity={0.7} accessibilityLabel="Dojô">
+      <TouchableOpacity style={[styles.input, bad && styles.inputBad]} onPress={() => setOpen((o) => !o)} activeOpacity={0.7} accessibilityLabel="Dojô">
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ fontFamily: F.body, fontSize: 14, color: label ? P.ink : P.ink4 }} numberOfLines={1}>
             {label || "Selecionar dojô…"}

@@ -50,6 +50,14 @@ interface Props {
   onSaved: () => void;
 }
 
+// Aponta-campo (aprovado 16/07/2026, ver PR): identifica QUAL campo bloqueou
+// o submit — fonte única para (a) rolar/focar até ele e (b) marcá-lo em
+// vermelho (styles.inputBad). "graduated_at" e "matricula" não são chaves de
+// Form (são estado à parte: graduatedAtBr / manualRegistrationNumber).
+type FieldKey =
+  | "full_name" | "dojo_id" | "birth_date" | "graduated_at"
+  | "cpf" | "guardian_name" | "guardian_cpf" | "matricula";
+
 // ⚠️ NÃO usar para pré-selecionar dojô em cadastro novo (PR #592 removeu
 // exatamente esse uso — ver handleSave/useEffect abaixo para o porquê).
 // Serve só para o DojoSelectSection resolver o RÓTULO do dojô já vinculado
@@ -81,6 +89,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [saving, setSaving] = useState(false);
   const [cepStatus, setCepStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Aponta-campo: qual campo causou o bloqueio de submit mais recente — única
+  // fonte da marca visual (styles.inputBad) nos campos sem validação de
+  // formato em tempo real. Some assim que o campo em questão é editado.
+  const [errorField, setErrorField] = useState<FieldKey | null>(null);
   // toast de sucesso (inline, sem sistema global)
   const [toast, setToast] = useState<string | null>(null);
   // "repetir dados do último cadastro" só faz sentido se já houve um nesta sessão
@@ -124,8 +136,28 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const guardianNameRef = useRef<TextInput>(null);
   const guardianCpfRef = useRef<TextInput>(null);
   const guardianPhoneRef = useRef<TextInput>(null);
+  // Aponta-campo: refs adicionais — data de último exame e matrícula (FPKT)
+  // não tinham ref antes (não avançavam via Enter); agora servem só pra
+  // .focus() rolar até o campo quando o submit bloqueia por causa deles.
+  const graduatedAtRef = useRef<TextInput>(null);
+  const matriculaRef = useRef<TextInput>(null);
+  // Aponta-campo: ref do ScrollView + Y do seletor de dojô (TouchableOpacity,
+  // não focável) — mesmo padrão já usado em app/karate/[slug]/index.tsx
+  // (eventsSectionY + scrollRef.scrollTo), preferido a measureLayout puro
+  // pra evitar as pegadinhas de timing de node handle no RN Web.
+  const scrollRef = useRef<ScrollView>(null);
+  const dojoFieldY = useRef(0);
 
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
+  // Aponta-campo: qualquer edição no campo aponta some a marca (item 4 do
+  // pedido) — nada de borda vermelha grudada depois que o usuário corrige.
+  // set() é o ÚNICO setter de campos de Form (nome, dojô, nascimento, cpf,
+  // responsável…), então limpar aqui cobre 6 dos 8 campos de uma vez; os
+  // outros 2 (matrícula, data de último exame) vivem fora de Form — ver
+  // onChangeManualRegistration / onChangeGraduatedAt, abaixo.
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => {
+    setForm((p) => ({ ...p, [k]: v }));
+    setErrorField((ef) => (ef === (k as unknown as FieldKey) ? null : ef));
+  };
 
   // Bugfix (16/07/2026): TODO erro de submit (validação client-side OU
   // resposta do backend) precisa virar mensagem visível, sem depender de o
@@ -139,10 +171,54 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     toastGlobal.error(msg);
   }, []);
 
+  // Aponta-campo: rola até o campo culpado e marca sua borda em vermelho.
+  // Complementar ao showError (toast garante visibilidade independente de
+  // scroll; isto aqui garante que o usuário ache o campo sem caçar).
+  //
+  // TextInput com ref: .focus() — no RN Web isso já dispara o scrollIntoView
+  // nativo do browser (elemento focado dentro de um container com overflow
+  // rola sozinho), então cobre foco + scroll com uma chamada só.
+  //
+  // Dojô: TouchableOpacity, não é focável do mesmo jeito — usamos o Y
+  // reportado por onLayout (ver DojoSelectSection/onDojoLayout) +
+  // scrollRef.scrollTo, o mesmo padrão já usado em
+  // app/karate/[slug]/index.tsx (eventsSectionY). Sem measureLayout: o campo
+  // já está montado e visível quando o submit roda (nunca aparece só depois
+  // da validação), então não há corrida de timing a evitar — measureLayout
+  // seria estratégia equivalente, mas o onLayout+ref já é o padrão do repo.
+  const goToField = useCallback((key: FieldKey) => {
+    setErrorField(key);
+    switch (key) {
+      case "full_name": nameRef.current?.focus(); break;
+      case "birth_date": birthRef.current?.focus(); break;
+      case "graduated_at": graduatedAtRef.current?.focus(); break;
+      case "cpf": cpfRef.current?.focus(); break;
+      case "guardian_name": guardianNameRef.current?.focus(); break;
+      case "guardian_cpf": guardianCpfRef.current?.focus(); break;
+      case "matricula": matriculaRef.current?.focus(); break;
+      case "dojo_id":
+        scrollRef.current?.scrollTo({ y: Math.max(0, dojoFieldY.current - 12), animated: true });
+        break;
+    }
+  }, []);
+
+  // Aponta-campo: matrícula (FPKT) e data de último exame vivem fora do
+  // estado Form (manualRegistrationNumber / graduatedAtBr), então não passam
+  // pelo set() genérico acima — precisam do próprio "limpa a marca ao
+  // editar" aqui.
+  const onChangeManualRegistration = useCallback((v: string) => {
+    setManualRegistrationNumber(v);
+    setErrorField((ef) => (ef === "matricula" ? null : ef));
+  }, []);
+  const onChangeGraduatedAt = useCallback((v: string) => {
+    setGraduatedAtBr(v);
+    setErrorField((ef) => (ef === "graduated_at" ? null : ef));
+  }, []);
+
   // carrega ficha em edição
   useEffect(() => {
     if (!visible) return;
-    setErrorMsg(null); setCepStatus(null); setToast(null);
+    setErrorMsg(null); setCepStatus(null); setToast(null); setErrorField(null);
     pendingPhotoFile.current = null; // limpa foto pendente ao abrir
     if (!practitionerId) {
       // cadastro novo: pré-seleciona o dojô do ÚLTIMO CADASTRO BEM-SUCEDIDO
@@ -316,28 +392,42 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   }, [form]);
 
   async function handleSave() {
-    if (!form.full_name.trim()) { showError("Informe o nome completo."); return; }
-    if (!form.dojo_id) { showError("Selecione o dojô."); return; }
-    if (dateBad) { showError("A data de nascimento é inválida. Corrija ou deixe em branco."); return; }
-    if (!isEdit && graduatedAtBad) { showError("A data de último exame é inválida. Corrija ou deixe em branco."); return; }
-    if (cpfBad) { showError("O CPF informado é inválido. Corrija ou deixe em branco."); return; }
+    // Aponta-campo (16/07/2026): cada bloqueio de submit chama goToField logo
+    // após showError — o toast garante visibilidade, o goToField garante que
+    // o usuário ache o campo sem ter que caçar num form longo com ScrollView
+    // de maxHeight:520. Ordem das 8 validações preservada (não mexemos em
+    // regra de bloqueio, só na comunicação).
+    if (!form.full_name.trim()) { showError("Informe o nome completo."); goToField("full_name"); return; }
+    if (!form.dojo_id) { showError("Selecione o dojô."); goToField("dojo_id"); return; }
+    if (dateBad) { showError("A data de nascimento é inválida. Corrija ou deixe em branco."); goToField("birth_date"); return; }
+    if (!isEdit && graduatedAtBad) { showError("A data de último exame é inválida. Corrija ou deixe em branco."); goToField("graduated_at"); return; }
+    if (cpfBad) { showError("O CPF informado é inválido. Corrija ou deixe em branco."); goToField("cpf"); return; }
     // P7: menor de idade sem responsável nomeado → bloqueia
     if (isMinor && !form.guardian_name.trim()) {
       showError("Para menores de 18 anos, o nome do responsável é obrigatório (LGPD Art. 14).");
+      goToField("guardian_name");
       return;
     }
-    if (guardianCpfBad) { showError("O CPF do responsável é inválido. Corrija ou deixe em branco."); return; }
+    if (guardianCpfBad) { showError("O CPF do responsável é inválido. Corrija ou deixe em branco."); goToField("guardian_cpf"); return; }
     // Matrícula (FPKT): obrigatória em cadastro e edição — decisão 16/07/2026
     // reverte a tentativa de torná-la opcional. O backend rejeita com 422 se
     // vier vazia (FPKT_NUMBER_REQUIRED no cadastro; "A matrícula não pode
     // ficar vazia." na edição) — validamos aqui para o usuário não descobrir
     // isso só depois do submit.
+    //
+    // Esta é a validação que originou o pedido: "Repetir dados do último
+    // cadastro" preenche dojô e endereço mas deliberadamente NÃO copia a
+    // matrícula (é única por pessoa) — o usuário clicava, salvava, e o erro
+    // "matrícula não pode ficar vazia" não dizia ONDE. Agora goToField
+    // rola/foca o campo e marca a borda.
     if (!isEdit && !manualRegistrationNumber.trim()) {
       showError("Informe o número de matrícula (FPKT). Sem o número em mãos? Use o fluxo de solicitação de praticante.");
+      goToField("matricula");
       return;
     }
     if (isEdit && !manualRegistrationNumber.trim()) {
       showError("A matrícula não pode ficar vazia.");
+      goToField("matricula");
       return;
     }
     setErrorMsg(null); setSaving(true);
@@ -480,6 +570,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
             <ActivityIndicator style={{ paddingVertical: 48 }} color={P.red} />
           ) : (
             <ScrollView
+              ref={scrollRef}
               style={{ maxHeight: 520 }}
               contentContainerStyle={{ padding: 20, paddingTop: 6 }}
               keyboardShouldPersistTaps="handled"
@@ -511,6 +602,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 dateBad={dateBad}
                 age={age}
                 cpfBad={cpfBad}
+                nameBad={errorField === "full_name"}
+                dojoBad={errorField === "dojo_id"}
+                onDojoLayout={(e) => { dojoFieldY.current = e.nativeEvent.layout.y; }}
                 nameRef={nameRef}
                 birthRef={birthRef}
                 cpfRef={cpfRef}
@@ -530,8 +624,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 registrationSlot={
                   <MatriculaField
                     value={manualRegistrationNumber}
-                    onChange={setManualRegistrationNumber}
+                    onChange={onChangeManualRegistration}
                     isEdit={isEdit}
+                    inputRef={matriculaRef}
+                    bad={errorField === "matricula"}
                   />
                 }
               />
@@ -557,8 +653,9 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                         Shoji, igual ao campo Nascimento) via style/placeholderTextColor,
                         senão o campo aparenta estar "escurecido" fora do padrão. */}
                     <DateInput
+                      ref={graduatedAtRef}
                       value={graduatedAtBr}
-                      onChangeText={setGraduatedAtBr}
+                      onChangeText={onChangeGraduatedAt}
                       placeholder="dd/mm/aaaa"
                       placeholderTextColor={P.ink4}
                       style={[styles.input, styles.mono, graduatedAtBad && styles.inputBad]}
@@ -589,6 +686,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 setField={set}
                 isMinor={isMinor}
                 guardianCpfBad={guardianCpfBad}
+                guardianNameBad={errorField === "guardian_name"}
                 guardianNameRef={guardianNameRef}
                 guardianCpfRef={guardianCpfRef}
                 guardianPhoneRef={guardianPhoneRef}
