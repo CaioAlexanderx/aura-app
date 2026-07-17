@@ -222,7 +222,6 @@ function renderBack(card: MembershipCard, options?: CarteirinhaBatchOptions): st
 
   return (
     '<div class="cr80">' +
-      '<div class="wm wm-back"></div>' +
       '<div class="face-pad">' +
         '<div class="head">' +
           '<div class="head-left">' +
@@ -269,7 +268,6 @@ function cardCss(): string {
   html += '.face-pad{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:2.85mm 6.2mm 4.2mm}';
   html += '.wm{position:absolute;pointer-events:none;object-fit:contain;z-index:1}';
   html += '.wm-front{left:70%;top:50%;width:52mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%)}';
-  html += '.wm-back{left:50%;top:56%;width:60mm;height:35.75mm;opacity:' + WM_OPACITY + ';transform:translate(-50%,-50%);background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain}';
 
   // header
   // gap:3mm (15/07/2026) — o Caio pediu respiro entre o nome da federação e o
@@ -348,7 +346,13 @@ function cardCss(): string {
 
   // verso body
   html += '.back-row{display:flex;flex:1;margin-top:1.8mm;min-height:0}';
-  html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
+  html += '.kun-col{position:relative;flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
+  // Marca d'água confinada a .kun-col (teste PR #597): pseudo-elemento em vez de
+  // <div>/<img> solto no card, para acompanhar a coluna se o layout mudar, sem
+  // coordenada mágica. Opacidade fica só no ::before (nunca em .kun-col, senão o
+  // texto -- .kun-eyebrow/.kun-title/.kun-list -- desbota junto).
+  html += '.kun-col::before{content:"";position:absolute;inset:0;background-image:url(\'' + DOJO_KUN_DATA_URI + '\');background-repeat:no-repeat;background-position:center;background-size:contain;opacity:' + WM_OPACITY + ';pointer-events:none;z-index:0}';
+  html += '.kun-col>*{position:relative;z-index:1}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
   html += '.kun-list{margin-top:0.5mm;display:flex;flex-direction:column;gap:1.05mm}';
@@ -414,7 +418,8 @@ function cardCss(): string {
   // marca d'água — impressão clareia tons claros; sobe um pouco mais que a
   // tela para permanecer perceptível no papel, sem competir com o texto
   // (a marca fica em z-index:1, sempre atrás de .face-pad z-index:2).
-  html += '.wm-front,.wm-back{opacity:0.22}';
+  html += '.wm-front{opacity:0.22}';
+  html += '.kun-col::before{opacity:0.22}';
   html += '}';
 
   return html;
