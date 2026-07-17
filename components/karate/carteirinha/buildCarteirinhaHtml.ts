@@ -350,7 +350,7 @@ function cardCss(): string {
   html += '.kun-col{flex:1.45;padding-right:3.2mm;display:flex;flex-direction:column;justify-content:flex-start}';
   html += '.kun-eyebrow{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:700;letter-spacing:0.55pt;text-transform:uppercase;color:' + RED + '}';
   html += '.kun-title{font-family:"Shippori Mincho","Georgia","Times New Roman",serif;font-size:6.4pt;font-weight:700;margin-top:0.4mm;color:' + INK + '}';
-  html += '.kun-list{margin-top:1.2mm;display:flex;flex-direction:column;gap:1.05mm}';
+  html += '.kun-list{margin-top:0.5mm;display:flex;flex-direction:column;gap:1.05mm}';
   html += '.kun-item{display:flex;align-items:flex-start;gap:1.5mm}';
   html += '.kun-dot{width:2.6mm;flex-shrink:0;text-align:center;font-size:8pt;line-height:1.15;font-weight:700;color:' + RED + '}';
   html += '.kun-text{flex:1;min-width:0;font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:5.7pt;font-weight:900;line-height:1.15;color:' + INK + '}';
