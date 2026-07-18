@@ -133,7 +133,38 @@ function qrImgUrl(data: string, size = 220): string {
 }
 
 // Opacidade única da marca (frente = verso), por pedido da federação.
+// NÃO MEXER — a frente (logo FPKT) já foi impressa e aprovada nessa opacidade.
 const WM_OPACITY = 0.18;
+
+// Opacidade do verso (dojo-kun), calibrada SÓ para impressão em papel — nunca
+// mude WM_OPACITY acima para isso, ela é compartilhada com a frente por
+// acordo com a federação e a frente não teve reclamação.
+//
+// Por que uma constante separada: em 17/07/2026 o Caio imprimiu o verso de
+// verdade (não só olhou na tela) e reportou a marca "clarinha demais no
+// papel". A cobertura de tinta medida no PR #597 explica o motivo — logo FPKT
+// (frente) = 25.9%, caligrafia do dojo-kun (verso) = 7.4%. Um traço fino de
+// caligrafia tem MENOS área de tinta que um logo cheio; a impressora resolve
+// cinza claro em meio-tom e esse traço praticamente evapora, mesmo com o
+// reforço de @media print que já existia aqui (0.22). Isso só apareceu no
+// papel — na tela (Chrome, PDF a 150dpi) 0.18/0.22 pareciam suficientes.
+//
+// 0.45 — valor CRAVADO PELO CAIO (17/07/2026) depois de imprimir a folha de
+// teste em papel (opacidades 0.18/0.28/0.35/0.45/0.55, faixa colorida e
+// faixa-preta). A recomendação inicial deste PR era 0.35; a impressão real
+// mandou escurecer mais. Fica o registro: a análise em Chrome headless a 4x
+// (não estimada) mediu que o texto do kun-list mantém contraste alto até 0.55
+// — a luminância média do fundo cai de 247/255 (0.18) para 231/255 (0.55),
+// e o texto é tinta sólida, sem opacidade — e apontou que a partir de ~0.45
+// os traços da caligrafia cruzam as linhas do kun-list com mais frequência.
+// Esse trade-off foi visto no papel e aceito: no impresso a marca precisa
+// desse peso para não sumir. NÃO baixar este valor com base em screenshot —
+// a tela mente aqui, foi exatamente o erro que originou este PR.
+//
+// Aplicada SÓ no ".kun-col::before" (o pseudo-elemento da marca do verso,
+// dentro do bloco @media print de cardCss()) — a frente (.wm-front) permanece
+// em 0.22 no print, exatamente como estava.
+const WM_OPACITY_BACK = 0.45;
 
 export type CarteirinhaBatchOptions = {
   federationName?: string;
@@ -442,7 +473,7 @@ function cardCss(): string {
   // tela para permanecer perceptível no papel, sem competir com o texto
   // (a marca fica em z-index:1, sempre atrás de .face-pad z-index:2).
   html += '.wm-front{opacity:0.22}';
-  html += '.kun-col::before{opacity:0.22}';
+  html += '.kun-col::before{opacity:' + WM_OPACITY_BACK + '}';
   html += '}';
 
   return html;
