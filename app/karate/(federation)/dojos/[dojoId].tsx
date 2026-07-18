@@ -56,6 +56,7 @@ import {
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
+import DojoPortalLinkCard from "@/components/karate/DojoPortalLinkCard";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
 import RedistribuirPraticantesModal from "@/components/karate/RedistribuirPraticantesModal";
 import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
@@ -913,6 +914,9 @@ export default function DojoDetailScreen() {
             canEdit={canManage}
           />
         </Card>
+
+        {/* F0 (Canal B): link fixo do Portal do Dojô sem Aura — gerar, copiar (uma vez) e revogar */}
+        <DojoPortalLinkCard federationId={federationId} dojoId={dojoId!} />
 
         {/* DJ4: seção Anuidades com "Lançar pagamento" no topo */}
         <Card style={{ marginTop: SP[6] }}>

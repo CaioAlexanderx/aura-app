@@ -11,6 +11,8 @@
 //   POST /public/karate/dojo/annuity/pix
 //   GET  /public/karate/dojo/certificates
 // ============================================================
+import { request } from "@/services/api";
+
 const API = process.env.EXPO_PUBLIC_API_URL ?? "";
 const BASE = `${API}/api/v1/public/karate/dojo`;
 
@@ -109,4 +111,42 @@ export const karateDojoPortalApi = {
   getCertificates: (token: string) =>
     fetch(`${BASE}/certificates`, { headers: authHeaders(token) })
       .then(handle<{ orders: DojoCertificate[]; count: number }>),
+};
+
+// ─────────────────────────────────────────────────────────────
+// Lado FEDERAÇÃO (autenticado, staff) — gestão do link fixo do portal.
+// Contrato do Aura-backend #398 (F0):
+//   POST   /federation/:id/dojos/:dojoId/portal-link → { url, token, created_at }
+//          (o token/URL completos são exibidos UMA única vez — não há GET do valor)
+//   GET    /federation/:id/dojos/:dojoId/portal-link → { active, created_at, revoked_at }
+//   DELETE /federation/:id/dojos/:dojoId/portal-link → revoga imediatamente
+// Usa o request() core de services/api.ts (Bearer JWT auto), mesmo padrão dos
+// métodos de federação do karateApi — fica NESTE arquivo (e não no karateApi.ts,
+// 125 KB) para manter a edição cirúrgica: é o outro lado do MESMO Canal B acima.
+// ─────────────────────────────────────────────────────────────
+
+export interface DojoPortalLinkStatus {
+  active: boolean;
+  created_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface DojoPortalLinkCreated {
+  url: string;
+  token: string;
+  created_at: string;
+}
+
+export const karateDojoPortalAdminApi = {
+  /** Estado atual do link (nunca devolve o token em si). */
+  getPortalLink: (federationId: string, dojoId: string): Promise<DojoPortalLinkStatus> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/portal-link`),
+
+  /** Gera (ou regenera, invalidando o anterior) o link fixo do portal. */
+  createPortalLink: (federationId: string, dojoId: string): Promise<DojoPortalLinkCreated> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/portal-link`, { method: "POST" }),
+
+  /** Revoga o link ativo — o dojô perde o acesso na hora. */
+  revokePortalLink: (federationId: string, dojoId: string): Promise<{ revoked: boolean }> =>
+    request(`/federation/${federationId}/dojos/${dojoId}/portal-link`, { method: "DELETE" }),
 };

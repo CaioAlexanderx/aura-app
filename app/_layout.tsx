@@ -126,6 +126,7 @@ function AuthGuard() {
     // grupo autenticado (federation) — que é transparente, então também tem
     // segments[0]==="karate". Distinguimos pelos marcadores públicos:
     //   /karate/verify/[token]           → verify
+    //   /karate/claim?t=…                → claim (F0: criação da conta do dojô por convite)
     //   /karate/[slug]/praticante        → praticante (portal OTP)
     //   /karate/[slug]/p/[publicToken]   → p (perfil público reduzido)
     //   /karate/[slug]/inscricao/[id]    → inscricao
@@ -137,6 +138,7 @@ function AuthGuard() {
     // nunca batem nesses marcadores.
     const onKaratePublic = segments[0] === "karate" && (
       segments[1] === "verify" ||
+      segments[1] === "claim" ||    // F0 (Canal B): claim da conta do dojô por convite (?t=) — pública, sem login
       segments[2] === "praticante" ||
       segments[2] === "p" ||
       segments[2] === "inscricao" ||
