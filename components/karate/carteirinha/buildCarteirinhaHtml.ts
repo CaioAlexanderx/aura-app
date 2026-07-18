@@ -149,22 +149,22 @@ const WM_OPACITY = 0.18;
 // reforço de @media print que já existia aqui (0.22). Isso só apareceu no
 // papel — na tela (Chrome, PDF a 150dpi) 0.18/0.22 pareciam suficientes.
 //
-// 0.35 é o ponto de partida recomendado, não o valor final — o Caio decide
-// depois de imprimir a folha de teste (docs/pr-assets ou outputs/, opacidades
-// 0.18/0.28/0.35/0.45/0.55, faixa colorida e faixa-preta). Critério usado
-// para escolher 0.35 como recomendação: renderizado em Chrome headless a
-// 4x de escala (não estimado), o texto do kun-list continua com contraste
-// alto até 0.55 — luminância média do fundo cai de 247/255 (0.18) para
-// 231/255 (0.55), enquanto o texto (tinta sólida, sem opacidade) permanece
-// muito mais escuro; ainda assim, a partir de ~0.45 os traços da caligrafia
-// passam a cruzar visualmente as linhas do kun-list com mais frequência,
-// então 0.35 fica no meio do caminho: bem mais escuro que 0.18/0.22 (o que
-// resolve o problema relatado), sem competir com a leitura.
+// 0.45 — valor CRAVADO PELO CAIO (17/07/2026) depois de imprimir a folha de
+// teste em papel (opacidades 0.18/0.28/0.35/0.45/0.55, faixa colorida e
+// faixa-preta). A recomendação inicial deste PR era 0.35; a impressão real
+// mandou escurecer mais. Fica o registro: a análise em Chrome headless a 4x
+// (não estimada) mediu que o texto do kun-list mantém contraste alto até 0.55
+// — a luminância média do fundo cai de 247/255 (0.18) para 231/255 (0.55),
+// e o texto é tinta sólida, sem opacidade — e apontou que a partir de ~0.45
+// os traços da caligrafia cruzam as linhas do kun-list com mais frequência.
+// Esse trade-off foi visto no papel e aceito: no impresso a marca precisa
+// desse peso para não sumir. NÃO baixar este valor com base em screenshot —
+// a tela mente aqui, foi exatamente o erro que originou este PR.
 //
 // Aplicada SÓ no ".kun-col::before" (o pseudo-elemento da marca do verso,
 // dentro do bloco @media print de cardCss()) — a frente (.wm-front) permanece
 // em 0.22 no print, exatamente como estava.
-const WM_OPACITY_BACK = 0.35;
+const WM_OPACITY_BACK = 0.45;
 
 export type CarteirinhaBatchOptions = {
   federationName?: string;
