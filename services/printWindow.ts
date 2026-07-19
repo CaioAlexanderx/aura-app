@@ -8,9 +8,22 @@
 // toast de erro fácil de não ver no balcão.
 //
 // SOLUÇÃO: abrir a janela SINCRONAMENTE dentro do gesto do clique, com
-// um placeholder "Gerando impressão…", e injetar o HTML (ou navegar para
-// o blob) quando o fetch terminar. Erro do backend aparece DENTRO da
-// janela (ex.: 409 "DANFE só pode ser impressa quando autorizada").
+// um placeholder "Gerando impressão…", e entregar o conteúdo quando o
+// fetch terminar. Erro do backend aparece DENTRO da janela (ex.: 409
+// "DANFE só pode ser impressa quando autorizada").
+//
+// 18/07/2026 ("Falha na impressão" nas 2 lojas do Davi): o conteúdo
+// final NÃO é mais injetado via document.write — a janela NAVEGA para
+// uma blob URL. O print programático disparado durante/logo após a
+// troca de documento via document.write morria na CRIAÇÃO do preview:
+// o Chrome abortava o job e mostrava "Falha na impressão. Verifique a
+// impressora e tente novamente" ancorado na aba do APP, sem job algum
+// chegar à impressora (medido em Chrome 150: o window.print() do cupom
+// executava reentrante, DENTRO do document.close() chamado pelo
+// opener). Navegação real = ciclo de vida normal do documento — o
+// mesmo padrão das etiquetas (PrintLabels), único fluxo que nunca
+// falhou. document.write continua APENAS no placeholder e em mensagens
+// de erro (que não imprimem nada).
 //
 // USO: chamar openPrintWindow() de forma SÍNCRONA no onPress (nunca
 // depois de um await) — o window.open acontece antes do primeiro await.
@@ -27,6 +40,8 @@ const PLACEHOLDER = `<!doctype html><html><head><meta charset="utf-8"><title>Imp
 <style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#666;font-size:15px}</style>
 </head><body>Gerando impressão…</body></html>`;
 
+// SÓ para placeholder e mensagens de erro. NUNCA para conteúdo que vai
+// imprimir — conteúdo de impressão navega via blob URL (ver header).
 function writeDoc(win: Window, html: string) {
   try {
     win.document.open();
@@ -54,11 +69,20 @@ export async function openPrintWindow(
 <body style="font-family:system-ui,sans-serif;padding:24px;color:#b00020;line-height:1.5">${msg}</body></html>`);
       return "error";
     }
-    if (r.url) {
-      try { win.location.href = r.url; } catch { try { win.close(); } catch {} return "error"; }
-      return "ok";
+    // Navegação real — nunca document.write pro conteúdo que imprime.
+    const isBlob = !r.url;
+    const url = r.url ?? URL.createObjectURL(new Blob([r.html || ""], { type: "text/html" }));
+    try {
+      win.location.href = url;
+    } catch {
+      try { win.close(); } catch {}
+      if (isBlob) { try { URL.revokeObjectURL(url); } catch {} }
+      return "error";
     }
-    writeDoc(win, r.html || "");
+    if (isBlob) {
+      // A navegação consome a blob em ms; 60s é folga p/ máquina lenta.
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60_000);
+    }
     return "ok";
   } catch {
     try { win.close(); } catch {}
