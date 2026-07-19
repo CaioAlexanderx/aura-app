@@ -1,10 +1,14 @@
 // ============================================================
-// AlunoFichaModal — ficha do aluno do dojô (F2)
+// AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a)
 //
 // Dados + responsável + ações: Editar (delega pro AlunoFormModal via
 // onEdit), Inativar/Reativar (PATCH status) e Excluir (DELETE real na
 // F2 — o aviso deixa claro que é definitivo; quando a F3 criar
 // cobranças o backend passa a responder 409 HAS_HISTORY).
+//
+// F3a: seção "Mensalidade" (AlunoAssinaturaSection) — assinar plano,
+// ver assinatura ativa, cancelar. Sub-componente inline (nunca modal
+// aninhado — mesmo racional do GuardianPicker já usado aqui dentro).
 //
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
@@ -20,6 +24,7 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
 import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError } from "./helpers";
+import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
 
 interface Props {
   visible: boolean;
@@ -169,6 +174,8 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
                   <Text style={styles.guardianMeta}>{minor ? "Nenhum responsável vinculado — vincule pelo Editar." : "Nenhum responsável vinculado."}</Text>
                 )}
               </View>
+
+              <AlunoAssinaturaSection federationId={federationId} student={s} onChanged={onChanged} />
 
               {!!err && <Text style={styles.err}>{err}</Text>}
 
