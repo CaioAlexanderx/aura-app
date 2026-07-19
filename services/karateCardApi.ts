@@ -65,10 +65,16 @@ export interface IssueBatchResult {
 }
 
 // ── Fila de impressão (migration 233 — sisteminha de gestão) ────────
-// Três etapas sobre a MESMA linha de karate_membership_cards:
+// Estados sobre a MESMA linha de karate_membership_cards:
 //   'to_print' (gerada, esperando) -> 'printed' (clique em imprimir,
 //   NÃO é prova de impressão real) -> 'delivered' (só confirmação manual).
-export type PrintStatus = "to_print" | "printed" | "delivered";
+//   'out_of_queue' — ramo lateral a partir de 'to_print' (aura-backend#402):
+//   a federação tira da fila pra controlar o que imprime de fato. NÃO é
+//   revogação — a carteirinha continua ativa/válida. 'return-to-queue'
+//   devolve pra 'to_print' (mesma rota usada por "Não saiu / reimprimir").
+//   Só aceita tirar da fila a partir de 'to_print' — 'printed'/'delivered'
+//   são recusados pelo backend.
+export type PrintStatus = "to_print" | "printed" | "delivered" | "out_of_queue";
 
 export interface QueueItem {
   id: string;
@@ -83,6 +89,8 @@ export interface QueueItem {
   issued_at: string;
   printed_at: string | null;
   delivered_at: string | null;
+  /** Preenchido quando a carteirinha é tirada da fila (aba "Fora da fila"). Carteirinha CONTINUA VÁLIDA — isto não é revogação. */
+  out_of_queue_at: string | null;
   /** Nº de vezes que a carteirinha foi de fato marcada como impressa. 1 = 1ª via. */
   print_count: number;
 }
@@ -91,6 +99,7 @@ export interface QueueCounters {
   to_print: number;
   printed: number;
   delivered: number;
+  out_of_queue: number;
 }
 
 export interface QueueDojoBreakdown {
@@ -213,9 +222,21 @@ export const karateCardApi = {
       body: { card_ids: cardIds },
     }),
 
-  /** POST /federation/{id}/cards/queue/return-to-queue — "não saiu" / reimprimir (staffWrite). */
+  /** POST /federation/{id}/cards/queue/return-to-queue — "não saiu" / reimprimir / devolver da aba "Fora da fila" (staffWrite). */
   returnToQueue: (federationId: string, cardIds: string[]): Promise<QueueMutationResult> =>
     request(`/federation/${federationId}/cards/queue/return-to-queue`, {
+      method: "POST",
+      body: { card_ids: cardIds },
+    }),
+
+  /**
+   * POST /federation/{id}/cards/queue/remove-from-queue — "Tirar da fila" (staffWrite).
+   * Só aceito a partir de 'to_print' (backend recusa printed/delivered — erro por
+   * item, ver QueueMutationResult.errors). A carteirinha CONTINUA VÁLIDA, isto
+   * NÃO é revogação — só sai da fila de impressão (PR aura-backend#402).
+   */
+  removeFromQueue: (federationId: string, cardIds: string[]): Promise<QueueMutationResult> =>
+    request(`/federation/${federationId}/cards/queue/remove-from-queue`, {
       method: "POST",
       body: { card_ids: cardIds },
     }),

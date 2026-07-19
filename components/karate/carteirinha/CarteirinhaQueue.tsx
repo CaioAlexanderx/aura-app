@@ -22,11 +22,21 @@
 // visual da lista por dojô quando "Todos" está selecionado.
 //
 // Ordenação ("gerado por último, visualizado primeiro", regra do Caio,
-// vale nas três abas): cada aba ordena pelo timestamp que fez o cartão
+// vale nas quatro abas): cada aba ordena pelo timestamp que fez o cartão
 // ENTRAR nessa etapa — issued_at em "A imprimir", printed_at em
-// "Impressa", delivered_at em "Entregue" — mais recente no topo. Isso é
-// feito no backend (listPrintQueue); aqui só preservamos a ordem ao
-// agrupar por dojô.
+// "Impressa", delivered_at em "Entregue", out_of_queue_at em "Fora da
+// fila" — mais recente no topo. Isso é feito no backend (listPrintQueue);
+// aqui só preservamos a ordem ao agrupar por dojô.
+//
+// "Tirar da fila" / aba "Fora da fila" (depende de aura-backend#402,
+// print_status out_of_queue + POST .../queue/remove-from-queue): NÃO é
+// revogação — a carteirinha continua ativa, o QR segue validando normal.
+// Só sai da fila de impressão pra federação controlar o que imprime de
+// fato. Só é possível tirar a partir de "A imprimir" (backend recusa
+// printed/delivered com erro por item); "Devolver à fila" usa o mesmo
+// return-to-queue que já existia para "Não saiu / reimprimir". Em lote,
+// reaproveita a MESMA seleção múltipla de "Imprimir selecionadas" — não
+// há um segundo mecanismo de seleção nesta tela.
 //
 // Histórico de vias: print_count (nº de vezes que a carteirinha foi de
 // fato marcada como impressa) + printed_at formatam "3ª via — reimpressa
@@ -38,7 +48,7 @@
 // confirmação antes. Mesmo padrão askConfirm/confirmDialog de
 // CarteirinhaPanel.tsx (Modal transparent de nível único).
 // ============================================================
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput, ActivityIndicator, Modal, ViewStyle, TextStyle } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -54,6 +64,7 @@ const TABS: { id: PrintStatus; label: string; icon: string }[] = [
   { id: "to_print", label: "A imprimir", icon: "inbox" },
   { id: "printed", label: "Impressa", icon: "credit-card" },
   { id: "delivered", label: "Entregue", icon: "truck" },
+  { id: "out_of_queue", label: "Fora da fila", icon: "eye-off" },
 ];
 
 type ConfirmDialog = { title: string; message: string; confirmLabel: string; onConfirm: () => void } | null;
@@ -68,6 +79,7 @@ function viaLabel(item: QueueItem): string {
 function stageDateLabel(tab: PrintStatus, item: QueueItem): string {
   if (tab === "delivered") return item.delivered_at ? `Entregue em ${formatEventDateNumeric(item.delivered_at)}` : "Entregue";
   if (tab === "printed") return item.printed_at ? `Impressa em ${formatEventDateNumeric(item.printed_at)}` : "Impressa";
+  if (tab === "out_of_queue") return item.out_of_queue_at ? `Fora da fila desde ${formatEventDateNumeric(item.out_of_queue_at)}` : "Fora da fila";
   return item.issued_at ? `Gerada em ${formatEventDateNumeric(item.issued_at)}` : "Gerada";
 }
 
@@ -76,7 +88,7 @@ export function CarteirinhaQueue() {
   const isWeb = Platform.OS === "web";
   const params = useLocalSearchParams<{ tab?: string; dojo?: string }>();
 
-  const initialTab: PrintStatus = (params.tab === "printed" || params.tab === "delivered") ? (params.tab as PrintStatus) : "to_print";
+  const initialTab: PrintStatus = (params.tab === "printed" || params.tab === "delivered" || params.tab === "out_of_queue") ? (params.tab as PrintStatus) : "to_print";
 
   const [tab, setTab] = useState<PrintStatus>(initialTab);
   const [dojoId, setDojoId] = useState<string | null>(typeof params.dojo === "string" ? params.dojo : null);
@@ -91,18 +103,26 @@ export function CarteirinhaQueue() {
   const askConfirm = (title: string, message: string, confirmLabel: string, onConfirm: () => void) =>
     setConfirmDialog({ title, message, confirmLabel, onConfirm });
 
+  // Guarda contra condição de corrida: trocar de aba rápido dispara N
+  // chamadas em voo; sem o requestId, a resposta mais lenta pode chegar
+  // por último e sobrescrever o resultado da aba certa com dado da aba
+  // errada (já mordeu esta tela 2x). Só a chamada mais recente escreve.
+  const requestIdRef = useRef(0);
   const load = useCallback(async () => {
     if (!federationId) return;
+    const reqId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await karateCardApi.listQueue(federationId, { print_status: tab, pageSize: 500 });
+      if (reqId !== requestIdRef.current) return;
       setResult(res);
     } catch (err) {
+      if (reqId !== requestIdRef.current) return;
       console.error("[CarteirinhaQueue] Falha ao carregar a fila:", err);
       setError("Não foi possível carregar a fila. Tente novamente.");
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) setLoading(false);
     }
   }, [federationId, tab]);
 
@@ -248,6 +268,26 @@ export function CarteirinhaQueue() {
     }
   }
 
+  // Tirar da fila — NÃO é revogação. A carteirinha continua ativa e o QR
+  // segue validando normal; só sai da fila de impressão (backend recusa a
+  // partir de printed/delivered — só 'to_print' pode ser tirado; erro vem
+  // por item em res.errors, sem travar o resto do lote).
+  async function doRemove(ids: string[]) {
+    setBusyAction(true);
+    try {
+      const res = await karateCardApi.removeFromQueue(federationId, ids);
+      if (res.errors.length > 0) {
+        toast.warning(`${res.ok.length} tirada(s) da fila — ${res.errors.length} com erro`);
+      } else {
+        toast.success(`${res.ok.length} carteirinha(s) tiradas da fila`);
+      }
+      setSelected(new Set());
+      load();
+    } finally {
+      setBusyAction(false);
+    }
+  }
+
   function askPrint() {
     if (!isWeb) { toast.error("Impressão de carteirinhas disponível apenas na versão web"); return; }
     const ids = Array.from(selected);
@@ -257,6 +297,31 @@ export function CarteirinhaQueue() {
       `${ids.length} carteirinha(s) serão marcadas como impressas e abertas numa folha para impressão. Se a impressão não sair de fato, use "Não saiu / reimprimir" depois — sem culpa.`,
       "Imprimir",
       () => doPrint(ids)
+    );
+  }
+
+  // Tirar da fila — em lote, reaproveita a MESMA seleção múltipla de
+  // "Imprimir selecionadas" (não é um segundo mecanismo de seleção). Copy
+  // evita "apagar/excluir": a carteirinha continua válida, só some da fila
+  // de impressão — isso precisa ficar explícito na confirmação, senão o
+  // usuário lê "remover" e acha que está revogando o registro.
+  function askRemoveBatch() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    askConfirm(
+      "Tirar da fila?",
+      `${ids.length} carteirinha(s) saem da fila de impressão, mas continuam válidas — o QR segue validando normalmente. Você pode devolver a qualquer momento na aba "Fora da fila".`,
+      "Tirar da fila",
+      () => doRemove(ids)
+    );
+  }
+
+  function askRemoveOne(item: QueueItem) {
+    askConfirm(
+      `Tirar "${item.student_name}" da fila?`,
+      "Sai da fila de impressão, mas continua válida — o QR segue validando normalmente. Você pode devolver a qualquer momento na aba \"Fora da fila\".",
+      "Tirar da fila",
+      () => doRemove([item.id])
     );
   }
 
@@ -274,6 +339,15 @@ export function CarteirinhaQueue() {
   function askReturnBatch() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
+    if (tab === "out_of_queue") {
+      askConfirm(
+        "Devolver à fila?",
+        `${ids.length} carteirinha(s) voltam para "A imprimir".`,
+        "Devolver à fila",
+        () => doReturn(ids)
+      );
+      return;
+    }
     const fromDelivered = tab === "delivered";
     askConfirm(
       fromDelivered ? "Reimprimir selecionadas?" : "Não saiu / reimprimir?",
@@ -286,6 +360,15 @@ export function CarteirinhaQueue() {
   }
 
   function askReturnOne(item: QueueItem) {
+    if (tab === "out_of_queue") {
+      askConfirm(
+        `Devolver "${item.student_name}" à fila?`,
+        "Volta para \"A imprimir\".",
+        "Devolver à fila",
+        () => doReturn([item.id])
+      );
+      return;
+    }
     const fromDelivered = tab === "delivered";
     askConfirm(
       fromDelivered ? `Reimprimir a carteirinha de ${item.student_name}?` : `"${item.student_name}" não saiu / reimprimir?`,
@@ -297,14 +380,14 @@ export function CarteirinhaQueue() {
     );
   }
 
-  const counters = result?.counters || { to_print: 0, printed: 0, delivered: 0 };
+  const counters = result?.counters || { to_print: 0, printed: 0, delivered: 0, out_of_queue: 0 };
 
   return (
     <View style={s.container}>
       {/* Contadores no topo */}
       <View style={s.countersBar}>
         <Text style={s.countersText}>
-          <Text style={s.countersNum}>{counters.to_print}</Text> a imprimir · <Text style={s.countersNum}>{counters.printed}</Text> impressas · <Text style={s.countersNum}>{counters.delivered}</Text> entregues
+          <Text style={s.countersNum}>{counters.to_print}</Text> a imprimir · <Text style={s.countersNum}>{counters.printed}</Text> impressas · <Text style={s.countersNum}>{counters.delivered}</Text> entregues · <Text style={s.countersNum}>{counters.out_of_queue}</Text> fora da fila
         </Text>
       </View>
 
@@ -408,15 +491,25 @@ export function CarteirinhaQueue() {
                         <Text style={s.itemMeta} numberOfLines={1}>{stageDateLabel(tab, item)}</Text>
                         {item.belt_name ? <Text style={s.beltBadge}>{item.belt_name}</Text> : null}
                         {item.is_minor ? <Text style={s.minorBadge}>Menor</Text> : null}
-                        {tab !== "to_print" ? <Text style={s.viaBadge}>{viaLabel(item)}</Text> : null}
+                        {tab === "printed" || tab === "delivered" ? <Text style={s.viaBadge}>{viaLabel(item)}</Text> : null}
                       </View>
                     </View>
+                    {tab === "to_print" && (
+                      <Pressable
+                        onPress={(e) => { e.stopPropagation?.(); askRemoveOne(item); }}
+                        style={s.rowActionBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Tirar da fila"
+                      >
+                        <Icon name="x" size={13} color={C.ink3} />
+                      </Pressable>
+                    )}
                     {tab !== "to_print" && (
                       <Pressable
                         onPress={(e) => { e.stopPropagation?.(); askReturnOne(item); }}
                         style={s.rowActionBtn}
                         accessibilityRole="button"
-                        accessibilityLabel={tab === "printed" ? "Não saiu / reimprimir" : "Reimprimir"}
+                        accessibilityLabel={tab === "printed" ? "Não saiu / reimprimir" : tab === "delivered" ? "Reimprimir" : "Devolver à fila"}
                       >
                         <Icon name="refresh-cw" size={13} color={C.ink3} />
                       </Pressable>
@@ -432,14 +525,24 @@ export function CarteirinhaQueue() {
       {/* Barra de ação — varia por etapa */}
       <View style={s.actionBar}>
         {tab === "to_print" && (
-          <Pressable
-            onPress={askPrint}
-            style={[s.primaryBtn, (selected.size === 0 || busyAction || !isWeb) && s.btnDisabled]}
-            disabled={selected.size === 0 || busyAction || !isWeb}
-          >
-            {busyAction ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="download" size={16} color="#fff" />}
-            <Text style={s.primaryBtnText}>Imprimir selecionadas ({selected.size})</Text>
-          </Pressable>
+          <>
+            <Pressable
+              onPress={askRemoveBatch}
+              style={[s.secondaryBtn, (selected.size === 0 || busyAction) && s.btnDisabled]}
+              disabled={selected.size === 0 || busyAction}
+            >
+              <Icon name="x" size={15} color={C.ink2} />
+              <Text style={s.secondaryBtnText}>Tirar da fila ({selected.size})</Text>
+            </Pressable>
+            <Pressable
+              onPress={askPrint}
+              style={[s.primaryBtn, (selected.size === 0 || busyAction || !isWeb) && s.btnDisabled]}
+              disabled={selected.size === 0 || busyAction || !isWeb}
+            >
+              {busyAction ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="download" size={16} color="#fff" />}
+              <Text style={s.primaryBtnText}>Imprimir selecionadas ({selected.size})</Text>
+            </Pressable>
+          </>
         )}
         {tab === "printed" && (
           <>
@@ -469,6 +572,16 @@ export function CarteirinhaQueue() {
           >
             <Icon name="refresh-cw" size={15} color={C.ink2} />
             <Text style={s.secondaryBtnText}>Reimprimir selecionadas ({selected.size})</Text>
+          </Pressable>
+        )}
+        {tab === "out_of_queue" && (
+          <Pressable
+            onPress={askReturnBatch}
+            style={[s.primaryBtn, (selected.size === 0 || busyAction) && s.btnDisabled]}
+            disabled={selected.size === 0 || busyAction}
+          >
+            {busyAction ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="refresh-cw" size={16} color="#fff" />}
+            <Text style={s.primaryBtnText}>Devolver à fila ({selected.size})</Text>
           </Pressable>
         )}
       </View>
