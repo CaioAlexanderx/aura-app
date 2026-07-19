@@ -1,8 +1,9 @@
 // ============================================================
-// Aura Karatê (dojô) — Painel (F1)
+// Aura Karatê (dojô) — Painel (F1; F2 no card de faixas)
 // Home do shell completo do dojô: cards-resumo com os MESMOS dados que
-// as telas internas já buscam (nenhum endpoint novo):
-//   • Faixas do dojô        → karateApi.listSenseiPractitioners
+// as telas internas já buscam:
+//   • Alunos / faixas       → alunos PRÓPRIOS (F2, summary) quando
+//                             existirem; senão karateApi.listSenseiPractitioners
 //   • Situação da anuidade  → karateApi.getSenseiAnnuity
 //   • Últimas solicitações  → karateApi.listPractitionerRequests
 //   • Atalho p/ Certificados
@@ -23,6 +24,7 @@ import {
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiPractitioner, SenseiAnnuityResponse } from "@/services/karateApi";
+import { karateDojoStudentsApi, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -69,26 +71,49 @@ export default function DojoPainel() {
   const [annuity, setAnnuity] = useState<SenseiAnnuityResponse | null>(null);
   const [annuityFailed, setAnnuityFailed] = useState(false);
   const [requests, setRequests] = useState<any[] | null>(null);
+  // F2: summary dos alunos PRÓPRIOS do dojô (null = endpoint falhou/sem dado).
+  const [ownSummary, setOwnSummary] = useState<DojoStudentsSummary | null>(null);
 
   const load = useCallback(async () => {
     if (!federationId) return;
     setLoading(true);
-    const [p, a, r] = await Promise.allSettled([
+    const [p, a, r, s] = await Promise.allSettled([
       karateApi.listSenseiPractitioners(federationId),
       karateApi.getSenseiAnnuity(federationId),
       karateApi.listPractitionerRequests(federationId),
+      karateDojoStudentsApi.listStudents(federationId, { summary: true }),
     ]);
     setPracs(p.status === "fulfilled" ? ((p.value as any)?.practitioners ?? []) : null);
     setAnnuity(a.status === "fulfilled" ? (a.value as SenseiAnnuityResponse) : null);
     setAnnuityFailed(a.status !== "fulfilled");
     setRequests(r.status === "fulfilled" ? normalizeRequests(r.value) : null);
+    setOwnSummary(s.status === "fulfilled" ? ((s.value as any)?.summary ?? null) : null);
     setLoading(false);
   }, [federationId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Pirâmide de faixas (mesma derivação da tela Praticantes).
+  // F2: quando o dojô já tem alunos PRÓPRIOS (summary.total > 0), o card
+  // de faixas passa a usar summary.by_belt deles — é o dado que o dojô
+  // controla. Sem nenhum aluno próprio (ou com o endpoint fora do ar),
+  // MANTÉM a derivação federada da F1: o painel nunca fica pior do que
+  // era antes de existir o registro próprio.
+  const useOwn = !!ownSummary && ownSummary.total > 0;
   const piramide = useMemo(() => {
+    if (useOwn && ownSummary) {
+      return (ownSummary.by_belt ?? [])
+        .filter((b) => b.count > 0)
+        .sort((a, b) => (b.belt_order ?? -1) - (a.belt_order ?? -1))
+        .map((b) => {
+          const key = b.belt_label ? resolveBeltKey(b.belt_label) : null;
+          return {
+            id: `own-${b.belt_label ?? "sem-faixa"}`,
+            label: b.belt_label ?? "Sem faixa",
+            color: key ? KarateBelts[key].color : KarateColors.bg2,
+            n: b.count,
+          };
+        });
+    }
     const counts = new Map<BeltKey, number>();
     for (const p of pracs ?? []) {
       if (!p.is_active) continue;
@@ -97,12 +122,12 @@ export default function DojoPainel() {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return Array.from(counts.entries())
-      .map(([belt, n]) => ({ belt, n }))
-      .sort((a, b) => beltRank(b.belt) - beltRank(a.belt));
-  }, [pracs]);
+      .sort((a, b) => beltRank(b[0]) - beltRank(a[0]))
+      .map(([belt, n]) => ({ id: belt as string, label: KarateBelts[belt].label, color: KarateBelts[belt].color, n }));
+  }, [pracs, ownSummary, useOwn]);
 
-  const total = pracs?.length ?? 0;
-  const ativos = (pracs ?? []).filter((p) => p.is_active).length;
+  const total = useOwn && ownSummary ? ownSummary.total : (pracs?.length ?? 0);
+  const ativos = useOwn && ownSummary ? ownSummary.active : (pracs ?? []).filter((p) => p.is_active).length;
   const maxP = Math.max(1, ...piramide.map((p) => p.n));
   const topFaixas = piramide.slice(0, 4);
   const outrasFaixas = piramide.length > 4 ? piramide.slice(4).reduce((s, p) => s + p.n, 0) : 0;
@@ -137,27 +162,27 @@ export default function DojoPainel() {
 
       {!loading && (
         <View style={styles.grid}>
-          {/* ── Card: Praticantes / faixas ── */}
+          {/* ── Card: Alunos / faixas (F2: próprios > federados) ── */}
           <View style={styles.card}>
             <View style={styles.cardHead}>
               <Icon name="users" size={16} color={KarateColors.primary} />
-              <Text style={styles.cardTitle}>Praticantes</Text>
+              <Text style={styles.cardTitle}>Alunos</Text>
             </View>
-            {pracs === null ? (
+            {pracs === null && !useOwn ? (
               <Text style={styles.cardErr}>Não foi possível carregar. <Text style={styles.cardErrLink} onPress={load}>Tentar de novo</Text></Text>
             ) : (
               <>
                 <View style={styles.bigRow}>
                   <Text style={styles.bigNum}>{total}</Text>
-                  <Text style={styles.bigSub}>{ativos} ativo{ativos === 1 ? "" : "s"}</Text>
+                  <Text style={styles.bigSub}>{ativos} ativo{ativos === 1 ? "" : "s"}{useOwn ? "" : " · na federação"}</Text>
                 </View>
                 {topFaixas.length > 0 && (
                   <View style={{ gap: 6, marginTop: 4 }}>
                     {topFaixas.map((p) => (
-                      <View key={p.belt} style={styles.pyRow}>
-                        <Text style={styles.pyLabel} numberOfLines={1}>{KarateBelts[p.belt].label}</Text>
+                      <View key={p.id} style={styles.pyRow}>
+                        <Text style={styles.pyLabel} numberOfLines={1}>{p.label}</Text>
                         <View style={styles.pyTrack}>
-                          <View style={[styles.pyBar, { width: `${(p.n / maxP) * 100}%`, backgroundColor: KarateBelts[p.belt].color }]} />
+                          <View style={[styles.pyBar, { width: `${(p.n / maxP) * 100}%`, backgroundColor: p.color }]} />
                         </View>
                         <Text style={styles.pyNum}>{p.n}</Text>
                       </View>
@@ -168,12 +193,12 @@ export default function DojoPainel() {
                   </View>
                 )}
                 {total === 0 && (
-                  <Text style={styles.cardEmpty}>Nenhum praticante cadastrado ainda.</Text>
+                  <Text style={styles.cardEmpty}>Nenhum aluno cadastrado ainda.</Text>
                 )}
               </>
             )}
-            <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/praticantes")} accessibilityRole="link">
-              <Text style={styles.cardLinkTxt}>Ver praticantes</Text>
+            <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/alunos")} accessibilityRole="link">
+              <Text style={styles.cardLinkTxt}>Ver alunos</Text>
               <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
             </TouchableOpacity>
           </View>
