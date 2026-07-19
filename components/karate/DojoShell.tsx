@@ -63,6 +63,9 @@ const DOJO_NAV: DojoNavItem[] = [
   // dojô (aba "Meus alunos") e os federados (aba "Na federação"). A URL
   // antiga /karate/praticantes segue viva como redirect fino → /alunos.
   { label: "Alunos",        icon: "users",               route: "/karate/(dojo)/alunos",        match: "alunos",        sidebarOnly: false },
+  // F3a: Mensalidades — planos, assinaturas e cobranças (Pix) do dojô,
+  // separado da Anuidade (que é a filiação do DOJÔ à federação).
+  { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarOnly: false },
   { label: "Solicitações", icon: "paper-plane-outline", route: "/karate/(dojo)/solicitacoes",  match: "solicitacoes",  sidebarOnly: false },
   { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
   { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
@@ -358,7 +361,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Sidebar (DNA do KarateShell) ───────────────────────────
+  // ── Sidebar (DNA do KarateShell) ────────────────────────
   sidebar: {
     width: 236,
     backgroundColor: KarateColors.bg2,
@@ -549,7 +552,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ──────────────────────────────────────────
+  // ── Topbar mobile ───────────────────────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -574,7 +577,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────────────────────────────
+  // ── Bottom tabs ────────────────────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,

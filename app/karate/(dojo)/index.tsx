@@ -1,14 +1,20 @@
 // ============================================================
-// Aura Karatê (dojô) — Painel (F1; F2 no card de faixas)
+// Aura Karatê (dojô) — Painel (F1; F2 no card de faixas; F3a: card Mensalidades)
 // Home do shell completo do dojô: cards-resumo com os MESMOS dados que
 // as telas internas já buscam:
 //   • Alunos / faixas       → alunos PRÓPRIOS (F2, summary) quando
 //                             existirem; senão karateApi.listSenseiPractitioners
+//   • Mensalidades do mês   → summary de GET /dojo/billing/charges (F3a)
 //   • Situação da anuidade  → karateApi.getSenseiAnnuity
 //   • Últimas solicitações  → karateApi.listPractitionerRequests
 //   • Atalho p/ Certificados
 // Cada bloco falha sozinho (Promise.allSettled) — um endpoint fora do
 // ar não derruba o painel inteiro. Datas: parse manual tz-safe.
+//
+// F3a: o card de Mensalidades é SILENCIOSO em falha (inclusive 503
+// SCHEMA_PENDING antes da migration rodar) — sem card nenhum, nunca
+// um aviso de erro no painel por causa de uma feature ainda não
+// disponível no ambiente.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -25,6 +31,8 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiPractitioner, SenseiAnnuityResponse } from "@/services/karateApi";
 import { karateDojoStudentsApi, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
+import { karateDojoBillingApi, DojoChargesSummary } from "@/services/karateDojoBillingApi";
+import { currentCompetence } from "@/components/karate/dojoMensalidades/helpers";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -73,21 +81,25 @@ export default function DojoPainel() {
   const [requests, setRequests] = useState<any[] | null>(null);
   // F2: summary dos alunos PRÓPRIOS do dojô (null = endpoint falhou/sem dado).
   const [ownSummary, setOwnSummary] = useState<DojoStudentsSummary | null>(null);
+  // F3a: summary de mensalidades do mês atual (null = falhou/indisponível — card some).
+  const [billingSummary, setBillingSummary] = useState<DojoChargesSummary | null>(null);
 
   const load = useCallback(async () => {
     if (!federationId) return;
     setLoading(true);
-    const [p, a, r, s] = await Promise.allSettled([
+    const [p, a, r, s, b] = await Promise.allSettled([
       karateApi.listSenseiPractitioners(federationId),
       karateApi.getSenseiAnnuity(federationId),
       karateApi.listPractitionerRequests(federationId),
       karateDojoStudentsApi.listStudents(federationId, { summary: true }),
+      karateDojoBillingApi.listCharges(federationId, { competence: currentCompetence() }),
     ]);
     setPracs(p.status === "fulfilled" ? ((p.value as any)?.practitioners ?? []) : null);
     setAnnuity(a.status === "fulfilled" ? (a.value as SenseiAnnuityResponse) : null);
     setAnnuityFailed(a.status !== "fulfilled");
     setRequests(r.status === "fulfilled" ? normalizeRequests(r.value) : null);
     setOwnSummary(s.status === "fulfilled" ? ((s.value as any)?.summary ?? null) : null);
+    setBillingSummary(b.status === "fulfilled" ? (b.value.summary ?? null) : null);
     setLoading(false);
   }, [federationId]);
 
@@ -151,7 +163,7 @@ export default function DojoPainel() {
       <View>
         <Text style={styles.eyebrow}>Aura Karatê · {dojoName}</Text>
         <Text style={styles.title}>Painel do dojô</Text>
-        <Text style={styles.lead}>O resumo do seu dojô num lugar só: alunos, anuidade, solicitações e certificados.</Text>
+        <Text style={styles.lead}>O resumo do seu dojô num lugar só: alunos, mensalidades, anuidade, solicitações e certificados.</Text>
       </View>
 
       {loading && (
@@ -202,6 +214,27 @@ export default function DojoPainel() {
               <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
             </TouchableOpacity>
           </View>
+
+          {/* ── Card: Mensalidades do mês (F3a) — some se o endpoint falhar ── */}
+          {billingSummary && (
+            <View style={styles.card}>
+              <View style={styles.cardHead}>
+                <Icon name="receipt" size={16} color={KarateColors.primary} />
+                <Text style={styles.cardTitle}>Mensalidades do mês</Text>
+              </View>
+              <View style={styles.bigRow}>
+                <Text style={styles.bigNum}>{fmtValor(billingSummary.paid_amount)}</Text>
+                <Text style={styles.bigSub}>recebido de {fmtValor(billingSummary.total_amount)}</Text>
+              </View>
+              <Text style={styles.cardEmpty}>
+                {billingSummary.pending_count} pendente{billingSummary.pending_count === 1 ? "" : "s"} · {billingSummary.overdue_count} vencida{billingSummary.overdue_count === 1 ? "" : "s"}
+              </Text>
+              <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/mensalidades")} accessibilityRole="link">
+                <Text style={styles.cardLinkTxt}>Ver mensalidades</Text>
+                <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* ── Card: Anuidade ── */}
           <View style={styles.card}>
