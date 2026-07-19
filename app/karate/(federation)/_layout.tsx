@@ -10,7 +10,9 @@ import { useAuthStore } from "@/stores/auth";
 import { KarateColors } from "@/constants/karateTheme";
 
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
-// Papéis de dojô: usam o shell light /karate/sensei (somente leitura).
+// Papéis de dojô: usam o shell COMPLETO do dojô — grupo /karate/(dojo)
+// (F1 Aura Dojô; antes era o shell light /karate/sensei, que hoje só
+// redireciona pra lá).
 const DOJO_ROLES = ["sensei", "dojo_owner"];
 
 export default function KarateLayout() {
@@ -31,11 +33,14 @@ export default function KarateLayout() {
     return <Redirect href="/(tabs)" />;   // empresa não-karatê → home do Aura Negócio
   }
 
-  // 2b) Track G: papéis de dojô (sensei/dono) vão pro shell light do sensei,
-  // não pro shell administrativo da federação.
+  // 2b) Track G/F1: papéis de dojô (sensei/dono) vão pro shell completo
+  // do dojô — grupo (dojo) —, não pro shell administrativo da federação.
+  // O href LEVA o nome do grupo: index/praticantes/eventos/configuracoes
+  // são rotas compartilhadas entre (dojo) e (federation), e um href nu
+  // ("/karate") resolveria de volta pro outro grupo e viraria loop.
   const karateRole = (company as any)?.karate_role;
   if (DOJO_ROLES.includes(karateRole as string)) {
-    return <Redirect href="/karate/sensei" />;
+    return <Redirect href={"/karate/(dojo)" as any} />;
   }
 
   // 3) Sem mock: o federationId vem do JWT (company.federation_id). Se a

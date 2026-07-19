@@ -38,6 +38,18 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'food.delivery': 'expansao',
   'food.nfce':     'expansao',
   'food.config':   'essencial',
+  // 2026-07-18 (F1 Aura Dojo): shell completo do dojo (grupo (dojo) em
+  // /karate — Painel/Praticantes/Solicitacoes/Eventos/Anuidade/
+  // Certificados/Configuracoes). Registro de FUNDACAO: o shell AINDA NAO
+  // consome estas chaves (TODO F2: filtrar DOJO_NAV em
+  // components/karate/DojoShell.tsx por useVisibleModules); o gate real
+  // de plano/cobranca do dojo (R$140/mes) fica pra F3c. Todas 'essencial'
+  // por ora — regra da casa: toda tela nova entra no mapa.
+  'karate_dojo.praticantes':  'essencial',
+  'karate_dojo.financeiro':   'essencial',
+  'karate_dojo.eventos':      'essencial',
+  'karate_dojo.certificados': 'essencial',
+  'karate_dojo.config':       'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -63,6 +75,12 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // novas aqui. Owners sempre veem (filtro de permission so se aplica a
   // membros).
   'food.access': ['food.mesas','food.pedidos','food.cardapio','food.kds','food.delivery','food.nfce','food.config'],
+  // 2026-07-18 (F1 Aura Dojo): mesmo padrao do food.access — sem
+  // permissions granulares de dojo no banco ainda, a umbrella
+  // "karate_dojo.access" destrava as areas juntas. Quando precisar de
+  // granularidade (ex.: instrutor so ve Praticantes), adicionar chaves
+  // especificas aqui. O shell do dojo consome a partir da F2.
+  'karate_dojo.access': ['karate_dojo.praticantes','karate_dojo.financeiro','karate_dojo.eventos','karate_dojo.certificados','karate_dojo.config'],
 };
 
 export function useVisibleModules(): Set<string> {
