@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ──────────────────────────────────────
+  // ── Topbar mobile ──────────────────────────────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────────────────────────
+  // ── Bottom tabs ────────────────────────────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,
