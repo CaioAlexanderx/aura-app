@@ -20,9 +20,9 @@
 // (index, praticantes, eventos, configuracoes). usePathname devolve o
 // caminho SEM o grupo, então o estado ativo casa pelo segmento.
 //
-// TODO F2 (permissions): filtrar DOJO_NAV por useVisibleModules com as
+// TODO F2b (permissions): filtrar DOJO_NAV por useVisibleModules com as
 // chaves karate_dojo.* já registradas em hooks/useVisibleModules.ts —
-// nesta fase o registro existe mas o shell ainda não consome.
+// o registro existe mas o shell ainda não consome.
 //
 // ⚠️ Ícones SÓ via wrapper @/components/Icon (nomes abaixo já são
 // usados em telas karatê existentes — nada de @expo/vector-icons).
@@ -59,7 +59,10 @@ interface DojoNavItem {
 
 const DOJO_NAV: DojoNavItem[] = [
   { label: "Painel",        icon: "grid",                route: "/karate/(dojo)",               match: "",              sidebarOnly: false },
-  { label: "Praticantes",   icon: "users",               route: "/karate/(dojo)/praticantes",   match: "praticantes",   sidebarOnly: false },
+  // F2: "Praticantes" virou "Alunos" — a tela reúne o registro PRÓPRIO do
+  // dojô (aba "Meus alunos") e os federados (aba "Na federação"). A URL
+  // antiga /karate/praticantes segue viva como redirect fino → /alunos.
+  { label: "Alunos",        icon: "users",               route: "/karate/(dojo)/alunos",        match: "alunos",        sidebarOnly: false },
   { label: "Solicitações", icon: "paper-plane-outline", route: "/karate/(dojo)/solicitacoes",  match: "solicitacoes",  sidebarOnly: false },
   { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
   { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
@@ -546,7 +549,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ──────────────────────────────────────────
+  // ── Topbar mobile ──────────────────────────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -571,7 +574,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────────────────────────────
+  // ── Bottom tabs ────────────────────────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,
