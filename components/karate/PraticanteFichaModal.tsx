@@ -465,7 +465,10 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (!isEdit) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
-    // Faixa inicial (cadastro): backend semeia a trajetória e auto-emite a carteirinha.
+    // Faixa inicial (cadastro): backend semeia a trajetória (karate_belt_history).
+    // 17/07/2026: NÃO auto-emite mais carteirinha aqui — isso agora só acontece
+    // no upload da primeira foto (uploadPractitionerPhoto) ou no botão manual
+    // da aba Carteirinha (backend: decisão Caio, remoção da auto-emissão no cadastro).
     if (!isEdit) {
       const fx = faixaToBody(beltKey, danDeg, kyuDeg);
       if (fx) { body.belt_level = fx.belt_level; body.belt_name = fx.belt_name; body.belt_schema = fx.belt_schema; }
