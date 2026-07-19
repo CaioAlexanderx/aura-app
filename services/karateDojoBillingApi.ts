@@ -1,0 +1,244 @@
+// ============================================================
+// AURA DOJÔ — F3a: Mensalidades do dojô (planos, assinaturas, cobranças, PIX)
+//
+// Cliente tipado do Aura-backend PR "f3a-dojo-billing" (em paralelo — o
+// backend está sendo construído a partir do MESMO contrato deste arquivo).
+// Base: /federation/:id/dojo/billing — Bearer = JWT normal do app via
+// request() core (Canal A).
+//
+// Vive num service pequeno separado, mesmo racional do
+// karateDojoStudentsApi (karateApi.ts tem 125 KB e é intocável).
+//
+// Erros do backend (todos via ApiError.data.code, ver helpers.ts do
+// módulo components/karate/dojoMensalidades p/ mapeamento pt-BR):
+//   422 VALIDATION_ERROR · 503 SCHEMA_PENDING (migration pendente) ·
+//   409 PIX_NAO_CONFIGURADO (POST /charges/:id/pix) ·
+//   409 no cancel de cobrança já paga.
+// ============================================================
+import { request } from "@/services/api";
+
+export type DojoChargeStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type DojoChargePaymentMethod = "pix" | "dinheiro" | "cartao" | "outro";
+
+// ── Planos ──────────────────────────────────────────────────
+export interface DojoBillingPlan {
+  id: string;
+  name: string;
+  amount: number;
+  due_day: number;
+  active: boolean;
+  students_count: number;
+}
+
+/** Campo ausente (undefined) = não mexe. Espelha PATCH parcial do backend. */
+export interface DojoBillingPlanPayload {
+  name?: string;
+  amount?: number;
+  due_day?: number;
+  active?: boolean;
+}
+
+export interface DojoBillingPlansListResponse {
+  data: DojoBillingPlan[];
+}
+
+// ── Assinaturas ─────────────────────────────────────────────
+export interface DojoSubscription {
+  id: string;
+  student_id: string;
+  plan_id: string | null;
+  amount: number;
+  due_day: number;
+  payer_guardian_id: string | null;
+  active_from: string | null;
+  canceled_at: string | null;
+}
+
+export interface DojoSubscribePayload {
+  plan_id?: string | null;
+  amount?: number;
+  due_day?: number;
+  payer_guardian_id?: string | null;
+}
+
+export interface DojoSubscriptionPersonRef {
+  id: string;
+  full_name: string;
+}
+
+export interface DojoSubscriptionListItem extends DojoSubscription {
+  student: DojoSubscriptionPersonRef;
+  guardian?: DojoSubscriptionPersonRef | null;
+}
+
+export interface DojoSubscriptionsListResponse {
+  data: DojoSubscriptionListItem[];
+}
+
+// ── Geração de cobranças ────────────────────────────────────
+export interface DojoGenerateChargesResult {
+  created: number;
+  skipped: number;
+}
+
+// ── Cobranças ───────────────────────────────────────────────
+export interface DojoCharge {
+  id: string;
+  student: DojoSubscriptionPersonRef;
+  guardian: DojoSubscriptionPersonRef | null;
+  /** 'YYYY-MM'. */
+  competence: string;
+  amount: number;
+  /** 'YYYY-MM-DD' — date puro, NUNCA new Date() direto. */
+  due_date: string;
+  status: DojoChargeStatus;
+  paid_at: string | null;
+  payment_method: DojoChargePaymentMethod | null;
+  has_pix: boolean;
+}
+
+export interface DojoChargesSummary {
+  total_amount: number;
+  paid_amount: number;
+  pending_count: number;
+  overdue_count: number;
+  paid_count: number;
+}
+
+export interface DojoChargesListResponse {
+  data: DojoCharge[];
+  summary: DojoChargesSummary;
+}
+
+export interface DojoChargesFilters {
+  competence?: string;
+  status?: DojoChargeStatus;
+  q?: string;
+}
+
+export interface DojoChargePixResponse {
+  payload: string;
+  public_url: string;
+}
+
+export interface DojoConfirmChargePayload {
+  method?: DojoChargePaymentMethod;
+}
+
+// ── Config de recebimento (PIX do dojô) ─────────────────────
+export interface DojoBillingConfig {
+  pix_configured: boolean;
+  pix_key_masked: string | null;
+  pix_key_type: string | null;
+}
+
+export interface DojoBillingConfigPayload {
+  pix_key: string;
+  pix_key_type: string;
+}
+
+/** Opções de tipo de chave Pix pro seletor da UI (Asaas-padrão). */
+export const PIX_KEY_TYPE_OPTIONS: { key: string; label: string }[] = [
+  { key: "cpf", label: "CPF" },
+  { key: "cnpj", label: "CNPJ" },
+  { key: "email", label: "E-mail" },
+  { key: "phone", label: "Telefone" },
+  { key: "random", label: "Aleatória" },
+];
+
+function qs(params: Record<string, string | undefined>): string {
+  const parts: string[] = [];
+  for (const k of Object.keys(params)) {
+    const v = params[k];
+    if (v != null && v !== "") parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+  }
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+const base = (federationId: string) => `/federation/${federationId}/dojo/billing`;
+
+export const karateDojoBillingApi = {
+  // Planos
+  listPlans: (federationId: string): Promise<DojoBillingPlansListResponse> =>
+    request<DojoBillingPlansListResponse>(`${base(federationId)}/plans`),
+
+  createPlan: (federationId: string, payload: DojoBillingPlanPayload): Promise<DojoBillingPlan> =>
+    request<DojoBillingPlan>(`${base(federationId)}/plans`, { method: "POST", body: payload }),
+
+  updatePlan: (
+    federationId: string,
+    planId: string,
+    payload: DojoBillingPlanPayload
+  ): Promise<DojoBillingPlan> =>
+    request<DojoBillingPlan>(`${base(federationId)}/plans/${planId}`, {
+      method: "PATCH",
+      body: payload,
+    }),
+
+  // Assinaturas
+  subscribeStudent: (
+    federationId: string,
+    studentId: string,
+    payload: DojoSubscribePayload
+  ): Promise<DojoSubscription> =>
+    request<DojoSubscription>(`${base(federationId)}/students/${studentId}/subscribe`, {
+      method: "POST",
+      body: payload,
+    }),
+
+  cancelSubscription: (federationId: string, studentId: string): Promise<void> =>
+    request<void>(`${base(federationId)}/students/${studentId}/subscribe`, { method: "DELETE" }),
+
+  listSubscriptions: (federationId: string): Promise<DojoSubscriptionsListResponse> =>
+    request<DojoSubscriptionsListResponse>(`${base(federationId)}/subscriptions`),
+
+  // Geração de cobranças (idempotente)
+  generateCharges: (federationId: string, competence: string): Promise<DojoGenerateChargesResult> =>
+    request<DojoGenerateChargesResult>(`${base(federationId)}/generate`, {
+      method: "POST",
+      body: { competence },
+      // Lote de N alunos numa transação única pode passar dos 10s default.
+      timeout: 20000,
+    }),
+
+  // Cobranças
+  listCharges: (
+    federationId: string,
+    filters: DojoChargesFilters = {}
+  ): Promise<DojoChargesListResponse> =>
+    request<DojoChargesListResponse>(
+      `${base(federationId)}/charges${qs({
+        competence: filters.competence,
+        status: filters.status,
+        q: filters.q,
+      })}`
+    ),
+
+  getChargePix: (federationId: string, chargeId: string): Promise<DojoChargePixResponse> =>
+    request<DojoChargePixResponse>(`${base(federationId)}/charges/${chargeId}/pix`, {
+      method: "POST",
+    }),
+
+  confirmCharge: (
+    federationId: string,
+    chargeId: string,
+    payload: DojoConfirmChargePayload = {}
+  ): Promise<DojoCharge> =>
+    request<DojoCharge>(`${base(federationId)}/charges/${chargeId}/confirm`, {
+      method: "POST",
+      body: payload,
+    }),
+
+  cancelCharge: (federationId: string, chargeId: string): Promise<DojoCharge> =>
+    request<DojoCharge>(`${base(federationId)}/charges/${chargeId}/cancel`, { method: "POST" }),
+
+  // Config de recebimento
+  getConfig: (federationId: string): Promise<DojoBillingConfig> =>
+    request<DojoBillingConfig>(`${base(federationId)}/config`),
+
+  updateConfig: (
+    federationId: string,
+    payload: DojoBillingConfigPayload
+  ): Promise<DojoBillingConfig> =>
+    request<DojoBillingConfig>(`${base(federationId)}/config`, { method: "PUT", body: payload }),
+};
