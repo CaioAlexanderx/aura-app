@@ -1,12 +1,12 @@
 // ============================================================
-// Helpers — Mensalidades do dojô (F3a) + Conta Aura (F3b)
+// Helpers — Mensalidades do dojô (F3a) + Conta Aura (F3b) + Régua (F3c)
 //
 // Competência 'YYYY-MM' e datas 'YYYY-MM-DD' são SEMPRE tz-safe: parse
 // manual por regex/split, nunca new Date('YYYY-MM') / new Date('YYYY-MM-DD')
 // direto (em UTC-3 isso pode voltar um mês/dia).
 // ============================================================
 import { KarateColors } from "@/constants/karateTheme";
-import { BaasStatus, DojoChargeStatus } from "@/services/karateDojoBillingApi";
+import { BaasStatus, DojoChargeStatus, DojoReminderLogStatus } from "@/services/karateDojoBillingApi";
 
 const MESES_LONG = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -192,4 +192,46 @@ export function buildWaUrl(phone: string, message: string): string | null {
 /** Valida dia de vencimento 1–28 (evita mês curto/fevereiro). */
 export function isValidDueDay(day: number | null | undefined): boolean {
   return typeof day === "number" && Number.isInteger(day) && day >= 1 && day <= 28;
+}
+
+// ── Régua de cobrança (lembretes automáticos, F3c) ────────────
+
+/** Limites do offset (dias relativos ao vencimento) espelhados do backend. */
+export const REMINDER_OFFSET_MIN = -15;
+export const REMINDER_OFFSET_MAX = 30;
+export const REMINDER_OFFSET_MAX_COUNT = 6;
+
+export const REMINDER_OFFSET_PRESETS: { value: number; label: string }[] = [
+  { value: -3, label: "3 dias antes" },
+  { value: 0, label: "No vencimento" },
+  { value: 3, label: "3 dias depois" },
+  { value: 7, label: "7 dias depois" },
+];
+
+/** offset (dias, negativo=antes/0=no dia/positivo=depois) → rótulo curto pt-BR. */
+export function offsetLabel(offset: number): string {
+  if (offset === 0) return "no vencimento";
+  if (offset < 0) return `${Math.abs(offset)}d antes`;
+  return `${offset}d depois`;
+}
+
+export interface ReminderLogStatusView {
+  key: DojoReminderLogStatus;
+  label: string;
+  icon: string;
+  color: string;
+  bg: string;
+}
+
+export function reminderLogStatusView(
+  status: DojoReminderLogStatus | string | null | undefined
+): ReminderLogStatusView {
+  switch (status) {
+    case "sent":
+      return { key: "sent", label: "Enviado", icon: "check_circle", color: KarateColors.ok, bg: KarateColors.okSoft };
+    case "failed":
+      return { key: "failed", label: "Falhou", icon: "alert", color: KarateColors.danger, bg: KarateColors.dangerSoft };
+    default:
+      return { key: "skipped_no_email", label: "Sem e-mail", icon: "alert_circle", color: KarateColors.neutral, bg: KarateColors.neutralSoft };
+  }
 }

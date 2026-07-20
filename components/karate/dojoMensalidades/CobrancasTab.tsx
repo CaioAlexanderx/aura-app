@@ -11,6 +11,8 @@
 //
 // F3b: ContaAuraCard logo abaixo do PixConfigCard — degrade invisível
 // quando a flag BaaS está desligada (ver componentes/contaAura).
+// F3c: federationId/dojoName repassados pro ChargesList (botão de
+// WhatsApp rápido nas vencidas).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -133,6 +135,8 @@ export function CobrancasTab({ onGoToPlanos }: Props) {
       {!loading && !error && !noSubscriptions && charges.length > 0 && (
         <ChargesList
           charges={charges}
+          federationId={federationId}
+          dojoName={dojoName}
           onOpenPix={setPixCharge}
           onOpenConfirm={(c) => { setActionMode("confirm"); setActionCharge(c); }}
           onOpenCancel={(c) => { setActionMode("cancel"); setActionCharge(c); }}

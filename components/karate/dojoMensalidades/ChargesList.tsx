@@ -6,15 +6,24 @@
 // (quando houver), valor, vencimento, badge de status. Ações por linha:
 // Pix, Confirmar pagamento, Cancelar — cedidas pelo pai (CobrancasTab)
 // via callback, que também é dono dos modais (irmãos, nunca aninhados).
+//
+// F3c (aditivo): linhas 'overdue' ganham um botão de WhatsApp rápido —
+// busca o telefone do aluno (GET /dojo/students/:id, mesmo fallback do
+// ChargePixModal: guardian.phone || student.phone) e abre o wa.me com a
+// MESMA mensagem de cobrança do modal (helper compartilhado). Sem PIX
+// copia-e-cola aqui — é um atalho de contato, não substitui o fluxo de
+// cobrar por Pix (botão dedicado ao lado).
 // ============================================================
 import React, { useMemo, useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
+  View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Platform, Linking, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { DojoCharge, DojoChargeStatus } from "@/services/karateDojoBillingApi";
-import { chargeStatusView, fmtBRL, fmtDateBR } from "./helpers";
+import { karateDojoStudentsApi } from "@/services/karateDojoStudentsApi";
+import { toast } from "@/components/Toast";
+import { buildChargeWaMessage, buildWaUrl, chargeStatusView, fmtBRL, fmtDateBR } from "./helpers";
 
 type StatusFilter = "all" | DojoChargeStatus;
 
@@ -28,14 +37,17 @@ const STATUS_TABS: [StatusFilter, string][] = [
 
 interface Props {
   charges: DojoCharge[];
+  federationId: string;
+  dojoName: string;
   onOpenPix: (charge: DojoCharge) => void;
   onOpenConfirm: (charge: DojoCharge) => void;
   onOpenCancel: (charge: DojoCharge) => void;
 }
 
-export function ChargesList({ charges, onOpenPix, onOpenConfirm, onOpenCancel }: Props) {
+export function ChargesList({ charges, federationId, dojoName, onOpenPix, onOpenConfirm, onOpenCancel }: Props) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [waLoadingId, setWaLoadingId] = useState<string | null>(null);
 
   const list = useMemo(() => {
     return charges.filter((c) => {
@@ -47,6 +59,38 @@ export function ChargesList({ charges, onOpenPix, onOpenConfirm, onOpenCancel }:
       return true;
     });
   }, [charges, q, status]);
+
+  async function openWa(charge: DojoCharge) {
+    if (waLoadingId) return;
+    setWaLoadingId(charge.id);
+    try {
+      const student = await karateDojoStudentsApi.getStudent(federationId, charge.student.id);
+      const phone = student.guardian?.phone || student.phone || "";
+      const message = buildChargeWaMessage({
+        dojoName,
+        payerName: charge.guardian?.full_name ?? charge.student.full_name,
+        studentName: charge.student.full_name,
+        isPayerStudent: !charge.guardian,
+        competence: charge.competence,
+        amount: charge.amount,
+        dueDate: charge.due_date,
+        status: charge.status,
+        pixPayload: null,
+        publicUrl: null,
+      });
+      const url = buildWaUrl(phone, message);
+      if (!url) {
+        toast.error("Sem telefone cadastrado para essa cobrança.");
+        return;
+      }
+      if (Platform.OS === "web") window.open(url, "_blank");
+      else Linking.openURL(url);
+    } catch {
+      toast.error("Não foi possível abrir o WhatsApp agora.");
+    } finally {
+      setWaLoadingId(null);
+    }
+  }
 
   return (
     <View style={{ gap: 12 }}>
@@ -80,6 +124,8 @@ export function ChargesList({ charges, onOpenPix, onOpenConfirm, onOpenCancel }:
         const canPix = c.status === "pending" || c.status === "overdue";
         const canConfirm = c.status === "pending" || c.status === "overdue";
         const canCancel = c.status === "pending" || c.status === "overdue";
+        const canWhats = c.status === "overdue";
+        const waBusy = waLoadingId === c.id;
         return (
           <View key={c.id} style={styles.row}>
             <View style={{ flex: 1, minWidth: 160 }}>
@@ -100,6 +146,21 @@ export function ChargesList({ charges, onOpenPix, onOpenConfirm, onOpenCancel }:
             </View>
 
             <View style={styles.actions}>
+              {canWhats && (
+                <TouchableOpacity
+                  style={[styles.actBtn, styles.waBtn]}
+                  onPress={() => openWa(c)}
+                  disabled={waBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cobrar vencida pelo WhatsApp"
+                >
+                  {waBusy ? (
+                    <ActivityIndicator size="small" color="#25D366" />
+                  ) : (
+                    <Icon name="whatsapp" size={15} color="#25D366" />
+                  )}
+                </TouchableOpacity>
+              )}
               {canPix && (
                 <TouchableOpacity style={styles.actBtn} onPress={() => onOpenPix(c)} accessibilityRole="button" accessibilityLabel="Cobrar por Pix">
                   <Icon name="qr_code" size={15} color={KarateColors.primary} />
@@ -156,6 +217,7 @@ const styles = StyleSheet.create({
     width: 30, height: 30, borderRadius: KarateRadius.sm, alignItems: "center", justifyContent: "center",
     backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border,
   } as ViewStyle,
+  waBtn: { backgroundColor: "rgba(37,211,102,0.10)", borderColor: "rgba(37,211,102,0.35)" } as ViewStyle,
 
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 30 } as ViewStyle,
   stateTxt: { fontSize: 13, fontWeight: "600", color: KarateColors.ink2 } as TextStyle,

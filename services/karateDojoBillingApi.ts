@@ -1,11 +1,12 @@
 // ============================================================
 // AURA DOJÔ — F3a: Mensalidades do dojô (planos, assinaturas, cobranças, PIX)
 // F3b: Conta Aura (BaaS opt-in — ativação, status, seletor de recebimento)
+// F3c: Régua de cobrança (lembretes automáticos por e-mail)
 //
-// Cliente tipado do Aura-backend PR "f3a-dojo-billing" / "f3b-conta-aura"
-// (em paralelo — o backend está sendo construído a partir do MESMO
-// contrato deste arquivo). Base: /federation/:id/dojo/billing — Bearer =
-// JWT normal do app via request() core (Canal A).
+// Cliente tipado do Aura-backend PR "f3a-dojo-billing" / "f3b-conta-aura" /
+// "f3c-dojo-regua-gate" (em paralelo — o backend está sendo construído a
+// partir do MESMO contrato deste arquivo). Base: /federation/:id/dojo/billing —
+// Bearer = JWT normal do app via request() core (Canal A).
 //
 // Vive num service pequeno separado, mesmo racional do
 // karateDojoStudentsApi (karateApi.ts tem 125 KB e é intocável).
@@ -211,6 +212,49 @@ export interface DojoBaasProviderResponse {
   provider: DojoBillingProvider;
 }
 
+// ── Régua de cobrança (lembretes automáticos, F3c) ──────────
+// Lembretes por e-mail perto do vencimento, com offsets configuráveis
+// em dias relativos ao vencimento (negativo = antes, 0 = no dia,
+// positivo = depois). Execução agendada no backend + botão "rodar
+// agora" no front — dedupe por dia (reenviar não duplica cobrança já
+// avisada no mesmo dia).
+export interface DojoReminderConfig {
+  enabled: boolean;
+  /** Inteiros -15..30, no máx. 6, únicos. */
+  offsets: number[];
+  send_email: boolean;
+  updated_at: string | null;
+}
+
+export interface DojoReminderConfigPayload {
+  enabled: boolean;
+  offsets: number[];
+  send_email: boolean;
+}
+
+export type DojoReminderChannel = "email";
+export type DojoReminderLogStatus = "sent" | "failed" | "skipped_no_email";
+
+export interface DojoReminderLogItem {
+  id: string;
+  charge_id: string;
+  student_name: string;
+  offset: number;
+  channel: DojoReminderChannel;
+  status: DojoReminderLogStatus;
+  sent_at: string;
+}
+
+export interface DojoReminderLogResponse {
+  data: DojoReminderLogItem[];
+}
+
+export interface DojoRunRemindersResult {
+  sent: number;
+  skipped: number;
+  failed: number;
+}
+
 function qs(params: Record<string, string | undefined>): string {
   const parts: string[] = [];
   for (const k of Object.keys(params)) {
@@ -327,5 +371,28 @@ export const karateDojoBillingApi = {
     request<DojoBaasProviderResponse>(`${base(federationId)}/baas/provider`, {
       method: "PUT",
       body: { provider },
+    }),
+
+  // Régua de cobrança (lembretes, F3c)
+  getReminderConfig: (federationId: string): Promise<DojoReminderConfig> =>
+    request<DojoReminderConfig>(`${base(federationId)}/reminder-config`),
+
+  updateReminderConfig: (
+    federationId: string,
+    payload: DojoReminderConfigPayload
+  ): Promise<DojoReminderConfig> =>
+    request<DojoReminderConfig>(`${base(federationId)}/reminder-config`, {
+      method: "PUT",
+      body: payload,
+    }),
+
+  getReminderLog: (federationId: string, competence?: string): Promise<DojoReminderLogResponse> =>
+    request<DojoReminderLogResponse>(`${base(federationId)}/reminder-log${qs({ competence })}`),
+
+  runReminders: (federationId: string): Promise<DojoRunRemindersResult> =>
+    request<DojoRunRemindersResult>(`${base(federationId)}/reminders/run`, {
+      method: "POST",
+      // Envio de lote de lembretes pode passar dos 10s default.
+      timeout: 20000,
     }),
 };

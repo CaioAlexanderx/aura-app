@@ -1,10 +1,11 @@
 // ============================================================
-// Aura Karatê (dojô) — Mensalidades (F3a)
+// Aura Karatê (dojô) — Mensalidades (F3a) + Régua de cobrança (F3c)
 //
-// Duas abas internas, mesmo padrão de app/karate/(dojo)/alunos.tsx:
+// Três abas internas, mesmo padrão de app/karate/(dojo)/alunos.tsx:
 //   • "Cobranças" — competência selecionada, resumo, gerar cobranças
-//     do mês, lista com ações (Pix/Confirmar/Cancelar)
+//     do mês, lista com ações (Pix/Confirmar/Cancelar/WhatsApp vencidas)
 //   • "Planos"    — CRUD de planos de mensalidade
+//   • "Régua"     — lembretes automáticos por e-mail perto do vencimento
 //
 // Rota nova (não existe versão federada equivalente — não entra em
 // FEDERATION_SHARED_SECTIONS do _layout do grupo).
@@ -15,12 +16,14 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { CobrancasTab } from "@/components/karate/dojoMensalidades/CobrancasTab";
 import { PlanosSection } from "@/components/karate/dojoMensalidades/PlanosSection";
+import { ReguaSection } from "@/components/karate/dojoMensalidades/regua/ReguaSection";
 
-type TabKey = "cobrancas" | "planos";
+type TabKey = "cobrancas" | "planos" | "regua";
 
 const TABS: [TabKey, string][] = [
   ["cobrancas", "Cobranças"],
   ["planos", "Planos"],
+  ["regua", "Régua"],
 ];
 
 export default function DojoMensalidades() {
@@ -50,8 +53,10 @@ export default function DojoMensalidades() {
       <View style={styles.body}>
         {tab === "cobrancas" ? (
           <CobrancasTab onGoToPlanos={() => setTab("planos")} />
-        ) : (
+        ) : tab === "planos" ? (
           <PlanosSection />
+        ) : (
+          <ReguaSection />
         )}
       </View>
     </View>
