@@ -6,6 +6,19 @@
 //
 // Padrão de modal segue RegistrarGraduacaoModal (mesma pasta):
 // backdrop + card + header + form + footer com Cancelar/Confirmar.
+//
+// SEM seletor de regime de parcelamento (diferente do dojô, ver
+// components/karate/LancarAnuidadeDojoModal.tsx): confirmado no backend
+// (src/services/karateAnnuityService.js, comentário de regras de negócio)
+// que anuidade de praticante é sempre 1x/ano — "Praticante: só faixa-preta
+// paga; 1x R$60 (Mai) — plano 'anual' N=1". A própria tela de valores e
+// planos (app/karate/(federation)/financeiro/tabs/AnnuityPlansPanel.tsx,
+// CARD_DEFS) só define o card cpf-anual — não existe fee semestral/
+// trimestral para CPF configurável em lugar nenhum do produto. Oferecer
+// esses regimes aqui seria uma opção que sempre erra (sem amount manual)
+// ou que engana (com amount manual, vira só um rótulo sem efeito). Envia
+// `plan: "anual"` explicitamente para não depender do default silencioso
+// da rota (mesmo comportamento de hoje, só que documentado no payload).
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -56,6 +69,7 @@ export function LancarAnuidadeModal({
         reference_period: period.trim(),
         amount: n,
         due_date: dueIso,
+        plan: "anual",
       };
       await karateApi.chargeCpfAnnuity(federationId, practitionerId, body);
       setSaving(false);
@@ -82,6 +96,7 @@ export function LancarAnuidadeModal({
 
           <View style={{ padding: 16, gap: 12 }}>
             {practitionerName ? <Text style={st.hint}>Cobrança de anuidade CPF para {practitionerName}.</Text> : null}
+            <Text style={st.hint}>Regime: Anual (1x) — única opção para anuidade de praticante.</Text>
 
             <Text style={st.label}>Período de referência <Text style={st.required}>*</Text></Text>
             <TextInput
