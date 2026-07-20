@@ -11,6 +11,10 @@
 //
 // F3b: card "Conta Aura" (ContaAuraCard, BaaS opt-in) logo abaixo —
 // invisível quando a flag do backend está desligada.
+//
+// F4: card "Check-in por QR" (QrSettingsCard) — liga/desliga o painel
+// de check-in por QR na tela Turmas; some sozinho se o endpoint ainda
+// não existir no ambiente (mesmo racional do ContaAuraCard).
 // ============================================================
 import React from "react";
 import {
@@ -23,6 +27,7 @@ import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCard";
 import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/ContaAuraCard";
+import { QrSettingsCard } from "@/components/karate/dojoTurmas/QrSettingsCard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -112,6 +117,9 @@ export default function DojoConfiguracoes() {
 
       {/* F3b: Conta Aura (BaaS opt-in) — invisível com a flag desligada */}
       {!!federationId && <ContaAuraCard federationId={federationId} />}
+
+      {/* F4: Check-in por QR (Turmas) — some se o endpoint ainda não existir */}
+      {!!federationId && <QrSettingsCard federationId={federationId} />}
 
       {/* Nota: edições via federação */}
       <View style={styles.note}>

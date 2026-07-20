@@ -63,6 +63,9 @@ const DOJO_NAV: DojoNavItem[] = [
   // dojô (aba "Meus alunos") e os federados (aba "Na federação"). A URL
   // antiga /karate/praticantes segue viva como redirect fino → /alunos.
   { label: "Alunos",        icon: "users",               route: "/karate/(dojo)/alunos",        match: "alunos",        sidebarOnly: false },
+  // F4: Turmas — CRUD de turmas, matrícula e chamada (presença), com
+  // check-in por QR opcional (o toggle mora em Configurações).
+  { label: "Turmas",        icon: "dumbbell",            route: "/karate/(dojo)/turmas",        match: "turmas",        sidebarOnly: false },
   // F3a: Mensalidades — planos, assinaturas e cobranças (Pix) do dojô,
   // separado da Anuidade (que é a filiação do DOJÔ à federação).
   { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarOnly: false },
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) — só breadcrumb ───────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ────────────────────────
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Sidebar (DNA do KarateShell) ────────────────────────
+  // ── Sidebar (DNA do KarateShell) ────────────────────
   sidebar: {
     width: 236,
     backgroundColor: KarateColors.bg2,
@@ -552,7 +555,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ───────────────────────────────────
+  // ── Topbar mobile ─────────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────────────────────
+  // ── Bottom tabs ────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,
