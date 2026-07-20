@@ -1,10 +1,11 @@
 // ============================================================
 // AURA DOJÔ — F3a: Mensalidades do dojô (planos, assinaturas, cobranças, PIX)
+// F3b: Conta Aura (BaaS opt-in — ativação, status, seletor de recebimento)
 //
-// Cliente tipado do Aura-backend PR "f3a-dojo-billing" (em paralelo — o
-// backend está sendo construído a partir do MESMO contrato deste arquivo).
-// Base: /federation/:id/dojo/billing — Bearer = JWT normal do app via
-// request() core (Canal A).
+// Cliente tipado do Aura-backend PR "f3a-dojo-billing" / "f3b-conta-aura"
+// (em paralelo — o backend está sendo construído a partir do MESMO
+// contrato deste arquivo). Base: /federation/:id/dojo/billing — Bearer =
+// JWT normal do app via request() core (Canal A).
 //
 // Vive num service pequeno separado, mesmo racional do
 // karateDojoStudentsApi (karateApi.ts tem 125 KB e é intocável).
@@ -13,7 +14,9 @@
 // módulo components/karate/dojoMensalidades p/ mapeamento pt-BR):
 //   422 VALIDATION_ERROR · 503 SCHEMA_PENDING (migration pendente) ·
 //   409 PIX_NAO_CONFIGURADO (POST /charges/:id/pix) ·
-//   409 no cancel de cobrança já paga.
+//   409 no cancel de cobrança já paga ·
+//   503 BAAS_DISABLED (flag off) · 409 BAAS_JA_ATIVADO ·
+//   409 PROVIDER_NAO_DISPONIVEL (baas sem approved).
 // ============================================================
 import { request } from "@/services/api";
 
@@ -119,6 +122,12 @@ export interface DojoChargesFilters {
 export interface DojoChargePixResponse {
   payload: string;
   public_url: string;
+  /**
+   * Aditivo (F3b): quando a Conta Aura está ativa como forma de
+   * recebimento, o backend devolve o provider usado nessa cobrança.
+   * Campo opcional — trate a ausência como 'pix_manual'.
+   */
+  provider?: DojoBillingProvider;
 }
 
 export interface DojoConfirmChargePayload {
@@ -145,6 +154,62 @@ export const PIX_KEY_TYPE_OPTIONS: { key: string; label: string }[] = [
   { key: "phone", label: "Telefone" },
   { key: "random", label: "Aleatória" },
 ];
+
+// ── Conta Aura (BaaS opt-in, F3b) ────────────────────────────
+// Subconta Asaas do dojô: o dojô escolhe entre continuar recebendo na
+// própria chave Pix ('pix_manual') ou ativar a conta integrada ('baas'
+// — conciliação automática, split de 0,5% embutido nas taxas). Atrás
+// de flag no backend: enabled:false em produção até a homologação
+// Asaas — nesse caso a UI (ContaAuraCard) não renderiza nada.
+export type BaasStatus =
+  | "none" | "created" | "docs_pending" | "under_review" | "approved" | "rejected";
+
+export type DojoBillingProvider = "pix_manual" | "baas";
+
+export interface DojoBaasAccount {
+  agency: string;
+  account: string;
+  account_digit: string;
+  wallet_id_masked: string;
+}
+
+export interface DojoBaasStatusResponse {
+  enabled: boolean;
+  status: BaasStatus;
+  onboarding_url: string | null;
+  provider: DojoBillingProvider;
+  account: DojoBaasAccount | null;
+}
+
+export type BaasPersonType = "FISICA" | "JURIDICA";
+export type BaasCompanyType = "MEI" | "LIMITED" | "INDIVIDUAL" | "ASSOCIATION";
+
+export interface DojoBaasActivatePayload {
+  person_type: BaasPersonType;
+  name: string;
+  cpf_cnpj: string;
+  /** Obrigatório quando person_type === 'FISICA'. 'YYYY-MM-DD'. */
+  birth_date?: string;
+  /** Obrigatório quando person_type === 'JURIDICA'. */
+  company_type?: BaasCompanyType;
+  email: string;
+  mobile_phone: string;
+  income_value: number;
+  address: string;
+  address_number: string;
+  complement?: string;
+  province: string;
+  postal_code: string;
+}
+
+export interface DojoBaasActivateResponse {
+  status: "created";
+  onboarding_url: string | null;
+}
+
+export interface DojoBaasProviderResponse {
+  provider: DojoBillingProvider;
+}
 
 function qs(params: Record<string, string | undefined>): string {
   const parts: string[] = [];
@@ -241,4 +306,26 @@ export const karateDojoBillingApi = {
     payload: DojoBillingConfigPayload
   ): Promise<DojoBillingConfig> =>
     request<DojoBillingConfig>(`${base(federationId)}/config`, { method: "PUT", body: payload }),
+
+  // Conta Aura (BaaS opt-in, F3b)
+  getBaas: (federationId: string): Promise<DojoBaasStatusResponse> =>
+    request<DojoBaasStatusResponse>(`${base(federationId)}/baas`),
+
+  activateBaas: (
+    federationId: string,
+    payload: DojoBaasActivatePayload
+  ): Promise<DojoBaasActivateResponse> =>
+    request<DojoBaasActivateResponse>(`${base(federationId)}/baas/activate`, {
+      method: "POST",
+      body: payload,
+    }),
+
+  setBaasProvider: (
+    federationId: string,
+    provider: DojoBillingProvider
+  ): Promise<DojoBaasProviderResponse> =>
+    request<DojoBaasProviderResponse>(`${base(federationId)}/baas/provider`, {
+      method: "PUT",
+      body: { provider },
+    }),
 };

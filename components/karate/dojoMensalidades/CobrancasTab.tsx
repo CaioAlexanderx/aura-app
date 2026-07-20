@@ -8,6 +8,9 @@
 //     aba Planos ("Definir planos e mensalidades")
 //   • há assinatura(s) mas o mês não foi gerado ainda        → CTA
 //     "Gerar cobranças do mês" (mesmo botão do cabeçalho)
+//
+// F3b: ContaAuraCard logo abaixo do PixConfigCard — degrade invisível
+// quando a flag BaaS está desligada (ver componentes/contaAura).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -23,6 +26,7 @@ import {
 } from "@/services/karateDojoBillingApi";
 import { currentCompetence, mapBillingError } from "./helpers";
 import { PixConfigCard } from "./PixConfigCard";
+import { ContaAuraCard } from "./contaAura/ContaAuraCard";
 import { CompetenceSelector } from "./CompetenceSelector";
 import { SummaryCards } from "./SummaryCards";
 import { GenerateChargesCard } from "./GenerateChargesCard";
@@ -81,6 +85,7 @@ export function CobrancasTab({ onGoToPlanos }: Props) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <PixConfigCard federationId={federationId} />
+      <ContaAuraCard federationId={federationId} />
 
       <View style={styles.headerRow}>
         <CompetenceSelector competence={competence} onChange={setCompetence} />
