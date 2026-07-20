@@ -215,6 +215,37 @@ export type SalesFilters = {
   offset?: number;
 };
 
+// 20/07/2026 (Studio "Vendas"): edição completa de uma venda concluída.
+// ⚠️ Estende o PATCH /companies/:id/sales/:saleId, que HOJE só aceita
+// seller_id. Para itens/desconto funcionarem o backend precisa aceitar
+// items[] + discount_amount neste mesmo endpoint (contrato no PR).
+//   - items[]: substitui as linhas da venda. id presente = item existente
+//     (atualiza qtd/preço/desconto); id ausente = item novo; itens omitidos
+//     do array são removidos. O backend deve reprocessar estoque + totais.
+export type UpdateSaleItem = {
+  id?: string | null;
+  product_id?: string | null;
+  variant_id?: string | null;
+  quantity: number;
+  unit_price: number;
+  discount?: number;
+  product_name?: string;
+};
+
+export type UpdateSaleBody = {
+  items?: UpdateSaleItem[];
+  discount_amount?: number;
+  seller_id?: string | null;
+  notes?: string | null;
+};
+
+export type UpdateSaleResult = {
+  ok: boolean;
+  sale_id: string;
+  total_amount?: number;
+  discount_amount?: number;
+};
+
 export var salesApi = {
   list: function(companyId: string, filters?: SalesFilters) {
     var qs: string[] = [];
@@ -243,6 +274,15 @@ export var salesApi = {
     return request<{ ok: boolean; sale_id: string; seller_id: string | null; seller_name: string | null }>(
       "/companies/" + companyId + "/sales/" + saleId,
       { method: "PATCH", body: { seller_id: seller_id }, retry: 0 }
+    );
+  },
+  // 20/07/2026 (Studio "Vendas"): edição completa (itens/qtd/preços/desconto)
+  // de uma venda concluída. Estende o PATCH /sales/:id — requer suporte no
+  // backend (ver contrato no PR). Sem o backend, retorna erro tratado na UI.
+  updateSale: function(companyId: string, saleId: string, body: UpdateSaleBody) {
+    return request<UpdateSaleResult>(
+      "/companies/" + companyId + "/sales/" + saleId,
+      { method: "PATCH", body: body, retry: 0, timeout: 20000 }
     );
   },
   // 02/06/2026 (b): emite NFC-e (ou NF-e) por venda. Idempotente no backend

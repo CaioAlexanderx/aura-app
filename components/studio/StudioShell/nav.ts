@@ -92,6 +92,13 @@ export const STUDIO_NAV: StudioNavItem[] = [
     subtitle: 'Acompanhe a produção',
   },
   {
+    route: '/studio/vendas/historico',
+    label: 'Vendas',
+    group: 'VENDAS',
+    icon: 'receipt',
+    subtitle: 'Histórico, edição e cancelamento',
+  },
+  {
     route: '/studio/vendas/caixa',
     label: 'Caixa / PDV',
     group: 'VENDAS',
