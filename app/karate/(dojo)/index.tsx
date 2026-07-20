@@ -1,10 +1,13 @@
 // ============================================================
-// Aura Karatê (dojô) — Painel (F1; F2 no card de faixas; F3a: card Mensalidades)
+// Aura Karatê (dojô) — Painel (F1; F2 no card de faixas; F3a: card Mensalidades;
+// F4: card Presenças hoje)
 // Home do shell completo do dojô: cards-resumo com os MESMOS dados que
 // as telas internas já buscam:
 //   • Alunos / faixas       → alunos PRÓPRIOS (F2, summary) quando
 //                             existirem; senão karateApi.listSenseiPractitioners
 //   • Mensalidades do mês   → summary de GET /dojo/billing/charges (F3a)
+//   • Presenças hoje        → soma client-side das turmas de HOJE (F4;
+//                             sem endpoint agregado — ver efeito dedicado)
 //   • Situação da anuidade  → karateApi.getSenseiAnnuity
 //   • Últimas solicitações  → karateApi.listPractitionerRequests
 //   • Atalho p/ Certificados
@@ -14,7 +17,7 @@
 // F3a: o card de Mensalidades é SILENCIOSO em falha (inclusive 503
 // SCHEMA_PENDING antes da migration rodar) — sem card nenhum, nunca
 // um aviso de erro no painel por causa de uma feature ainda não
-// disponível no ambiente.
+// disponível no ambiente. F4 segue o mesmo racional.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -33,6 +36,8 @@ import { karateApi, SenseiPractitioner, SenseiAnnuityResponse } from "@/services
 import { karateDojoStudentsApi, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
 import { karateDojoBillingApi, DojoChargesSummary } from "@/services/karateDojoBillingApi";
 import { currentCompetence } from "@/components/karate/dojoMensalidades/helpers";
+import { karateDojoClassesApi } from "@/services/karateDojoClassesApi";
+import { todayISO, weekdayOfISO } from "@/components/karate/dojoTurmas/helpers";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -83,6 +88,9 @@ export default function DojoPainel() {
   const [ownSummary, setOwnSummary] = useState<DojoStudentsSummary | null>(null);
   // F3a: summary de mensalidades do mês atual (null = falhou/indisponível — card some).
   const [billingSummary, setBillingSummary] = useState<DojoChargesSummary | null>(null);
+  // F4: presenças de hoje — calculado client-side a partir das turmas do
+  // dia (sem endpoint agregado). null = falhou/indisponível — card some.
+  const [presencasHoje, setPresencasHoje] = useState<{ present: number; total: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!federationId) return;
@@ -104,6 +112,37 @@ export default function DojoPainel() {
   }, [federationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // F4: Presenças hoje — soma client-side das turmas de HOJE (sem
+  // endpoint agregado; bounded pelas turmas do dia, tipicamente poucas).
+  // Falha em qualquer etapa faz o card sumir, nunca aparecer com erro.
+  useEffect(() => {
+    if (!federationId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await karateDojoClassesApi.listClasses(federationId);
+        const today = todayISO();
+        const wd = weekdayOfISO(today);
+        const todays = (res.data ?? []).filter((c) => c.active && (c.weekdays || []).includes(wd));
+        if (todays.length === 0) {
+          if (!cancelled) setPresencasHoje({ present: 0, total: 0 });
+          return;
+        }
+        const atts = await Promise.allSettled(
+          todays.map((c) => karateDojoClassesApi.getAttendance(federationId, c.id, today))
+        );
+        let present = 0;
+        for (const att of atts) {
+          if (att.status === "fulfilled") present += att.value.data.filter((row) => row.present === true).length;
+        }
+        if (!cancelled) setPresencasHoje({ present, total: todays.length });
+      } catch {
+        if (!cancelled) setPresencasHoje(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [federationId]);
 
   // F2: quando o dojô já tem alunos PRÓPRIOS (summary.total > 0), o card
   // de faixas passa a usar summary.by_belt deles — é o dado que o dojô
@@ -231,6 +270,26 @@ export default function DojoPainel() {
               </Text>
               <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/mensalidades")} accessibilityRole="link">
                 <Text style={styles.cardLinkTxt}>Ver mensalidades</Text>
+                <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Card: Presenças hoje (F4) — some se falhar/indisponível ── */}
+          {presencasHoje !== null && (
+            <View style={styles.card}>
+              <View style={styles.cardHead}>
+                <Icon name="check_circle" size={16} color={KarateColors.primary} />
+                <Text style={styles.cardTitle}>Presenças hoje</Text>
+              </View>
+              <View style={styles.bigRow}>
+                <Text style={styles.bigNum}>{presencasHoje.present}</Text>
+                <Text style={styles.bigSub}>
+                  {presencasHoje.total === 0 ? "nenhuma turma hoje" : `em ${presencasHoje.total} turma${presencasHoje.total === 1 ? "" : "s"} hoje`}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/turmas")} accessibilityRole="link">
+                <Text style={styles.cardLinkTxt}>Ver turmas</Text>
                 <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
               </TouchableOpacity>
             </View>
