@@ -1,5 +1,5 @@
 // ============================================================
-// Aura Karatê (dojô) — Configurações (F1, tela nova; F3a: card Pix)
+// Aura Karatê (dojô) — Configurações (F1, tela nova; F3a: card Pix; F3b: Conta Aura)
 // Dados cadastrais do dojô vindos do /dojo/me REAL (contexts/KarateDojo)
 // em modo READ-ONLY: nome, código FPKT, federação, região, contato,
 // filiação. Edições são feitas PELA FEDERAÇÃO — a nota no rodapé deixa
@@ -8,6 +8,9 @@
 //
 // F3a: card "Recebimento Pix" (PixConfigCard, alwaysShow) — a mesma
 // chave Pix usada nas cobranças de mensalidade em (dojo)/mensalidades.
+//
+// F3b: card "Conta Aura" (ContaAuraCard, BaaS opt-in) logo abaixo —
+// invisível quando a flag do backend está desligada.
 // ============================================================
 import React from "react";
 import {
@@ -19,6 +22,7 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCard";
+import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/ContaAuraCard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -105,6 +109,9 @@ export default function DojoConfiguracoes() {
 
       {/* F3a: chave Pix de recebimento das mensalidades */}
       {!!federationId && <PixConfigCard federationId={federationId} alwaysShow />}
+
+      {/* F3b: Conta Aura (BaaS opt-in) — invisível com a flag desligada */}
+      {!!federationId && <ContaAuraCard federationId={federationId} />}
 
       {/* Nota: edições via federação */}
       <View style={styles.note}>
