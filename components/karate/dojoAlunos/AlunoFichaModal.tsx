@@ -1,5 +1,6 @@
 // ============================================================
-// AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a)
+// AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a;
+// seções Presenças + QR de check-in F4)
 //
 // Dados + responsável + ações: Editar (delega pro AlunoFormModal via
 // onEdit), Inativar/Reativar (PATCH status) e Excluir (DELETE real na
@@ -9,6 +10,10 @@
 // F3a: seção "Mensalidade" (AlunoAssinaturaSection) — assinar plano,
 // ver assinatura ativa, cancelar. Sub-componente inline (nunca modal
 // aninhado — mesmo racional do GuardianPicker já usado aqui dentro).
+//
+// F4: seções "Presenças" (AlunoPresencasSection) e "QR de check-in"
+// (AlunoQrSection) — ambas silenciosas em erro/indisponibilidade (a
+// ficha nunca mostra aviso de erro por causa de uma feature opcional).
 //
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
@@ -25,6 +30,8 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
 import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError } from "./helpers";
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
+import { AlunoPresencasSection } from "./AlunoPresencasSection";
+import { AlunoQrSection } from "./AlunoQrSection";
 
 interface Props {
   visible: boolean;
@@ -176,6 +183,10 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
               </View>
 
               <AlunoAssinaturaSection federationId={federationId} student={s} onChanged={onChanged} />
+
+              {/* F4: presenças + QR de check-in (seções silenciosas em erro/indisponibilidade) */}
+              <AlunoPresencasSection federationId={federationId} studentId={s.id} />
+              <AlunoQrSection federationId={federationId} studentId={s.id} />
 
               {!!err && <Text style={styles.err}>{err}</Text>}
 
