@@ -1,10 +1,13 @@
 // ============================================================
-// Aura Karatê (dojô) — Configurações (F1, tela nova)
+// Aura Karatê (dojô) — Configurações (F1, tela nova; F3a: card Pix)
 // Dados cadastrais do dojô vindos do /dojo/me REAL (contexts/KarateDojo)
 // em modo READ-ONLY: nome, código FPKT, federação, região, contato,
 // filiação. Edições são feitas PELA FEDERAÇÃO — a nota no rodapé deixa
 // isso explícito (dado faltante é neutro "—", não erro).
 // Datas: parse manual tz-safe (nunca Date UTC de 'YYYY-MM-DD').
+//
+// F3a: card "Recebimento Pix" (PixConfigCard, alwaysShow) — a mesma
+// chave Pix usada nas cobranças de mensalidade em (dojo)/mensalidades.
 // ============================================================
 import React from "react";
 import {
@@ -14,6 +17,8 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateDojo } from "@/contexts/KarateDojo";
+import { useKarateFederation } from "@/contexts/KarateFederation";
+import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -35,6 +40,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function DojoConfiguracoes() {
   const { dojoMe, loading, error, reload, dojoName, dojoCode } = useKarateDojo();
+  const { federationId } = useKarateFederation();
 
   // Dado faltante é NEUTRO ("—"), não pendência/erro.
   const rows: { label: string; value: string }[] = [
@@ -96,6 +102,9 @@ export default function DojoConfiguracoes() {
           </View>
         </View>
       )}
+
+      {/* F3a: chave Pix de recebimento das mensalidades */}
+      {!!federationId && <PixConfigCard federationId={federationId} alwaysShow />}
 
       {/* Nota: edições via federação */}
       <View style={styles.note}>
