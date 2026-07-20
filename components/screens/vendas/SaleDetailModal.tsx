@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
 import { employeesApi, request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { openPrintWindow } from "@/services/printWindow";
 import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 
 // ============================================================
@@ -250,22 +251,20 @@ export function SaleDetailModal({
       toast.error("Recibo indisponível para esta venda");
       return;
     }
-    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+    // 18/07: via openPrintWindow (navega pra blob URL). O padrão antigo
+    // (window.open("") + document.write) fazia o auto-print morrer na
+    // criação do preview → "Falha na impressão" na aba do app (Davi).
     setPrintingReceipt(true);
     const token = useAuthStore.getState().token;
     const url = BASE_URL + "/companies/" + effectiveCompanyId + "/print/receipt/" + saleId + "/preview";
-    let win: Window | null = null;
     try {
-      win = window.open("", "_blank");
-      if (!win) { toast.error("Permita pop-ups para imprimir o recibo."); return; }
-      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando recibo...</body></html>");
-      const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
-      if (!resp.ok) { win.document.write("<html><body>Erro ao carregar recibo (" + resp.status + ").</body></html>"); return; }
-      const html = await resp.text();
-      win.document.open(); win.document.write(html); win.document.close();
-    } catch (err: any) {
-      if (win) { win.document.open(); win.document.write("<html><body>Erro de conexão ao carregar recibo.</body></html>"); win.document.close(); }
-      toast.error("Erro ao abrir recibo");
+      const outcome = await openPrintWindow(async () => {
+        const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+        if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
+        return { ok: true as const, html: await resp.text() };
+      });
+      if (outcome === "blocked") toast.error("Permita pop-ups para imprimir o recibo.");
     } finally {
       setPrintingReceipt(false);
     }
@@ -276,22 +275,18 @@ export function SaleDetailModal({
   // direto daria "Token não fornecido").
   async function handlePrint2Via(nfceId: string) {
     if (!effectiveCompanyId || !nfceId) { toast.error("Nota indisponível"); return; }
-    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+    // 18/07: via openPrintWindow (blob URL) — ver handlePrintReceipt.
     setPrint2via(true);
     const token = useAuthStore.getState().token;
     const url = BASE_URL + "/companies/" + effectiveCompanyId + "/nfce/" + nfceId + "/danfe-termica";
-    let win: Window | null = null;
     try {
-      win = window.open("", "_blank");
-      if (!win) { toast.error("Permita pop-ups para imprimir a 2ª via."); return; }
-      win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Gerando 2ª via...</body></html>");
-      const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
-      if (!resp.ok) { win.document.open(); win.document.write("<html><body>Não foi possível gerar a 2ª via (" + resp.status + ").</body></html>"); win.document.close(); return; }
-      const html = await resp.text();
-      win.document.open(); win.document.write(html); win.document.close();
-    } catch (err: any) {
-      if (win) { win.document.open(); win.document.write("<html><body>Erro de conexão ao gerar a 2ª via.</body></html>"); win.document.close(); }
-      toast.error("Erro ao abrir 2ª via");
+      const outcome = await openPrintWindow(async () => {
+        const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+        if (!resp.ok) return { ok: false as const, error: "Não foi possível gerar a 2ª via (" + resp.status + ")." };
+        return { ok: true as const, html: await resp.text() };
+      });
+      if (outcome === "blocked") toast.error("Permita pop-ups para imprimir a 2ª via.");
     } finally {
       setPrint2via(false);
     }

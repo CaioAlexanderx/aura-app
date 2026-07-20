@@ -25,6 +25,7 @@
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { openPrintWindow } from "@/services/printWindow";
 
 // ─── Fiado (legado) ────────────────────────────────────────────────────────
 export type CreditBalanceItem = {
@@ -379,72 +380,34 @@ export type CreateAccountBody = {
 // window.open() direto dá "Token não fornecido".
 // Solução: fetch com Bearer token → texto HTML → document.write em nova janela.
 export async function printCarne(companyId: string, customerId: string): Promise<void> {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (typeof window === "undefined") return;
+  // 18/07: via openPrintWindow (navega pra blob URL). O padrão antigo
+  // (window.open("") + document.write + setTimeout window.print()) fazia o
+  // auto-print morrer na criação do preview → "Falha na impressão". O
+  // disparo agora é do autoPrintScript no HTML servido, não daqui.
   const token = useAuthStore.getState().token;
   const url = BASE_URL + "/companies/" + companyId + "/print/credit/" + customerId + "/carne";
-  let win: Window | null = null;
-  try {
-    win = window.open("", "_blank");
-    if (!win) { alert("Permita pop-ups para imprimir o carnê."); return; }
-    win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando carnê...</body></html>");
-
-    const resp = await fetch(url, {
-      headers: token ? { Authorization: "Bearer " + token } : {},
-    });
-    if (!resp.ok) {
-      win.document.write("<html><body>Erro ao carregar carnê (" + resp.status + ").</body></html>");
-      return;
-    }
-    const html = await resp.text();
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    // Dispara print depois que o HTML renderizou
-    setTimeout(() => {
-      try { win?.focus(); win?.print(); } catch {}
-    }, 400);
-  } catch (err) {
-    if (win) {
-      win.document.open();
-      win.document.write("<html><body>Erro de conexão ao carregar carnê.</body></html>");
-      win.document.close();
-    }
-  }
+  const outcome = await openPrintWindow(async () => {
+    const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+    if (!resp.ok) return { ok: false as const, error: "Erro ao carregar carnê (" + resp.status + ")." };
+    return { ok: true as const, html: await resp.text() };
+  });
+  if (outcome === "blocked") alert("Permita pop-ups para imprimir o carnê.");
 }
 
 // ─── B5 (DESIGN-38): Print recibo de pagamento (autenticado) ──────
 // Mesmo padrão do printCarne: GET /print/credit/receipts/:txId exige Bearer.
 export async function printReceipt(companyId: string, transactionId: string): Promise<void> {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (typeof window === "undefined") return;
+  // 18/07: via openPrintWindow (blob URL) — ver printCarne.
   const token = useAuthStore.getState().token;
   const url = BASE_URL + "/companies/" + companyId + "/print/credit/receipts/" + transactionId;
-  let win: Window | null = null;
-  try {
-    win = window.open("", "_blank");
-    if (!win) { alert("Permita pop-ups para imprimir o recibo."); return; }
-    win.document.write("<html><body style='font-family:sans-serif;padding:24px'>Carregando recibo...</body></html>");
-
-    const resp = await fetch(url, {
-      headers: token ? { Authorization: "Bearer " + token } : {},
-    });
-    if (!resp.ok) {
-      win.document.write("<html><body>Erro ao carregar recibo (" + resp.status + ").</body></html>");
-      return;
-    }
-    const html = await resp.text();
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    setTimeout(() => {
-      try { win?.focus(); win?.print(); } catch {}
-    }, 400);
-  } catch (err) {
-    if (win) {
-      win.document.open();
-      win.document.write("<html><body>Erro de conexão ao carregar recibo.</body></html>");
-      win.document.close();
-    }
-  }
+  const outcome = await openPrintWindow(async () => {
+    const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
+    if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
+    return { ok: true as const, html: await resp.text() };
+  });
+  if (outcome === "blocked") alert("Permita pop-ups para imprimir o recibo.");
 }
 
 // ─── Entrega 2: fonte Única de "valor a pagar" de uma parcela ────────────────
