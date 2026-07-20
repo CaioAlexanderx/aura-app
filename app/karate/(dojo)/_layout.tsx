@@ -16,6 +16,11 @@
 // vertical karatê → exige dojo_id (o JWT de dojô carrega dojo_id;
 // federação NÃO entra aqui e volta pro shell dela preservando a seção
 // quando ela existe lá).
+//
+// F3c (19/07): DojoBillingGate montado como irmão do DojoShell — mesmo
+// padrão do KarateBillingGate em (federation)/_layout.tsx. Overlay
+// bloqueante só quando o backend manda required=true (R$140, flag off
+// em produção até o piloto); fail-open em qualquer erro.
 // ============================================================
 import React from "react";
 import { View, Text, ActivityIndicator } from "react-native";
@@ -23,6 +28,7 @@ import { Redirect, usePathname } from "expo-router";
 import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateDojoProvider } from "@/contexts/KarateDojo";
 import { DojoShell } from "@/components/karate/DojoShell";
+import { DojoBillingGate } from "@/components/karate/DojoBillingGate";
 import { useAuthStore } from "@/stores/auth";
 import { KarateColors } from "@/constants/karateTheme";
 
@@ -86,6 +92,10 @@ export default function DojoLayout() {
     <KarateFederationProvider>
       <KarateDojoProvider>
         <DojoShell />
+        {/* Checkout "invisível" do plano Aura Dojô: só aparece (bloqueante)
+            quando o backend manda required=true; caso contrário fica
+            invisível ou mostra só o aviso (não bloqueante) de trial. */}
+        <DojoBillingGate companyId={(company as any)?.id ?? ""} />
       </KarateDojoProvider>
     </KarateFederationProvider>
   );

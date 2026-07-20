@@ -48,6 +48,22 @@ export type KarateGateResponse = {
   has_subscription: boolean;
 };
 
+// 19/07/2026 (F3c) — mesmo endpoint /billing/karate-gate, contrato PRÓPRIO
+// quando a company é karate_dojo (diferente do state/blocked da federação
+// acima). required:false sempre que a flag do backend estiver desligada —
+// a resposta ainda traz os valores (preço/trial), então a UI mostra preço
+// e aviso de trial sem nunca bloquear enquanto a flag estiver off.
+export type DojoGateResponse = {
+  required: boolean;
+  plan: "dojo";
+  amount: number;
+  seats: number;
+  seat_amount: number;
+  total: number;
+  trial_ends_at: string | null;
+  billing_status: string | null;
+};
+
 export var billingApi = {
   status: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/status"); },
   tokenize: function(companyId: string, cardData: {
@@ -85,6 +101,10 @@ export var billingApi = {
   invoices: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/invoices"); },
   generatePix: function(companyId: string, paymentId: string) { return request<any>("/companies/" + companyId + "/billing/generate-pix/" + paymentId, { method: "POST" }); },
   plans: function() { return request<any>("/billing/plans"); },
-  // Karatê: estado binário do gate de cobrança (ok | blocked) + valor fixo.
-  karateGate: function(companyId: string) { return request<KarateGateResponse>("/companies/" + companyId + "/billing/karate-gate"); },
+  // Karatê: estado do gate de cobrança. Federação usa o contrato default
+  // (KarateGateResponse: state ok|blocked); dojô (F3c) passa o generic
+  // explicitamente pro contrato required/plan/total (DojoGateResponse) —
+  // mesmo endpoint, resposta decidida pelo backend a partir da vertical
+  // da company do companyId informado.
+  karateGate: function<T = KarateGateResponse>(companyId: string) { return request<T>("/companies/" + companyId + "/billing/karate-gate"); },
 };

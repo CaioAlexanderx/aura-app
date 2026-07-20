@@ -164,12 +164,17 @@ function AuthGuard() {
   .includes(((company as any)?.vertical_active ?? (company as any)?.vertical) as string);
     // 2026-07-17 (hotfix FPKT): federação de karatê tem checkout próprio
     // (KarateBillingGate, montado em app/karate/(federation)/_layout.tsx —
-    // valor único R$169, sem seletor de plano). NÃO reusar isKarate aqui:
-    // isKarate cobre karate_dojo também, e dojô não tem gate próprio
-    // (104 empresas karate_dojo em produção ficariam sem cobrança nenhuma
-    // se dojô fosse excluído do redirect genérico). Só federação sai.
-    const isKarateFederation =
-      (((company as any)?.vertical_active ?? (company as any)?.vertical) as string) === "karate_federation";
+    // valor único R$169, sem seleção de plano). Historicamente dojô NÃO
+    // tinha gate próprio e por isso ficava de fora desta exclusão (senão
+    // as 104 empresas karate_dojo em produção ficariam sem cobrança
+    // nenhuma se saíssem do redirect genérico sem ter pra onde ir).
+    // F3c (19/07): dojô ganhou o gate dele (DojoBillingGate, montado em
+    // app/karate/(dojo)/_layout.tsx — R$140, contrato próprio no mesmo
+    // endpoint /billing/karate-gate) — agora as DUAS verticais saem do
+    // checkout genérico.
+    const karateVerticalKey = ((company as any)?.vertical_active ?? (company as any)?.vertical) as string;
+    const isKarateFederation = karateVerticalKey === "karate_federation";
+    const isKarateDojoVertical = karateVerticalKey === "karate_dojo";
 
     if (!token && !inAuth) {
       router.replace("/(auth)/login");
@@ -227,13 +232,12 @@ function AuthGuard() {
     const hasActiveBilling = billingStatus === "active" || trialActive;
     const memberRole       = (company as any)?.member_role || "owner";
     const isOwner          = memberRole === "owner";
-    // 2026-07-17 (hotfix FPKT): federação de karatê é excluída do checkout
-    // genérico — quem cobra é o KarateBillingGate (overlay bloqueante dentro
-    // de app/karate/(federation)/_layout.tsx). Sem essa exclusão o redirect
-    // de 2026-06-18 (dispara em QUALQUER rota autenticada) arranca o usuário
-    // de /karate antes do gate montar, e o overlay de R$169 nunca aparece —
-    // era exatamente o bug: a federação caía no seletor genérico de planos.
-    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling && !isKarateFederation;
+    // 2026-07-17 (hotfix FPKT) + F3c (19/07): federação E dojô de karatê são
+    // excluídos do checkout genérico — cada um tem o gate próprio dele
+    // (KarateBillingGate / DojoBillingGate, ver comentário acima). Sem essa
+    // exclusão o redirect de 2026-06-18 (dispara em QUALQUER rota
+    // autenticada) arranca o usuário de /karate antes do gate montar.
+    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling && !isKarateFederation && !isKarateDojoVertical;
 
     // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
     // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
