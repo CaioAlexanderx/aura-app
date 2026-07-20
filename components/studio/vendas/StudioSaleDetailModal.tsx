@@ -223,7 +223,7 @@ export function StudioSaleDetailModal({
               <ActivityIndicator color={t.primary} />
             </View>
           ) : (
-            <ScrollView style={{ maxHeight: "100%" }} contentContainerStyle={{ padding: 16 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 16 }}>
               {/* Badges */}
               <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 {isCancelled && (
@@ -363,8 +363,8 @@ export function StudioSaleDetailModal({
                 <>
                   {canEdit && (
                     <Pressable onPress={startEdit} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7, ...webPointer() }}>
-                      <Ic name="edit" size={15} color={t.ink} />
-                      <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>Editar</Text>
+                    <Ic name="edit" size={15} color={t.ink} />
+                    <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>Editar</Text>
                     </Pressable>
                   )}
                   <Pressable onPress={() => setConfirmCancel(true)} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.dangerSoft, borderWidth: 1, borderColor: t.danger, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7, ...webPointer() }}>
