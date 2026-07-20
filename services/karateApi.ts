@@ -975,11 +975,21 @@ export interface VoidAnnuityResult {
   transaction_cancelled?: boolean;
 }
 
+// amount/due_date OPCIONAIS a partir da Fase F1 (installments — aura-backend
+// migration 222): omitidos, o backend busca a fee vigente do `plan`
+// (karate_annual_fees) e gera N parcelas automaticamente (semestral=2,
+// trimestral=4, vencimentos escalonados). Informados, mantém o contrato
+// antigo — 1 cobrança única no valor/vencimento passados (plan vira só um
+// rótulo nesse caso, ver comentário na rota POST .../charge).
 export interface ChargeInput {
   reference_period: string;
-  amount: number;
-  due_date: string;
+  amount?: number;
+  due_date?: string;
   payment_method?: string;
+  /** Regime de parcelamento (Fase F1). Ausente: backend resolve por
+   *  precedência — plan explícito > companies.karate_annuity_plan do dojô >
+   *  (dojô) 422 PLANO_INDEFINIDO se nenhum dos dois existir / (cpf) 'anual'. */
+  plan?: AnnuityPlan | null;
 }
 
 // Body real de POST .../dojos/{dojoId}/pix (karateAnnuities.js) — cria PIX
