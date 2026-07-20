@@ -7,6 +7,11 @@
 // o envelope de cobranças (GET /charges) não traz telefone. Igual ao
 // padrão do crediário: nada é enviado sem o usuário tocar em "Abrir no
 // WhatsApp"; telefone e mensagem são editáveis.
+//
+// F3b (aditivo): quando a resposta do Pix traz provider === 'baas', a
+// Conta Aura está ativa como recebimento — mostra uma linha discreta
+// avisando que a baixa é automática. O botão "Confirmar pagamento" da
+// lista (ChargesList/ChargeActionModal) continua existindo sem mudança.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -15,7 +20,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
-import { karateDojoBillingApi, DojoCharge } from "@/services/karateDojoBillingApi";
+import { karateDojoBillingApi, DojoCharge, DojoBillingProvider } from "@/services/karateDojoBillingApi";
 import { karateDojoStudentsApi } from "@/services/karateDojoStudentsApi";
 import { copyToClipboard } from "@/utils/clipboard";
 import { maskPhone } from "@/utils/masks";
@@ -33,6 +38,7 @@ export function ChargePixModal({ visible, federationId, dojoName, charge, onClos
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [provider, setProvider] = useState<DojoBillingProvider | null>(null);
   const [pixErr, setPixErr] = useState<string | null>(null);
 
   const [phone, setPhone] = useState("");
@@ -47,6 +53,7 @@ export function ChargePixModal({ visible, federationId, dojoName, charge, onClos
     setPixErr(null);
     setPayload(null);
     setPublicUrl(null);
+    setProvider(null);
     setPhone("");
     setCopiedCode(false);
     setCopiedLink(false);
@@ -67,6 +74,7 @@ export function ChargePixModal({ visible, federationId, dojoName, charge, onClos
         pixLink = pixRes.value.public_url;
         setPayload(pixPayload);
         setPublicUrl(pixLink);
+        setProvider(pixRes.value.provider ?? null);
       } else {
         setPixErr(mapBillingError(pixRes.reason).message);
       }
@@ -168,6 +176,12 @@ export function ChargePixModal({ visible, federationId, dojoName, charge, onClos
                     </TouchableOpacity>
                   )}
                 </View>
+                {provider === "baas" && (
+                  <View style={s.baasRow}>
+                    <Icon name="wallet" size={12} color={KarateColors.ok} />
+                    <Text style={s.baasTxt}>Recebimento via Conta Aura · baixa automática</Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -235,6 +249,8 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" } as ViewStyle,
   copyBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 12 } as ViewStyle,
   copyTxt: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  baasRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 } as ViewStyle,
+  baasTxt: { fontSize: 11.5, fontWeight: "600", color: KarateColors.ok } as TextStyle,
   hint: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 6, lineHeight: 15 } as TextStyle,
   input: { borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: KarateColors.ink, backgroundColor: KarateColors.glassHi } as TextStyle,
   textarea: { minHeight: 160, fontFamily: KarateFonts.body, lineHeight: 20 } as TextStyle,

@@ -1,12 +1,12 @@
 // ============================================================
-// Helpers — Mensalidades do dojô (F3a)
+// Helpers — Mensalidades do dojô (F3a) + Conta Aura (F3b)
 //
 // Competência 'YYYY-MM' e datas 'YYYY-MM-DD' são SEMPRE tz-safe: parse
 // manual por regex/split, nunca new Date('YYYY-MM') / new Date('YYYY-MM-DD')
 // direto (em UTC-3 isso pode voltar um mês/dia).
 // ============================================================
 import { KarateColors } from "@/constants/karateTheme";
-import { DojoChargeStatus } from "@/services/karateDojoBillingApi";
+import { BaasStatus, DojoChargeStatus } from "@/services/karateDojoBillingApi";
 
 const MESES_LONG = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -90,6 +90,34 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   outro: "Outro",
 };
 
+// ── Status da Conta Aura (BaaS opt-in, F3b) — sempre icon+texto ─────
+
+export interface BaasStatusView {
+  key: BaasStatus;
+  label: string;
+  icon: string;
+  color: string;
+  bg: string;
+}
+
+/** 'none' também tem uma view (usada só internamente — o card não exibe badge nesse estado). */
+export function baasStatusView(status: BaasStatus | string | null | undefined): BaasStatusView {
+  switch (status) {
+    case "created":
+      return { key: "created", label: "Ativação em andamento", icon: "clock", color: KarateColors.warn, bg: KarateColors.warnSoft };
+    case "docs_pending":
+      return { key: "docs_pending", label: "Documentos pendentes", icon: "alert", color: KarateColors.warn, bg: KarateColors.warnSoft };
+    case "under_review":
+      return { key: "under_review", label: "Em análise", icon: "clock", color: KarateColors.warn, bg: KarateColors.warnSoft };
+    case "approved":
+      return { key: "approved", label: "Conta aprovada", icon: "check_circle", color: KarateColors.ok, bg: KarateColors.okSoft };
+    case "rejected":
+      return { key: "rejected", label: "Cadastro recusado", icon: "alert", color: KarateColors.danger, bg: KarateColors.dangerSoft };
+    default:
+      return { key: "none", label: "Não ativada", icon: "wallet", color: KarateColors.neutral, bg: KarateColors.neutralSoft };
+  }
+}
+
 // ── Erros da API → mensagem pt-BR (ApiError carrega body em e.data) ───
 
 export function mapBillingError(e: any): { code: string | null; message: string } {
@@ -100,6 +128,15 @@ export function mapBillingError(e: any): { code: string | null; message: string 
   }
   if (code === "PIX_NAO_CONFIGURADO") {
     return { code, message: "Configure a chave Pix do dojô antes de gerar cobranças por Pix." };
+  }
+  if (code === "BAAS_DISABLED") {
+    return { code, message: "A Conta Aura ainda não está disponível neste ambiente." };
+  }
+  if (code === "BAAS_JA_ATIVADO") {
+    return { code, message: "A Conta Aura já foi ativada para este dojô." };
+  }
+  if (code === "PROVIDER_NAO_DISPONIVEL") {
+    return { code, message: "A Conta Aura ainda não foi aprovada pela instituição financeira — não é possível ativar o recebimento por ela." };
   }
   if (code === "VALIDATION_ERROR") {
     return { code, message: apiErrors[0] || "Dados inválidos — confira o formulário." };
