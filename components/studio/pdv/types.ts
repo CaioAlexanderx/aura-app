@@ -10,6 +10,10 @@
 //     product.price (tabela). A diferença vira item_discount no backend.
 //   - PaymentEntry: entrada de split (uma detPag por forma no backend).
 //   - PAY_METHODS restrito a dinheiro/PIX/cartão (decisão com Caio).
+//
+// 20/07/2026 (paridade fiscal Negócio):
+//   - SaleDone carrega items/cliente/cpf/pagamento + flags fiscais p/
+//     alimentar <NfceActions/> e o comprovante não-fiscal no StageDone.
 // ============================================================
 import type { CustomizationConfig } from "@/services/studioApi";
 
@@ -57,10 +61,27 @@ export type DayStats = {
   em_producao: number;
 };
 
+// Item enxuto p/ NFC-e (paridade NfceActionsItem do Negócio).
+export type SaleDoneItem = {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+};
+
 export type SaleDone = {
   sale_id: string;
   total: number;
   wa_link: string | null;
+  // ── Fiscal (paridade Negócio): dados p/ NfceActions + comprovante ──
+  items: SaleDoneItem[];
+  customer_name: string | null;
+  customer_cpf: string | null;
+  customer_phone: string | null;
+  payment_method: string;
+  payments?: { method: string; value: number }[];
+  auto_emit: boolean;      // nfce_config.auto_emit_nfce && is_active
+  fiscal_enabled: boolean; // nfce_config.is_active
 };
 
 // Multi-pagamento (split): cada entrada vira uma detPag no backend

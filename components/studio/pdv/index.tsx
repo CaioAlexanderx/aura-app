@@ -7,6 +7,9 @@
 // pagamento + lápis de preço/qtd por item. Matemática em checkoutMath;
 // cupom limpo ao editar item. Carrinho recebe pay/setPay (chips no rodapé).
 // Rail usa height:100% (não 100vh) pra não estourar abaixo da topbar.
+//
+// 20/07/2026: CPF/CNPJ na nota (cpf/setCpf) threaded ao StageCheckout p/
+// a NFC-e emitida na tela de sucesso.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -242,6 +245,8 @@ export default function StudioCaixaPage() {
         setCustomer={checkout.setCustomer}
         phone={checkout.phone}
         setPhone={checkout.setPhone}
+        cpf={checkout.cpf}
+        setCpf={checkout.setCpf}
         pay={checkout.pay}
         setPay={checkout.setPay}
         notes={checkout.notes}

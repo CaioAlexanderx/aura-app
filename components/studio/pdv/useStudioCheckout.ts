@@ -10,17 +10,25 @@
 //   - Cupom do Financeiro (couponsApi.validate) → coupon_code
 //   - Split de pagamento → payments[] (valida balanceamento antes do POST)
 //   - Lápis de preço por item → unit_price (tabela) + item_discount (diff)
+//
+// 20/07/2026 — paridade fiscal com o Negócio:
+//   - Lê nfce_config (getConfig) → fiscalEnabled (is_active) e autoEmitNfce
+//     (auto_emit_nfce && is_active), expostos no SaleDone p/ o StageDone.
+//   - CPF/CNPJ na nota (opcional) → customer_cpf.
+//   - SaleDone carrega items/cliente/pagamento p/ alimentar <NfceActions/>.
 // ============================================================
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { pdvApi } from "@/services/pdvApi";
 import { request } from "@/services/api";
 import { couponsApi } from "@/services/couponsApi";
+import { nfceApi } from "@/services/nfceApi";
 import type { CartLine, SaleDone, PaymentEntry } from "./types";
 import {
   round2,
   manualDiscountAmount,
   totalAfter,
   lineListPrice,
+  lineSalePrice,
   lineDiscount,
   splitRemaining,
   splitIsBalanced,
@@ -30,11 +38,42 @@ import {
 export function useStudioCheckout(cid: string | undefined) {
   const [customer, setCustomer] = useState("");
   const [phone, setPhone] = useState("");
+  const [cpf, setCpf] = useState("");
   const [pay, setPay] = useState("pix");
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<SaleDone | null>(null);
+
+  // ── Config fiscal (nfce_config) — gate de exibição + auto-emissão ──
+  const [fiscalEnabled, setFiscalEnabled] = useState(false);
+  const [autoEmitNfce, setAutoEmitNfce] = useState(false);
+
+  useEffect(() => {
+    if (!cid) {
+      setFiscalEnabled(false);
+      setAutoEmitNfce(false);
+      return;
+    }
+    let alive = true;
+    nfceApi
+      .getConfig(cid)
+      .then((r) => {
+        if (!alive) return;
+        const cfg = r?.config;
+        const active = !!cfg?.is_active;
+        setFiscalEnabled(active);
+        setAutoEmitNfce(active && !!cfg?.auto_emit_nfce);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setFiscalEnabled(false);
+        setAutoEmitNfce(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cid]);
 
   // ── Desconto manual ──
   const [discountType, setDiscountType] = useState<"%" | "R$">("%");
@@ -167,6 +206,7 @@ export function useStudioCheckout(cid: string | undefined) {
           seller_name: customer.trim() || null,
         };
         if (payments) saleBody.payments = payments;
+        if (cpf.trim()) saleBody.customer_cpf = cpf.replace(/\D/g, "");
         if (couponApplied?.code) saleBody.coupon_code = couponApplied.code;
         if (manual > 0) {
           if (discountType === "%") {
@@ -210,10 +250,26 @@ export function useStudioCheckout(cid: string | undefined) {
           waLink = `https://wa.me/${ph}?text=${msg}`;
         }
 
+        // Itens enxutos p/ NFC-e (preço de venda efetivo por unidade).
+        const fiscalItems = cart.map((l) => ({
+          product_id: l.product.id,
+          product_name: l.product.name,
+          quantity: l.qty,
+          unit_price: round2(lineSalePrice(l)),
+        }));
+
         setDone({
           sale_id: saleId,
           total: parseFloat(saleRes?.sale?.total_amount || String(total)),
           wa_link: waLink,
+          items: fiscalItems,
+          customer_name: customer.trim() || null,
+          customer_cpf: cpf.trim() ? cpf.replace(/\D/g, "") : null,
+          customer_phone: phone.trim() || null,
+          payment_method: primaryPayment,
+          payments,
+          auto_emit: autoEmitNfce,
+          fiscal_enabled: fiscalEnabled,
         });
         return true;
       } catch (e: any) {
@@ -223,12 +279,13 @@ export function useStudioCheckout(cid: string | undefined) {
         setSending(false);
       }
     },
-    [cid, pay, notes, customer, phone, discountType, discountValue, couponApplied, splitMode, splitPayments],
+    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled],
   );
 
   const reset = useCallback(() => {
     setCustomer("");
     setPhone("");
+    setCpf("");
     setNotes("");
     setDone(null);
     setError(null);
@@ -242,8 +299,10 @@ export function useStudioCheckout(cid: string | undefined) {
   }, []);
 
   return {
-    customer, setCustomer, phone, setPhone, pay, setPay, notes, setNotes,
+    customer, setCustomer, phone, setPhone, cpf, setCpf, pay, setPay, notes, setNotes,
     sending, error, setError, done, finalizeSale, reset,
+    // fiscal
+    fiscalEnabled, autoEmitNfce,
     // desconto
     discountType, setDiscountType, discountValue, setDiscountValue, clearDiscount,
     // cupom

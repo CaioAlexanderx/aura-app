@@ -4,6 +4,8 @@
 // pagamento (chips + split) · cupom · desconto manual · totais · concluir.
 // Cliente nunca obrigatório. Sem modal de troco (decisão 05/06).
 // Desconto por item exibido em porcentagem.
+//
+// 20/07/2026 — CPF/CNPJ na nota (opcional) p/ a NFC-e emitida no sucesso.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Platform, TextInput } from "react-native";
@@ -169,7 +171,7 @@ function SplitRow({
 
 export function StageCheckout({
   t, cart, subtotal, count, customCount,
-  customer, setCustomer, phone, setPhone, pay, setPay, notes, setNotes,
+  customer, setCustomer, phone, setPhone, cpf, setCpf, pay, setPay, notes, setNotes,
   sending, error, onBack, onFinalize,
   onSetQty, onSetPrice, onRemoveLine,
   discountType, setDiscountType, discountValue, setDiscountValue, manualDiscount,
@@ -179,6 +181,7 @@ export function StageCheckout({
 }: {
   t: StudioPalette; cart: CartLine[]; subtotal: number; count: number; customCount: number;
   customer: string; setCustomer: (s: string) => void; phone: string; setPhone: (s: string) => void;
+  cpf: string; setCpf: (s: string) => void;
   pay: string; setPay: (s: string) => void; notes: string; setNotes: (s: string) => void;
   sending: boolean; error: string | null; onBack: () => void; onFinalize: () => void;
   onSetQty: (lineId: string, qty: number) => void; onSetPrice: (lineId: string, price: number) => void; onRemoveLine: (lineId: string) => void;
@@ -220,6 +223,7 @@ export function StageCheckout({
           <View style={{ gap: 10 }}>
             <FInput t={t} value={customer} onChangeText={setCustomer} placeholder="Nome do cliente" />
             <FInput t={t} value={phone} onChangeText={(v) => setPhone(maskPhone(v))} placeholder="WhatsApp (00) 00000-0000" keyboardType="phone-pad" />
+            <FInput t={t} value={cpf} onChangeText={setCpf} placeholder="CPF/CNPJ na nota (opcional)" keyboardType="number-pad" />
           </View>
         </View>
 
