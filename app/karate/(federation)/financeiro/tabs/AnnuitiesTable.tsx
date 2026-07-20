@@ -40,7 +40,7 @@ import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/Lanc
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan, AnnuityStatus,
-  FinanceAuditEntry,
+  FinanceAuditEntry, AnnuityPaymentMethod,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
@@ -272,7 +272,7 @@ function InstallmentDetailRow({
   inst, state, federationId, onPay, onPix, onEdit, onSendEmail, hasEmail,
 }: {
   inst: AnnuityInstallment; state: InstState; federationId: string;
-  onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
+  onPay: (instId: string, method: AnnuityPaymentMethod) => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
   onSendEmail: (instId: string) => void;
@@ -319,7 +319,7 @@ function InstallmentDetailRow({
   const v = INST_STATE_VIEW[state];
   const isPending = inst.status !== "paid";
 
-  const submitPay = async (method: "pix" | "dinheiro" | "transferencia" | "outro") => {
+  const submitPay = async (method: AnnuityPaymentMethod) => {
     setPaying(true);
     try {
       await onPay(inst.id, method);
@@ -446,9 +446,9 @@ function InstallmentDetailRow({
         <View style={styles.instSubPanel}>
           <Body muted style={{ fontSize: 11 }}>Forma de recebimento:</Body>
           <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-            {(["pix", "dinheiro", "transferencia", "outro"] as const).map((m) => (
+            {(["pix", "transferencia", "dinheiro", "credito_cbkt", "outro"] as const).map((m) => (
               <TouchableOpacity key={m} disabled={paying} style={styles.methodChip} onPress={() => submitPay(m)} accessibilityRole="button" accessibilityLabel={`Confirmar pagamento via ${m}`}>
-                <Text style={styles.methodChipLabel}>{m === "pix" ? "PIX" : m === "dinheiro" ? "Dinheiro" : m === "transferencia" ? "Transferência" : "Outro"}</Text>
+                <Text style={styles.methodChipLabel}>{m === "pix" ? "PIX" : m === "dinheiro" ? "Dinheiro" : m === "transferencia" ? "Transferência" : m === "credito_cbkt" ? "Crédito CBKT" : "Outro"}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -521,7 +521,7 @@ function AnnuityRowItem({
 }: {
   vm: AnnuityRowVM; seg: SegKey; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
   onToggleSelect: () => void; onToggleExpand: () => void;
-  onPay: (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => Promise<void>;
+  onPay: (instId: string, method: AnnuityPaymentMethod) => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
   onSendEmail: (instId: string) => void;
@@ -891,7 +891,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // ── Ações de parcela ────────────────────────────────────────────
-  const handlePayInstallment = useCallback(async (instId: string, method: "pix" | "dinheiro" | "transferencia" | "outro") => {
+  const handlePayInstallment = useCallback(async (instId: string, method: AnnuityPaymentMethod) => {
     try {
       await karateApi.payInstallment(federationId, instId, { payment_method: method });
       toast.success("Pagamento registrado");

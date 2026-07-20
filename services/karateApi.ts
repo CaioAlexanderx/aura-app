@@ -696,10 +696,17 @@ export interface AnnuityFeePlanInput {
   effective_from?: string;
 }
 
+/** Formas de pagamento aceitas na BAIXA de anuidade (dojô e CPF/praticante —
+ *  as 3 rotas de /pay do backend: installments/:id/pay, dojos/:dojoId/:annuityId/pay
+ *  e dojos/:dojoId/pay). Tipo único — ver PR #408 no aura-backend (contrato
+ *  fixado: 'credito_cbkt', snake_case, sem acento). NÃO duplicar este union
+ *  em literais soltos; sempre referenciar este tipo. */
+export type AnnuityPaymentMethod = "pix" | "dinheiro" | "transferencia" | "credito_cbkt" | "outro";
+
 /** Body de POST .../installments/:id/pay (baixa manual de UMA parcela). */
 export interface InstallmentPayInput {
   paid_at?: string; // 'YYYY-MM-DD', default hoje no backend
-  payment_method?: "pix" | "dinheiro" | "transferencia" | "outro";
+  payment_method?: AnnuityPaymentMethod;
   amount?: number;
 }
 
@@ -2327,7 +2334,7 @@ export const karateApi = {
     annuityId: string,
     payload: {
       paid_at?: string;          // 'YYYY-MM-DD' (default hoje no backend)
-      payment_method?: "pix" | "dinheiro" | "transferencia" | "outro";
+      payment_method?: AnnuityPaymentMethod;
       amount?: number;
     }
   ): Promise<DojoAnnuity> =>
@@ -2345,7 +2352,7 @@ export const karateApi = {
       amount: number;
       paid_at?: string;          // 'YYYY-MM-DD'
       due_date?: string;         // 'YYYY-MM-DD'
-      payment_method?: "pix" | "dinheiro" | "transferencia" | "outro";
+      payment_method?: AnnuityPaymentMethod;
     }
   ): Promise<DojoAnnuity> =>
     request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/pay`, {

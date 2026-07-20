@@ -63,7 +63,7 @@ import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
-import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation, RosterEvent } from "@/services/karateApi";
+import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation, RosterEvent, AnnuityPaymentMethod } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
@@ -164,11 +164,14 @@ type AnnuityRow = DojoDetail["annuity_history"][number] & {
 };
 const annuityId = (a: AnnuityRow): string | null => a.annuity_history_id || a.id || null;
 
-type PaymentMethod = "pix" | "dinheiro" | "transferencia" | "outro";
+// Alias local para o tipo único de services/karateApi.ts (evita duplicar o
+// literal — ver AnnuityPaymentMethod / PR #408 no aura-backend).
+type PaymentMethod = AnnuityPaymentMethod;
 const PM_LABELS: { value: PaymentMethod; label: string }[] = [
   { value: "pix", label: "Pix" },
-  { value: "dinheiro", label: "Dinheiro" },
   { value: "transferencia", label: "Transferência" },
+  { value: "dinheiro", label: "Dinheiro" },
+  { value: "credito_cbkt", label: "Crédito CBKT" },
   { value: "outro", label: "Outro" },
 ];
 
