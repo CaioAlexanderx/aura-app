@@ -64,10 +64,17 @@ function fmtMoney(v: number) {
 type KpiDef = { key: AnnuityStatusFilter; label: string; bucket?: AnnuitySummaryBucket; accent?: "ok" | "danger" | "warn"; icon: string };
 
 function KpiCard({ def, active, onPress, loading }: { def: KpiDef; active: boolean; onPress: () => void; loading: boolean }) {
-  // Mockup: só os KPIs acentuados (Atrasado/Em aberto/Recebido) tingem o
-  // rótulo (ícone + texto); "Previsto" fica no muted padrão (.kpi .lbl sem
-  // style inline no mockup) — nunca o VALOR grande, que é sempre ink.
-  const color = def.accent === "ok" ? P.ok : def.accent === "danger" ? P.red : def.accent === "warn" ? P.warn : C.ink3;
+  // Fase F5 (mockup v2) — só os KPIs acentuados (Atrasado/Recebido) tingem
+  // o rótulo (ícone + texto); "Previsto"/"Em aberto" ficam no muted padrão
+  // (.kpi .lbl sem style inline no mockup) — nunca o VALOR grande, que é
+  // sempre ink. "Atrasado" usa P.danger (o mesmo token do badge da LINHA,
+  // ver annuityReceivableStatusView/KarateReceivableStatus.atrasado em
+  // karateTheme.ts) — não P.red: o vermelhão de carimbo é o acento RARO de
+  // AÇÃO (Receber, Nova campanha, filete do KPI ativo), e "Atrasado" é
+  // status/perigo, um papel semântico separado no design system Shoji
+  // (era P.red aqui, uma mistura dos dois papéis que o mockup mantém
+  // distintos — ver --red vs --danger no mockup-anuidade-engine-recebivel-v2).
+  const color = def.accent === "ok" ? P.ok : def.accent === "danger" ? P.danger : def.accent === "warn" ? P.warn : C.ink3;
   // Hover-web (leve elevação/tint, mesmo padrão de Chip no kit Shoji) — o
   // card É clicável (filtra a lista pelo status), então precisa PARECER
   // clicável (cursor + realce), não só reagir ao clique.
