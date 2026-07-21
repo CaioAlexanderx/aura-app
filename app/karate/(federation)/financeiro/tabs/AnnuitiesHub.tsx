@@ -157,9 +157,18 @@ export function AnnuitiesSeasonHeader({
   // Ordem por urgência (não pela ordem do "funil" financeiro): o gestor
   // de federação quer ver quem deve e quanto está atrasado em segundos —
   // "Previsto" é só o contexto/total e vem por último.
+  //
+  // Fase F4 (hierarquia do mockup v2, "paleta contida") — só Recebido
+  // (verde) e Atrasado (vermelho) carregam cor; Em aberto volta a ser
+  // NEUTRO, igual Previsto (antes usava accent "warn"/âmbar — o mockup v2
+  // reserva âmbar só pro estado "Parcial" das LINHAS, não pra este KPI
+  // agregado). "Em aberto" já soma tudo que não é nem recebido nem
+  // necessariamente vencido (due ∪ overdue ∪ defaulting ∪ suspended) — um
+  // âmbar aqui competia visualmente com o vermelho de Atrasado sem
+  // agregar informação nova.
   const kpis: KpiDef[] = [
     { key: "atrasado", label: "Atrasado", bucket: segment?.atrasado, accent: "danger", icon: "warning" },
-    { key: "em_aberto", label: "Em aberto", bucket: segment?.em_aberto, accent: "warn", icon: "time" },
+    { key: "em_aberto", label: "Em aberto", bucket: segment?.em_aberto, icon: "time" },
     { key: "paid", label: "Recebido", bucket: segment?.recebido, accent: "ok", icon: "checkmark-circle" },
     { key: "all", label: "Previsto", bucket: segment?.previsto, icon: "document-text" },
   ];

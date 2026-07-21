@@ -277,6 +277,55 @@ export function annuityStatusView(status?: string | null) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Fase F4 — anuidade como RECEBÍVEL (badge de linha da lista do
+// recebível). O backend (GET .../annuities/dojos|cpf) só devolve
+// `computed_status` binário-ish (paid/due/overdue/defaulting/suspended/
+// no_charge — ver STATUS_ALIASES em karateAnnuities.js) — não existe um
+// status 'partial' persistido nem computado no SQL. A F3 (PR #412)
+// adicionou `paid_total`/`total` por linha (soma real de amount_paid),
+// então "pago em parte" é derivável NO CLIENTE a partir desses dois
+// agregados já prontos do backend — isso NÃO é recalcular a distribuição
+// FIFO (regra que não pode ser violada, ver AnnuityReceiveModal): é só
+// rótulo visual (0 < paid_total < total), a mesma classificação que o
+// mockup v2 usa (quitado/parcial/em_aberto/atrasado — 4 estados).
+// `atrasado` aqui usa o MESMO agrupamento que STATUS_ALIASES.atrasado do
+// backend (overdue ∪ defaulting ∪ suspended) — mesmo nome, mesmo critério
+// dos KPIs/chips de filtro, pra não reabrir a confusão de nomenclatura que
+// o BUGFIX P2 (11/07/2026, ver AnnuitiesTable.tsx) já corrigiu uma vez.
+export type ReceivableStatusView = "paid" | "partial" | "open" | "atrasado";
+
+export const KarateReceivableStatus: Record<ReceivableStatusView, {
+  label: string; icon: string; color: string; bg: string;
+}> = {
+  paid:     { label: "Quitado",    icon: "checkmark-circle", color: ShojiPalette.ok,      bg: ShojiPalette.okWash },
+  partial:  { label: "Parcial",    icon: "time",              color: ShojiPalette.warn,    bg: ShojiPalette.warnWash },
+  open:     { label: "Em aberto",  icon: "ellipse-outline",   color: ShojiPalette.ink3,     bg: ShojiPalette.neutralWash },
+  atrasado: { label: "Atrasado",   icon: "warning",           color: ShojiPalette.danger,   bg: ShojiPalette.dangerWash },
+} as const;
+
+/** Badge da lista do recebível (F4) — `computedStatus` é o `status` que já
+ *  vem de GET .../annuities/dojos|cpf; `paidTotal`/`total` vêm da MESMA
+ *  linha (paid_total/total, F3). Nunca chamar isso com números computados
+ *  localmente a partir de installments[] — sempre os agregados do backend. */
+export function annuityReceivableStatusView(
+  computedStatus: string | null | undefined,
+  paidTotal: number,
+  total: number
+) {
+  let key: ReceivableStatusView;
+  if (computedStatus === "paid" || computedStatus === "confirmed") {
+    key = "paid";
+  } else if (paidTotal > 0.005 && paidTotal < total - 0.005) {
+    key = "partial";
+  } else if (computedStatus === "overdue" || computedStatus === "defaulting" || computedStatus === "suspended") {
+    key = "atrasado";
+  } else {
+    key = "open";
+  }
+  return { key, ...KarateReceivableStatus[key] };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Faixas (Belt) — paleta DESSATURADA canônica (10 faixas Shotokan)
 // ─────────────────────────────────────────────────────────────
 export type BeltKey =

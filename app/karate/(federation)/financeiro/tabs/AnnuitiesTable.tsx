@@ -28,7 +28,7 @@ import {
 import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateShadows as SH,
-  annuityStatusView,
+  annuityStatusView, annuityReceivableStatusView,
 } from "@/constants/karateTheme";
 import { SearchField, Chip, Mono, Body, RowPressable } from "@/components/karate/shoji";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
@@ -40,13 +40,17 @@ import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/Lanc
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan, AnnuityStatus,
-  FinanceAuditEntry, AnnuityPaymentMethod,
+  FinanceAuditEntry, AnnuityPaymentMethod, AnnuityReceiveResult,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
 import { VoidBatchModal, VoidBatchTarget } from "@/components/karate/VoidBatchModal";
 import { WhatsAppChargeModal, WhatsAppChargeTarget } from "@/components/karate/WhatsAppChargeModal";
 import { BulkPayConfirmModal, BulkPayTarget } from "@/components/karate/BulkPayConfirmModal";
+// Fase F4 — anuidade como recebível: folha de baixa livre (prévia FIFO ao
+// vivo, contra o backend) e extrato do ledger de uma anuidade.
+import { AnnuityReceiveModal } from "@/components/karate/AnnuityReceiveModal";
+import { AnnuityStatementModal } from "@/components/karate/AnnuityStatementModal";
 import type { SegKey } from "./AnnuitiesHub";
 
 const PAGE_SIZE = 50;
@@ -518,6 +522,7 @@ function InstallmentDetailRow({
 function AnnuityRowItem({
   vm, seg, wide, selected, selectable, expanded, federationId, onToggleSelect, onToggleExpand,
   onPay, onPix, onEdit, onSendEmail, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
+  onReceive, onStatement,
 }: {
   vm: AnnuityRowVM; seg: SegKey; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
   onToggleSelect: () => void; onToggleExpand: () => void;
@@ -527,9 +532,17 @@ function AnnuityRowItem({
   onSendEmail: (instId: string) => void;
   onVoid: () => void; onLaunch: () => void;
   voidConfirming: boolean; onVoidConfirm: () => void; onVoidCancel: () => void; voiding: boolean;
+  /** Fase F4 — abre a folha de baixa livre / o extrato deste recebível. */
+  onReceive: () => void; onStatement: () => void;
 }) {
-  const sv = annuityStatusView(vm.status);
   const isNoCharge = vm.status === "no_charge";
+  // Fase F4: badge do recebível (Quitado/Parcial/Em aberto/Atrasado) usa
+  // paid_total/total (F3, agregados do backend) além do computed_status —
+  // é rótulo visual, não a distribuição FIFO (ver AnnuityReceiveModal). O
+  // estado "Sem cobrança" continua no vocabulário antigo (annuityStatusView),
+  // que já é a fonte certa pra ele.
+  const sv = isNoCharge ? annuityStatusView(vm.status) : annuityReceivableStatusView(vm.status, vm.paidTotal, vm.total);
+  const saldo = Math.max(0, Math.round((vm.total - vm.paidTotal) * 100) / 100);
   const trail = classifyInstallments(vm.installments);
   const showTrail = shouldShowInstallmentTrail(seg, trail);
 
@@ -554,6 +567,13 @@ function AnnuityRowItem({
         <View style={{ flex: wide ? 2 : undefined, minWidth: wide ? undefined : 140, gap: 2 }}>
           <Text style={styles.name} numberOfLines={1}>{vm.name}</Text>
           <Mono style={{ fontSize: 10, color: P.red }}>{vm.code || "—"}</Mono>
+          {/* Fase F4 (mockup v2) — barra devido→recebido, compacta, sob o
+              nome. Só faz sentido quando existe cobrança com valor > 0. */}
+          {!isNoCharge && vm.total > 0 && (
+            <View style={styles.progBarTrack} accessibilityLabel={`${fmtMoney(vm.paidTotal)} recebido de ${fmtMoney(vm.total)}`}>
+              <View style={[styles.progBarFill, { width: `${Math.max(0, Math.min(100, Math.round((vm.paidTotal / vm.total) * 100)))}%` }]} />
+            </View>
+          )}
         </View>
 
         {wide && (
@@ -588,6 +608,18 @@ function AnnuityRowItem({
             <Icon name={sv.icon as any} size={11} color={sv.color} />
             <Text style={[styles.badgeText, { color: sv.color }]}>{sv.label}</Text>
           </View>
+          {/* Fase F4 (mockup v2) — saldo em destaque à direita: destaque por
+              tipografia (mono, bold), não por cor extra — só fica vermelho
+              quando atrasado, mesmo princípio do mockup ("paleta contida"). */}
+          {!isNoCharge && (
+            saldo <= 0.005 ? (
+              <Body muted style={{ fontSize: 10.5, color: P.ok }}>saldo quitado</Body>
+            ) : (
+              <Mono style={{ fontSize: 14, fontWeight: "700", color: sv.key === "atrasado" ? P.danger : C.ink }}>
+                {fmtMoney(saldo)}
+              </Mono>
+            )
+          )}
           {vm.daysOverdue > 0 && <Body muted style={{ fontSize: 10, color: P.red }}>{vm.daysOverdue}d em atraso</Body>}
         </View>
 
@@ -599,6 +631,33 @@ function AnnuityRowItem({
             </TouchableOpacity>
           ) : (
             <>
+              {/* Fase F4 — extrato do recebível (sempre acessível, mesmo
+                  quitado: histórico de baixas não desaparece). */}
+              {vm.rowId && (
+                <TouchableOpacity
+                  style={styles.statementBtn}
+                  onPress={(e) => { e.stopPropagation?.(); onStatement(); }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Extrato de ${vm.name}`}
+                >
+                  <Icon name="receipt" size={14} color={C.ink3} />
+                </TouchableOpacity>
+              )}
+              {/* Fase F4 — ação primária do recebível: abre a folha de baixa
+                  livre (prévia FIFO ao vivo contra o backend, nunca
+                  recalculada no cliente). Só quando há saldo em aberto —
+                  quitado não oferece "Receber" (mesma regra do mockup v2). */}
+              {vm.rowId && saldo > 0.005 && (
+                <TouchableOpacity
+                  style={styles.receiveBtn}
+                  onPress={(e) => { e.stopPropagation?.(); onReceive(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Receber pagamento de ${vm.name}`}
+                >
+                  <Text style={styles.receiveBtnLabel}>Receber</Text>
+                </TouchableOpacity>
+              )}
               {vm.installments.length > 0 && (
                 <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.ink4} />
               )}
@@ -865,6 +924,14 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // (sem e-mail cadastrado) — nunca aberto com o SendEmailBatchModal ainda
   // visível (armadilha Modal-dentro-de-Modal); ver onOpenWhatsApp abaixo.
   const [waTarget, setWaTarget] = useState<WhatsAppChargeTarget | null>(null);
+  // Fase F4 — anuidade como recebível: folha de baixa livre (por rowId/
+  // annuity_id) e extrato. `receiveTargetKey`/`statementTargetKey` não-nulo
+  // é o sinal de "modal aberto" (mesmo padrão de emailModalTargets/
+  // voidModalTargets acima) — nunca os dois abertos ao mesmo tempo
+  // (armadilha Modal-dentro-de-Modal: cada open* fecha qualquer outro modal
+  // transiente primeiro, ver openReceive/openStatement abaixo).
+  const [receiveTargetKey, setReceiveTargetKey] = useState<string | null>(null);
+  const [statementTargetKey, setStatementTargetKey] = useState<string | null>(null);
 
   // Volta pra página 1 sempre que o filtro/busca/segmento/ano muda; limpa
   // seleção (evita agir sobre linhas que já não estão na tela).
@@ -932,6 +999,43 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
       setVoiding(false);
     }
   }, [voidTargetKey, items, federationId, load, onMutated]);
+
+  // ── Fase F4 — folha de baixa livre / extrato do recebível ───────────
+  // Cada open* fecha qualquer OUTRO modal transiente antes de abrir o seu
+  // (mesma disciplina do resto do arquivo — nunca dois <Modal> montados ao
+  // mesmo tempo, armadilha Modal-dentro-de-Modal no RN Web).
+  const openReceive = useCallback((key: string) => {
+    setStatementTargetKey(null);
+    setPixTarget(null);
+    setChargeTargetKey(null);
+    setVoidTargetKey(null);
+    setReceiveTargetKey(key);
+  }, []);
+  const closeReceive = useCallback(() => setReceiveTargetKey(null), []);
+
+  const openStatement = useCallback((key: string) => {
+    setReceiveTargetKey(null);
+    setPixTarget(null);
+    setChargeTargetKey(null);
+    setVoidTargetKey(null);
+    setStatementTargetKey(key);
+  }, []);
+  const closeStatement = useCallback(() => setStatementTargetKey(null), []);
+
+  // Sucesso da baixa — a lista e os KPIs (via onMutated, que recarrega o
+  // summary no hub) leem a MESMA fonte pós-baixa: um refetch real do
+  // backend (load(true)), nunca um patch otimista da linha em memória.
+  // Isso é deliberado (evita a família de bug "estado duplicado" — mutação
+  // escreve numa lista, UI lê outra — já documentada nas armadilhas desta
+  // tela) mesmo custando um round-trip extra.
+  const handleReceiveSuccess = useCallback((_result: AnnuityReceiveResult) => {
+    setReceiveTargetKey(null);
+    load(true);
+    onMutated();
+  }, [load, onMutated]);
+
+  const receiveTargetVm = items.find((i) => i.key === receiveTargetKey) || null;
+  const statementTargetVm = items.find((i) => i.key === statementTargetKey) || null;
 
   // ── Multi-seleção — pagamento em lote (nunca all-or-nothing silencioso) ──
   const toggleSelect = useCallback((key: string) => {
@@ -1157,6 +1261,8 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
               onVoidConfirm={handleVoid}
               onVoidCancel={() => setVoidTargetKey(null)}
               voiding={voiding}
+              onReceive={() => openReceive(item.key)}
+              onStatement={() => openStatement(item.key)}
             />
           </View>
         )}
@@ -1284,6 +1390,38 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
           onClose={() => setWaTarget(null)}
         />
       )}
+
+      {/* Fase F4 — folha de baixa livre (prévia FIFO ao vivo contra
+          /receive/preview, confirmação via /receive). Só abre quando a
+          linha tem cobrança (rowId) — mesma guarda que o botão "Receber"
+          já aplica antes de chamar onReceive. */}
+      {receiveTargetVm && receiveTargetVm.rowId && (
+        <AnnuityReceiveModal
+          visible={!!receiveTargetVm}
+          federationId={federationId}
+          annuityId={receiveTargetVm.rowId}
+          name={receiveTargetVm.name}
+          code={receiveTargetVm.code}
+          planLabel={receiveTargetVm.plan ? PLAN_LABEL[receiveTargetVm.plan] : null}
+          referencePeriod={receiveTargetVm.referencePeriod}
+          dueTotal={receiveTargetVm.total}
+          paidTotal={receiveTargetVm.paidTotal}
+          installments={receiveTargetVm.installments}
+          onClose={closeReceive}
+          onSuccess={handleReceiveSuccess}
+        />
+      )}
+
+      {/* Fase F4 — extrato do recebível (GET .../payments). */}
+      {statementTargetVm && statementTargetVm.rowId && (
+        <AnnuityStatementModal
+          visible={!!statementTargetVm}
+          federationId={federationId}
+          annuityId={statementTargetVm.rowId}
+          name={statementTargetVm.name}
+          onClose={closeStatement}
+        />
+      )}
     </View>
   );
 }
@@ -1319,6 +1457,18 @@ const styles = StyleSheet.create({
 
   launchBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: P.ink, borderRadius: R.sm, paddingVertical: 6, paddingHorizontal: 10 } as ViewStyle,
   launchBtnLabel: { fontSize: 11, fontWeight: "700", color: "#fff" } as TextStyle,
+
+  // Fase F4 (mockup v2) — barra compacta devido→recebido, sob o nome do
+  // dojô/praticante. Cor única (P.ok) — o mockup só usa vermelho pra
+  // ação/perigo, nunca pra "progresso normal".
+  progBarTrack: { height: 4, borderRadius: 3, backgroundColor: P.paper3, overflow: "hidden", marginTop: 5, width: "100%", maxWidth: 180 } as ViewStyle,
+  progBarFill: { height: "100%", borderRadius: 3, backgroundColor: P.ok } as ViewStyle,
+
+  // Fase F4 — ação primária do recebível (mockup .btn.primary: vermelho é
+  // reservado pra ação real, aqui "Receber").
+  receiveBtn: { backgroundColor: P.red, borderRadius: R.sm, paddingVertical: 7, paddingHorizontal: 12 } as ViewStyle,
+  receiveBtnLabel: { fontSize: 12, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
+  statementBtn: { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: R.sm, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass } as ViewStyle,
 
   iconBtnDanger: { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: R.sm, borderWidth: 1, borderColor: P.dangerWash, backgroundColor: P.dangerWash } as ViewStyle,
 

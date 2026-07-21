@@ -671,6 +671,120 @@ export interface AnnuitySummaryResponse {
   praticante: AnnuitySummarySegment;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Fase F4 — anuidade como recebível (tela do recebível: lista + folha de
+// baixa livre + prévia FIFO ao vivo + extrato).
+//
+// Contrato lido direto do código da F3 (PR #412, aura-backend, branch
+// feat/karate-annuity-f3-receive-routes — src/routes/karateAnnuities.js,
+// rotas receive/receive-preview/payments, e src/services/
+// karateAnnuityLedger.js, applyAnnuityPayment/computeDistribution). Depende
+// dessa PR (ainda não mergeada) + migration 249 (karate_annuity_payment_
+// operations, dedup por operation_id) — ver aviso no topo deste arquivo/PR.
+//
+// REGRA QUE NÃO PODE SER VIOLADA: allocations[]/balance_after abaixo são a
+// ÚNICA fonte da distribuição FIFO (quais parcelas o valor cobre, quanto
+// sobra). O cliente NUNCA recalcula essa distribuição — só renderiza o que
+// /receive/preview (dry-run) ou /receive (commit) devolvem.
+// ─────────────────────────────────────────────────────────────────
+
+/** Uma linha da distribuição FIFO (uma parcela tocada pelo valor recebido).
+ *  `kind` é string (não union fechada) por segurança de forward-compat —
+ *  hoje o backend usa 'anuidade' | 'filiacao'. */
+export interface AnnuityReceiveAllocation {
+  installment_id: string;
+  annuity_id: string;
+  seq: number;
+  kind: string;
+  due_date: string | null;
+  amount_due: number;
+  amount_paid_before: number;
+  amount_applied: number;
+  amount_paid_after: number;
+  balance_after: number;
+  status_before: "pending" | "partial" | "paid";
+  status_after: "pending" | "partial" | "paid";
+  closes_installment: boolean;
+}
+
+/** Rollup pós-commit de karate_dojo_annuity_history (SELECT * no backend —
+ *  index signature tolera campos adicionais que a UI ainda não usa).
+ *  Só vem preenchido quando dry_run:false (commit real). */
+export interface AnnuityReceiveHeader {
+  id: string;
+  dojo_id: string | null;
+  practitioner_id: string | null;
+  amount: number;
+  status: string;
+  due_date: string | null;
+  paid_at: string | null;
+  payment_method: string | null;
+  transaction_id: string | null;
+  [key: string]: unknown;
+}
+
+/** Resposta de POST .../receive/preview (dry_run:true, header:null) e
+ *  POST .../receive (dry_run:false, header preenchido) — MESMO shape nos
+ *  dois (confirmado lendo o backend, não um contrato assumido). */
+export interface AnnuityReceiveResult {
+  dry_run: boolean;
+  federation_id: string;
+  annuity_id: string;
+  installment_id: string | null;
+  amount: number;
+  payment_method: AnnuityPaymentMethod | null;
+  paid_at: string;
+  operation_id: string | null;
+  /** true = retry com operation_id repetido; a baixa já tinha sido aplicada
+   *  na 1ª chamada (a UI não deve tratar como um novo recebimento). */
+  idempotent_hit: boolean;
+  allocations: AnnuityReceiveAllocation[];
+  total_applied: number;
+  remaining_unapplied: number;
+  balance_before: number;
+  balance_after: number;
+  header: AnnuityReceiveHeader | null;
+}
+
+/** Body de POST .../receive e .../receive/preview. `operation_id` só tem
+ *  efeito no commit real (o motor ignora no dry-run, de propósito). */
+export interface AnnuityReceiveInput {
+  amount: number;
+  payment_method: AnnuityPaymentMethod;
+  /** 'YYYY-MM-DD' (o backend converte pra meio-dia horário de Brasília) ou
+   *  ISO completo. Ausente = "agora" no backend. */
+  paid_at?: string;
+  operation_id?: string;
+}
+
+/** Uma linha do extrato (GET .../payments, ledger karate_annuity_payments). */
+export interface AnnuityPaymentLedgerEntry {
+  id: string;
+  installment_id: string;
+  annuity_id: string;
+  seq: number;
+  kind: string;
+  amount: number;
+  paid_at: string;
+  payment_method: string | null;
+  /** Id bruto do usuário que registrou a baixa (sem name-join no endpoint
+   *  hoje) — null quando a baixa não veio da UI (ex.: legado). */
+  created_by: string | null;
+  operation_id: string | null;
+  created_at: string;
+}
+
+/** GET .../payments — extrato do ledger, mais recente primeiro
+ *  (paid_at DESC, created_at DESC como desempate). */
+export interface AnnuityPaymentsResponse {
+  annuity_id: string;
+  dojo_id: string | null;
+  practitioner_id: string | null;
+  total: number;
+  count: number;
+  data: AnnuityPaymentLedgerEntry[];
+}
+
 /** Tabela de anuidades por PLANO (Fase F2) — karate_annual_fees com
  *  plan/due_months (migration 222). Coexiste com o shape legado por
  *  size_tier (AnnualFee/AnnualFeeInput acima, usados pela vigência antiga). */
@@ -701,7 +815,7 @@ export interface AnnuityFeePlanInput {
  *  e dojos/:dojoId/pay). Tipo único — ver PR #408 no aura-backend (contrato
  *  fixado: 'credito_cbkt', snake_case, sem acento). NÃO duplicar este union
  *  em literais soltos; sempre referenciar este tipo. */
-export type AnnuityPaymentMethod = "pix" | "dinheiro" | "transferencia" | "credito_cbkt" | "outro";
+export type AnnuityPaymentMethod = "pix" | "dinheiro" | "transferencia" | "credito_cbkt" | "credito_exame" | "outro";
 
 /** Body de POST .../installments/:id/pay (baixa manual de UMA parcela). */
 export interface InstallmentPayInput {
@@ -2446,6 +2560,49 @@ export const karateApi = {
       method: "POST",
       body: body ?? {},
     }),
+
+  // ── Fase F4 — anuidade como recebível (baixa livre + prévia FIFO + extrato) ──
+  // Contrato lido do backend F3 (PR #412, karateAnnuities.js/
+  // karateAnnuityLedger.js) — ver comentário no bloco de tipos acima.
+
+  /** POST .../receive/preview — dry-run do motor FIFO. NÃO grava nada.
+   *  ÚNICA fonte da distribuição (quais parcelas o valor cobre, saldo
+   *  depois) — quem chama NUNCA recalcula isso, só renderiza a resposta. */
+  previewAnnuityReceive: (
+    federationId: string,
+    annuityId: string,
+    body: AnnuityReceiveInput
+  ): Promise<AnnuityReceiveResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/receive/preview`, {
+      method: "POST",
+      body,
+    }),
+
+  /** POST .../receive — baixa livre (commit real), mesmo shape do preview
+   *  (dry_run:false, header preenchido). retry:0 — reenviar um POST cuja
+   *  resposta se perdeu na volta arriscaria duplo clique automático;
+   *  `operation_id` (gerado uma vez por abertura da folha de baixa) é quem
+   *  protege contra o retry MANUAL do operador (dedup migration 249 — um
+   *  reenvio com o MESMO operation_id devolve idempotent_hit:true em vez
+   *  de aplicar de novo). */
+  receiveAnnuityPayment: (
+    federationId: string,
+    annuityId: string,
+    body: AnnuityReceiveInput
+  ): Promise<AnnuityReceiveResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/receive`, {
+      method: "POST",
+      body,
+      retry: 0,
+    }),
+
+  /** GET .../payments — extrato do ledger (karate_annuity_payments) de uma
+   *  anuidade, mais recente primeiro. */
+  getAnnuityPayments: (
+    federationId: string,
+    annuityId: string
+  ): Promise<AnnuityPaymentsResponse> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/payments`),
 
   /** POST .../installments/:id/pix — cria intent PIX para UMA parcela.
    *  Resposta no mesmo shape de PixIntent (intent_id/payload/qr_image/...). */
