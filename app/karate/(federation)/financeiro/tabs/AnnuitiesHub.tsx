@@ -34,12 +34,13 @@ import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP,
 } from "@/constants/karateTheme";
-import { ShojiBackground, PageHead, Mono, RaisedHeader, ShojiButton } from "@/components/karate/shoji";
+import { ShojiBackground, PageHead, Mono, RaisedHeader, ShojiButton, Chip } from "@/components/karate/shoji";
 import { Motion, webTransition } from "@/constants/motion";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   karateApi, AnnuitySummaryResponse, AnnuitySummaryBucket, AnnuityStatusFilter,
   AnnuityCampaignPreviewResponse, AnnuityCampaignScope, AnnuityCampaignResult,
+  AnnuityDojoStatusFilter,
 } from "@/services/karateApi";
 import { AnnuitiesTable } from "./AnnuitiesTable";
 import { AnnuityPlansPanel } from "./AnnuityPlansPanel";
@@ -52,6 +53,20 @@ export type SegKey = "dojo" | "cpf";
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_MIN = 2023;
 const YEAR_MAX = CURRENT_YEAR + 1;
+
+// Filtro ativo/inativo do segmento DOJÔ (Caio, 21/07/2026 — "não podemos
+// cobrar e controlar os inativos; sempre precisamos dessa visão segmentada,
+// ativos primeiro"). Mesmo padrão de chip do STATUS_SEGMENTS de
+// DojosListTab (app/karate/(federation)/dojos/tabs/DojosListTab.tsx) —
+// reaproveitado aqui em vez de um controle novo, só reordenado com
+// "Ativos" primeiro (a diretriz do Caio é mais recente que aquele
+// arquivo). Só existe pro segmento Dojôs — a rota de CPF
+// (listCpfAnnuities) não tem esse toggle no backend.
+const DOJO_STATUS_SEGMENTS: { key: AnnuityDojoStatusFilter; label: string }[] = [
+  { key: "active", label: "Ativos" },
+  { key: "inactive", label: "Inativos" },
+  { key: "all", label: "Todos" },
+];
 
 const firstParam = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
@@ -130,6 +145,7 @@ function KpiCard({ def, active, onPress, loading }: { def: KpiDef; active: boole
 export function AnnuitiesSeasonHeader({
   area, seg, year, summary, summaryLoading, summaryError, onArea, onSeg, onYear, onRetrySummary,
   statusFilter, onStatusFilter,
+  dojoStatus, onDojoStatus,
   onNovaCampanha, newMembersCount, newMembersLoading, newMembersDojos, newMembersPracts, onOpenCampaignFromBanner,
 }: {
   area: AreaKey; seg: SegKey; year: string;
@@ -137,6 +153,11 @@ export function AnnuitiesSeasonHeader({
   onArea: (a: AreaKey) => void; onSeg: (s: SegKey) => void; onYear: (y: string) => void;
   onRetrySummary: () => void;
   statusFilter: AnnuityStatusFilter; onStatusFilter: (s: AnnuityStatusFilter) => void;
+  /** Filtro ativo/inativo do segmento Dojô (PR #413 do backend) — fonte
+   *  única no hub (AnnuitiesHub), alimenta A MESMA hora a listagem
+   *  (AnnuitiesTable → listDojoAnnuities) e o summary (getAnnuitySummary)
+   *  logo abaixo, pra nunca divergirem. */
+  dojoStatus: AnnuityDojoStatusFilter; onDojoStatus: (s: AnnuityDojoStatusFilter) => void;
   /** Fase F3 — abre o CampaignWizard (botão "Nova campanha" e banner de
    *  novos filiados sem cobrança compartilham o mesmo wizard). */
   onNovaCampanha: () => void;
@@ -332,6 +353,29 @@ export function AnnuitiesSeasonHeader({
           </Pressable>
         </View>
       )}
+
+      {/* Filtro ativo/inativo (segmento DOJÔ) — Caio, 21/07/2026: "não
+          podemos cobrar e controlar os inativos"; padrão fica sempre em
+          Ativos, com Inativos/Todos por trás de um filtro (mesmo espírito
+          do STATUS_SEGMENTS de DojosListTab). Só aparece com seg==="dojo":
+          a rota de CPF (listCpfAnnuities) não tem esse toggle no backend
+          — o praticante inativo já sai filtrado por padrão lá, sem
+          parametrização, então não faz sentido mostrar este controle
+          quando o segmento ativo é Praticantes. `dojoStatus` é a MESMA
+          fonte de estado que alimenta a listagem (AnnuitiesTable) e o
+          summary/KPIs (loadSummary, abaixo) — nunca duas cópias. */}
+      {area === "cobrancas" && seg === "dojo" && (
+        <View style={styles.dojoStatusRow}>
+          {DOJO_STATUS_SEGMENTS.map((s) => (
+            <Chip
+              key={s.key}
+              label={s.label}
+              active={dojoStatus === s.key}
+              onPress={() => onDojoStatus(s.key)}
+            />
+          ))}
+        </View>
+      )}
     </RaisedHeader>
   );
 }
@@ -355,6 +399,16 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
   const [statusFilter, setStatusFilter] = useState<AnnuityStatusFilter>("all");
   useEffect(() => { setStatusFilter("all"); }, [year, seg]);
 
+  // Filtro ativo/inativo do segmento Dojô (Caio, 21/07/2026) — FONTE ÚNICA
+  // no hub: alimenta tanto a listagem (AnnuitiesTable → listDojoAnnuities,
+  // via prop abaixo) quanto o summary/KPIs (loadSummary, logo abaixo).
+  // Nunca duas cópias de estado — é isso que garante que lista e KPIs não
+  // divergem quando o dojo_status muda. Default "active" (só ativos).
+  // Não reseta ao trocar ano/seg — é ortogonal ao statusFilter (pagamento)
+  // e persistir entre trocas de segmento/ano é o esperado (mesmo dojo_status
+  // continua fazendo sentido pro gestor entre temporadas).
+  const [dojoStatus, setDojoStatus] = useState<AnnuityDojoStatusFilter>("active");
+
   const [summary, setSummary] = useState<AnnuitySummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(false);
@@ -363,14 +417,23 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
     setSummaryLoading(true);
     setSummaryError(false);
     try {
-      const res = await karateApi.getAnnuitySummary(federationId, { year });
+      const res = await karateApi.getAnnuitySummary(federationId, {
+        year,
+        // dojo_status só existe pro segmento Dojô no backend (a rota de
+        // CPF não tem esse toggle) — mandamos o MESMO valor que a listagem
+        // usa quando seg==="dojo" (ver AnnuitiesTable), e omitimos (default
+        // do backend, "active") quando seg==="cpf", pra não filtrar a
+        // fatia de dojô do summary com um valor que a tela de Praticantes
+        // não está mostrando controle nenhum pra escolher.
+        dojo_status: seg === "dojo" ? dojoStatus : undefined,
+      });
       setSummary(res);
     } catch {
       setSummaryError(true);
     } finally {
       setSummaryLoading(false);
     }
-  }, [federationId, year]);
+  }, [federationId, year, seg, dojoStatus]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
   // ── Fase F3 — campanha anual de anuidades ────────────────────────
@@ -426,6 +489,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
       summary={summary} summaryLoading={summaryLoading} summaryError={summaryError}
       onArea={setArea} onSeg={setSeg} onYear={setYear} onRetrySummary={loadSummary}
       statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+      dojoStatus={dojoStatus} onDojoStatus={setDojoStatus}
       onNovaCampanha={() => openCampaignWizard(undefined)}
       newMembersCount={newMembersCount}
       newMembersLoading={newMembersLoading}
@@ -435,6 +499,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
     />
   ), [
     area, seg, year, summary, summaryLoading, summaryError, setArea, setSeg, setYear, loadSummary, statusFilter,
+    dojoStatus,
     newMembersCount, newMembersLoading, newMembersDojos, newMembersPracts, openCampaignWizard,
   ]);
 
@@ -483,6 +548,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
         year={year}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        dojoStatus={dojoStatus}
         onMutated={loadSummary}
         headerElement={header}
       />
@@ -544,4 +610,9 @@ const styles = StyleSheet.create({
   segBtnOn: { backgroundColor: P.glass, ...(Platform.OS === "web" ? ({ boxShadow: "0 1px 3px rgba(43,38,32,0.10)" } as any) : {}) } as ViewStyle,
   segLabel: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink3 } as TextStyle,
   segLabelOn: { color: C.ink } as TextStyle,
+
+  // Chips de ativo/inativo do segmento Dojô — mesma linguagem de Chip do
+  // kit Shoji usada em DojosListTab (STATUS_SEGMENTS), só numa faixa
+  // própria abaixo do switch Dojôs/Praticantes.
+  dojoStatusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 } as ViewStyle,
 });
