@@ -590,6 +590,10 @@ export interface DojoAnnuity {
   installments?: AnnuityInstallment[];
   paid_total?: number;
   total?: number;
+  /** PR #413 (aura-backend) — se o dojô titular da cobrança está ativo ou
+   *  inativo (computeDojoStatus). Opcional/defensivo: ambiente com deploy
+   *  parcial do backend pode ainda não mandar o campo. */
+  is_active?: boolean | null;
 }
 
 export interface CpfAnnuity {
@@ -661,6 +665,18 @@ export interface AnnuityInstallment {
  *  (STATUS_ALIASES em karateAnnuities.js): em_aberto = tudo não pago;
  *  atrasado = não pago E já vencido. */
 export type AnnuityStatusFilter = AnnuityStatus | "em_aberto" | "atrasado" | "all";
+
+/** Filtro ativo/inativo por DOJÔ — GET /financial/annuities/dojos e GET
+ *  /financial/annuities/summary aceitam `dojo_status` (PR #413,
+ *  aura-backend): "active" (default do backend) | "inactive" | "all".
+ *  Valor inválido → 422. É o MESMO parâmetro nas duas rotas — o backend
+ *  compartilha o predicado entre listagem e summary, então o cliente
+ *  SEMPRE precisa mandar o mesmo valor pras duas chamadas (senão o topo
+ *  mostra um número e a lista mostra outro). A rota de CPF
+ *  (listCpfAnnuities) NÃO tem esse toggle — o backend já filtra
+ *  praticante inativo por padrão, sem parametrização; não inventar esse
+ *  parâmetro lá. */
+export type AnnuityDojoStatusFilter = DojoStatus | "all";
 
 export interface AnnuitySummaryBucket {
   valor: number;
@@ -2393,7 +2409,12 @@ export const karateApi = {
    *  (em_aberto/atrasado — ver AnnuityStatusFilter) e "all" (sem filtro). */
   listDojoAnnuities: (
     federationId: string,
-    params?: { status?: AnnuityStatusFilter; year?: string; q?: string; page?: number; pageSize?: number }
+    params?: {
+      status?: AnnuityStatusFilter; year?: string; q?: string; page?: number; pageSize?: number;
+      /** Filtro ativo/inativo do dojô (PR #413) — mesmo valor que deve ir
+       *  para getAnnuitySummary, senão lista e KPIs divergem. */
+      dojo_status?: AnnuityDojoStatusFilter;
+    }
   ): Promise<Paginated<DojoAnnuity>> => {
     const qs = new URLSearchParams();
     if (params?.status && params.status !== "all") qs.set("status", params.status);
@@ -2401,6 +2422,7 @@ export const karateApi = {
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    if (params?.dojo_status) qs.set("dojo_status", params.dojo_status);
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/financial/annuities/dojos${query}`);
   },
@@ -2536,10 +2558,14 @@ export const karateApi = {
    *  dos números do topo do hub — NUNCA somar a partir da listagem paginada. */
   getAnnuitySummary: (
     federationId: string,
-    params?: { year?: string }
+    /** `dojo_status` (PR #413) precisa ser o MESMO valor mandado para
+     *  listDojoAnnuities — as duas rotas compartilham o predicado no
+     *  backend. Omitido = default do backend ("active"). */
+    params?: { year?: string; dojo_status?: AnnuityDojoStatusFilter }
   ): Promise<AnnuitySummaryResponse> => {
     const qs = new URLSearchParams();
     if (params?.year) qs.set("year", params.year);
+    if (params?.dojo_status) qs.set("dojo_status", params.dojo_status);
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/financial/annuities/summary${query}`);
   },

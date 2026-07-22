@@ -20,7 +20,7 @@
 //     uma penalidade. Fase F4 estende essa mesma ação pro lote (barra de
 //     seleção → VoidBatchModal, POST .../void-batch).
 // ============================================================
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet,
   ActivityIndicator, RefreshControl, useWindowDimensions, ViewStyle, TextStyle, Platform, Clipboard,
@@ -30,7 +30,7 @@ import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateShadows as SH,
   annuityStatusView, annuityReceivableStatusView,
 } from "@/constants/karateTheme";
-import { SearchField, Chip, Mono, Body, RowPressable } from "@/components/karate/shoji";
+import { SearchField, Chip, Mono, Body, RowPressable, ShojiBadge } from "@/components/karate/shoji";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { toast } from "@/components/Toast";
@@ -40,7 +40,7 @@ import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/Lanc
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateApi, DojoAnnuity, CpfAnnuity, AnnuityInstallment, AnnuityStatusFilter, AnnuityPlan, AnnuityStatus,
-  FinanceAuditEntry, AnnuityPaymentMethod, AnnuityReceiveResult,
+  FinanceAuditEntry, AnnuityPaymentMethod, AnnuityReceiveResult, AnnuityDojoStatusFilter,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
@@ -136,6 +136,10 @@ export interface AnnuityRowVM {
   dueDate: string | null;
   installments: AnnuityInstallment[];
   referencePeriod: string;
+  /** Ativo/inativo do DOJÔ titular (PR #413) — null pro segmento CPF
+   *  (praticante não tem esse conceito aqui; o backend já filtra
+   *  praticante inativo por padrão, sem parametrização). */
+  isActive: boolean | null;
 }
 
 // computeDaysOverdue: deriva "dias em atraso" a partir das PRÓPRIAS parcelas
@@ -179,6 +183,7 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
       dueDate: d.due_date ?? null,
       installments: d.installments ?? [],
       referencePeriod: d.reference_period,
+      isActive: typeof d.is_active === "boolean" ? d.is_active : null,
     };
   }
   const p = item as CpfAnnuity;
@@ -198,6 +203,9 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
     dueDate: p.due_date ?? null,
     installments: p.installments ?? [],
     referencePeriod: p.reference_period,
+    // CPF não tem conceito de dojo_status na API (ver AnnuityDojoStatusFilter
+    // em services/karateApi.ts) — sempre null aqui.
+    isActive: null,
   };
 }
 
@@ -660,6 +668,15 @@ function AnnuityRowItem({
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>{vm.name}</Text>
             {vm.plan && <Text style={styles.planPill}>{PLAN_LABEL[vm.plan]}</Text>}
+            {/* Rótulo de dojô inativo (PR #413 — is_active por linha).
+                Só aparece quando é FALSE: no recorte padrão ("Ativos")
+                nunca aparece nenhuma linha inativa, então o rótulo "Ativo"
+                seria redundante em toda a tabela — só sinalizamos a
+                EXCEÇÃO. É essencial no recorte "Todos"/"Inativos" pra
+                distinguir quem já não é filiado. Mesmo componente
+                (ShojiBadge dojoStatus=) que DojosListTab usa pro mesmo
+                conceito — nenhum badge novo inventado aqui. */}
+            {seg === "dojo" && vm.isActive === false && <ShojiBadge dojoStatus="inactive" />}
           </View>
           <Mono style={{ fontSize: 10, color: P.red }}>{vm.code || "—"}</Mono>
           {/* Fase F5 (mockup v2) — barra devido→recebido com legenda de
@@ -989,11 +1006,15 @@ interface Props {
   year: string;
   statusFilter: AnnuityStatusFilter;
   onStatusFilterChange: (s: AnnuityStatusFilter) => void;
+  /** Filtro ativo/inativo do segmento Dojô (PR #413, backend) — vem do hub
+   *  (AnnuitiesHub), fonte única compartilhada com o summary/KPIs. Só é
+   *  usado quando seg==="dojo" (listCpfAnnuities não tem esse parâmetro). */
+  dojoStatus: AnnuityDojoStatusFilter;
   onMutated: () => void;
   headerElement: React.ReactNode;
 }
 
-export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatusFilterChange, onMutated, headerElement }: Props) {
+export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatusFilterChange, dojoStatus, onMutated, headerElement }: Props) {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
 
@@ -1045,26 +1066,48 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [receiveTargetKey, setReceiveTargetKey] = useState<string | null>(null);
   const [statementTargetKey, setStatementTargetKey] = useState<string | null>(null);
 
-  // Volta pra página 1 sempre que o filtro/busca/segmento/ano muda; limpa
-  // seleção (evita agir sobre linhas que já não estão na tela).
-  useEffect(() => { setPage(1); setSelected(new Set()); setExpandedKey(null); }, [seg, year, statusFilter, debouncedQ]);
+  // Volta pra página 1 sempre que o filtro/busca/segmento/ano/dojo_status
+  // muda; limpa seleção (evita agir sobre linhas que já não estão na
+  // tela). BUGFIX real já visto no roster: trocar de filtro sem resetar a
+  // página deixa a lista vazia (ex.: página 3 de "Ativos" pode não existir
+  // em "Inativos") sem explicar o motivo pro operador.
+  useEffect(() => { setPage(1); setSelected(new Set()); setExpandedKey(null); }, [seg, year, statusFilter, dojoStatus, debouncedQ]);
+
+  // Condição de corrida: cada fetch carrega um id incremental; só a
+  // resposta MAIS RECENTE pode escrever no estado (mesmo padrão de
+  // DojosListTab/CadastralTab). Trocar o filtro dojo_status rápido demais
+  // (ou junto de outro filtro) antes disparava duas requisições concorrentes
+  // e a mais lenta podia sobrescrever a lista com dados do recorte errado.
+  const reqIdRef = useRef(0);
 
   const load = useCallback(async (isRefresh = false) => {
+    const myReq = ++reqIdRef.current;
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      const params = { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE };
+      // dojo_status só existe na rota de dojô (PR #413) — a rota de CPF
+      // (listCpfAnnuities) não tem esse parâmetro no backend, então só
+      // entra no payload quando seg==="dojo". Mesmo valor que o hub manda
+      // pro summary (getAnnuitySummary) nesse mesmo recorte — garante que
+      // lista e KPIs nunca divergem.
+      const params = seg === "dojo"
+        ? { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE, dojo_status: dojoStatus }
+        : { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE };
       const res = seg === "dojo"
         ? await karateApi.listDojoAnnuities(federationId, params)
         : await karateApi.listCpfAnnuities(federationId, params);
+      if (myReq !== reqIdRef.current) return; // resposta obsoleta — descarta
       setItems(res.data.map((it) => toRowVM(seg, it)));
       setTotal(res.total);
     } catch {
+      if (myReq !== reqIdRef.current) return;
       setError(true);
     } finally {
-      isRefresh ? setRefreshing(false) : setLoading(false);
+      if (myReq === reqIdRef.current) {
+        isRefresh ? setRefreshing(false) : setLoading(false);
+      }
     }
-  }, [federationId, seg, year, statusFilter, debouncedQ, page]);
+  }, [federationId, seg, year, statusFilter, dojoStatus, debouncedQ, page]);
   useEffect(() => { load(); }, [load]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
