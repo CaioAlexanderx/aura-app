@@ -41,7 +41,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
-  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated, Platform,
+  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated, Platform, Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
@@ -237,18 +237,21 @@ export default function DojoDetailScreen() {
   // DJ4: modal "Lançar pagamento" (período novo já pago)
   const [registerModal, setRegisterModal] = useState(false);
 
-  // Toast inline — padrão das fichas Shoji.
-  const [toast, setToast] = useState<string | null>(null);
+  // Toast inline — padrão das fichas Shoji. Item 3 (toggle ativo/inativo do
+  // roster): ganhou um 2º parâmetro opcional `undo` (mesmo formato do toast
+  // com Desfazer já usado em app/karate/roster-update/[token].tsx) — todo
+  // showToast(msg) existente continua funcionando sem alterações.
+  const [toast, setToast] = useState<{ message: string; undoLabel?: string; onUndo?: () => void } | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
+  const showToast = useCallback((msg: string, undo?: { label: string; onUndo: () => void }) => {
+    setToast({ message: msg, undoLabel: undo?.label, onUndo: undo?.onUndo });
     toastAnim.setValue(0);
     Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => {
       Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setToast(null));
-    }, 2600);
+    }, undo ? 4000 : 2600);
   }, [toastAnim]);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
@@ -299,6 +302,89 @@ export default function DojoDetailScreen() {
     setRosterTab(tab);
     setRosterPage(1);
   }, []);
+
+  // ── Toggle ativo/inativo por praticante (pedido do Caio, 21/07/2026) ────
+  // Fonte única: a mutação escreve DIRETO no `roster` que a UI já lê (linha
+  // ~854, roster.map) — é a mesma lista, não uma cópia paralela. Essa é a
+  // armadilha nº1 deste produto (mutação numa lista, UI lendo outra → clique
+  // vira no-op silencioso; já mordeu 2×), então NUNCA introduzir um segundo
+  // estado para o status otimista.
+  //
+  // Corrida (item 5): PATCHes do MESMO praticante são serializados por
+  // student_id em `rosterChainRef` — o próximo só sai depois que o anterior
+  // terminar (sucesso ou falha), então nunca um PATCH lento sobrescreve um
+  // valor mais novo na resposta do servidor. `rosterDesiredRef` guarda qual
+  // é o ÚLTIMO valor que o usuário pediu para aquele id; se um PATCH falha
+  // mas o usuário já trocou de novo enquanto ele estava em voo, o revert
+  // NÃO mexe na UI (senão apagaria uma mudança mais recente) — só desfaz
+  // visualmente quando a falha ainda é a última palavra sobre aquele id.
+  // Sem retry automático (retry:0): cada PATCH sai uma única vez.
+  const rosterChainRef = useRef<Record<string, Promise<void>>>({});
+  const rosterDesiredRef = useRef<Record<string, boolean>>({});
+
+  // Contadores do summary (Ativos/Inativos) acompanham a mudança otimista —
+  // decisão do Caio (item 4): o item some da aba só no próximo reload, mas os
+  // contadores nunca podem mentir enquanto isso, então sobem/descem junto.
+  const applyRosterActiveDelta = useCallback((activeDelta: number) => {
+    setRosterSummary((prev) => (prev ? {
+      ...prev,
+      active: Math.max(0, prev.active + activeDelta),
+      inactive: Math.max(0, prev.inactive - activeDelta),
+    } : prev));
+  }, []);
+
+  const setRosterItemActive = useCallback((studentId: string, active: boolean) => {
+    setRoster((prev) => prev.map((m) => (m.student_id === studentId ? { ...m, is_active: active } : m)));
+  }, []);
+
+  // Aplica UMA mudança de status (otimista + PATCH serializado). Devolve
+  // se deu certo — quem chama decide o toast (sucesso com Desfazer, ou erro).
+  const applyRosterStatusChange = useCallback((studentId: string, nextActive: boolean): Promise<boolean> => {
+    const prevActive = !nextActive;
+    rosterDesiredRef.current[studentId] = nextActive;
+    setRosterItemActive(studentId, nextActive);
+    applyRosterActiveDelta(nextActive ? 1 : -1);
+
+    const run = async (): Promise<boolean> => {
+      try {
+        await karateApi.updatePractitioner(federationId, studentId, { is_active: nextActive });
+        return true;
+      } catch {
+        // Só desfaz visualmente se nenhum clique mais novo já mudou o alvo
+        // deste praticante enquanto este PATCH estava em voo.
+        if (rosterDesiredRef.current[studentId] === nextActive) {
+          setRosterItemActive(studentId, prevActive);
+          applyRosterActiveDelta(prevActive ? 1 : -1);
+          rosterDesiredRef.current[studentId] = prevActive;
+        }
+        return false;
+      }
+    };
+
+    const chained = (rosterChainRef.current[studentId] || Promise.resolve()).then(run, run);
+    rosterChainRef.current[studentId] = chained.then(() => undefined);
+    return chained;
+  }, [federationId, applyRosterActiveDelta, setRosterItemActive]);
+
+  // Handler do switch na linha do roster — troca na hora, sem diálogo
+  // (decisão do Caio: reversível/baixo risco, precisa ser rápido pra trocar
+  // vários seguidos). Gate: mesmo `canManage` (canTransfer) já usado nas
+  // demais ações de praticante desta tela — não afrouxar.
+  const handleToggleRosterActive = useCallback((m: DojoMemberStanding) => {
+    if (!canManage) return;
+    const nextActive = !m.is_active;
+    const name = m.full_name;
+    applyRosterStatusChange(m.student_id, nextActive).then((ok) => {
+      if (ok) {
+        showToast(`${name} ${nextActive ? "ativado" : "inativado"}`, {
+          label: "Desfazer",
+          onUndo: () => { applyRosterStatusChange(m.student_id, !nextActive); },
+        });
+      } else {
+        showToast(`Não foi possível atualizar ${name}. Tente de novo.`);
+      }
+    });
+  }, [canManage, applyRosterStatusChange, showToast]);
 
   // Validação de quadro — GET roster-validation para o banner no topo do
   // detalhe (pending/validated). Falha silenciosa: o banner simplesmente
@@ -861,7 +947,24 @@ export default function DojoDetailScreen() {
                     </View>
                     {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
                     <View style={styles.rosterBadges}>
-                      <Badge status={m.is_active ? "ok" : "neutral"} label={m.is_active ? "Ativo" : "Inativo"} />
+                      {canManage ? (
+                        <View style={styles.rosterStatusToggle}>
+                          <Text style={[styles.rosterStatusLabel, !m.is_active && styles.rosterStatusLabelOff]}>
+                            {m.is_active ? "Ativo" : "Inativo"}
+                          </Text>
+                          <Switch
+                            value={m.is_active}
+                            onValueChange={() => handleToggleRosterActive(m)}
+                            trackColor={{ false: C.border2, true: C.primarySoft }}
+                            thumbColor={m.is_active ? C.primary : "#fff"}
+                            accessibilityRole="switch"
+                            accessibilityLabel={`Status de ${m.full_name}`}
+                            accessibilityHint={m.is_active ? "Ativado. Toque para inativar." : "Inativado. Toque para ativar."}
+                          />
+                        </View>
+                      ) : (
+                        <Badge status={m.is_active ? "ok" : "neutral"} label={m.is_active ? "Ativo" : "Inativo"} />
+                      )}
                       {m.is_black_belt && m.financeiro === "em_dia" ? (
                         <Badge status="ok" label="Em dia" />
                       ) : null}
@@ -1182,14 +1285,31 @@ export default function DojoDetailScreen() {
         }}
       />
 
-      {/* Toast inline */}
+      {/* Toast inline — pointerEvents box-none: o retangulo do toast não
+          intercepta toques fora do texto/botão, mas o botão Desfazer (quando
+          presente) precisa continuar clicável. */}
       {toast ? (
-        <Animated.View pointerEvents="none" style={[styles.toast, {
+        <Animated.View pointerEvents="box-none" style={[styles.toast, {
           opacity: toastAnim,
           transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
         }]}>
           <Icon name="check" size={16} color="#bfe3c4" />
-          <Text style={styles.toastTxt}>{toast}</Text>
+          <Text style={styles.toastTxt}>{toast.message}</Text>
+          {toast.onUndo ? (
+            <Pressable
+              onPress={() => {
+                const undo = toast.onUndo;
+                if (toastTimer.current) clearTimeout(toastTimer.current);
+                setToast(null);
+                undo?.();
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={toast.undoLabel || "Desfazer"}
+            >
+              <Text style={styles.toastUndo}>{toast.undoLabel || "Desfazer"}</Text>
+            </Pressable>
+          ) : null}
         </Animated.View>
       ) : null}
     </ShojiBackground>
@@ -1657,6 +1777,11 @@ const styles = StyleSheet.create({
   rosterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   rosterName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   rosterBadges: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  // Toggle ativo/inativo do roster (21/07/2026) — label + Switch, no lugar
+  // do Badge estático para quem pode editar (canManage).
+  rosterStatusToggle: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+  rosterStatusLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: C.ok } as TextStyle,
+  rosterStatusLabelOff: { color: C.ink3 } as TextStyle,
   // Fase 5 — bloco de resumo das faixas-pretas (texto + BarRow em dia/atrasado).
   blackBeltBlock: { paddingVertical: 4, marginBottom: SP[5], borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: SP[5] } as ViewStyle,
   blackBeltLine: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink } as TextStyle,
@@ -1757,4 +1882,5 @@ const styles = StyleSheet.create({
   // Toast inline
   toast: { position: "absolute", left: 20, right: 20, bottom: 24, alignSelf: "center", maxWidth: 460, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.ink, borderRadius: R.md, paddingVertical: 12, paddingHorizontal: 16 } as ViewStyle,
   toastTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2", flex: 1 } as TextStyle,
+  toastUndo: { fontFamily: F.body, fontSize: 13, fontWeight: "800", color: "#f4d9a0" } as TextStyle,
 });
