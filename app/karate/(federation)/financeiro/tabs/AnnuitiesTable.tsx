@@ -564,66 +564,78 @@ function AnnuityRowItem({
           <View style={{ width: 22 }} />
         )}
 
-        <View style={{ flex: wide ? 2 : undefined, minWidth: wide ? undefined : 140, gap: 2 }}>
-          <Text style={styles.name} numberOfLines={1}>{vm.name}</Text>
-          <Mono style={{ fontSize: 10, color: P.red }}>{vm.code || "—"}</Mono>
-          {/* Fase F4 (mockup v2) — barra devido→recebido, compacta, sob o
-              nome. Só faz sentido quando existe cobrança com valor > 0. */}
-          {!isNoCharge && vm.total > 0 && (
-            <View style={styles.progBarTrack} accessibilityLabel={`${fmtMoney(vm.paidTotal)} recebido de ${fmtMoney(vm.total)}`}>
-              <View style={[styles.progBarFill, { width: `${Math.max(0, Math.min(100, Math.round((vm.paidTotal / vm.total) * 100)))}%` }]} />
-            </View>
-          )}
-        </View>
-
-        {wide && (
-          <View style={{ width: 100 }}>
-            <Body muted style={{ fontSize: 12 }}>{vm.plan ? PLAN_LABEL[vm.plan] : "—"}</Body>
+        <View style={{ flex: wide ? 2 : undefined, minWidth: wide ? undefined : 140, gap: 3 }}>
+          {/* Fase F5 (mockup v2) — nome + plano na MESMA célula (pílula
+              inline, mesmo espírito do mockup .plan), no lugar da antiga
+              coluna "Plano" isolada (só existia em telas largas). */}
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{vm.name}</Text>
+            {vm.plan && <Text style={styles.planPill}>{PLAN_LABEL[vm.plan]}</Text>}
           </View>
-        )}
-
-        <View style={{ width: wide ? 220 : "100%", flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: wide ? 0 : 6 }}>
-          {trail.length === 0 ? (
-            <Body muted style={{ fontSize: 11 }}>Sem parcelas lançadas</Body>
-          ) : showTrail ? (
-            trail.map(({ inst, state }) => (
-              <InstallmentPill key={inst.id} inst={inst} state={state} active={expanded} onPress={onToggleExpand} />
-            ))
-          ) : (
-            <InstallmentSummary vm={vm} state={trail[0]?.state ?? null} />
+          <Mono style={{ fontSize: 10, color: P.red }}>{vm.code || "—"}</Mono>
+          {/* Fase F5 (mockup v2) — barra devido→recebido com legenda de
+              valores (recebido / de total) logo abaixo — a mesma informação
+              que antes vivia numa coluna "Total" à parte, agora lida junto
+              do progresso (mockup .amts). Só faz sentido quando existe
+              cobrança com valor > 0. */}
+          {!isNoCharge && vm.total > 0 && (
+            <>
+              <View style={styles.progBarTrack} accessibilityLabel={`${fmtMoney(vm.paidTotal)} recebido de ${fmtMoney(vm.total)}`}>
+                <View style={[styles.progBarFill, { width: `${Math.max(0, Math.min(100, Math.round((vm.paidTotal / vm.total) * 100)))}%` }]} />
+              </View>
+              <View style={styles.progCaptions}>
+                <Mono style={styles.progCaptionRecv}>{fmtMoney(vm.paidTotal)} recebido</Mono>
+                <Mono style={styles.progCaptionDue}>de {fmtMoney(vm.total)}</Mono>
+              </View>
+            </>
           )}
-        </View>
 
-        {wide && (
-          <View style={{ width: 110, alignItems: "flex-end" }}>
-            <Mono style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>{fmtMoney(vm.total)}</Mono>
-            {vm.paidTotal > 0 && vm.paidTotal < vm.total && (
-              <Body muted style={{ fontSize: 10 }}>{fmtMoney(vm.paidTotal)} pago</Body>
+          {/* Trilha de parcelas — aditiva ao mockup v2 (que só tem a barra):
+              MANTIDA aqui, mais discreta/aninhada sob o progresso, porque é
+              a única forma de abrir/pagar uma parcela FORA da ordem FIFO
+              (função existente shipped na F2 — não pode sumir, ver PR). */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
+            {trail.length === 0 ? (
+              <Body muted style={{ fontSize: 11 }}>Sem parcelas lançadas</Body>
+            ) : showTrail ? (
+              trail.map(({ inst, state }) => (
+                <InstallmentPill key={inst.id} inst={inst} state={state} active={expanded} onPress={onToggleExpand} />
+              ))
+            ) : (
+              <InstallmentSummary vm={vm} state={trail[0]?.state ?? null} />
             )}
           </View>
-        )}
+        </View>
 
-        <View style={{ width: wide ? 130 : undefined, alignItems: "flex-end", gap: 4 }}>
+        {/* Fase F5 (mockup v2) — saldo com coluna PRÓPRIA à direita (peso
+            visual: mono maior, cor só quando atrasado — "paleta contida").
+            Antes o saldo dividia a mesma coluna estreita do badge de status
+            com tipografia pequena; agora o badge fica no topo e o número
+            do saldo ganha destaque abaixo, mais perto do mockup aprovado. */}
+        <View style={{ width: wide ? 150 : undefined, alignItems: "flex-end", gap: 4 }}>
           <View style={[styles.badge, { backgroundColor: sv.bg }]} accessibilityLabel={sv.label}>
             <Icon name={sv.icon as any} size={11} color={sv.color} />
             <Text style={[styles.badgeText, { color: sv.color }]}>{sv.label}</Text>
           </View>
-          {/* Fase F4 (mockup v2) — saldo em destaque à direita: destaque por
-              tipografia (mono, bold), não por cor extra — só fica vermelho
-              quando atrasado, mesmo princípio do mockup ("paleta contida"). */}
           {!isNoCharge && (
             saldo <= 0.005 ? (
-              <Body muted style={{ fontSize: 10.5, color: P.ok }}>saldo quitado</Body>
+              <Body muted style={{ fontSize: 11, color: P.ok }}>saldo quitado</Body>
             ) : (
-              <Mono style={{ fontSize: 14, fontWeight: "700", color: sv.key === "atrasado" ? P.danger : C.ink }}>
-                {fmtMoney(saldo)}
-              </Mono>
+              <>
+                <Mono style={[styles.balanceNum, { color: sv.key === "atrasado" ? P.danger : C.ink }]}>
+                  {fmtMoney(saldo)}
+                </Mono>
+                <Text style={styles.balanceCap}>saldo</Text>
+              </>
             )
           )}
-          {vm.daysOverdue > 0 && <Body muted style={{ fontSize: 10, color: P.red }}>{vm.daysOverdue}d em atraso</Body>}
+          {/* Fase F5 — P.danger (não P.red): mesmo token semântico do
+              badge/KPI "Atrasado" acima (ver annuityReceivableStatusView) —
+              o vermelhão de carimbo (P.red) fica reservado pra AÇÃO. */}
+          {vm.daysOverdue > 0 && <Body muted style={{ fontSize: 10, color: P.danger }}>{vm.daysOverdue}d em atraso</Body>}
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {isNoCharge ? (
             <TouchableOpacity style={styles.launchBtn} onPress={(e) => { e.stopPropagation?.(); onLaunch(); }} accessibilityRole="button" accessibilityLabel={`Lançar anuidade de ${vm.name}`}>
               <Icon name="add" size={13} color="#fff" />
@@ -631,19 +643,31 @@ function AnnuityRowItem({
             </TouchableOpacity>
           ) : (
             <>
-              {/* Fase F4 — extrato do recebível (sempre acessível, mesmo
-                  quitado: histórico de baixas não desaparece). */}
-              {vm.rowId && (
-                <TouchableOpacity
-                  style={styles.statementBtn}
-                  onPress={(e) => { e.stopPropagation?.(); onStatement(); }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Extrato de ${vm.name}`}
-                >
-                  <Icon name="receipt" size={14} color={C.ink3} />
-                </TouchableOpacity>
-              )}
+              {/* Fase F5 (mockup v2: "ação primária destacada, secundárias
+                  contidas") — extrato + remover cobrança AGRUPADOS e
+                  contidos (ícone só, borda fraca), a ação primária
+                  "Receber" separada e destacada em vermelho. Nenhuma das
+                  duas ações mudou de comportamento — só reorganizadas. */}
+              <View style={styles.secondaryActions}>
+                {/* Fase F4 — extrato do recebível (sempre acessível, mesmo
+                    quitado: histórico de baixas não desaparece). */}
+                {vm.rowId && (
+                  <TouchableOpacity
+                    style={styles.statementBtn}
+                    onPress={(e) => { e.stopPropagation?.(); onStatement(); }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Extrato de ${vm.name}`}
+                  >
+                    <Icon name="receipt" size={14} color={C.ink3} />
+                  </TouchableOpacity>
+                )}
+                {vm.rowId && (
+                  <TouchableOpacity style={styles.iconBtnDanger} onPress={(e) => { e.stopPropagation?.(); onVoid(); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remover cobrança de ${vm.name}`}>
+                    <Icon name="trash-outline" size={14} color={P.red} />
+                  </TouchableOpacity>
+                )}
+              </View>
               {/* Fase F4 — ação primária do recebível: abre a folha de baixa
                   livre (prévia FIFO ao vivo contra o backend, nunca
                   recalculada no cliente). Só quando há saldo em aberto —
@@ -660,11 +684,6 @@ function AnnuityRowItem({
               )}
               {vm.installments.length > 0 && (
                 <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.ink4} />
-              )}
-              {vm.rowId && (
-                <TouchableOpacity style={styles.iconBtnDanger} onPress={(e) => { e.stopPropagation?.(); onVoid(); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remover cobrança de ${vm.name}`}>
-                  <Icon name="trash-outline" size={14} color={P.red} />
-                </TouchableOpacity>
               )}
             </>
           )}
@@ -854,15 +873,18 @@ const TableHeader = React.memo(function TableHeader(p: TableHeaderProps) {
           <Chip label="Sem cobrança" active={p.statusFilter === "no_charge"} onPress={() => p.onStatusFilter("no_charge")} />
         </View>
         <Body muted style={{ fontSize: 11.5, marginBottom: 6 }}>{p.total} {p.total === 1 ? "registro" : "registros"} na temporada</Body>
+        {/* Fase F5 (mockup v2) — thead reduzido a 2 colunas reais (Dojô/
+            Praticante + Saldo): "Plano" virou pílula inline no nome,
+            "Parcelas" e "Total" viraram a barra + legenda sob o nome —
+            nenhuma informação sumiu, só o cabeçalho de tabela parou de
+            listar como colunas o que agora é lido dentro da própria
+            célula (razão do "ainda parece tabela" apontado pelo Caio). */}
         {p.showThead && (
           <View style={styles.thead}>
             <View style={{ width: 22 }} />
             <Text style={[styles.th, { flex: 2 }]}>{p.seg === "dojo" ? "Dojô" : "Praticante"}</Text>
-            <Text style={[styles.th, { width: 100 }]}>Plano</Text>
-            <Text style={[styles.th, { width: 220 }]}>Parcelas</Text>
-            <Text style={[styles.th, { width: 110, textAlign: "right" }]}>Total</Text>
-            <Text style={[styles.th, { width: 130, textAlign: "right" }]}>Status</Text>
-            <View style={{ width: 40 }} />
+            <Text style={[styles.th, { width: 150, textAlign: "right" }]}>Saldo</Text>
+            <View style={{ width: 96 }} />
           </View>
         )}
       </View>
@@ -1441,13 +1463,21 @@ const styles = StyleSheet.create({
 
   skeletonRow: { height: 56, borderRadius: R.md, backgroundColor: C.line, opacity: 0.4, marginBottom: 8 } as ViewStyle,
 
-  rowCard: { borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 10 } as ViewStyle,
-  rowMain: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 } as ViewStyle,
+  // Fase F5 (mockup v2) — respiro generoso: mais padding vertical na
+  // linha (era 10/6, mockup usa 15px de padding no .row) e gap maior entre
+  // as células (era 8, agora 12) — mesma estrutura "poço + divisor" de
+  // Praticantes/Dojôs (CLAUDE.md #6), só com mais ar entre os elementos.
+  rowCard: { borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 14 } as ViewStyle,
+  rowMain: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 } as ViewStyle,
 
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: C.line2, alignItems: "center", justifyContent: "center", backgroundColor: P.glass2 } as ViewStyle,
   checkboxOn: { backgroundColor: P.red, borderColor: P.red } as ViewStyle,
 
   name: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
+  // Fase F5 (mockup v2) — nome + plano na mesma linha (pílula inline,
+  // mockup .plan), substitui a antiga coluna "Plano" (só em telas largas).
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" } as ViewStyle,
+  planPill: { fontFamily: F.mono, fontSize: 9.5, letterSpacing: 0.4, textTransform: "uppercase", color: C.ink2, borderWidth: 1, borderColor: C.line2, borderRadius: R.sm, paddingHorizontal: 6, paddingVertical: 1 } as TextStyle,
 
   pill: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: R.pill, borderWidth: 1.5 } as ViewStyle,
   pillText: { fontFamily: F.mono, fontSize: 10, fontWeight: "700" } as TextStyle,
@@ -1461,16 +1491,31 @@ const styles = StyleSheet.create({
   // Fase F4 (mockup v2) — barra compacta devido→recebido, sob o nome do
   // dojô/praticante. Cor única (P.ok) — o mockup só usa vermelho pra
   // ação/perigo, nunca pra "progresso normal".
-  progBarTrack: { height: 4, borderRadius: 3, backgroundColor: P.paper3, overflow: "hidden", marginTop: 5, width: "100%", maxWidth: 180 } as ViewStyle,
+  progBarTrack: { height: 4, borderRadius: 3, backgroundColor: P.paper3, overflow: "hidden", marginTop: 5, width: "100%", maxWidth: 260 } as ViewStyle,
   progBarFill: { height: "100%", borderRadius: 3, backgroundColor: P.ok } as ViewStyle,
+  // Fase F5 (mockup v2 .amts) — legenda de valores sob a barra, no lugar
+  // da antiga coluna "Total" isolada (mesma informação, lida junto do
+  // progresso — só existia em telas largas antes, agora sempre visível).
+  progCaptions: { flexDirection: "row", justifyContent: "space-between", marginTop: 5, maxWidth: 260 } as ViewStyle,
+  progCaptionRecv: { fontSize: 10.5, color: P.ok, fontWeight: "500" } as TextStyle,
+  progCaptionDue: { fontSize: 10.5, color: C.ink3 } as TextStyle,
 
   // Fase F4 — ação primária do recebível (mockup .btn.primary: vermelho é
   // reservado pra ação real, aqui "Receber").
-  receiveBtn: { backgroundColor: P.red, borderRadius: R.sm, paddingVertical: 7, paddingHorizontal: 12 } as ViewStyle,
-  receiveBtnLabel: { fontSize: 12, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
+  // Fase F5 — botão primário um pouco mais generoso (mockup .btn: 9px 15px).
+  receiveBtn: { backgroundColor: P.red, borderRadius: R.sm, paddingVertical: 9, paddingHorizontal: 15 } as ViewStyle,
+  receiveBtnLabel: { fontSize: 12.5, fontWeight: "700", color: "#fdf8f2" } as TextStyle,
   statementBtn: { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: R.sm, borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass } as ViewStyle,
 
   iconBtnDanger: { alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: R.sm, borderWidth: 1, borderColor: P.dangerWash, backgroundColor: P.dangerWash } as ViewStyle,
+  // Fase F5 (mockup v2: "secundárias contidas") — agrupa extrato + remover
+  // cobrança num cluster compacto, visualmente separado da ação primária.
+  secondaryActions: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
+
+  // Fase F5 (mockup v2) — saldo com peso tipográfico próprio (era 14, mono
+  // 700, dividindo coluna com o badge; mockup usa ~20px de destaque).
+  balanceNum: { fontFamily: F.mono, fontSize: 17, fontWeight: "700", letterSpacing: 0.2 } as TextStyle,
+  balanceCap: { fontFamily: F.mono, fontSize: 9.5, color: C.ink3, letterSpacing: 0.3 } as TextStyle,
 
   confirmVoidBox: { marginTop: 10, gap: 8, backgroundColor: P.dangerWash, borderWidth: 1, borderColor: P.danger, borderRadius: R.md, padding: 12 } as ViewStyle,
   confirmVoidText: { fontSize: 11.5, lineHeight: 16, color: C.ink2 } as TextStyle,
