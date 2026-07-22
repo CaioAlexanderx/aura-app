@@ -22,7 +22,7 @@
 // practitioner_total do payload (total REAL da rede), não a soma das barras
 // visíveis — a distribuição oculta a Vermelha, então somar barras subestima.
 // ============================================================
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   ScrollView, View, Text, RefreshControl, TouchableOpacity,
   useWindowDimensions, StyleSheet, ViewStyle, TextStyle,
@@ -35,9 +35,9 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   ShojiBackground, PageHead, SectionHead, Card, KpiBand, BarRow, Alert,
-  ShojiButton, Body, Mono,
+  ShojiButton, Body, Mono, Chip,
 } from "@/components/karate/shoji";
-import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert, StandingSummary } from "@/services/karateApi";
+import { karateApi, DashboardPayload, OverdueDojo, UpcomingEvent, DashboardAlert, StandingSummary, BeltDistributionItem } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { formatEventDateCompact } from "@/utils/eventDate";
 
@@ -86,6 +86,36 @@ export default function KaratePainel() {
     finally { setStandingLoading(false); }
   }, [federationId]);
 
+  // "Praticantes por graduação" (item 3, auditoria ativo/inativo — Caio
+  // 21/07/2026: "sempre ativos primeiro"): consome GET /belt-distribution
+  // (desacoplado do /dashboard, que reusa o mesmo default/parâmetro no
+  // backend — ver karateFederation.js) com toggle ativo/todos. Default
+  // "active", espelhando o default do backend. reqIdRef evita condição de
+  // corrida ao alternar rápido (mesmo padrão de DojosListTab/CadastralTab).
+  const [beltStatus, setBeltStatus] = useState<"active" | "all">("active");
+  const [beltDist, setBeltDist] = useState<BeltDistributionItem[] | null>(null);
+  const [beltLoading, setBeltLoading] = useState(true);
+  const [beltError, setBeltError] = useState(false);
+  const beltReqIdRef = useRef(0);
+
+  const loadBelts = useCallback(async (status: "active" | "all") => {
+    const myReq = ++beltReqIdRef.current;
+    setBeltLoading(true);
+    setBeltError(false);
+    try {
+      const res = await karateApi.getBeltDistribution(federationId, status);
+      if (myReq !== beltReqIdRef.current) return; // resposta obsoleta — descarta
+      setBeltDist(res);
+    } catch {
+      if (myReq !== beltReqIdRef.current) return;
+      setBeltError(true);
+    } finally {
+      if (myReq === beltReqIdRef.current) setBeltLoading(false);
+    }
+  }, [federationId]);
+
+  useEffect(() => { loadBelts(beltStatus); }, [loadBelts, beltStatus]);
+
   useEffect(() => { load(); loadStanding(); }, [load, loadStanding]);
 
   if (error) {
@@ -97,7 +127,13 @@ export default function KaratePainel() {
   const overdue = data?.overdue_dojos ?? [];
   // C6: graduação ATIVA — exclui a Vermelha (histórica) e ordena pela
   // hierarquia oficial. O total/legenda e o max consideram só os exibidos.
-  const belts = (data?.belt_distribution ?? [])
+  //
+  // Item 3 (22/07/2026 — auditoria ativo/inativo): fonte trocada de
+  // data.belt_distribution (embutido no /dashboard, sem toggle) para o
+  // estado dedicado `beltDist` (GET /belt-distribution?status=, com toggle
+  // ativo/todos — ver loadBelts acima). Desacoplado do resto do /dashboard
+  // de propósito: trocar o toggle não deve re-buscar o payload inteiro.
+  const belts = (beltDist ?? [])
     .filter((b) => isActiveBelt(b.belt_level) && isActiveBelt(b.belt_name))
     .slice()
     // back#252: ordena pela ordem canônica. Preferimos o `rank` numérico que
@@ -111,10 +147,14 @@ export default function KaratePainel() {
   const apiAlerts: DashboardAlert[] = (data as any)?.alerts ?? [];
   const beltTotal = belts.reduce((s, b) => s + b.count, 0);
   const beltMax = belts.reduce((m, b) => Math.max(m, b.count), 0) || 1;
-  // back#252: total REAL da rede. Usa practitioner_total quando vier; senão
-  // cai no KPI practitioner_count (e por último na soma das barras visíveis).
-  const practitionerTotal =
-    data?.practitioner_total ?? data?.kpis?.practitioner_count ?? beltTotal;
+  // back#252: total REAL da rede (não a soma das barras visíveis, que
+  // subestima por excluir a Vermelha). Quando o toggle está em "active",
+  // standing.praticantes.ativos é a fonte mais precisa (mesmo critério de
+  // is_active usado pelo belt-distribution?status=active); em "all" cai no
+  // total bruto do /dashboard.
+  const practitionerTotal = beltStatus === "active"
+    ? (standing?.praticantes.ativos ?? data?.practitioner_total ?? data?.kpis?.practitioner_count ?? beltTotal)
+    : (data?.practitioner_total ?? data?.kpis?.practitioner_count ?? beltTotal);
   const overdueTotal = overdue.reduce((s, d) => s + d.amount, 0);
   // Federação vazia: sem dojôs E sem praticantes → tela de boas-vindas.
   const isEmpty = !loading && !!data && data.kpis.dojo_count === 0 && data.kpis.practitioner_count === 0;
@@ -160,7 +200,7 @@ export default function KaratePainel() {
     <ShojiBackground>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { load(true); loadStanding(); }} tintColor={P.red} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { load(true); loadStanding(); loadBelts(beltStatus); }} tintColor={P.red} />}
       >
         {pageHead}
 
@@ -174,7 +214,18 @@ export default function KaratePainel() {
               value: standing ? standing.dojos.ativos : data!.kpis.dojo_count,
               meta: standing ? `de ${data!.kpis.dojo_count} cadastrados` : undefined,
             },
-            { label: "Praticantes", value: data!.kpis.practitioner_count.toLocaleString("pt-BR") },
+            // BUGFIX (22/07/2026 — auditoria ativo/inativo, Caio 21/07/2026:
+            // "não podemos cobrar e controlar os inativos... sempre ativos
+            // primeiro"): value era data.kpis.practitioner_count (total bruto,
+            // mistura inativo). Mesma fonte/mesmo fallback pattern de "Dojôs
+            // filiados" acima — standing.praticantes.ativos com o total como meta.
+            {
+              label: "Praticantes",
+              value: standing
+                ? standing.praticantes.ativos.toLocaleString("pt-BR")
+                : data!.kpis.practitioner_count.toLocaleString("pt-BR"),
+              meta: standing ? `de ${data!.kpis.practitioner_count.toLocaleString("pt-BR")} cadastrados` : undefined,
+            },
             { label: "Receita YTD", value: fmtMoney(data!.kpis.revenue_ytd) },
             // Fonte única (CLAUDE.md — Correção 1): inadimplência de dojô = standing.dojos.atrasado /
             // standing.dojos.ativos — a MESMA base do drill-down de Saúde da Rede. O overdue_rate do
@@ -250,9 +301,23 @@ export default function KaratePainel() {
 
         {/* Distribuição por graduação (ativa — Vermelha histórica fica de fora) */}
         <View style={styles.section}>
-          <SectionHead title="Praticantes por graduação" sub={practitionerTotal > 0 ? `${practitionerTotal.toLocaleString("pt-BR")} praticantes` : undefined} />
+          <SectionHead
+            title="Praticantes por graduação"
+            sub={practitionerTotal > 0 ? `${practitionerTotal.toLocaleString("pt-BR")} praticantes` : undefined}
+            actions={
+              // Item 3 (22/07/2026 — auditoria ativo/inativo): toggle discreto
+              // ativo/todos, espelhando GET /belt-distribution?status=. Mesmo
+              // componente Chip usado no resto do app (ex.: RelacaoFaixasCard
+              // da Saúde da Rede).
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <Chip label="Ativos" active={beltStatus === "active"} onPress={() => setBeltStatus("active")} />
+                <Chip label="Todos" active={beltStatus === "all"} onPress={() => setBeltStatus("all")} />
+              </View>
+            }
+          />
           <Card>
-            {loading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
+            {beltLoading ? [1, 2, 3, 4].map((k) => <Skeleton key={k} height={18} style={{ marginBottom: 14 }} />)
+              : beltError ? <KarateEmptyState icon="alert-circle-outline" title="Não foi possível carregar a distribuição" style={{ paddingVertical: 24 }} />
               : belts.length === 0 ? <KarateEmptyState icon="podium-outline" title="Sem praticantes" style={{ paddingVertical: 24 }} />
               : belts.map((b, i) => <BarRow key={b.belt_level} index={i} label={b.belt_name} value={b.count} max={beltMax} color={beltColor(b.belt_level)} />)}
           </Card>

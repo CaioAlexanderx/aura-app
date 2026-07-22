@@ -1956,8 +1956,17 @@ export const karateApi = {
   getStandingSummary: (federationId: string): Promise<StandingSummary> =>
     request(`/federation/${federationId}/standing/summary`),
 
-  getBeltDistribution: (federationId: string): Promise<BeltDistributionItem[]> =>
-    request(`/federation/${federationId}/belt-distribution`),
+  /**
+   * Distribuição por faixa da federação (card "Praticantes por graduação"
+   * do Painel). `status`: 'active' (default do backend, omitir aqui já
+   * basta — auditoria ativo/inativo, Caio 21/07/2026: "sempre ativos
+   * primeiro") | 'inactive' | 'all'.
+   */
+  getBeltDistribution: (
+    federationId: string,
+    status?: "active" | "inactive" | "all"
+  ): Promise<BeltDistributionItem[]> =>
+    request(`/federation/${federationId}/belt-distribution${status ? `?status=${status}` : ""}`),
 
   // Track P — busca rápida federation-wide
   search: (federationId: string, q: string): Promise<SearchResult> => {
