@@ -633,16 +633,26 @@ export interface CpfAnnuity {
 /** Plano de anuidade — dojô usa os 3; praticante (cpf) só usa 'anual' (N=1). */
 export type AnnuityPlan = "anual" | "semestral" | "trimestral";
 
-/** Uma parcela de anuidade (karate_annuity_installments). status persistido é
- *  SÓ 'pending'|'paid' — "vencida"/"a vencer"/"futura" são rótulos derivados
- *  no cliente a partir de due_date, nunca persistidos. */
+/** Uma parcela de anuidade (karate_annuity_installments). Migration 247 (F1
+ *  da reforma da anuidade — recebível com baixa parcial) adicionou
+ *  `amount_paid` e o valor 'partial' de `status`: persistido agora é
+ *  'pending'|'partial'|'paid' — "vencida"/"a vencer"/"futura" continuam
+ *  sendo rótulos derivados no cliente a partir de due_date, nunca
+ *  persistidos (só a distinção pago-total/pago-em-parte/não-pago vem
+ *  pronta do backend). `amount_paid` é o SALDO JÁ RECEBIDO da parcela
+ *  (SUM do ledger karate_annuity_payments) — o cliente só EXIBE esse
+ *  valor, nunca recalcula (mesma regra do FIFO em AnnuityReceiveModal). */
 export interface AnnuityInstallment {
   id: string;
   seq: number;
   amount: number;
+  /** Aditivo (F1 da reforma da anuidade, migration 247) — quanto já foi
+   *  recebido desta parcela (baixa livre/parcial). 0 quando nada foi pago
+   *  ainda; pode ficar entre 0 e `amount` (parcial) ou == `amount` (paga). */
+  amount_paid: number;
   due_date: string | null;
   paid_at: string | null;
-  status: "pending" | "paid";
+  status: "pending" | "partial" | "paid";
   transaction_id: string | null;
 }
 

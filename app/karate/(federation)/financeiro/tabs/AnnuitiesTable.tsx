@@ -201,41 +201,107 @@ function toRowVM(seg: SegKey, item: DojoAnnuity | CpfAnnuity): AnnuityRowVM {
   };
 }
 
-// ── Trilha de parcelas: classifica cada parcela em paga/vencida/a
-//    vencer/futura. SÓ a PRIMEIRA parcela pendente (por seq) vira "a
-//    vencer" quando ainda não venceu — as pendentes seguintes são
-//    "futura" (parcela futura nunca deixa ninguém atrasado — CLAUDE.md).
-type InstState = "paga" | "vencida" | "a_vencer" | "futura";
-function classifyInstallments(installments: AnnuityInstallment[]): { inst: AnnuityInstallment; state: InstState }[] {
+// ── Trilha de parcelas: classifica cada parcela em paga/parcial/vencida/a
+//    vencer/futura. SÓ a PRIMEIRA parcela NÃO paga (por seq, parcial
+//    inclusive) consome a posição de "próxima pendente" — as seguintes só
+//    viram "a vencer" se essa primeira já não tiver ficado com outro rótulo
+//    (parcela futura nunca deixa ninguém atrasado — CLAUDE.md).
+//
+// Precedência (paga > parcial > vencida > a_vencer > futura), aditiva à
+// F1 da reforma da anuidade (migration 247 — amount_paid + status='partial'
+// no backend, ver services/karateApi.ts): uma parcela com baixa parcial
+// SEMPRE cai em "parcial", mesmo se já venceu — o estado "parcial" tem
+// prioridade visual (mesma âmbar do badge "Parcial" da linha,
+// annuityReceivableStatusView) sobre "vencida", mas carrega consigo a
+// flag `overdue` pra a pill/badge ainda sinalizarem o atraso (ícone
+// "warning" em vez de "time") em vez de escondê-lo. Decisão: uma parcela
+// parcial-e-vencida NÃO deve ficar visualmente idêntica a uma vencida sem
+// nenhum pagamento (perderia a informação valiosa de que já entrou
+// dinheiro), nem idêntica a uma parcial em dia (perderia o alerta de
+// atraso) — por isso os dois sinais coexistem na mesma pill em vez de a
+// gente escolher só um.
+//
+// `status` do backend é a fonte de verdade pra "é parcial?" (persistido,
+// migration 247); o fallback por amount_paid/amount cobre ambiente com
+// backend desatualizado (migration 247 não aplicada — status nunca vem
+// 'partial', mas amount_paid pode ter sido setado por um caminho antigo)
+// ou item sem `status` normalizado. "Paga" idem: status==='paid' OU
+// amount_paid >= amount (arredondamento de centavo — 0.005).
+type InstState = "paga" | "parcial" | "vencida" | "a_vencer" | "futura";
+function classifyInstallments(installments: AnnuityInstallment[]): { inst: AnnuityInstallment; state: InstState; overdue: boolean }[] {
   const sorted = [...installments].sort((a, b) => a.seq - b.seq);
   const today = new Date().toISOString().slice(0, 10);
   let firstPendingSeen = false;
   return sorted.map((inst) => {
-    if (inst.status === "paid") return { inst, state: "paga" as InstState };
+    const amount = Number(inst.amount) || 0;
+    const amountPaid = Number(inst.amount_paid) || 0;
+    const fullyPaid = inst.status === "paid" || (amount > 0 && amountPaid >= amount - 0.005);
+    if (fullyPaid) return { inst, state: "paga" as InstState, overdue: false };
+
+    // Não paga (nem em parte, nem no total) — consome a posição de
+    // "próxima pendente" ANTES de decidir o rótulo final, pra manter a
+    // regra "só a primeira parcela não-paga vira a_vencer" mesmo quando
+    // essa primeira acaba rotulada "parcial" ou "vencida".
+    const isFirstPending = !firstPendingSeen;
+    firstPendingSeen = true;
+
     const overdue = !!inst.due_date && inst.due_date <= today;
-    if (overdue) return { inst, state: "vencida" as InstState };
-    if (!firstPendingSeen) { firstPendingSeen = true; return { inst, state: "a_vencer" as InstState }; }
-    return { inst, state: "futura" as InstState };
+    const isPartial = inst.status === "partial" || (amountPaid > 0.005 && amountPaid < amount - 0.005);
+    if (isPartial) return { inst, state: "parcial" as InstState, overdue };
+    if (overdue) return { inst, state: "vencida" as InstState, overdue: true };
+    if (isFirstPending) return { inst, state: "a_vencer" as InstState, overdue: false };
+    return { inst, state: "futura" as InstState, overdue: false };
   });
 }
 
+// Mesma âmbar do badge "Parcial" da linha (annuityReceivableStatusView,
+// P.warn/P.warnWash) — "parcial" fala a mesma língua de cor em toda a
+// tela, do badge da linha à pill da trilha. Ícone difere de "a_vencer"
+// (que também usa essa âmbar) só na variante parcial+vencida (abaixo, em
+// InstallmentPill) — a cor sozinha nunca é o único sinal (WCAG 1.4.1,
+// CLAUDE.md do design system).
 const INST_STATE_VIEW: Record<InstState, { label: string; color: string; bg: string; icon: string }> = {
   paga:      { label: "Paga",     color: P.ok,      bg: P.okWash,      icon: "checkmark-circle" },
+  parcial:   { label: "Parcial",  color: P.warn,    bg: P.warnWash,    icon: "time" },
   vencida:   { label: "Vencida",  color: P.danger,  bg: P.dangerWash,  icon: "warning" },
   a_vencer:  { label: "A vencer", color: P.warn,    bg: P.warnWash,    icon: "time" },
   futura:    { label: "Futura",   color: P.neutral, bg: P.neutralWash, icon: "ellipse-outline" },
 };
 
-function InstallmentPill({ inst, state, active, onPress }: { inst: AnnuityInstallment; state: InstState; active: boolean; onPress: () => void }) {
+// InstallmentPill — trilha adaptada a split payments (se houver, ver
+// classifyInstallments acima). Duas pistas visuais pra "parcial", nenhuma
+// delas exige inventar cor nova:
+//   1) preenchimento proporcional (mini barra no rodapé da pill,
+//      amount_paid/amount, vindo PRONTO do backend — nunca recalculado
+//      aqui) — é o que diferencia uma pill "parcial" (âmbar + barrinha) de
+//      uma "a_vencer" (mesma âmbar, sem barra, porque amount_paid é 0).
+//   2) ícone "warning" (em vez de "time") quando a parcial também já
+//      venceu — mesmo ícone que "vencida" usa, na cor âmbar de "parcial"
+//      (não vira vermelho: parcial tem prioridade visual sobre vencida,
+//      ver comentário de classifyInstallments).
+// accessibilityLabel carrega o valor por extenso (R$X de R$Y) pra quem usa
+// leitor de tela, já que a barra visual é decorativa/redundante pra esse
+// público.
+function InstallmentPill({ inst, state, overdue, active, onPress }: { inst: AnnuityInstallment; state: InstState; overdue: boolean; active: boolean; onPress: () => void }) {
   const v = INST_STATE_VIEW[state];
+  const amount = Number(inst.amount) || 0;
+  const amountPaid = Number(inst.amount_paid) || 0;
+  const fillPct = state === "parcial" && amount > 0 ? Math.max(0, Math.min(1, amountPaid / amount)) : 0;
+  const icon = state === "parcial" && overdue ? "warning" : v.icon;
+  const label = state === "parcial"
+    ? `Parcela ${inst.seq}, ${monthAbbrOf(inst.due_date)}, Parcial, ${fmtMoney(amountPaid)} de ${fmtMoney(amount)}${overdue ? ", vencida" : ""}`
+    : `Parcela ${inst.seq}, ${monthAbbrOf(inst.due_date)}, ${v.label}`;
   return (
     <TouchableOpacity
       style={[styles.pill, { backgroundColor: v.bg, borderColor: active ? P.red : "transparent" }]}
       onPress={(e) => { e.stopPropagation?.(); onPress(); }}
       accessibilityRole="button"
-      accessibilityLabel={`Parcela ${inst.seq}, ${monthAbbrOf(inst.due_date)}, ${v.label}`}
+      accessibilityLabel={label}
     >
-      <Icon name={v.icon as any} size={10} color={v.color} />
+      {fillPct > 0 && (
+        <View pointerEvents="none" style={[styles.pillFill, { width: `${fillPct * 100}%`, backgroundColor: v.color }]} />
+      )}
+      <Icon name={icon as any} size={10} color={v.color} />
       <Text style={[styles.pillText, { color: v.color }]}>{monthAbbrOf(inst.due_date)}</Text>
     </TouchableOpacity>
   );
@@ -251,31 +317,45 @@ function InstallmentPill({ inst, state, active, onPress }: { inst: AnnuityInstal
 // segmento: se algum praticante tiver mais de uma parcela (dado legado,
 // correção manual), a trilha real volta a aparecer — a UI nunca esconde
 // informação por causa do segmento em que está.
-function shouldShowInstallmentTrail(seg: SegKey, trail: { inst: AnnuityInstallment; state: InstState }[]): boolean {
+function shouldShowInstallmentTrail(seg: SegKey, trail: { inst: AnnuityInstallment; state: InstState; overdue: boolean }[]): boolean {
   return seg === "dojo" || trail.length > 1;
 }
 
 // Substituto da trilha quando ela é ocultada (Praticantes, parcela única):
 // mostra a informação que de fato importa na linha — vencimento + situação
-// da parcela — em vez de uma pill que só repete o mês por extenso.
-function InstallmentSummary({ vm, state }: { vm: AnnuityRowVM; state: InstState | null }) {
+// da parcela — em vez de uma pill que só repete o mês por extenso. Mesma
+// adaptação a split payments da pill: parcial mostra o valor recebido, e
+// parcial+vencida troca o ícone pra "warning" (mesma regra de
+// InstallmentPill — cor âmbar de "parcial" tem prioridade, o ícone é quem
+// avisa o atraso).
+function InstallmentSummary({ vm, state, overdue }: { vm: AnnuityRowVM; state: InstState | null; overdue: boolean }) {
   const v = state ? INST_STATE_VIEW[state] : null;
+  const inst = state === "parcial" ? vm.installments[0] : null;
+  const icon = state === "parcial" && overdue ? "warning" : v?.icon;
+  const label = inst
+    ? `Parcial · ${fmtMoney(Number(inst.amount_paid) || 0)} de ${fmtMoney(Number(inst.amount) || 0)}${overdue ? " · vencida" : ""}`
+    : v?.label ?? "";
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-      {v && <Icon name={v.icon as any} size={12} color={v.color} />}
+      {v && <Icon name={icon as any} size={12} color={v.color} />}
       <Body muted style={{ fontSize: 11.5 }}>
         {vm.dueDate ? `Vence ${formatIsoToBr(vm.dueDate)}` : "Sem vencimento"}
-        {v ? ` · ${v.label}` : ""}
+        {v ? ` · ${label}` : ""}
       </Body>
     </View>
   );
 }
 
 // ── Painel expandido: detalhe de cada parcela + ações (pagar/pix/editar) ─
+// Adaptado a split payments: badge usa INST_STATE_VIEW (já cobre "Parcial"
+// com a mesma âmbar da pill/badge da linha) + ícone "warning" quando
+// parcial-e-vencida (mesma regra de InstallmentPill); o valor devido ganha
+// uma legenda "R$X pago" abaixo quando há baixa parcial — sempre o
+// amount_paid que já vem do backend, nunca recalculado aqui.
 function InstallmentDetailRow({
-  inst, state, federationId, onPay, onPix, onEdit, onSendEmail, hasEmail,
+  inst, state, overdue, federationId, onPay, onPix, onEdit, onSendEmail, hasEmail,
 }: {
-  inst: AnnuityInstallment; state: InstState; federationId: string;
+  inst: AnnuityInstallment; state: InstState; overdue: boolean; federationId: string;
   onPay: (instId: string, method: AnnuityPaymentMethod) => Promise<void>;
   onPix: (instId: string, amount: number, label: string) => void;
   onEdit: (instId: string, body: { amount?: number; due_date?: string }) => Promise<void>;
@@ -321,6 +401,8 @@ function InstallmentDetailRow({
   };
 
   const v = INST_STATE_VIEW[state];
+  const badgeIcon = state === "parcial" && overdue ? "warning" : v.icon;
+  const amountPaid = Number(inst.amount_paid) || 0;
   const isPending = inst.status !== "paid";
 
   const submitPay = async (method: AnnuityPaymentMethod) => {
@@ -363,12 +445,19 @@ function InstallmentDetailRow({
     <View style={styles.instRow}>
       <View style={styles.instRowMain}>
         <View style={[styles.instBadge, { backgroundColor: v.bg }]}>
-          <Icon name={v.icon as any} size={11} color={v.color} />
+          <Icon name={badgeIcon as any} size={11} color={v.color} />
           <Text style={[styles.instBadgeText, { color: v.color }]}>{v.label}</Text>
         </View>
         <Body muted style={{ fontSize: 11.5, width: 78 }}>Parcela {inst.seq}</Body>
         <Body muted style={{ fontSize: 11.5, width: 96 }}>{inst.due_date ? formatIsoToBr(inst.due_date) : "Sem data"}</Body>
-        <Mono style={{ fontSize: 12.5, width: 88 }}>{fmtMoney(inst.amount)}</Mono>
+        <View style={{ width: 88 }}>
+          <Mono style={{ fontSize: 12.5 }}>{fmtMoney(inst.amount)}</Mono>
+          {state === "parcial" && (
+            <Text style={{ fontFamily: F.mono, fontSize: 9.5, color: v.color, marginTop: 1 }}>
+              {fmtMoney(amountPaid)} pago
+            </Text>
+          )}
+        </View>
         {inst.status === "paid" ? (
           <View style={{ flexDirection: "row", alignItems: "center", flex: 1, justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
             <Body muted style={{ fontSize: 11 }}>
@@ -598,11 +687,11 @@ function AnnuityRowItem({
             {trail.length === 0 ? (
               <Body muted style={{ fontSize: 11 }}>Sem parcelas lançadas</Body>
             ) : showTrail ? (
-              trail.map(({ inst, state }) => (
-                <InstallmentPill key={inst.id} inst={inst} state={state} active={expanded} onPress={onToggleExpand} />
+              trail.map(({ inst, state, overdue }) => (
+                <InstallmentPill key={inst.id} inst={inst} state={state} overdue={overdue} active={expanded} onPress={onToggleExpand} />
               ))
             ) : (
-              <InstallmentSummary vm={vm} state={trail[0]?.state ?? null} />
+              <InstallmentSummary vm={vm} state={trail[0]?.state ?? null} overdue={trail[0]?.overdue ?? false} />
             )}
           </View>
         </View>
@@ -709,11 +798,12 @@ function AnnuityRowItem({
       {expanded && vm.installments.length > 0 && (
         <View style={styles.instPanel}>
           <ContactChannelsRow whatsapp={vm.whatsapp} email={vm.email} />
-          {trail.map(({ inst, state }) => (
+          {trail.map(({ inst, state, overdue }) => (
             <InstallmentDetailRow
               key={inst.id}
               inst={inst}
               state={state}
+              overdue={overdue}
               federationId={federationId}
               onPay={onPay}
               onPix={onPix}
@@ -1080,6 +1170,17 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // sentido cobrar agora. Conta quantos dos selecionados TÊM essa parcela
   // (emailPayableCount, alimenta o botão da barra) sem precisar abrir o
   // modal — o modal em si recalcula na hora de montar os targets.
+  //
+  // Decisão consciente (trilha adaptável a split payments, ver
+  // classifyInstallments acima): NÃO inclui "parcial" aqui de propósito.
+  // Esses fluxos legados de LOTE (e-mail/"Registrar pagamento") mostram
+  // `inst.amount` (valor cheio) ao operador antes de confirmar —
+  // BulkPayConfirmModal em particular é um componente com histórico de bug
+  // P0 de dinheiro (ver comentário no próprio arquivo), então trocar esse
+  // valor pro saldo em aberto (amount - amount_paid) merece revisão própria,
+  // fora do escopo desta mudança (só a trilha). Uma parcela parcial
+  // permanece acionável pelo fluxo "Receber" por linha (split-aware, F4) —
+  // ela só não entra automaticamente nesses atalhos em lote por enquanto.
   const emailPayableCount = useMemo(() => selectedRows.filter(
     (vm) => classifyInstallments(vm.installments).some((c) => c.state === "vencida" || c.state === "a_vencer")
   ).length, [selectedRows]);
@@ -1105,6 +1206,8 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // handleOpenBulkPay, cada linha contribui com sua parcela vencida/a_vencer
   // (uma por linha; se não tiver nenhuma pendente, entra em noPendingCount
   // — informativo, não é erro, mostrado no modal antes de confirmar).
+  // "parcial" fica de fora aqui pelo mesmo motivo documentado em
+  // emailPayableCount acima.
   const handleOpenBulkEmail = useCallback(() => {
     const targets: EmailBatchTarget[] = [];
     let noPending = 0;
@@ -1146,6 +1249,9 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // BulkPayConfirmModal — a baixa em si só acontece depois do operador
   // confirmar explicitamente lá dentro (contagem + valor total visíveis
   // antes de mutar).
+  // "parcial" fica de fora aqui pelo mesmo motivo documentado em
+  // emailPayableCount acima (BulkPayConfirmModal exibe inst.amount cheio,
+  // não o saldo em aberto — trocar isso é fora do escopo desta mudança).
   const handleOpenBulkPay = useCallback(() => {
     const targets: BulkPayTarget[] = [];
     let noPending = 0;
@@ -1479,8 +1585,18 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" } as ViewStyle,
   planPill: { fontFamily: F.mono, fontSize: 9.5, letterSpacing: 0.4, textTransform: "uppercase", color: C.ink2, borderWidth: 1, borderColor: C.line2, borderRadius: R.sm, paddingHorizontal: 6, paddingVertical: 1 } as TextStyle,
 
-  pill: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: R.pill, borderWidth: 1.5 } as ViewStyle,
+  // overflow:"hidden" existe pra clipar o pillFill (mini barra de progresso
+  // do split payment) dentro do arredondado da pill — sem isso a barra
+  // vazaria retangular por cima do borderRadius. position:"relative" pra
+  // servir de container do position:"absolute" do pillFill.
+  pill: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, borderRadius: R.pill, borderWidth: 1.5, overflow: "hidden", position: "relative" } as ViewStyle,
   pillText: { fontFamily: F.mono, fontSize: 10, fontWeight: "700" } as TextStyle,
+  // Fase F1 da reforma da anuidade (split payments) — preenchimento
+  // proporcional (amount_paid/amount, vindo pronto do backend) no rodapé da
+  // pill "parcial". É o que diferencia visualmente uma pill parcial de uma
+  // "a_vencer" (mesma âmbar, mas a_vencer nunca tem essa barra porque
+  // amount_paid é 0 ali).
+  pillFill: { position: "absolute", left: 0, bottom: 0, height: 2.5, opacity: 0.55 } as ViewStyle,
 
   badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: R.pill } as ViewStyle,
   badgeText: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700" } as TextStyle,
