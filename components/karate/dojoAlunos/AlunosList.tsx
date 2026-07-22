@@ -39,7 +39,11 @@ export function AlunosList({
   onRetry, onOpenStudent, onNew, onImport,
 }: Props) {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  // 22/07/2026 — auditoria ativo/inativo (Caio, 21/07/2026: "não podemos
+  // cobrar e controlar os inativos... sempre ativos primeiro"): default
+  // da lista era "all", divergindo da pirâmide acima (que já só conta
+  // ativos, via summary do backend). Trivial, mas fecha a divergência.
+  const [status, setStatus] = useState<StatusFilter>("active");
   const [belt, setBelt] = useState<string | null>(null);
 
   // Pirâmide: faixa mais alta primeiro (belt_order desc; sem ordem → fim).

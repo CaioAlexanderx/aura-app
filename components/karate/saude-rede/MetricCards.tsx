@@ -47,14 +47,20 @@ export function AfiliacaoCard({
         <><Sk h={36} mb={8} /><Sk h={80} /></>
       ) : (
         <FadeIn>
+          {/* BUGFIX (22/07/2026 — auditoria ativo/inativo, Caio 21/07/2026:
+              "não podemos cobrar e controlar os inativos... sempre ativos
+              primeiro"): hero number era total_now (cadastro bruto, mistura
+              inativo). Promovido dojos_ativos a hero — mesmo padrão do
+              KpiBand "Dojôs filiados" do Painel (ativos em destaque, total
+              como meta secundária). */}
           <View style={st.heroRow}>
-            <Text style={st.heroNum}>{data.total_now ?? 0}</Text>
-            <Text style={st.heroSub}>dojôs cadastrados em {data.season}</Text>
+            <Text style={st.heroNum}>{data.dojos_ativos ?? 0}</Text>
+            <Text style={st.heroSub}>de {data.total_now ?? 0} cadastrados em {data.season}</Text>
           </View>
           <View style={st.twinBoxRow}>
             <View style={[st.twinBox, st.twinBoxOk]}>
-              <Text style={st.twinBoxNum}>{data.dojos_ativos ?? 0}</Text>
-              <Text style={st.twinBoxLabel}>ativos</Text>
+              <Text style={st.twinBoxNum}>{data.total_now ?? 0}</Text>
+              <Text style={st.twinBoxLabel}>total cadastrado</Text>
             </View>
             <View style={[st.twinBox, st.twinBoxWarn]}>
               <Text style={[st.twinBoxNum, { color: C.ink2 }]}>{data.dojos_inativos ?? 0}</Text>
@@ -332,11 +338,13 @@ const BELT_HEX: Record<string, string> = {
   "2º Dan ou acima": CANONICAL_BELT_HEX.preta,
 };
 
-// ── Filtro de status (Todos / Ativos / Inativos) ───────────────
+// ── Filtro de status (Ativos / Inativos / Todos) ───────────────
+// Ordem "ativos primeiro" (Caio, 21/07/2026) — mesmo default do chip
+// selecionado abaixo.
 const STATUS_FILTERS: Array<{ key: RelacaoFaixasStatus; label: string }> = [
-  { key: "all", label: "Todos" },
   { key: "active", label: "Ativos" },
   { key: "inactive", label: "Inativos" },
+  { key: "all", label: "Todos" },
 ];
 
 // Kyu por faixa (rótulo) — FPKT Shotokan. Dan (preta) não tem kyu.
@@ -354,16 +362,25 @@ export function RelacaoFaixasCard({
   // Não mexe no load centralizado de Saúde da Rede (Promise.allSettled
   // no orquestrador): busca relacao-faixas de forma independente aqui
   // quando o filtro muda, sem afetar os outros cards.
-  const [status, setStatus] = React.useState<RelacaoFaixasStatus>("all");
+  //
+  // BUGFIX (22/07/2026 — auditoria ativo/inativo, Caio 21/07/2026: "não
+  // podemos cobrar e controlar os inativos... sempre ativos primeiro"):
+  // default era "all", mas o orquestrador (saude-rede/index.tsx) chama
+  // getRelacaoFaixas(federationId) sem `status` — e o backend agora
+  // (default mudou pra 'active') devolve só ativos nesse caso. O chip
+  // "Todos" ficava aceso mostrando dado de "Ativos" (rótulo mentindo).
+  // Alinhado: default "active", coerente com o `data` que chega pronto.
+  const [status, setStatus] = React.useState<RelacaoFaixasStatus>("active");
   const [localData, setLocalData] = React.useState<RelacaoFaixasPayload | null>(null);
   const [localLoading, setLocalLoading] = React.useState(false);
   const [hasFiltered, setHasFiltered] = React.useState(false);
 
   React.useEffect(() => {
-    // "Todos" no primeiro render == o `data` que já veio do load
-    // compartilhado; só dispara fetch próprio quando o usuário de fato
-    // troca o filtro (evita um /relacao-faixas duplicado no mount).
-    if (status === "all" && !hasFiltered) return;
+    // "Ativos" no primeiro render == o `data` que já veio do load
+    // compartilhado (backend default também é 'active'); só dispara fetch
+    // próprio quando o usuário de fato troca o filtro (evita um
+    // /relacao-faixas duplicado no mount).
+    if (status === "active" && !hasFiltered) return;
     if (!federationId) return;
     let cancelled = false;
     setLocalLoading(true);
