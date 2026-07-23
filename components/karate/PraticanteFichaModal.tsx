@@ -18,6 +18,7 @@ import {
   Modal, View, Text, ScrollView, TouchableOpacity, Pressable,
   ActivityIndicator, useWindowDimensions, TextInput, Animated, StyleSheet,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { ShojiPalette as P, BeltKey } from "@/constants/karateTheme";
@@ -78,9 +79,21 @@ let lastDojo: { id: string; name: string } | null = null;
 let lastShared: SharedSnapshot | null = null;
 
 export function PraticanteFichaModal({ federationId, visible, practitionerId, onClose, onSaved }: Props) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const cardW = Math.min(720, width - 24);
   const isEdit = !!practitionerId;
+
+  // Link "Abrir ficha completa" no topo do modal (pedido do Caio, 22/07/2026)
+  // - so no modo EDICAO (no cadastro novo ainda nao existe ficha completa).
+  // Fecha o modal ANTES de navegar: <Modal> de topo (RN Web) empilhado atras
+  // da nova rota fica invisivel/preso por baixo se nao for fechado primeiro
+  // - armadilha ja conhecida deste produto.
+  const openFullFicha = useCallback(() => {
+    if (!practitionerId) return;
+    onClose();
+    router.push(`/karate/praticantes/${practitionerId}` as any);
+  }, [practitionerId, onClose, router]);
 
   const [form, setForm] = useState<Form>(EMPTY);
   const [fpkt, setFpkt] = useState<string | null>(null);
@@ -564,9 +577,27 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 <Text style={styles.sub}>Nome, dojô e matrícula (FPKT) são obrigatórios — o resto você completa quando quiser.</Text>
               )}
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
-              <Icon name="x" size={20} color={P.ink2} />
-            </TouchableOpacity>
+            <View style={{ alignItems: "flex-end", gap: 8 }}>
+              {/* "Abrir ficha completa" (pedido do Caio, 22/07/2026) — só em
+                  modo EDIÇÃO (cadastro novo ainda não tem ficha completa).
+                  Fecha o modal ao navegar (ver openFullFicha acima) — evita
+                  o <Modal> de topo ficar preso atrás da nova rota no RN Web. */}
+              {isEdit && practitionerId ? (
+                <Pressable
+                  onPress={openFullFicha}
+                  style={styles.fullFichaLink}
+                  hitSlop={8}
+                  accessibilityRole="link"
+                  accessibilityLabel="Abrir ficha completa do praticante"
+                >
+                  <Icon name="external-link" size={12} color={P.ink3} />
+                  <Text style={styles.fullFichaLinkTxt}>Abrir ficha completa</Text>
+                </Pressable>
+              ) : null}
+              <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
+                <Icon name="x" size={20} color={P.ink2} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {loading ? (

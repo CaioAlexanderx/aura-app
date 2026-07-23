@@ -55,6 +55,7 @@ import {
 } from "@/components/karate/shoji";
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
+import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import DojoPortalLinkCard from "@/components/karate/DojoPortalLinkCard";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
@@ -191,6 +192,11 @@ export default function DojoDetailScreen() {
   const [error, setError] = useState(false);
   // Modal de edição (reusa a ficha de cadastro com o id atual)
   const [editOpen, setEditOpen] = useState(false);
+  // Ficha do PRATICANTE (nome clicavel no roster) - mesmo padrao de estado
+  // usado em app/karate/(federation)/praticantes/index.tsx ({ open, id }),
+  // reaproveitando o MESMO PraticanteFichaModal (modo edicao). onSaved chama
+  // loadRoster() - o mesmo refetch que o toggle de status ja usa.
+  const [practitionerFicha, setPractitionerFicha] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   // Modal de exportação (round-trip com o import)
   const [exportOpen, setExportOpen] = useState(false);
   // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
@@ -385,6 +391,19 @@ export default function DojoDetailScreen() {
       }
     });
   }, [canManage, applyRosterStatusChange, showToast]);
+
+  // Abre a ficha do praticante em modo EDICAO a partir do nome no roster
+  // (pedido do Caio, 22/07/2026). Mesmo padrao do botao "Editar" da pagina
+  // cheia do praticante (app/karate/(federation)/praticantes/[practitionerId].tsx,
+  // ~L208): la o botao Editar fica visivel para QUALQUER papel que acesse a
+  // tela (so Inativar/Excluir sao restritos a canManage/canTransfer) - aqui
+  // seguimos a MESMA regua, nao a do switch de status (que e uma acao
+  // administrativa propria desta tela). Nome e switch sao Pressables IRMAOS
+  // na linha do roster (ver roster.map abaixo), nunca aninhados - um toque
+  // no nome nunca dispara o switch, e vice-versa.
+  const openPractitionerFicha = useCallback((studentId: string) => {
+    setPractitionerFicha({ open: true, id: studentId });
+  }, []);
 
   // Validação de quadro — GET roster-validation para o banner no topo do
   // detalhe (pending/validated). Falha silenciosa: o banner simplesmente
@@ -939,12 +958,22 @@ export default function DojoDetailScreen() {
               ) : (
                 roster.map((m, i) => (
                   <View key={m.student_id} style={[styles.rosterRow, i === roster.length - 1 && styles.noBorder]}>
-                    <View style={{ flex: 1, minWidth: 160 }}>
+                    {/* Nome clicável (pedido do Caio, 22/07/2026) — abre a ficha em modo
+                        edição. Pressable IRMãO do bloco de status/switch abaixo (nunca
+                        aninhado nele), então o toque no nome nunca alcança o Switch e
+                        vice-versa — são alvos de toque totalmente distintos na linha. */}
+                    <Pressable
+                      onPress={() => openPractitionerFicha(m.student_id)}
+                      style={({ pressed }) => [{ flex: 1, minWidth: 160 }, pressed && styles.rosterNamePressed]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Abrir ficha de ${m.full_name}`}
+                      hitSlop={4}
+                    >
                       <Text style={styles.rosterName}>{m.full_name}</Text>
                       <Body muted style={{ fontSize: 11.5, marginTop: 2 }}>
                         {m.karate_registration_number || "Sem matrícula"}
                       </Body>
-                    </View>
+                    </Pressable>
                     {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
                     <View style={styles.rosterBadges}>
                       {canManage ? (
@@ -1084,6 +1113,22 @@ export default function DojoDetailScreen() {
         dojoId={dojoId!}
         onClose={() => setEditOpen(false)}
         onSaved={() => load()}
+      />
+
+      {/* Ficha do PRATICANTE (nome clicável no roster, 22/07/2026) — abre o
+          MESMO PraticanteFichaModal usado em praticantes/index.tsx e em
+          praticantes/[practitionerId].tsx, sempre em modo edição (id vindo
+          do roster). Top-level <Modal>, irmão dos demais desta tela — nunca
+          aninhado dentro de outro <Modal> (RN Web renderiza atrás e fica
+          invisível; já mordeu este produto 5×). onSaved recarrega a página
+          ATUAL do roster (mesmo refetch que o toggle de status já usa), então
+          nome/faixa/matrícula voltam atualizados sem reload manual. */}
+      <PraticanteFichaModal
+        federationId={federationId}
+        visible={practitionerFicha.open}
+        practitionerId={practitionerFicha.id}
+        onClose={() => setPractitionerFicha({ open: false, id: null })}
+        onSaved={() => loadRoster()}
       />
 
       {/* Modal de exportação */}
@@ -1776,6 +1821,10 @@ const styles = StyleSheet.create({
   teamName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   rosterRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   rosterName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
+  // Feedback visual do nome clicavel no roster (22/07/2026): leve opacidade
+  // ao pressionar (mobile) / :active no web — nada de hover-reveal (quebra
+  // em touch); o alvo ja e sempre visivel, so confirma o toque.
+  rosterNamePressed: { opacity: 0.6 } as ViewStyle,
   rosterBadges: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
   // Toggle ativo/inativo do roster (21/07/2026) — label + Switch, no lugar
   // do Badge estático para quem pode editar (canManage).
