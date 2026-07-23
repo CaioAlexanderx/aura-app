@@ -85,6 +85,11 @@ export const styles = StyleSheet.create({
   subMono: { fontFamily: F.mono, fontSize: 12, color: P.red, marginTop: 4 } as TextStyle,
   close: { padding: 4, borderRadius: 999 } as ViewStyle,
 
+  // Link "Abrir ficha completa" no header do modal, só em modo edição
+  // (pedido do Caio, 22/07/2026) — discreto, alinhado ao close (x).
+  fullFichaLink: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 6 } as ViewStyle,
+  fullFichaLinkTxt: { fontFamily: F.body, fontSize: 11, fontWeight: "600", color: P.ink3 } as TextStyle,
+
   repeat: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13, marginBottom: 10 } as ViewStyle,
   repeatTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.ink } as TextStyle,
   repeatHint: { fontFamily: F.body, fontSize: 11, color: P.ink3 } as TextStyle,
