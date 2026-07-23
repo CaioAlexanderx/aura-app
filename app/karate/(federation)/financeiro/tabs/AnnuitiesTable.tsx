@@ -547,9 +547,9 @@ function InstallmentDetailRow({
         <View style={styles.instSubPanel}>
           <Body muted style={{ fontSize: 11 }}>Forma de recebimento:</Body>
           <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-            {(["pix", "transferencia", "dinheiro", "credito_cbkt", "boleto", "outro"] as const).map((m) => (
+            {(["pix", "transferencia", "dinheiro", "credito_cbkt", "credito_exame", "boleto", "outro"] as const).map((m) => (
               <TouchableOpacity key={m} disabled={paying} style={styles.methodChip} onPress={() => submitPay(m)} accessibilityRole="button" accessibilityLabel={`Confirmar pagamento via ${m}`}>
-                <Text style={styles.methodChipLabel}>{m === "pix" ? "PIX" : m === "dinheiro" ? "Dinheiro" : m === "transferencia" ? "Transferência" : m === "credito_cbkt" ? "Crédito CBKT" : m === "boleto" ? "Boleto" : "Outro"}</Text>
+                <Text style={styles.methodChipLabel}>{m === "pix" ? "PIX" : m === "dinheiro" ? "Dinheiro" : m === "transferencia" ? "Transferência" : m === "credito_cbkt" ? "Crédito CBKT" : m === "credito_exame" ? "Crédito exame/curso" : m === "boleto" ? "Boleto" : "Outro"}</Text>
               </TouchableOpacity>
             ))}
           </View>
