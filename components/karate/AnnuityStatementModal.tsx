@@ -43,6 +43,7 @@ const METHOD_LABEL: Record<string, string> = {
   credito_cbkt: "Crédito CBKT",
   credito_exame: "Crédito exame/curso",
   transferencia: "Transferência",
+  boleto: "Boleto",
   outro: "Outro",
 };
 function methodLabel(m: string | null): string {
