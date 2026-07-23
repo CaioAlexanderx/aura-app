@@ -84,6 +84,7 @@ function AuthGuard() {
       const onPublicMicrosite = segments[0] === "karate" && (
         segments.length <= 2 ||                 // hub: /karate/{slug}
         segments[1] === "verify" ||             // carteirinha pública
+        segments[1] === "carteirinha" ||        // carteirinha virtual (link compartilhável, PR#416/#417)
         segments[2] === "dojo" ||               // portal do dojô (OTP)
         segments[2] === "praticante" ||         // portal do praticante (OTP)
         segments[2] === "p" ||                  // perfil público reduzido
@@ -126,6 +127,7 @@ function AuthGuard() {
     // grupo autenticado (federation) — que é transparente, então também tem
     // segments[0]==="karate". Distinguimos pelos marcadores públicos:
     //   /karate/verify/[token]           → verify
+    //   /karate/carteirinha/[token]      → carteirinha virtual (link compartilhável, PR#416/#417)
     //   /karate/claim?t=…                → claim (F0: criação da conta do dojô por convite)
     //   /karate/[slug]/praticante        → praticante (portal OTP)
     //   /karate/[slug]/p/[publicToken]   → p (perfil público reduzido)
@@ -138,6 +140,7 @@ function AuthGuard() {
     // nunca batem nesses marcadores.
     const onKaratePublic = segments[0] === "karate" && (
       segments[1] === "verify" ||
+      segments[1] === "carteirinha" ||  // carteirinha virtual (link compartilhável, PR#416/#417)
       segments[1] === "claim" ||    // F0 (Canal B): claim da conta do dojô por convite (?t=) — pública, sem login
       segments[2] === "praticante" ||
       segments[2] === "p" ||

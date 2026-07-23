@@ -49,7 +49,7 @@
 // CarteirinhaPanel.tsx (Modal transparent de nível único).
 // ============================================================
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput, ActivityIndicator, Modal, ViewStyle, TextStyle } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput, ActivityIndicator, Modal, Linking, ViewStyle, TextStyle } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -59,6 +59,16 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateCardApi, QueueItem, QueueListResult, PrintStatus, MembershipCard } from "@/services/karateCardApi";
 import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { formatEventDateNumeric } from "@/utils/eventDate";
+import { copyToClipboard } from "@/utils/clipboard";
+
+// Carteirinha VIRTUAL (link compartilhável) — app/karate/carteirinha/[token].tsx,
+// PR aura-backend#416/#417. A fila NÃO devolve verify_token na listagem
+// (listPrintQueue não faz esse SELECT — confirmado lendo karateCardService.js);
+// por isso o token é resolvido sob demanda via GET .../card (karateCardApi.getCard,
+// MESMA chamada que doPrint já usa) só quando o usuário de fato pede o link —
+// evita N+1 desnecessário em toda carga da fila. Cacheado em memória por
+// item.id pra não refazer a chamada entre "copiar" e "compartilhar" da MESMA linha.
+const VIRTUAL_CARD_BASE = "https://app.getaura.com.br/karate/carteirinha";
 
 const TABS: { id: PrintStatus; label: string; icon: string }[] = [
   { id: "to_print", label: "A imprimir", icon: "inbox" },
@@ -102,6 +112,11 @@ export function CarteirinhaQueue() {
 
   const askConfirm = (title: string, message: string, confirmLabel: string, onConfirm: () => void) =>
     setConfirmDialog({ title, message, confirmLabel, onConfirm });
+
+  // Carteirinha virtual — token resolvido sob demanda (ver comentário nos
+  // imports) e cacheado por item.id enquanto a tela estiver montada.
+  const tokenCacheRef = useRef<Map<string, string>>(new Map());
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
 
   // Guarda contra condição de corrida: trocar de aba rápido dispara N
   // chamadas em voo; sem o requestId, a resposta mais lenta pode chegar
@@ -285,6 +300,65 @@ export function CarteirinhaQueue() {
       load();
     } finally {
       setBusyAction(false);
+    }
+  }
+
+  // ── Carteirinha virtual — copiar/compartilhar link ──────────────
+  // Resolve o verify_token da carteirinha (não vem na listagem da fila —
+  // ver comentário no import de VIRTUAL_CARD_BASE) via GET .../card
+  // (karateCardApi.getCard, MESMA chamada usada por doPrint), cacheado por
+  // item.id. Retorna null se a busca falhar.
+  async function resolveVirtualToken(item: QueueItem): Promise<string | null> {
+    const cached = tokenCacheRef.current.get(item.id);
+    if (cached) return cached;
+    try {
+      const card = await karateCardApi.getCard(federationId, item.student_id);
+      if (card?.verify_token) {
+        tokenCacheRef.current.set(item.id, card.verify_token);
+        return card.verify_token;
+      }
+      return null;
+    } catch (err) {
+      console.error("[CarteirinhaQueue] Falha ao buscar token da carteirinha virtual", item.id, err);
+      return null;
+    }
+  }
+
+  function virtualCardUrl(token: string): string {
+    return `${VIRTUAL_CARD_BASE}/${token}`;
+  }
+
+  async function handleCopyVirtualLink(item: QueueItem) {
+    if (linkBusyId) return;
+    setLinkBusyId(item.id);
+    try {
+      const token = await resolveVirtualToken(item);
+      if (!token) { toast.error("Não foi possível gerar o link — tente novamente."); return; }
+      const ok = await copyToClipboard(virtualCardUrl(token));
+      if (ok) toast.success("Link copiado"); else toast.error("Não foi possível copiar o link");
+    } finally {
+      setLinkBusyId(null);
+    }
+  }
+
+  // Abre o wa.me com o link pré-preenchido — o envio em si é manual (o
+  // usuário escolhe o contato dentro do WhatsApp), MESMO padrão de
+  // shareRosterLinkWhatsApp em app/karate/(federation)/dojos/[dojoId].tsx.
+  async function handleShareVirtualLink(item: QueueItem) {
+    if (linkBusyId) return;
+    setLinkBusyId(item.id);
+    try {
+      const token = await resolveVirtualToken(item);
+      if (!token) { toast.error("Não foi possível gerar o link — tente novamente."); return; }
+      const message = `Carteirinha digital de ${item.student_name} — ${federationName || "FPKT"}:\n${virtualCardUrl(token)}`;
+      const link = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      if (isWeb && typeof window !== "undefined") {
+        window.open(link, "_blank");
+      } else {
+        Linking.openURL(link).catch(() => toast.error("Não foi possível abrir o WhatsApp"));
+      }
+    } finally {
+      setLinkBusyId(null);
     }
   }
 
@@ -494,26 +568,48 @@ export function CarteirinhaQueue() {
                         {tab === "printed" || tab === "delivered" ? <Text style={s.viaBadge}>{viaLabel(item)}</Text> : null}
                       </View>
                     </View>
-                    {tab === "to_print" && (
+                    <View style={s.rowActions}>
+                      {isWeb && (
+                        <Pressable
+                          onPress={(e) => { e.stopPropagation?.(); handleCopyVirtualLink(item); }}
+                          style={s.rowActionBtn}
+                          disabled={linkBusyId === item.id}
+                          accessibilityRole="button"
+                          accessibilityLabel="Copiar link da carteirinha virtual"
+                        >
+                          {linkBusyId === item.id ? <ActivityIndicator size="small" color={C.ink3} /> : <Icon name="copy" size={13} color={C.ink3} />}
+                        </Pressable>
+                      )}
                       <Pressable
-                        onPress={(e) => { e.stopPropagation?.(); askRemoveOne(item); }}
+                        onPress={(e) => { e.stopPropagation?.(); handleShareVirtualLink(item); }}
                         style={s.rowActionBtn}
+                        disabled={linkBusyId === item.id}
                         accessibilityRole="button"
-                        accessibilityLabel="Tirar da fila"
+                        accessibilityLabel="Compartilhar carteirinha virtual pelo WhatsApp"
                       >
-                        <Icon name="x" size={13} color={C.ink3} />
+                        <Icon name="whatsapp" size={13} color={C.ink3} />
                       </Pressable>
-                    )}
-                    {tab !== "to_print" && (
-                      <Pressable
-                        onPress={(e) => { e.stopPropagation?.(); askReturnOne(item); }}
-                        style={s.rowActionBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel={tab === "printed" ? "Não saiu / reimprimir" : tab === "delivered" ? "Reimprimir" : "Devolver à fila"}
-                      >
-                        <Icon name="refresh-cw" size={13} color={C.ink3} />
-                      </Pressable>
-                    )}
+                      {tab === "to_print" && (
+                        <Pressable
+                          onPress={(e) => { e.stopPropagation?.(); askRemoveOne(item); }}
+                          style={s.rowActionBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Tirar da fila"
+                        >
+                          <Icon name="x" size={13} color={C.ink3} />
+                        </Pressable>
+                      )}
+                      {tab !== "to_print" && (
+                        <Pressable
+                          onPress={(e) => { e.stopPropagation?.(); askReturnOne(item); }}
+                          style={s.rowActionBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={tab === "printed" ? "Não saiu / reimprimir" : tab === "delivered" ? "Reimprimir" : "Devolver à fila"}
+                        >
+                          <Icon name="refresh-cw" size={13} color={C.ink3} />
+                        </Pressable>
+                      )}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -653,6 +749,7 @@ const s = StyleSheet.create({
   beltBadge: { fontFamily: F.body, fontSize: 9, fontWeight: "700", color: C.ink2, backgroundColor: P.paper2, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" } as TextStyle,
   minorBadge: { fontFamily: F.body, fontSize: 8, fontWeight: "700", color: C.warn, backgroundColor: P.warnWash, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" } as TextStyle,
   viaBadge: { fontFamily: F.body, fontSize: 8.5, fontWeight: "700", color: P.red, backgroundColor: P.redWash, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" } as TextStyle,
+  rowActions: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 } as ViewStyle,
   rowActionBtn: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: P.paper2, flexShrink: 0 } as ViewStyle,
 
   emptyBox: { alignItems: "center", paddingVertical: 40, gap: 10, backgroundColor: P.glass2, borderRadius: R.lg, borderWidth: 1, borderColor: C.border } as ViewStyle,

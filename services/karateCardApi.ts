@@ -157,6 +157,45 @@ function apiBase(): string {
   );
 }
 
+// ── Carteirinha virtual (link compartilhável, PR aura-backend#416/#417) ──
+// Contexto mínimo pré-identidade — GET /public/karate/card/{token}.
+export interface CardTokenPreview {
+  requires_identity: true;
+  dojo_name: string | null;
+  federation_name: string | null;
+  federation_logo: string | null;
+}
+
+// Cartão completo devolvido por POST /public/karate/card/{token}/verify
+// após identidade confirmada. Shape próximo de MembershipCard, mas sem
+// id/federation_id/student_id/dojo_id (o endpoint público não expõe IDs
+// internos) e com revoked_at.
+export interface VirtualCardResult {
+  card_number: string | null;
+  cbkt_number: string | null;
+  student_name: string;
+  birth_date: string | null;
+  cpf: string | null;
+  belt: string | null;
+  belt_name: string | null;
+  dojo_name: string | null;
+  photo_url: string | null;
+  is_minor: boolean;
+  issued_at: string;
+  revoked_at: string | null;
+  status: CardStatus;
+  verify_token: string;
+  federation_name: string | null;
+  federation_logo: string | null;
+}
+
+export interface CardIdentityInput {
+  /** dd/mm/aaaa OU yyyy-mm-dd — o backend normaliza os dois formatos. */
+  birth_date?: string;
+  rg?: string;
+  cpf?: string;
+}
+
 export const karateCardApi = {
   /** POST /federation/{id}/practitioners/{pid}/issue-card — emite/renova (staffWrite). */
   issueCard: (federationId: string, practitionerId: string): Promise<IssueCardResult> =>
@@ -252,6 +291,72 @@ export const karateCardApi = {
     );
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Falha ao verificar registro (${res.status})`);
+    return res.json();
+  },
+
+  /**
+   * GET /public/karate/card/{token} — carteirinha VIRTUAL, passo LEVE
+   * (pré-identidade, PR aura-backend#417). Devolve só contexto mínimo —
+   * dojô/federação — SEM foto, nome, CPF, RG ou nascimento (o backend nem
+   * faz JOIN em customers nesse passo, defesa em profundidade). O cartão
+   * CHEIO só sai depois de confirmar identidade em verifyCardIdentity.
+   * Retorna null em 404 (token não corresponde a nenhuma carteirinha).
+   */
+  getCardPreview: async (token: string): Promise<CardTokenPreview | null> => {
+    const res = await fetch(
+      `${apiBase()}/public/karate/card/${encodeURIComponent(token)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Falha ao carregar carteirinha (${res.status})`);
+    return res.json();
+  },
+
+  /**
+   * POST /public/karate/card/{token}/verify — gate de identidade que libera
+   * o cartão CHEIO (com foto) da carteirinha virtual (PR aura-backend#417).
+   * Body: { birth_date?, rg?, cpf? } — QUALQUER UM que bata com o
+   * praticante dono do token libera. birth_date aceita "dd/mm/aaaa" OU
+   * "yyyy-mm-dd" (o backend normaliza os dois formatos).
+   *
+   * Erros com `.code`:
+   *   IDENTITY_MISMATCH (403) — token inexistente OU identidade errada;
+   *     PROPOSITALMENTE indistinguíveis (anti-oráculo) — nunca revelar ao
+   *     usuário qual dos dois aconteceu.
+   *   VALIDATION_ERROR  (422) — nenhum campo plausível informado.
+   *   RATE_LIMITED      (429) — 10 tentativas / 10 min por token+IP.
+   *   NOT_FOUND         (404) — token com formato inválido (erro de input).
+   */
+  verifyCardIdentity: async (token: string, identity: CardIdentityInput): Promise<VirtualCardResult> => {
+    const res = await fetch(
+      `${apiBase()}/public/karate/card/${encodeURIComponent(token)}/verify`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(identity),
+      }
+    );
+    if (res.status === 403) {
+      const e: any = new Error("Não foi possível confirmar sua identidade.");
+      e.code = "IDENTITY_MISMATCH";
+      throw e;
+    }
+    if (res.status === 422) {
+      const e: any = new Error("Informe data de nascimento, RG ou CPF válidos.");
+      e.code = "VALIDATION_ERROR";
+      throw e;
+    }
+    if (res.status === 429) {
+      const e: any = new Error("Muitas tentativas. Aguarde alguns minutos.");
+      e.code = "RATE_LIMITED";
+      throw e;
+    }
+    if (res.status === 404) {
+      const e: any = new Error("Carteirinha não encontrada.");
+      e.code = "NOT_FOUND";
+      throw e;
+    }
+    if (!res.ok) throw new Error(`Falha ao confirmar identidade (${res.status})`);
     return res.json();
   },
 
