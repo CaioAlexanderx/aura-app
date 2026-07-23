@@ -841,7 +841,7 @@ export interface AnnuityFeePlanInput {
  *  e dojos/:dojoId/pay). Tipo único — ver PR #408 no aura-backend (contrato
  *  fixado: 'credito_cbkt', snake_case, sem acento). NÃO duplicar este union
  *  em literais soltos; sempre referenciar este tipo. */
-export type AnnuityPaymentMethod = "pix" | "dinheiro" | "transferencia" | "credito_cbkt" | "credito_exame" | "outro";
+export type AnnuityPaymentMethod = "pix" | "dinheiro" | "transferencia" | "credito_cbkt" | "credito_exame" | "boleto" | "outro";
 
 /** Body de POST .../installments/:id/pay (baixa manual de UMA parcela). */
 export interface InstallmentPayInput {

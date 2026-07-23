@@ -173,6 +173,8 @@ const PM_LABELS: { value: PaymentMethod; label: string }[] = [
   { value: "transferencia", label: "Transferência" },
   { value: "dinheiro", label: "Dinheiro" },
   { value: "credito_cbkt", label: "Crédito CBKT" },
+  { value: "credito_exame", label: "Crédito exame/curso" },
+  { value: "boleto", label: "Boleto" },
   { value: "outro", label: "Outro" },
 ];
 

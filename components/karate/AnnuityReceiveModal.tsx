@@ -48,14 +48,17 @@ import {
   karateApi, AnnuityInstallment, AnnuityPaymentMethod, AnnuityReceiveResult,
 } from "@/services/karateApi";
 
-// Os 4 métodos de anuidade do Caio — o backend ainda aceita 'transferencia'/
+// Os métodos de anuidade do Caio — o backend ainda aceita 'transferencia'/
 // 'outro' por compatibilidade (baixas legadas), mas a UI de anuidade só
-// oferece estes 4 (instrução explícita da F4).
+// oferece estes (instrução explícita da F4; 'boleto' entra em 23/07/2026 —
+// a federação também registra baixa por boleto, planilha de anuidades 2026
+// usa boleto em 3 dojôs).
 const METHODS: { key: AnnuityPaymentMethod; label: string }[] = [
   { key: "pix", label: "Pix" },
   { key: "dinheiro", label: "Dinheiro" },
   { key: "credito_cbkt", label: "Crédito CBKT" },
   { key: "credito_exame", label: "Crédito exame/curso" },
+  { key: "boleto", label: "Boleto" },
 ];
 
 function fmtMoney(v: number) {
