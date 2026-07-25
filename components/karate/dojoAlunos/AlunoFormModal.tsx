@@ -14,7 +14,7 @@
 // a idade aparece ao lado assim que o nascimento é preenchido.
 // Erros da API (422/409) caem no campo certo via mapStudentSaveError.
 // ============================================================
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Modal, View, Text, TouchableOpacity, ScrollView,
   StyleSheet, ViewStyle, TextStyle,
@@ -71,6 +71,52 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Partial<Record<StudentErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
+
+  // Polish QA 25/07 (item 5): ao falhar a validação o erro renderizava
+  // abaixo da área visível do modal — parecia que "Cadastrar aluno" não
+  // fazia nada. Fix: refs nos campos que podem errar + scrollTo no
+  // ScrollView, medindo a posição via measureLayout contra o node interno
+  // do próprio ScrollView (padrão RN-web, sem dependência nova).
+  const scrollViewRef = useRef<ScrollView>(null);
+  const fullNameFieldRef = useRef<View>(null);
+  const birthFieldRef = useRef<View>(null);
+  const cpfFieldRef = useRef<View>(null);
+  const guardianFieldRef = useRef<View>(null);
+  const generalErrRef = useRef<View>(null);
+
+  function scrollToField(ref: React.RefObject<View>) {
+    const node = ref.current as any;
+    const scrollNode = scrollViewRef.current as any;
+    if (!node || !scrollNode || typeof node.measureLayout !== "function") return;
+    try {
+      const innerNode = typeof scrollNode.getInnerViewNode === "function"
+        ? scrollNode.getInnerViewNode()
+        : scrollNode;
+      node.measureLayout(
+        innerNode,
+        (_x: number, y: number) => scrollViewRef.current?.scrollTo({ y: Math.max(y - 16, 0), animated: true }),
+        () => { /* falha ao medir — melhor não rolar do que quebrar o modal */ }
+      );
+    } catch {
+      // silencioso — o formulário segue usável mesmo sem o auto-scroll
+    }
+  }
+
+  // Roda DEPOIS do commit de `errors` (não dentro de save()): o campo de
+  // erro geral (generalErrRef) só monta quando errors.general existe, então
+  // medir a posição precisa esperar o re-render acontecer primeiro.
+  useEffect(() => {
+    if (!visible || Object.keys(errors).length === 0) return;
+    const order: Array<[StudentErrorField, React.RefObject<View>]> = [
+      ["full_name", fullNameFieldRef],
+      ["birth_date", birthFieldRef],
+      ["cpf", cpfFieldRef],
+      ["guardian", guardianFieldRef],
+      ["general", generalErrRef],
+    ];
+    const hit = order.find(([field]) => !!errors[field]);
+    if (hit) scrollToField(hit[1]);
+  }, [errors, visible]);
 
   // Hidrata ao abrir (criar = limpo; editar = dados do aluno).
   useEffect(() => {
@@ -174,22 +220,24 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={styles.body}>
+          <ScrollView ref={scrollViewRef} style={{ flexShrink: 1 }} contentContainerStyle={styles.body}>
             <Text style={styles.lead}>
               Só o nome é obrigatório — dá para completar o resto depois. A exceção: menor de 18 anos precisa de responsável (LGPD).
             </Text>
 
             <Text style={styles.section}>Dados do aluno</Text>
-            <FormField
-              label="Nome completo"
-              required
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Nome do aluno"
-              error={errors.full_name}
-            />
+            <View ref={fullNameFieldRef}>
+              <FormField
+                label="Nome completo"
+                required
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Nome do aluno"
+                error={errors.full_name}
+              />
+            </View>
             <View style={styles.row2}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1 }} ref={birthFieldRef}>
                 <FormField
                   label="Nascimento"
                   value={birthBR}
@@ -200,7 +248,7 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
                   hint={age != null ? `${age} anos${isMinor ? " — exige responsável" : ""}` : undefined}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1 }} ref={cpfFieldRef}>
                 <FormField
                   label="CPF"
                   value={cpf}
@@ -317,7 +365,7 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               </View>
             </View>
 
-            <View style={[styles.guardianBox, isMinor && styles.guardianBoxMinor]}>
+            <View ref={guardianFieldRef} style={[styles.guardianBox, isMinor && styles.guardianBoxMinor]}>
               <Text style={styles.section2}>
                 Responsável {isMinor ? "· obrigatório para menor de 18" : "· opcional para adulto"}
               </Text>
@@ -355,7 +403,9 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               numberOfLines={3}
             />
 
-            {!!errors.general && <Text style={styles.generalErr}>{errors.general}</Text>}
+            <View ref={generalErrRef}>
+              {!!errors.general && <Text style={styles.generalErr}>{errors.general}</Text>}
+            </View>
           </ScrollView>
 
           <View style={styles.foot}>
