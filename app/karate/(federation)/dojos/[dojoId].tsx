@@ -56,6 +56,7 @@ import {
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
 import PraticanteFichaModal from "@/components/karate/PraticanteFichaModal";
+import { RegistrarGraduacaoModal } from "@/components/karate/praticante-detalhe/RegistrarGraduacaoModal";
 import DojoExportModal from "@/components/karate/DojoExportModal";
 import DojoPortalLinkCard from "@/components/karate/DojoPortalLinkCard";
 import GerirEquipeTecnicaModal from "@/components/karate/GerirEquipeTecnicaModal";
@@ -199,6 +200,15 @@ export default function DojoDetailScreen() {
   // reaproveitando o MESMO PraticanteFichaModal (modo edicao). onSaved chama
   // loadRoster() - o mesmo refetch que o toggle de status ja usa.
   const [practitionerFicha, setPractitionerFicha] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  // Faixa clicável no roster (pedido do Caio, 23/07/2026) — gêmeo do nome
+  // clicável (22/07/2026). Abre o MESMO RegistrarGraduacaoModal usado na aba
+  // Trajetória da ficha do praticante (TrajetoriaTab), reaproveitado aqui.
+  // Fonte única de estado (armadilha nº2 deste produto): só este id controla
+  // qual praticante está graduando; onDone chama loadRoster() — o MESMO
+  // refetch que o nome-clicável e o toggle de status já usam — nunca um
+  // patch otimista de faixa (a faixa é derivada da view karate_current_belt,
+  // não escrita direto pelo front).
+  const [graduandoId, setGraduandoId] = useState<string | null>(null);
   // Modal de exportação (round-trip com o import)
   const [exportOpen, setExportOpen] = useState(false);
   // F9: modal de gestão da equipe técnica (papéis is_arbiter/is_instructor/is_examiner/is_assistant)
@@ -406,6 +416,17 @@ export default function DojoDetailScreen() {
   const openPractitionerFicha = useCallback((studentId: string) => {
     setPractitionerFicha({ open: true, id: studentId });
   }, []);
+
+  // Abre o modal de graduação a partir da faixa clicável no roster (pedido
+  // do Caio, 23/07/2026) — gêmeo do nome clicável acima. Gate: MESMO
+  // `canManage` (canTransfer) que protege "Registrar graduação" na aba
+  // Trajetória (TrajetoriaTab, allowed = canTransfer(karateRole)) — graduação
+  // é mais sensível que abrir a ficha (nome), por isso segue a régua mais
+  // restrita (canManage), não a régua aberta do nome-clicável.
+  const openGraduacao = useCallback((studentId: string) => {
+    if (!canManage) return;
+    setGraduandoId(studentId);
+  }, [canManage]);
 
   // Validação de quadro — GET roster-validation para o banner no topo do
   // detalhe (pending/validated). Falha silenciosa: o banner simplesmente
@@ -976,7 +997,27 @@ export default function DojoDetailScreen() {
                         {m.karate_registration_number || "Sem matrícula"}
                       </Body>
                     </Pressable>
-                    {m.belt_level ? <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} /> : null}
+                    {/* Faixa clicável (pedido do Caio, 23/07/2026) — abre o modal de
+                        graduação. Pressable IRMÃO do nome e do bloco de status/switch
+                        (nunca aninhado neles): tocar na faixa não alcança o nome nem o
+                        Switch, e vice-versa — três alvos de toque distintos na mesma
+                        linha. Só é clicável para quem pode graduar (canManage); sem essa
+                        permissão a faixa continua um BeltBadge estático, como hoje. */}
+                    {m.belt_level ? (
+                      canManage ? (
+                        <Pressable
+                          onPress={() => openGraduacao(m.student_id)}
+                          style={({ pressed }) => [pressed && styles.rosterNamePressed]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Registrar graduação de ${m.full_name}`}
+                          hitSlop={4}
+                        >
+                          <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} />
+                        </Pressable>
+                      ) : (
+                        <BeltBadge beltLevel={m.belt_level} beltName={m.belt_name || undefined} />
+                      )
+                    ) : null}
                     <View style={styles.rosterBadges}>
                       {canManage ? (
                         <View style={styles.rosterStatusToggle}>
@@ -1131,6 +1172,24 @@ export default function DojoDetailScreen() {
         practitionerId={practitionerFicha.id}
         onClose={() => setPractitionerFicha({ open: false, id: null })}
         onSaved={() => loadRoster()}
+      />
+
+      {/* Graduação (faixa clicável no roster, 23/07/2026) — MESMO
+          RegistrarGraduacaoModal usado na aba Trajetória da ficha do
+          praticante (TrajetoriaTab), reaproveitado aqui. Top-level <Modal>,
+          irmão dos demais desta tela (ficha do praticante, ficha do dojô
+          etc.) — nunca aninhado (RN Web renderiza atrás e fica invisível;
+          já mordeu este produto 5×). Fecha sozinho (graduandoId volta a
+          null) antes de recarregar, então nunca fica sobreposto ao de
+          ficha. onDone recarrega a página ATUAL do roster (mesmo refetch
+          que nome/switch já usam) — a faixa nova vem da view
+          karate_current_belt (derivada, append-only), sem patch otimista. */}
+      <RegistrarGraduacaoModal
+        visible={graduandoId != null}
+        onClose={() => setGraduandoId(null)}
+        federationId={federationId}
+        practitionerId={graduandoId ?? ""}
+        onDone={() => { setGraduandoId(null); loadRoster(); }}
       />
 
       {/* Modal de exportação */}
