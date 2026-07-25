@@ -29,6 +29,12 @@ function SolicitacoesBody({ federationId }: { federationId: string }) {
       try {
         return await karateApi.createPractitionerRequest(federationId, body);
       } catch (e: any) {
+        // Bônus (Polish QA 25/07): 409 DOJO_NAO_CONECTADO (Aura-backend#422)
+        // vira a mesma mensagem amigável de "conecte seu dojô" das outras
+        // telas gateadas (eventos/anuidade), em vez do erro genérico da API.
+        if (e instanceof ApiError && e.data?.code === "DOJO_NAO_CONECTADO") {
+          throw new Error("Conecte seu dojô à federação para enviar solicitações de praticante.");
+        }
         if (e instanceof ApiError) throw new Error(e.message || "Não foi possível enviar a solicitação.");
         throw new Error("Não foi possível enviar a solicitação. Tente de novo.");
       }

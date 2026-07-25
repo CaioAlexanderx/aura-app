@@ -117,6 +117,25 @@ export function maskCpf(raw: string | null | undefined): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+// ── Telefone ─────────────────────────────────────────────────
+
+/**
+ * Máscara BR de telefone a partir de dígitos crus: (DD) 90000-0000 (celular,
+ * 11 dígitos) ou (DD) 0000-0000 (fixo, 10 dígitos) — mesmo formato do
+ * placeholder "(91) 90000-0000" já usado no form. Aceita parcial (uso
+ * incremental durante digitação) e serve também pra EXIBIÇÃO de telefone
+ * já salvo (ex.: card do responsável vinculado), que hoje sai cru
+ * ("91988887777") em vez de mascarado.
+ */
+export function formatPhone(raw: string | null | undefined): string {
+  const d = onlyDigits(raw).slice(0, 11);
+  if (!d) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 // ── Erros da API → campo certo, em pt-BR ─────────────────────
 
 export type StudentErrorField =

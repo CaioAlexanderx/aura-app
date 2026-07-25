@@ -19,6 +19,7 @@ import { FormField } from "@/components/karate/FormField";
 import {
   karateDojoStudentsApi, DojoGuardian, DojoStudentGuardianRef,
 } from "@/services/karateDojoStudentsApi";
+import { formatPhone } from "./helpers";
 
 interface Props {
   federationId: string;
@@ -107,7 +108,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.selName} numberOfLines={1}>{value.full_name ?? "Responsável"}</Text>
             <Text style={styles.selMeta} numberOfLines={1}>
-              {[value.relationship, value.phone].filter(Boolean).join(" · ") || "Sem contato informado"}
+              {[value.relationship, value.phone ? formatPhone(value.phone) : null].filter(Boolean).join(" · ") || "Sem contato informado"}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setOpen(!open)} accessibilityRole="button" style={styles.linkBtn}>
@@ -158,7 +159,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.gName} numberOfLines={1}>{g.full_name}</Text>
                           <Text style={styles.gMeta} numberOfLines={1}>
-                            {[g.relationship, g.phone].filter(Boolean).join(" · ") || "Sem contato"}
+                            {[g.relationship, g.phone ? formatPhone(g.phone) : null].filter(Boolean).join(" · ") || "Sem contato"}
                             {typeof g.students_count === "number" && g.students_count > 0
                               ? ` · ${g.students_count} aluno${g.students_count === 1 ? "" : "s"}`
                               : ""}

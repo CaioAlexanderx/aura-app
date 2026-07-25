@@ -77,6 +77,14 @@ const DOJO_NAV: DojoNavItem[] = [
   { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarOnly: true },
 ];
 
+// Polish QA 25/07 (item 3): "Eventos" depende de conexão com a federação
+// (GET /federation/:id/dojo/events só existe conectado — Aura-backend#422).
+// Enquanto linked === false a entrada some da nav; a rota em si segue
+// acessível por URL direta com um estado explicativo (eventos.tsx).
+function visibleDojoNav(linked: boolean): DojoNavItem[] {
+  return linked ? DOJO_NAV : DOJO_NAV.filter((i) => i.match !== "eventos");
+}
+
 // Segmento de seção da pathname ("/karate/praticantes" → "praticantes").
 function sectionSeg(path: string): string {
   const clean = (path || "").split("?")[0].split("#")[0];
@@ -135,14 +143,19 @@ function SidebarNav() {
   const router = useRouter();
   const path = usePathname();
   const { karateRole } = useKarateFederation();
-  const { dojoName, dojoCode, dojoMe } = useKarateDojo();
+  const { dojoName, dojoCode, dojoMe, linked } = useKarateDojo();
 
   const user = useAuthStore((s) => s.user) as any;
   const logout = useAuthStore((s) => s.logout);
   const userName = (user?.name || user?.email || "Usuário") as string;
 
-  const mainItems = DOJO_NAV.filter((i) => !i.sidebarOnly);
-  const footerItems = DOJO_NAV.filter((i) => i.sidebarOnly);
+  // Polish QA 25/07 (item 3): "Eventos" some da nav enquanto o dojô não
+  // está conectado à federação (linked === false). Fail-open: linked
+  // default true (contexts/KarateDojo), então nada some por engano
+  // durante o loading ou num backend antigo sem o campo.
+  const visibleNav = visibleDojoNav(linked);
+  const mainItems = visibleNav.filter((i) => !i.sidebarOnly);
+  const footerItems = visibleNav.filter((i) => i.sidebarOnly);
 
   const renderItem = (item: DojoNavItem) => {
     const active = isItemActive(item, path);
@@ -246,8 +259,10 @@ function SidebarNav() {
 function BottomTabNav() {
   const router = useRouter();
   const path = usePathname();
+  const { linked } = useKarateDojo();
   // Configurações fica fora da barra mobile (tarefa de mesa, padrão da casa).
-  const tabs = DOJO_NAV.filter((i) => !i.sidebarOnly);
+  // Polish QA 25/07 (item 3): mesmo gate de "Eventos" da sidebar.
+  const tabs = visibleDojoNav(linked).filter((i) => !i.sidebarOnly);
 
   return (
     <View style={styles.bottomBar}>
@@ -324,11 +339,18 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) — só breadcrumb ────────────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ────────────────────
+  // zIndex explícito (Polish QA 25/07, item 7): o banner de trial do
+  // DojoBillingGate é um overlay absoluto renderizado como IRMÃO do shell
+  // (_layout.tsx) — sem um zIndex próprio aqui, o header vermelho podia
+  // pintar por cima dele dependendo da ordem de commit. O banner usa
+  // zIndex bem mais alto (ver DojoBillingGate.tsx); isto aqui só fixa o
+  // header num valor baixo e conhecido pra nunca competir com ele.
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(43,38,32,0.20)",
+    zIndex: 1,
   } as ViewStyle,
   topbarInner: {
     flexDirection: "row",
@@ -364,7 +386,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Sidebar (DNA do KarateShell) ────────────────────
+  // ── Sidebar (DNA do KarateShell) ────────────
   sidebar: {
     width: 236,
     backgroundColor: KarateColors.bg2,
@@ -555,7 +577,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ─────────────────────
+  // ── Topbar mobile ───────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -564,6 +586,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: KarateColors.border,
+    zIndex: 1,
   } as ViewStyle,
   mobileTopbarEyebrow: {
     fontFamily: KarateFonts.body,
@@ -580,7 +603,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────
+  // ── Bottom tabs ────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,

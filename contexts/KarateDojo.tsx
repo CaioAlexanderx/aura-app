@@ -8,6 +8,10 @@
 //                O fallback estático SENSEI_DOJO {name:"Dojô"} morreu
 //                na F1 — o shell não exibe mais placeholder fixo.
 //   • dojoCode — fpkt_affiliation_id (ou null enquanto carrega/faltar)
+//   • linked   — conexão do dojô à federação (Aura-backend#422, polish
+//                QA 25/07). FAIL-OPEN: true por padrão (loading/erro/
+//                backend antigo sem o campo nunca esconde nav nem
+//                bloqueia tela por conta disso).
 //
 // Sempre montado DENTRO de KarateFederationProvider (o federationId da
 // rota vem de lá). Erro de rede não bloqueia o shell: dojoName cai no
@@ -27,6 +31,7 @@ export interface KarateDojoContextValue {
   reload: () => void;
   dojoName: string;
   dojoCode: string | null;
+  linked: boolean;
 }
 
 const KarateDojoContext = createContext<KarateDojoContextValue>({
@@ -36,6 +41,7 @@ const KarateDojoContext = createContext<KarateDojoContextValue>({
   reload: () => {},
   dojoName: "Dojô",
   dojoCode: null,
+  linked: true,
 });
 
 export function KarateDojoProvider({ children }: { children: ReactNode }) {
@@ -72,6 +78,9 @@ export function KarateDojoProvider({ children }: { children: ReactNode }) {
     reload: load,
     dojoName: dojoMe?.name || company?.name || "Dojô",
     dojoCode: dojoMe?.fpkt_affiliation_id ?? null,
+    // Fail-open: enquanto carrega ou se o campo não vier, assume conectado
+    // (nunca esconde nav/gate por causa de loading ou de um backend antigo).
+    linked: dojoMe?.linked ?? true,
   };
 
   return (

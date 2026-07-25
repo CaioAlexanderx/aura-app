@@ -22,7 +22,7 @@
 // o dojô é uma company própria com billing próprio; useAuthStore().company.id).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, TextInput, ScrollView, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { View, Text, TextInput, ScrollView, StyleSheet, ViewStyle, TextStyle, Platform, useWindowDimensions } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
@@ -57,12 +57,23 @@ const FAIL_OPEN_GATE: DojoGateResponse = {
   trial_ends_at: null, billing_status: null,
 };
 
+// Mesmo breakpoint do DojoShell (components/karate/DojoShell.tsx,
+// BREAKPOINT_SIDEBAR) — hardcoded aqui pra não criar um import cruzado só
+// por uma constante. Usado só pra saber a altura do header (item 7).
+const BREAKPOINT_SIDEBAR = 768;
+
 export function DojoBillingGate({ companyId }: { companyId: string }) {
   const [gate, setGate] = useState<DojoGateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [method, setMethod] = useState<Method>("pix");
   const [busy, setBusy] = useState(false);
   const [pix, setPix] = useState<SubscribeResponse | null>(null);
+  const { width } = useWindowDimensions();
+  // Altura aproximada do header do DojoShell em cada layout (topbar web
+  // ~48px; mobileTopbar tem 54px fixos) — usada só pra deslocar o banner
+  // de trial pra BAIXO do header em vez de ficar sobreposto (item 7).
+  const isWideShell = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
+  const bannerTop = isWideShell ? 58 : 64;
 
   // Cartão
   const [cardNumber, setCardNumber] = useState("");
@@ -147,12 +158,20 @@ export function DojoBillingGate({ companyId }: { companyId: string }) {
   // bloquear) quando o trial estiver perto/dentro do prazo.
   if (!gate.required) {
     if (!showTrialNotice) return null;
+    // Polish QA 25/07 (item 7): o banner é IRMÃO do DojoShell no _layout,
+    // não filho — por isso não basta position:absolute com top fixo perto
+    // de 0: ele acaba na mesma faixa vertical do header vermelho e o
+    // header (pintado depois, sem zIndex antes) ficava por cima. Fix:
+    // top desloca o banner pra ABAIXO do header (bannerTop calculado a
+    // partir do layout, acima) e um zIndex bem mais alto que o do header
+    // (DojoShell.tsx fixa o header em zIndex:1) garante que o banner
+    // nunca fica escondido atrás dele.
     return (
-      <View style={styles.trialBanner} pointerEvents="box-none">
+      <View style={[styles.trialBanner, { top: bannerTop }]} pointerEvents="box-none">
         <View style={styles.trialCard}>
           <Icon name="clock" size={14} color={C.warn} />
           <Text style={styles.trialTxt}>
-            Seu período de teste do Aura Dojô termina em {trialDays} {trialDays === 1 ? "dia" : "dias"}.
+            Seu período de teste no Aura Karatê termina em {trialDays} {trialDays === 1 ? "dia" : "dias"}.
           </Text>
         </View>
       </View>
@@ -275,8 +294,11 @@ const styles = StyleSheet.create({
   fLabel: { fontSize: 11, fontWeight: "700", color: C.ink2, marginBottom: 4, marginTop: 2 } as TextStyle,
   input: { borderWidth: 1, borderColor: C.border, borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: C.ink, backgroundColor: C.surface, fontFamily: F.mono } as TextStyle,
   foot: { fontSize: 11, color: C.ink3, textAlign: "center", marginTop: 16 } as TextStyle,
-  // Aviso de trial (não bloqueante) — banner discreto no topo.
-  trialBanner: { position: "absolute", top: 8, left: 0, right: 0, alignItems: "center", zIndex: 500 } as ViewStyle,
+  // Aviso de trial (não bloqueante) — banner discreto no topo. `top` real
+  // é sobrescrito inline (bannerTop, calculado no componente) pra ficar
+  // sempre ABAIXO do header do shell; zIndex bem acima do header (que fixa
+  // zIndex:1 em DojoShell.tsx) garante que nunca fica escondido atrás dele.
+  trialBanner: { position: "absolute", top: 8, left: 0, right: 0, alignItems: "center", zIndex: 2000 } as ViewStyle,
   trialCard: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.warnSoft, borderWidth: 1, borderColor: C.border, borderRadius: R.pill, paddingVertical: 6, paddingHorizontal: 12 } as ViewStyle,
   trialTxt: { fontSize: 11.5, fontWeight: "700", color: C.warn } as TextStyle,
 });

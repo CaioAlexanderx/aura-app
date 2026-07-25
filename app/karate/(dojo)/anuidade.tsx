@@ -1,10 +1,17 @@
 // ============================================================
 // Aura Karatê (dojô) — Anuidade (F1; antes /karate/sensei/anuidade)
-// Anuidade do dojô à federação: situação, Pix e histórico (dados reais
-// via GET /federation/:id/dojo/annuity). Somente leitura; o pagamento
-// é conciliado pela federação. Padrão de loading/erro/vazio: eventos.tsx.
-// F1: eyebrow usa o nome REAL do dojô (/dojo/me via contexts/KarateDojo)
-// — o fallback estático SENSEI_DOJO morreu.
+// Anuidade do dojô à(s) federação(ões): situação, Pix e histórico.
+// Somente leitura; o pagamento é conciliado pela federação.
+//
+// Polish QA 25/07 (item 4): a tela vira DUAS federações lado a lado —
+//   • FPKT — exatamente o fluxo de hoje (pendência/histórico/Pix real,
+//     via GET /federation/:id/dojo/annuity), agora dentro de um card
+//     identificado como a federação FPKT. Quando o dojô não está
+//     conectado (`linked === false` do contexto, ou `not_linked: true`
+//     na resposta — Aura-backend#422), o card mostra uma mensagem de
+//     conexão em vez da lista vazia genérica.
+//   • JKA — card DESABILITADO/esmaecido, selo "Em breve", SEM nenhuma
+//     chamada de API — é placeholder visual, não uma feature nova.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -36,9 +43,9 @@ function fmtValor(v: number | null): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function DojoAnuidade() {
+function FpktAnnuityCard() {
   const { federationId } = useKarateFederation();
-  const { dojoName } = useKarateDojo();
+  const { linked } = useKarateDojo();
   const [data, setData] = useState<SenseiAnnuityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -60,6 +67,10 @@ export default function DojoAnuidade() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Aditivo do backend (Aura-backend#422): `not_linked` ainda não está no
+  // tipo (karateApi.ts é grande demais pra tocar por 1 campo aditivo) —
+  // cast local, teste seguro `!!`.
+  const notLinked = !linked || !!(data as any)?.not_linked;
   const pending: SenseiAnnuity | null = data?.pending ?? null;
   const history: SenseiAnnuity[] = data?.history ?? [];
   const pix = data?.pix ?? null;
@@ -82,11 +93,13 @@ export default function DojoAnuidade() {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <View>
-        <Text style={styles.eyebrow}>{dojoName}</Text>
-        <Text style={styles.title}>Anuidade do dojô</Text>
-        <Text style={styles.lead}>A filiação anual do seu dojô à federação. O pagamento é por Pix e a federação confirma o recebimento.</Text>
+    <View style={styles.fedCard}>
+      <View style={styles.fedHead}>
+        <View style={styles.fedMark}><Text style={styles.fedMarkTxt}>FPKT</Text></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.fedName}>FPKT</Text>
+          <Text style={styles.fedSub}>Federação Paraense de Karatê Tradicional</Text>
+        </View>
       </View>
 
       {loading && (
@@ -95,9 +108,16 @@ export default function DojoAnuidade() {
         </View>
       )}
 
-      {!loading && error && (
+      {!loading && notLinked && (
         <View style={styles.stateBox}>
-          <Icon name="alert-circle-outline" size={28} color={KarateColors.ink3} />
+          <Icon name="link" size={26} color={KarateColors.ink3} />
+          <Text style={styles.stateTxt}>Conecte seu dojô à FPKT para ver e pagar a anuidade.</Text>
+        </View>
+      )}
+
+      {!loading && !notLinked && error && (
+        <View style={styles.stateBox}>
+          <Icon name="alert-circle-outline" size={26} color={KarateColors.ink3} />
           <Text style={styles.stateTxt}>Não foi possível carregar a anuidade.</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
             <Text style={styles.retryTxt}>Tentar de novo</Text>
@@ -105,20 +125,20 @@ export default function DojoAnuidade() {
         </View>
       )}
 
-      {!loading && !error && !hasAnyData && (
+      {!loading && !notLinked && !error && !hasAnyData && (
         <View style={styles.stateBox}>
-          <Icon name="document-text-outline" size={28} color={KarateColors.ink3} />
+          <Icon name="file-text" size={26} color={KarateColors.ink3} />
           <Text style={styles.stateTxt}>Nenhuma anuidade registrada ainda.</Text>
           <Text style={styles.stateSub}>Quando a federação lançar a anuidade do seu dojô, ela aparece aqui.</Text>
         </View>
       )}
 
-      {!loading && !error && hasAnyData && (
+      {!loading && !notLinked && !error && hasAnyData && (
         <>
           {/* Situação */}
           <View style={[styles.statusCard, { backgroundColor: statusMeta.bg, borderColor: statusMeta.color }]}>
             <View style={[styles.statusIco, { borderColor: statusMeta.color }]}>
-              <Icon name={statusMeta.icon} size={24} color={statusMeta.color} />
+              <Icon name={statusMeta.icon} size={22} color={statusMeta.color} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.statusT, { color: statusMeta.color }]}>
@@ -132,7 +152,7 @@ export default function DojoAnuidade() {
 
           {/* Pix */}
           {pix && (
-            <View style={styles.card}>
+            <View style={styles.subCard}>
               <Text style={styles.cardTitle}>Pagamento</Text>
               <Text style={styles.cardSub}>Use a chave Pix da federação. Depois do pagamento, a federação concilia e atualiza aqui.</Text>
               <View style={styles.pixRow}>
@@ -148,7 +168,7 @@ export default function DojoAnuidade() {
             </View>
           )}
           {!pix && (
-            <View style={styles.card}>
+            <View style={styles.subCard}>
               <Text style={styles.cardTitle}>Pagamento</Text>
               <Text style={styles.cardSub}>A federação ainda não cadastrou uma chave Pix para pagamento.</Text>
             </View>
@@ -156,7 +176,7 @@ export default function DojoAnuidade() {
 
           {/* Histórico */}
           {history.length > 0 && (
-            <View style={styles.card}>
+            <View style={styles.subCard}>
               <Text style={styles.cardTitle}>Histórico de pagamentos</Text>
               <Text style={styles.cardSub}>Últimas renovações</Text>
               {history.map((h) => {
@@ -179,27 +199,80 @@ export default function DojoAnuidade() {
           )}
         </>
       )}
+    </View>
+  );
+}
+
+// JKA — placeholder visual puro (decisão de produto): nenhuma chamada de
+// API, nenhuma estrutura de dados nova. Só o selo "Em breve".
+function JkaAnnuityCard() {
+  return (
+    <View style={[styles.fedCard, styles.fedCardDisabled]}>
+      <View style={styles.fedHead}>
+        <View style={[styles.fedMark, styles.fedMarkDisabled]}><Text style={styles.fedMarkTxtDisabled}>JKA</Text></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.fedNameDisabled}>Japan Karate Association</Text>
+          <Text style={styles.fedSub}>Filiação internacional</Text>
+        </View>
+        <View style={styles.soonBadge}>
+          <Text style={styles.soonBadgeTxt}>Em breve</Text>
+        </View>
+      </View>
+      <Text style={styles.soonBody}>A filiação à JKA estará disponível em breve.</Text>
+    </View>
+  );
+}
+
+export default function DojoAnuidade() {
+  const { dojoName } = useKarateDojo();
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <View>
+        <Text style={styles.eyebrow}>{dojoName}</Text>
+        <Text style={styles.title}>Anuidade</Text>
+        <Text style={styles.lead}>A filiação anual do seu dojô às federações. O pagamento é por Pix e a federação confirma o recebimento.</Text>
+      </View>
+
+      <FpktAnnuityCard />
+      <JkaAnnuityCard />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
+  content: { padding: 16, gap: 16, paddingBottom: 40 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
-  stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
-  stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center" } as TextStyle,
+
+  // ── Card de federação (envelope comum a FPKT e JKA) ─────────────
+  fedCard: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 14 } as ViewStyle,
+  fedCardDisabled: { opacity: 0.6, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  fedHead: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
+  fedMark: { width: 44, height: 44, borderRadius: 12, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  fedMarkDisabled: { backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
+  fedMarkTxt: { fontSize: 11, fontWeight: "800", color: KarateColors.primary } as TextStyle,
+  fedMarkTxtDisabled: { fontSize: 11, fontWeight: "800", color: KarateColors.ink3 } as TextStyle,
+  fedName: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  fedNameDisabled: { fontSize: 15, fontWeight: "800", color: KarateColors.ink3 } as TextStyle,
+  fedSub: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  soonBadge: { backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 } as ViewStyle,
+  soonBadgeTxt: { fontSize: 10.5, fontWeight: "800", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.4 } as TextStyle,
+  soonBody: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
+
+  stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 32 } as ViewStyle,
+  stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center", maxWidth: 380 } as TextStyle,
   stateSub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 320 } as TextStyle,
   retryBtn: { marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+
   statusCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: KarateRadius.lg, borderWidth: 1, padding: 16 } as ViewStyle,
   statusIco: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
   statusT: { fontSize: 15, fontWeight: "800" } as TextStyle,
   statusSub: { fontSize: 12.5, color: KarateColors.ink2, marginTop: 2 } as TextStyle,
   valor: { fontSize: 18, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
-  card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
+  subCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 2, marginBottom: 8, lineHeight: 17 } as TextStyle,
   pixRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, padding: 12 } as ViewStyle,

@@ -2,6 +2,15 @@
 // Aura Karatê (dojô) — Eventos (F1; antes /karate/sensei/eventos)
 // Próximos exames e cursos ABERTOS da federação (dados reais via
 // GET /federation/:id/dojo/events). A inscrição passa pela federação.
+//
+// Polish QA 25/07 (item 3): decisão do Caio — a rota some da nav
+// (DojoShell) enquanto o dojô não está conectado (`linked === false`,
+// contexts/KarateDojo). Se o usuário chegar direto pela URL, a tela
+// mostra um estado explicativo em vez da lista (e nunca chama a API à
+// toa: o gate de `linked` já resolve isso sem round-trip). O contrato
+// novo do backend (Aura-backend#422) também devolve `not_linked: true`
+// (lista vazia) quando a conexão cai DEPOIS do primeiro load — o teste
+// seguro é `!!body.not_linked`, então o gate cobre os dois sinais.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -11,6 +20,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiEvent, SenseiEventsResponse } from "@/services/karateApi";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -38,6 +48,7 @@ function tipoLabel(examType: string): string {
 
 export default function DojoEventos() {
   const { federationId } = useKarateFederation();
+  const { linked } = useKarateDojo();
   const [showHow, setShowHow] = useState(false);
   const [data, setData] = useState<SenseiEventsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +70,10 @@ export default function DojoEventos() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Aditivo do backend (Aura-backend#422): `not_linked` não está no tipo
+  // ainda (services/karateApi.ts é grande demais pra tocar por 1 campo
+  // aditivo) — cast local, teste seguro `!!`.
+  const notLinked = !linked || !!(data as any)?.not_linked;
   const eventos: SenseiEvent[] = data?.events ?? [];
   const fed = data?.federation ?? null;
   const contatoEmail = fed?.email || "eventos@fpkt.org.br";
@@ -72,50 +87,60 @@ export default function DojoEventos() {
         <Text style={styles.lead}>Exames e cursos da federação. Para inscrever seus alunos, envie a lista para a federação — ela cuida do resto.</Text>
       </View>
 
-      {loading && (
+      {notLinked ? (
         <View style={styles.stateBox}>
-          <ActivityIndicator size="large" color={KarateColors.primary} />
+          <Icon name="calendar" size={28} color={KarateColors.ink3} />
+          <Text style={styles.stateTxt}>Conecte seu dojô à federação para ver exames, cursos e inscrever seus alunos.</Text>
+          <Text style={styles.stateSub}>A conexão será liberada em breve.</Text>
         </View>
-      )}
+      ) : (
+        <>
+          {loading && (
+            <View style={styles.stateBox}>
+              <ActivityIndicator size="large" color={KarateColors.primary} />
+            </View>
+          )}
 
-      {!loading && error && (
-        <View style={styles.stateBox}>
-          <Icon name="alert-circle-outline" size={28} color={KarateColors.ink3} />
-          <Text style={styles.stateTxt}>Não foi possível carregar os eventos.</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
-            <Text style={styles.retryTxt}>Tentar de novo</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+          {!loading && error && (
+            <View style={styles.stateBox}>
+              <Icon name="alert-circle-outline" size={28} color={KarateColors.ink3} />
+              <Text style={styles.stateTxt}>Não foi possível carregar os eventos.</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
+                <Text style={styles.retryTxt}>Tentar de novo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-      {!loading && !error && eventos.length === 0 && (
-        <View style={styles.stateBox}>
-          <Icon name="calendar-outline" size={28} color={KarateColors.ink3} />
-          <Text style={styles.stateTxt}>Nenhum evento aberto no momento.</Text>
-          <Text style={styles.stateSub}>Quando a federação abrir exames ou cursos, eles aparecem aqui.</Text>
-        </View>
-      )}
+          {!loading && !error && eventos.length === 0 && (
+            <View style={styles.stateBox}>
+              <Icon name="calendar" size={28} color={KarateColors.ink3} />
+              <Text style={styles.stateTxt}>Nenhum evento aberto no momento.</Text>
+              <Text style={styles.stateSub}>Quando a federação abrir exames ou cursos, eles aparecem aqui.</Text>
+            </View>
+          )}
 
-      {!loading && !error && eventos.map((e) => {
-        const taxa = fmtTaxa(e.fee_amount);
-        return (
-          <View key={e.id} style={styles.card}>
-            <Text style={styles.evEyebrow}>{tipoLabel(e.exam_type)}</Text>
-            <Text style={styles.evTipo}>{e.name}</Text>
-            <View style={styles.metaRow}><Icon name="calendar-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{fmtDataLonga(e.event_date)}</Text></View>
-            {!!e.location && (
-              <View style={styles.metaRow}><Icon name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.location}</Text></View>
-            )}
-            {!!taxa && (
-              <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{taxa}</Text></View>
-            )}
-            <TouchableOpacity style={styles.askBtn} onPress={() => setShowHow(true)} accessibilityRole="button">
-              <Icon name="paper-plane-outline" size={14} color={KarateColors.primary} />
-              <Text style={styles.askTxt}>Solicitar inscrição</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
+          {!loading && !error && eventos.map((e) => {
+            const taxa = fmtTaxa(e.fee_amount);
+            return (
+              <View key={e.id} style={styles.card}>
+                <Text style={styles.evEyebrow}>{tipoLabel(e.exam_type)}</Text>
+                <Text style={styles.evTipo}>{e.name}</Text>
+                <View style={styles.metaRow}><Icon name="calendar" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{fmtDataLonga(e.event_date)}</Text></View>
+                {!!e.location && (
+                  <View style={styles.metaRow}><Icon name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.location}</Text></View>
+                )}
+                {!!taxa && (
+                  <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{taxa}</Text></View>
+                )}
+                <TouchableOpacity style={styles.askBtn} onPress={() => setShowHow(true)} accessibilityRole="button">
+                  <Icon name="paper-plane-outline" size={14} color={KarateColors.primary} />
+                  <Text style={styles.askTxt}>Solicitar inscrição</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </>
+      )}
 
       <Modal visible={showHow} transparent animationType="fade" onRequestClose={() => setShowHow(false)}>
         <View style={styles.overlay}>
@@ -143,7 +168,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
-  stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center" } as TextStyle,
+  stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center", maxWidth: 380 } as TextStyle,
   stateSub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 320 } as TextStyle,
   retryBtn: { marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
