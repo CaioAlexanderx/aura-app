@@ -175,7 +175,13 @@ export function RegistrarGraduacaoModal({
               </>
             ) : null}
 
-            <Text style={gradStyles.label}>Observação <Text style={gradStyles.labelHint}>(opcional)</Text></Text>
+            {/* Rótulo "Descrição" (pedido do Caio, 23/07/2026) — era "Observação".
+                Este modal é compartilhado (aba Trajetória + faixa clicável no
+                roster do dojô); em ambos os lugares o campo é a mesma coisa
+                (descrição livre da graduação), então renomear aqui não gera
+                inconsistência entre os dois usos — o próprio `notes` já ERA a
+                descrição, só o rótulo mudou. */}
+            <Text style={gradStyles.label}>Descrição <Text style={gradStyles.labelHint}>(opcional)</Text></Text>
             <TextInput
               style={[gradStyles.input, { minHeight: 64, textAlignVertical: "top", fontFamily: KarateFonts.body, letterSpacing: 0 }]}
               value={notes}
@@ -183,7 +189,7 @@ export function RegistrarGraduacaoModal({
               placeholder="Ex.: exame na sede, banca X, menção honrosa…"
               placeholderTextColor={KarateColors.ink4}
               multiline
-              accessibilityLabel="Observação da graduação"
+              accessibilityLabel="Descrição da graduação"
             />
 
             <TouchableOpacity style={gradStyles.legacyRow} onPress={() => setLegacy((v) => !v)} activeOpacity={0.7}>
