@@ -283,5 +283,6 @@ const styles = StyleSheet.create({
   histRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   histIco: { width: 28, height: 28, borderRadius: 14, backgroundColor: KarateColors.okSoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
   histAno: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  histQuando: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  histQuando: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
+  histValor: { fontSize: 13, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
 });
