@@ -62,7 +62,7 @@ import {
   karateCardApi, CardTokenPreview, VirtualCardResult, CardIdentityInput, CardStatus,
 } from "@/services/karateCardApi";
 import type { MembershipCard } from "@/services/karateCardApi";
-import { buildSingleCardHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
+import { buildSingleCardHtml, buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
 
@@ -121,7 +121,12 @@ const STATUS_CFG: Record<CardStatus, { label: string; sub: string; icon: string;
 };
 
 // ── card frame (render web via iframe, MESMO HTML da impressão) ──────
-function VirtualCardFrame({ card, face }: { card: MembershipCard; face: "front" | "back" }) {
+// `fill` é usado pelo flip 3D (CardStage): as duas faces (front/back) ficam
+// empilhadas dentro do mesmo "flipper" com rotateY, então cada iframe passa
+// a ocupar 100% do container da face (o tamanho/aspect-ratio físico do
+// cartão é controlado por fora, em styles.flipStage) em vez do próprio
+// styles.cardFrame (usado no modo antigo, sem flip).
+function VirtualCardFrame({ card, face, fill }: { card: MembershipCard; face: "front" | "back"; fill?: boolean }) {
   const hostRef = useRef<any>(null);
 
   useEffect(() => {
@@ -150,7 +155,7 @@ function VirtualCardFrame({ card, face }: { card: MembershipCard; face: "front" 
       </View>
     );
   }
-  return <View ref={hostRef} style={styles.cardFrame} />;
+  return <View ref={hostRef} style={fill ? styles.cardFrameFill : styles.cardFrame} />;
 }
 
 // ── main ─────────────────────────────────────────────────
@@ -387,6 +392,14 @@ function IdentityForm({
 }
 
 // ── passo do cartão ───────────────────────────────────────
+// Flip 3D (rotateY) entre frente e verso: as duas faces são renderizadas
+// SIMULTANEAMENTE em dois VirtualCardFrame (dois iframes, cada um só-frente
+// ou só-verso via buildSingleCardHtml(card, face) — já suportava o parâmetro
+// face antes desta mudança, não foi preciso tocar em buildCarteirinhaHtml.ts).
+// Ambas ficam empilhadas dentro de um "flipper" com transformStyle:
+// preserve-3d + backfaceVisibility: hidden em cada face; girar o flipper
+// (rotateY 0deg <-> 180deg) já esconde/revela a face certa — não recriamos o
+// desenho do cartão, só giramos o mesmo HTML gerado pelo módulo existente.
 function CardStage({
   card, face, setFace,
 }: {
@@ -397,6 +410,11 @@ function CardStage({
   const cfg = STATUS_CFG[card.status];
   const tone = TONE_COLOR[cfg.tone];
   const membershipCard = toMembershipCard(card);
+  const flipped = face === "back";
+
+  const toggleFace = useCallback(() => {
+    setFace(flipped ? "front" : "back");
+  }, [flipped, setFace]);
 
   return (
     <>
@@ -410,25 +428,103 @@ function CardStage({
         </View>
       </View>
 
-      <View style={styles.faceToggle}>
-        <Pressable
-          style={[styles.faceBtn, face === "front" && styles.faceBtnActive]}
-          onPress={() => setFace("front")}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.faceBtnTxt, face === "front" && styles.faceBtnTxtActive]}>Frente</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.faceBtn, face === "back" && styles.faceBtnActive]}
-          onPress={() => setFace("back")}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.faceBtnTxt, face === "back" && styles.faceBtnTxtActive]}>Verso</Text>
-        </Pressable>
-      </View>
+      <Text style={styles.faceCaption}>
+        {flipped ? "Verso da carteirinha" : "Frente da carteirinha"} · toque no cartão para virar
+      </Text>
 
-      <VirtualCardFrame card={membershipCard} face={face} />
+      <Pressable
+        style={styles.flipStage}
+        onPress={toggleFace}
+        accessibilityRole="button"
+        accessibilityLabel={flipped ? "Carteirinha — verso. Toque para ver a frente." : "Carteirinha — frente. Toque para ver o verso."}
+      >
+        <View style={[styles.flipper, flipped && styles.flipperFlipped]}>
+          <View style={[styles.flipFace, styles.flipFaceFront]} pointerEvents="none">
+            <VirtualCardFrame card={membershipCard} face="front" fill />
+          </View>
+          <View style={[styles.flipFace, styles.flipFaceBack]} pointerEvents="none">
+            <VirtualCardFrame card={membershipCard} face="back" fill />
+          </View>
+        </View>
+      </Pressable>
+
+      <Pressable
+        style={styles.flipBtn}
+        onPress={toggleFace}
+        accessibilityRole="button"
+        accessibilityLabel="Virar carteirinha"
+      >
+        <Icon name="swap-horizontal" size={15} color={KarateColors.ink2} />
+        <Text style={styles.flipBtnTxt}>Virar carteirinha</Text>
+      </Pressable>
+
+      <DownloadPdfButton card={card} />
     </>
+  );
+}
+
+// ── download PDF (frente e verso) ─────────────────────────
+// Reusa 1:1 o mecanismo de "Imprimir" da fila (CarteirinhaQueue.tsx
+// doPrint): monta a folha A4 com buildCarteirinhaHtml (mesma função da
+// impressão em lote — já emite frente E verso por carteirinha), gera um
+// Blob e abre em nova aba via window.open(url, "_blank") — com fallback
+// para window.open("") + document.write se o navegador bloquear blob URL.
+// A folha aberta já tem seu próprio botão flutuante "Imprimir"; no celular
+// o caminho é o mesmo da fila: imprimir → "Salvar como PDF" no diálogo do
+// navegador. Nenhuma lib de PDF nova, nenhuma chamada autenticada — os
+// dados vêm só do VirtualCardResult que a página já tem em memória (mesmo
+// resultado do POST /verify), então funciona igual pra quem não está
+// logado (praticante no link público).
+function DownloadPdfButton({ card }: { card: VirtualCardResult }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handlePress = useCallback(() => {
+    if (!IS_WEB) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const membershipCard = toMembershipCard(card);
+      const html = buildCarteirinhaHtml([membershipCard], { federationName: card.federation_name || undefined });
+      let opened = false;
+      try {
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (w) {
+          opened = true;
+        } else {
+          const w2 = window.open("", "_blank");
+          if (w2) { w2.document.write(html); w2.document.close(); opened = true; }
+        }
+      } catch (blobErr) {
+        console.error("[VirtualCardScreen] Erro ao gerar PDF:", blobErr);
+      }
+      if (!opened) {
+        setErr("Não foi possível abrir o PDF — permita pop-ups para este site e tente de novo.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [card]);
+
+  if (!IS_WEB) return null;
+
+  return (
+    <View style={styles.downloadWrap}>
+      <Pressable
+        style={[styles.downloadBtn, busy && { opacity: 0.7 }]}
+        onPress={handlePress}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Baixar carteirinha em PDF, frente e verso"
+      >
+        {busy ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="download" size={16} color="#fff" />}
+        <Text style={styles.downloadBtnTxt}>Baixar PDF (frente e verso)</Text>
+      </Pressable>
+      {err ? <Text style={styles.downloadErrTxt}>{err}</Text> : null}
+      <Text style={styles.downloadHint}>Abre a folha de impressão · no celular, use "Salvar como PDF" na tela de impressão.</Text>
+    </View>
   );
 }
 
@@ -516,13 +612,54 @@ const styles = StyleSheet.create({
   stL:       { fontSize: 17, fontWeight: "800" } as TextStyle,
   stS:       { fontSize: 12, color: KarateColors.ink2, marginTop: 2 } as TextStyle,
 
-  faceToggle: { flexDirection: "row", gap: 8, marginBottom: 14, alignSelf: "center" } as ViewStyle,
-  faceBtn:       { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 999, backgroundColor: KarateColors.glass2, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
-  faceBtnActive: { backgroundColor: KarateColors.ink, borderColor: KarateColors.ink } as ViewStyle,
-  faceBtnTxt:       { fontSize: 12.5, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
-  faceBtnTxtActive: { color: "#fff" } as TextStyle,
+  faceCaption: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", marginBottom: 10 } as TextStyle,
+
+  // Flip 3D: flipStage fixa o tamanho físico do cartão (mesma proporção
+  // CR80 de cardFrame); flipper gira em Y; cada flipFace cobre 100% do
+  // flipper e esconde a própria face quando de costas (backfaceVisibility).
+  // `perspective`/`transformStyle` são propriedades CSS sem equivalente
+  // "oficial" no ViewStyle do RN — só existem no runtime web, por isso o
+  // cast `as any` dentro de Platform.select({ web: ... }) (mesmo padrão já
+  // usado acima em `card` com boxShadow).
+  flipStage: {
+    width: "100%", maxWidth: 480, alignSelf: "center", aspectRatio: 85.6 / 54, marginBottom: 14,
+    ...Platform.select({ web: { perspective: 1600 } as any, default: {} }),
+  } as ViewStyle,
+  flipper: {
+    flex: 1,
+    ...Platform.select({
+      web: { transformStyle: "preserve-3d", transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)" } as any,
+      default: {},
+    }),
+  } as ViewStyle,
+  flipperFlipped: { transform: [{ rotateY: "180deg" }] } as ViewStyle,
+  flipFace: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backfaceVisibility: "hidden",
+  } as ViewStyle,
+  flipFaceFront: {} as ViewStyle,
+  flipFaceBack: { transform: [{ rotateY: "180deg" }] } as ViewStyle,
+
+  flipBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    alignSelf: "center", marginTop: 14, paddingVertical: 10, paddingHorizontal: 18,
+    borderRadius: KarateRadius.pill, backgroundColor: KarateColors.glass2,
+    borderWidth: 1, borderColor: KarateColors.border,
+  } as ViewStyle,
+  flipBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
+
+  downloadWrap: { marginTop: 16, alignItems: "center" } as ViewStyle,
+  downloadBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9,
+    alignSelf: "stretch", backgroundColor: KarateColors.ink, borderRadius: KarateRadius.md,
+    paddingVertical: 14, paddingHorizontal: 18,
+  } as ViewStyle,
+  downloadBtnTxt: { color: "#fff", fontSize: 14.5, fontWeight: "700" } as TextStyle,
+  downloadErrTxt: { color: KarateColors.danger, fontSize: 12.5, lineHeight: 17, textAlign: "center", marginTop: 8 } as TextStyle,
+  downloadHint: { fontSize: 11.5, color: KarateColors.ink4, textAlign: "center", marginTop: 8, lineHeight: 15 } as TextStyle,
 
   cardFrame: { width: "100%", maxWidth: 480, alignSelf: "center", aspectRatio: 85.6 / 54 } as ViewStyle,
+  cardFrameFill: { width: "100%", height: "100%" } as ViewStyle,
   nativeFallback: { alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 40 } as ViewStyle,
   nativeFallbackTxt: { fontSize: 13, color: KarateColors.ink3, textAlign: "center", maxWidth: 280 } as TextStyle,
 
