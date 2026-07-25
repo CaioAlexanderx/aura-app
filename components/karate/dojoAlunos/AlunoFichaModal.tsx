@@ -157,7 +157,7 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
               <InfoRow label="Nascimento" value={s.birth_date ? `${isoToBR(s.birth_date)}${s.age != null ? ` · ${s.age} anos` : ""}` : null} />
               <InfoRow label="CPF" value={s.cpf ? maskCpf(s.cpf) : null} />
               <InfoRow label="Sexo" value={s.sex ? SEX_LABEL[s.sex] ?? s.sex : null} />
-              <InfoRow label="Telefone" value={s.phone} />
+              <InfoRow label="Telefone" value={s.phone ? formatPhone(s.phone) : null} />
               <InfoRow label="E-mail" value={s.email} />
               <InfoRow label="Início no dojô" value={s.enrolled_at ? isoToBR(s.enrolled_at) : null} />
               <InfoRow label="Consentimento LGPD" value={s.consent_lgpd ? "Registrado" : "Não registrado"} />
