@@ -28,7 +28,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
-import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError } from "./helpers";
+import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError, formatPhone } from "./helpers";
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
@@ -171,7 +171,7 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
                     <Text style={styles.guardianMeta}>
                       {[
                         s.guardian.relationship,
-                        s.guardian.phone,
+                        s.guardian.phone ? formatPhone(s.guardian.phone) : null,
                         s.guardian.cpf ? `CPF ${maskCpf(s.guardian.cpf)}` : null,
                         s.guardian.email ?? null,
                       ].filter(Boolean).join(" · ") || "Sem contato informado"}
