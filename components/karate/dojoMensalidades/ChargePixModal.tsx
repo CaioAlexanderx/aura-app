@@ -8,6 +8,11 @@
 // padrão do crediário: nada é enviado sem o usuário tocar em "Abrir no
 // WhatsApp"; telefone e mensagem são editáveis.
 //
+// O telefone sugerido (guardian ou aluno) vem cru da API — é mascarado
+// com maskPhone só para EXIBIÇÃO/edição no campo. buildWaUrl() sempre
+// extrai só os dígitos do valor do campo antes de montar o link do
+// wa.me, então a máscara nunca vaza pro link.
+//
 // F3b (aditivo): quando a resposta do Pix traz provider === 'baas', a
 // Conta Aura está ativa como recebimento — mostra uma linha discreta
 // avisando que a baixa é automática. O botão "Confirmar pagamento" da
@@ -84,7 +89,7 @@ export function ChargePixModal({ visible, federationId, dojoName, charge, onClos
         const s = studentRes.value;
         suggestedPhone = s.guardian?.phone || s.phone || "";
       }
-      setPhone(suggestedPhone);
+      setPhone(suggestedPhone ? maskPhone(suggestedPhone) : "");
 
       setMessage(
         buildChargeWaMessage({

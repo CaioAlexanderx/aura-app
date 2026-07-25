@@ -6,6 +6,14 @@
 // (criar/editar) e do TurmaDetalhe (matrícula + chamada) — todos
 // irmãos, nunca modal aninhado (RN-web). Sem TouchableOpacity aninhado:
 // o card é uma View simples com uma linha de ações (Abrir/Editar).
+//
+// IMPORTANTE: os dois modais (TurmaFormModal/TurmaDetalhe) são
+// renderizados FORA do bloco condicional de loading/erro — sempre
+// junto do `content` calculado abaixo. Antes eram parte do único
+// `return` do caminho "sucesso", então um refetch (`load()`) disparado
+// enquanto a TurmaDetalhe estava aberta (ex.: matricular um aluno,
+// via onChanged) recolocava `loading=true` e esse componente inteiro
+// desmontava — incluindo a Modal aberta, que fechava sozinha do nada.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -52,26 +60,24 @@ export function TurmasList({ federationId }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  let content: React.ReactNode;
+
   if (loading) {
-    return (
+    content = (
       <View style={styles.stateBox}>
         <ActivityIndicator size="large" color={KarateColors.primary} />
       </View>
     );
-  }
-
-  if (schemaPending) {
-    return (
+  } else if (schemaPending) {
+    content = (
       <View style={styles.stateBox}>
         <Icon name="clock" size={26} color={KarateColors.ink3} />
         <Text style={styles.stateTxt}>Turmas ainda não estão disponíveis neste ambiente.</Text>
         <Text style={styles.stateSub}>Uma atualização está pendente no servidor. Tente novamente mais tarde.</Text>
       </View>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error) {
+    content = (
       <View style={styles.stateBox}>
         <Icon name="alert" size={26} color={KarateColors.ink3} />
         <Text style={styles.stateTxt}>{error}</Text>
@@ -80,84 +86,90 @@ export function TurmasList({ federationId }: Props) {
         </TouchableOpacity>
       </View>
     );
+  } else {
+    content = (
+      <View style={{ gap: 14 }}>
+        {classes.length > 0 && (
+          <View style={styles.actionsRow}>
+            <KarateButton label="Nova turma" variant="sumi" size="sm" onPress={() => { setFormClass(null); setFormOpen(true); }} />
+          </View>
+        )}
+
+        {classes.length === 0 && (
+          <View style={styles.stateBox}>
+            <Icon name="dumbbell" size={28} color={KarateColors.ink3} />
+            <Text style={styles.stateTxt}>Nenhuma turma cadastrada ainda.</Text>
+            <Text style={styles.stateSub}>Crie uma turma (ex.: "Infantil", Seg/Qua/Sex às 18h) para começar a fazer chamada.</Text>
+            <KarateButton label="Criar primeira turma" variant="sumi" size="md" onPress={() => { setFormClass(null); setFormOpen(true); }} style={{ marginTop: 4 }} />
+          </View>
+        )}
+
+        <View style={styles.grid}>
+          {classes.map((c) => {
+            const time = timeRangeLabel(c.start_time, c.end_time);
+            return (
+              <View key={c.id} style={styles.card}>
+                <View style={styles.cardHead}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{c.name}</Text>
+                  {!c.active && (
+                    <View style={styles.inactiveBadge}>
+                      <Text style={styles.inactiveTxt}>Inativa</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.chipsRow}>
+                  {[0, 1, 2, 3, 4, 5, 6].map((d) => {
+                    const on = (c.weekdays || []).includes(d);
+                    return (
+                      <View key={d} style={[styles.dayChip, on && styles.dayChipOn]} accessibilityLabel={WEEKDAY_LONG[d]}>
+                        <Text style={[styles.dayChipTxt, on && styles.dayChipTxtOn]}>{WEEKDAY_SHORT[d]}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.metaRow}>
+                  {!!time && (
+                    <View style={styles.metaItem}>
+                      <Icon name="clock" size={12} color={KarateColors.ink3} />
+                      <Text style={styles.metaTxt}>{time}</Text>
+                    </View>
+                  )}
+                  {!!c.modality && (
+                    <View style={styles.metaItem}>
+                      <Icon name="dumbbell" size={12} color={KarateColors.ink3} />
+                      <Text style={styles.metaTxt} numberOfLines={1}>{c.modality}</Text>
+                    </View>
+                  )}
+                  <View style={styles.metaItem}>
+                    <Icon name="users" size={12} color={KarateColors.ink3} />
+                    <Text style={styles.metaTxt}>{c.students_count} aluno{c.students_count === 1 ? "" : "s"}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={styles.editIconBtn}
+                    onPress={() => { setFormClass(c); setFormOpen(true); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar ${c.name}`}
+                  >
+                    <Icon name="edit" size={14} color={KarateColors.ink2} />
+                  </TouchableOpacity>
+                  <KarateButton label="Abrir turma" variant="secondary" size="sm" onPress={() => setDetailClass(c)} style={{ flex: 1 }} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
   }
 
   return (
-    <View style={{ gap: 14 }}>
-      {classes.length > 0 && (
-        <View style={styles.actionsRow}>
-          <KarateButton label="Nova turma" variant="sumi" size="sm" onPress={() => { setFormClass(null); setFormOpen(true); }} />
-        </View>
-      )}
-
-      {classes.length === 0 && (
-        <View style={styles.stateBox}>
-          <Icon name="dumbbell" size={28} color={KarateColors.ink3} />
-          <Text style={styles.stateTxt}>Nenhuma turma cadastrada ainda.</Text>
-          <Text style={styles.stateSub}>Crie uma turma (ex.: "Infantil", Seg/Qua/Sex às 18h) para começar a fazer chamada.</Text>
-          <KarateButton label="Criar primeira turma" variant="sumi" size="md" onPress={() => { setFormClass(null); setFormOpen(true); }} style={{ marginTop: 4 }} />
-        </View>
-      )}
-
-      <View style={styles.grid}>
-        {classes.map((c) => {
-          const time = timeRangeLabel(c.start_time, c.end_time);
-          return (
-            <View key={c.id} style={styles.card}>
-              <View style={styles.cardHead}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{c.name}</Text>
-                {!c.active && (
-                  <View style={styles.inactiveBadge}>
-                    <Text style={styles.inactiveTxt}>Inativa</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.chipsRow}>
-                {[0, 1, 2, 3, 4, 5, 6].map((d) => {
-                  const on = (c.weekdays || []).includes(d);
-                  return (
-                    <View key={d} style={[styles.dayChip, on && styles.dayChipOn]} accessibilityLabel={WEEKDAY_LONG[d]}>
-                      <Text style={[styles.dayChipTxt, on && styles.dayChipTxtOn]}>{WEEKDAY_SHORT[d]}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-
-              <View style={styles.metaRow}>
-                {!!time && (
-                  <View style={styles.metaItem}>
-                    <Icon name="clock" size={12} color={KarateColors.ink3} />
-                    <Text style={styles.metaTxt}>{time}</Text>
-                  </View>
-                )}
-                {!!c.modality && (
-                  <View style={styles.metaItem}>
-                    <Icon name="dumbbell" size={12} color={KarateColors.ink3} />
-                    <Text style={styles.metaTxt} numberOfLines={1}>{c.modality}</Text>
-                  </View>
-                )}
-                <View style={styles.metaItem}>
-                  <Icon name="users" size={12} color={KarateColors.ink3} />
-                  <Text style={styles.metaTxt}>{c.students_count} aluno{c.students_count === 1 ? "" : "s"}</Text>
-                </View>
-              </View>
-
-              <View style={styles.cardActions}>
-                <TouchableOpacity
-                  style={styles.editIconBtn}
-                  onPress={() => { setFormClass(c); setFormOpen(true); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Editar ${c.name}`}
-                >
-                  <Icon name="edit" size={14} color={KarateColors.ink2} />
-                </TouchableOpacity>
-                <KarateButton label="Abrir turma" variant="secondary" size="sm" onPress={() => setDetailClass(c)} style={{ flex: 1 }} />
-              </View>
-            </View>
-          );
-        })}
-      </View>
+    <>
+      {content}
 
       <TurmaFormModal
         visible={formOpen}
@@ -174,7 +186,7 @@ export function TurmasList({ federationId }: Props) {
         onClose={() => setDetailClass(null)}
         onChanged={load}
       />
-    </View>
+    </>
   );
 }
 
