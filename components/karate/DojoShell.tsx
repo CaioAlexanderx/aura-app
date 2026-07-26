@@ -24,6 +24,14 @@
 // chaves karate_dojo.* já registradas em hooks/useVisibleModules.ts —
 // o registro existe mas o shell ainda não consome.
 //
+// F6 (conexão/filiação): item "Federação" — antes desta feature o dojô
+// self-serve não tinha NENHUM caminho no produto para se conectar à
+// federação (linked=false travava Eventos/Anuidade/Certificados sem
+// saída). Ver app/karate/(dojo)/conexao.tsx. sidebarOnly:false de
+// propósito — o público que mais precisa dessa porta é o sensei no
+// celular, então ela também aparece nas bottom tabs (não só no rodapé
+// da sidebar, como Configurações).
+//
 // ⚠️ Ícones SÓ via wrapper @/components/Icon (nomes abaixo já são
 // usados em telas karatê existentes — nada de @expo/vector-icons).
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem
@@ -73,6 +81,10 @@ const DOJO_NAV: DojoNavItem[] = [
   { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
   { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
   { label: "Certificados",  icon: "ribbon",              route: "/karate/(dojo)/certificados",  match: "certificados",  sidebarOnly: false },
+  // F6: conexão/filiação do dojô à federação — sempre visível (é a
+  // própria porta de saída de "não conectado", não pode ficar atrás de
+  // um gate de "já conectado").
+  { label: "Federação",     icon: "link",                route: "/karate/(dojo)/conexao",       match: "conexao",       sidebarOnly: false },
   // Configurações: só na sidebar (rodapé), padrão do shell da federação.
   { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarOnly: true },
 ];
@@ -339,7 +351,7 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) — só breadcrumb ────────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ────────────────
   // zIndex explícito (Polish QA 25/07, item 7): o banner de trial do
   // DojoBillingGate é um overlay absoluto renderizado como IRMÃO do shell
   // (_layout.tsx) — sem um zIndex próprio aqui, o header vermelho podia
@@ -577,7 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ───────────────
+  // ── Topbar mobile ──────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -603,7 +615,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────
+  // ── Bottom tabs ──────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,

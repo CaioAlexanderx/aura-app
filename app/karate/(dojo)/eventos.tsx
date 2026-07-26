@@ -11,12 +11,17 @@
 // novo do backend (Aura-backend#422) também devolve `not_linked: true`
 // (lista vazia) quando a conexão cai DEPOIS do primeiro load — o teste
 // seguro é `!!body.not_linked`, então o gate cobre os dois sinais.
+//
+// F6 (conexão/filiação): antes deste polish, "conecte seu dojô" era um
+// BECO SEM SAÍDA — nenhuma tela do produto explicava COMO conectar. O
+// texto agora vira botão para /karate/(dojo)/conexao (Aura-backend#424).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
@@ -47,6 +52,7 @@ function tipoLabel(examType: string): string {
 }
 
 export default function DojoEventos() {
+  const router = useRouter();
   const { federationId } = useKarateFederation();
   const { linked } = useKarateDojo();
   const [showHow, setShowHow] = useState(false);
@@ -91,7 +97,10 @@ export default function DojoEventos() {
         <View style={styles.stateBox}>
           <Icon name="calendar" size={28} color={KarateColors.ink3} />
           <Text style={styles.stateTxt}>Conecte seu dojô à federação para ver exames, cursos e inscrever seus alunos.</Text>
-          <Text style={styles.stateSub}>A conexão será liberada em breve.</Text>
+          <TouchableOpacity style={styles.connectBtn} onPress={() => router.push("/karate/(dojo)/conexao" as any)} accessibilityRole="button" accessibilityLabel="Conectar meu dojô à federação">
+            <Icon name="link" size={14} color={KarateColors.primary} />
+            <Text style={styles.connectBtnTxt}>Conectar meu dojô</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <>
@@ -172,6 +181,8 @@ const styles = StyleSheet.create({
   stateSub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 320 } as TextStyle,
   retryBtn: { marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
+  connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 5 } as ViewStyle,
   evEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
   evTipo: { fontSize: 15, fontWeight: "700", color: KarateColors.ink, marginBottom: 2 } as TextStyle,

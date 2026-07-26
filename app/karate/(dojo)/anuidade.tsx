@@ -12,12 +12,18 @@
 //     conexão em vez da lista vazia genérica.
 //   • JKA — card DESABILITADO/esmaecido, selo "Em breve", SEM nenhuma
 //     chamada de API — é placeholder visual, não uma feature nova.
+//
+// F6 (conexão/filiação): antes deste polish, "conecte seu dojô à FPKT"
+// era um BECO SEM SAÍDA — nenhuma tela do produto explicava COMO
+// conectar. O texto agora vira botão para /karate/(dojo)/conexao
+// (Aura-backend#424).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, annuityStatusView } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
@@ -44,6 +50,7 @@ function fmtValor(v: number | null): string {
 }
 
 function FpktAnnuityCard() {
+  const router = useRouter();
   const { federationId } = useKarateFederation();
   const { linked } = useKarateDojo();
   const [data, setData] = useState<SenseiAnnuityResponse | null>(null);
@@ -112,6 +119,10 @@ function FpktAnnuityCard() {
         <View style={styles.stateBox}>
           <Icon name="link" size={26} color={KarateColors.ink3} />
           <Text style={styles.stateTxt}>Conecte seu dojô à FPKT para ver e pagar a anuidade.</Text>
+          <TouchableOpacity style={styles.connectBtn} onPress={() => router.push("/karate/(dojo)/conexao" as any)} accessibilityRole="button" accessibilityLabel="Conectar meu dojô à federação">
+            <Icon name="link" size={14} color={KarateColors.primary} />
+            <Text style={styles.connectBtnTxt}>Conectar meu dojô</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -246,7 +257,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
 
-  // ── Card de federação (envelope comum a FPKT e JKA) ─────────────
+  // ── Card de federação (envelope comum a FPKT e JKA) ───────────────
   fedCard: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 14 } as ViewStyle,
   fedCardDisabled: { opacity: 0.6, backgroundColor: KarateColors.bg2 } as ViewStyle,
   fedHead: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
@@ -266,6 +277,8 @@ const styles = StyleSheet.create({
   stateSub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 320 } as TextStyle,
   retryBtn: { marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
+  connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
 
   statusCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: KarateRadius.lg, borderWidth: 1, padding: 16 } as ViewStyle,
   statusIco: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
