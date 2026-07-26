@@ -1,5 +1,5 @@
 // ============================================================
-// Helpers — Alunos do dojô (F2)
+// Helpers — Alunos do dojô (F2) + vínculo com a federação (F5a)
 //
 // Faixas comuns do karatê (chips do form; belt_order = posição na
 // hierarquia, 1 = Branca … 9 = Preta — espelha BELT_KEY_RANK do tema,
@@ -117,6 +117,15 @@ export function maskCpf(raw: string | null | undefined): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+// ── CEP ──────────────────────────────────────────────────────
+
+/** Máscara 00000-000 (aceita parcial) — usado na ficha de solicitação de filiação (F5a). */
+export function maskCep(raw: string | null | undefined): string {
+  const d = onlyDigits(raw).slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
 // ── Telefone ─────────────────────────────────────────────────
 
 /**
@@ -182,4 +191,33 @@ export function mapStudentSaveError(e: any): { field: StudentErrorField; message
     return { field: "general", message: apiErrors[0] || "Dados inválidos — confira o formulário." };
   }
   return { field: "general", message: e?.message || "Não foi possível salvar. Tente de novo." };
+}
+
+// ── Federação (F5a) — erros do POST/DELETE .../students/:sid/federate ──
+
+export type FederationErrorField = "fpkt_number" | "general";
+
+/**
+ * Mapeia os erros do vínculo com a federação (Aura-backend#425) pro
+ * campo certo, em pt-BR: 404 FPKT_NUMBER_NOT_FOUND (número não existe),
+ * 409 PRACTITIONER_JA_VINCULADO (o praticante já é de outro aluno),
+ * 409 JA_FEDERADO (este aluno já está federado) e 409 DOJO_NAO_CONECTADO
+ * (o dojô ainda não está conectado à federação — cobre também o caminho
+ * de solicitação, não só o de número).
+ */
+export function mapFederationError(e: any): { field: FederationErrorField; message: string } {
+  const code = e?.data?.code ?? e?.code ?? null;
+  if (code === "FPKT_NUMBER_NOT_FOUND") {
+    return { field: "fpkt_number", message: "Não encontramos nenhum praticante com este número FPKT." };
+  }
+  if (code === "PRACTITIONER_JA_VINCULADO") {
+    return { field: "fpkt_number", message: "Este número FPKT já está vinculado a outro aluno." };
+  }
+  if (code === "JA_FEDERADO") {
+    return { field: "general", message: "Este aluno já está federado." };
+  }
+  if (code === "DOJO_NAO_CONECTADO") {
+    return { field: "general", message: "Seu dojô ainda não está conectado à federação — conecte primeiro para federar alunos." };
+  }
+  return { field: "general", message: e?.message || "Não foi possível concluir. Tente de novo." };
 }

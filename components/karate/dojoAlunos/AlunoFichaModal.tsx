@@ -1,6 +1,6 @@
 // ============================================================
 // AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a;
-// seções Presenças + QR de check-in F4)
+// seções Presenças + QR de check-in F4; seção Federação F5a)
 //
 // Dados + responsável + ações: Editar (delega pro AlunoFormModal via
 // onEdit), Inativar/Reativar (PATCH status) e Excluir (DELETE real na
@@ -14,6 +14,11 @@
 // F4: seções "Presenças" (AlunoPresencasSection) e "QR de check-in"
 // (AlunoQrSection) — ambas silenciosas em erro/indisponibilidade (a
 // ficha nunca mostra aviso de erro por causa de uma feature opcional).
+//
+// F5a: seção "Federação" (AlunoFederacaoSection) — o sensei DECLARA se o
+// aluno é federado (número FPKT existente ou solicitação de filiação); a
+// federação CONFIRMA. Mesmo racional de sub-componente inline das seções
+// acima.
 //
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
@@ -32,6 +37,7 @@ import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError, formatPhone } from 
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
+import { AlunoFederacaoSection } from "./AlunoFederacaoSection";
 
 interface Props {
   visible: boolean;
@@ -181,6 +187,8 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
                   <Text style={styles.guardianMeta}>{minor ? "Nenhum responsável vinculado — vincule pelo Editar." : "Nenhum responsável vinculado."}</Text>
                 )}
               </View>
+
+              <AlunoFederacaoSection federationId={federationId} student={s} onChanged={onChanged} />
 
               <AlunoAssinaturaSection federationId={federationId} student={s} onChanged={onChanged} />
 
