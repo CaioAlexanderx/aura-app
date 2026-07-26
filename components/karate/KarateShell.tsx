@@ -17,6 +17,11 @@
 //   (rota /karate/exames = tela de Certificados/Selo; exames de faixa
 //    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
+// F6: adicionado item Filiações — inbox de pedidos de conexão vindos
+//   dos dojôs (admin+staff, só sidebar). Distinto de "Conexões" (que é
+//   saúde de SINCRONIZAÇÃO de dojôs já ligados) — nomes deliberadamente
+//   diferentes pra não confundir os dois fluxos. Ver
+//   app/karate/(federation)/filiacao/index.tsx.
 //
 // IA/Nav P1:
 //   • isActive — o item índice (Dashboard, route "/karate/") casa por
@@ -25,7 +30,7 @@
 //
 // Nav P2 (3.5): breadcrumb leve em rotas aninhadas.
 //
-// ── Shell premium (v5 Shoji / 障子) ──────────────────────────
+// ── Shell premium (v5 Shoji / 障子) ────────────────────────
 //   Identidade e navegação concentradas na SIDEBAR (web); o header fica
 //   limpo, só com o caminho atual. Layout (25/06, feedback Caio):
 //   • Sidebar — topo: marca Aura Karatê (selo 空 sobre gradiente oxblood +
@@ -54,7 +59,7 @@
 //   app: sem fonte, sem gate de carregamento, glyphs sempre presentes.
 //   Os nomes em NAV_ITEMS são chaves válidas do Icon (ou aliases mapeados).
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem ser
-//   objetos (cor/string solta crasha "Invalid value used as weak map key").
+//   objetos (cor/string solta crasha "Invalid value used as weak map key".
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -91,6 +96,10 @@ const NAV_ITEMS = [
   { label: "Dojôs",           icon: "building",  route: "/karate/dojos",         roles: null,          sidebarOnly: false },
   { label: "Praticantes",     icon: "users",     route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
   { label: "Conexões",        icon: "network",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
+  // F6: inbox de pedidos de CONEXÃO/FILIAÇÃO vindos dos dojôs (contrato
+  // Aura-backend#424) — domínio diferente de "Conexões" acima (aquela é
+  // saúde de sincronização de dojôs JÁ ligados).
+  { label: "Filiações",       icon: "inbox",     route: "/karate/filiacao",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   { label: "Financeiro",      icon: "wallet",    route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
   // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
   { label: "Certificados",    icon: "ribbon",    route: "/karate/exames",        roles: null,          sidebarOnly: false },
@@ -148,7 +157,7 @@ function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ── Breadcrumb / seção atual ─────────────────────────────────
+// ── Breadcrumb / seção atual ─────────────────────────
 // Mapa segmento-da-seção → rótulo, derivado de NAV_ITEMS.
 const SECTION_LABEL: Record<string, string> = (() => {
   const map: Record<string, string> = {};
@@ -533,7 +542,7 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) — só breadcrumb ───────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ────────────────
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
@@ -579,7 +588,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Sidebar ────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────
   sidebar: {
     width: 236,
     backgroundColor: KarateColors.bg2,
@@ -741,7 +750,7 @@ const styles = StyleSheet.create({
   sidebarItemLabel:  { fontFamily: KarateFonts.body, fontSize: 13, fontWeight: "500", color: KarateColors.ink2 } as TextStyle,
   sidebarItemLabelActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
-  // ── Chip de usuário (sb-foot) ──────────────────────────────
+  // ── Chip de usuário (sb-foot) ─────────────────────
   sbFoot: {
     flexDirection: "row",
     alignItems: "center",
@@ -792,7 +801,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile (enxuta) ─────────────────────────────────
+  // ── Topbar mobile (enxuta) ───────────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -809,7 +818,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────────────────────────────────────────
+  // ── Bottom tabs ──────────────────────────────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,
