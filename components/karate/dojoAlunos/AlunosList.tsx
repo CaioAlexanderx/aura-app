@@ -1,9 +1,15 @@
 // ============================================================
-// AlunosList — F2 (aba "Meus alunos")
+// AlunosList — F2 (aba "Meus alunos") + filtro/badge de federação (F5a)
 //
 // Pirâmide por faixa (summary do backend, só ativos), busca + filtros
-// status/faixa (client-side: a lista vem inteira, ≤1000) e as linhas.
-// Presentational — dados e modais vivem no MeusAlunosTab.
+// status/faixa/federação (client-side: a lista vem inteira, ≤1000) e as
+// linhas. Presentational — dados e modais vivem no MeusAlunosTab.
+//
+// F5a: filtro "Todos/Federados/Só do dojô" segue o MESMO padrão dos
+// filtros de status/faixa acima — client-side sobre a lista já
+// carregada (o backend também aceita `?federated=true|false` em
+// listStudents, mas o MeusAlunosTab faz UMA busca completa e filtra
+// aqui, igual já fazia pra status/faixa; sem round-trip extra).
 //
 // Regra da casa: dado faltante é NEUTRO (idade/CPF ausentes não viram
 // alerta). A única sinalização é menor de 18 sem responsável (LGPD) —
@@ -21,6 +27,7 @@ import { DojoStudent, DojoStudentsSummary } from "@/services/karateDojoStudentsA
 import { beltViewFor, maskCpf, onlyDigits } from "./helpers";
 
 type StatusFilter = "all" | "active" | "inactive";
+type FederatedFilter = "all" | "federated" | "dojo_only";
 
 interface Props {
   students: DojoStudent[];
@@ -45,6 +52,7 @@ export function AlunosList({
   // ativos, via summary do backend). Trivial, mas fecha a divergência.
   const [status, setStatus] = useState<StatusFilter>("active");
   const [belt, setBelt] = useState<string | null>(null);
+  const [federated, setFederated] = useState<FederatedFilter>("all");
 
   // Pirâmide: faixa mais alta primeiro (belt_order desc; sem ordem → fim).
   const piramide = useMemo(() => {
@@ -63,6 +71,8 @@ export function AlunosList({
   const list = students.filter((s) => {
     if (status !== "all" && s.status !== status) return false;
     if (belt && (s.belt_label ?? "Sem faixa") !== belt) return false;
+    if (federated === "federated" && !s.federated) return false;
+    if (federated === "dojo_only" && s.federated) return false;
     if (q.trim()) {
       const byName = s.full_name.toLowerCase().includes(q.trim().toLowerCase());
       const byCpf = qDigits.length >= 3 && (s.cpf ?? "").includes(qDigits);
@@ -167,6 +177,20 @@ export function AlunosList({
         ))}
       </View>
 
+      <View style={styles.filters}>
+        {([["all", "Todos"], ["federated", "Federados"], ["dojo_only", "Só do dojô"]] as [FederatedFilter, string][]).map(([key, label]) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.chipBtn, federated === key && styles.chipBtnOn]}
+            onPress={() => setFederated(key)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: federated === key }}
+          >
+            <Text style={[styles.chipBtnTxt, federated === key && styles.chipBtnTxtOn]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {beltOptions.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.beltFilters}>
           <TouchableOpacity
@@ -210,6 +234,12 @@ export function AlunosList({
                 {minor && !s.guardian ? " · Sem responsável" : ""}
               </Text>
             </View>
+            {s.federated && (
+              <View style={styles.fedBadge}>
+                <Icon name="shield" size={11} color={KarateColors.ok} />
+                <Text style={styles.fedBadgeTxt}>Federado</Text>
+              </View>
+            )}
             <View style={[styles.chip, { backgroundColor: v.color }]}>
               <Text style={[styles.chipTxt, { color: v.textColor }]}>{v.label}</Text>
             </View>
@@ -268,6 +298,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 12 } as ViewStyle,
   nome: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   meta: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  fedBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: KarateColors.okSoft, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 7 } as ViewStyle,
+  fedBadgeTxt: { fontSize: 10, fontWeight: "700", color: KarateColors.ok } as TextStyle,
   chip: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)" } as ViewStyle,
   chipTxt: { fontSize: 11, fontWeight: "800" } as TextStyle,
   status: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999 } as ViewStyle,
