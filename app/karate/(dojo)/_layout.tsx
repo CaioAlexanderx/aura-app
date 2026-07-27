@@ -21,6 +21,16 @@
 // padrão do KarateBillingGate em (federation)/_layout.tsx. Overlay
 // bloqueante só quando o backend manda required=true (R$140, flag off
 // em produção até o piloto); fail-open em qualquer erro.
+//
+// QA 27/07 (item 1): <ToastContainer/> estava montado no grupo
+// (federation) e em (tabs)/(auth), mas NUNCA neste grupo — toda
+// chamada a toast.error()/toast.success() disparada por uma tela do
+// dojô (certificados, eventos, AlunoFederacaoSection…) empurrava pro
+// store do zustand e não tinha host nenhum pra renderizar: erro de API
+// (ex.: 503 SCHEMA_PENDING em "Pedir certificados") ficava
+// SILENCIOSAMENTE engolido — sem toast, sem estado de erro, nada visível
+// na tela, só aparecia no painel de rede. Mesmo padrão do grupo
+// (federation) logo abaixo: ToastContainer como irmão do shell.
 // ============================================================
 import React from "react";
 import { View, Text, ActivityIndicator } from "react-native";
@@ -29,6 +39,7 @@ import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateDojoProvider } from "@/contexts/KarateDojo";
 import { DojoShell } from "@/components/karate/DojoShell";
 import { DojoBillingGate } from "@/components/karate/DojoBillingGate";
+import { ToastContainer } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { KarateColors } from "@/constants/karateTheme";
 
@@ -96,6 +107,11 @@ export default function DojoLayout() {
             quando o backend manda required=true; caso contrário fica
             invisível ou mostra só o aviso (não bloqueante) de trial. */}
         <DojoBillingGate companyId={(company as any)?.id ?? ""} />
+        {/* QA 27/07 (item 1): host de toasts do grupo — sem isso, todo
+            toast.error()/toast.success() disparado pelas telas do dojô
+            (certificados, eventos, ficha do aluno…) não tinha onde
+            renderizar. */}
+        <ToastContainer />
       </KarateDojoProvider>
     </KarateFederationProvider>
   );

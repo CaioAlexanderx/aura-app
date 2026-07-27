@@ -32,6 +32,16 @@
 // celular, então ela também aparece nas bottom tabs (não só no rodapé
 // da sidebar, como Configurações).
 //
+// QA 27/07 (item 4): <TrialBanner/> — o aviso não bloqueante de trial
+// ("Seu período de teste termina em N dias") morava em DojoBillingGate
+// como overlay position:absolute (irmão deste shell no _layout) e podia
+// sobrepor eyebrow/título de telas com conteúdo centralizado (ex.:
+// conexao.tsx). Agora vive AQUI, IN-FLOW, entre o header e o <Slot/> —
+// quando aparece, empurra o conteúdo pra baixo em vez de flutuar por
+// cima dele; quando não há trial ativo, não ocupa espaço nenhum (retorna
+// null). Usa o hook useDojoTrialBanner (components/karate/DojoBillingGate)
+// com consulta própria e leve ao gate.
+//
 // ⚠️ Ícones SÓ via wrapper @/components/Icon (nomes abaixo já são
 // usados em telas karatê existentes — nada de @expo/vector-icons).
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem
@@ -54,6 +64,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
+import { useDojoTrialBanner } from "@/components/karate/DojoBillingGate";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 import { useAuthStore } from "@/stores/auth";
 
@@ -146,6 +157,24 @@ function Topbar() {
           <Text style={styles.crumbCurrent} numberOfLines={1}>{section}</Text>
         </View>
         <View style={{ flex: 1 }} />
+      </View>
+    </View>
+  );
+}
+
+// QA 27/07 (item 4): banner de trial IN-FLOW — ocupa espaço real quando
+// visível (empurra o Slot pra baixo), some sem deixar vazio quando não.
+function TrialBanner() {
+  const company = useAuthStore((s) => s.company) as any;
+  const { show, days } = useDojoTrialBanner(company?.id ?? "");
+  if (!show) return null;
+  return (
+    <View style={styles.trialBar}>
+      <View style={styles.trialPill}>
+        <Icon name="clock" size={13} color={KarateColors.warn} />
+        <Text style={styles.trialPillTxt}>
+          Seu período de teste no Aura Karatê termina em {days} {days === 1 ? "dia" : "dias"}.
+        </Text>
       </View>
     </View>
   );
@@ -312,6 +341,7 @@ export function DojoShell() {
         <SidebarNav />
         <View style={styles.content}>
           <Topbar />
+          <TrialBanner />
           <Slot />
         </View>
       </View>
@@ -328,6 +358,7 @@ export function DojoShell() {
           <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{dojoName}</Text>
         </View>
       </View>
+      <TrialBanner />
       <View style={styles.content}>
         <Slot />
       </View>
@@ -352,12 +383,6 @@ const styles = StyleSheet.create({
   } as ViewStyle,
 
   // ── Topbar oxblood (web) — só breadcrumb ────────────────
-  // zIndex explícito (Polish QA 25/07, item 7): o banner de trial do
-  // DojoBillingGate é um overlay absoluto renderizado como IRMÃO do shell
-  // (_layout.tsx) — sem um zIndex próprio aqui, o header vermelho podia
-  // pintar por cima dele dependendo da ordem de commit. O banner usa
-  // zIndex bem mais alto (ver DojoBillingGate.tsx); isto aqui só fixa o
-  // header num valor baixo e conhecido pra nunca competir com ele.
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
@@ -396,6 +421,30 @@ const styles = StyleSheet.create({
     fontFamily: KarateFonts.body,
     fontSize: 12,
     color: "rgba(253,248,242,0.4)",
+  } as TextStyle,
+
+  // ── Banner de trial in-flow (QA 27/07, item 4) ──────────
+  trialBar: {
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: KarateColors.bg,
+  } as ViewStyle,
+  trialPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: KarateColors.warnSoft,
+    borderWidth: 1,
+    borderColor: KarateColors.border,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  } as ViewStyle,
+  trialPillTxt: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: KarateColors.warn,
   } as TextStyle,
 
   // ── Sidebar (DNA do KarateShell) ────────────

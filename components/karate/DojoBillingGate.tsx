@@ -20,9 +20,26 @@
 //
 // companyId: é o id da PRÓPRIA company do dojô (não o federationId —
 // o dojô é uma company própria com billing próprio; useAuthStore().company.id).
+//
+// QA 27/07 (item 4): o aviso NÃO bloqueante de trial ("Seu período de
+// teste termina em N dias") era renderizado aqui como um <View
+// position="absolute"> flutuando por cima de TODO o conteúdo do grupo
+// (dojo) — este componente é montado como IRMÃO do DojoShell no
+// _layout, então o banner ficava fora do fluxo normal e podia cair
+// exatamente em cima do eyebrow/título de telas com conteúdo centralizado
+// (ex.: conexao.tsx). Em telas com header alinhado à esquerda o banner
+// (centralizado na largura toda) "caia no vazio" e passava despercebido
+// — mas nunca deveria depender de sorte de layout. Fix: o banner saiu
+// daqui e virou IN-FLOW dentro do DojoShell (ver <TrialBanner/> em
+// components/karate/DojoShell.tsx), que consome o hook
+// `useDojoTrialBanner` abaixo — assim ele reserva espaço de verdade
+// (empurra o conteúdo pra baixo quando aparece) em vez de flutuar por
+// cima. Este componente agora só cuida do overlay BLOQUEANTE
+// (gate.required===true), que continua cobrindo a tela inteira de
+// propósito (é pra bloquear mesmo).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, TextInput, ScrollView, StyleSheet, ViewStyle, TextStyle, Platform, useWindowDimensions } from "react-native";
+import { View, Text, TextInput, ScrollView, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
@@ -57,10 +74,30 @@ const FAIL_OPEN_GATE: DojoGateResponse = {
   trial_ends_at: null, billing_status: null,
 };
 
-// Mesmo breakpoint do DojoShell (components/karate/DojoShell.tsx,
-// BREAKPOINT_SIDEBAR) — hardcoded aqui pra não criar um import cruzado só
-// por uma constante. Usado só pra saber a altura do header (item 7).
-const BREAKPOINT_SIDEBAR = 768;
+/**
+ * Hook leve e independente pro DojoShell saber se o aviso de trial (não
+ * bloqueante) deve aparecer — usado só pra reservar espaço IN-FLOW no
+ * topo do conteúdo (QA 27/07, item 4). Faz sua PRÓPRIA consulta ao gate
+ * (GET leve) em vez de compartilhar estado com o overlay bloqueante
+ * abaixo, pra não acoplar DojoShell a este componente.
+ */
+export function useDojoTrialBanner(companyId: string): { show: boolean; days: number | null } {
+  const [state, setState] = useState<{ show: boolean; days: number | null }>({ show: false, days: null });
+  useEffect(() => {
+    let alive = true;
+    if (!companyId) { setState({ show: false, days: null }); return; }
+    billingApi
+      .karateGate<DojoGateResponse>(companyId)
+      .then((g) => {
+        if (!alive) return;
+        const d = !g.required ? daysUntil(g.trial_ends_at) : null;
+        setState({ show: !g.required && d !== null && d >= 0, days: d });
+      })
+      .catch(() => { if (alive) setState({ show: false, days: null }); });
+    return () => { alive = false; };
+  }, [companyId]);
+  return state;
+}
 
 export function DojoBillingGate({ companyId }: { companyId: string }) {
   const [gate, setGate] = useState<DojoGateResponse | null>(null);
@@ -68,12 +105,6 @@ export function DojoBillingGate({ companyId }: { companyId: string }) {
   const [method, setMethod] = useState<Method>("pix");
   const [busy, setBusy] = useState(false);
   const [pix, setPix] = useState<SubscribeResponse | null>(null);
-  const { width } = useWindowDimensions();
-  // Altura aproximada do header do DojoShell em cada layout (topbar web
-  // ~48px; mobileTopbar tem 54px fixos) — usada só pra deslocar o banner
-  // de trial pra BAIXO do header em vez de ficar sobreposto (item 7).
-  const isWideShell = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
-  const bannerTop = isWideShell ? 58 : 64;
 
   // Cartão
   const [cardNumber, setCardNumber] = useState("");
@@ -104,8 +135,6 @@ export function DojoBillingGate({ companyId }: { companyId: string }) {
 
   const amount = gate.total || gate.amount || 140;
   const amountLabel = "R$ " + amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  const trialDays = !gate.required ? daysUntil(gate.trial_ends_at) : null;
-  const showTrialNotice = !gate.required && trialDays !== null && trialDays >= 0;
 
   async function payPix() {
     setBusy(true);
@@ -154,28 +183,11 @@ export function DojoBillingGate({ companyId }: { companyId: string }) {
     }
   }
 
-  // Não obrigatório: fica invisível, exceto um aviso discreto (SEM
-  // bloquear) quando o trial estiver perto/dentro do prazo.
+  // Não obrigatório: overlay bloqueante fica invisível. O aviso de trial
+  // (não bloqueante) saiu daqui — ver <TrialBanner/> em DojoShell.tsx e a
+  // nota no cabeçalho deste arquivo (QA 27/07, item 4).
   if (!gate.required) {
-    if (!showTrialNotice) return null;
-    // Polish QA 25/07 (item 7): o banner é IRMÃO do DojoShell no _layout,
-    // não filho — por isso não basta position:absolute com top fixo perto
-    // de 0: ele acaba na mesma faixa vertical do header vermelho e o
-    // header (pintado depois, sem zIndex antes) ficava por cima. Fix:
-    // top desloca o banner pra ABAIXO do header (bannerTop calculado a
-    // partir do layout, acima) e um zIndex bem mais alto que o do header
-    // (DojoShell.tsx fixa o header em zIndex:1) garante que o banner
-    // nunca fica escondido atrás dele.
-    return (
-      <View style={[styles.trialBanner, { top: bannerTop }]} pointerEvents="box-none">
-        <View style={styles.trialCard}>
-          <Icon name="clock" size={14} color={C.warn} />
-          <Text style={styles.trialTxt}>
-            Seu período de teste no Aura Karatê termina em {trialDays} {trialDays === 1 ? "dia" : "dias"}.
-          </Text>
-        </View>
-      </View>
-    );
+    return null;
   }
 
   return (
@@ -294,11 +306,4 @@ const styles = StyleSheet.create({
   fLabel: { fontSize: 11, fontWeight: "700", color: C.ink2, marginBottom: 4, marginTop: 2 } as TextStyle,
   input: { borderWidth: 1, borderColor: C.border, borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: C.ink, backgroundColor: C.surface, fontFamily: F.mono } as TextStyle,
   foot: { fontSize: 11, color: C.ink3, textAlign: "center", marginTop: 16 } as TextStyle,
-  // Aviso de trial (não bloqueante) — banner discreto no topo. `top` real
-  // é sobrescrito inline (bannerTop, calculado no componente) pra ficar
-  // sempre ABAIXO do header do shell; zIndex bem acima do header (que fixa
-  // zIndex:1 em DojoShell.tsx) garante que nunca fica escondido atrás dele.
-  trialBanner: { position: "absolute", top: 8, left: 0, right: 0, alignItems: "center", zIndex: 2000 } as ViewStyle,
-  trialCard: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.warnSoft, borderWidth: 1, borderColor: C.border, borderRadius: R.pill, paddingVertical: 6, paddingHorizontal: 12 } as ViewStyle,
-  trialTxt: { fontSize: 11.5, fontWeight: "700", color: C.warn } as TextStyle,
 });
