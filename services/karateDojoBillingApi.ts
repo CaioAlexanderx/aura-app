@@ -1,12 +1,14 @@
 // ============================================================
 // AURA DOJÔ — F3a: Mensalidades do dojô (planos, assinaturas, cobranças, PIX)
 // F3b: Conta Aura (BaaS opt-in — ativação, status, seletor de recebimento)
-// F3c: Régua de cobrança (lembretes automáticos por e-mail)
+// F3c: Régua de cobrança (lembretes automáticos por e-mail + WhatsApp)
 //
 // Cliente tipado do Aura-backend PR "f3a-dojo-billing" / "f3b-conta-aura" /
-// "f3c-dojo-regua-gate" (em paralelo — o backend está sendo construído a
-// partir do MESMO contrato deste arquivo). Base: /federation/:id/dojo/billing —
-// Bearer = JWT normal do app via request() core (Canal A).
+// "f3c-dojo-regua-gate" + contrato final #429 (fila de WhatsApp). Base:
+// /federation/:id/dojo/billing — Bearer = JWT normal do app via request()
+// core (Canal A). A fila de WhatsApp vive fora do prefixo /billing
+// (contrato #429: /federation/:id/dojo/reminders/…), por isso tem seu
+// próprio helper de base logo abaixo.
 //
 // Vive num service pequeno separado, mesmo racional do
 // karateDojoStudentsApi (karateApi.ts tem 125 KB e é intocável).
@@ -18,13 +20,24 @@
 //   409 no cancel de cobrança já paga ·
 //   503 BAAS_DISABLED (flag off) · 409 BAAS_JA_ATIVADO ·
 //   409 PROVIDER_NAO_DISPONIVEL (baas sem approved).
+//
+// QA 27/07 (item 3, contrato #429 FINAL):
+//   • o resumo do POST .../reminders/run deixou de trazer só `skipped`
+//     (que misturava "sem e-mail" com dedupe) — agora traz
+//     { sent, skipped_no_email, skipped_sent, failed, skipped }.
+//     `skipped` continua presente por compatibilidade (soma dos dois),
+//     mas a UI usa os campos novos (ver buildRunSummary em ../helpers).
+//   • nova fila GET .../dojo/reminders/whatsapp-queue?date= + POST
+//     .../dojo/reminders/:chargeId/whatsapp-sent — canal alternativo pro
+//     responsável sem e-mail cadastrado (no Brasil ele tem telefone, não
+//     e-mail — decisão do Caio).
 // ============================================================
 import { request } from "@/services/api";
 
 export type DojoChargeStatus = "pending" | "paid" | "overdue" | "cancelled";
 export type DojoChargePaymentMethod = "pix" | "dinheiro" | "cartao" | "outro";
 
-// ── Planos ──────────────────────────────────────────────────
+// ── Planos ────────────────────────────────────
 export interface DojoBillingPlan {
   id: string;
   name: string;
@@ -46,7 +59,7 @@ export interface DojoBillingPlansListResponse {
   data: DojoBillingPlan[];
 }
 
-// ── Assinaturas ─────────────────────────────────────────────
+// ── Assinaturas ────────────────────────────────
 export interface DojoSubscription {
   id: string;
   student_id: string;
@@ -79,13 +92,13 @@ export interface DojoSubscriptionsListResponse {
   data: DojoSubscriptionListItem[];
 }
 
-// ── Geração de cobranças ────────────────────────────────────
+// ── Geração de cobranças ────────────────────────
 export interface DojoGenerateChargesResult {
   created: number;
   skipped: number;
 }
 
-// ── Cobranças ───────────────────────────────────────────────
+// ── Cobranças ──────────────────────────────────
 export interface DojoCharge {
   id: string;
   student: DojoSubscriptionPersonRef;
@@ -135,7 +148,7 @@ export interface DojoConfirmChargePayload {
   method?: DojoChargePaymentMethod;
 }
 
-// ── Config de recebimento (PIX do dojô) ─────────────────────
+// ── Config de recebimento (PIX do dojô) ───────────────
 export interface DojoBillingConfig {
   pix_configured: boolean;
   pix_key_masked: string | null;
@@ -156,12 +169,7 @@ export const PIX_KEY_TYPE_OPTIONS: { key: string; label: string }[] = [
   { key: "random", label: "Aleatória" },
 ];
 
-// ── Conta Aura (BaaS opt-in, F3b) ────────────────────────────
-// Subconta Asaas do dojô: o dojô escolhe entre continuar recebendo na
-// própria chave Pix ('pix_manual') ou ativar a conta integrada ('baas'
-// — conciliação automática, split de 0,5% embutido nas taxas). Atrás
-// de flag no backend: enabled:false em produção até a homologação
-// Asaas — nesse caso a UI (ContaAuraCard) não renderiza nada.
+// ── Conta Aura (BaaS opt-in, F3b) ────────────────────
 export type BaasStatus =
   | "none" | "created" | "docs_pending" | "under_review" | "approved" | "rejected";
 
@@ -212,12 +220,7 @@ export interface DojoBaasProviderResponse {
   provider: DojoBillingProvider;
 }
 
-// ── Régua de cobrança (lembretes automáticos, F3c) ──────────
-// Lembretes por e-mail perto do vencimento, com offsets configuráveis
-// em dias relativos ao vencimento (negativo = antes, 0 = no dia,
-// positivo = depois). Execução agendada no backend + botão "rodar
-// agora" no front — dedupe por dia (reenviar não duplica cobrança já
-// avisada no mesmo dia).
+// ── Régua de cobrança (lembretes automáticos, F3c) ──────
 export interface DojoReminderConfig {
   enabled: boolean;
   /** Inteiros -15..30, no máx. 6, únicos. */
@@ -249,10 +252,41 @@ export interface DojoReminderLogResponse {
   data: DojoReminderLogItem[];
 }
 
+/**
+ * Resumo do POST .../reminders/run (contrato #429 FINAL). `skipped`
+ * continua vindo do backend por compatibilidade (soma de
+ * skipped_no_email + skipped_sent) — a UI usa os campos específicos
+ * (buildRunSummary em ../helpers) pra não repetir o bug "1 sem e-mail"
+ * quando na verdade era dedupe (QA 27/07).
+ */
 export interface DojoRunRemindersResult {
   sent: number;
-  skipped: number;
+  skipped_no_email: number;
+  skipped_sent: number;
   failed: number;
+  skipped: number;
+}
+
+// ── Fila de lembretes por WhatsApp (F3c, contrato #429) ─────
+export interface DojoWhatsappQueueItem {
+  charge_id: string;
+  offset: number;
+  student_name: string;
+  recipient_name: string;
+  phone: string;
+  amount: number;
+  /** 'YYYY-MM-DD'. */
+  due_date: string;
+  /** 'YYYY-MM'. */
+  competence: string;
+  payment_url: string | null;
+  message: string;
+  wa_url: string;
+  already_sent: boolean;
+}
+
+export interface DojoWhatsappQueueResponse {
+  data: DojoWhatsappQueueItem[];
 }
 
 function qs(params: Record<string, string | undefined>): string {
@@ -265,6 +299,8 @@ function qs(params: Record<string, string | undefined>): string {
 }
 
 const base = (federationId: string) => `/federation/${federationId}/dojo/billing`;
+// Fila de WhatsApp vive fora do prefixo /billing (contrato #429).
+const remindersBase = (federationId: string) => `/federation/${federationId}/dojo/reminders`;
 
 export const karateDojoBillingApi = {
   // Planos
@@ -394,5 +430,15 @@ export const karateDojoBillingApi = {
       method: "POST",
       // Envio de lote de lembretes pode passar dos 10s default.
       timeout: 20000,
+    }),
+
+  // Fila de lembretes por WhatsApp (F3c, contrato #429)
+  getWhatsappQueue: (federationId: string, date: string): Promise<DojoWhatsappQueueResponse> =>
+    request<DojoWhatsappQueueResponse>(`${remindersBase(federationId)}/whatsapp-queue${qs({ date })}`),
+
+  markWhatsappSent: (federationId: string, chargeId: string, offset: number): Promise<void> =>
+    request<void>(`${remindersBase(federationId)}/${chargeId}/whatsapp-sent`, {
+      method: "POST",
+      body: { offset },
     }),
 };
