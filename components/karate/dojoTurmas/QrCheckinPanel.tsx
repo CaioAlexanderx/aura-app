@@ -6,6 +6,12 @@
 // digita no campo como um teclado e Enter dispara o check-in. Colar o
 // token manualmente também funciona. Visível só quando
 // settings.qr_checkin_enabled (checado por app/karate/(dojo)/turmas.tsx).
+//
+// QA 27/07 (item 4): o campo só limpava depois de SUCESSO — com leitor
+// físico, um erro (ex.: NOT_ENROLLED) deixava o texto no campo e o
+// próximo bipe concatenava em cima, gerando erro em cascata. Agora o
+// campo limpa SEMPRE (sucesso ou erro) e o foco volta pro input em
+// qualquer desfecho.
 // ============================================================
 import React, { useRef, useState } from "react";
 import {
@@ -36,10 +42,12 @@ export function QrCheckinPanel({ federationId }: Props) {
     try {
       const res = await karateDojoClassesApi.checkin(federationId, t);
       setResult(res);
-      setToken("");
     } catch (e: any) {
       setError(mapClassesError(e).message);
     } finally {
+      // Limpa SEMPRE (sucesso ou erro) — senão o próximo bipe do leitor
+      // físico concatena em cima do texto anterior e gera erro em cascata.
+      setToken("");
       setBusy(false);
       if (Platform.OS === "web") inputRef.current?.focus();
     }
