@@ -1,11 +1,24 @@
 // ============================================================
-// GuardianPicker — escolher ou criar responsável (F2)
+// GuardianPicker — escolher, cadastrar ou editar responsável (F2)
 //
 // Painel INLINE (expande dentro do AlunoFormModal — modal aninhado em
-// RN-web é frágil, então nada de Modal próprio aqui). Duas ações:
+// RN-web é frágil, então nada de Modal próprio aqui). Ações:
 //   • escolher um responsável existente (GET /dojo/guardians, com
 //     contagem de alunos vinculados)
-//   • cadastrar um novo inline (nome + telefone + parentesco)
+//   • cadastrar um novo inline (nome + telefone + e-mail + parentesco)
+//   • editar o responsável JÁ VINCULADO (nome/telefone/e-mail/parentesco)
+//
+// QA 27/07 (item 1, o mais grave): não havia campo de e-mail no cadastro
+// — como menor de 18 é cobrado do responsável e a régua envia por
+// e-mail, nenhum aluno menor recebia lembrete. O backend já aceita
+// `email` no POST/PATCH de /dojo/guardians; só faltava o campo aqui.
+//
+// QA 27/07 (item 2): o bloco só oferecia Trocar/Remover — corrigir um
+// responsável já cadastrado exigia criar outro. Agora "Editar" abre um
+// formulário inline pré-preenchido, salva via PATCH /dojo/guardians/:id
+// e atualiza o valor selecionado (onChange) sem fechar nada — reflete
+// na ficha/lista assim que os dados forem recarregados (mesmo padrão de
+// atualização em cascata do resto do form de aluno).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -19,7 +32,7 @@ import { FormField } from "@/components/karate/FormField";
 import {
   karateDojoStudentsApi, DojoGuardian, DojoStudentGuardianRef,
 } from "@/services/karateDojoStudentsApi";
-import { formatPhone } from "./helpers";
+import { formatPhone, isValidEmail } from "./helpers";
 
 interface Props {
   federationId: string;
@@ -37,9 +50,20 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [newRel, setNewRel] = useState("");
   const [saving, setSaving] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
+
+  // Editar o responsável JÁ VINCULADO (item 2) — painel próprio, separado
+  // do de trocar/cadastrar (que fica dentro de `open`).
+  const [editingCurrent, setEditingCurrent] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRel, setEditRel] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,16 +100,22 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
       setCreateErr("Informe o nome do responsável.");
       return;
     }
+    if (!isValidEmail(newEmail)) {
+      setCreateErr("E-mail inválido.");
+      return;
+    }
     setSaving(true);
     setCreateErr(null);
     try {
       const g = await karateDojoStudentsApi.createGuardian(federationId, {
         full_name: newName.trim(),
         phone: newPhone.trim() || null,
+        email: newEmail.trim() || null,
         relationship: newRel.trim() || null,
       });
       setNewName("");
       setNewPhone("");
+      setNewEmail("");
       setNewRel("");
       setGuardians(null); // lista mudou — recarrega na próxima abertura
       pick(g);
@@ -93,6 +123,54 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
       setCreateErr(e?.data?.error || e?.message || "Não foi possível salvar o responsável.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEditCurrent = () => {
+    if (!value) return;
+    setEditName(value.full_name ?? "");
+    setEditPhone(value.phone ?? "");
+    setEditEmail(value.email ?? "");
+    setEditRel(value.relationship ?? "");
+    setEditErr(null);
+    setOpen(false);
+    setCreating(false);
+    setEditingCurrent(true);
+  };
+
+  const saveEditCurrent = async () => {
+    if (!value) return;
+    if (!editName.trim()) {
+      setEditErr("Informe o nome do responsável.");
+      return;
+    }
+    if (!isValidEmail(editEmail)) {
+      setEditErr("E-mail inválido.");
+      return;
+    }
+    setEditSaving(true);
+    setEditErr(null);
+    try {
+      const g = await karateDojoStudentsApi.updateGuardian(federationId, value.id, {
+        full_name: editName.trim(),
+        phone: editPhone.trim() || null,
+        email: editEmail.trim() || null,
+        relationship: editRel.trim() || null,
+      });
+      setGuardians(null); // lista mudou — recarrega na próxima abertura
+      onChange({
+        id: g.id,
+        full_name: g.full_name,
+        phone: g.phone,
+        relationship: g.relationship,
+        cpf: g.cpf,
+        email: g.email,
+      });
+      setEditingCurrent(false);
+    } catch (e: any) {
+      setEditErr(e?.data?.error || e?.message || "Não foi possível salvar as alterações.");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -108,14 +186,17 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.selName} numberOfLines={1}>{value.full_name ?? "Responsável"}</Text>
             <Text style={styles.selMeta} numberOfLines={1}>
-              {[value.relationship, value.phone ? formatPhone(value.phone) : null].filter(Boolean).join(" · ") || "Sem contato informado"}
+              {[value.relationship, value.phone ? formatPhone(value.phone) : null, value.email ?? null].filter(Boolean).join(" · ") || "Sem contato informado"}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => setOpen(!open)} accessibilityRole="button" style={styles.linkBtn}>
+          <TouchableOpacity onPress={startEditCurrent} accessibilityRole="button" style={styles.linkBtn}>
+            <Text style={styles.linkTxt}>Editar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setEditingCurrent(false); setOpen(!open); }} accessibilityRole="button" style={styles.linkBtn}>
             <Text style={styles.linkTxt}>Trocar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { onChange(null); setOpen(false); }}
+            onPress={() => { onChange(null); setOpen(false); setEditingCurrent(false); }}
             accessibilityRole="button"
             style={styles.linkBtn}
           >
@@ -130,6 +211,45 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
       )}
 
       {!!errorText && <Text style={styles.err}>{errorText}</Text>}
+
+      {editingCurrent && value && (
+        <View style={styles.panel}>
+          <FormField
+            label="Nome do responsável"
+            required
+            value={editName}
+            onChangeText={setEditName}
+            placeholder="Nome completo"
+          />
+          <FormField
+            label="Telefone"
+            value={editPhone}
+            onChangeText={setEditPhone}
+            placeholder="(91) 90000-0000"
+            keyboardType="phone-pad"
+          />
+          <FormField
+            label="E-mail"
+            value={editEmail}
+            onChangeText={setEditEmail}
+            placeholder="email@exemplo.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            hint="É pra onde vai o lembrete de mensalidade."
+          />
+          <FormField
+            label="Parentesco"
+            value={editRel}
+            onChangeText={setEditRel}
+            placeholder="mãe, pai, avó…"
+          />
+          {!!editErr && <Text style={styles.err}>{editErr}</Text>}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <KarateButton label="Cancelar" variant="ghost" size="sm" onPress={() => setEditingCurrent(false)} style={{ flex: 1 }} />
+            <KarateButton label="Salvar alterações" variant="sumi" size="sm" onPress={saveEditCurrent} loading={editSaving} style={{ flex: 2 }} />
+          </View>
+        </View>
+      )}
 
       {open && (
         <View style={styles.panel}>
@@ -193,6 +313,15 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
                     onChangeText={setNewPhone}
                     placeholder="(91) 90000-0000"
                     keyboardType="phone-pad"
+                  />
+                  <FormField
+                    label="E-mail"
+                    value={newEmail}
+                    onChangeText={setNewEmail}
+                    placeholder="email@exemplo.com"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    hint="É pra onde vai o lembrete de mensalidade (importante pra aluno menor de 18)."
                   />
                   <FormField
                     label="Parentesco"
