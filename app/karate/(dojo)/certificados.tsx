@@ -23,6 +23,17 @@
 // F1→F5b: MOCK_APTOS morreu no polish 25/07; esta rewrite substitui o
 // TODO(F5) que ficou marcado no lugar da seção "Praticantes aptos".
 //
+// QA 27/07 (item 1): loadAptos/loadOrders caíam em catch MUDO (lista
+// vazia sem sinalizar nada) — uma falha de leitura (ex.: 503
+// SCHEMA_PENDING, 500 SQL_SCHEMA_MISMATCH) ficava indistinguível de
+// "realmente não há nada aqui", e a tela mostrava o empty state normal
+// como se estivesse tudo certo. Agora cada seção guarda um estado de
+// erro próprio (aptosError/ordersError) com mensagem visível + botão
+// "Tentar de novo", mesmo padrão já usado em eventos.tsx. A escrita
+// (submit → "Pedir certificados") já tinha loading+toast.error, mas o
+// ToastContainer não estava montado no grupo (dojo) — corrigido em
+// (dojo)/_layout.tsx nesta mesma leva.
+//
 // StyleSheet: todos os top-level são objetos (WeakMap safe). Sem deps
 // novas.
 // ============================================================
@@ -51,23 +62,28 @@ export default function DojoCertificadosScreen() {
 
   const [aptos, setAptos] = useState<AptoRow[]>([]);
   const [aptosLoading, setAptosLoading] = useState(true);
+  const [aptosError, setAptosError] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<CreateCertOrdersResult | null>(null);
 
   const [orders, setOrders] = useState<DojoCertOrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState(false);
   const [statusFilter, setStatusFilter] = useState<DojoCertOrderStatus | "all">("all");
 
   const loadAptos = useCallback(async () => {
     if (!federationId || !linked) { setAptosLoading(false); return; }
     setAptosLoading(true);
+    setAptosError(false);
     try {
       const res = await karateDojoFederativoApi.getAptos(federationId);
       setAptos(res.data);
-    } catch {
-      // sem conexão/dojô não conectado — mantém vazio, sem quebrar a tela
+    } catch (e: any) {
+      // Erro de leitura: nunca fica indistinguível de "vazio de verdade" —
+      // aptosError liga o estado de erro (com retry) em vez do empty state.
       setAptos([]);
+      setAptosError(true);
     } finally {
       setAptosLoading(false);
     }
@@ -76,13 +92,15 @@ export default function DojoCertificadosScreen() {
   const loadOrders = useCallback(async () => {
     if (!federationId || !linked) { setOrdersLoading(false); return; }
     setOrdersLoading(true);
+    setOrdersError(false);
     try {
       const res = await karateDojoFederativoApi.listCertOrders(federationId, {
         status: statusFilter === "all" ? undefined : statusFilter,
       });
       setOrders(res.data);
-    } catch {
+    } catch (e: any) {
       setOrders([]);
+      setOrdersError(true);
     } finally {
       setOrdersLoading(false);
     }
@@ -181,6 +199,14 @@ export default function DojoCertificadosScreen() {
 
       {aptosLoading ? (
         <View style={st.emptyCard}><ActivityIndicator color={KarateColors.primary} /></View>
+      ) : aptosError ? (
+        <View style={st.emptyCard}>
+          <Icon name="alert_circle" size={28} color={KarateColors.ink3} />
+          <Text style={st.emptyText}>Não foi possível carregar os praticantes aptos.</Text>
+          <TouchableOpacity style={st.retryBtn} onPress={loadAptos} accessibilityRole="button">
+            <Text style={st.retryTxt}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
       ) : aptos.length === 0 ? (
         <View style={st.emptyCard}>
           <Icon name="ribbon" size={32} color={KarateColors.ink4} />
@@ -201,12 +227,22 @@ export default function DojoCertificadosScreen() {
         </View>
       </View>
 
-      <PedidosList
-        orders={orders}
-        loading={ordersLoading}
-        statusFilter={statusFilter}
-        onChangeFilter={setStatusFilter}
-      />
+      {ordersError ? (
+        <View style={st.emptyCard}>
+          <Icon name="alert_circle" size={28} color={KarateColors.ink3} />
+          <Text style={st.emptyText}>Não foi possível carregar seus pedidos.</Text>
+          <TouchableOpacity style={st.retryBtn} onPress={loadOrders} accessibilityRole="button">
+            <Text style={st.retryTxt}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <PedidosList
+          orders={orders}
+          loading={ordersLoading}
+          statusFilter={statusFilter}
+          onChangeFilter={setStatusFilter}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -229,6 +265,9 @@ const st = StyleSheet.create({
 
   connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
   connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+
+  retryBtn: { marginTop: 2, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
+  retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
 
   btnPrimary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 10, paddingHorizontal: 16 } as ViewStyle,
   btnPrimaryText: { fontSize: 13, fontWeight: "700", color: "#fff" } as TextStyle,
