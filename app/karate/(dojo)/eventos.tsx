@@ -1,24 +1,35 @@
 // ============================================================
 // Aura Karatê (dojô) — Eventos (F1; antes /karate/sensei/eventos)
 // Próximos exames e cursos ABERTOS da federação (dados reais via
-// GET /federation/:id/dojo/events). A inscrição passa pela federação.
+// GET /federation/:id/dojo/events). exam_type distingue o fluxo:
+// 'exame' → "Enviar candidatos" (banca decide quem gradua); qualquer
+// outro valor ('curso', 'competicao'…) → "Inscrever alunos" (a inscrição
+// em si já é aceite — sem decisão de graduação envolvida).
 //
-// Polish QA 25/07 (item 3): decisão do Caio — a rota some da nav
-// (DojoShell) enquanto o dojô não está conectado (`linked === false`,
+// F5b (Aura-backend#426): a inscrição deixou de ser "manda e-mail pra
+// federação" (modal "Como inscrever seus alunos" removido) — agora é
+// POST /events/:eventId/enroll (cursos/competições) ou
+// POST /belt-exams/:examId/candidates (exames), em lote, com seletor de
+// alunos federados (SelecionarAlunosModal, reusado dos dois fluxos) e
+// resultado (ResultadoLoteCard) mostrando quantos entraram e quem foi
+// pulado — pt-BR, motivo por motivo.
+//
+// REGRA DE OURO: só aluno FEDERADO participa. O seletor já desabilita
+// não-federados com atalho pra ficha; se ainda assim algum item vier
+// pulado do backend (corrida), o card de resultado explica e oferece o
+// mesmo atalho.
+//
+// Polish QA 25/07 (item 3, mantido): a rota some da nav (DojoShell)
+// enquanto o dojô não está conectado (`linked === false`,
 // contexts/KarateDojo). Se o usuário chegar direto pela URL, a tela
 // mostra um estado explicativo em vez da lista (e nunca chama a API à
-// toa: o gate de `linked` já resolve isso sem round-trip). O contrato
-// novo do backend (Aura-backend#422) também devolve `not_linked: true`
-// (lista vazia) quando a conexão cai DEPOIS do primeiro load — o teste
-// seguro é `!!body.not_linked`, então o gate cobre os dois sinais.
-//
-// F6 (conexão/filiação): antes deste polish, "conecte seu dojô" era um
-// BECO SEM SAÍDA — nenhuma tela do produto explicava COMO conectar. O
-// texto agora vira botão para /karate/(dojo)/conexao (Aura-backend#424).
+// toa). O backend também devolve `not_linked: true` (lista vazia) quando
+// a conexão cai DEPOIS do primeiro load — o teste seguro é
+// `!!body.not_linked`, então o gate cobre os dois sinais.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -27,6 +38,11 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiEvent, SenseiEventsResponse } from "@/services/karateApi";
+import { toast } from "@/components/Toast";
+import { karateDojoFederativoApi, SkippedItem } from "@/services/karateDojoFederativoApi";
+import { SelecionarAlunosModal } from "@/components/karate/dojoFederativo/SelecionarAlunosModal";
+import { ResultadoLoteCard } from "@/components/karate/dojoFederativo/ResultadoLoteCard";
+import { mapDojoFederativoError } from "@/components/karate/dojoFederativo/helpers";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -47,18 +63,40 @@ function fmtTaxa(v: number | null): string | null {
   return `Taxa: ${v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por aluno`;
 }
 
+function isExame(e: SenseiEvent): boolean {
+  return e.exam_type === "exame";
+}
+
 function tipoLabel(examType: string): string {
-  return examType === "curso" ? "Curso / seminário" : "Exame de faixa";
+  return examType === "curso" ? "Curso / seminário" : examType === "exame" ? "Exame de faixa" : "Evento";
+}
+
+interface EventExtra {
+  loading: boolean;
+  loaded: boolean;
+  count: number;
+  rows: { id: string; student_name: string }[];
+  expanded: boolean;
+}
+
+interface EventResult {
+  successCount: number;
+  successLabel: string;
+  skipped: SkippedItem[];
 }
 
 export default function DojoEventos() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const { linked } = useKarateDojo();
-  const [showHow, setShowHow] = useState(false);
   const [data, setData] = useState<SenseiEventsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  const [selectorEvent, setSelectorEvent] = useState<SenseiEvent | null>(null);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [results, setResults] = useState<Record<string, EventResult>>({});
+  const [extras, setExtras] = useState<Record<string, EventExtra>>({});
 
   const load = useCallback(async () => {
     if (!federationId) return;
@@ -81,16 +119,83 @@ export default function DojoEventos() {
   // aditivo) — cast local, teste seguro `!!`.
   const notLinked = !linked || !!(data as any)?.not_linked;
   const eventos: SenseiEvent[] = data?.events ?? [];
-  const fed = data?.federation ?? null;
-  const contatoEmail = fed?.email || "eventos@fpkt.org.br";
-  const contatoFone = fed?.phone || null;
+
+  const ensureExtra = useCallback(async (e: SenseiEvent) => {
+    if (!federationId) return;
+    setExtras((prev) => ({ ...prev, [e.id]: { ...(prev[e.id] || { count: 0, rows: [], expanded: true, loaded: false }), loading: true, expanded: true } }));
+    try {
+      const res = isExame(e)
+        ? await karateDojoFederativoApi.listExamCandidates(federationId, e.id)
+        : await karateDojoFederativoApi.listEventEnrollments(federationId, e.id);
+      const rows = res.data.map((r) => ({ id: r.id, student_name: r.student_name }));
+      setExtras((prev) => ({ ...prev, [e.id]: { loading: false, loaded: true, count: res.count, rows, expanded: true } }));
+    } catch {
+      setExtras((prev) => ({ ...prev, [e.id]: { loading: false, loaded: true, count: 0, rows: [], expanded: true } }));
+    }
+  }, [federationId]);
+
+  const toggleExtra = (e: SenseiEvent) => {
+    const cur = extras[e.id];
+    if (!cur?.loaded) { ensureExtra(e); return; }
+    setExtras((prev) => ({ ...prev, [e.id]: { ...prev[e.id], expanded: !prev[e.id].expanded } }));
+  };
+
+  const closeSelector = () => { if (!submitBusy) setSelectorEvent(null); };
+
+  const handleSubmitSelector = async (studentIds: string[]) => {
+    if (!federationId || !selectorEvent) return;
+    const e = selectorEvent;
+    setSubmitBusy(true);
+    try {
+      if (isExame(e)) {
+        const res = await karateDojoFederativoApi.submitExamCandidates(federationId, e.id, studentIds);
+        setResults((prev) => ({
+          ...prev,
+          [e.id]: {
+            successCount: res.submitted,
+            successLabel: res.submitted === 1 ? "candidato enviado" : "candidatos enviados",
+            skipped: res.skipped,
+          },
+        }));
+        if (res.submitted > 0) {
+          toast.success(`${res.submitted} candidato${res.submitted === 1 ? "" : "s"} enviado${res.submitted === 1 ? "" : "s"} à banca.`);
+        }
+      } else {
+        const res = await karateDojoFederativoApi.enrollInEvent(federationId, e.id, studentIds);
+        setResults((prev) => ({
+          ...prev,
+          [e.id]: {
+            successCount: res.enrolled,
+            successLabel: res.enrolled === 1 ? "aluno inscrito" : "alunos inscritos",
+            skipped: res.skipped,
+          },
+        }));
+        if (res.enrolled > 0) {
+          toast.success(`${res.enrolled} aluno${res.enrolled === 1 ? "" : "s"} inscrito${res.enrolled === 1 ? "" : "s"}.`);
+        }
+      }
+      setSelectorEvent(null);
+      // Força recarregar o contador desta card na próxima expansão.
+      setExtras((prev) => {
+        const next = { ...prev };
+        delete next[e.id];
+        return next;
+      });
+    } catch (err: any) {
+      toast.error(mapDojoFederativoError(err));
+    } finally {
+      setSubmitBusy(false);
+    }
+  };
+
+  const goFederar = () => router.push("/karate/(dojo)/alunos" as any);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <View>
         <Text style={styles.eyebrow}>Abertos ao seu dojô</Text>
         <Text style={styles.title}>Próximos eventos</Text>
-        <Text style={styles.lead}>Exames e cursos da federação. Para inscrever seus alunos, envie a lista para a federação — ela cuida do resto.</Text>
+        <Text style={styles.lead}>Exames e cursos da federação. Inscreva seus alunos federados direto por aqui, em lote.</Text>
       </View>
 
       {notLinked ? (
@@ -112,7 +217,7 @@ export default function DojoEventos() {
 
           {!loading && error && (
             <View style={styles.stateBox}>
-              <Icon name="alert-circle-outline" size={28} color={KarateColors.ink3} />
+              <Icon name="alert_circle" size={28} color={KarateColors.ink3} />
               <Text style={styles.stateTxt}>Não foi possível carregar os eventos.</Text>
               <TouchableOpacity style={styles.retryBtn} onPress={load} accessibilityRole="button">
                 <Text style={styles.retryTxt}>Tentar de novo</Text>
@@ -130,6 +235,9 @@ export default function DojoEventos() {
 
           {!loading && !error && eventos.map((e) => {
             const taxa = fmtTaxa(e.fee_amount);
+            const exame = isExame(e);
+            const extra = extras[e.id];
+            const result = results[e.id];
             return (
               <View key={e.id} style={styles.card}>
                 <Text style={styles.evEyebrow}>{tipoLabel(e.exam_type)}</Text>
@@ -141,31 +249,64 @@ export default function DojoEventos() {
                 {!!taxa && (
                   <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{taxa}</Text></View>
                 )}
-                <TouchableOpacity style={styles.askBtn} onPress={() => setShowHow(true)} accessibilityRole="button">
-                  <Icon name="paper-plane-outline" size={14} color={KarateColors.primary} />
-                  <Text style={styles.askTxt}>Solicitar inscrição</Text>
-                </TouchableOpacity>
+                {exame && (
+                  <Text style={styles.examNote}>A banca da federação decide quem gradua — o dojô só envia os candidatos.</Text>
+                )}
+
+                <View style={styles.actionsRow}>
+                  <TouchableOpacity style={styles.askBtn} onPress={() => setSelectorEvent(e)} accessibilityRole="button">
+                    <Icon name={exame ? "send" : "user_plus"} size={14} color={KarateColors.primary} />
+                    <Text style={styles.askTxt}>{exame ? "Enviar candidatos" : "Inscrever alunos"}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.counterRow} onPress={() => toggleExtra(e)} accessibilityRole="button">
+                    <Icon name={extra?.expanded ? "chevron_up" : "chevron_down"} size={13} color={KarateColors.ink3} />
+                    <Text style={styles.counterTxt}>
+                      {extra?.loaded
+                        ? `${extra.count} ${exame ? "candidato(s) enviado(s)" : "aluno(s) inscrito(s)"}`
+                        : (exame ? "Ver candidatos enviados" : "Ver alunos inscritos")}
+                    </Text>
+                    {extra?.loading && <ActivityIndicator size="small" color={KarateColors.ink3} />}
+                  </TouchableOpacity>
+                </View>
+
+                {extra?.expanded && !extra.loading && (
+                  <View style={styles.counterList}>
+                    {extra.rows.length === 0 ? (
+                      <Text style={styles.counterEmpty}>Nenhum ainda.</Text>
+                    ) : (
+                      extra.rows.map((r) => (
+                        <Text key={r.id} style={styles.counterItemTxt} numberOfLines={1}>• {r.student_name}</Text>
+                      ))
+                    )}
+                  </View>
+                )}
+
+                {!!result && (
+                  <ResultadoLoteCard
+                    successCount={result.successCount}
+                    successLabel={result.successLabel}
+                    skipped={result.skipped}
+                    onGoFederar={goFederar}
+                    onClose={() => setResults((prev) => { const next = { ...prev }; delete next[e.id]; return next; })}
+                  />
+                )}
               </View>
             );
           })}
         </>
       )}
 
-      <Modal visible={showHow} transparent animationType="fade" onRequestClose={() => setShowHow(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
-            <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>Como inscrever seus alunos</Text>
-              <TouchableOpacity onPress={() => setShowHow(false)} accessibilityLabel="Fechar"><Icon name="close" size={22} color={KarateColors.ink} /></TouchableOpacity>
-            </View>
-            <Text style={styles.sheetBody}>Envie a lista de alunos que vão participar para a federação{fed?.name ? ` (${fed.name})` : ""}. Ela confirma as vagas e a taxa, e faz a inscrição para você.</Text>
-            <View style={styles.contactRow}><Icon name="mail-outline" size={16} color={KarateColors.primary} /><Text style={styles.contact}>{contatoEmail}</Text></View>
-            {!!contatoFone && (
-              <View style={styles.contactRow}><Icon name="logo-whatsapp" size={16} color={KarateColors.ok} /><Text style={styles.contact}>{contatoFone}</Text></View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <SelecionarAlunosModal
+        visible={!!selectorEvent}
+        onClose={closeSelector}
+        federationId={federationId}
+        title={selectorEvent ? (isExame(selectorEvent) ? "Enviar candidatos" : "Inscrever alunos") : ""}
+        subtitle={selectorEvent?.name}
+        ctaLabel={selectorEvent && isExame(selectorEvent) ? "Enviar candidatos" : "Inscrever"}
+        busy={submitBusy}
+        onSubmit={handleSubmitSelector}
+      />
     </ScrollView>
   );
 }
@@ -183,18 +324,18 @@ const styles = StyleSheet.create({
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
   connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 5 } as ViewStyle,
+  card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
   evEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
   evTipo: { fontSize: 15, fontWeight: "700", color: KarateColors.ink, marginBottom: 2 } as TextStyle,
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
   meta: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
-  askBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 8, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 12 } as ViewStyle,
+  examNote: { fontSize: 11.5, color: KarateColors.ink3, fontStyle: "italic", marginTop: 2, lineHeight: 16 } as TextStyle,
+  actionsRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 6 } as ViewStyle,
+  askBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 12 } as ViewStyle,
   askTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
-  overlay: { flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
-  sheet: { width: "100%", maxWidth: 380, backgroundColor: KarateColors.bg, borderRadius: KarateRadius.lg, padding: 20, gap: 10 } as ViewStyle,
-  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as ViewStyle,
-  sheetTitle: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
-  sheetBody: { fontSize: 13, color: KarateColors.ink2, lineHeight: 19 } as TextStyle,
-  contactRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, padding: 11 } as ViewStyle,
-  contact: { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
+  counterRow: { flexDirection: "row", alignItems: "center", gap: 5 } as ViewStyle,
+  counterTxt: { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
+  counterList: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, padding: 10, gap: 3, marginTop: 2 } as ViewStyle,
+  counterEmpty: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
+  counterItemTxt: { fontSize: 12.5, color: KarateColors.ink2 } as TextStyle,
 });

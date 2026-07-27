@@ -1,56 +1,151 @@
 // ============================================================
-// Aura Karatê (dojô) — Certificados (Track J; F1: movida de
-// /karate/sensei/certificados para /karate/(dojo)/certificados)
+// Aura Karatê (dojô) — Certificados (F5b: dados reais)
 //
 // Dojô vê:
-//   1. "Praticantes aptos" — aprovados em banca (belt_history) sem pedido ativo
-//   2. "Meus pedidos" — solicitações deste dojô com EstadoSelo
+//   1. "Praticantes aptos" — GET /aptos (Aura-backend#426). A UNIDADE é a
+//      GRADUAÇÃO (belt_history), não o aluno — por isso a seleção usa
+//      belt_history_id como chave (um aluno pode aparecer 2x se tiver 2
+//      graduações sem pedido). Seleção múltipla + "Pedir certificados
+//      (N)" → POST /cert-orders.
+//   2. "Meus pedidos" — GET /cert-orders (dojô-scoped) com filtro por
+//      status e EstadoSelo (PedidosList).
 //
-// Polish QA 25/07 (item 1): o MOCK_APTOS (3 praticantes fictícios em
-// produção — Ricardo Sato, Fernanda Oka, Caio Brandão) foi REMOVIDO por
-// completo, junto com toda a lógica de "Pedir certificado" que dependia
-// dele (não dava pra pedir certificado de um apto de verdade, só do
-// mock). A seção "Praticantes aptos" agora é sempre um empty state até
-// a F5 trazer o endpoint real — ver TODO abaixo.
+// Regra de ouro: só aluno FEDERADO chega em /aptos (o backend já filtra
+// na origem). Se ainda assim algum item vier recusado no POST (corrida —
+// ex.: desvinculado entre o load e o submit), o skip vem mapeado em
+// pt-BR (dojoFederativo/helpers.mapSkipReason) com o motivo, e o card de
+// resultado oferece o atalho para federar.
 //
-// Polish QA 25/07 (item 2): cabeçalho padrão (eyebrow + título) igual
-// alunos.tsx/mensalidades.tsx, e grid responsivo pronto (2-3 colunas
-// desktop / 1 mobile, largura máxima por card) para quando os aptos de
-// verdade chegarem — sem isso o card de largura total com o botão
-// esticado ficava quebrado em desktop.
+// Gate: a rota exige dojô conectado (409 DOJO_NAO_CONECTADO) — mesmo
+// padrão de eventos.tsx/conexao.tsx: usa `linked` do contexto (fail-open)
+// e só chama a API quando conectado; nunca round-trip à toa.
 //
-// StyleSheet: todos top-level são objetos (WeakMap safe). Sem deps novas.
+// F1→F5b: MOCK_APTOS morreu no polish 25/07; esta rewrite substitui o
+// TODO(F5) que ficou marcado no lugar da seção "Praticantes aptos".
+//
+// StyleSheet: todos os top-level são objetos (WeakMap safe). Sem deps
+// novas.
 // ============================================================
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator, ViewStyle, TextStyle,
+  View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, ViewStyle, TextStyle,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { EstadoSelo, normalizeCertStatus } from "@/components/karate/EstadoSelo";
-import { karateApi, CertOrder } from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
+import { toast } from "@/components/Toast";
+import {
+  karateDojoFederativoApi, AptoRow, DojoCertOrderRow, DojoCertOrderStatus, CreateCertOrdersResult,
+} from "@/services/karateDojoFederativoApi";
+import { AptosList } from "@/components/karate/dojoFederativo/AptosList";
+import { PedidosList } from "@/components/karate/dojoFederativo/PedidosList";
+import { ResultadoLoteCard } from "@/components/karate/dojoFederativo/ResultadoLoteCard";
+import { mapDojoFederativoError } from "@/components/karate/dojoFederativo/helpers";
 
 export default function DojoCertificadosScreen() {
+  const router = useRouter();
   const { federationId } = useKarateFederation();
-  const { dojoName } = useKarateDojo();
-  const [orders, setOrders] = useState<CertOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { dojoName, linked } = useKarateDojo();
+
+  const [aptos, setAptos] = useState<AptoRow[]>([]);
+  const [aptosLoading, setAptosLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [result, setResult] = useState<CreateCertOrdersResult | null>(null);
+
+  const [orders, setOrders] = useState<DojoCertOrderRow[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<DojoCertOrderStatus | "all">("all");
+
+  const loadAptos = useCallback(async () => {
+    if (!federationId || !linked) { setAptosLoading(false); return; }
+    setAptosLoading(true);
+    try {
+      const res = await karateDojoFederativoApi.getAptos(federationId);
+      setAptos(res.data);
+    } catch {
+      // sem conexão/dojô não conectado — mantém vazio, sem quebrar a tela
+      setAptos([]);
+    } finally {
+      setAptosLoading(false);
+    }
+  }, [federationId, linked]);
 
   const loadOrders = useCallback(async () => {
+    if (!federationId || !linked) { setOrdersLoading(false); return; }
+    setOrdersLoading(true);
     try {
-      setLoading(true);
-      const res = await karateApi.listMyCertOrders(federationId);
-      setOrders(res.data || []);
+      const res = await karateDojoFederativoApi.listCertOrders(federationId, {
+        status: statusFilter === "all" ? undefined : statusFilter,
+      });
+      setOrders(res.data);
     } catch {
-      // sem conexão ou migration pendente — mantém vazio
+      setOrders([]);
     } finally {
-      setLoading(false);
+      setOrdersLoading(false);
     }
-  }, [federationId]);
+  }, [federationId, linked, statusFilter]);
 
+  useEffect(() => { loadAptos(); }, [loadAptos]);
   useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  const toggleApto = (beltHistoryId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(beltHistoryId)) next.delete(beltHistoryId); else next.add(beltHistoryId);
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    if (!federationId || selected.size === 0) return;
+    setCreating(true);
+    setResult(null);
+    try {
+      const items = aptos
+        .filter((a) => selected.has(a.belt_history_id))
+        .map((a) => ({ student_id: a.student_id, belt_history_id: a.belt_history_id }));
+      const res = await karateDojoFederativoApi.createCertOrders(federationId, { items });
+      setResult(res);
+      setSelected(new Set());
+      if (res.created > 0) {
+        toast.success(`${res.created} certificado${res.created === 1 ? "" : "s"} pedido${res.created === 1 ? "" : "s"}.`);
+      }
+      await Promise.all([loadAptos(), loadOrders()]);
+    } catch (e: any) {
+      toast.error(mapDojoFederativoError(e));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const goFederar = () => router.push("/karate/(dojo)/alunos" as any);
+
+  if (!linked) {
+    return (
+      <ScrollView style={st.screen} contentContainerStyle={st.content}>
+        <View style={st.head}>
+          <Text style={st.eyebrow}>{dojoName}</Text>
+          <Text style={st.title}>Certificados</Text>
+        </View>
+        <View style={st.emptyCard}>
+          <Icon name="ribbon" size={32} color={KarateColors.ink4} />
+          <Text style={st.emptyText}>Conecte seu dojô à federação para pedir certificados.</Text>
+          <TouchableOpacity
+            style={st.connectBtn}
+            onPress={() => router.push("/karate/(dojo)/conexao" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Conectar meu dojô à federação"
+          >
+            <Icon name="link" size={14} color={KarateColors.primary} />
+            <Text style={st.connectBtnTxt}>Conectar meu dojô</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
@@ -65,22 +160,38 @@ export default function DojoCertificadosScreen() {
           <Text style={st.h2}>Praticantes aptos</Text>
           <Text style={st.sh}>Aprovados em banca — graduação já consta no histórico</Text>
         </View>
+        {selected.size > 0 && (
+          <TouchableOpacity style={st.btnPrimary} onPress={submit} disabled={creating} accessibilityRole="button">
+            {creating ? <ActivityIndicator size="small" color="#fff" /> : (
+              <Text style={st.btnPrimaryText}>Pedir certificados ({selected.size})</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/*
-        TODO(F5): consumir GET /federation/:id/dojo/aptos quando o endpoint
-        real existir e renderizar os cards em st.grid/st.cardGridItem
-        (já preparados abaixo: 2-3 colunas desktop, 1 mobile, largura
-        máxima por card, botão "Pedir certificado" compacto dentro do
-        card). Até lá a seção fica sempre no empty state — nada de mock.
-      */}
-      <View style={st.emptyCard}>
-        <Icon name="ribbon" size={32} color={KarateColors.ink4} />
-        <Text style={st.emptyText}>Nenhum praticante apto no momento</Text>
-        <Text style={st.emptySub}>
-          Quando a federação aprovar graduações do seu dojô em banca, os aptos aparecem aqui para você pedir o certificado.
-        </Text>
-      </View>
+      {!!result && (
+        <ResultadoLoteCard
+          successCount={result.created}
+          successLabel={result.created === 1 ? "certificado pedido" : "certificados pedidos"}
+          skipped={result.skipped}
+          onGoFederar={goFederar}
+          onClose={() => setResult(null)}
+        />
+      )}
+
+      {aptosLoading ? (
+        <View style={st.emptyCard}><ActivityIndicator color={KarateColors.primary} /></View>
+      ) : aptos.length === 0 ? (
+        <View style={st.emptyCard}>
+          <Icon name="ribbon" size={32} color={KarateColors.ink4} />
+          <Text style={st.emptyText}>Nenhum praticante apto no momento</Text>
+          <Text style={st.emptySub}>
+            Quando a federação aprovar graduações do seu dojô em banca, os aptos aparecem aqui para você pedir o certificado.
+          </Text>
+        </View>
+      ) : (
+        <AptosList aptos={aptos} selected={selected} onToggle={toggleApto} />
+      )}
 
       {/* Section: Meus pedidos */}
       <View style={[st.sectionHead, { marginTop: 24 }]}>
@@ -88,30 +199,14 @@ export default function DojoCertificadosScreen() {
           <Text style={st.h2}>Meus pedidos</Text>
           <Text style={st.sh}>Solicitações deste dojô — estado atualizado pela federação</Text>
         </View>
-        <View style={st.pill}><Text style={st.pillText}>{orders.length} pedidos</Text></View>
       </View>
 
-      <View style={st.card}>
-        {loading ? (
-          <ActivityIndicator color={KarateColors.primary} />
-        ) : orders.length === 0 ? (
-          <View style={st.empty}>
-            <Icon name="mail-outline" size={28} color={KarateColors.ink4} />
-            <Text style={st.emptyText}>Nenhum pedido ainda</Text>
-          </View>
-        ) : (
-          orders.map((o) => (
-            <View key={o.id} style={st.orderRow}>
-              <View style={st.av}><Text style={st.avText}>{o.nome_impresso.split(" ").map((w: string) => w[0]).join("").slice(0,2)}</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.name}>{o.nome_impresso}</Text>
-                <Text style={st.belt}>{o.belt_name}</Text>
-              </View>
-              <EstadoSelo status={normalizeCertStatus(o.status)} />
-            </View>
-          ))
-        )}
-      </View>
+      <PedidosList
+        orders={orders}
+        loading={ordersLoading}
+        statusFilter={statusFilter}
+        onChangeFilter={setStatusFilter}
+      />
     </ScrollView>
   );
 }
@@ -124,32 +219,16 @@ const st = StyleSheet.create({
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
 
-  sectionHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 } as ViewStyle,
+  sectionHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14, gap: 10 } as ViewStyle,
   h2: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   sh: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
 
-  // Grid responsivo pronto para os aptos reais (F5): 2-3 colunas em
-  // desktop, 1 em mobile (flexWrap + flexBasis fazem a quebra sozinhos,
-  // sem media query), largura máxima por card.
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 } as ViewStyle,
-  cardGridItem: { flexBasis: 280, flexGrow: 1, maxWidth: 380 } as ViewStyle,
-  card: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 10 } as ViewStyle,
-
-  personRow: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
-  av:   { width: 38, height: 38, borderRadius: 19, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center", flexShrink: 0 } as ViewStyle,
-  avText: { fontSize: 13, fontWeight: "800", color: KarateColors.primary } as TextStyle,
-  name: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
-  belt: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
-
-  orderRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-
-  emptyCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", paddingVertical: 32, paddingHorizontal: 24, gap: 8 } as ViewStyle,
-  empty: { alignItems: "center", paddingVertical: 28, gap: 8 } as ViewStyle,
+  emptyCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", paddingVertical: 32, paddingHorizontal: 24, gap: 8, marginBottom: 12 } as ViewStyle,
   emptyText: { fontSize: 13, color: KarateColors.ink4, fontWeight: "600", textAlign: "center" } as TextStyle,
   emptySub: { fontSize: 12, color: KarateColors.ink3, textAlign: "center", maxWidth: 360, lineHeight: 17 } as TextStyle,
 
-  pill: { backgroundColor: KarateColors.surface, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
-  pillText: { fontSize: 11, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
+  connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
+  connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
 
   btnPrimary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: KarateColors.primary, borderRadius: KarateRadius.sm, paddingVertical: 10, paddingHorizontal: 16 } as ViewStyle,
   btnPrimaryText: { fontSize: 13, fontWeight: "700", color: "#fff" } as TextStyle,
