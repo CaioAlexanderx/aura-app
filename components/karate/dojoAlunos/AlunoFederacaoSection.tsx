@@ -29,6 +29,31 @@
 // e se é transferência" acontece como confirmação IMEDIATA após vincular
 // (não antes) — a seção já nasce no estado 'linked' com essa informação
 // visível.
+//
+// QA 27/07 (item 2): as duas frases desta seção usavam `federationName`
+// de useKarateFederation(), que resolve pra `company?.name` — CORRETO só
+// quando a company logada É a federação. Aqui a company logada é o
+// DOJÔ (contexto karate_dojo), então `company.name` é o nome do PRÓPRIO
+// dojô, não da federação — a tela mostrava "conecte-se à Dojô Kondei"
+// em vez de "conecte-se à FPKT". Fonte corrigida: dojoMe.federation_name
+// (services/karateDojoInfoApi.ts, GET /dojo/me — mesmo dado que
+// alimenta o breadcrumb/sidebar do DojoShell), a mesma fonte de verdade
+// que conexao.tsx usa (lá vem de GET /connection → info.federation.name;
+// aqui vem de /dojo/me → dojoMe.federation_name — ambos o nome REAL da
+// federação, nunca o do dojô).
+//
+// QA 27/07 (item 5): vincular por número FPKT digitado à mão é
+// propenso a erro de digitação — um número certo mas de OUTRO
+// praticante vinculava o aluno errado silenciosamente. Como o backend
+// não tem endpoint de pré-visualização (nota acima), a confirmação
+// acontece LOGO APÓS o vínculo confirmado pelo backend: se o nome do
+// praticante encontrado diverge do nome do aluno (dojoAlunos/helpers.
+// namesDivergent — normalizado, sem acento, ignora conectores), a seção
+// NÃO fecha direto no estado 'linked' — mostra um painel "Confirme o
+// vínculo" com os dois nomes lado a lado. "Cancelar" desfaz na hora
+// (DELETE .../federate, o mesmo endpoint do botão "Desvincular").
+// "Confirmar vínculo" segue pro estado 'linked' normal. Quando os nomes
+// batem, o fluxo permanece direto, sem esse passo extra.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -40,7 +65,6 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { FormField } from "@/components/karate/FormField";
-import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { ApiError } from "@/services/api";
 import {
@@ -49,7 +73,7 @@ import {
 } from "@/services/karateDojoStudentsApi";
 import {
   ageFromISO, brToISO, isoToBR, maskDateBR, maskCpf, maskCep, onlyDigits,
-  formatPhone, mapFederationError, COMMON_BELTS,
+  formatPhone, mapFederationError, namesDivergent, COMMON_BELTS,
 } from "./helpers";
 
 interface Props {
@@ -124,8 +148,9 @@ const SEX_OPTIONS: { key: DojoStudentSex; label: string }[] = [
 
 export function AlunoFederacaoSection({ federationId, student, onChanged }: Props) {
   const router = useRouter();
-  const { federationName } = useKarateFederation();
-  const { linked: dojoLinked } = useKarateDojo();
+  const { linked: dojoLinked, dojoMe } = useKarateDojo();
+  // QA 27/07 (item 2): nome REAL da federação — nunca o do dojô logado.
+  const federationName = dojoMe?.federation_name || "a federação";
 
   const [fed, setFed] = useState<FedState>(() => extractFed(student));
   useEffect(() => {
@@ -140,6 +165,11 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
   const [numberErr, setNumberErr] = useState<string | null>(null);
   const [lastLinkResult, setLastLinkResult] = useState<FederateByNumberResult | null>(null);
 
+  // QA 27/07 (item 5): resultado do vínculo com nome divergente,
+  // aguardando confirmação explícita (ver nota no cabeçalho do arquivo).
+  const [pendingConfirm, setPendingConfirm] = useState<FederateByNumberResult | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
   const submitNumber = async () => {
     const num = fpktInput.trim();
     if (!num) {
@@ -150,20 +180,59 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
     setNumberErr(null);
     try {
       const res = await karateDojoStudentsApi.federateByNumber(federationId, student.id, num);
-      setLastLinkResult(res);
-      setFed({
-        federated: true,
-        status: "linked",
-        fpktNumber: res.practitioner.fpkt_number,
-        practitionerName: res.practitioner.name,
-      });
-      setNumberOpen(false);
-      setFpktInput("");
-      onChanged?.();
+      if (namesDivergent(student.full_name, res.practitioner.name)) {
+        // Backend já confirmou e ligou — não tem "antes" de verdade pra
+        // pré-visualizar (nota do cabeçalho). Segura o estado 'linked' e
+        // pede confirmação explícita; "Cancelar" desfaz na hora.
+        setPendingConfirm(res);
+        setNumberOpen(false);
+        setFpktInput("");
+      } else {
+        setLastLinkResult(res);
+        setFed({
+          federated: true,
+          status: "linked",
+          fpktNumber: res.practitioner.fpkt_number,
+          practitionerName: res.practitioner.name,
+        });
+        setNumberOpen(false);
+        setFpktInput("");
+        onChanged?.();
+      }
     } catch (e: any) {
       setNumberErr(mapFederationError(e).message);
     } finally {
       setNumberBusy(false);
+    }
+  };
+
+  const confirmDivergentLink = () => {
+    if (!pendingConfirm) return;
+    setLastLinkResult(pendingConfirm);
+    setFed({
+      federated: true,
+      status: "linked",
+      fpktNumber: pendingConfirm.practitioner.fpkt_number,
+      practitionerName: pendingConfirm.practitioner.name,
+    });
+    setPendingConfirm(null);
+    onChanged?.();
+  };
+
+  const cancelDivergentLink = async () => {
+    if (!pendingConfirm) return;
+    setConfirmBusy(true);
+    try {
+      await karateDojoStudentsApi.unfederate(federationId, student.id);
+    } catch {
+      // Mesmo se o desfazer falhar (rede etc.), não trava a UI — o vínculo
+      // (correto ou não) fica visível no estado normal, onde "Desvincular"
+      // já existe pro sensei tentar de novo manualmente.
+    } finally {
+      setFed(extractFed(student)); // volta pro estado conhecido antes desta tentativa
+      setPendingConfirm(null);
+      setConfirmBusy(false);
+      onChanged?.();
     }
   };
 
@@ -300,7 +369,35 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
         </View>
       )}
 
-      {dojoLinked && fed.status === "linked" && (
+      {dojoLinked && !!pendingConfirm && (
+        <View style={styles.confirmDivergentBox}>
+          <View style={styles.pendingBadge}>
+            <Icon name="alert_circle" size={13} color={KarateColors.warn} />
+            <Text style={styles.pendingBadgeTxt}>Confirme o vínculo</Text>
+          </View>
+          <Text style={styles.hint}>
+            O nome do praticante encontrado é bem diferente do nome deste aluno. Confira antes de continuar.
+          </Text>
+          <View style={styles.compareRow}>
+            <View style={styles.compareCol}>
+              <Text style={styles.compareLabel}>Aluno no dojô</Text>
+              <Text style={styles.compareName}>{student.full_name}</Text>
+            </View>
+            <Text style={styles.compareArrow}>→</Text>
+            <View style={styles.compareCol}>
+              <Text style={styles.compareLabel}>Praticante encontrado</Text>
+              <Text style={styles.compareName}>{pendingConfirm.practitioner.name}</Text>
+              <Text style={styles.infoLine}>FPKT {pendingConfirm.practitioner.fpkt_number}</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <KarateButton label="Cancelar" variant="ghost" size="sm" onPress={cancelDivergentLink} loading={confirmBusy} style={{ flex: 1 }} />
+            <KarateButton label="Confirmar vínculo" variant="sumi" size="sm" onPress={confirmDivergentLink} disabled={confirmBusy} style={{ flex: 1 }} />
+          </View>
+        </View>
+      )}
+
+      {dojoLinked && !pendingConfirm && fed.status === "linked" && (
         <View style={{ gap: 8 }}>
           <View style={styles.linkedBadge}>
             <Icon name="shield" size={13} color={KarateColors.ok} />
@@ -329,7 +426,7 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
         </View>
       )}
 
-      {dojoLinked && fed.status === "pending" && (
+      {dojoLinked && !pendingConfirm && fed.status === "pending" && (
         <View style={{ gap: 4 }}>
           <View style={styles.pendingBadge}>
             <Icon name="time-outline" size={13} color={KarateColors.warn} />
@@ -339,7 +436,7 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
         </View>
       )}
 
-      {dojoLinked && fed.status === "none" && (
+      {dojoLinked && !pendingConfirm && fed.status === "none" && (
         <View style={{ gap: 10 }}>
           <Text style={styles.hint}>
             Alunos federados aparecem para a {federationName} e podem ser inscritos em exames, cursos e pedir certificado.
@@ -487,4 +584,11 @@ const styles = StyleSheet.create({
   err: { fontSize: 11.5, color: KarateColors.danger, fontWeight: "600" } as TextStyle,
   confirmBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border2, borderRadius: KarateRadius.md, padding: 10, backgroundColor: KarateColors.glass2, marginTop: 4 } as ViewStyle,
   confirmTxt: { fontSize: 12, color: KarateColors.ink2, lineHeight: 17 } as TextStyle,
+  // QA 27/07 (item 5): painel de confirmação de vínculo com nome divergente.
+  confirmDivergentBox: { gap: 10, borderWidth: 1, borderColor: KarateColors.warn, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  compareRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
+  compareCol: { flex: 1, gap: 2 } as ViewStyle,
+  compareLabel: { fontSize: 10.5, fontWeight: "700", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.3 } as TextStyle,
+  compareName: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  compareArrow: { fontSize: 16, color: KarateColors.ink3 } as TextStyle,
 });
