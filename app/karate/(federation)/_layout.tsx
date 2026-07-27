@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, ActivityIndicator } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, usePathname } from "expo-router";
 import { KarateFederationProvider } from "@/contexts/KarateFederation";
 import { KarateShell } from "@/components/karate/KarateShell";
 import { KarateBillingGate } from "@/components/karate/KarateBillingGate";
@@ -15,8 +15,23 @@ const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
 // redireciona pra lá).
 const DOJO_ROLES = ["sensei", "dojo_owner"];
 
+// QA 27/07 (item 3): rotas cuja URL também existe no grupo (dojo) —
+// mesma lista (espelhada) de FEDERATION_SHARED_SECTIONS em
+// app/karate/(dojo)/_layout.tsx. Um deep-link (full page load) pra
+// "/karate/eventos" resolve pra ESTE grupo primeiro (colisão de rota
+// entre (dojo)/eventos.tsx e (federation)/eventos.tsx) quando a conta
+// logada é dojô — sem preservar a seção, o redirect abaixo sempre
+// mandava pro índice (Painel), mesmo quando o usuário pediu "/eventos".
+// Nav por clique (DojoShell) nunca passava por aqui (usa o href JA
+// COM o grupo, "/karate/(dojo)/eventos"), por isso só o deep-link direto
+// quebrava.
+const DOJO_SHARED_SECTIONS = ["praticantes", "eventos", "configuracoes"];
+
 export default function KarateLayout() {
   const { isHydrated, company } = useAuthStore();
+  // Hook incondicional (Rules of Hooks) — só é USADO no branch do
+  // redirect de dojô abaixo, mas precisa ser lido sempre no topo.
+  const path = usePathname();
 
   // 1) Espera a sessão hidratar (evita decidir com company ainda vazio)
   if (!isHydrated) {
@@ -38,9 +53,19 @@ export default function KarateLayout() {
   // O href LEVA o nome do grupo: index/praticantes/eventos/configuracoes
   // são rotas compartilhadas entre (dojo) e (federation), e um href nu
   // ("/karate") resolveria de volta pro outro grupo e viraria loop.
+  //
+  // QA 27/07 (item 3): o redirect agora PRESERVA a seção pedida
+  // (usePathname, igual FederationRedirect faz na direção oposta em
+  // (dojo)/_layout.tsx) em vez de sempre mandar pro índice — senão um
+  // deep-link pra "/karate/eventos" (que colide de nome com este grupo)
+  // sempre pousava no Painel, mesmo pedindo Eventos.
   const karateRole = (company as any)?.karate_role;
   if (DOJO_ROLES.includes(karateRole as string)) {
-    return <Redirect href={"/karate/(dojo)" as any} />;
+    const seg = (path || "").split("?")[0].split("/").filter(Boolean)[1] ?? "";
+    const dojoHref = DOJO_SHARED_SECTIONS.includes(seg)
+      ? `/karate/(dojo)/${seg}`
+      : "/karate/(dojo)";
+    return <Redirect href={dojoHref as any} />;
   }
 
   // 3) Sem mock: o federationId vem do JWT (company.federation_id). Se a
