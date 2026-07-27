@@ -145,6 +145,45 @@ export function formatPhone(raw: string | null | undefined): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+// ── Nomes (F5a) — comparação aluno × praticante federado ───────
+
+/** minúsculas, sem acento, espaços colapsados — pronta pra comparar. */
+export function normalizeName(raw: string | null | undefined): string {
+  return String(raw ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Conectores comuns de nome pt-BR — ignorados na comparação de token pra
+// não gerar falso-negativo ("Maria de Souza" × "Maria Souza") nem
+// falso-positivo ("de"/"da" sozinho batendo por acidente).
+const NAME_STOPWORDS = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+function nameTokens(raw: string | null | undefined): string[] {
+  return normalizeName(raw)
+    .split(" ")
+    .filter((t) => t.length > 1 && !NAME_STOPWORDS.has(t));
+}
+
+/**
+ * true quando dois nomes NÃO compartilham nenhum sobrenome/primeiro nome
+ * (comparação normalizada: sem acento, minúsculas, ignora conectores).
+ * Usada pra alertar quando o número FPKT digitado à mão vincula um
+ * praticante com nome muito diferente do aluno — erro de digitação
+ * vincula o aluno errado silenciosamente (QA 27/07, item 5). Dado
+ * faltante não é divergência (regra da casa: ausênte ≠ inválido) — só
+ * alerta quando DÁ pra comparar e os nomes realmente não batem.
+ */
+export function namesDivergent(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (ta.length === 0 || tb.length === 0) return false;
+  return !ta.some((t) => tb.includes(t));
+}
+
 // ── Erros da API → campo certo, em pt-BR ─────────────────────
 
 export type StudentErrorField =
