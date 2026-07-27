@@ -9,6 +9,15 @@
 // dojoAlunos/helpers.ts (mapFederationError), mas para as rotas
 // federativas de certificados/eventos/exames (não vive lá porque é um
 // domínio diferente — nunca mistura com o service de alunos).
+//
+// QA 27/07 (item 1): o backend distingue dois erros de infraestrutura
+// que antes caíam ambos no fallback genérico de e.message (às vezes uma
+// string em inglês/técnica, pouco acionável pro sensei):
+//   • 503 SCHEMA_PENDING       — a migration/feature ainda não foi
+//     habilitada neste ambiente. Ação: tentar mais tarde.
+//   • 500 SQL_SCHEMA_MISMATCH  — o schema do banco não bate com o que o
+//     backend espera (bug real). Ação: avisar o suporte.
+// Mapeados explicitamente aqui pra nunca aparecer um erro cru na tela.
 // ============================================================
 import { SkipReasonCode } from "@/services/karateDojoFederativoApi";
 
@@ -34,14 +43,24 @@ export function isNaoFederadoReason(reason: SkipReasonCode): boolean {
   return reason === "ALUNO_NAO_FEDERADO";
 }
 
-/** Mapeia erros de chamada (409/403) das rotas federativas, pt-BR. */
+/** Mapeia erros de chamada (409/403/500/503) das rotas federativas, pt-BR. */
 export function mapDojoFederativoError(e: any): string {
   const code = e?.data?.code ?? e?.code ?? null;
+  const status = e?.status;
   if (code === "DOJO_NAO_CONECTADO") {
     return "Seu dojô ainda não está conectado à federação — conecte primeiro para continuar.";
   }
   if (code === "PORTAL_READ_ONLY") {
     return "O portal do dojô é somente leitura. Entre com a conta do dojô para alterar dados.";
+  }
+  // 503: feature/migration ainda não habilitada neste ambiente — degrada,
+  // não é bug. 500: schema não bate com o esperado pelo backend — é bug
+  // real, vale avisar o suporte em vez de tentar de novo sozinho.
+  if (code === "SCHEMA_PENDING" || status === 503) {
+    return "O serviço está indisponível no momento. Tente novamente mais tarde.";
+  }
+  if (code === "SQL_SCHEMA_MISMATCH" || status === 500) {
+    return "Não foi possível registrar o pedido — avise o suporte.";
   }
   return e?.message || "Não foi possível concluir. Tente de novo.";
 }
