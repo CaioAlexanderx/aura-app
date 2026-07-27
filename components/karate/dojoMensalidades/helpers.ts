@@ -6,14 +6,16 @@
 // direto (em UTC-3 isso pode voltar um mês/dia).
 // ============================================================
 import { KarateColors } from "@/constants/karateTheme";
-import { BaasStatus, DojoChargeStatus, DojoReminderLogStatus } from "@/services/karateDojoBillingApi";
+import {
+  BaasStatus, DojoChargeStatus, DojoReminderLogStatus, DojoRunRemindersResult,
+} from "@/services/karateDojoBillingApi";
 
 const MESES_LONG = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 ];
 
-// ── Competência (mês de referência) ─────────────────────────
+// ── Competência (mês de referência) ─────────────
 
 /** Competência atual no formato 'YYYY-MM' (tz local do device). */
 export function currentCompetence(): string {
@@ -45,7 +47,16 @@ export function competenceLabel(competence: string): string {
   return `${mes[0].toUpperCase()}${mes.slice(1)} de ${y}`;
 }
 
-// ── Datas / valores ──────────────────────────────────────────
+// ── Datas / valores ───────────────────────
+
+/** Hoje no fuso do device, 'YYYY-MM-DD' (componentes locais, nunca toISOString). */
+export function todayISO(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 /** 'YYYY-MM-DD' → 'DD/MM/AAAA' ('—' se ausente/inválida). */
 export function fmtDateBR(iso: string | null | undefined): string {
@@ -194,7 +205,7 @@ export function isValidDueDay(day: number | null | undefined): boolean {
   return typeof day === "number" && Number.isInteger(day) && day >= 1 && day <= 28;
 }
 
-// ── Régua de cobrança (lembretes automáticos, F3c) ────────────
+// ── Régua de cobrança (lembretes automáticos, F3c) ────────
 
 /** Limites do offset (dias relativos ao vencimento) espelhados do backend. */
 export const REMINDER_OFFSET_MIN = -15;
@@ -234,4 +245,24 @@ export function reminderLogStatusView(
     default:
       return { key: "skipped_no_email", label: "Sem e-mail", icon: "alert_circle", color: KarateColors.neutral, bg: KarateColors.neutralSoft };
   }
+}
+
+/**
+ * Resumo do POST .../reminders/run (contrato #429 FINAL). QA 27/07
+ * (item 3): o resumo antigo mostrava só `skipped` rotulado "sem e-mail",
+ * mas `skipped` inclui dedupe (aluno já avisado no mesmo dia) — em
+ * produção isso exibiu "1 sem e-mail" com o e-mail já cadastrado. Agora
+ * usa os campos específicos e some com bom senso as partes zeradas (não
+ * polui com "0 falharam" etc.).
+ */
+export function buildRunSummary(r: DojoRunRemindersResult): string {
+  const parts: string[] = [];
+  if (r.sent > 0) parts.push(`${r.sent} enviado${r.sent === 1 ? "" : "s"}`);
+  const semContato = r.skipped_no_email ?? r.skipped ?? 0;
+  if (semContato > 0) parts.push(`${semContato} sem contato`);
+  const jaEnviado = r.skipped_sent ?? 0;
+  if (jaEnviado > 0) parts.push(`${jaEnviado} já enviado${jaEnviado === 1 ? "" : "s"}`);
+  if (r.failed > 0) parts.push(`${r.failed} ${r.failed === 1 ? "falhou" : "falharam"}`);
+  if (parts.length === 0) return "Nenhum lembrete elegível hoje.";
+  return parts.join(" · ");
 }

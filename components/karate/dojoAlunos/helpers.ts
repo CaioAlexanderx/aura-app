@@ -53,7 +53,7 @@ export function beltViewFor(label: string | null | undefined): {
   return { label: label || "Sem faixa", color: KarateColors.bg2, textColor: KarateColors.ink2 };
 }
 
-// ── Datas (tz-safe, string-only) ─────────────────────────────
+// ── Datas (tz-safe, string-only) ─────────────────
 
 /** 'YYYY-MM-DD' → idade em anos (null se ausente/inválida). */
 export function ageFromISO(iso: string | null | undefined): number | null {
@@ -102,7 +102,7 @@ export function maskDateBR(raw: string): string {
   return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
 }
 
-// ── CPF ──────────────────────────────────────────────────────
+// ── CPF ──────────────────────────────────
 
 export function onlyDigits(s: string | null | undefined): string {
   return String(s ?? "").replace(/\D/g, "");
@@ -117,7 +117,7 @@ export function maskCpf(raw: string | null | undefined): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
-// ── CEP ──────────────────────────────────────────────────────
+// ── CEP ──────────────────────────────────
 
 /** Máscara 00000-000 (aceita parcial) — usado na ficha de solicitação de filiação (F5a). */
 export function maskCep(raw: string | null | undefined): string {
@@ -126,7 +126,7 @@ export function maskCep(raw: string | null | undefined): string {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-// ── Telefone ─────────────────────────────────────────────────
+// ── Telefone ─────────────────────────────
 
 /**
  * Máscara BR de telefone a partir de dígitos crus: (DD) 90000-0000 (celular,
@@ -145,7 +145,22 @@ export function formatPhone(raw: string | null | undefined): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-// ── Nomes (F5a) — comparação aluno × praticante federado ───────
+// ── E-mail ──────────────────────────────
+
+/**
+ * Validação de formato bem simples (não resolve DNS, só pega erro de
+ * digitação óbvio). String vazia é considerada válida aqui (o campo é
+ * opcional na maioria dos forms) — quem chama decide se é obrigatório.
+ * QA 27/07 (item 1): o e-mail do responsável é pra onde vai o lembrete
+ * de mensalidade do menor — vale validar formato antes de salvar.
+ */
+export function isValidEmail(raw: string | null | undefined): boolean {
+  const v = String(raw ?? "").trim();
+  if (!v) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+// ── Nomes (F5a) — comparação aluno × praticante federado ─────
 
 /** minúsculas, sem acento, espaços colapsados — pronta pra comparar. */
 export function normalizeName(raw: string | null | undefined): string {
@@ -184,7 +199,7 @@ export function namesDivergent(a: string | null | undefined, b: string | null | 
   return !ta.some((t) => tb.includes(t));
 }
 
-// ── Erros da API → campo certo, em pt-BR ─────────────────────
+// ── Erros da API → campo certo, em pt-BR ───────────
 
 export type StudentErrorField =
   | "full_name"
