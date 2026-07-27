@@ -1,7 +1,8 @@
 // ============================================================
 // AURA KARATÊ — /dojo/me AUTENTICADO (lado do dojô logado)
 //
-//   GET /federation/:id/dojo/me
+//   GET   /federation/:id/dojo/me
+//   PATCH /federation/:id/dojo/me
 //
 // Dados cadastrais do dojô da company logada (JWT com dojo_id;
 // requireDojoAccess no aura-backend). É o análogo autenticado do
@@ -19,26 +20,61 @@
 // aditivos, disponíveis na raiz OU em dojo.linked/dojo.linked_at.
 // FAIL-OPEN: backend antigo sem o campo → linked=true (nunca esconde nav
 // nem bloqueia telas por causa de um deploy fora de ordem).
+//
+// QA 27/07 (item 5, contrato Aura-backend#429 FINAL): o GET passou a
+// devolver o dojô inteiro (cnpj/email/phone/founded_at + o bloco de
+// filiação com affiliation_status/affiliated_since/practitioners_count).
+// A tela de Configurações separa em dois blocos:
+//   • Dados do dojô — nome/cnpj/email/phone/founded_at, EDITÁVEIS pelo
+//     sensei via PATCH (novo, este arquivo).
+//   • Filiação — fpkt_affiliation_id/federation_name/affiliation_status/
+//     affiliation_model/affiliated_since/region/practitioners_count,
+//     somente leitura (vem da federação; o servidor ignora esses campos
+//     se enviados no PATCH).
 // ============================================================
 import { request } from "@/services/api";
+
+/** 'filiado' · 'pendente' · 'nao_filiado' — só a federação muda isso. */
+export type DojoAffiliationStatus = "filiado" | "pendente" | "nao_filiado";
 
 export interface DojoMeInfo {
   id: string | null;
   name: string | null;
+  slug: string | null;
   cnpj: string | null;
-  region: string | null;
-  fpkt_affiliation_id: string | null;
-  affiliation_model: string | null;
-  affiliation_since: string | null;
-  dojo_founded_year: number | null;
-  phone: string | null;
   email: string | null;
-  status: string | null;
-  practitioner_count: number | null;
+  phone: string | null;
+  /** 'YYYY-MM-DD' — date puro; parse manual, NUNCA new Date() direto. */
+  founded_at: string | null;
+  federation_id: string | null;
   federation_name: string | null;
+  federation_slug: string | null;
+  fpkt_affiliation_id: string | null;
+  affiliation_status: DojoAffiliationStatus | null;
+  affiliation_model: string | null;
+  /** 'YYYY-MM-DD'. */
+  affiliated_since: string | null;
+  region: string | null;
+  practitioners_count: number | null;
+  auth_channel: string | null;
   /** Conexão do dojô à federação (aditivo, Aura-backend#422). Fail-open: true quando ausente. */
   linked: boolean;
   linked_at: string | null;
+}
+
+/**
+ * Payload do PATCH — só os campos PRÓPRIOS do dojô (o dojô tem registro
+ * próprio; decisão do Caio). Campos federativos (fpkt_affiliation_id,
+ * affiliation_status…) são ignorados pelo servidor mesmo se enviados.
+ * Campo ausente (undefined) = não mexe.
+ */
+export interface DojoMeUpdatePayload {
+  name?: string;
+  cnpj?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  /** 'YYYY-MM-DD'. */
+  founded_at?: string | null;
 }
 
 function num(v: any): number | null {
@@ -55,6 +91,10 @@ function boolWithFallback(v: any, fallback: boolean): boolean {
   return typeof v === "boolean" ? v : fallback;
 }
 
+function affiliationStatus(v: any): DojoAffiliationStatus | null {
+  return v === "filiado" || v === "pendente" || v === "nao_filiado" ? v : null;
+}
+
 export function normalizeDojoMe(raw: any): DojoMeInfo {
   const d =
     raw && typeof raw === "object" && raw.dojo && typeof raw.dojo === "object"
@@ -67,18 +107,22 @@ export function normalizeDojoMe(raw: any): DojoMeInfo {
   return {
     id: str(d.id),
     name: str(d.name),
+    slug: str(d.slug),
     cnpj: str(d.cnpj),
-    region: str(d.region),
-    fpkt_affiliation_id: str(d.fpkt_affiliation_id),
-    affiliation_model: str(d.affiliation_model),
-    affiliation_since: str(d.affiliation_since),
-    dojo_founded_year: num(d.dojo_founded_year),
-    phone: str(d.phone),
     email: str(d.email),
-    status: str(d.status),
-    practitioner_count: num(d.practitioner_count),
+    phone: str(d.phone),
+    founded_at: str(d.founded_at),
+    federation_id: str(d.federation_id),
     federation_name:
       str(d.federation_name) ?? str(raw?.federation?.name) ?? str(d.federation?.name),
+    federation_slug: str(d.federation_slug),
+    fpkt_affiliation_id: str(d.fpkt_affiliation_id),
+    affiliation_status: affiliationStatus(d.affiliation_status),
+    affiliation_model: str(d.affiliation_model),
+    affiliated_since: str(d.affiliated_since),
+    region: str(d.region),
+    practitioners_count: num(d.practitioners_count),
+    auth_channel: str(d.auth_channel),
     linked,
     linked_at: linkedAt,
   };
@@ -87,4 +131,19 @@ export function normalizeDojoMe(raw: any): DojoMeInfo {
 export const karateDojoInfoApi = {
   getDojoMe: async (federationId: string): Promise<DojoMeInfo> =>
     normalizeDojoMe(await request<any>(`/federation/${federationId}/dojo/me`)),
+
+  /**
+   * PATCH /dojo/me — 200 com o mesmo shape do GET; 422 VALIDATION_ERROR
+   * com `errors: string[]` (mapeado em pt-BR em app/karate/(dojo)/configuracoes.tsx).
+   */
+  updateDojoMe: async (
+    federationId: string,
+    payload: DojoMeUpdatePayload
+  ): Promise<DojoMeInfo> =>
+    normalizeDojoMe(
+      await request<any>(`/federation/${federationId}/dojo/me`, {
+        method: "PATCH",
+        body: payload,
+      })
+    ),
 };
