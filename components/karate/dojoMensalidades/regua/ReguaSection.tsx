@@ -10,12 +10,19 @@
 //
 // enabled/offsets são salvos juntos (botão "Salvar régua" só habilita
 // quando há diferença pro que está salvo no servidor). send_email é
-// enviado sempre true — hoje o único canal é e-mail; o campo existe no
-// contrato pra suportar canais futuros sem quebrar o payload.
+// enviado sempre true — hoje o único canal automatico é e-mail; o campo
+// existe no contrato pra suportar canais futuros sem quebrar o payload.
 //
 // Degrade: 503 SCHEMA_PENDING (migration pendente) → aviso amigável,
 // sem crash — mesmo padrão de PixConfigCard/ContaAuraCard. O log é
 // secundário: falha nele não derruba a seção inteira.
+//
+// QA 27/07 (item 3, contrato #429 FINAL):
+//   • o resumo do "Enviar lembretes agora" passa a usar buildRunSummary
+//     (sent/skipped_no_email/skipped_sent/failed) em vez do `skipped`
+//     genérico, que misturava "sem e-mail" com dedupe.
+//   • nova seção WhatsAppQueueSection (canal alternativo pro responsável
+//     sem e-mail — no Brasil ele tem telefone, não e-mail).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -28,10 +35,11 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateDojoBillingApi, DojoReminderConfig, DojoReminderLogItem, DojoRunRemindersResult,
 } from "@/services/karateDojoBillingApi";
-import { currentCompetence, mapBillingError } from "../helpers";
+import { buildRunSummary, currentCompetence, mapBillingError } from "../helpers";
 import { CompetenceSelector } from "../CompetenceSelector";
 import { OffsetsEditor } from "./OffsetsEditor";
 import { ReminderLogList } from "./ReminderLogList";
+import { WhatsAppQueueSection } from "./WhatsAppQueueSection";
 
 const DEFAULT_CONFIG: DojoReminderConfig = { enabled: false, offsets: [-3, 0, 3], send_email: true, updated_at: null };
 
@@ -224,12 +232,12 @@ export function ReguaSection() {
         {!!runResult && (
           <View style={styles.runResultBox}>
             <Icon name="check_circle" size={14} color={KarateColors.ok} />
-            <Text style={styles.runResultTxt}>
-              {runResult.sent} enviado(s) · {runResult.skipped} sem e-mail · {runResult.failed} falhou(aram)
-            </Text>
+            <Text style={styles.runResultTxt}>{buildRunSummary(runResult)}</Text>
           </View>
         )}
       </View>
+
+      <WhatsAppQueueSection />
 
       <View style={styles.card}>
         <View style={styles.logHead}>
