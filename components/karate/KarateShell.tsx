@@ -17,11 +17,11 @@
 //   (rota /karate/exames = tela de Certificados/Selo; exames de faixa
 //    vivem em "Eventos"). Renomeado de "Exames" p/ desfazer a confusão.
 // Track L: adicionado item Saúde da Rede (admin+staff, só sidebar).
-// F6: adicionado item Filiações — inbox de pedidos de conexão vindos
-//   dos dojôs (admin+staff, só sidebar). Distinto de "Conexões" (que é
-//   saúde de SINCRONIZAÇÃO de dojôs já ligados) — nomes deliberadamente
-//   diferentes pra não confundir os dois fluxos. Ver
-//   app/karate/(federation)/filiacao/index.tsx.
+// F6: adicionado item Filiações (inbox de pedidos de conexão vindos dos
+//   dojôs) — REMOVIDO da sidebar em 27/07/2026 (convergência): virou aba
+//   "Filiações" dentro de Conexões (ver app/karate/(federation)/
+//   conexoes/index.tsx e .../tabs/FiliacoesTab.tsx), não item próprio.
+//   A rota /karate/filiacao segue viva como redirect fino.
 //
 // IA/Nav P1:
 //   • isActive — o item índice (Dashboard, route "/karate/") casa por
@@ -76,6 +76,7 @@ import {
   ViewStyle,
   TextStyle,
   SafeAreaView,
+  ScrollView,
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -95,11 +96,11 @@ const NAV_ITEMS = [
   { label: "Saúde da Rede",   icon: "activity",  route: "/karate/saude-rede",    roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   { label: "Dojôs",           icon: "building",  route: "/karate/dojos",         roles: null,          sidebarOnly: false },
   { label: "Praticantes",     icon: "users",     route: "/karate/praticantes",   roles: null,          sidebarOnly: false },
+  // Conexões agora é um container de 3 abas (Filiações/Praticantes/
+  // Sincronização — ver app/karate/(federation)/conexoes/index.tsx).
+  // Filiações teve item PRÓPRIO na sidebar (F6) até 27/07/2026, quando a
+  // investigação confirmou que era o mesmo domínio — virou aba, não rota.
   { label: "Conexões",        icon: "network",   route: "/karate/conexoes",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
-  // F6: inbox de pedidos de CONEXÃO/FILIAÇÃO vindos dos dojôs (contrato
-  // Aura-backend#424) — domínio diferente de "Conexões" acima (aquela é
-  // saúde de sincronização de dojôs JÁ ligados).
-  { label: "Filiações",       icon: "inbox",     route: "/karate/filiacao",      roles: ["federation_admin", "federation_staff"], sidebarOnly: true },
   { label: "Financeiro",      icon: "wallet",    route: "/karate/financeiro",    roles: ["federation_admin"], sidebarOnly: false },
   // Track J: Certificados (rota /karate/exames = tela de Selo/Certificados).
   { label: "Certificados",    icon: "ribbon",    route: "/karate/exames",        roles: null,          sidebarOnly: false },
@@ -430,13 +431,25 @@ function SidebarNav() {
         />
       </View>
 
-      {/* Navigation principal */}
-      <View style={styles.navSection}>
-        <Text style={styles.navLabel}>Navegação</Text>
+      {/* Navigation principal — MIOLO rolável (bug do usuário: sidebar
+          cortava itens sem rolagem em telas menores). Mesmo fix de
+          components/studio/StudioShell/Sidebar.tsx (13/06/2026): o
+          container (styles.sidebar) ganhou alignSelf:"stretch" +
+          overflow:"hidden" pra travar a altura no que o pai (wideContainer,
+          flex:1 row) já dá; só então o ScrollView flex:1 do miolo passa a
+          rolar de verdade em vez de crescer junto com o conteúdo. Marca/
+          federação/busca ficam ACIMA (fixos), Configurações/chip de
+          usuário ficam ABAIXO (fixos) — só os itens de navegação rolam.
+          O espaçador <View flex:1/> que empurrava o rodapé foi substituído
+          pelo próprio flex:1 do ScrollView. */}
+      <Text style={styles.navLabel}>Navegação</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.navSection}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
+      >
         {mainItems.map(renderItem)}
-      </View>
-
-      <View style={{ flex: 1 }} />
+      </ScrollView>
 
       {/* Rodapé: Configurações (se houver) */}
       {footerItems.length > 0 && (
@@ -591,6 +604,13 @@ const styles = StyleSheet.create({
   // ── Sidebar ────────────────────────────────────────
   sidebar: {
     width: 236,
+    // Fix scroll (bug do usuário): alignSelf:"stretch" ocupa 100% da
+    // altura do pai (row, flex:1) sem crescer pelo conteúdo; overflow:
+    // "hidden" é ESSENCIAL no web — sem ele o View cresce junto com o
+    // miolo e o ScrollView interno nunca aciona (mesmo racional de
+    // StudioShell/Sidebar.tsx).
+    alignSelf: "stretch",
+    overflow: "hidden",
     backgroundColor: KarateColors.bg2,
     borderRightWidth: 1,
     borderRightColor: KarateColors.border2,

@@ -1,23 +1,39 @@
 // ============================================================
 // Conexões — Aura Karatê (federação) · Shoji
 //
-// Tela com abas de nível superior (H3, mesmo padrão de
-// app/karate/(federation)/dojos/index.tsx):
-//   1. "Conexões" (ConexoesTab)       — como cada dojô se conecta à
-//      federação. Conteúdo INALTERADO — só virou aba (era rota única).
-//   2. "Solicitações" (SolicitacoesTab) — NOVA, aba PRINCIPAL: fila de
-//      solicitações de praticante (criação/transferência) vindas dos
-//      dojôs, pra federação conferir/numerar/aprovar.
+// Container de 3 abas de nível superior (H3 + convergência 27/07/2026):
+//   1. "Filiações" (FiliacoesTab)    — inbox de pedidos de filiação/conexão
+//      (karate_affiliation_requests): dojô self-serve OU a federação
+//      abrindo pelo dojô (migration 255, origin). É a PÁGINA PRINCIPAL —
+//      sem aprovação aqui o dojô não existe pra federação.
+//   2. "Praticantes" (SolicitacoesTab) — fila de solicitações de praticante
+//      (criação/transferência) vindas dos dojôs, pra federação
+//      conferir/numerar/aprovar. Nome interno do componente ("Solicitações")
+//      preservado — é o rótulo do domínio de praticante, não da aba.
+//   3. "Sincronização" (ConexoesTab)  — como cada dojô JÁ LINKADO se
+//      conecta (native/manual). Era a antiga aba "Conexões" (mesmo
+//      componente, minus a seção morta "Dojôs querendo entrar" — ver
+//      comentário de topo de ConexoesTab.tsx).
+//
+// CONVERGÊNCIA (27/07/2026): a extinta rota /karate/filiacao (F6) virou
+// a aba "Filiações" aqui — era uma tela IRMÃ que a investigação
+// confirmou ser o único inbox real de filiação (karate_dojo_connections/
+// "Conectar dojô" é config de sincronia pós-vínculo, sempre esteve
+// parqueada e vazia). /karate/filiacao segue viva como redirect fino
+// para /karate/conexoes?tab=filiacoes (não quebra bookmarks/links).
 //
 // Sub-navegação por QUERY PARAM (mesmo padrão do hub de Anuidades e da
-// tela de Dojôs): ?tab=solicitacoes já abre a aba nova no boot.
+// tela de Dojôs): ?tab=filiacoes | ?tab=solicitacoes | ?tab=conexoes já
+// abre a aba certa no boot (compat com os nomes antigos de query —
+// ?tab=conexoes continua abrindo "Sincronização", que era a rota-única
+// original desse nome).
 //
-// Badge de pendentes na aba "Solicitações": busca leve (só
-// getPractitionerRequestMetrics) independente do fetch completo que
-// SolicitacoesTab faz pra si mesma — cada aba cuida do próprio dado,
-// mesma separação de responsabilidade de DojosListTab/CadastralTab.
+// Badges de pendentes nas abas "Filiações" e "Praticantes": busca leve
+// (getMetrics/getPractitionerRequestMetrics) independente do fetch
+// completo que cada aba faz pra si mesma — cada aba cuida do próprio
+// dado, mesma separação de responsabilidade de DojosListTab/CadastralTab.
 // Refaz no foco da tela (useFocusEffect) pra não ficar com número stale
-// depois de aprovar/rejeitar uma solicitação e voltar pra cá.
+// depois de aprovar/rejeitar e voltar pra cá.
 // ============================================================
 import React, { useCallback, useState } from "react";
 import {
@@ -28,10 +44,12 @@ import { useFocusEffect } from "@react-navigation/native";
 import { KarateColors, ShojiPalette } from "@/constants/karateTheme";
 import { ConexoesTab } from "./tabs/ConexoesTab";
 import { SolicitacoesTab } from "./tabs/SolicitacoesTab";
+import { FiliacoesTab } from "./tabs/FiliacoesTab";
 import { karateApi } from "@/services/karateApi";
+import { karateAffiliationApi } from "@/services/karateAffiliationApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-type Tab = "conexoes" | "solicitacoes";
+type Tab = "filiacoes" | "solicitacoes" | "conexoes";
 
 const firstParam = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
@@ -39,25 +57,32 @@ const firstParam = (v: string | string[] | undefined): string | undefined =>
 export default function ConexoesScreen() {
   const { federationId } = useKarateFederation();
 
-  // Deep-link: ?tab=conexoes abre a lista de conexões no boot (lazy
-  // useState initializer, mesmo padrão do hub de Anuidades/Dojôs) —
-  // depois disso o usuário navega livremente pelas abas.
+  // Deep-link: ?tab=<...> abre a aba certa no boot (lazy useState
+  // initializer, mesmo padrão do hub de Anuidades/Dojôs) — depois disso o
+  // usuário navega livremente pelas abas. Default = Filiações: é o novo
+  // inbox principal (sem filiação aprovada, o dojô nem existe pra
+  // federação) — mais urgente que a fila de praticantes de um dojô que
+  // já está dentro.
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
-  const [activeTab, setActiveTab] = useState<Tab>(() =>
-    // Solicitações é a PÁGINA PRINCIPAL de Conexões (14/07/2026): é a fila que
-    // a federação precisa trabalhar — sem ela, praticante solicitado fica em
-    // limbo. ?tab=conexoes leva para a lista de conexões.
-    firstParam(params.tab) === "conexoes" ? "conexoes" : "solicitacoes"
-  );
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const raw = firstParam(params.tab);
+    if (raw === "conexoes") return "conexoes";
+    if (raw === "solicitacoes") return "solicitacoes";
+    return "filiacoes";
+  });
 
-  const [pendentes, setPendentes] = useState<number | null>(null);
+  const [pendentesPraticantes, setPendentesPraticantes] = useState<number | null>(null);
+  const [pendentesFiliacoes, setPendentesFiliacoes] = useState<number | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!federationId) return;
     let cancelled = false;
     karateApi.getPractitionerRequestMetrics(federationId)
-      .then((m) => { if (!cancelled) setPendentes(m.pendentes); })
-      .catch(() => { if (!cancelled) setPendentes(null); });
+      .then((m) => { if (!cancelled) setPendentesPraticantes(m.pendentes); })
+      .catch(() => { if (!cancelled) setPendentesPraticantes(null); });
+    karateAffiliationApi.getMetrics(federationId)
+      .then((m) => { if (!cancelled) setPendentesFiliacoes(m.pending); })
+      .catch(() => { if (!cancelled) setPendentesFiliacoes(null); });
     return () => { cancelled = true; };
   }, [federationId]));
 
@@ -71,19 +96,37 @@ export default function ConexoesScreen() {
         contentContainerStyle={styles.tabBarContent}
       >
         <TouchableOpacity
+          style={[styles.tabItem, activeTab === "filiacoes" && styles.tabItemActive]}
+          onPress={() => setActiveTab("filiacoes")}
+          accessibilityRole="tab"
+          accessibilityLabel="Filiações"
+          accessibilityState={{ selected: activeTab === "filiacoes" }}
+        >
+          <View style={styles.tabLabelRow}>
+            <Text style={[styles.tabLabel, activeTab === "filiacoes" && styles.tabLabelActive]}>
+              Filiações
+            </Text>
+            {!!pendentesFiliacoes && pendentesFiliacoes > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{pendentesFiliacoes > 99 ? "99+" : pendentesFiliacoes}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tabItem, activeTab === "solicitacoes" && styles.tabItemActive]}
           onPress={() => setActiveTab("solicitacoes")}
           accessibilityRole="tab"
-          accessibilityLabel="Solicitações"
+          accessibilityLabel="Praticantes"
           accessibilityState={{ selected: activeTab === "solicitacoes" }}
         >
           <View style={styles.tabLabelRow}>
             <Text style={[styles.tabLabel, activeTab === "solicitacoes" && styles.tabLabelActive]}>
-              Solicitações
+              Praticantes
             </Text>
-            {!!pendentes && pendentes > 0 && (
+            {!!pendentesPraticantes && pendentesPraticantes > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeTxt}>{pendentes > 99 ? "99+" : pendentes}</Text>
+                <Text style={styles.badgeTxt}>{pendentesPraticantes > 99 ? "99+" : pendentesPraticantes}</Text>
               </View>
             )}
           </View>
@@ -92,20 +135,20 @@ export default function ConexoesScreen() {
           style={[styles.tabItem, activeTab === "conexoes" && styles.tabItemActive]}
           onPress={() => setActiveTab("conexoes")}
           accessibilityRole="tab"
-          accessibilityLabel="Conexões"
+          accessibilityLabel="Sincronização"
           accessibilityState={{ selected: activeTab === "conexoes" }}
         >
           <Text style={[styles.tabLabel, activeTab === "conexoes" && styles.tabLabelActive]}>
-            Conexões
+            Sincronização
           </Text>
         </TouchableOpacity>
-
       </ScrollView>
 
       {/* Tab content */}
       <View style={styles.content}>
-        {activeTab === "conexoes" && <ConexoesTab />}
+        {activeTab === "filiacoes" && <FiliacoesTab />}
         {activeTab === "solicitacoes" && <SolicitacoesTab />}
+        {activeTab === "conexoes" && <ConexoesTab onOpenFiliacoes={() => setActiveTab("filiacoes")} />}
       </View>
     </View>
   );
