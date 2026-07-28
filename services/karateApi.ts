@@ -2527,6 +2527,14 @@ export const karateApi = {
       /** Filtro ativo/inativo do dojô (PR #413) — mesmo valor que deve ir
        *  para getAnnuitySummary, senão lista e KPIs divergem. */
       dojo_status?: AnnuityDojoStatusFilter;
+      /** Filtra a lista para UM único dojô (backend, aura-backend) —
+       *  escopo de federação preservado, mesma resposta paginada
+       *  (DojoAnnuity[]). Usado pela seção de Anuidades dentro da página
+       *  do dojô, que reusa esta MESMA rota (nunca uma 2ª fonte de dados)
+       *  em vez do `annuity_history` legado do GET /dojos/:id. O summary
+       *  (getAnnuitySummary) NÃO aceita este parâmetro — os KPIs do dojô
+       *  são derivados no cliente a partir desta mesma lista filtrada. */
+      dojo_id?: string;
     }
   ): Promise<Paginated<DojoAnnuity>> => {
     const qs = new URLSearchParams();
@@ -2536,6 +2544,7 @@ export const karateApi = {
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     if (params?.dojo_status) qs.set("dojo_status", params.dojo_status);
+    if (params?.dojo_id) qs.set("dojo_id", params.dojo_id);
     const query = qs.toString() ? `?${qs.toString()}` : "";
     return request(`/federation/${federationId}/financial/annuities/dojos${query}`);
   },

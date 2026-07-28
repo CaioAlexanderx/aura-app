@@ -33,15 +33,21 @@
 // DJ2: card Cadastro exibe "Sensei responsável" (sensei_practitioner_name ou
 //   sensei_name) em vez do CPF. CPF removido da exibição.
 //
-// DJ4: cada anuidade não paga ganha botão "Registrar pagamento" (modal pequeno:
-//   data + forma + valor opcional → payAnnuity). Botão geral "Lançar pagamento"
-//   no topo da seção → modal (competência + valor + data + forma →
-//   registerAnnuityPayment). Convive com Editar/Estornar já existentes.
+// F6 (26/07/2026): a seção Anuidades deixou de ser uma implementação
+//   PARALELA (3 modais locais, API legada payAnnuity/registerAnnuityPayment,
+//   fonte data.annuity_history) e passou a reusar OS MESMOS componentes da
+//   aba Anuidades do hub financeiro — AnnuityReceivableRow (render de linha
+//   compartilhado, extraído de AnnuitiesTable.tsx) + AnnuityReceiveModal
+//   (baixa livre/FIFO) + AnnuityStatementModal (extrato) +
+//   LancarAnuidadeDojoModal (lançar/editar). Dados vêm de
+//   listDojoAnnuities(dojo_id=<este dojô>) — nunca mais annuity_history.
+//   O antigo atalho "Lançar pagamento" (criava um período JÁ PAGO fora do
+//   fluxo) saiu — ver comentário perto de chargeAnnuityOpen abaixo.
 // ============================================================
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
-  Modal, Pressable, TouchableOpacity, TextInput, ActivityIndicator, Animated, Platform, Switch,
+  Modal, Pressable, TouchableOpacity, ActivityIndicator, Animated, Platform, Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
@@ -65,13 +71,33 @@ import InactivateChoiceDialog from "@/components/karate/InactivateChoiceDialog";
 import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
-import { karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary, RosterStatusFilter, RosterValidation, RosterEvent, AnnuityPaymentMethod } from "@/services/karateApi";
+import {
+  karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary,
+  RosterStatusFilter, RosterValidation, RosterEvent, DojoAnnuity, AnnuityReceiveResult, AnnuityStatus,
+  AnnuityPaymentMethod,
+} from "@/services/karateApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { canTransfer } from "@/components/karate/praticante-detalhe/helpers";
 import { DocumentosSection } from "@/components/karate/DocumentosSection";
 import { copyToClipboard } from "@/utils/clipboard";
 import { maskPhone } from "@/utils/masks";
+// F6 (26/07/2026) — anuidade do dojô vira RECEBÍVEL de verdade dentro da
+// própria página, reusando EXATAMENTE os componentes canônicos da aba
+// Anuidades do hub financeiro (AnnuitiesTable.tsx): mesmo render de linha
+// (AnnuityReceivableRow, badge/trilha/saldo corretos — mata o bug do badge
+// "Inativo" fixo que o card local antigo tinha) e os mesmos 3 modais de
+// ação (Receber, Extrato, Lançar/Editar). Nenhuma 2ª implementação
+// paralela — ver CLAUDE.md e o diagnóstico que motivou esta mudança.
+import {
+  AnnuityReceivableRow, AnnuityRowVM, toRowVM, fmtMoney, PLAN_LABEL,
+} from "@/components/karate/AnnuityReceivableRow";
+import { AnnuityReceiveModal } from "@/components/karate/AnnuityReceiveModal";
+import { AnnuityStatementModal } from "@/components/karate/AnnuityStatementModal";
+import { LancarAnuidadeDojoModal } from "@/components/karate/LancarAnuidadeDojoModal";
+import { PixPaymentModal } from "@/components/karate/PixPaymentModal";
+import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
+import { WhatsAppChargeModal, WhatsAppChargeTarget } from "@/components/karate/WhatsAppChargeModal";
 
 // G2 (migration 226) — plano de anuidade REAL do dojô. "Modelo"
 // (affiliation_model) foi removido de TODA superfície de leitura em
@@ -93,7 +119,6 @@ type OverflowMenuItem =
   | { type: "action"; key: string; label: string; icon: string; onPress: () => void; destructive?: boolean; disabled?: boolean }
   | { type: "divider"; key: string };
 const fmtDate = (iso: string | null) => { if (!iso) return null; const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }); };
-const fmtMoney = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Máscara leve de CEP só para exibição (não altera o dado).
 const fmtCep = (v: string | null | undefined): string | null => {
@@ -128,56 +153,22 @@ const COUNT_LABEL: Record<string, string> = {
   connections: "conexões",
 };
 
-// Máscara de data dd/mm/aaaa para os modais de anuidade.
-const onlyD = (v: string) => (v || "").replace(/\D/g, "");
-function maskDate(v: string) {
-  const d = onlyD(v).slice(0, 8);
-  if (d.length > 4) return d.replace(/(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
-  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "$1/$2");
-  return d;
-}
-function brToISO(v: string): string | null {
-  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!m) return null;
-  const [, dd, mm, yyyy] = m;
-  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-  if (d.getFullYear() !== Number(yyyy) || d.getMonth() !== Number(mm) - 1 || d.getDate() !== Number(dd)) return null;
-  return `${yyyy}-${mm}-${dd}`;
-}
+// dd/mm/aaaa <- YYYY-MM-DD — ainda usado por RosterUpdatesSection
+// (fmtEventValue, birth_date). A máscara/parse inversos (maskDate/
+// brToISO/todayBr) saíram daqui — eram só dos 3 modais locais de
+// anuidade removidos na F6 (ver AnnuityReceiveModal/DateInput.tsx, que
+// já têm o próprio par maskBrDate/parseBrDate).
 function isoToBr(v: string | null | undefined): string {
   if (!v) return "";
   const m = String(v).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
-function todayBr(): string {
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${now.getFullYear()}`;
-}
 
-// Tipo defensivo: a entrada do annuity_history PODE trazer o id da anuidade
-// (annuity_history_id / id). Sem id não dá para editar/estornar; nesse caso
-// as ações simplesmente não aparecem para aquela linha.
-type AnnuityRow = DojoDetail["annuity_history"][number] & {
-  annuity_history_id?: string | null;
-  id?: string | null;
-  due_date?: string | null;
-};
-const annuityId = (a: AnnuityRow): string | null => a.annuity_history_id || a.id || null;
-
-// Alias local para o tipo único de services/karateApi.ts (evita duplicar o
-// literal — ver AnnuityPaymentMethod / PR #408 no aura-backend).
-type PaymentMethod = AnnuityPaymentMethod;
-const PM_LABELS: { value: PaymentMethod; label: string }[] = [
-  { value: "pix", label: "Pix" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "credito_cbkt", label: "Crédito CBKT" },
-  { value: "credito_exame", label: "Crédito exame/curso" },
-  { value: "boleto", label: "Boleto" },
-  { value: "outro", label: "Outro" },
-];
+// F6 — annuity_history / AnnuityRow (tipo local) e annuityId() saíram
+// daqui: a seção de Anuidades agora busca DojoAnnuity[] via
+// listDojoAnnuities(dojo_id=...) — o mesmo shape/rota da aba Anuidades do
+// hub financeiro — em vez do array legado data.annuity_history (fonte
+// paralela e desatualizada, com o bug do badge "Inativo" fixo).
 
 export default function DojoDetailScreen() {
   const { dojoId } = useLocalSearchParams<{ dojoId: string }>();
@@ -248,15 +239,25 @@ export default function DojoDetailScreen() {
   // modal mostra; histErr guarda erro da exclusão para exibir inline + retry.
   const [histStep, setHistStep] = useState<"choice" | "confirm">("choice");
   const [histErr, setHistErr] = useState<string | null>(null);
-  const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);
-  // F4.5 — erro de PATCH header (ex.: AMOUNT_BELOW_PAID) exibido DENTRO
-  // do AnnuityEditModal, sem fechar o modal nem apagar o valor digitado.
-  const [annuityEditErr, setAnnuityEditErr] = useState<string | null>(null);
 
-  // DJ4: modal "Registrar pagamento" (anuidade existente não paga)
-  const [payModal, setPayModal] = useState<AnnuityRow | null>(null);
-  // DJ4: modal "Lançar pagamento" (período novo já pago)
-  const [registerModal, setRegisterModal] = useState(false);
+  // ── F6 — Anuidades do dojô como recebível (fonte: listDojoAnnuities com
+  // dojo_id, mesmo shape da aba Anuidades do hub financeiro) ──────────────
+  // Cada open* fecha qualquer OUTRO modal transiente antes de abrir o seu —
+  // mesma disciplina de AnnuitiesTable.tsx (nunca dois <Modal> montados ao
+  // mesmo tempo, armadilha Modal-dentro-de-Modal no RN Web).
+  const [annuities, setAnnuities] = useState<AnnuityRowVM[]>([]);
+  const [annuitiesLoading, setAnnuitiesLoading] = useState(true);
+  const [annuitiesError, setAnnuitiesError] = useState(false);
+  const [expandedAnnuityKey, setExpandedAnnuityKey] = useState<string | null>(null);
+  const [voidAnnuityKey, setVoidAnnuityKey] = useState<string | null>(null);
+  const [voidingAnnuity, setVoidingAnnuity] = useState(false);
+  const [receiveAnnuityKey, setReceiveAnnuityKey] = useState<string | null>(null);
+  const [statementAnnuityKey, setStatementAnnuityKey] = useState<string | null>(null);
+  const [editAnnuityKey, setEditAnnuityKey] = useState<string | null>(null);
+  const [chargeAnnuityOpen, setChargeAnnuityOpen] = useState(false);
+  const [pixAnnuityTarget, setPixAnnuityTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
+  const [emailAnnuityTargets, setEmailAnnuityTargets] = useState<EmailBatchTarget[] | null>(null);
+  const [waAnnuityTarget, setWaAnnuityTarget] = useState<WhatsAppChargeTarget | null>(null);
 
   // Toast inline — padrão das fichas Shoji. Item 3 (toggle ativo/inativo do
   // roster): ganhou um 2º parâmetro opcional `undo` (mesmo formato do toast
@@ -518,6 +519,164 @@ export default function DojoDetailScreen() {
       Alert.alert("Não foi possível abrir", "Copie o link e envie manualmente.")
     );
   }, [rosterValidation]);
+
+  // ── F6 — Anuidades do dojô como recebível ────────────────────────────
+  // Busca própria (independente do GET de detalhe): listDojoAnnuities com
+  // dojo_id filtra a MESMA rota/shape que a aba Anuidades do hub financeiro
+  // usa (GET /financial/annuities/dojos), sem passar `year` — mostra o
+  // histórico inteiro do dojô (paridade com o antigo data.annuity_history
+  // que esta seção substitui). pageSize generoso: um único dojô não deve
+  // ter mais que um punhado de anuidades lançadas ao longo dos anos.
+  const loadAnnuities = useCallback(() => {
+    if (!dojoId) return;
+    setAnnuitiesLoading(true); setAnnuitiesError(false);
+    karateApi.listDojoAnnuities(federationId, { dojo_id: dojoId, pageSize: 100 })
+      .then((res) => setAnnuities(res.data.map((it) => toRowVM("dojo", it))))
+      .catch(() => setAnnuitiesError(true))
+      .finally(() => setAnnuitiesLoading(false));
+  }, [federationId, dojoId]);
+  useEffect(() => { loadAnnuities(); }, [loadAnnuities]);
+
+  // Identificador estável de linha PARA ESTA TELA: ao contrário do hub (uma
+  // linha por dojô, `key`=dojo_id é único), aqui um único dojô pode aparecer
+  // em VÁRIAS linhas (uma por temporada/competência já lançada) — todas com
+  // o MESMO dojo_id. `annuityId` (annuity_history_id) é o identificador real
+  // de cada lançamento; referencePeriod é o fallback só para o caso raro de
+  // uma linha sem id (nunca deveria acontecer, mas evita colisão em runtime).
+  const annuityKey = useCallback((vm: AnnuityRowVM): string => vm.rowId || vm.referencePeriod, []);
+
+  // Mini-KPIs do dojô (Previsto/Recebido/Saldo/Atrasado) — GET .../summary
+  // NÃO aceita dojo_id (só a listagem aceita), então os KPIs são DERIVADOS
+  // desta MESMA lista filtrada, com a fórmula IDÊNTICA à do summary (pra
+  // nunca divergir do hub): previsto = Σ total; recebido = Σ paid_total;
+  // saldo = Σ (amount - amount_paid) sobre parcelas não pagas; atrasado =
+  // idem, restrito a due_date <= hoje.
+  const annuityKpis = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    let previsto = 0, recebido = 0, saldo = 0, atrasado = 0;
+    for (const vm of annuities) {
+      previsto += vm.total;
+      recebido += vm.paidTotal;
+      for (const inst of vm.installments) {
+        if (inst.status === "paid") continue;
+        const open = Math.max(0, (Number(inst.amount) || 0) - (Number(inst.amount_paid) || 0));
+        saldo += open;
+        if (inst.due_date && inst.due_date <= todayIso) atrasado += open;
+      }
+    }
+    return { previsto, recebido, saldo, atrasado };
+  }, [annuities]);
+
+  // Cada open* fecha qualquer OUTRO modal transiente antes de abrir o seu —
+  // nunca dois <Modal> montados ao mesmo tempo (RN Web renderiza o 2º atrás
+  // do 1º, vira no-op silencioso; já mordeu este produto várias vezes).
+  const closeAllAnnuityModals = useCallback(() => {
+    setReceiveAnnuityKey(null);
+    setStatementAnnuityKey(null);
+    setEditAnnuityKey(null);
+    setChargeAnnuityOpen(false);
+    setVoidAnnuityKey(null);
+    setPixAnnuityTarget(null);
+    setEmailAnnuityTargets(null);
+  }, []);
+  // Extrato é visualização (com raras edições inline dentro do próprio
+  // AnnuityStatementModal) — fica aberto pra qualquer papel que acesse esta
+  // tela, mesmo padrão de "ver" vs. "mudar" já usado no roster (nome
+  // clicável abre a ficha pra qualquer um; graduação exige canManage).
+  const openStatementAnnuity = useCallback((key: string) => { closeAllAnnuityModals(); setStatementAnnuityKey(key); }, [closeAllAnnuityModals]);
+  // Receber/Editar/Lançar mudam dinheiro ou o lançamento — mesmo gate
+  // canManage das demais ações administrativas desta tela.
+  const openReceiveAnnuity = useCallback((key: string) => { if (!canManage) return; closeAllAnnuityModals(); setReceiveAnnuityKey(key); }, [canManage, closeAllAnnuityModals]);
+  const openEditAnnuity = useCallback((key: string) => { if (!canManage) return; closeAllAnnuityModals(); setEditAnnuityKey(key); }, [canManage, closeAllAnnuityModals]);
+  const openChargeAnnuity = useCallback(() => { if (!canManage) return; closeAllAnnuityModals(); setChargeAnnuityOpen(true); }, [canManage, closeAllAnnuityModals]);
+  const requestVoidAnnuity = useCallback((key: string) => { if (!canManage) return; closeAllAnnuityModals(); setVoidAnnuityKey(key); }, [canManage, closeAllAnnuityModals]);
+
+  // Sucesso de qualquer ação (receber, editar/remover baixa, editar/lançar
+  // anuidade) termina em REFETCH REAL da lista do dojô + dos KPIs (nunca
+  // patch otimista de dinheiro) — mesma disciplina de AnnuitiesTable.tsx.
+  const onAnnuityMutated = useCallback(() => { loadAnnuities(); }, [loadAnnuities]);
+
+  const handleReceiveAnnuitySuccess = useCallback((_result: AnnuityReceiveResult) => {
+    setReceiveAnnuityKey(null);
+    onAnnuityMutated();
+  }, [onAnnuityMutated]);
+
+  const handlePayInstallment = useCallback(async (instId: string, method: AnnuityPaymentMethod) => {
+    if (!canManage) { Alert.alert("Sem permissão", "Você não pode registrar pagamentos aqui."); throw new Error("forbidden"); }
+    try {
+      await karateApi.payInstallment(federationId, instId, { payment_method: method });
+      showToast("Pagamento registrado");
+      onAnnuityMutated();
+    } catch (e: any) {
+      Alert.alert("Não foi possível registrar", e?.message || "Tente novamente.");
+      throw e;
+    }
+  }, [federationId, onAnnuityMutated, showToast, canManage]);
+
+  const handleEditInstallment = useCallback(async (instId: string, body: { amount?: number; due_date?: string }) => {
+    if (!canManage) { Alert.alert("Sem permissão", "Você não pode editar parcelas aqui."); throw new Error("forbidden"); }
+    try {
+      await karateApi.updateInstallment(federationId, instId, body);
+      showToast("Parcela atualizada");
+      onAnnuityMutated();
+    } catch (e: any) {
+      Alert.alert("Não foi possível editar", e?.message || "Tente novamente.");
+      throw e;
+    }
+  }, [federationId, onAnnuityMutated, showToast, canManage]);
+
+  const handleVoidAnnuity = useCallback(async () => {
+    if (!voidAnnuityKey) return;
+    const vm = annuities.find((i) => annuityKey(i) === voidAnnuityKey);
+    if (!vm || !vm.rowId) { setVoidAnnuityKey(null); return; }
+    setVoidingAnnuity(true);
+    try {
+      await karateApi.voidAnnuityGeneric(federationId, vm.rowId);
+      showToast("Cobrança removida");
+      setVoidAnnuityKey(null);
+      onAnnuityMutated();
+    } catch (e: any) {
+      Alert.alert("Não foi possível remover", e?.message || "Tente novamente.");
+    } finally {
+      setVoidingAnnuity(false);
+    }
+  }, [voidAnnuityKey, annuities, annuityKey, federationId, onAnnuityMutated, showToast]);
+
+  const openEmailForInstallment = useCallback((vm: AnnuityRowVM, instId: string) => {
+    const inst = vm.installments.find((i) => i.id === instId);
+    if (!inst) return;
+    closeAllAnnuityModals();
+    setEmailAnnuityTargets([{
+      key: `${vm.key}-${inst.id}`,
+      instId: inst.id,
+      name: vm.name,
+      whatsapp: vm.whatsapp,
+      amount: inst.amount,
+      referencePeriod: vm.referencePeriod,
+      dueDate: inst.due_date,
+      status: vm.status as AnnuityStatus,
+    }]);
+  }, [closeAllAnnuityModals]);
+
+  const receiveAnnuityVm = annuities.find((i) => annuityKey(i) === receiveAnnuityKey) || null;
+  const statementAnnuityVm = annuities.find((i) => annuityKey(i) === statementAnnuityKey) || null;
+  const editAnnuityVm = annuities.find((i) => annuityKey(i) === editAnnuityKey) || null;
+  // Shape DojoAnnuity mínimo pra alimentar LancarAnuidadeDojoModal
+  // (mode="edit") a partir da própria linha já carregada (sem fetch extra) —
+  // mesmo padrão de AnnuitiesTable.tsx (editAnnuityVm lá).
+  const editAnnuityDojoShape: DojoAnnuity | null = editAnnuityVm ? {
+    dojo_id: editAnnuityVm.key,
+    dojo_name: editAnnuityVm.name,
+    reference_period: editAnnuityVm.referencePeriod,
+    amount: editAnnuityVm.amount,
+    due_date: editAnnuityVm.dueDate || "",
+    paid_at: null,
+    status: editAnnuityVm.status as AnnuityStatus,
+    plan: editAnnuityVm.plan,
+    installments: editAnnuityVm.installments,
+    paid_total: editAnnuityVm.paidTotal,
+    total: editAnnuityVm.total,
+  } : null;
 
   // ── Suspender / Reativar ─────────────────────────────────────────
   // b1: o backend agora manda status "inactive" (baseado em is_active) em vez
@@ -1099,66 +1258,96 @@ export default function DojoDetailScreen() {
         {/* F0 (Canal B): link fixo do Portal do Dojô sem Aura — gerar, copiar (uma vez) e revogar */}
         <DojoPortalLinkCard federationId={federationId} dojoId={dojoId!} />
 
-        {/* DJ4: seção Anuidades com "Lançar pagamento" no topo */}
+        {/* F6 (26/07/2026) — Anuidades do dojô como recebível DE VERDADE,
+            reusando os MESMOS componentes da aba Anuidades do hub financeiro
+            (AnnuityReceivableRow + AnnuityReceiveModal/AnnuityStatementModal/
+            LancarAnuidadeDojoModal) — nunca uma 2ª implementação paralela.
+            Substitui o card local antigo (3 modais próprios, API legada
+            payAnnuity/registerAnnuityPayment, fonte data.annuity_history e o
+            bug do badge "Inativo" fixo via ShojiBadge dojoStatus=a.status). */}
         <Card style={{ marginTop: SP[6] }}>
           <View style={styles.annuityHead}>
-            <SectionHead title="Anuidades" sub="Editar ou registrar pagamentos" />
-            <TouchableOpacity
-              style={styles.launchBtn}
-              onPress={() => setRegisterModal(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Lançar pagamento de anuidade"
-            >
-              <Icon name="add" size={13} color={C.ink} />
-              <Text style={styles.launchBtnTxt}>Lançar pagamento</Text>
-            </TouchableOpacity>
+            <SectionHead title="Anuidades" sub="Recebível do dojô — devido, recebido e saldo" />
+            {canManage ? (
+              <TouchableOpacity
+                style={styles.launchBtn}
+                onPress={openChargeAnnuity}
+                accessibilityRole="button"
+                accessibilityLabel="Lançar anuidade"
+              >
+                <Icon name="add" size={13} color={C.ink} />
+                <Text style={styles.launchBtnTxt}>Lançar anuidade</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
-          {data.annuity_history.length === 0 ? <Body muted>Nenhuma anuidade registrada.</Body>
-            : (data.annuity_history as AnnuityRow[]).map((a, i) => {
-              const id = annuityId(a);
-              const canActUnpaid = !a.paid_at;
-              return (
-                <View key={id || i} style={[styles.annRow, i === data.annuity_history.length - 1 && styles.noBorder]}>
-                  <Mono style={{ fontSize: 14, color: C.ink, width: 56 }}>{a.reference_period}</Mono>
-                  <View style={{ flex: 1 }}>
-                    {a.paid_at ? <Text style={styles.paid}>Pago em {fmtDate(a.paid_at)}</Text> : <Text style={styles.due}>Em aberto</Text>}
-                  </View>
-                  <Mono style={{ fontSize: 13.5, color: C.ink2 }}>{fmtMoney(a.amount)}</Mono>
-                  <ShojiBadge dojoStatus={a.status} />
-                  {id ? (
-                    <View style={styles.annActions}>
-                      {/* DJ4: Registrar pagamento — só se não pago */}
-                      {canActUnpaid ? (
-                        <TouchableOpacity
-                          style={[styles.annBtn, styles.annBtnPay]}
-                          disabled={busy}
-                          onPress={() => setPayModal(a)}
-                          accessibilityLabel="Registrar pagamento"
-                        >
-                          <Icon name="checkmark" size={13} color={P.ok ?? "#2d8a4e"} />
-                        </TouchableOpacity>
-                      ) : null}
-                      {/* F4.5 (23/07/2026, PR #432 aura-backend) — Editar
-                          agora é SEM lock de status: antes só aparecia pra
-                          não-paga (canActUnpaid), hoje aparece sempre — o
-                          backend aceita editar valor/competência de
-                          qualquer anuidade, inclusive já paga (422
-                          AMOUNT_BELOW_PAID se o novo valor ficar abaixo do
-                          já recebido, tratado no onSave abaixo). Edição de
-                          plano/parcelas por vencimento fica no editor rico
-                          da aba Anuidades do hub financeiro
-                          (AnnuitiesTable.tsx, que já tem installments/plan
-                          carregados) — aqui fica o editor leve de
-                          valor/competência, coerente com o resto desta
-                          tela de detalhe do dojô. */}
-                      <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
-                        <Icon name="edit" size={13} color={C.ink} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
+
+          {annuitiesError ? (
+            <KarateErrorState
+              title="Não foi possível carregar as anuidades"
+              message="Verifique sua conexão e tente novamente."
+              onRetry={loadAnnuities}
+            />
+          ) : annuitiesLoading ? (
+            <View>
+              {[1, 2].map((k) => <Skeleton key={k} height={40} style={{ marginBottom: 8 }} />)}
+            </View>
+          ) : (
+            <>
+              {annuities.length > 0 ? (
+                <KpiBand
+                  items={[
+                    { label: "Previsto", value: fmtMoney(annuityKpis.previsto) },
+                    { label: "Recebido", value: fmtMoney(annuityKpis.recebido) },
+                    { label: "Saldo", value: fmtMoney(annuityKpis.saldo) },
+                  ]}
+                  style={{ marginBottom: SP[5] }}
+                />
+              ) : null}
+
+              {annuities.length === 0 ? (
+                <KarateEmptyState
+                  icon="receipt-outline"
+                  title="Nenhuma anuidade lançada"
+                  subtitle={canManage ? "Lance a anuidade da temporada para começar a receber deste dojô." : "Nenhuma anuidade registrada para este dojô ainda."}
+                />
+              ) : (
+                annuities.map((vm) => {
+                  const key = annuityKey(vm);
+                  return (
+                    <AnnuityReceivableRow
+                      key={key}
+                      vm={vm}
+                      seg="dojo"
+                      wide
+                      federationId={federationId}
+                      selected={false}
+                      selectable={false}
+                      expanded={expandedAnnuityKey === key}
+                      onToggleSelect={() => {}}
+                      onToggleExpand={() => setExpandedAnnuityKey((k) => (k === key ? null : key))}
+                      onPay={handlePayInstallment}
+                      onPix={(instId, amount, label) => {
+                        if (!canManage) return;
+                        closeAllAnnuityModals();
+                        setPixAnnuityTarget({ installmentId: instId, amount, label: `${vm.name} — ${label}` });
+                      }}
+                      onEdit={handleEditInstallment}
+                      onSendEmail={(instId) => openEmailForInstallment(vm, instId)}
+                      onVoid={() => requestVoidAnnuity(key)}
+                      onLaunch={openChargeAnnuity}
+                      voidConfirming={voidAnnuityKey === key}
+                      onVoidConfirm={handleVoidAnnuity}
+                      onVoidCancel={() => setVoidAnnuityKey(null)}
+                      voiding={voidingAnnuity}
+                      onReceive={() => openReceiveAnnuity(key)}
+                      onStatement={() => openStatementAnnuity(key)}
+                      onEditAnnuity={() => openEditAnnuity(key)}
+                    />
+                  );
+                })
+              )}
+            </>
+          )}
         </Card>
       </ScrollView>
 
@@ -1344,81 +1533,105 @@ export default function DojoDetailScreen() {
         </View>
       </Modal>
 
-      {/* Modal de edição de anuidade (valor / competência) — editor leve
-          desta tela; plano/parcelas por vencimento ficam no editor rico do
-          hub financeiro (ver comentário acima, na renderização do botão
-          "Editar"). SEM lock de status (PR #432) — funciona pra qualquer
-          anuidade, inclusive já paga; 422 AMOUNT_BELOW_PAID tratado abaixo
-          com mensagem clara, sem fechar o modal nem apagar o que foi
-          digitado (annuityEdit continua setado — o modal some só no
-          sucesso). */}
-      <AnnuityEditModal
-        visible={!!annuityEdit}
-        row={annuityEdit}
-        busy={busy}
-        errorText={annuityEditErr}
-        onClose={() => { setAnnuityEdit(null); setAnnuityEditErr(null); }}
-        onSave={async (payload) => {
-          const id = annuityEdit ? annuityId(annuityEdit) : null;
-          if (!id) return;
-          setBusy(true);
-          setAnnuityEditErr(null);
-          try {
-            await karateApi.updateAnnuity(federationId, dojoId!, id, payload);
-            setAnnuityEdit(null);
-            showToast("Anuidade atualizada");
-            load();
-          } catch (e: any) {
-            const code = e?.data?.code ?? null;
-            const paidTotal = e?.data?.details?.paid_total;
-            const msg = code === "AMOUNT_BELOW_PAID"
-              ? (paidTotal != null
-                  ? `O novo valor é menor que o já recebido nesta anuidade (${fmtMoney(paidTotal)}) — não é possível. Ajuste o valor para, no mínimo, esse total.`
-                  : "O novo valor é menor que o já recebido nesta anuidade — não é possível.")
-              : (e?.message || "Não foi possível salvar a anuidade.");
-            setAnnuityEditErr(msg);
-          } finally { setBusy(false); }
-        }}
-      />
+      {/* F6 — os 3 modais canônicos do recebível, TOP-LEVEL (irmãos dos
+          demais desta tela, nunca aninhados — RN Web renderiza o 2º <Modal>
+          atrás do 1º e vira no-op silencioso). Mesmo padrão "fecha um antes
+          de abrir outro" que AnnuitiesTable.tsx já usa (closeAllAnnuityModals
+          acima). Toda ação termina em refetch real (onAnnuityMutated /
+          loadAnnuities), nunca patch otimista de dinheiro. */}
+      {receiveAnnuityVm && receiveAnnuityVm.rowId && (
+        <AnnuityReceiveModal
+          visible={!!receiveAnnuityVm}
+          federationId={federationId}
+          annuityId={receiveAnnuityVm.rowId}
+          name={receiveAnnuityVm.name}
+          code={receiveAnnuityVm.code}
+          planLabel={receiveAnnuityVm.plan ? PLAN_LABEL[receiveAnnuityVm.plan] : null}
+          referencePeriod={receiveAnnuityVm.referencePeriod}
+          dueTotal={receiveAnnuityVm.total}
+          paidTotal={receiveAnnuityVm.paidTotal}
+          installments={receiveAnnuityVm.installments}
+          onClose={() => setReceiveAnnuityKey(null)}
+          onSuccess={handleReceiveAnnuitySuccess}
+        />
+      )}
 
-      {/* DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente */}
-      <PayAnnuityModal
-        visible={!!payModal}
-        row={payModal}
-        busy={busy}
-        onClose={() => setPayModal(null)}
-        onSave={async (payload) => {
-          const id = payModal ? annuityId(payModal) : null;
-          if (!id) return;
-          setBusy(true);
-          try {
-            await karateApi.payAnnuity(federationId, dojoId!, id, payload);
-            setPayModal(null);
-            showToast("Pagamento registrado");
-            load();
-          } catch (e: any) {
-            Alert.alert("Não foi possível registrar", e?.message || "Tente novamente.");
-          } finally { setBusy(false); }
-        }}
-      />
+      {statementAnnuityVm && statementAnnuityVm.rowId && (
+        <AnnuityStatementModal
+          visible={!!statementAnnuityVm}
+          federationId={federationId}
+          annuityId={statementAnnuityVm.rowId}
+          name={statementAnnuityVm.name}
+          onClose={() => setStatementAnnuityKey(null)}
+          onMutated={onAnnuityMutated}
+        />
+      )}
 
-      {/* DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia */}
-      <RegisterPaymentModal
-        visible={registerModal}
-        busy={busy}
-        onClose={() => setRegisterModal(false)}
-        onSave={async (payload) => {
-          setBusy(true);
-          try {
-            await karateApi.registerAnnuityPayment(federationId, dojoId!, payload);
-            setRegisterModal(false);
-            showToast("Pagamento lançado");
-            load();
-          } catch (e: any) {
-            Alert.alert("Não foi possível lançar", e?.message || "Tente novamente.");
-          } finally { setBusy(false); }
-        }}
-      />
+      {editAnnuityVm && editAnnuityVm.rowId && (
+        <LancarAnuidadeDojoModal
+          visible={!!editAnnuityVm}
+          mode="edit"
+          federationId={federationId}
+          dojoId={dojoId!}
+          dojoName={editAnnuityVm.name}
+          annuityId={editAnnuityVm.rowId}
+          annuity={editAnnuityDojoShape}
+          onClose={() => setEditAnnuityKey(null)}
+          onDone={() => { setEditAnnuityKey(null); onAnnuityMutated(); }}
+        />
+      )}
+
+      {/* Lançar cobrança nova (temporada sem anuidade ainda) — regressão a
+          vigiar: o antigo "Lançar pagamento" desta tela criava um período JÁ
+          PAGO (baixa fora do fluxo). Esse atalho saiu — quem precisar
+          registrar um pagamento retroativo já quitado agora faz em 2 passos:
+          lançar a cobrança aqui (charge) e, em seguida, dar baixa nela
+          (Receber). Não é regressão silenciosa: documentado no PR. */}
+      {chargeAnnuityOpen && (
+        <LancarAnuidadeDojoModal
+          visible={chargeAnnuityOpen}
+          mode="charge"
+          federationId={federationId}
+          dojoId={dojoId!}
+          dojoName={data.name}
+          onClose={() => setChargeAnnuityOpen(false)}
+          onDone={() => { setChargeAnnuityOpen(false); onAnnuityMutated(); }}
+        />
+      )}
+
+      {pixAnnuityTarget && (
+        <PixPaymentModal
+          visible={!!pixAnnuityTarget}
+          federationId={federationId}
+          target={{ installmentId: pixAnnuityTarget.installmentId }}
+          amount={pixAnnuityTarget.amount}
+          description={`Anuidade — ${pixAnnuityTarget.label}`}
+          isAdmin
+          onSuccess={() => { setPixAnnuityTarget(null); onAnnuityMutated(); }}
+          onClose={() => setPixAnnuityTarget(null)}
+        />
+      )}
+
+      {emailAnnuityTargets && (
+        <SendEmailBatchModal
+          visible={!!emailAnnuityTargets}
+          federationId={federationId}
+          targets={emailAnnuityTargets}
+          noPendingCount={0}
+          onClose={() => setEmailAnnuityTargets(null)}
+          onDone={() => { setEmailAnnuityTargets(null); onAnnuityMutated(); }}
+          onOpenWhatsApp={(t) => { setEmailAnnuityTargets(null); setWaAnnuityTarget(t); }}
+        />
+      )}
+
+      {waAnnuityTarget && (
+        <WhatsAppChargeModal
+          visible={!!waAnnuityTarget}
+          federationId={federationId}
+          target={waAnnuityTarget}
+          onClose={() => setWaAnnuityTarget(null)}
+        />
+      )}
 
       {/* Toast inline — pointerEvents box-none: o retangulo do toast não
           intercepta toques fora do texto/botão, mas o botão Desfazer (quando
@@ -1545,260 +1758,6 @@ function RosterUpdatesSection({ federationId, dojoId }: { federationId: string; 
         </Pressable>
       )}
     </Card>
-  );
-}
-
-// ── Modal de edição de anuidade (valor / vencimento / competência) ─────
-// F4.5 (23/07/2026, PR #432 aura-backend) — editor LEVE de valor/
-// competência, SEM lock de status (antes só editava anuidade não-paga).
-// `due_date` SAIU do payload: o contrato novo de PATCH .../dojos/:dojoId/
-// :annuityId não aceita mais vencimento de HEADER (o backend ignora
-// silenciosamente esse campo se enviado) — vencimento agora é POR PARCELA
-// via `installments[].due_date`, editável no editor rico da aba Anuidades
-// do hub financeiro (AnnuitiesTable.tsx → LancarAnuidadeDojoModal
-// mode="edit", que já carrega plan/installments da própria linha). Manter
-// dois editores de vencimento divergentes aqui seria repetir a família de
-// bug "duas fontes de verdade" — por isso este ficou só valor+competência.
-function AnnuityEditModal({ visible, row, busy, errorText, onClose, onSave }: {
-  visible: boolean;
-  row: AnnuityRow | null;
-  busy: boolean;
-  /** Erro de PATCH (ex.: AMOUNT_BELOW_PAID) — exibido inline, SEM fechar o
-   *  modal nem limpar os campos (o operador não perde o que digitou). */
-  errorText?: string | null;
-  onClose: () => void;
-  onSave: (payload: { amount?: number; reference_period?: string }) => void;
-}) {
-  const [amount, setAmount] = useState("");
-  const [ref, setRef] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible || !row) return;
-    setErr(null);
-    setAmount(row.amount != null ? String(row.amount).replace(".", ",") : "");
-    setRef(row.reference_period || "");
-  }, [visible, row]);
-
-  function submit() {
-    setErr(null);
-    const payload: { amount?: number; reference_period?: string } = {};
-    if (amount.trim()) {
-      const n = Number(amount.replace(/\./g, "").replace(",", "."));
-      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
-      payload.amount = n;
-    }
-    if (ref.trim()) payload.reference_period = ref.trim();
-    if (Object.keys(payload).length === 0) { setErr("Nada para alterar."); return; }
-    onSave(payload);
-  }
-
-  const shownErr = err || errorText || null;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
-        <View style={styles.modalCard}>
-          <Text style={styles.modalEyebrow}>空  FPKT · Editar anuidade</Text>
-          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
-
-          <Text style={styles.fieldLbl}>Valor (R$)</Text>
-          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
-          <Text style={styles.fieldHintDojo}>
-            Vencimento por parcela agora se edita na aba Anuidades (Financeiro).
-          </Text>
-
-          <Text style={styles.fieldLbl}>Competência</Text>
-          <TextInput style={styles.input} value={ref} onChangeText={setRef} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
-
-          {shownErr ? <Text style={styles.errTxt}>{shownErr}</Text> : null}
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
-              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Salvar</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
-              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ── DJ4: Modal "Registrar pagamento" — baixa manual de cobrança existente ──
-function PayAnnuityModal({ visible, row, busy, onClose, onSave }: {
-  visible: boolean;
-  row: AnnuityRow | null;
-  busy: boolean;
-  onClose: () => void;
-  onSave: (payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number }) => void;
-}) {
-  const [paidAt, setPaidAt] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("pix");
-  const [amount, setAmount] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    setErr(null);
-    setPaidAt(todayBr());
-    setMethod("pix");
-    setAmount(row?.amount != null ? String(row.amount).replace(".", ",") : "");
-  }, [visible, row]);
-
-  function submit() {
-    setErr(null);
-    const payload: { paid_at?: string; payment_method?: PaymentMethod; amount?: number } = {};
-    if (paidAt.trim()) {
-      const iso = brToISO(paidAt);
-      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
-      payload.paid_at = iso;
-    }
-    payload.payment_method = method;
-    if (amount.trim()) {
-      const n = Number(amount.replace(/\./g, "").replace(",", "."));
-      if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
-      payload.amount = n;
-    }
-    onSave(payload);
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
-        <View style={styles.modalCard}>
-          <Text style={styles.modalEyebrow}>空  FPKT · Registrar pagamento</Text>
-          <Text style={styles.modalTitle}>{row?.reference_period || "Anuidade"}<Text style={{ color: P.red }}>.</Text></Text>
-
-          <Text style={styles.fieldLbl}>Data do pagamento</Text>
-          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
-
-          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
-          <View style={styles.pmChips}>
-            {PM_LABELS.map((pm) => (
-              <TouchableOpacity
-                key={pm.value}
-                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
-                onPress={() => setMethod(pm.value)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: method === pm.value }}
-              >
-                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.fieldLbl}>Valor recebido (R$) <Text style={styles.fieldOptional}>opcional</Text></Text>
-          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
-
-          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
-              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Confirmar pagamento</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
-              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ── DJ4: Modal "Lançar pagamento" — período já pago sem cobrança prévia ────
-function RegisterPaymentModal({ visible, busy, onClose, onSave }: {
-  visible: boolean;
-  busy: boolean;
-  onClose: () => void;
-  onSave: (payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod }) => void;
-}) {
-  const [period, setPeriod] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paidAt, setPaidAt] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("pix");
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    setErr(null);
-    setPeriod("");
-    setAmount("");
-    setPaidAt(todayBr());
-    setMethod("pix");
-  }, [visible]);
-
-  function submit() {
-    setErr(null);
-    if (!period.trim()) { setErr("Informe a competência (ex.: 2026)."); return; }
-    const n = Number(amount.replace(/\./g, "").replace(",", "."));
-    if (!amount.trim() || !isFinite(n) || n <= 0) { setErr("Informe o valor."); return; }
-    const payload: { reference_period: string; amount: number; paid_at?: string; payment_method?: PaymentMethod } = {
-      reference_period: period.trim(),
-      amount: n,
-      payment_method: method,
-    };
-    if (paidAt.trim()) {
-      const iso = brToISO(paidAt);
-      if (!iso) { setErr("Data inválida (dd/mm/aaaa)."); return; }
-      payload.paid_at = iso;
-    }
-    onSave(payload);
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && onClose()} />
-        <View style={styles.modalCard}>
-          <Text style={styles.modalEyebrow}>空  FPKT · Lançar pagamento</Text>
-          <Text style={styles.modalTitle}>Período já pago<Text style={{ color: P.red }}>.</Text></Text>
-          <Text style={styles.modalBody}>
-            Use para registrar um pagamento recebido via PIX estática quando não havia cobrança prévia no sistema.
-          </Text>
-
-          <Text style={styles.fieldLbl}>Competência <Text style={styles.fieldRequired}>*</Text></Text>
-          <TextInput style={styles.input} value={period} onChangeText={setPeriod} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
-
-          <Text style={styles.fieldLbl}>Valor (R$) <Text style={styles.fieldRequired}>*</Text></Text>
-          <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
-
-          <Text style={styles.fieldLbl}>Data do pagamento</Text>
-          <TextInput style={[styles.input, styles.mono]} value={paidAt} onChangeText={(v) => setPaidAt(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Data do pagamento" />
-
-          <Text style={styles.fieldLbl}>Forma de pagamento</Text>
-          <View style={styles.pmChips}>
-            {PM_LABELS.map((pm) => (
-              <TouchableOpacity
-                key={pm.value}
-                style={[styles.pmChip, method === pm.value && styles.pmChipActive]}
-                onPress={() => setMethod(pm.value)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: method === pm.value }}
-              >
-                <Text style={[styles.pmChipTxt, method === pm.value && styles.pmChipTxtActive]}>{pm.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
-              {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Lançar pagamento</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={onClose}>
-              <Text style={styles.ghostBtnTxt}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -1940,9 +1899,6 @@ const styles = StyleSheet.create({
   pagerBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface } as ViewStyle,
   pagerBtnOff: { opacity: 0.4 } as ViewStyle,
   pagerBtnTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink } as TextStyle,
-  annRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
-  paid: { fontFamily: F.body, fontSize: 11.5, color: C.ok } as TextStyle,
-  due: { fontFamily: F.body, fontSize: 11.5, color: C.alert } as TextStyle,
 
   // Banner de validação do quadro (pending) — icon + título + link/ações.
   validationRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
@@ -1970,26 +1926,10 @@ const styles = StyleSheet.create({
   praticantesSegMuted: { color: C.ink3, fontWeight: "600" } as TextStyle,
   praticantesSegDot: { color: C.ink4 } as TextStyle,
 
-  // DJ4: cabeçalho da seção anuidades com botão "Lançar pagamento"
+  // Cabeçalho da seção Anuidades (F6) — título + botão "Lançar anuidade".
   annuityHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 } as ViewStyle,
   launchBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 12, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
   launchBtnTxt: { fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: C.ink } as TextStyle,
-
-  // Ações de anuidade (linha)
-  annActions: { flexDirection: "row", gap: 6, marginLeft: 4 } as ViewStyle,
-  annBtn: { width: 30, height: 30, borderRadius: R.sm, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  annBtnPay: { borderColor: "#b7e0c2", backgroundColor: "#f0faf2" } as ViewStyle,
-
-  // Chips de forma de pagamento
-  pmChips: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 } as ViewStyle,
-  pmChip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2 } as ViewStyle,
-  pmChipActive: { borderColor: P.ink, backgroundColor: P.ink } as ViewStyle,
-  pmChipTxt: { fontFamily: F.body, fontSize: 13, color: C.ink } as TextStyle,
-  pmChipTxtActive: { color: "#fdf8f2" } as TextStyle,
-
-  // Campo labels
-  fieldOptional: { fontWeight: "400", color: P.ink3, fontFamily: F.body } as TextStyle,
-  fieldRequired: { color: P.red, fontFamily: F.body } as TextStyle,
 
   // Botão kebab do header (Item 2 — abre o menu de overflow)
   kebabBtn: { width: 38, height: 38, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
@@ -2016,12 +1956,6 @@ const styles = StyleSheet.create({
   ghostBtn: { paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, alignItems: "center" } as ViewStyle,
   ghostBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
 
-  // Campos dos modais de anuidade
-  fieldLbl: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginTop: 12, marginBottom: 5 } as TextStyle,
-  input: { fontFamily: F.body, fontSize: 14, color: P.ink, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 11 } as TextStyle,
-  mono: { fontFamily: F.mono, letterSpacing: 0.5 } as TextStyle,
-  errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, marginTop: 12 } as TextStyle,
-  fieldHintDojo: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: -2, marginBottom: 4 } as TextStyle,
   // fix/karate-excluir-dojo: erro inline da etapa "confirm" do HAS_HISTORY
   // (mesma família visual do errBox de RedistribuirPraticantesModal.tsx).
   errBoxInline: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11, marginTop: 14 } as ViewStyle,
