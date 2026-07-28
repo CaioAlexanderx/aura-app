@@ -193,6 +193,12 @@ export const karateCompetitionsApi = {
   closeCompetition: (federationId: string, cid: string): Promise<{ id: string; status: CompetitionStatus }> =>
     request(`/federation/${federationId}/competitions/${cid}/close`, { method: "POST", body: {} }),
 
+  // Exclusão definitiva — DELETE /federation/:id/competitions/:cid (Aura-backend #294).
+  // Backend só permite em status 'draft' ou 'cancelled' (409 CONFLICT caso contrário);
+  // a cascata (categorias/inscrições/chaveamento/resultados) é feita no backend.
+  deleteCompetition: (federationId: string, cid: string): Promise<{ ok: boolean; id: string }> =>
+    request(`/federation/${federationId}/competitions/${cid}`, { method: "DELETE" }),
+
   // ── Categorias ──────────────────────────────────────────
   listCategories: (federationId: string, cid: string): Promise<Category[]> =>
     request(`/federation/${federationId}/competitions/${cid}/categories`),

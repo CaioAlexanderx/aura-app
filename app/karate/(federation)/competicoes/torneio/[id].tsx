@@ -137,6 +137,7 @@ export default function TorneioDetalhe() {
   // F7.4: encerrar (open -> done) e cancelar (draft/open -> cancelled) o campeonato.
   const [closing, setClosing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // ── Workspace: rail (categorias + Visão geral/Ranking geral) + abas ──
   const [selection, setSelection] = useState<RailSelection>({ kind: "overview" });
@@ -252,6 +253,29 @@ export default function TorneioDetalhe() {
       notify("Não foi possível cancelar", e?.message ?? "Tente novamente.");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // Exclusão definitiva — só habilitada em draft/cancelled (guarda do backend,
+  // #294). Campeonato aberto/encerrado precisa ser "Cancelado" antes. Sai da
+  // tela após excluir (o registro deixa de existir).
+  const handleDelete = async () => {
+    const ok = await confirmAsync({
+      title: "Excluir campeonato?",
+      message:
+        "O campeonato e tudo que estiver vinculado a ele (categorias, inscrições, chaveamento e resultados) serão apagados definitivamente. Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir campeonato",
+      destructive: true,
+    });
+    if (!ok || !comp) return;
+    setDeleting(true);
+    try {
+      await karateCompetitionsApi.deleteCompetition(federationId, cid);
+      notify("Campeonato excluído", "O campeonato foi removido definitivamente.");
+      router.replace("/karate/competicoes");
+    } catch (e: any) {
+      notify("Não foi possível excluir", e?.message ?? "Tente novamente.");
+      setDeleting(false);
     }
   };
 
@@ -530,6 +554,16 @@ export default function TorneioDetalhe() {
               loading={cancelling}
               disabled={closing || cancelling}
               onPress={handleCancel}
+            />
+          )}
+          {(comp.status === "draft" || comp.status === "cancelled") && (
+            <KarateButton
+              label={deleting ? "Excluindo..." : "Excluir"}
+              variant="ghost"
+              size="sm"
+              loading={deleting}
+              disabled={deleting}
+              onPress={handleDelete}
             />
           )}
         </View>
