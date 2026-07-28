@@ -811,6 +811,94 @@ export interface AnnuityPaymentsResponse {
   data: AnnuityPaymentLedgerEntry[];
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Fase F4.5 — edição/remoção de baixa + edição de header da anuidade
+// independente do status (decisão do Caio, 23/07/2026; PR #431 editar/
+// remover baixa + PR #432 editar header, aura-backend, ambos já
+// mergeados e no ar). Contrato lido direto de src/routes/karateAnnuities.js
+// (PATCH/DELETE .../payments/:paymentId) e src/services/
+// karateAnnuityLedger.js (recomputeAnnuityFromLedger — MESMO motor de
+// rebuild global usado pelo PATCH de header, ver AnnuityUpdateInput acima).
+// ─────────────────────────────────────────────────────────────────
+
+/** Shape de `installments[]` nas respostas de PATCH header / PATCH baixa /
+ *  DELETE baixa (mapInstallmentForResponse no backend) — DIFERENTE do
+ *  shape de `AnnuityInstallment` usado pela listagem (GET
+ *  /annuities/dojos|cpf): aqui vem `installment_id` (não `id`) e vem
+ *  `kind`/`payment_method` junto. Não misturar os dois tipos. */
+export interface AnnuityInstallmentLedgerView {
+  installment_id: string;
+  seq: number;
+  kind: string;
+  amount: number;
+  amount_paid: number;
+  status: "pending" | "partial" | "paid";
+  due_date: string | null;
+  paid_at: string | null;
+  payment_method: string | null;
+  transaction_id: string | null;
+}
+
+/** Rollup mínimo de header devolvido pelas rotas de baixa (PATCH/DELETE
+ *  .../payments/:paymentId) — bem mais enxuto que AnnuityReceiveHeader (só
+ *  os 4 campos que o front realmente usa pra refletir o pós-mutação). */
+export interface AnnuityPaymentMutationHeader {
+  amount: number;
+  status: string;
+  due_date: string | null;
+  paid_at: string | null;
+}
+
+/** Body de PATCH /financial/annuities/:annuityId/payments/:paymentId
+ *  (corrige uma baixa já lançada). Todos os campos opcionais, ao menos um
+ *  obrigatório; `payment_method: null` explícito limpa o campo. 422
+ *  AMOUNT_EXCEEDS_BALANCE se o novo total recebido ultrapassar o devido. */
+export type AnnuityPaymentUpdateInput = Partial<{
+  amount: number;
+  /** 'YYYY-MM-DD' (o backend converte pra meio-dia horário de Brasília) ou
+   *  ISO completo — mesma convenção de AnnuityReceiveInput.paid_at. */
+  paid_at: string;
+  payment_method: AnnuityPaymentMethod | null;
+}>;
+
+export interface AnnuityPaymentEditResult {
+  annuity_id: string;
+  payment_id: string;
+  header: AnnuityPaymentMutationHeader | null;
+  installments: AnnuityInstallmentLedgerView[];
+}
+
+/** Resposta de DELETE .../payments/:paymentId — remove a baixa lógica
+ *  inteira (todas as linhas do mesmo `operation_id`, quando presente). */
+export interface AnnuityPaymentDeleteResult {
+  annuity_id: string;
+  /** Pode ter mais de 1 linha — DELETE remove o GRUPO inteiro (mesmo
+   *  operation_id) quando a baixa era um split FIFO de uma única baixa
+   *  livre sobre mais de uma parcela; `removed_group` sinaliza esse caso. */
+  deleted: { id: string; installment_id: string; amount: number }[];
+  removed_group: boolean;
+  header: AnnuityPaymentMutationHeader | null;
+  installments: AnnuityInstallmentLedgerView[];
+}
+
+/** Resposta de PATCH /financial/annuities/dojos/:dojoId/:annuityId (edição
+ *  de header) — shape PRÓPRIO dessa rota, não um DojoAnnuity (não tem
+ *  dojo_name/whatsapp/etc — quem chama já tem esses campos da linha que
+ *  originou a edição). */
+export interface AnnuityHeaderUpdateResult {
+  annuity_id: string;
+  dojo_id: string;
+  reference_period: string;
+  plan: AnnuityPlan | null;
+  amount: number | null;
+  due_date: string | null;
+  status: string | null;
+  paid_at: string | null;
+  installments: AnnuityInstallmentLedgerView[];
+  total: number;
+  paid_total: number;
+}
+
 /** Tabela de anuidades por PLANO (Fase F2) — karate_annual_fees com
  *  plan/due_months (migration 222). Coexiste com o shape legado por
  *  size_tier (AnnualFee/AnnualFeeInput acima, usados pela vigência antiga). */
@@ -1103,11 +1191,27 @@ export interface AnnuityVoidBatchResult {
   errors: AnnuityVoidBatchError[];
 }
 
+/** Body de PATCH /financial/annuities/dojos/:dojoId/:annuityId (edicao de
+ *  header -- PR #432, aura-backend, ja mergeado/no ar). Precedencia quando
+ *  mais de um campo e enviado: `installments` explicito > `plan` (re-gera
+ *  as parcelas pela fee vigente) > `amount` sozinho (redistribui
+ *  proporcionalmente sobre as parcelas 'anuidade' existentes) >
+ *  `reference_period` sozinho. `status`/`due_date` NAO existem mais nesse
+ *  contrato (o backend ignora silenciosamente esses campos se enviados) --
+ *  vencimento agora e por PARCELA, via `installments[].due_date`. SEM lock
+ *  de status (Caio, 23/07/2026): funciona em qualquer status, inclusive
+ *  paga -- 422 AMOUNT_BELOW_PAID se o novo total ficar menor que o ja
+ *  recebido. */
 export type AnnuityUpdateInput = Partial<{
   amount: number;
-  due_date: string;
+  plan: AnnuityPlan;
   reference_period: string;
-  status: AnnuityStatus;
+  /** Reestrutura as parcelas 'anuidade' (kind !== 'filiacao', convencao
+   *  seq===0 = filiacao, ja usada em AnnuityReceiveModal). Precisa listar
+   *  TODAS as parcelas 'anuidade' que devem sobreviver -- o backend casa
+   *  por `seq`; o que nao aparece aqui e removido (ledger realocado pro
+   *  seq ancora antes de apagar a parcela). */
+  installments: { seq: number; due_date: string; amount: number }[];
 }>;
 
 // Resposta real de POST .../dojos/:dojoId/:annuityId/void (karateAnnuities.js).
@@ -2466,13 +2570,16 @@ export const karateApi = {
       body: { amount },
     }),
 
-  /** Edita uma anuidade de dojô já lançada (valor, vencimento, período, status). */
+  /** Edita uma anuidade de dojô já lançada (valor/plano/período/parcelas).
+   *  SEM lock de status (PR #432) — funciona em qualquer status, inclusive
+   *  já paga. Ver AnnuityUpdateInput pra precedência dos campos e
+   *  AnnuityHeaderUpdateResult pro shape da resposta (NÃO é um DojoAnnuity). */
   updateAnnuity: (
     federationId: string,
     dojoId: string,
     annuityId: string,
     payload: AnnuityUpdateInput
-  ): Promise<DojoAnnuity> =>
+  ): Promise<AnnuityHeaderUpdateResult> =>
     request(`/federation/${federationId}/financial/annuities/dojos/${dojoId}/${annuityId}`, {
       method: "PATCH",
       body: payload,
@@ -2648,6 +2755,37 @@ export const karateApi = {
     annuityId: string
   ): Promise<AnnuityPaymentsResponse> =>
     request(`/federation/${federationId}/financial/annuities/${annuityId}/payments`),
+
+  /** PATCH .../payments/:paymentId — corrige uma baixa já lançada (valor/
+   *  data/forma). retry:0 (ação de dinheiro — mesmo padrão de
+   *  receiveAnnuityPayment; nunca reenviar automaticamente). O chamador
+   *  SEMPRE refaz o refetch do extrato + lista/KPIs depois — a resposta
+   *  aqui é só pra tratamento de erro imediato, nunca vira patch otimista. */
+  updateAnnuityPayment: (
+    federationId: string,
+    annuityId: string,
+    paymentId: string,
+    body: AnnuityPaymentUpdateInput
+  ): Promise<AnnuityPaymentEditResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/payments/${paymentId}`, {
+      method: "PATCH",
+      body,
+      retry: 0,
+    }),
+
+  /** DELETE .../payments/:paymentId — remove a baixa lógica inteira (todas
+   *  as linhas do mesmo operation_id). Destrutivo — a UI que chama isso
+   *  precisa confirmar com o operador ANTES (cicatriz: 3 anuidades pagas
+   *  por engano numa ação sem confirmação). retry:0. */
+  deleteAnnuityPayment: (
+    federationId: string,
+    annuityId: string,
+    paymentId: string
+  ): Promise<AnnuityPaymentDeleteResult> =>
+    request(`/federation/${federationId}/financial/annuities/${annuityId}/payments/${paymentId}`, {
+      method: "DELETE",
+      retry: 0,
+    }),
 
   /** POST .../installments/:id/pix — cria intent PIX para UMA parcela.
    *  Resposta no mesmo shape de PixIntent (intent_id/payload/qr_image/...). */

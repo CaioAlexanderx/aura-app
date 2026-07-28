@@ -619,7 +619,7 @@ function InstallmentDetailRow({
 function AnnuityRowItem({
   vm, seg, wide, selected, selectable, expanded, federationId, onToggleSelect, onToggleExpand,
   onPay, onPix, onEdit, onSendEmail, onVoid, onLaunch, voidConfirming, onVoidConfirm, onVoidCancel, voiding,
-  onReceive, onStatement,
+  onReceive, onStatement, onEditAnnuity,
 }: {
   vm: AnnuityRowVM; seg: SegKey; wide: boolean; selected: boolean; selectable: boolean; expanded: boolean; federationId: string;
   onToggleSelect: () => void; onToggleExpand: () => void;
@@ -631,6 +631,10 @@ function AnnuityRowItem({
   voidConfirming: boolean; onVoidConfirm: () => void; onVoidCancel: () => void; voiding: boolean;
   /** Fase F4 — abre a folha de baixa livre / o extrato deste recebível. */
   onReceive: () => void; onStatement: () => void;
+  /** F4.5 — abre a edição do header da anuidade (valor/plano/parcelas),
+   *  independente do status. Só faz sentido pra seg="dojo" (a rota PATCH
+   *  de header só existe pra dojô — ver AnnuityUpdateInput em karateApi.ts). */
+  onEditAnnuity: () => void;
 }) {
   const isNoCharge = vm.status === "no_charge";
   // Fase F4: badge do recebível (Quitado/Parcial/Em aberto/Atrasado) usa
@@ -755,6 +759,21 @@ function AnnuityRowItem({
                   "Receber" separada e destacada em vermelho. Nenhuma das
                   duas ações mudou de comportamento — só reorganizadas. */}
               <View style={styles.secondaryActions}>
+                {/* F4.5 (23/07/2026) — editar valor/plano/parcelas da
+                    anuidade, independente do status (antes só existia pra
+                    não-paga). Só dojô — a rota PATCH de header é
+                    dojô-específica (ver comentário de onEditAnnuity acima). */}
+                {seg === "dojo" && vm.rowId && (
+                  <TouchableOpacity
+                    style={styles.statementBtn}
+                    onPress={(e) => { e.stopPropagation?.(); onEditAnnuity(); }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar anuidade de ${vm.name}`}
+                  >
+                    <Icon name="edit" size={14} color={C.ink3} />
+                  </TouchableOpacity>
+                )}
                 {/* Fase F4 — extrato do recebível (sempre acessível, mesmo
                     quitado: histórico de baixas não desaparece). */}
                 {vm.rowId && (
@@ -1034,6 +1053,13 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [voidTargetKey, setVoidTargetKey] = useState<string | null>(null);
   const [voiding, setVoiding] = useState(false);
   const [chargeTargetKey, setChargeTargetKey] = useState<string | null>(null);
+  // F4.5 (23/07/2026, PR #432 aura-backend) — "Editar" da anuidade de
+  // dojô, independente do status (antes só existia pra não-paga). Mesmo
+  // padrão non-null-é-sinal-de-aberto de chargeTargetKey acima; abre o
+  // MESMO LancarAnuidadeDojoModal (mode="edit"), que já tem plano +
+  // parcelas carregados a partir da própria linha da tabela (sem fetch
+  // extra — a listagem já traz installments/plan, ver toRowVM).
+  const [editTargetKey, setEditTargetKey] = useState<string | null>(null);
   const [pixTarget, setPixTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
   // BUGFIX P0 (11/07/2026) — "Registrar pagamento" em lote agora exige
   // confirmação (BulkPayConfirmModal), mesmo padrão de
@@ -1164,6 +1190,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
     setPixTarget(null);
     setChargeTargetKey(null);
     setVoidTargetKey(null);
+    setEditTargetKey(null);
     setReceiveTargetKey(key);
   }, []);
   const closeReceive = useCallback(() => setReceiveTargetKey(null), []);
@@ -1173,9 +1200,23 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
     setPixTarget(null);
     setChargeTargetKey(null);
     setVoidTargetKey(null);
+    setEditTargetKey(null);
     setStatementTargetKey(key);
   }, []);
   const closeStatement = useCallback(() => setStatementTargetKey(null), []);
+
+  // F4.5 — "Editar" da anuidade (header): fecha qualquer outro modal
+  // transiente antes (mesma disciplina de openReceive/openStatement acima
+  // — nunca dois <Modal> montados ao mesmo tempo).
+  const openEdit = useCallback((key: string) => {
+    setReceiveTargetKey(null);
+    setStatementTargetKey(null);
+    setPixTarget(null);
+    setChargeTargetKey(null);
+    setVoidTargetKey(null);
+    setEditTargetKey(key);
+  }, []);
+  const closeEdit = useCallback(() => setEditTargetKey(null), []);
 
   // Sucesso da baixa — a lista e os KPIs (via onMutated, que recarrega o
   // summary no hub) leem a MESMA fonte pós-baixa: um refetch real do
@@ -1191,6 +1232,25 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
 
   const receiveTargetVm = items.find((i) => i.key === receiveTargetKey) || null;
   const statementTargetVm = items.find((i) => i.key === statementTargetKey) || null;
+  const editTargetVm = items.find((i) => i.key === editTargetKey) || null;
+  // Shape DojoAnnuity mínimo pra alimentar LancarAnuidadeDojoModal
+  // (mode="edit") a partir da própria linha da tabela — já tem
+  // plan/installments carregados (GET /financial/annuities/dojos, Fase F2),
+  // sem round-trip extra. due_date aqui é só preenchimento defensivo (o
+  // modal em modo edição usa installments[].due_date, não este campo).
+  const editAnnuityVm: DojoAnnuity | null = editTargetVm ? {
+    dojo_id: editTargetVm.key,
+    dojo_name: editTargetVm.name,
+    reference_period: editTargetVm.referencePeriod,
+    amount: editTargetVm.amount,
+    due_date: editTargetVm.dueDate || "",
+    paid_at: null,
+    status: editTargetVm.status as AnnuityStatus,
+    plan: editTargetVm.plan,
+    installments: editTargetVm.installments,
+    paid_total: editTargetVm.paidTotal,
+    total: editTargetVm.total,
+  } : null;
 
   // ── Multi-seleção — pagamento em lote (nunca all-or-nothing silencioso) ──
   const toggleSelect = useCallback((key: string) => {
@@ -1434,6 +1494,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
               voiding={voiding}
               onReceive={() => openReceive(item.key)}
               onStatement={() => openStatement(item.key)}
+              onEditAnnuity={() => openEdit(item.key)}
             />
           </View>
         )}
@@ -1583,7 +1644,11 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
         />
       )}
 
-      {/* Fase F4 — extrato do recebível (GET .../payments). */}
+      {/* Fase F4 — extrato do recebível (GET .../payments). F4.5 — cada
+          baixa listada ganha editar/remover (dentro do próprio modal,
+          inline — ver AnnuityStatementModal); onMutated recarrega a MESMA
+          lista/KPIs que qualquer outra mutação desta tela recarrega
+          (load(true) + onMutated), fonte única, sem patch otimista. */}
       {statementTargetVm && statementTargetVm.rowId && (
         <AnnuityStatementModal
           visible={!!statementTargetVm}
@@ -1591,6 +1656,25 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
           annuityId={statementTargetVm.rowId}
           name={statementTargetVm.name}
           onClose={closeStatement}
+          onMutated={() => { load(true); onMutated(); }}
+        />
+      )}
+
+      {/* F4.5 — editar a anuidade (valor/plano/parcelas), independente do
+          status. `editAnnuityVm` já vem com plan/installments da própria
+          linha da tabela (sem fetch extra). onDone recarrega lista/KPIs
+          pela mesma via de sempre (load(true) + onMutated). */}
+      {editTargetVm && editTargetVm.rowId && seg === "dojo" && (
+        <LancarAnuidadeDojoModal
+          visible={!!editTargetVm}
+          mode="edit"
+          federationId={federationId}
+          dojoId={editTargetVm.key}
+          dojoName={editTargetVm.name}
+          annuityId={editTargetVm.rowId}
+          annuity={editAnnuityVm}
+          onClose={closeEdit}
+          onDone={() => { closeEdit(); load(true); onMutated(); }}
         />
       )}
     </View>

@@ -249,6 +249,9 @@ export default function DojoDetailScreen() {
   const [histStep, setHistStep] = useState<"choice" | "confirm">("choice");
   const [histErr, setHistErr] = useState<string | null>(null);
   const [annuityEdit, setAnnuityEdit] = useState<AnnuityRow | null>(null);
+  // F4.5 — erro de PATCH header (ex.: AMOUNT_BELOW_PAID) exibido DENTRO
+  // do AnnuityEditModal, sem fechar o modal nem apagar o valor digitado.
+  const [annuityEditErr, setAnnuityEditErr] = useState<string | null>(null);
 
   // DJ4: modal "Registrar pagamento" (anuidade existente não paga)
   const [payModal, setPayModal] = useState<AnnuityRow | null>(null);
@@ -1135,12 +1138,22 @@ export default function DojoDetailScreen() {
                           <Icon name="checkmark" size={13} color={P.ok ?? "#2d8a4e"} />
                         </TouchableOpacity>
                       ) : null}
-                      {/* Editar — só se não pago */}
-                      {canActUnpaid ? (
-                        <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
-                          <Icon name="edit" size={13} color={C.ink} />
-                        </TouchableOpacity>
-                      ) : null}
+                      {/* F4.5 (23/07/2026, PR #432 aura-backend) — Editar
+                          agora é SEM lock de status: antes só aparecia pra
+                          não-paga (canActUnpaid), hoje aparece sempre — o
+                          backend aceita editar valor/competência de
+                          qualquer anuidade, inclusive já paga (422
+                          AMOUNT_BELOW_PAID se o novo valor ficar abaixo do
+                          já recebido, tratado no onSave abaixo). Edição de
+                          plano/parcelas por vencimento fica no editor rico
+                          da aba Anuidades do hub financeiro
+                          (AnnuitiesTable.tsx, que já tem installments/plan
+                          carregados) — aqui fica o editor leve de
+                          valor/competência, coerente com o resto desta
+                          tela de detalhe do dojô. */}
+                      <TouchableOpacity style={styles.annBtn} disabled={busy} onPress={() => setAnnuityEdit(a)} accessibilityLabel="Editar anuidade">
+                        <Icon name="edit" size={13} color={C.ink} />
+                      </TouchableOpacity>
                     </View>
                   ) : null}
                 </View>
@@ -1331,23 +1344,39 @@ export default function DojoDetailScreen() {
         </View>
       </Modal>
 
-      {/* Modal de edição de anuidade (valor / vencimento / competência) */}
+      {/* Modal de edição de anuidade (valor / competência) — editor leve
+          desta tela; plano/parcelas por vencimento ficam no editor rico do
+          hub financeiro (ver comentário acima, na renderização do botão
+          "Editar"). SEM lock de status (PR #432) — funciona pra qualquer
+          anuidade, inclusive já paga; 422 AMOUNT_BELOW_PAID tratado abaixo
+          com mensagem clara, sem fechar o modal nem apagar o que foi
+          digitado (annuityEdit continua setado — o modal some só no
+          sucesso). */}
       <AnnuityEditModal
         visible={!!annuityEdit}
         row={annuityEdit}
         busy={busy}
-        onClose={() => setAnnuityEdit(null)}
+        errorText={annuityEditErr}
+        onClose={() => { setAnnuityEdit(null); setAnnuityEditErr(null); }}
         onSave={async (payload) => {
           const id = annuityEdit ? annuityId(annuityEdit) : null;
           if (!id) return;
           setBusy(true);
+          setAnnuityEditErr(null);
           try {
             await karateApi.updateAnnuity(federationId, dojoId!, id, payload);
             setAnnuityEdit(null);
             showToast("Anuidade atualizada");
             load();
           } catch (e: any) {
-            Alert.alert("Não foi possível salvar", e?.message || "Tente novamente.");
+            const code = e?.data?.code ?? null;
+            const paidTotal = e?.data?.details?.paid_total;
+            const msg = code === "AMOUNT_BELOW_PAID"
+              ? (paidTotal != null
+                  ? `O novo valor é menor que o já recebido nesta anuidade (${fmtMoney(paidTotal)}) — não é possível. Ajuste o valor para, no mínimo, esse total.`
+                  : "O novo valor é menor que o já recebido nesta anuidade — não é possível.")
+              : (e?.message || "Não foi possível salvar a anuidade.");
+            setAnnuityEditErr(msg);
           } finally { setBusy(false); }
         }}
       />
@@ -1520,15 +1549,27 @@ function RosterUpdatesSection({ federationId, dojoId }: { federationId: string; 
 }
 
 // ── Modal de edição de anuidade (valor / vencimento / competência) ─────
-function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
+// F4.5 (23/07/2026, PR #432 aura-backend) — editor LEVE de valor/
+// competência, SEM lock de status (antes só editava anuidade não-paga).
+// `due_date` SAIU do payload: o contrato novo de PATCH .../dojos/:dojoId/
+// :annuityId não aceita mais vencimento de HEADER (o backend ignora
+// silenciosamente esse campo se enviado) — vencimento agora é POR PARCELA
+// via `installments[].due_date`, editável no editor rico da aba Anuidades
+// do hub financeiro (AnnuitiesTable.tsx → LancarAnuidadeDojoModal
+// mode="edit", que já carrega plan/installments da própria linha). Manter
+// dois editores de vencimento divergentes aqui seria repetir a família de
+// bug "duas fontes de verdade" — por isso este ficou só valor+competência.
+function AnnuityEditModal({ visible, row, busy, errorText, onClose, onSave }: {
   visible: boolean;
   row: AnnuityRow | null;
   busy: boolean;
+  /** Erro de PATCH (ex.: AMOUNT_BELOW_PAID) — exibido inline, SEM fechar o
+   *  modal nem limpar os campos (o operador não perde o que digitou). */
+  errorText?: string | null;
   onClose: () => void;
-  onSave: (payload: { amount?: number; due_date?: string; reference_period?: string }) => void;
+  onSave: (payload: { amount?: number; reference_period?: string }) => void;
 }) {
   const [amount, setAmount] = useState("");
-  const [due, setDue] = useState("");
   const [ref, setRef] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
@@ -1536,27 +1577,23 @@ function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
     if (!visible || !row) return;
     setErr(null);
     setAmount(row.amount != null ? String(row.amount).replace(".", ",") : "");
-    setDue(isoToBr(row.due_date));
     setRef(row.reference_period || "");
   }, [visible, row]);
 
   function submit() {
     setErr(null);
-    const payload: { amount?: number; due_date?: string; reference_period?: string } = {};
+    const payload: { amount?: number; reference_period?: string } = {};
     if (amount.trim()) {
       const n = Number(amount.replace(/\./g, "").replace(",", "."));
       if (!isFinite(n) || n <= 0) { setErr("Valor inválido."); return; }
       payload.amount = n;
     }
-    if (due.trim()) {
-      const iso = brToISO(due);
-      if (!iso) { setErr("Vencimento inválido (dd/mm/aaaa)."); return; }
-      payload.due_date = iso;
-    }
     if (ref.trim()) payload.reference_period = ref.trim();
     if (Object.keys(payload).length === 0) { setErr("Nada para alterar."); return; }
     onSave(payload);
   }
+
+  const shownErr = err || errorText || null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -1568,14 +1605,14 @@ function AnnuityEditModal({ visible, row, busy, onClose, onSave }: {
 
           <Text style={styles.fieldLbl}>Valor (R$)</Text>
           <TextInput style={[styles.input, styles.mono]} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="500,00" placeholderTextColor={P.ink4} accessibilityLabel="Valor" />
-
-          <Text style={styles.fieldLbl}>Vencimento</Text>
-          <TextInput style={[styles.input, styles.mono]} value={due} onChangeText={(v) => setDue(maskDate(v))} keyboardType="numeric" placeholder="dd/mm/aaaa" placeholderTextColor={P.ink4} maxLength={10} accessibilityLabel="Vencimento" />
+          <Text style={styles.fieldHintDojo}>
+            Vencimento por parcela agora se edita na aba Anuidades (Financeiro).
+          </Text>
 
           <Text style={styles.fieldLbl}>Competência</Text>
           <TextInput style={styles.input} value={ref} onChangeText={setRef} placeholder="Ex.: 2026" placeholderTextColor={P.ink4} accessibilityLabel="Competência" />
 
-          {err ? <Text style={styles.errTxt}>{err}</Text> : null}
+          {shownErr ? <Text style={styles.errTxt}>{shownErr}</Text> : null}
 
           <View style={styles.modalActions}>
             <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={submit}>
@@ -1984,6 +2021,7 @@ const styles = StyleSheet.create({
   input: { fontFamily: F.body, fontSize: 14, color: P.ink, backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 11 } as TextStyle,
   mono: { fontFamily: F.mono, letterSpacing: 0.5 } as TextStyle,
   errTxt: { fontFamily: F.body, fontSize: 12.5, color: P.red2, marginTop: 12 } as TextStyle,
+  fieldHintDojo: { fontFamily: F.body, fontSize: 11, color: P.ink3, marginTop: -2, marginBottom: 4 } as TextStyle,
   // fix/karate-excluir-dojo: erro inline da etapa "confirm" do HAS_HISTORY
   // (mesma família visual do errBox de RedistribuirPraticantesModal.tsx).
   errBoxInline: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11, marginTop: 14 } as ViewStyle,
