@@ -12,6 +12,12 @@
 //
 // Normalização DEFENSIVA nas duas pontas: campos ausentes viram null/[]
 // em vez de quebrar a UI — mesmo racional de karateDojoInfoApi.ts.
+//
+// DECISÃO (27/07/2026): a federação NUNCA abre filiação pelo dojô — é
+// sempre o dojô self-serve que se filia. `origin`/`requested_by` (migration
+// 255), `pending_by_origin` e `openRequest()` (POST /affiliation-requests)
+// foram REMOVIDOS daqui — o backend também está revertendo esses campos.
+// Contrato self-serve puro: list, metrics, approve, reject.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -193,8 +199,16 @@ export const karateAffiliationApi = {
     return { data, count: typeof res?.count === "number" ? res.count : data.length };
   },
 
-  getMetrics: (federationId: string): Promise<AffiliationRequestsMetrics> =>
-    request(`/federation/${federationId}/affiliation-requests/metrics`),
+  getMetrics: async (federationId: string): Promise<AffiliationRequestsMetrics> => {
+    const res = await request<any>(`/federation/${federationId}/affiliation-requests/metrics`);
+    const r = res && typeof res === "object" ? res : {};
+    return {
+      pending: num(r.pending) ?? 0,
+      approved: num(r.approved) ?? 0,
+      rejected: num(r.rejected) ?? 0,
+      mais_antiga: r.mais_antiga ?? null,
+    };
+  },
 
   approve: (
     federationId: string,

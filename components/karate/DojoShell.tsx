@@ -58,6 +58,7 @@ import {
   ViewStyle,
   TextStyle,
   SafeAreaView,
+  ScrollView,
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -261,13 +262,22 @@ function SidebarNav() {
         </View>
       </View>
 
-      {/* Navegação principal */}
-      <View style={styles.navSection}>
-        <Text style={styles.navLabel}>Navegação</Text>
+      {/* Navegação principal — MIOLO rolável (mesmo fix do KarateShell:
+          bug do usuário, sidebar cortava itens sem rolagem em telas
+          menores). styles.sidebar ganhou alignSelf:"stretch" +
+          overflow:"hidden" pra travar a altura no pai; o ScrollView
+          flex:1 abaixo é quem rola de verdade. Marca/dojô ficam fixos
+          acima, Configurações/chip de usuário fixos abaixo — o espaçador
+          <View flex:1/> que empurrava o rodapé virou o próprio flex:1 do
+          ScrollView. */}
+      <Text style={styles.navLabel}>Navegação</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.navSection}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
+      >
         {mainItems.map(renderItem)}
-      </View>
-
-      <View style={{ flex: 1 }} />
+      </ScrollView>
 
       {/* Rodapé: Configurações */}
       {footerItems.length > 0 && (
@@ -450,6 +460,12 @@ const styles = StyleSheet.create({
   // ── Sidebar (DNA do KarateShell) ────────────
   sidebar: {
     width: 236,
+    // Fix scroll (mesmo racional do KarateShell/StudioShell): alignSelf:
+    // "stretch" ocupa 100% da altura do pai (row, flex:1) sem crescer
+    // pelo conteúdo; overflow:"hidden" é ESSENCIAL no web — sem ele o
+    // View cresce junto com o miolo e o ScrollView interno nunca aciona.
+    alignSelf: "stretch",
+    overflow: "hidden",
     backgroundColor: KarateColors.bg2,
     borderRightWidth: 1,
     borderRightColor: KarateColors.border2,
