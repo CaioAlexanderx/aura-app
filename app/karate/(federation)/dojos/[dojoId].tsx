@@ -44,7 +44,7 @@
 //   O antigo atalho "Lançar pagamento" (criava um período JÁ PAGO fora do
 //   fluxo) saiu — ver comentário perto de chargeAnnuityOpen abaixo.
 // ============================================================
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
   Modal, Pressable, TouchableOpacity, ActivityIndicator, Animated, Platform, Switch,
