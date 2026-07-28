@@ -12,6 +12,12 @@
 //
 // Normalização DEFENSIVA nas duas pontas: campos ausentes viram null/[]
 // em vez de quebrar a UI — mesmo racional de karateDojoInfoApi.ts.
+//
+// DECISÃO (27/07/2026): a federação NUNCA abre filiação pelo dojô — é
+// sempre o dojô self-serve que se filia. `origin`/`requested_by` (migration
+// 255), `pending_by_origin` e `openRequest()` (POST /affiliation-requests)
+// foram REMOVIDOS daqui — o backend também está revertendo esses campos.
+// Contrato self-serve puro: list, metrics, approve, reject.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -69,8 +75,6 @@ export interface AffiliationRequestDojo {
   name: string;
 }
 
-export type AffiliationRequestOrigin = "dojo" | "federation";
-
 export interface AffiliationRequestRow {
   id: string;
   dojo: AffiliationRequestDojo | null;
@@ -84,13 +88,6 @@ export interface AffiliationRequestRow {
   students_count: number | null;
   notes: string | null;
   status: AffiliationRequestStatus;
-  /** migration 255: quem abriu o pedido — 'dojo' (self-serve, POST
-   *  /dojo/connection) | 'federation' (a federação abriu pelo dojô, POST
-   *  /affiliation-requests). Mesmo inbox, mesmo approve/reject. */
-  origin: AffiliationRequestOrigin;
-  /** id do usuário da federação que abriu (origin==='federation'); null
-   *  quando origin==='dojo' (o próprio dojô abriu, sem "requested_by"). */
-  requested_by: string | null;
   created_at: string;
   reviewed_at: string | null;
   rejection_reason: string | null;
@@ -111,8 +108,6 @@ export interface AffiliationRequestsMetrics {
   approved: number;
   rejected: number;
   mais_antiga: AffiliationOldestPending | null;
-  /** migration 255: quebra do pendente por quem abriu o pedido. */
-  pending_by_origin: { dojo: number; federation: number };
 }
 
 export interface AffiliationApproveResult {
@@ -124,32 +119,6 @@ export interface AffiliationApproveResult {
 
 export interface AffiliationRejectResult {
   ok: boolean;
-}
-
-// ── POST /affiliation-requests (lado federação abre pelo dojô) ──────
-// migration 255: mesmo corpo aceito por POST /dojo/connection — só o
-// dojo_id (obrigatório) muda quem está falando. Ver
-// AffiliationOpenRequestResult para o formato de resposta.
-export interface AffiliationOpenRequestBody {
-  dojo_id: string;
-  contact_name?: string;
-  contact_phone?: string;
-  contact_email?: string;
-  cnpj?: string;
-  cpf?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  students_count?: number;
-  notes?: string;
-}
-
-export interface AffiliationOpenRequestResult {
-  id: string;
-  status: "pending";
-  origin: AffiliationRequestOrigin;
-  created_at: string;
-  already_pending: boolean;
 }
 
 function num(v: any): number | null {
@@ -187,7 +156,6 @@ function normalizeDojoConnection(raw: any): DojoConnectionInfo {
 function normalizeAffiliationRow(raw: any): AffiliationRequestRow {
   const r = raw && typeof raw === "object" ? raw : {};
   const validStatus: AffiliationRequestStatus[] = ["pending", "approved", "rejected"];
-  const validOrigin: AffiliationRequestOrigin[] = ["dojo", "federation"];
   return {
     id: String(r.id),
     dojo: r.dojo && typeof r.dojo === "object"
@@ -203,10 +171,6 @@ function normalizeAffiliationRow(raw: any): AffiliationRequestRow {
     students_count: num(r.students_count),
     notes: str(r.notes),
     status: validStatus.includes(r.status) ? r.status : "pending",
-    // origin ausente (backend antigo/schema pendente) → 'dojo': é o
-    // comportamento histórico (só existia o self-serve).
-    origin: validOrigin.includes(r.origin) ? r.origin : "dojo",
-    requested_by: str(r.requested_by),
     created_at: r.created_at,
     reviewed_at: str(r.reviewed_at),
     rejection_reason: str(r.rejection_reason),
@@ -238,34 +202,13 @@ export const karateAffiliationApi = {
   getMetrics: async (federationId: string): Promise<AffiliationRequestsMetrics> => {
     const res = await request<any>(`/federation/${federationId}/affiliation-requests/metrics`);
     const r = res && typeof res === "object" ? res : {};
-    const byOrigin = r.pending_by_origin && typeof r.pending_by_origin === "object" ? r.pending_by_origin : {};
     return {
       pending: num(r.pending) ?? 0,
       approved: num(r.approved) ?? 0,
       rejected: num(r.rejected) ?? 0,
       mais_antiga: r.mais_antiga ?? null,
-      pending_by_origin: {
-        dojo: num(byOrigin.dojo) ?? 0,
-        federation: num(byOrigin.federation) ?? 0,
-      },
     };
   },
-
-  /**
-   * A FEDERAÇÃO abre o pedido de filiação pelo dojô (migration 255) —
-   * mesmo inbox do self-serve, só que `origin:'federation'`. O dojô
-   * precisa já estar tecnicamente roteado a esta federação
-   * (companies.federation_id) e ainda não linkado.
-   * 201 { id, status:'pending', origin:'federation' } — pedido novo
-   * 200 { ..., already_pending:true }                 — já havia pendente
-   * Erros (o caller trata via ApiError): 404 DOJO_NOT_FOUND |
-   * 422 DOJO_NAO_ROTEADO | 422 VALIDATION_ERROR | 409 JA_CONECTADO.
-   */
-  openRequest: (
-    federationId: string,
-    body: AffiliationOpenRequestBody
-  ): Promise<AffiliationOpenRequestResult> =>
-    request(`/federation/${federationId}/affiliation-requests`, { method: "POST", body }),
 
   approve: (
     federationId: string,

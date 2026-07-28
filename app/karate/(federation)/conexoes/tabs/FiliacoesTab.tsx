@@ -13,11 +13,9 @@
 // .../affiliation-requests[?status], GET .../affiliation-requests/metrics,
 // POST .../:id/approve|reject (contrato Aura-backend#424 + migration 252).
 //
-// migration 255: POST .../affiliation-requests (sem :requestId) deixa a
-// FEDERAÇÃO abrir o pedido pelo dojô — mesmo inbox, `origin` distingue
-// quem iniciou ('dojo' self-serve | 'federation'). Cada card mostra um
-// selo de origem; os KPIs usam `pending_by_origin` no meta do card
-// "Pendentes".
+// DECISÃO (27/07/2026): a federação NUNCA abre filiação pelo dojô — é
+// sempre o dojô self-serve que se filia. Sem selo de origem no card, sem
+// quebra de KPI por origem: o inbox é só self-serve, ponto.
 //
 // Decisão de UX (mesmo racional documentado em
 // conexoes/solicitacoes/[requestId].tsx): TODA ação que muta fica em um
@@ -39,7 +37,7 @@ import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { Skeleton } from "@/components/karate/Skeleton";
-import { ShojiBackground, PageHead, Card, KpiBand, Chip, Avatar, Mono, Body, ShojiButton, Pill } from "@/components/karate/shoji";
+import { ShojiBackground, PageHead, Card, KpiBand, Chip, Avatar, Mono, Body, ShojiButton } from "@/components/karate/shoji";
 import {
   karateAffiliationApi, AffiliationRequestRow, AffiliationRequestsMetrics, AffiliationRequestStatus,
 } from "@/services/karateAffiliationApi";
@@ -204,22 +202,12 @@ export function FiliacoesTab() {
     }
   }, [federationId, rejectReason, closeStage, load]);
 
-  // meta do card "Pendentes": quebra por origem (migration 255) — só
-  // aparece quando há pelo menos 1 pendente de cada lado, pra não poluir
-  // o caso comum (tudo self-serve, que é o histórico).
-  const pendingMeta = useMemo(() => {
-    const byOrigin = metrics?.pending_by_origin;
-    if (!byOrigin) return undefined;
-    if (byOrigin.federation <= 0) return undefined;
-    return `${byOrigin.dojo} do dojô · ${byOrigin.federation} da federação`;
-  }, [metrics]);
-
   const kpiItems = useMemo(() => ([
-    { label: "Pendentes", value: metrics?.pending ?? 0, accent: true, meta: pendingMeta },
+    { label: "Pendentes", value: metrics?.pending ?? 0, accent: true },
     { label: "Aprovados", value: metrics?.approved ?? 0 },
     { label: "Recusados", value: metrics?.rejected ?? 0 },
     { label: "Mais antiga", value: metrics?.mais_antiga ? diasLabel(metrics.mais_antiga.dias) : "—" },
-  ]), [metrics, pendingMeta]);
+  ]), [metrics]);
 
   return (
     <ShojiBackground>
@@ -278,7 +266,6 @@ export function FiliacoesTab() {
                     </View>
                     <View style={{ alignItems: "flex-end", gap: 6 }}>
                       <StatusPill status={row.status} />
-                      <Pill label={row.origin === "federation" ? "Pela federação" : "Autoatendimento"} />
                     </View>
                   </View>
 

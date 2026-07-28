@@ -1,19 +1,20 @@
 // ============================================================
 // Conexões — Aura Karatê (federação) · Shoji
 //
-// Container de 3 abas de nível superior (H3 + convergência 27/07/2026):
-//   1. "Filiações" (FiliacoesTab)    — inbox de pedidos de filiação/conexão
-//      (karate_affiliation_requests): dojô self-serve OU a federação
-//      abrindo pelo dojô (migration 255, origin). É a PÁGINA PRINCIPAL —
-//      sem aprovação aqui o dojô não existe pra federação.
+// Container de 2 abas de nível superior (H3 + convergência 27/07/2026):
+//   1. "Filiações" (FiliacoesTab)    — inbox self-serve de pedidos de
+//      filiação (karate_affiliation_requests). A federação NUNCA abre
+//      filiação pelo dojô — é SEMPRE o dojô que se filia. É a PÁGINA
+//      PRINCIPAL — sem aprovação aqui o dojô não existe pra federação.
 //   2. "Praticantes" (SolicitacoesTab) — fila de solicitações de praticante
 //      (criação/transferência) vindas dos dojôs, pra federação
 //      conferir/numerar/aprovar. Nome interno do componente ("Solicitações")
 //      preservado — é o rótulo do domínio de praticante, não da aba.
-//   3. "Sincronização" (ConexoesTab)  — como cada dojô JÁ LINKADO se
-//      conecta (native/manual). Era a antiga aba "Conexões" (mesmo
-//      componente, minus a seção morta "Dojôs querendo entrar" — ver
-//      comentário de topo de ConexoesTab.tsx).
+//
+// A aba "Sincronização" (ConexoesTab — native/manual/reconnect) SAIU do
+// container (27/07/2026): expunha uma feature parqueada e vazia. O
+// componente ConexoesTab.tsx NÃO foi apagado (pode voltar), só não é mais
+// importado/renderizado aqui.
 //
 // CONVERGÊNCIA (27/07/2026): a extinta rota /karate/filiacao (F6) virou
 // a aba "Filiações" aqui — era uma tela IRMÃ que a investigação
@@ -23,10 +24,10 @@
 // para /karate/conexoes?tab=filiacoes (não quebra bookmarks/links).
 //
 // Sub-navegação por QUERY PARAM (mesmo padrão do hub de Anuidades e da
-// tela de Dojôs): ?tab=filiacoes | ?tab=solicitacoes | ?tab=conexoes já
-// abre a aba certa no boot (compat com os nomes antigos de query —
-// ?tab=conexoes continua abrindo "Sincronização", que era a rota-única
-// original desse nome).
+// tela de Dojôs): ?tab=filiacoes | ?tab=solicitacoes abre a aba certa no
+// boot. O antigo ?tab=conexoes (apontava pra "Sincronização", agora fora
+// do container) cai graciosamente na aba default (Filiações) — não
+// quebra, não dá erro.
 //
 // Badges de pendentes nas abas "Filiações" e "Praticantes": busca leve
 // (getMetrics/getPractitionerRequestMetrics) independente do fetch
@@ -42,14 +43,13 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { KarateColors, ShojiPalette } from "@/constants/karateTheme";
-import { ConexoesTab } from "./tabs/ConexoesTab";
 import { SolicitacoesTab } from "./tabs/SolicitacoesTab";
 import { FiliacoesTab } from "./tabs/FiliacoesTab";
 import { karateApi } from "@/services/karateApi";
 import { karateAffiliationApi } from "@/services/karateAffiliationApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-type Tab = "filiacoes" | "solicitacoes" | "conexoes";
+type Tab = "filiacoes" | "solicitacoes";
 
 const firstParam = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
@@ -66,7 +66,8 @@ export default function ConexoesScreen() {
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const raw = firstParam(params.tab);
-    if (raw === "conexoes") return "conexoes";
+    // ?tab=conexoes é o nome antigo (apontava pra "Sincronização", que
+    // saiu do container) — cai graciosamente no default (Filiações).
     if (raw === "solicitacoes") return "solicitacoes";
     return "filiacoes";
   });
@@ -131,24 +132,12 @@ export default function ConexoesScreen() {
             )}
           </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === "conexoes" && styles.tabItemActive]}
-          onPress={() => setActiveTab("conexoes")}
-          accessibilityRole="tab"
-          accessibilityLabel="Sincronização"
-          accessibilityState={{ selected: activeTab === "conexoes" }}
-        >
-          <Text style={[styles.tabLabel, activeTab === "conexoes" && styles.tabLabelActive]}>
-            Sincronização
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Tab content */}
       <View style={styles.content}>
         {activeTab === "filiacoes" && <FiliacoesTab />}
         {activeTab === "solicitacoes" && <SolicitacoesTab />}
-        {activeTab === "conexoes" && <ConexoesTab onOpenFiliacoes={() => setActiveTab("filiacoes")} />}
       </View>
     </View>
   );
