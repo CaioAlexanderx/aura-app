@@ -19,6 +19,17 @@
 // OU aprovação de uma solicitação — a aprovação em si é tratada pelo
 // fluxo de filiação, não por este service).
 //
+// F5b (30/07 — Aura-backend#447 + migration 262): DECISÃO DE PRODUTO —
+// o fluxo de informação SOBE (dojô → federação). O dojô é fonte da
+// identidade da pessoa; vincular um aluno a um praticante passa a dar ao
+// dojô o direito de sobrescrever a ficha daquela pessoa na federação. Até
+// aqui, POST .../federate com { fpkt_number } vinculava IMEDIATO — o
+// backend gravava antes de qualquer conferência (achado em prod: aluna de
+// 12 anos vinculada a praticante nascido em 2020, CPF diferente, sem
+// aviso algum). Agora a MESMA rota primeiro faz PREVIEW (não grava) e só
+// grava com { fpkt_number, confirm: true, resolution }. Ver
+// previewFederateByNumber/confirmFederateByNumber abaixo.
+//
 // Vive num service pequeno separado: karateApi.ts tem 125 KB e a regra
 // da casa é edição cirúrgica (mesmo racional do karateDojoInfoApi).
 //
@@ -195,22 +206,7 @@ export const DOJO_IMPORT_MAX_ROWS = 500;
  */
 export const DOJO_STUDENTS_MAX_LIMIT = 500;
 
-// ── F5a: vínculo com a federação (Aura-backend#425 + migration 253) ─────
-
-/** Praticante encontrado/vinculado ao federar por número FPKT existente. */
-export interface FederatedPractitionerRef {
-  id: string;
-  name: string;
-  fpkt_number: string;
-}
-
-/** POST .../federate com { fpkt_number } — vínculo IMEDIATO (o back já confirma e liga). */
-export interface FederateByNumberResult {
-  linked: true;
-  practitioner: FederatedPractitionerRef;
-  /** true quando o praticante já estava federado em OUTRO dojô (transferência). */
-  is_transfer: boolean;
-}
+// ── F5a: solicitação de filiação (Aura-backend#425 + migration 253) ─────
 
 /** POST .../federate com { request: true, ...ficha } — cria pedido; a federação decide depois. */
 export interface FederateByRequestResult {
@@ -218,8 +214,6 @@ export interface FederateByRequestResult {
   request_id: string;
   status: "pending";
 }
-
-export type FederateResult = FederateByNumberResult | FederateByRequestResult;
 
 /**
  * Ficha H1 exigida pela federação na solicitação de filiação — TODOS os
@@ -246,6 +240,73 @@ export interface FederationRequestPayload {
   guardian_name?: string;
   guardian_phone?: string;
   guardian_relationship?: string;
+}
+
+// ── F5b: vínculo por número FPKT — PREVIEW (não grava) + CONFIRM (grava) ──
+// (Aura-backend#447 + migration 262 — ver nota de decisão no topo do
+// arquivo). Mesma rota POST .../students/:sid/federate: sem `confirm`,
+// devolve o praticante encontrado e a comparação campo a campo, SEM
+// gravar nada; com `confirm: true`, grava.
+
+export type FederationCompareSide = "dojo" | "federation";
+
+/** Praticante encontrado ao pré-visualizar/confirmar o vínculo por número FPKT. */
+export interface FederationPractitionerInfo {
+  id: string;
+  name: string;
+  fpkt_number: string;
+  dojo_id: string | null;
+  dojo_name: string | null;
+  is_active: boolean;
+  identity_managed_by: string | null;
+}
+
+/** Um dos campos comparados dojô × federação (sempre 15, nome/nascimento/CPF/RG/sexo/telefone/e-mail/endereço por campo/foto). */
+export interface FederationComparisonField {
+  field: string;
+  label: string;
+  dojo_value: string | null;
+  federation_value: string | null;
+  /** Dado ausente de um lado NUNCA é divergência (regra da casa: ausente ≠ inválido). */
+  diverges: boolean;
+  /** "dojo" | "federation" | null (null quando os dois lados estão vazios ou iguais). */
+  suggested: FederationCompareSide | null;
+}
+
+/** Motivo pelo qual a confirmação está bloqueada (ex.: CPF_CONFLITANTE — sem override possível). */
+export interface FederationBlocker {
+  code: string;
+  message: string;
+}
+
+/** Resposta do preview (não grava nada). */
+export interface FederatePreviewResult {
+  preview: true;
+  practitioner: FederationPractitionerInfo;
+  /** true quando o praticante já está federado em OUTRO dojô — vincular aqui transfere. */
+  is_transfer: boolean;
+  /** false → a confirmação fica indisponível; ver `blockers`. */
+  can_link: boolean;
+  blockers: FederationBlocker[];
+  comparison: FederationComparisonField[];
+}
+
+/** field → qual lado vale ("dojo" | "federation"); campo omitido usa o `suggested` do preview. */
+export type FederationResolution = Record<string, FederationCompareSide>;
+
+/** Um campo que foi de fato sobrescrito na confirmação. */
+export interface FederationAppliedField {
+  field: string;
+  from: string | null;
+  value: string | null;
+}
+
+/** Resposta da confirmação (grava — efetiva o vínculo e aplica a resolução campo a campo). */
+export interface FederateConfirmResult {
+  linked: true;
+  practitioner: FederationPractitionerInfo;
+  applied: FederationAppliedField[];
+  is_transfer: boolean;
 }
 
 function qs(params: Record<string, string | undefined>): string {
@@ -336,20 +397,47 @@ export const karateDojoStudentsApi = {
     }),
 
   /**
-   * Federa por número FPKT existente — vínculo IMEDIATO (o back confirma
-   * na hora: 200 {linked:true, practitioner, is_transfer}). Erros:
-   * 404 FPKT_NUMBER_NOT_FOUND, 409 PRACTITIONER_JA_VINCULADO,
-   * 409 JA_FEDERADO, 409 DOJO_NAO_CONECTADO (mapeados em helpers.ts,
-   * mapFederationError).
+   * F5b: pré-visualiza o vínculo por número FPKT — NÃO grava nada. Devolve
+   * o praticante encontrado, se é transferência (`is_transfer`), se o
+   * vínculo pode acontecer (`can_link`; se false, ver `blockers`) e a
+   * comparação campo a campo dojô × federação (`comparison` — 15 campos
+   * sempre presentes; dado ausente de um lado nunca é divergência).
+   * Erros: 404 FPKT_NUMBER_NOT_FOUND, 409 DOJO_NAO_CONECTADO (mapeados em
+   * helpers.ts, mapFederationError). Bloqueios como CPF_CONFLITANTE vêm
+   * no corpo 200 (`blockers`), não como exceção.
    */
-  federateByNumber: (
+  previewFederateByNumber: (
     federationId: string,
     studentId: string,
     fpktNumber: string
-  ): Promise<FederateByNumberResult> =>
-    request<FederateByNumberResult>(`${base(federationId)}/students/${studentId}/federate`, {
+  ): Promise<FederatePreviewResult> =>
+    request<FederatePreviewResult>(`${base(federationId)}/students/${studentId}/federate`, {
       method: "POST",
       body: { fpkt_number: fpktNumber },
+    }),
+
+  /**
+   * F5b: confirma o vínculo depois da conferência — grava. `resolution`
+   * decide, campo a campo, qual lado vale ("dojo" | "federation"); campo
+   * omitido usa o `suggested` do preview. A partir daqui o CADASTRO
+   * daquela pessoa na federação passa a ser mantido pelo dojô (fluxo de
+   * informação sobe — decisão de produto 30/07). Erros: os do preview +
+   * 409 CPF_CONFLITANTE (sem override — corrigir o cadastro ou usar outro
+   * número), 409 PRATICANTE_JA_VINCULADO (nome novo do código; o backend
+   * também manda `legacy_code: "PRACTITIONER_JA_VINCULADO"` durante a
+   * transição — tratar os dois, ver mapFederationError), 503
+   * SCHEMA_PENDING_262 (migration 262 ainda não aplicada neste ambiente —
+   * o preview funciona normalmente, só a confirmação falha).
+   */
+  confirmFederateByNumber: (
+    federationId: string,
+    studentId: string,
+    fpktNumber: string,
+    resolution?: FederationResolution
+  ): Promise<FederateConfirmResult> =>
+    request<FederateConfirmResult>(`${base(federationId)}/students/${studentId}/federate`, {
+      method: "POST",
+      body: { fpkt_number: fpktNumber, confirm: true, resolution: resolution ?? {} },
     }),
 
   /**
@@ -368,7 +456,12 @@ export const karateDojoStudentsApi = {
       body: { request: true, ...payload },
     }),
 
-  /** Desvincula — o praticante CONTINUA existindo na federação, só o vínculo com este aluno some. */
+  /**
+   * Desvincula — devolve a gestão da ficha à federação: o dojô deixa de
+   * poder sobrescrever os dados dessa pessoa por aqui. O praticante
+   * CONTINUA existindo no cadastro da federação, só o vínculo com este
+   * aluno some.
+   */
   unfederate: (federationId: string, studentId: string): Promise<{ unlinked: boolean }> =>
     request<{ unlinked: boolean }>(`${base(federationId)}/students/${studentId}/federate`, {
       method: "DELETE",
