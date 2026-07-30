@@ -2,14 +2,22 @@
 // AlunosList — F2 (aba "Meus alunos") + filtro/badge de federação (F5a)
 //
 // Pirâmide por faixa (summary do backend, só ativos), busca + filtros
-// status/faixa/federação (client-side: a lista vem inteira, ≤1000) e as
+// status/faixa/federação (client-side sobre a lista carregada) e as
 // linhas. Presentational — dados e modais vivem no MeusAlunosTab.
 //
 // F5a: filtro "Todos/Federados/Só do dojô" segue o MESMO padrão dos
 // filtros de status/faixa acima — client-side sobre a lista já
 // carregada (o backend também aceita `?federated=true|false` em
-// listStudents, mas o MeusAlunosTab faz UMA busca completa e filtra
-// aqui, igual já fazia pra status/faixa; sem round-trip extra).
+// listStudents, mas o MeusAlunosTab faz UMA busca e filtra aqui, igual
+// já fazia pra status/faixa; sem round-trip extra).
+//
+// QA prod 30/07 (item 1, regressão): o backend agora pagina (default
+// 100, máximo 500 — Aura-backend#429); o MeusAlunosTab já pede o teto
+// (500), mas um dojô com mais alunos que isso ainda teria parte da
+// lista fora do alcance da busca/filtros abaixo (tudo client-side).
+// `count` é o total real do dojô (sem paginação) — quando maior que o
+// que foi carregado, mostramos um aviso discreto e NEUTRO (não é erro,
+// é informação) em vez de deixar aluno sumir em silêncio.
 //
 // Regra da casa: dado faltante é NEUTRO (idade/CPF ausentes não viram
 // alerta). A única sinalização é menor de 18 sem responsável (LGPD) —
@@ -31,6 +39,8 @@ type FederatedFilter = "all" | "federated" | "dojo_only";
 
 interface Props {
   students: DojoStudent[];
+  /** Total real do dojô (sem paginação) — pode ser maior que students.length. */
+  count: number;
   summary: DojoStudentsSummary | null;
   loading: boolean;
   error: boolean;
@@ -42,7 +52,7 @@ interface Props {
 }
 
 export function AlunosList({
-  students, summary, loading, error, schemaPending,
+  students, count, summary, loading, error, schemaPending,
   onRetry, onOpenStudent, onNew, onImport,
 }: Props) {
   const [q, setQ] = useState("");
@@ -152,8 +162,22 @@ export function AlunosList({
     );
   }
 
+  // QA 30/07 (item 1): count > alunos carregados só acontece quando o
+  // dojô passou do teto pedido (DOJO_STUDENTS_MAX_LIMIT) — informativo,
+  // nunca alarmante; a busca/filtros acima só enxergam quem foi carregado.
+  const hasMore = count > students.length;
+
   return (
     <View style={{ gap: 14 }}>
+      {hasMore && (
+        <View style={styles.moreBanner}>
+          <Icon name="information-circle-outline" size={16} color={KarateColors.ink3} />
+          <Text style={styles.moreBannerTxt}>
+            Mostrando {students.length} de {count} alunos cadastrados.
+          </Text>
+        </View>
+      )}
+
       {summary && piramide.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Faixas dos alunos</Text>
@@ -300,6 +324,9 @@ const styles = StyleSheet.create({
   emptyBtns: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8, justifyContent: "center" } as ViewStyle,
   retryBtn: { marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 16 } as ViewStyle,
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+
+  moreBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, paddingVertical: 9, paddingHorizontal: 12 } as ViewStyle,
+  moreBannerTxt: { flex: 1, fontSize: 12, color: KarateColors.ink3, lineHeight: 16 } as TextStyle,
 
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,

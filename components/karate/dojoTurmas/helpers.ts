@@ -106,7 +106,11 @@ export function mapClassesError(e: any): { code: string | null; message: string 
     return { code, message: "O check-in por QR está desligado para este dojô." };
   }
   if (code === "NOT_ENROLLED") {
-    return { code, message: "Esse aluno não está matriculado em nenhuma turma de hoje." };
+    // QA prod 30/07 (item 2): o back distingue NOT_ENROLLED de
+    // NO_CLASS_TODAY, mas o "de hoje" no fim desta mensagem reintroduzia
+    // a mesma confusão que o fix queria eliminar — mandava o sensei
+    // olhar a agenda em vez do cadastro do aluno. É matrícula, não data.
+    return { code, message: "Esse aluno não está matriculado em nenhuma turma." };
   }
   if (code === "NO_CLASS_TODAY") {
     return { code, message: "Não há turma prevista para hoje." };

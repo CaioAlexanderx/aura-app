@@ -23,6 +23,13 @@
 //     genérico, que misturava "sem e-mail" com dedupe.
 //   • nova seção WhatsAppQueueSection (canal alternativo pro responsável
 //     sem e-mail — no Brasil ele tem telefone, não e-mail).
+//
+// QA prod 30/07 (item 4): salvar a régua muda quem é elegível HOJE pro
+// WhatsApp (offsets/enabled mudam o cálculo de "quem vence perto o
+// suficiente") — sem refazer a fila, ela ficava vazia até um reload da
+// página inteira. `queueRefreshKey` incrementa a cada salvamento
+// bem-sucedido e é passado pro WhatsAppQueueSection, que refaz o load
+// sozinho (sem recarregar o resto da tela).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -70,6 +77,10 @@ export function ReguaSection() {
   const [log, setLog] = useState<DojoReminderLogItem[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [logErr, setLogErr] = useState<string | null>(null);
+
+  // QA 30/07 (item 4): incrementa a cada "Salvar régua" bem-sucedido —
+  // WhatsAppQueueSection refaz o load sozinho quando isto muda.
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0);
 
   const loadConfig = useCallback(async () => {
     if (!federationId) return;
@@ -124,6 +135,8 @@ export function ReguaSection() {
       setSaved(cfg);
       setEnabled(cfg.enabled);
       setOffsets(cfg.offsets ?? []);
+      // Quem é elegível hoje pro WhatsApp muda junto com a régua.
+      setQueueRefreshKey((k) => k + 1);
     } catch (e: any) {
       setSaveErr(mapBillingError(e).message);
     } finally {
@@ -237,7 +250,7 @@ export function ReguaSection() {
         )}
       </View>
 
-      <WhatsAppQueueSection />
+      <WhatsAppQueueSection refreshKey={queueRefreshKey} />
 
       <View style={styles.card}>
         <View style={styles.logHead}>

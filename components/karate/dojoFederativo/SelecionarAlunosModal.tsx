@@ -11,6 +11,11 @@
 // AlunoFederacaoSection.tsx).
 //
 // StyleSheet: todos os top-level são objetos (WeakMap safe).
+//
+// QA prod 30/07 (item 1): busca os alunos ATIVOS pra oferecer na
+// inscrição em lote — sem `limit`, o backend paginado (Aura-backend#429)
+// só devolvia os 100 primeiros, e um dojô grande não conseguia
+// selecionar quem ficasse de fora. Pede o teto (DOJO_STUDENTS_MAX_LIMIT).
 // ============================================================
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -20,7 +25,7 @@ import {
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
+import { karateDojoStudentsApi, DojoStudent, DOJO_STUDENTS_MAX_LIMIT } from "@/services/karateDojoStudentsApi";
 
 interface Props {
   visible: boolean;
@@ -48,7 +53,7 @@ export function SelecionarAlunosModal({
     setQuery("");
     setLoading(true);
     karateDojoStudentsApi
-      .listStudents(federationId, { status: "active" })
+      .listStudents(federationId, { status: "active", limit: DOJO_STUDENTS_MAX_LIMIT })
       .then((res) => setStudents(res.data || []))
       .catch(() => setStudents([]))
       .finally(() => setLoading(false));

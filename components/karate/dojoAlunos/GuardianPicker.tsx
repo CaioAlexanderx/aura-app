@@ -19,6 +19,12 @@
 // e atualiza o valor selecionado (onChange) sem fechar nada — reflete
 // na ficha/lista assim que os dados forem recarregados (mesmo padrão de
 // atualização em cascata do resto do form de aluno).
+//
+// QA prod 30/07 (item 6): "Editar" abria o telefone CRU (ex.:
+// "91993334444"), enquanto o cartão logo acima mostra formatado (via
+// formatPhone, de ./helpers). startEditCurrent agora aplica maskPhone
+// (@/utils/masks — mesma máscara usada em configuracoes.tsx) ao
+// pré-preencher o campo.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -32,6 +38,7 @@ import { FormField } from "@/components/karate/FormField";
 import {
   karateDojoStudentsApi, DojoGuardian, DojoStudentGuardianRef,
 } from "@/services/karateDojoStudentsApi";
+import { maskPhone } from "@/utils/masks";
 import { formatPhone, isValidEmail } from "./helpers";
 
 interface Props {
@@ -129,7 +136,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
   const startEditCurrent = () => {
     if (!value) return;
     setEditName(value.full_name ?? "");
-    setEditPhone(value.phone ?? "");
+    setEditPhone(value.phone ? maskPhone(value.phone) : "");
     setEditEmail(value.email ?? "");
     setEditRel(value.relationship ?? "");
     setEditErr(null);

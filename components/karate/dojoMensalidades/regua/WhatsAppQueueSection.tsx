@@ -14,6 +14,19 @@
 // da chamada, então uma falha em whatsapp-sent não bloqueia o sensei
 // com um erro — ele só veria a linha continuar sem o badge "Enviado" e
 // pode tocar de novo (idempotente no backend).
+//
+// QA prod 30/07 (item 3, correção do texto): o backend NÃO filtra por
+// "sem e-mail" — devolve todos os elegíveis do dia que tenham telefone,
+// e-mail cadastrado ou não (confirmado em produção: responsável com
+// e-mail apareceu na fila). O subtítulo dizia o contrário; corrigido
+// pra descrever o comportamento real (envio manual por WhatsApp dos
+// lembretes do dia, ponto).
+//
+// QA prod 30/07 (item 4): salvar a régua (ReguaSection) muda quem é
+// elegível HOJE, então a fila precisa ser refeita junto — sem isso ela
+// ficava vazia até um reload da página inteira. `refreshKey` é
+// incrementado pelo pai a cada salvamento bem-sucedido da régua; ao
+// mudar, dispara um novo load() aqui (sem afetar o resto da tela).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -26,7 +39,12 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateDojoBillingApi, DojoWhatsappQueueItem } from "@/services/karateDojoBillingApi";
 import { fmtBRL, fmtDateBR, mapBillingError, offsetLabel, todayISO } from "../helpers";
 
-export function WhatsAppQueueSection() {
+interface Props {
+  /** Muda a cada salvamento bem-sucedido da régua (ReguaSection) — dispara refetch. */
+  refreshKey?: number;
+}
+
+export function WhatsAppQueueSection({ refreshKey }: Props = {}) {
   const { federationId } = useKarateFederation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +65,7 @@ export function WhatsAppQueueSection() {
     }
   }, [federationId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   if (!federationId) return null;
 
@@ -78,7 +96,7 @@ export function WhatsAppQueueSection() {
         <Text style={styles.cardTitle}>Enviar por WhatsApp</Text>
       </View>
       <Text style={styles.cardSub}>
-        Lembretes de hoje para responsáveis sem e-mail cadastrado — abre o WhatsApp com a mensagem pronta.
+        Lembretes de hoje para enviar manualmente por WhatsApp — abre o WhatsApp com a mensagem pronta pra cada responsável elegível.
       </Text>
 
       {loading && (

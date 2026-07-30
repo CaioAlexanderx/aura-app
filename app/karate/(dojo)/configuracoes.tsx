@@ -26,6 +26,11 @@
 // F4: card "Check-in por QR" (QrSettingsCard) — liga/desliga o painel
 // de check-in por QR na tela Turmas; some sozinho se o endpoint ainda
 // não existir no ambiente (mesmo racional do ContaAuraCard).
+//
+// QA prod 30/07 (item 5): o erro de validação (ex.: "E-mail inválido.")
+// só sumia ao salvar de novo — ficava visível enquanto o sensei
+// corrigia o campo. Cada onChangeText agora limpa o erro DAQUELE campo
+// assim que o valor muda (não espera outro Salvar).
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -101,6 +106,12 @@ function DadosDojoCard() {
   const [foundedBR, setFoundedBR] = useState("");
   const [errors, setErrors] = useState<Partial<Record<DojoMeErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
+
+  // QA 30/07 (item 5): limpa o erro DESTE campo assim que o valor muda —
+  // antes o "E-mail inválido." (e afins) só sumia ao salvar de novo.
+  function clearFieldError(field: DojoMeErrorField) {
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  }
 
   function startEdit() {
     setName(dojoMe?.name ?? dojoName ?? "");
@@ -179,18 +190,24 @@ function DadosDojoCard() {
         </View>
       ) : (
         <View style={{ marginTop: 8, gap: 10 }}>
-          <FormField label="Nome do dojô" required value={name} onChangeText={setName} error={errors.name} />
+          <FormField
+            label="Nome do dojô"
+            required
+            value={name}
+            onChangeText={(t) => { setName(t); clearFieldError("name"); }}
+            error={errors.name}
+          />
           <FormField
             label="CNPJ"
             value={cnpj}
-            onChangeText={(t) => setCnpj(maskCnpj(t))}
+            onChangeText={(t) => { setCnpj(maskCnpj(t)); clearFieldError("cnpj"); }}
             keyboardType="numeric"
             error={errors.cnpj}
           />
           <FormField
             label="E-mail"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => { setEmail(t); clearFieldError("email"); }}
             autoCapitalize="none"
             keyboardType="email-address"
             error={errors.email}
@@ -198,14 +215,14 @@ function DadosDojoCard() {
           <FormField
             label="Telefone"
             value={phone}
-            onChangeText={(t) => setPhone(maskPhone(t))}
+            onChangeText={(t) => { setPhone(maskPhone(t)); clearFieldError("phone"); }}
             keyboardType="phone-pad"
             error={errors.phone}
           />
           <FormField
             label="Fundado em"
             value={foundedBR}
-            onChangeText={(t) => setFoundedBR(maskDateBR(t))}
+            onChangeText={(t) => { setFoundedBR(maskDateBR(t)); clearFieldError("founded_at"); }}
             placeholder="DD/MM/AAAA"
             keyboardType="numeric"
             error={errors.founded_at}
