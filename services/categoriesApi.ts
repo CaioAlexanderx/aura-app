@@ -52,6 +52,14 @@ export type AssignProductCategoriesBody = {
   also_in: string[];
 };
 
+// PUT /products/:productId/categories -- shape confirmado contra o
+// backend real (PRs #440/#441, ver revisao do orquestrador em 30/07).
+export type AssignProductCategoriesResponse = {
+  product_id: string;
+  primary_category_id: string;
+  also_in: string[];
+};
+
 // GAP DE CONTRATO: secao 4 nao define o shape de resposta de
 // GET /products/unclassified alem de "orfaos paginados". Assumido um
 // envelope { products, total } -- precisa confirmar com B1/B2.
@@ -65,6 +73,22 @@ export type UnclassifiedParams = {
   offset?: number;
 };
 
+// POST /products/categories/bulk (contrato secao 4). Motor da atribuicao
+// em lote da tela "A organizar" (Bloco C1). Mesma base implicita de
+// /products/unclassified nesta tabela -- nao ha "Base:" redeclarada pro
+// endpoint, entao segue o padrao dos vizinhos na mesma secao.
+export type BulkAssignMode = "replace_primary" | "add_secondary";
+export type BulkAssignCategoriesBody = {
+  product_ids: string[];
+  primary_category_id: string;
+  mode: BulkAssignMode;
+};
+export type BulkAssignCategoriesResponse = {
+  updated: number;
+  mode: BulkAssignMode;
+  primary_category_id: string;
+};
+
 // ─── Migracao (contrato secao 5) ───────────────────────────────────────
 // Nenhuma logica de classificacao aqui -- so tipos + chamadas finas. Os
 // hooks so transportam a decisao do lojista. Ver useCategoryMigration.ts.
@@ -76,20 +100,25 @@ export type MigrationStatus = {
   orphans: number;
 };
 
-// GAP DE CONTRATO: secao 5 nao detalha o shape de linha de
-// GET /categories/migration/proposal alem de "staging agrupado, com
-// contagem e ate 5 nomes de exemplo por linha". Assumido -- confirmar
-// com B1/B2.
+// Nomes de campo confirmados contra o backend real: sao as colunas de
+// category_migration_staging (product_count, sample_product_names), nao
+// os nomes genericos que eu tinha assumido antes da revisao.
 export type MigrationProposalItem = {
   id: string;
   raw_value: string;
-  count: number;
-  sample_names: string[];
+  product_count: number;
+  sample_product_names: string[];
   kind?: "existing" | "new" | "ignore" | null;
   target_path?: string | null;
   status?: string;
 };
-export type MigrationProposalResponse = { items: MigrationProposalItem[] };
+// O envelope tem `orphan` (a linha orfa do diagnostico, sem raw_value de
+// categoria) alem de `items` -- confirmado contra o backend, necessario
+// pro wizard do Bloco C2.
+export type MigrationProposalResponse = {
+  items: MigrationProposalItem[];
+  orphan: MigrationProposalItem | null;
+};
 
 export type MigrationItemPatchBody = {
   kind: "existing" | "new" | "ignore";
@@ -97,12 +126,16 @@ export type MigrationItemPatchBody = {
   status?: string;
 };
 
-// GAP DE CONTRATO: shape de GET /products/brand-candidates nao detalhado
-// alem de "agrupa ... com contagem". Assumido -- confirmar com B1/B2.
-export type BrandCandidate = { token: string; count: number };
+// Nome de campo confirmado contra o backend real: product_count (mesmo
+// padrao de MigrationProposalItem), nao `count`.
+export type BrandCandidate = { token: string; product_count: number };
 export type BrandCandidatesResponse = { candidates: BrandCandidate[] };
 
 export type ApplyBrandBody = { assignments: Array<{ token: string; brand: string }> };
+// POST /products/brand/apply -- shape confirmado contra o backend real.
+export type ApplyBrandResponse = {
+  results: Array<{ token: string; brand: string; updated: number }>;
+};
 
 const base = (companyId: string) => "/companies/" + companyId + "/product-categories";
 const migrationBase = (companyId: string) => "/companies/" + companyId + "/categories/migration";
@@ -128,8 +161,14 @@ export const categoriesApi = {
     request<Category>(base(companyId), { method: "POST", body }),
 
   assignProductCategories: (companyId: string, productId: string, body: AssignProductCategoriesBody) =>
-    request<{ ok: boolean }>("/companies/" + companyId + "/products/" + productId + "/categories", {
+    request<AssignProductCategoriesResponse>("/companies/" + companyId + "/products/" + productId + "/categories", {
       method: "PUT",
+      body,
+    }),
+
+  bulkAssignProductCategories: (companyId: string, body: BulkAssignCategoriesBody) =>
+    request<BulkAssignCategoriesResponse>(base(companyId) + "/products/categories/bulk", {
+      method: "POST",
       body,
     }),
 
@@ -163,7 +202,7 @@ export const categoriesApi = {
     request<BrandCandidatesResponse>("/companies/" + companyId + "/products/brand-candidates"),
 
   applyBrandAssignments: (companyId: string, body: ApplyBrandBody) =>
-    request<{ ok: boolean }>("/companies/" + companyId + "/products/brand/apply", { method: "POST", body }),
+    request<ApplyBrandResponse>("/companies/" + companyId + "/products/brand/apply", { method: "POST", body }),
 };
 
 export default categoriesApi;

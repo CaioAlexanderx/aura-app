@@ -86,6 +86,9 @@ export function useCategoryMigration() {
 
   return {
     proposal: proposalQuery.data?.items || [],
+    // Linha orfa do diagnostico (produtos sem categoria textual nenhuma).
+    // O wizard (Bloco C2) precisa dela separada dos itens normais.
+    orphan: proposalQuery.data?.orphan || null,
     isLoadingProposal: proposalQuery.isLoading,
     refetchProposal: proposalQuery.refetch,
     status: statusQuery.data || null,
