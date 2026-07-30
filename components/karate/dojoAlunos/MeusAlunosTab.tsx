@@ -2,9 +2,14 @@
 // MeusAlunosTab — aba "Meus alunos" da tela Alunos (F2)
 //
 // Dono do estado: carrega a lista (com summary) UMA vez e filtra
-// client-side no AlunosList (≤1000 alunos — sem paginação na F2);
-// orquestra os 3 modais (form, ficha, importação), todos irmãos —
-// nunca modal dentro de modal (RN-web).
+// client-side no AlunosList; orquestra os 3 modais (form, ficha,
+// importação), todos irmãos — nunca modal dentro de modal (RN-web).
+//
+// QA prod 30/07 (item 1, regressão): o backend agora pagina (default
+// 100, máximo 500 — Aura-backend#429). Pedimos o teto de uma vez
+// (DOJO_STUDENTS_MAX_LIMIT) e repassamos `count` (total sem paginação)
+// pro AlunosList, que avisa quando `count` > alunos carregados — sem
+// paginação de verdade ainda, mas sem esconder aluno em silêncio.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView, View, StyleSheet, ViewStyle } from "react-native";
@@ -12,7 +17,7 @@ import { KarateColors } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
-  karateDojoStudentsApi, DojoStudent, DojoStudentsSummary,
+  karateDojoStudentsApi, DojoStudent, DojoStudentsSummary, DOJO_STUDENTS_MAX_LIMIT,
 } from "@/services/karateDojoStudentsApi";
 import { AlunosList } from "./AlunosList";
 import { AlunoFormModal } from "./AlunoFormModal";
@@ -22,6 +27,7 @@ import { ImportAlunosModal } from "./ImportAlunosModal";
 export function MeusAlunosTab() {
   const { federationId } = useKarateFederation();
   const [students, setStudents] = useState<DojoStudent[]>([]);
+  const [count, setCount] = useState(0);
   const [summary, setSummary] = useState<DojoStudentsSummary | null>(null);
   const [schemaPending, setSchemaPending] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,8 +43,13 @@ export function MeusAlunosTab() {
     setLoading(true);
     setError(false);
     try {
-      const res = await karateDojoStudentsApi.listStudents(federationId, { summary: true });
-      setStudents(res.data ?? []);
+      const res = await karateDojoStudentsApi.listStudents(federationId, {
+        summary: true,
+        limit: DOJO_STUDENTS_MAX_LIMIT,
+      });
+      const data = res.data ?? [];
+      setStudents(data);
+      setCount(typeof res.count === "number" ? res.count : data.length);
       setSummary(res.summary ?? null);
       setSchemaPending(res.schema_pending === true);
     } catch {
@@ -73,6 +84,7 @@ export function MeusAlunosTab() {
 
       <AlunosList
         students={students}
+        count={count}
         summary={summary}
         loading={loading}
         error={error}
