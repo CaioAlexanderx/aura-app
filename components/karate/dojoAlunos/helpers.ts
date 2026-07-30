@@ -1,5 +1,5 @@
 // ============================================================
-// Helpers — Alunos do dojô (F2) + vínculo com a federação (F5a)
+// Helpers — Alunos do dojô (F2) + vínculo com a federação (F5a/F5b)
 //
 // Faixas comuns do karatê (chips do form; belt_order = posição na
 // hierarquia, 1 = Branca … 9 = Preta — espelha BELT_KEY_RANK do tema,
@@ -160,9 +160,9 @@ export function isValidEmail(raw: string | null | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
-// ── Nomes (F5a) — comparação aluno × praticante federado ─────
+// ── Nomes ──────────────────────────────
 
-/** minúsculas, sem acento, espaços colapsados — pronta pra comparar. */
+/** minúsculas, sem acento, espaços colapsados — pronta pra comparar/exibir. */
 export function normalizeName(raw: string | null | undefined): string {
   return String(raw ?? "")
     .normalize("NFD")
@@ -170,33 +170,6 @@ export function normalizeName(raw: string | null | undefined): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, " ");
-}
-
-// Conectores comuns de nome pt-BR — ignorados na comparação de token pra
-// não gerar falso-negativo ("Maria de Souza" × "Maria Souza") nem
-// falso-positivo ("de"/"da" sozinho batendo por acidente).
-const NAME_STOPWORDS = new Set(["de", "da", "do", "das", "dos", "e"]);
-
-function nameTokens(raw: string | null | undefined): string[] {
-  return normalizeName(raw)
-    .split(" ")
-    .filter((t) => t.length > 1 && !NAME_STOPWORDS.has(t));
-}
-
-/**
- * true quando dois nomes NÃO compartilham nenhum sobrenome/primeiro nome
- * (comparação normalizada: sem acento, minúsculas, ignora conectores).
- * Usada pra alertar quando o número FPKT digitado à mão vincula um
- * praticante com nome muito diferente do aluno — erro de digitação
- * vincula o aluno errado silenciosamente (QA 27/07, item 5). Dado
- * faltante não é divergência (regra da casa: ausênte ≠ inválido) — só
- * alerta quando DÁ pra comparar e os nomes realmente não batem.
- */
-export function namesDivergent(a: string | null | undefined, b: string | null | undefined): boolean {
-  const ta = nameTokens(a);
-  const tb = nameTokens(b);
-  if (ta.length === 0 || tb.length === 0) return false;
-  return !ta.some((t) => tb.includes(t));
 }
 
 // ── Erros da API → campo certo, em pt-BR ───────────
@@ -247,31 +220,62 @@ export function mapStudentSaveError(e: any): { field: StudentErrorField; message
   return { field: "general", message: e?.message || "Não foi possível salvar. Tente de novo." };
 }
 
-// ── Federação (F5a) — erros do POST/DELETE .../students/:sid/federate ──
+// ── Federação (F5b) — erros do POST/DELETE .../students/:sid/federate ──
 
 export type FederationErrorField = "fpkt_number" | "general";
 
 /**
- * Mapeia os erros do vínculo com a federação (Aura-backend#425) pro
- * campo certo, em pt-BR: 404 FPKT_NUMBER_NOT_FOUND (número não existe),
- * 409 PRACTITIONER_JA_VINCULADO (o praticante já é de outro aluno),
- * 409 JA_FEDERADO (este aluno já está federado) e 409 DOJO_NAO_CONECTADO
- * (o dojô ainda não está conectado à federação — cobre também o caminho
- * de solicitação, não só o de número).
+ * Mapeia os erros do preview/confirmação do vínculo com a federação
+ * (Aura-backend#447, migration 262) pro campo certo, em pt-BR:
+ *
+ * - 404 FPKT_NUMBER_NOT_FOUND — número não existe.
+ * - 409 PRATICANTE_JA_VINCULADO — o praticante já é de outro aluno. O
+ *   backend RENOMEOU o código (era PRACTITIONER_JA_VINCULADO); durante a
+ *   transição ele também manda `legacy_code` com o nome antigo — tratamos
+ *   os dois em `code` e em `legacy_code`.
+ * - 409 CPF_CONFLITANTE — os dois lados têm CPF e são diferentes. NÃO HÁ
+ *   OVERRIDE: o sensei precisa corrigir o cadastro ou usar outro número.
+ *   Normalmente isso já chega como `blockers` no preview (200, can_link
+ *   false) — este mapeamento cobre o caso de a confirmação ainda assim
+ *   devolver 409 (corrida entre preview e confirm).
+ * - 409 JA_FEDERADO — este aluno já está federado.
+ * - 409 DOJO_NAO_CONECTADO — o dojô ainda não está conectado à federação.
+ * - 503 SCHEMA_PENDING_262 — a migration 262 ainda não rodou neste
+ *   ambiente; a confirmação não funciona (o preview funciona normalmente).
  */
 export function mapFederationError(e: any): { field: FederationErrorField; message: string } {
   const code = e?.data?.code ?? e?.code ?? null;
+  const legacyCode = e?.data?.legacy_code ?? null;
   if (code === "FPKT_NUMBER_NOT_FOUND") {
     return { field: "fpkt_number", message: "Não encontramos nenhum praticante com este número FPKT." };
   }
-  if (code === "PRACTITIONER_JA_VINCULADO") {
+  if (
+    code === "PRATICANTE_JA_VINCULADO" ||
+    code === "PRACTITIONER_JA_VINCULADO" ||
+    legacyCode === "PRACTITIONER_JA_VINCULADO" ||
+    legacyCode === "PRATICANTE_JA_VINCULADO"
+  ) {
     return { field: "fpkt_number", message: "Este número FPKT já está vinculado a outro aluno." };
+  }
+  if (code === "CPF_CONFLITANTE") {
+    return {
+      field: "general",
+      message:
+        e?.data?.error ||
+        "O CPF do dojô e o CPF da federação são diferentes — não é possível sobrescrever. Corrija o cadastro ou use outro número FPKT.",
+    };
   }
   if (code === "JA_FEDERADO") {
     return { field: "general", message: "Este aluno já está federado." };
   }
   if (code === "DOJO_NAO_CONECTADO") {
     return { field: "general", message: "Seu dojô ainda não está conectado à federação — conecte primeiro para federar alunos." };
+  }
+  if (code === "SCHEMA_PENDING_262" || code === "SCHEMA_PENDING") {
+    return {
+      field: "general",
+      message: "Essa confirmação ainda não está disponível neste ambiente (atualização pendente no servidor). Tente novamente mais tarde.",
+    };
   }
   return { field: "general", message: e?.message || "Não foi possível concluir. Tente de novo." };
 }
