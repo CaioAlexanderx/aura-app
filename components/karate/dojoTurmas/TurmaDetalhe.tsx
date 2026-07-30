@@ -11,6 +11,11 @@
 //     "todos presentes"/"limpar" e Salvar (PUT em lote).
 //
 // Todos os pickers/painéis são INLINE (nunca modal aninhado — RN-web).
+//
+// QA prod 30/07 (item 1): loadCandidates busca os alunos ATIVOS pra
+// matricular — sem `limit`, o backend paginado (Aura-backend#429) só
+// devolvia os 100 primeiros, e um dojô grande não conseguia matricular
+// quem ficasse de fora. Pede o teto (DOJO_STUDENTS_MAX_LIMIT).
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -24,7 +29,7 @@ import { toast } from "@/components/Toast";
 import {
   karateDojoClassesApi, DojoClass, DojoClassStudent, DojoAttendanceRow,
 } from "@/services/karateDojoClassesApi";
-import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
+import { karateDojoStudentsApi, DojoStudent, DOJO_STUDENTS_MAX_LIMIT } from "@/services/karateDojoStudentsApi";
 import { beltViewFor } from "@/components/karate/dojoAlunos/helpers";
 import {
   fmtDateLongBR, mapClassesError, shiftISODate, todayISO, weekdayOfISO,
@@ -118,7 +123,10 @@ function AlunosTab({ federationId, turma, onChanged }: { federationId: string; t
 
   const loadCandidates = useCallback(async () => {
     try {
-      const res = await karateDojoStudentsApi.listStudents(federationId, { status: "active" });
+      const res = await karateDojoStudentsApi.listStudents(federationId, {
+        status: "active",
+        limit: DOJO_STUDENTS_MAX_LIMIT,
+      });
       setCandidates(res.data ?? []);
       setCandidatesFailed(false);
     } catch {
