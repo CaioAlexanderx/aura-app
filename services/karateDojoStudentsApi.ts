@@ -25,6 +25,14 @@
 // Regra da casa "dado faltante ≠ pendência": todo campo além de
 // full_name é opcional — o backend só recusa dado INVÁLIDO (422) e
 // menor de 18 sem responsável (422 MENOR_SEM_RESPONSAVEL, LGPD).
+//
+// QA prod 30/07 (item 1, regressão): Aura-backend#429 introduziu
+// paginação em GET .../students (default limit=100, máximo 500 — antes
+// era LIMIT 1000 fixo, sem paginação real). Dojô com >100 alunos via só
+// os 100 primeiros, e busca/filtros da tela (client-side) não alcançam
+// quem ficou de fora. `limit`/`offset` abaixo deixam o caller pedir o
+// teto (DOJO_STUDENTS_MAX_LIMIT) — paginação de verdade fica pra depois;
+// por ora, ninguém pode sumir em silêncio.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -178,6 +186,15 @@ export interface DojoImportResult {
 /** Máximo de linhas por request de import (o front fatia em lotes). */
 export const DOJO_IMPORT_MAX_ROWS = 500;
 
+/**
+ * Teto de itens por página aceito por GET .../students (Aura-backend#429:
+ * default 100, máximo 500). Paginação real ainda não existe no front —
+ * telas que precisam da lista inteira do dojô pedem este teto de uma vez
+ * (500 cobre folgadamente o dojô típico; acima disso, item de paginação
+ * de verdade fica pra outra tarefa — ver DojoStudentsListResponse.count).
+ */
+export const DOJO_STUDENTS_MAX_LIMIT = 500;
+
 // ── F5a: vínculo com a federação (Aura-backend#425 + migration 253) ─────
 
 /** Praticante encontrado/vinculado ao federar por número FPKT existente. */
@@ -252,6 +269,9 @@ export const karateDojoStudentsApi = {
       summary?: boolean;
       /** Ausente = todos; convive com status/q/belt. */
       federated?: boolean;
+      /** Aura-backend#429: default 100, máximo 500 (ver DOJO_STUDENTS_MAX_LIMIT). */
+      limit?: number;
+      offset?: number;
     } = {}
   ): Promise<DojoStudentsListResponse> =>
     request<DojoStudentsListResponse>(
@@ -261,6 +281,8 @@ export const karateDojoStudentsApi = {
         belt: opts.belt,
         summary: opts.summary ? "1" : undefined,
         federated: opts.federated == null ? undefined : String(opts.federated),
+        limit: opts.limit == null ? undefined : String(opts.limit),
+        offset: opts.offset == null ? undefined : String(opts.offset),
       })}`
     ),
 
