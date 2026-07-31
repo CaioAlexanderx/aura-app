@@ -30,6 +30,15 @@
 // grava com { fpkt_number, confirm: true, resolution }. Ver
 // previewFederateByNumber/confirmFederateByNumber abaixo.
 //
+// F7.0 (30/07 — Aura-backend#446/#447/#448 + migration 262): o aluno do
+// dojô ganhou os campos que faltavam para o dojô SER a fonte da
+// identidade: rg + endereço completo (zip_code/street/number/complement/
+// neighborhood/city/state) — mesmo vocabulário que o lado da federação já
+// usa (customers), para a sincronização dojô→federação (F7.2) ser cópia
+// coluna-a-coluna. Foto NÃO entra aqui: karate_dojo_students não tem
+// endpoint de upload próprio (photo_url é campo morto desde a 242) — sem
+// endpoint, não há UI a construir.
+//
 // Vive num service pequeno separado: karateApi.ts tem 125 KB e a regra
 // da casa é edição cirúrgica (mesmo racional do karateDojoInfoApi).
 //
@@ -83,9 +92,19 @@ export interface DojoStudent {
   /** Idade computada pelo backend (tz-safe). */
   age: number | null;
   cpf: string | null;
+  /** F7.0 (migration 262) — o dojô é fonte da identidade da pessoa. */
+  rg: string | null;
   sex: DojoStudentSex | null;
   phone: string | null;
   email: string | null;
+  /** F7.0 (migration 262) — mesmo vocabulário de customers, para a sincronização F7.2 ser cópia coluna-a-coluna. */
+  zip_code: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
   photo_url: string | null;
   belt_label: string | null;
   belt_order: number | null;
@@ -149,9 +168,19 @@ export interface DojoStudentPayload {
   full_name?: string;
   birth_date?: string | null;
   cpf?: string | null;
+  /** F7.0 (migration 262). */
+  rg?: string | null;
   sex?: DojoStudentSex | null;
   phone?: string | null;
   email?: string | null;
+  /** F7.0 (migration 262) — endereço completo, mesmo vocabulário de customers. */
+  zip_code?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
   photo_url?: string | null;
   belt_label?: string | null;
   belt_order?: number | null;

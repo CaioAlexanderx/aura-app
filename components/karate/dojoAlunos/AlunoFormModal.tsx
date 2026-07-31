@@ -13,6 +13,17 @@
 // Datas: input DD/MM/AAAA mascarado + conversão string-only (tz-safe);
 // a idade aparece ao lado assim que o nascimento é preenchido.
 // Erros da API (422/409) caem no campo certo via mapStudentSaveError.
+//
+// F7.0 (30/07/2026 — Aura-backend migration 262): RG + endereço
+// completo (zip_code/street/number/complement/neighborhood/city/state).
+// O dojô passou a ser FONTE DA IDENTIDADE da pessoa (decisão de
+// arquitetura do Caio: "o fluxo de informação sobe, dojô → federação") —
+// sem esses campos o dojô não consegue preencher a ficha H1 que a
+// federação exige para adotar/federar um aluno. Endereço entra numa
+// seção RECOLHIDA por padrão (acordeão) pra não alongar ainda mais um
+// formulário que já é longo; abre sozinha ao editar um aluno que já tem
+// algo preenchido. Foto FICA DE FORA: não existe endpoint de upload no
+// lado do dojô — nada a construir aqui.
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -30,7 +41,7 @@ import {
 import { GuardianPicker } from "./GuardianPicker";
 import {
   COMMON_BELTS, beltOrderForLabel, ageFromISO, isoToBR, brToISO,
-  maskDateBR, maskCpf, onlyDigits, mapStudentSaveError, StudentErrorField,
+  maskDateBR, maskCpf, maskCep, onlyDigits, mapStudentSaveError, StudentErrorField,
 } from "./helpers";
 
 interface Props {
@@ -58,6 +69,7 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [fullName, setFullName] = useState("");
   const [birthBR, setBirthBR] = useState("");
   const [cpf, setCpf] = useState("");
+  const [rg, setRg] = useState("");
   const [sex, setSex] = useState<DojoStudentSex | null>(null);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -69,6 +81,16 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [guardian, setGuardian] = useState<DojoStudentGuardianRef | null>(null);
   const [consent, setConsent] = useState(false);
   const [notes, setNotes] = useState("");
+  // F7.0: endereço — acordeão recolhido por padrão (formulário já é longo).
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [cep, setCep] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
+  const [complement, setComplement] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [ufState, setUfState] = useState("");
   const [errors, setErrors] = useState<Partial<Record<StudentErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
 
@@ -127,6 +149,7 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setFullName(student.full_name ?? "");
       setBirthBR(isoToBR(student.birth_date));
       setCpf(student.cpf ? maskCpf(student.cpf) : "");
+      setRg(student.rg ?? "");
       setSex(student.sex ?? null);
       setPhone(student.phone ?? "");
       setEmail(student.email ?? "");
@@ -140,10 +163,24 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setGuardian(student.guardian ?? null);
       setConsent(student.consent_lgpd === true);
       setNotes(student.notes ?? "");
+      setCep(student.zip_code ? maskCep(student.zip_code) : "");
+      setStreet(student.street ?? "");
+      setNumber(student.number ?? "");
+      setComplement(student.complement ?? "");
+      setNeighborhood(student.neighborhood ?? "");
+      setCity(student.city ?? "");
+      setUfState(student.state ?? "");
+      // Abre o acordeão sozinho quando já há algo de RG/endereço salvo —
+      // esconder dado já preenchido seria pior do que a parede de campos.
+      setAddressOpen(
+        !!(student.rg || student.zip_code || student.street || student.number ||
+           student.complement || student.neighborhood || student.city || student.state)
+      );
     } else {
       setFullName("");
       setBirthBR("");
       setCpf("");
+      setRg("");
       setSex(null);
       setPhone("");
       setEmail("");
@@ -155,6 +192,14 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setGuardian(null);
       setConsent(false);
       setNotes("");
+      setCep("");
+      setStreet("");
+      setNumber("");
+      setComplement("");
+      setNeighborhood("");
+      setCity("");
+      setUfState("");
+      setAddressOpen(false);
     }
   }, [visible, student]);
 
@@ -162,6 +207,32 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const age = birthISO ? ageFromISO(birthISO) : null;
   const isMinor = age != null && age < 18;
   const effectiveBelt = beltFree ? (beltFreeText.trim() || null) : beltLabel;
+
+  // CEP autopreenche o endereço (ViaCEP) — mesmo padrão já usado na ficha
+  // do praticante na federação (praticante-ficha/EnderecoSection.tsx).
+  // Silencioso em erro: endereço é opcional, uma falha na busca não pode
+  // travar o cadastro do aluno.
+  async function onCepChange(raw: string) {
+    const masked = maskCep(raw);
+    setCep(masked);
+    const digits = onlyDigits(masked);
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const j = await r.json();
+      if (!j?.erro) {
+        setStreet((v) => j.logradouro || v);
+        setNeighborhood((v) => j.bairro || v);
+        setCity((v) => j.localidade || v);
+        setUfState((v) => j.uf || v);
+      }
+    } catch {
+      // silencioso — CEP é opcional
+    } finally {
+      setCepLoading(false);
+    }
+  }
 
   const save = async () => {
     const errs: Partial<Record<StudentErrorField, string>> = {};
@@ -182,9 +253,17 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       full_name: fullName.trim(),
       birth_date: birthISO,
       cpf: cpfDigits || null,
+      rg: rg.trim() || null,
       sex,
       phone: phone.trim() || null,
       email: email.trim() || null,
+      zip_code: onlyDigits(cep) || null,
+      street: street.trim() || null,
+      number: number.trim() || null,
+      complement: complement.trim() || null,
+      neighborhood: neighborhood.trim() || null,
+      city: city.trim() || null,
+      state: ufState.trim() ? ufState.trim().toUpperCase().slice(0, 2) : null,
       belt_label: effectiveBelt,
       belt_order: beltOrderForLabel(effectiveBelt),
       status,
@@ -208,6 +287,8 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setSaving(false);
     }
   };
+
+  const addressSummary = [city, ufState].filter(Boolean).join(" / ");
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -259,6 +340,12 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
                 />
               </View>
             </View>
+            <FormField
+              label="RG"
+              value={rg}
+              onChangeText={setRg}
+              placeholder="00.000.000-0"
+            />
 
             <Text style={styles.label}>Sexo</Text>
             <View style={styles.chips}>
@@ -365,6 +452,69 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               </View>
             </View>
 
+            {/* F7.0: Endereço — acordeão recolhido por padrão (formulário já é
+                longo); abre sozinho ao editar aluno com algo já preenchido
+                (ver hidratação acima). Necessário pra ficha H1 da federação
+                (RG + endereço completo) e pra o dojô ser fonte da identidade. */}
+            <TouchableOpacity
+              style={styles.addressToggle}
+              onPress={() => setAddressOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: addressOpen }}
+              accessibilityLabel="Endereço"
+            >
+              <Icon name="location" size={14} color={KarateColors.ink3} />
+              <Text style={styles.addressToggleTxt}>Endereço</Text>
+              <Text style={styles.addressToggleHint} numberOfLines={1}>
+                {addressOpen ? "" : (addressSummary || "opcional")}
+              </Text>
+              <Icon name={addressOpen ? "chevron_up" : "chevron_down"} size={14} color={KarateColors.ink3} />
+            </TouchableOpacity>
+
+            {addressOpen && (
+              <View style={styles.addressBox}>
+                <FormField
+                  label="CEP"
+                  value={cep}
+                  onChangeText={onCepChange}
+                  placeholder="00000-000"
+                  keyboardType="numeric"
+                  hint={cepLoading ? "Buscando endereço…" : "preenche o endereço automaticamente"}
+                />
+                <View style={styles.row2}>
+                  <View style={{ flex: 2 }}>
+                    <FormField label="Logradouro" value={street} onChangeText={setStreet} placeholder="Rua, avenida…" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <FormField label="Número" value={number} onChangeText={setNumber} placeholder="000" keyboardType="numeric" />
+                  </View>
+                </View>
+                <View style={styles.row2}>
+                  <View style={{ flex: 1 }}>
+                    <FormField label="Complemento" value={complement} onChangeText={setComplement} placeholder="Apto, bloco…" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <FormField label="Bairro" value={neighborhood} onChangeText={setNeighborhood} />
+                  </View>
+                </View>
+                <View style={styles.row2}>
+                  <View style={{ flex: 2 }}>
+                    <FormField label="Cidade" value={city} onChangeText={setCity} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <FormField
+                      label="UF"
+                      value={ufState}
+                      onChangeText={(t) => setUfState(t.toUpperCase().slice(0, 2))}
+                      maxLength={2}
+                      placeholder="SP"
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
+
             <View ref={guardianFieldRef} style={[styles.guardianBox, isMinor && styles.guardianBoxMinor]}>
               <Text style={styles.section2}>
                 Responsável {isMinor ? "· obrigatório para menor de 18" : "· opcional para adulto"}
@@ -442,6 +592,12 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
   chipTxt: { fontSize: 12.5, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   chipTxtOn: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
+  // F7.0: acordeão de endereço — some da vista por padrão, some sem
+  // engordar visualmente o resto do formulário.
+  addressToggle: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface } as ViewStyle,
+  addressToggleTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
+  addressToggleHint: { flex: 1, fontSize: 11.5, color: KarateColors.ink3, textAlign: "right" } as TextStyle,
+  addressBox: { gap: 10, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface } as ViewStyle,
   guardianBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
   guardianBoxMinor: { borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft } as ViewStyle,
   consentRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 } as ViewStyle,

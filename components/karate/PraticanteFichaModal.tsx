@@ -11,24 +11,40 @@
 //   POST /federation/:id/practitioners/:practitionerId/photo
 //   → ocorre APÓS o create/patch; falha no upload não reverte o cadastro.
 //
+// F7.1 (30/07/2026 — Aura-backend#446/#447/#448, migration 262): decisão
+// de arquitetura do Caio — "a federação não faz gestão de informação [...]
+// o trabalho dela é apenas receber a sincronização dos dados gerenciados
+// pelos dojôs". Quando um dojô adota a identidade de um praticante
+// (dojo_federate), GET .../practitioners/:id devolve
+// identity_managed_by:'dojo' + identity_dojo:{id,name}. Nome, nascimento,
+// CPF, RG, sexo, contato e endereço passam a ser mantidos pelo DOJÔ —
+// esta ficha os deixa em modo leitura (ver identityLocked abaixo) e só um
+// staff pode destravar uma correção pontual, com motivo obrigatório
+// (federation_identity_override + identity_override_reason). Matrícula,
+// papéis, status e dojô (onde o praticante TREINA — não confundir com
+// QUEM MANTÉM a ficha) continuam editáveis normalmente: é o que a
+// federação EMITE.
+//
 // Princípios (decisões Caio): ver praticante-ficha/helpers.ts + seções.
 // ============================================================
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, Pressable,
   ActivityIndicator, useWindowDimensions, TextInput, Animated, StyleSheet,
+  ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ModalPop } from "@/components/karate/anim/ModalPop";
-import { ShojiPalette as P, BeltKey } from "@/constants/karateTheme";
+import { ShojiPalette as P, BeltKey, KarateFonts as F } from "@/constants/karateTheme";
 import { karateApi } from "@/services/karateApi";
 import { request } from "@/services/api";
 import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone as maskPhoneUtil } from "@/utils/masks";
-import { stripRedundantCountryCode } from "@/components/karate/praticante-detalhe/helpers";
+import { stripRedundantCountryCode, canTransfer } from "@/components/karate/praticante-detalhe/helpers";
 import { pickFileWeb } from "@/services/studioUploadApi";
 import { toast as toastGlobal } from "@/components/Toast";
+import { useKarateFederation } from "@/contexts/KarateFederation";
 
 import {
   EMPTY, Form, SharedSnapshot,
@@ -78,11 +94,36 @@ let lastDojo: { id: string; name: string } | null = null;
 // (pedido do Caio, 17/07/2026; ver useEffect de "cadastro novo" abaixo).
 let lastShared: SharedSnapshot | null = null;
 
+// F7.1: estilos próprios do banner "ficha mantida pelo dojô" + caixa de
+// destrava de staff. Vivem aqui (não em shared-styles.tsx) porque são
+// exclusivos deste shell — as seções não precisam deles.
+const localStyles = StyleSheet.create({
+  identityBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: P.paper3, borderWidth: 1, borderColor: P.line, borderRadius: 12, padding: 12, marginBottom: 10 } as ViewStyle,
+  identityBannerTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.ink, marginBottom: 3 } as TextStyle,
+  identityBannerTxt: { fontFamily: F.body, fontSize: 12, color: P.ink2, lineHeight: 17 } as TextStyle,
+  overrideLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 } as ViewStyle,
+  overrideLinkTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: P.red } as TextStyle,
+  overrideBox: { gap: 8, backgroundColor: "rgba(184,70,58,0.06)", borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 12, marginBottom: 10 } as ViewStyle,
+  overrideBoxTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.ink } as TextStyle,
+  overrideBoxTxt: { fontFamily: F.body, fontSize: 12, color: P.ink2, lineHeight: 17 } as TextStyle,
+  overrideInput: { minHeight: 60, textAlignVertical: "top" } as TextStyle,
+  overrideCancelBtn: { alignSelf: "flex-start" } as ViewStyle,
+  overrideCancelTxt: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: P.ink3 } as TextStyle,
+  lockedBlock: { opacity: 0.55 } as ViewStyle,
+});
+
 export function PraticanteFichaModal({ federationId, visible, practitionerId, onClose, onSaved }: Props) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const cardW = Math.min(720, width - 24);
   const isEdit = !!practitionerId;
+
+  // F7.1: mesmo gate de papel já usado por TransferenciaTab e
+  // app/karate/(federation)/dojos/[dojoId].tsx (canTransfer — federation_admin
+  // ou federation_staff; role null = mock/dev, nada escondido). Reusado aqui
+  // como "é staff?" para liberar o destrava de identidade.
+  const { karateRole } = useKarateFederation();
+  const isStaff = canTransfer(karateRole);
 
   // Link "Abrir ficha completa" no topo do modal (pedido do Caio, 22/07/2026)
   // - so no modo EDICAO (no cadastro novo ainda nao existe ficha completa).
@@ -129,6 +170,16 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
   const [graduatedAtBr, setGraduatedAtBr] = useState("");
   // P6: File escolhido pelo usuário (web); null = nenhuma foto nova nesta sessão de edição
   const pendingPhotoFile = useRef<File | null>(null);
+
+  // F7.1: quem mantém a IDENTIDADE desta ficha ('federation' é o default —
+  // cobre tanto cadastro novo quanto os 9.783 praticantes de hoje) + o dojô
+  // gestor (só preenchido quando 'dojo'). Staff pode destravar (overrideOn)
+  // uma correção pontual — exige motivo (overrideReason) antes de enviar.
+  const [identityManagedBy, setIdentityManagedBy] = useState<"federation" | "dojo">("federation");
+  const [identityDojo, setIdentityDojo] = useState<{ id: string; name: string } | null>(null);
+  const [overrideOn, setOverrideOn] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const overrideReasonRef = useRef<TextInput>(null);
 
   // ref mutável para lastDojo — passado para DojoSelectSection
   const lastDojoRef = useRef<{ id: string; name: string } | null>(lastDojo);
@@ -262,6 +313,11 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       setManualRegistrationNumber("");
       setBeltKey("branca"); setDanDeg(null); setKyuDeg(null);
       setGraduatedAtBr("");
+      // F7.1: cadastro novo nunca é gerido pelo dojô — nasce 'federation'.
+      setIdentityManagedBy("federation");
+      setIdentityDojo(null);
+      setOverrideOn(false);
+      setOverrideReason("");
       return;
     }
     setCanRepeat(false);
@@ -297,6 +353,13 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
         setFpkt(p.karate_registration_number || null);
         setManualRegistrationNumber(p.karate_registration_number || "");
         setBeltName(p.current_belt?.belt_name || null);
+        // F7.1: identity_managed_by/identity_dojo vêm do backend (Aura-backend
+        // #446/#447/#448, migration 262) — ausentes = ficha ainda 'federation'
+        // (comportamento de hoje, os 9.783 praticantes existentes).
+        setIdentityManagedBy(p.identity_managed_by === "dojo" ? "dojo" : "federation");
+        setIdentityDojo(p.identity_dojo ?? null);
+        setOverrideOn(false);
+        setOverrideReason("");
       })
       .catch(() => showError("Não foi possível carregar a ficha."))
       .finally(() => setLoading(false));
@@ -377,6 +440,13 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
 
   const guardianCpfBad = form.guardian_cpf.length > 0 && !cpfValido(form.guardian_cpf);
 
+  // F7.1: trava dos campos de IDENTIDADE (Nome/Nascimento/CPF/RG/Sexo/
+  // Contato/Endereço) — só entra em cadastro EXISTENTE (isEdit) mantido
+  // pelo dojô e enquanto ninguém destravou. Matrícula, papéis, status e
+  // dojô (onde treina) NUNCA travam: são o que a federação emite.
+  const isDojoManaged = isEdit && identityManagedBy === "dojo";
+  const identityLocked = isDojoManaged && !overrideOn;
+
   // P6: handler de foto — abre picker, gera preview local, guarda File no ref
   const handlePickPhoto = useCallback(async () => {
     setPhotoLoading(true);
@@ -443,31 +513,50 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       goToField("matricula");
       return;
     }
+    // F7.1: destravou a identidade mas não disse por quê — o servidor
+    // recusa com 422 sem motivo; checamos aqui pra não gastar um round-trip
+    // com um erro que já sabemos que vem, e pra focar o campo certo.
+    if (isDojoManaged && overrideOn && !overrideReason.trim()) {
+      showError("Informe o motivo da correção antes de salvar — a alteração fica registrada na auditoria.");
+      overrideReasonRef.current?.focus();
+      return;
+    }
     setErrorMsg(null); setSaving(true);
+
+    // F7.1: campos de IDENTIDADE só entram no body quando a ficha NÃO está
+    // travada — OMITIDOS (nunca enviados como null) quando o dojô mantém e
+    // ninguém destravou. É de propósito: mandar o MESMO valor de volta
+    // ainda assim apresenta "campo de identidade presente" pro backend, que
+    // devolveria 409 IDENTITY_MANAGED_BY_DOJO mesmo sem mudança nenhuma.
+    const includeIdentity = !isDojoManaged || overrideOn;
 
     // P6: nunca envia blob URL no body do praticante.
     // A foto é vinculada exclusivamente via o endpoint dedicado /photo (após o save).
     const body: any = {
-      full_name: form.full_name.trim(),
-      cpf: onlyD(form.cpf) || null,
-      rg: form.rg || null,
-      birth_date: birthIso,
-      email: form.email || null,
-      phone: onlyD(form.phone) || null,
+      ...(includeIdentity ? {
+        full_name: form.full_name.trim(),
+        cpf: onlyD(form.cpf) || null,
+        rg: form.rg || null,
+        birth_date: birthIso,
+        email: form.email || null,
+        phone: onlyD(form.phone) || null,
+        street: form.street || null, number: form.number || null, complement: form.complement || null,
+        neighborhood: form.neighborhood || null, city: form.city || null,
+        state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
+        zip_code: onlyD(form.zip_code) || null,
+        // F9: sexo (mesmo padrão do birth_date: string dd/mm/aaaa → ISO no submit)
+        sex: form.sex || null,
+      } : {}),
       dojo_id: form.dojo_id,
       is_arbiter: form.is_arbiter, is_instructor: form.is_instructor, is_examiner: form.is_examiner, is_assistant: form.is_assistant,
       is_active: form.is_active,
-      street: form.street || null, number: form.number || null, complement: form.complement || null,
-      neighborhood: form.neighborhood || null, city: form.city || null,
-      state: form.state ? form.state.toUpperCase().slice(0, 2) : null,
-      zip_code: onlyD(form.zip_code) || null,
-      // P7
+      // P7 — não é campo de identidade (contrato F7.0): sempre editável,
+      // mesmo com a ficha travada.
       guardian_name: form.guardian_name.trim() || null,
       guardian_cpf: onlyD(form.guardian_cpf) || null,
       guardian_phone: onlyD(form.guardian_phone) || null,
       guardian_relationship: form.guardian_relationship || null,
-      // F9: sexo + filiado desde (mesmo padrão do birth_date: string dd/mm/aaaa → ISO no submit)
-      sex: form.sex || null,
+      // Filiado desde — o que a federação EMITE: sempre editável.
       affiliation_since: parseBrDate(form.affiliation_since),
       // P6: photo_url deliberadamente AUSENTE do body (blob inútil; URL permanente vem do /photo)
     };
@@ -494,6 +583,13 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
     if (isEdit && manualRegistrationNumber.trim() && manualRegistrationNumber.trim() !== (fpkt || "")) {
       body.karate_registration_number = manualRegistrationNumber.trim();
     }
+    // F7.1: staff destravou uma correção pontual numa ficha mantida pelo
+    // dojô — o servidor exige o motivo (422 sem ele); a trilha de auditoria
+    // guarda quem, quando e por quê.
+    if (isDojoManaged && overrideOn) {
+      body.federation_identity_override = true;
+      body.identity_override_reason = overrideReason.trim();
+    }
 
     let savedId: string | null = practitionerId ?? null;
 
@@ -507,6 +603,26 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
       }
     } catch (e: any) {
       setSaving(false);
+      // F7.1: erros novos da adoção de identidade (Aura-backend#446/#447/#448).
+      const code = e?.data?.code ?? e?.code ?? null;
+      if (code === "IDENTITY_MANAGED_BY_DOJO") {
+        const dojoFromError = e?.data?.identity_dojo as { id: string; name: string } | undefined;
+        setIdentityManagedBy("dojo");
+        if (dojoFromError) setIdentityDojo(dojoFromError);
+        showError(
+          `Esses dados são mantidos pelo dojô ${dojoFromError?.name || identityDojo?.name || "vinculado"} — a correção precisa ser feita lá. Para uma exceção pontual, use "Destravar para corrigir agora".`
+        );
+        return;
+      }
+      if (code === "IDENTITY_OVERRIDE_NOT_ALLOWED") {
+        showError("Este canal não permite destravar a identidade da ficha — peça a um administrador da federação para corrigir pelo canal certo.");
+        return;
+      }
+      if (code === "VALIDATION_ERROR" && /override_reason|motivo/i.test(JSON.stringify(e?.data?.errors || []))) {
+        showError("Informe o motivo da correção antes de salvar.");
+        overrideReasonRef.current?.focus();
+        return;
+      }
       showError(e?.message || "Não foi possível salvar. Tente novamente.");
       return;
     }
@@ -627,6 +743,58 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 </View>
               )}
 
+              {/* F7.1: ficha mantida pelo dojô — aviso + destrava de staff.
+                  O nome do DOJÔ aparece sempre (nunca o id) — é a fonte da
+                  identidade agora, não um detalhe técnico. */}
+              {isDojoManaged && (
+                <View style={localStyles.identityBanner}>
+                  <Icon name="lock" size={14} color={P.ink2} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={localStyles.identityBannerTitle}>
+                      Ficha mantida pelo dojô {identityDojo?.name || "vinculado"}
+                    </Text>
+                    <Text style={localStyles.identityBannerTxt}>
+                      Nome, nascimento, CPF, RG, sexo, contato e endereço só podem ser corrigidos lá — é assim que o dado sobe até aqui. Matrícula, papéis, status e dojô continuam editáveis normalmente.
+                    </Text>
+                    {isStaff && (
+                      <TouchableOpacity
+                        onPress={() => setOverrideOn(true)}
+                        style={localStyles.overrideLink}
+                        accessibilityRole="button"
+                        accessibilityLabel="Destravar para corrigir agora"
+                      >
+                        <Icon name="unlock" size={12} color={P.red} />
+                        <Text style={localStyles.overrideLinkTxt}>Destravar para corrigir agora</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {isDojoManaged && overrideOn && (
+                <View style={localStyles.overrideBox}>
+                  <Text style={localStyles.overrideBoxTitle}>Correção pontual — motivo obrigatório</Text>
+                  <Text style={localStyles.overrideBoxTxt}>
+                    Você vai editar campos que o dojô mantém. Essa alteração fica registrada na trilha de auditoria com o motivo abaixo — não é um jeito de contornar em silêncio, é uma correção pontual e rastreada.
+                  </Text>
+                  <TextInput
+                    ref={overrideReasonRef}
+                    value={overrideReason}
+                    onChangeText={setOverrideReason}
+                    placeholder="Por que esta correção é necessária?"
+                    placeholderTextColor={P.ink4}
+                    style={[styles.input, localStyles.overrideInput]}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    onPress={() => { setOverrideOn(false); setOverrideReason(""); }}
+                    style={localStyles.overrideCancelBtn}
+                  >
+                    <Text style={localStyles.overrideCancelTxt}>Cancelar — manter travado</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* ── Seção: Identidade (foto via photoSlot preserva ordem original: P6 antes do Nome) ── */}
               <DadosBasicosSection
                 federationId={federationId}
@@ -644,6 +812,7 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 cpfRef={cpfRef}
                 rgRef={rgRef}
                 onRgSubmit={() => phoneRef.current?.focus()}
+                identityLocked={identityLocked}
                 photoSlot={
                   <FotoSection
                     photoUrl={form.photo_url}
@@ -703,18 +872,23 @@ export function PraticanteFichaModal({ federationId, visible, practitionerId, on
                 </>
               ) : null}
 
-              {/* ── Seção: Contato & endereço ── */}
-              <EnderecoSection
-                form={form}
-                setField={set}
-                cepStatus={cepStatus}
-                onCep={onCep}
-                phoneRef={phoneRef}
-                emailRef={emailRef}
-                onEmailSubmit={handleSave}
-              />
+              {/* ── Seção: Contato & endereço (F7.1: travada quando a ficha é do dojô — todos os 9 campos aqui dentro são identidade) ── */}
+              <View
+                style={identityLocked ? localStyles.lockedBlock : undefined}
+                pointerEvents={identityLocked ? "none" : "auto"}
+              >
+                <EnderecoSection
+                  form={form}
+                  setField={set}
+                  cepStatus={cepStatus}
+                  onCep={onCep}
+                  phoneRef={phoneRef}
+                  emailRef={emailRef}
+                  onEmailSubmit={handleSave}
+                />
+              </View>
 
-              {/* ── P7: Seção Responsável ── */}
+              {/* ── P7: Seção Responsável (não é campo de identidade — sempre editável) ── */}
               <ResponsavelSection
                 form={form}
                 setField={set}

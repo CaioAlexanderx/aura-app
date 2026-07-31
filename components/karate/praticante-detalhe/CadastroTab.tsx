@@ -59,10 +59,32 @@ export function CadastroTab({ practitioner }: Props) {
   const age = ageFromBirthDate(p.birth_date);
   const needsGuardian = age !== null && age < 18;
 
+  // F7.0 (30/07/2026): a decisão de arquitetura do Caio — "o fluxo de
+  // informação sobe, dojô → federação" — significa que uma ficha adotada
+  // (dojo_federate, migration 262) tem os dados de IDENTIDADE mantidos
+  // pelo dojô. Esta aba é só leitura; sem o aviso, o staff via um CPF ou
+  // endereço desatualizado sem saber que a correção precisa ser feita lá.
+  // (p as any): identity_managed_by/identity_dojo não estão em
+  // PractitionerDetail (services/karateApi.ts, 125KB) — cast em vez de
+  // reescrever o arquivo inteiro por 2 campos, ver nota no PR.
+  const identityManagedBy = (p as any).identity_managed_by as string | null | undefined;
+  const identityDojo = (p as any).identity_dojo as { id: string; name: string } | null | undefined;
+  const identityManagedByDojo = identityManagedBy === "dojo";
+
   return (
     <View style={tabStyles.tab}>
       {/* Foto movida para o avatar do cabeçalho da ficha (ao lado do nome). */}
       <SectionHeader title="DADOS PESSOAIS" />
+
+      {identityManagedByDojo && (
+        <View style={fieldStyles.identityBanner}>
+          <Icon name="lock" size={13} color={KarateColors.ink2} />
+          <Text style={fieldStyles.identityBannerTxt}>
+            Estes dados são mantidos pelo dojô {identityDojo?.name || "vinculado"} — a correção precisa ser feita lá; é assim que o dado sobe até a federação.
+          </Text>
+        </View>
+      )}
+
       <Field label="Nome completo" value={p.full_name} />
       <Field label="CPF" value={formatCpfDisplay(p.cpf)} />
       <Field label="RG" value={p.rg} />
@@ -150,9 +172,11 @@ const fieldStyles = StyleSheet.create({
   value:       { flex: 1, fontSize: 13, color: KarateColors.ink, paddingTop: 2 } as TextStyle,
   empty:       { flex: 1, fontSize: 13, color: KarateColors.ink4, paddingTop: 2 } as TextStyle,
   sectionHead: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7, color: KarateColors.ink3, marginTop: 8, marginBottom: 4, textTransform: "uppercase" } as TextStyle,
+  // F7.0: aviso de ficha mantida pelo dojô (identity_managed_by === 'dojo').
+  identityBanner:    { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 10, marginBottom: 6 } as ViewStyle,
+  identityBannerTxt: { flex: 1, fontSize: 12, color: KarateColors.ink2, lineHeight: 17 } as TextStyle,
 });
 
 const tabStyles = StyleSheet.create({
   tab:       { padding: 16, gap: 6 } as ViewStyle,
 });
-
