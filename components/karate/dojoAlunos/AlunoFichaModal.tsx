@@ -20,6 +20,11 @@
 // federação CONFIRMA. Mesmo racional de sub-componente inline das seções
 // acima.
 //
+// F7.0 (30/07/2026): RG + endereço completo — mesmos campos que a
+// migration 262 criou em karate_dojo_students. Endereço só aparece
+// quando pelo menos um campo está preenchido (mesmo padrão condicional
+// de CadastroTab.tsx no lado da federação).
+//
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
 // grupo (dojo), então nada de confirmAsync aqui.
@@ -33,7 +38,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
-import { beltViewFor, isoToBR, maskCpf, mapStudentSaveError, formatPhone } from "./helpers";
+import { beltViewFor, isoToBR, maskCpf, maskCep, mapStudentSaveError, formatPhone } from "./helpers";
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
@@ -124,6 +129,7 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
 
   const belt = s ? beltViewFor(s.belt_label) : null;
   const minor = s?.age != null && s.age < 18;
+  const hasAddress = !!s && [s.street, s.number, s.complement, s.neighborhood, s.city, s.state, s.zip_code].some(Boolean);
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -162,9 +168,22 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
 
               <InfoRow label="Nascimento" value={s.birth_date ? `${isoToBR(s.birth_date)}${s.age != null ? ` · ${s.age} anos` : ""}` : null} />
               <InfoRow label="CPF" value={s.cpf ? maskCpf(s.cpf) : null} />
+              <InfoRow label="RG" value={s.rg} />
               <InfoRow label="Sexo" value={s.sex ? SEX_LABEL[s.sex] ?? s.sex : null} />
               <InfoRow label="Telefone" value={s.phone ? formatPhone(s.phone) : null} />
               <InfoRow label="E-mail" value={s.email} />
+              {hasAddress && (
+                <>
+                  <InfoRow label="CEP" value={s.zip_code ? maskCep(s.zip_code) : null} />
+                  <InfoRow
+                    label="Endereço"
+                    value={s.street ? `${s.street}${s.number ? `, ${s.number}` : ""}` : (s.number ? `Nº ${s.number}` : null)}
+                  />
+                  <InfoRow label="Complemento" value={s.complement} />
+                  <InfoRow label="Bairro" value={s.neighborhood} />
+                  <InfoRow label="Município" value={[s.city, s.state].filter(Boolean).join(" / ") || null} />
+                </>
+              )}
               <InfoRow label="Início no dojô" value={s.enrolled_at ? isoToBR(s.enrolled_at) : null} />
               <InfoRow label="Consentimento LGPD" value={s.consent_lgpd ? "Registrado" : "Não registrado"} />
               {!!s.notes && <InfoRow label="Observações" value={s.notes} />}
