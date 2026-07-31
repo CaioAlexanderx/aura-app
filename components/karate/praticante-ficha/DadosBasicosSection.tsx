@@ -5,6 +5,15 @@
 // photoSlot: nó React renderizado logo após o SectionTitle "Identidade",
 // antes do campo Nome — preserva a ordem exata do original (P6 é o primeiro
 // elemento da seção de identidade, acima do nome).
+//
+// F7.1 (30/07/2026): identityLocked trava SÓ os campos de IDENTIDADE (Nome,
+// Nascimento, CPF, RG, Sexo) quando a ficha é mantida pelo dojô — nunca o
+// seletor de dojô (onde o praticante TREINA, visão da federação — outra
+// coisa, ver migration 262), o registrationSlot (matrícula FPKT) ou "Filiado
+// desde": esses três são o que a federação EMITE e continuam editáveis
+// mesmo com a ficha travada. pointerEvents="none" + opacidade por bloco —
+// sem ensinar o primitivo Field (shared-styles) a ter um "disabled" que mais
+// nenhuma tela usa ainda.
 // ============================================================
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity, LayoutChangeEvent } from "react-native";
@@ -51,14 +60,21 @@ interface DadosBasicosSectionProps {
   // F-matricula: slot renderizado logo após o seletor de dojô — só no cadastro
   // (a página chamadora só passa este slot quando !isEdit).
   registrationSlot?: React.ReactNode;
+  // F7.1: true quando a ficha é mantida pelo dojô e ninguém destravou uma
+  // correção pontual — Nome/Nascimento/CPF/RG/Sexo ficam não-interativos.
+  identityLocked?: boolean;
 }
 
 export function DadosBasicosSection({
   federationId, form, setField, lastDojoRef,
   dateBad, age, cpfBad, nameBad, dojoBad, onDojoLayout,
   nameRef, birthRef, cpfRef, rgRef, onRgSubmit,
-  photoSlot, registrationSlot,
+  photoSlot, registrationSlot, identityLocked,
 }: DadosBasicosSectionProps) {
+  const lockProps = identityLocked
+    ? { pointerEvents: "none" as const, style: { opacity: 0.55 } }
+    : {};
+
   return (
     <>
       <SectionTitle>Identidade</SectionTitle>
@@ -66,14 +82,16 @@ export function DadosBasicosSection({
       {/* P6 — foto do praticante (acima do nome, como no original) */}
       {photoSlot}
 
-      <Field
-        label="Nome completo" req value={form.full_name}
-        onChangeText={(v) => setField("full_name", v)}
-        placeholder="Ex.: Maria Tanaka de Souza"
-        inputRef={nameRef} returnKeyType="next"
-        onSubmitEditing={() => birthRef.current?.focus()}
-        bad={nameBad}
-      />
+      <View {...lockProps}>
+        <Field
+          label="Nome completo" req value={form.full_name}
+          onChangeText={(v) => setField("full_name", v)}
+          placeholder="Ex.: Maria Tanaka de Souza"
+          inputRef={nameRef} returnKeyType="next"
+          onSubmitEditing={() => birthRef.current?.focus()}
+          bad={nameBad}
+        />
+      </View>
 
       <DojoSelectSection
         federationId={federationId}
@@ -91,37 +109,42 @@ export function DadosBasicosSection({
 
       {registrationSlot}
 
-      <Row2>
-        <Field
-          flex label="Nascimento" hint="dd/mm/aaaa" mono value={form.birth_date}
-          onChangeText={(v) => setField("birth_date", maskDate(v))}
-          keyboardType="numeric" placeholder="dd/mm/aaaa"
-          inputRef={birthRef} returnKeyType="next"
-          onSubmitEditing={() => cpfRef.current?.focus()}
-          bad={dateBad}
-          note={dateBad ? "Data inválida" : age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined}
-        />
-        <Field
-          flex label="CPF" mono value={form.cpf}
-          onChangeText={(v) => setField("cpf", maskCpf(v))}
-          keyboardType="numeric" placeholder="000.000.000-00" bad={cpfBad}
-          inputRef={cpfRef} returnKeyType="next"
-          onSubmitEditing={() => rgRef.current?.focus()}
-          note={cpfBad ? "Dígitos não conferem" : form.cpf ? "CPF válido" : undefined}
-          noteOk={!cpfBad && !!form.cpf}
-        />
-      </Row2>
+      <View {...lockProps}>
+        <Row2>
+          <Field
+            flex label="Nascimento" hint="dd/mm/aaaa" mono value={form.birth_date}
+            onChangeText={(v) => setField("birth_date", maskDate(v))}
+            keyboardType="numeric" placeholder="dd/mm/aaaa"
+            inputRef={birthRef} returnKeyType="next"
+            onSubmitEditing={() => cpfRef.current?.focus()}
+            bad={dateBad}
+            note={dateBad ? "Data inválida" : age != null ? `${age} anos${age < 18 ? " · menor de idade" : ""}` : undefined}
+          />
+          <Field
+            flex label="CPF" mono value={form.cpf}
+            onChangeText={(v) => setField("cpf", maskCpf(v))}
+            keyboardType="numeric" placeholder="000.000.000-00" bad={cpfBad}
+            inputRef={cpfRef} returnKeyType="next"
+            onSubmitEditing={() => rgRef.current?.focus()}
+            note={cpfBad ? "Dígitos não conferem" : form.cpf ? "CPF válido" : undefined}
+            noteOk={!cpfBad && !!form.cpf}
+          />
+        </Row2>
 
-      <Field
-        label="RG" mono value={form.rg}
-        onChangeText={(v) => setField("rg", v)}
-        placeholder="00.000.000-0"
-        inputRef={rgRef} returnKeyType="next"
-        onSubmitEditing={onRgSubmit}
-      />
+        <Field
+          label="RG" mono value={form.rg}
+          onChangeText={(v) => setField("rg", v)}
+          placeholder="00.000.000-0"
+          inputRef={rgRef} returnKeyType="next"
+          onSubmitEditing={onRgSubmit}
+        />
+      </View>
 
       <Row2>
-        <View style={[styles.field, { flex: 1 }]}>
+        <View
+          style={[styles.field, { flex: 1 }, identityLocked && { opacity: 0.55 }]}
+          pointerEvents={identityLocked ? "none" : "auto"}
+        >
           <Text style={styles.label}>Sexo</Text>
           <View style={styles.chipsRow}>
             {SEX_OPTIONS.map((opt) => {
