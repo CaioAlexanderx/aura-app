@@ -28,7 +28,7 @@ type RankingData = {
   employee_of_month: RankedEmployee | null;
 };
 
-var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\\B(?=(\\d{3})+(?!\\d))/g, "."); };
+var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
 var fmtK = function(n: number) { return n >= 1000 ? "R$ " + (n / 1000).toFixed(1).replace(".", ",") + "k" : fmt(n); };
 
 var PERIODS = [
