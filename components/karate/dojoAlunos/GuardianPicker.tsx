@@ -25,6 +25,12 @@
 // formatPhone, de ./helpers). startEditCurrent agora aplica maskPhone
 // (@/utils/masks — mesma máscara usada em configuracoes.tsx) ao
 // pré-preencher o campo.
+//
+// F8.2 (01/08/2026 — pedido do Caio: ficha do aluno igual à ficha do
+// praticante da federação): a federação já pede CPF do responsável
+// (karate_dojo_guardians.cpf já existe na coluna, só não estava na
+// tela) — cadastro e edição ganham o campo, mesma máscara/validação do
+// CPF do aluno (11 dígitos; ver AlunoFormModal.tsx).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -39,7 +45,7 @@ import {
   karateDojoStudentsApi, DojoGuardian, DojoStudentGuardianRef,
 } from "@/services/karateDojoStudentsApi";
 import { maskPhone } from "@/utils/masks";
-import { formatPhone, isValidEmail } from "./helpers";
+import { formatPhone, isValidEmail, maskCpf, onlyDigits } from "./helpers";
 
 interface Props {
   federationId: string;
@@ -56,6 +62,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newCpf, setNewCpf] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRel, setNewRel] = useState("");
@@ -66,6 +73,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
   // do de trocar/cadastrar (que fica dentro de `open`).
   const [editingCurrent, setEditingCurrent] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editCpf, setEditCpf] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRel, setEditRel] = useState("");
@@ -102,9 +110,22 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
     setCreating(false);
   };
 
+  // CPF do responsável: mesma validação do CPF do aluno (11 dígitos quando
+  // preenchido — ver cpfDigits em AlunoFormModal.tsx). Opcional: vazio passa.
+  function validateCpf(raw: string): string | null {
+    const d = onlyDigits(raw);
+    if (d.length > 0 && d.length !== 11) return "CPF incompleto — são 11 dígitos.";
+    return null;
+  }
+
   const createNew = async () => {
     if (!newName.trim()) {
       setCreateErr("Informe o nome do responsável.");
+      return;
+    }
+    const cpfErr = validateCpf(newCpf);
+    if (cpfErr) {
+      setCreateErr(cpfErr);
       return;
     }
     if (!isValidEmail(newEmail)) {
@@ -116,11 +137,13 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
     try {
       const g = await karateDojoStudentsApi.createGuardian(federationId, {
         full_name: newName.trim(),
+        cpf: onlyDigits(newCpf) || null,
         phone: newPhone.trim() || null,
         email: newEmail.trim() || null,
         relationship: newRel.trim() || null,
       });
       setNewName("");
+      setNewCpf("");
       setNewPhone("");
       setNewEmail("");
       setNewRel("");
@@ -136,6 +159,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
   const startEditCurrent = () => {
     if (!value) return;
     setEditName(value.full_name ?? "");
+    setEditCpf(value.cpf ? maskCpf(value.cpf) : "");
     setEditPhone(value.phone ? maskPhone(value.phone) : "");
     setEditEmail(value.email ?? "");
     setEditRel(value.relationship ?? "");
@@ -151,6 +175,11 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
       setEditErr("Informe o nome do responsável.");
       return;
     }
+    const cpfErr = validateCpf(editCpf);
+    if (cpfErr) {
+      setEditErr(cpfErr);
+      return;
+    }
     if (!isValidEmail(editEmail)) {
       setEditErr("E-mail inválido.");
       return;
@@ -160,6 +189,7 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
     try {
       const g = await karateDojoStudentsApi.updateGuardian(federationId, value.id, {
         full_name: editName.trim(),
+        cpf: onlyDigits(editCpf) || null,
         phone: editPhone.trim() || null,
         email: editEmail.trim() || null,
         relationship: editRel.trim() || null,
@@ -193,7 +223,12 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.selName} numberOfLines={1}>{value.full_name ?? "Responsável"}</Text>
             <Text style={styles.selMeta} numberOfLines={1}>
-              {[value.relationship, value.phone ? formatPhone(value.phone) : null, value.email ?? null].filter(Boolean).join(" · ") || "Sem contato informado"}
+              {[
+                value.relationship,
+                value.phone ? formatPhone(value.phone) : null,
+                value.cpf ? `CPF ${maskCpf(value.cpf)}` : null,
+                value.email ?? null,
+              ].filter(Boolean).join(" · ") || "Sem contato informado"}
             </Text>
           </View>
           <TouchableOpacity onPress={startEditCurrent} accessibilityRole="button" style={styles.linkBtn}>
@@ -227,6 +262,13 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
             value={editName}
             onChangeText={setEditName}
             placeholder="Nome completo"
+          />
+          <FormField
+            label="CPF do responsável"
+            value={editCpf}
+            onChangeText={(t) => setEditCpf(maskCpf(t))}
+            placeholder="000.000.000-00"
+            keyboardType="numeric"
           />
           <FormField
             label="Telefone"
@@ -313,6 +355,13 @@ export function GuardianPicker({ federationId, value, onChange, errorText }: Pro
                     value={newName}
                     onChangeText={setNewName}
                     placeholder="Nome completo"
+                  />
+                  <FormField
+                    label="CPF do responsável"
+                    value={newCpf}
+                    onChangeText={(t) => setNewCpf(maskCpf(t))}
+                    placeholder="000.000.000-00"
+                    keyboardType="numeric"
                   />
                   <FormField
                     label="Telefone"

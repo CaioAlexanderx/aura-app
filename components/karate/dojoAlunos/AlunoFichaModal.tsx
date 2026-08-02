@@ -25,13 +25,18 @@
 // quando pelo menos um campo está preenchido (mesmo padrão condicional
 // de CadastroTab.tsx no lado da federação).
 //
+// F8.2 (01/08/2026 — pedido do Caio: ficha do aluno igual à ficha do
+// praticante da federação): avatar de foto (karate_photo_url) no
+// cabeçalho, leitura — trocar a foto acontece via Editar (AlunoFormModal,
+// mesmo caminho de upload da ficha do praticante).
+//
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
 // grupo (dojo), então nada de confirmAsync aqui.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
+  Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Image,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -136,7 +141,19 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.head}>
-            <Text style={styles.headTitle} numberOfLines={1}>{s?.full_name ?? "Ficha do aluno"}</Text>
+            <View style={styles.headIdentity}>
+              {/* F8.2: avatar de leitura — trocar a foto acontece via Editar
+                  (AlunoFormModal), mesmo caminho de upload da ficha do
+                  praticante. */}
+              {s?.karate_photo_url ? (
+                <Image source={{ uri: s.karate_photo_url }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Icon name="user" size={15} color={KarateColors.ink4} />
+                </View>
+              )}
+              <Text style={styles.headTitle} numberOfLines={1}>{s?.full_name ?? "Ficha do aluno"}</Text>
+            </View>
             <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" style={styles.closeBtn}>
               <Icon name="close" size={18} color={KarateColors.ink3} />
             </TouchableOpacity>
@@ -264,6 +281,11 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 16 } as ViewStyle,
   sheet: { width: "100%", maxWidth: 560, maxHeight: "92%", backgroundColor: "#fdf8f2", borderRadius: 16, overflow: "hidden" } as ViewStyle,
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
+  headIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 } as ViewStyle,
+  // F8.2: avatar de leitura no cabeçalho da ficha (mesmo tamanho compacto
+  // do resto do header — a ficha não é a tela de edição da foto).
+  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: KarateColors.bg2 } as ViewStyle,
+  avatarPlaceholder: { width: 30, height: 30, borderRadius: 15, backgroundColor: KarateColors.bg2, alignItems: "center", justifyContent: "center" } as ViewStyle,
   headTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   closeBtn: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" } as ViewStyle,
   stateBox: { alignItems: "center", justifyContent: "center", paddingVertical: 48 } as ViewStyle,

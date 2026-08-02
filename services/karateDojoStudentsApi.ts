@@ -39,6 +39,15 @@
 // endpoint de upload próprio (photo_url é campo morto desde a 242) — sem
 // endpoint, não há UI a construir.
 //
+// F8.2 (01/08 — pedido do Caio: ficha do aluno igual à ficha do
+// praticante da federação; endpoint de foto criado em PR paralelo do
+// backend, mesmo padrão do upload de foto do praticante): o aluno ganha
+// um campo PERMANENTE de foto (karate_photo_url, gravado pelo backend
+// após o upload — mesmo racional de karate_photo_url no praticante) e o
+// endpoint dedicado POST .../students/:sid/photo (uploadStudentPhoto,
+// abaixo). O antigo `photo_url` (campo morto da 242, nunca teve endpoint)
+// segue aqui só por compatibilidade — não usar para leitura/escrita novas.
+//
 // Vive num service pequeno separado: karateApi.ts tem 125 KB e a regra
 // da casa é edição cirúrgica (mesmo racional do karateDojoInfoApi).
 //
@@ -105,7 +114,15 @@ export interface DojoStudent {
   neighborhood: string | null;
   city: string | null;
   state: string | null;
+  /** Campo morto desde a migration 242 (nunca teve endpoint de upload) — mantido só por compatibilidade. Não usar para leitura/escrita novas; ver karate_photo_url abaixo. */
   photo_url: string | null;
+  /**
+   * F8.2 (01/08/2026) — foto do aluno, mesmo padrão do karate_photo_url do
+   * praticante: gravado pelo backend após POST .../students/:id/photo
+   * (uploadStudentPhoto, abaixo). Este é o campo PERMANENTE a usar na UI
+   * (preview da ficha, avatar) — `photo_url` acima é legado/morto.
+   */
+  karate_photo_url: string | null;
   belt_label: string | null;
   belt_order: number | null;
   status: DojoStudentStatus;
@@ -338,6 +355,20 @@ export interface FederateConfirmResult {
   is_transfer: boolean;
 }
 
+// ── F8.2: upload de foto do aluno (mesmo padrão do praticante, ver
+// karateApi.ts#uploadPractitionerPhoto) — endpoint criado em PR paralelo
+// do backend. ─────────────────────────────────────────────────────────
+
+export interface UploadStudentPhotoInput {
+  /** Base64 puro, sem prefixo "data:<type>;base64,". */
+  content: string;
+  content_type?: "image/jpeg" | "image/png" | "image/webp";
+}
+
+export interface UploadStudentPhotoResult {
+  photo_url: string;
+}
+
 function qs(params: Record<string, string | undefined>): string {
   const parts: string[] = [];
   for (const k of Object.keys(params)) {
@@ -494,5 +525,27 @@ export const karateDojoStudentsApi = {
   unfederate: (federationId: string, studentId: string): Promise<{ unlinked: boolean }> =>
     request<{ unlinked: boolean }>(`${base(federationId)}/students/${studentId}/federate`, {
       method: "DELETE",
+    }),
+
+  /**
+   * F8.2 (01/08/2026): faz upload da foto do aluno — mesmo mecanismo de
+   * karateApi.ts#uploadPractitionerPhoto (JSON + base64 → R2, endpoint
+   * criado em PR paralelo do backend).
+   *
+   * POST /federation/:federationId/dojo/students/:studentId/photo
+   * Body: { content: "<base64 puro>", content_type?: "image/jpeg"|"image/png"|"image/webp" }
+   * Resposta: { photo_url: "https://r2..." }
+   *
+   * O backend grava karate_photo_url no banco — não é necessário enviar
+   * karate_photo_url no PATCH do aluno após esta chamada.
+   */
+  uploadStudentPhoto: (
+    federationId: string,
+    studentId: string,
+    body: UploadStudentPhotoInput
+  ): Promise<UploadStudentPhotoResult> =>
+    request<UploadStudentPhotoResult>(`${base(federationId)}/students/${studentId}/photo`, {
+      method: "POST",
+      body,
     }),
 };

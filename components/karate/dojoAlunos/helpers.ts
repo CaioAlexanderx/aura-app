@@ -9,28 +9,74 @@
 // Datas tz-safe: 'YYYY-MM-DD' é date puro — NUNCA new Date('YYYY-MM-DD')
 // (em UTC-3 volta um dia). Parse/format sempre por split manual.
 // ============================================================
-import { KarateBelts, KarateColors, resolveBeltKey } from "@/constants/karateTheme";
+import { KarateBelts, KarateColors, resolveBeltKey, BeltKey } from "@/constants/karateTheme";
 
 export interface CommonBelt {
   label: string;
   order: number;
+  /** BeltKey canônico (constants/karateTheme.ts) — usado para casar o
+   *  rótulo COM ou SEM grau (ex.: "Marrom 2º kyu", "Preta 3°") de volta
+   *  à faixa base (F8.2, ver parseCommonBelt/beltOrderForLabel abaixo). */
+  key: BeltKey;
 }
 
 export const COMMON_BELTS: CommonBelt[] = [
-  { label: "Branca", order: 1 },
-  { label: "Amarela", order: 2 },
-  { label: "Laranja", order: 3 },
-  { label: "Verde", order: 4 },
-  { label: "Azul Claro", order: 5 },
-  { label: "Roxa", order: 6 },
-  { label: "Azul Escuro", order: 7 },
-  { label: "Marrom", order: 8 },
-  { label: "Preta", order: 9 },
+  { label: "Branca", order: 1, key: "branca" },
+  { label: "Amarela", order: 2, key: "amarela" },
+  { label: "Laranja", order: 3, key: "laranja" },
+  { label: "Verde", order: 4, key: "verde" },
+  { label: "Azul Claro", order: 5, key: "azul_claro" },
+  { label: "Roxa", order: 6, key: "roxo" },
+  { label: "Azul Escuro", order: 7, key: "azul_escuro" },
+  { label: "Marrom", order: 8, key: "marrom" },
+  { label: "Preta", order: 9, key: "preta" },
 ];
 
-/** belt_order derivado da POSIÇÃO na lista de faixas comuns; texto livre → null. */
+/**
+ * F8.2 (01/08/2026 — pedido do Caio: "a ficha de cadastro do aluno DEVE
+ * ser igual à ficha de cadastro do praticante da federação"): a ficha do
+ * aluno passa a aceitar grau nas mesmas duas faixas que o lado da
+ * federação já trata assim (praticante-detalhe/helpers.ts BELT_KYUS/
+ * DAN_OPTIONS — escala oficial FPKT: Branca(10º kyu)·Amarela(9º)·
+ * Laranja(8º)·Verde(7º)·Azul Claro(6º)·Roxa(5º)·Azul Escuro(4º)·Marrom
+ * 3º/2º/1º kyu·Preta 1º ao 10º dan): Marrom tem 3 kyus distintos e Preta
+ * aceita grau Dan. Um aluno já cadastrado com "Marrom" ou "Preta" SEM
+ * grau continua válido — grau é opcional, parseCommonBelt reconhece os
+ * dois formatos (com e sem número) e nunca quebra dado existente.
+ */
+export function parseCommonBelt(label: string | null | undefined): { base: BeltKey; degree: number | null } | null {
+  if (!label) return null;
+  const key = resolveBeltKey(label);
+  if (!key || key === "vermelha") return null; // vermelha é histórica — nunca é seleção nova aqui
+  const m = String(label).match(/(\d+)/);
+  return { base: key, degree: m ? parseInt(m[1], 10) : null };
+}
+
+// F8.2: mapa key → order derivado direto de COMMON_BELTS (fonte única —
+// nunca duplicar a escala em dois lugares).
+const KEY_ORDER: Partial<Record<BeltKey, number>> = Object.fromEntries(
+  COMMON_BELTS.map((b) => [b.key, b.order])
+);
+
+/**
+ * belt_order derivado da faixa BASE — independe do grau/kyu/dan no rótulo:
+ * "Marrom 2º kyu" e "Marrom" ordenam juntos na pirâmide, na mesma posição
+ * (8). Resolve por texto via resolveBeltKey (mesmo helper usado no lado da
+ * federação, constants/karateTheme.ts), com fallback pro match exato
+ * antigo — cobre rótulos em texto livre que não batem com nenhuma das 9
+ * faixas comuns (o "Outra…" do form).
+ *
+ * F8.2: ANTES desta função só casava o rótulo por igualdade EXATA contra
+ * COMMON_BELTS — um rótulo com grau ("Marrom 2º kyu") nunca batia, caía em
+ * null e ia pro fim/começo da pirâmide (NULLS LAST/behaviour do backend),
+ * fora da posição correta. resolveBeltKey já normaliza acento/caixa/ordinal
+ * e reconhece "marrom"/"preta" mesmo com o grau no texto — é o mesmo bug
+ * que a escala oficial da federação (F8) corrigiu do lado do praticante.
+ */
 export function beltOrderForLabel(label: string | null | undefined): number | null {
   if (!label) return null;
+  const key = resolveBeltKey(label);
+  if (key && KEY_ORDER[key] != null) return KEY_ORDER[key]!;
   const t = label.trim().toLowerCase();
   const hit = COMMON_BELTS.find((b) => b.label.toLowerCase() === t);
   return hit ? hit.order : null;
