@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { DateInput } from "@/components/inputs/DateInput";
 
 var isWeb = Platform.OS === "web";
 
@@ -27,14 +28,37 @@ type RankingData = {
   employee_of_month: RankedEmployee | null;
 };
 
-var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
+var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\\B(?=(\\d{3})+(?!\\d))/g, "."); };
 var fmtK = function(n: number) { return n >= 1000 ? "R$ " + (n / 1000).toFixed(1).replace(".", ",") + "k" : fmt(n); };
 
 var PERIODS = [
   { key: "week", label: "Semana" },
   { key: "month", label: "Mes" },
   { key: "year", label: "Ano" },
+  { key: "custom", label: "Personalizado" },
 ];
+
+// SP = UTC-3 fixo (DST abolido em 2019). Meia-noite SP do dia D = D as 03:00
+// UTC. Mesma conta do periodToRange de app/(tabs)/vendas.tsx.
+//
+// NAO da pra mandar "YYYY-MM-DD" cru pro backend: employeesRanking faz
+// new Date(start_date).toISOString(), e o browser le data-only como meia-noite
+// UTC -- a janela inteira andaria 3h pra tras e o ranking pegaria as vendas
+// da noite do dia anterior. E a armadilha de fuso que ja mordeu este repo
+// algumas vezes; por isso mandamos timestamp completo, ja em UTC.
+//
+// `addDays` existe por causa do fim EXCLUSIVO da query do backend
+// (created_at >= start AND created_at < end): passando a meia-noite SP do dia
+// SEGUINTE em `end`, a data final que o lojista escolheu entra inteira.
+function spMidnightUTC(isoDate: string, addDays: number): string {
+  var p = isoDate.split("-");
+  return new Date(Date.UTC(
+    parseInt(p[0], 10),
+    parseInt(p[1], 10) - 1,
+    parseInt(p[2], 10) + addDays,
+    3, 0, 0
+  )).toISOString();
+}
 
 var MEDAL_EMOJI: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
 var MEDAL_BG: Record<string, string> = { gold: "#FDE68A", silver: "#E5E7EB", bronze: "#FDBA74" };
@@ -44,11 +68,32 @@ export function SalesRanking() {
   var { company } = useAuthStore();
   var companyId = company?.id;
   var [period, setPeriod] = useState("month");
+  // Periodo personalizado: BR (dd/mm/aaaa) pro input + ISO (YYYY-MM-DD) pra
+  // logica, mesmo par de estados que a listagem de Vendas usa.
+  var [customFromBr, setCustomFromBr] = useState("");
+  var [customToBr, setCustomToBr] = useState("");
+  var [customFromIso, setCustomFromIso] = useState<string | null>(null);
+  var [customToIso, setCustomToIso] = useState<string | null>(null);
+
+  var isCustom = period === "custom";
+  // Comparar "YYYY-MM-DD" como string funciona (formato lexicograficamente
+  // ordenado); evita criar Date so pra comparar.
+  var customInverted = isCustom && !!customFromIso && !!customToIso && customFromIso > customToIso;
+  var customIncomplete = isCustom && (!customFromIso || !customToIso);
+  // Backend responde 400 em custom sem as duas datas -- so dispara quando
+  // o intervalo esta completo e na ordem certa.
+  var canQuery = !!companyId && !customIncomplete && !customInverted;
+
+  var query = isCustom && customFromIso && customToIso
+    ? "period=custom"
+      + "&start_date=" + encodeURIComponent(spMidnightUTC(customFromIso, 0))
+      + "&end_date=" + encodeURIComponent(spMidnightUTC(customToIso, 1))
+    : "period=" + period;
 
   var { data, isLoading } = useQuery<RankingData>({
-    queryKey: ["employees-ranking", companyId, period],
-    queryFn: function() { return request<RankingData>("/companies/" + companyId + "/employees/ranking?period=" + period); },
-    enabled: !!companyId,
+    queryKey: ["employees-ranking", companyId, period, isCustom ? customFromIso : null, isCustom ? customToIso : null],
+    queryFn: function() { return request<RankingData>("/companies/" + companyId + "/employees/ranking?" + query); },
+    enabled: canQuery,
     staleTime: 120_000,
     retry: 1,
   });
@@ -71,10 +116,50 @@ export function SalesRanking() {
         })}
       </View>
 
+      {/* Intervalo do periodo personalizado */}
+      {isCustom && (
+        <View style={s.customRow}>
+          <View style={s.customField}>
+            <Text style={s.customLabel}>De</Text>
+            <DateInput
+              value={customFromBr}
+              onChangeText={setCustomFromBr}
+              onValidChange={setCustomFromIso}
+              style={s.customInput}
+            />
+          </View>
+          <View style={s.customField}>
+            <Text style={s.customLabel}>Ate</Text>
+            <DateInput
+              value={customToBr}
+              onChangeText={setCustomToBr}
+              onValidChange={setCustomToIso}
+              style={s.customInput}
+            />
+          </View>
+        </View>
+      )}
+
+      {customInverted && (
+        <View style={s.warningBanner}>
+          <Icon name="alert" size={14} color={Colors.amber} />
+          <Text style={s.warningText}>A data inicial esta depois da final. Inverta as duas para ver o ranking.</Text>
+        </View>
+      )}
+
+      {customIncomplete && !customInverted && (
+        <EmptyState
+          icon="trophy"
+          iconColor={Colors.amber}
+          title="Escolha o periodo"
+          subtitle="Preencha as datas de inicio e fim (dd/mm/aaaa) para montar o ranking do intervalo."
+        />
+      )}
+
       {isLoading && <ListSkeleton rows={3} showCards />}
 
-      {!isLoading && !hasData && (
-        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda registrada" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
+      {!isLoading && !hasData && canQuery && (
+        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda registrada" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : isCustom ? " no periodo escolhido" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
       )}
 
       {!isLoading && hasData && data && (
@@ -187,6 +272,11 @@ var s = StyleSheet.create({
   periodBtnActive: { backgroundColor: Colors.violet },
   periodText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   periodTextActive: { color: "#fff", fontWeight: "700" },
+  // Intervalo do periodo personalizado (mesmo visual dos filtros de Vendas)
+  customRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  customField: { flex: 1, gap: 4 },
+  customLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  customInput: { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: Colors.ink, fontSize: 12 },
   kpiRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
   kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
   kpiLabel: { fontSize: 9, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.3 },
