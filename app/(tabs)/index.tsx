@@ -259,7 +259,9 @@ export default function DashboardScreen() {
                 06/05/2026: "Ver analise completa" deep-linka pra Curva ABC dentro
                 da aba Receitas (foco abc -> auto-scroll na tela de Financeiro). */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro?tab=receitas&focus=abc"); }} />}
-            {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/folha"); }} />}
+            {/* 02/08/2026: ranking completo migrou de /folha pra aba propria em
+                /vendas — deep-link direto na aba pra nao cair na listagem. */}
+            {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/vendas?tab=ranking"); }} />}
             {!isDemo && !consolidatedView && <BirthdaysCard />}
 
             {/* ---- QUICK ACTIONS ---- */}
