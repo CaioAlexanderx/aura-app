@@ -25,7 +25,12 @@ export type PayslipType = "mensal" | "ferias" | "decimo_terceiro";
 export type HistoryItem = { id: string; month: string; total: number; liquid: number; paidAt: string; employees: number };
 export type RankingItem = { empId: string; name: string; role: string; sales: number; revenue: number; avgTicket: number; topProduct: string; trend: "up" | "down" };
 
-export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Ranking", "Metas", "Comissoes"];
+// 02/08/2026: "Ranking" saiu daqui e virou aba propria em /vendas
+// (entre "Vendas" e "Fechamentos de Caixa"). Motivo: ranking de venda por
+// vendedor e leitura de VENDA, nao de folha — e assim fica visivel tambem
+// pro plano Essencial, que nao tem folha. Componente movido para
+// components/screens/vendas/SalesRanking.tsx.
+export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Metas", "Comissoes"];
 
 export const STATUS_MAP: Record<string, { l: string; c: string }> = {
   active: { l: "Ativo", c: Colors.green },
