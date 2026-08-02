@@ -137,7 +137,7 @@ export default function VerifyCardScreen() {
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.govTitle}>{data?.federation_name || "FPKT"}</Text>
-            <Text style={styles.govSub}>Federação de Karatê Tradicional</Text>
+            <Text style={styles.govSub}>Federação Paulista de Karatê-Dô Tradicional</Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={styles.govK}>VERIFICAÇÃO</Text>
