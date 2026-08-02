@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView, Modal as RNModal } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { WebPortal } from "@/components/WebPortal";
 import { toast } from "@/components/Toast";
 import { birthdayApi, type BirthdayCustomer, type BirthdaySettings } from "@/services/api";
 import {
@@ -195,9 +196,7 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
     }
   }
 
-  const overlay = (
-    <View style={s.overlay}>
-      <Pressable style={s.backdrop} onPress={onClose} />
+  const modalCard = (
       <View style={s.modal}>
         <ScrollView contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
           <View style={s.header}>
@@ -336,46 +335,81 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
               disabled={!canSend}
               style={[s.primaryBtn, !canSend && { opacity: 0.5 }]}
             >
-              <Icon name="send" size={14} color="#fff" />
+              <Icon name="whatsapp" size={14} color="#fff" />
               <Text style={s.primaryText}>{sending ? "Enviando..." : "Criar e enviar"}</Text>
             </Pressable>
           </View>
         </ScrollView>
       </View>
-    </View>
   );
 
-  // Web: overlay com blur backdrop (mesmo padrão do QuickCustomerModal)
+  // Web: portal no document.body + backdrop cobrindo a viewport inteira.
+  //
+  // O portal NAO e cosmetico. Este modal e montado de dentro do BirthdaysCard,
+  // que vive no meio do conteudo scrollavel do painel. Basta um ancestral com
+  // transform/filter/backdrop-filter (o shell tem varios: orbs com blur, aurora
+  // da sidebar, hover transforms) pra esse ancestral virar o containing block
+  // do position:fixed — e ai o overlay para de se resolver contra a viewport.
+  // Sintoma exato reportado: modal colado no topo da pagina em vez de onde o
+  // usuario esta olhando, e blur cobrindo so um pedaco da tela.
+  // WebPortal joga a arvore direto no document.body (fora de qualquer
+  // containing block) e ainda trava o scroll do body enquanto o modal existe.
+  //
+  // align-items:flex-start + margin:auto no filho e a receita que centraliza
+  // sem cortar o topo quando o modal passa da altura da viewport (align-items
+  // :center sozinho torna a parte de cima inalcancavel no scroll).
   if (Platform.OS === "web" && typeof document !== "undefined") {
     return (
-      <div
-        style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 50000,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-          background: "rgba(0,0,0,0.5)",
-        } as any}
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      >
-        <div style={{ width: "100%", maxWidth: 480, padding: "0 16px", maxHeight: "90vh" } as any}>
-          {overlay}
+      <WebPortal active>
+        <div
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 50000,
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            padding: 16, boxSizing: "border-box", overflowY: "auto",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            background: "rgba(2,6,23,0.62)",
+          } as any}
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <div style={{ width: "100%", maxWidth: 480, margin: "auto" } as any}>
+            {modalCard}
+          </div>
         </div>
-      </div>
+      </WebPortal>
     );
   }
 
-  return overlay;
+  // Native: RNModal garante que o card fique por cima da tela toda em vez de
+  // ser renderizado inline no meio da lista do card de aniversariantes.
+  return (
+    <RNModal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={s.overlay}>
+        <Pressable style={s.backdrop} onPress={onClose} />
+        {modalCard}
+      </View>
+    </RNModal>
+  );
 }
 
 export default BirthdayCouponModal;
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "center", alignItems: "center" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
+  // overlay/backdrop so sao usados no caminho native (dentro do RNModal).
+  // No web quem faz esse papel e a <div> do portal.
+  overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2,6,23,0.62)"
+  },
   modal: {
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 24,
     borderWidth: 1, borderColor: Colors.border2,
     width: "100%", maxWidth: 480, zIndex: 10, maxHeight: "90vh" as any,
+    elevation: 50, // Android shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
   eyebrow: { fontSize: 10, color: Colors.violet, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 },
