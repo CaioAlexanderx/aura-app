@@ -637,6 +637,10 @@ var stockToggle = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "rgba(124,58,237,0.06)",
     borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.25)",
+  },
+  btnActive: {
+    backgroundColor: "rgba(124,58,237,0.18)",
     borderColor: "rgba(124,58,237,0.55)",
   },
   txt: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
