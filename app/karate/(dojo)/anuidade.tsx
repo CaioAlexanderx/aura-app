@@ -17,6 +17,12 @@
 // era um BECO SEM SAÍDA — nenhuma tela do produto explicava COMO
 // conectar. O texto agora vira botão para /karate/(dojo)/conexao
 // (Aura-backend#424).
+//
+// 02/08 (bugfix): o nome da federação no card FPKT estava DIGITADO à mão
+// e errado ("Federação Paraense de Karatê Tradicional"). Agora lê de
+// dojoMe.federation_name (já carregado por useKarateDojo via GET
+// /dojo/me), com o nome oficial completo como fallback só quando o dado
+// ainda não chegou (loading/erro/backend antigo).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -52,7 +58,7 @@ function fmtValor(v: number | null): string {
 function FpktAnnuityCard() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
-  const { linked } = useKarateDojo();
+  const { linked, dojoMe } = useKarateDojo();
   const [data, setData] = useState<SenseiAnnuityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -83,6 +89,11 @@ function FpktAnnuityCard() {
   const pix = data?.pix ?? null;
   const hasAnyData = !!pending || history.length > 0;
 
+  // Nome oficial da federação: lido de dojoMe.federation_name (GET
+  // /dojo/me, já carregado por useKarateDojo). Fallback só quando o dado
+  // ainda não chegou (loading/erro/backend antigo sem o campo).
+  const fedName = dojoMe?.federation_name || "Federação Paulista de Karatê-Dô Tradicional";
+
   // Situação da anuidade: sem pendência → "Em dia"; com pendência, usa o
   // mapa de ANUIDADE (annuityStatusView normaliza tudo).
   const statusMeta = pending
@@ -105,7 +116,7 @@ function FpktAnnuityCard() {
         <View style={styles.fedMark}><Text style={styles.fedMarkTxt}>FPKT</Text></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.fedName}>FPKT</Text>
-          <Text style={styles.fedSub}>Federação Paraense de Karatê Tradicional</Text>
+          <Text style={styles.fedSub}>{fedName}</Text>
         </View>
       </View>
 
