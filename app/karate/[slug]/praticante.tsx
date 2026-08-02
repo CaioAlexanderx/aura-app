@@ -222,7 +222,7 @@ export default function PortalPraticanteScreen() {
           <View style={styles.brand}>
             <FpktLogo size={44} />
             <Text style={styles.brandOrg}>Portal do praticante</Text>
-            <Text style={styles.brandSub}>FPKT · Federação de Karatê Tradicional</Text>
+            <Text style={styles.brandSub}>FPKT · Federação Paulista de Karatê-Dô Tradicional</Text>
           </View>
 
           {stage === "cpf" ? (
