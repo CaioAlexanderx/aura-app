@@ -36,7 +36,7 @@ var PERIODS = [
   { key: "year", label: "Ano" },
 ];
 
-var MEDAL_EMOJI: Record<string, string> = { gold: "\\uD83E\\uDD47", silver: "\\uD83E\\uDD48", bronze: "\\uD83E\\uDD49" };
+var MEDAL_EMOJI: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
 var MEDAL_BG: Record<string, string> = { gold: "#FDE68A", silver: "#E5E7EB", bronze: "#FDBA74" };
 var MEDAL_BORDER: Record<string, string> = { gold: "#F59E0B", silver: "#9CA3AF", bronze: "#F97316" };
 
@@ -104,7 +104,7 @@ export function SalesRanking() {
                 var border = MEDAL_BORDER[medal] || Colors.border;
                 var emoji = MEDAL_EMOJI[medal] || "";
                 var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-                var trendArrow = emp.trend_pct > 0 ? "\\u2191" : emp.trend_pct < 0 ? "\\u2193" : "";
+                var trendArrow = emp.trend_pct > 0 ? "↑" : emp.trend_pct < 0 ? "↓" : "";
                 return (
                   <View key={emp.id} style={[s.podiumCard, { borderColor: border }]}>
                     <Text style={s.podiumMedal}>{emoji}</Text>
@@ -133,7 +133,7 @@ export function SalesRanking() {
             <Text style={s.tableTitle}>Todos os vendedores</Text>
             {ranking.map(function(emp) {
               var trendColor = emp.trend_pct > 0 ? Colors.green : emp.trend_pct < 0 ? Colors.red : Colors.ink3;
-              var trendArrow = emp.trend_pct > 0 ? "\\u2191" : emp.trend_pct < 0 ? "\\u2193" : "";
+              var trendArrow = emp.trend_pct > 0 ? "↑" : emp.trend_pct < 0 ? "↓" : "";
               return (
                 <View key={emp.id} style={s.tableRow}>
                   <Text style={s.tablePos}>{emp.position}</Text>
