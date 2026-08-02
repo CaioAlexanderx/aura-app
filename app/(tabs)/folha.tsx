@@ -8,7 +8,6 @@ import { EmployeeCard } from "@/components/screens/folha/EmployeeCard";
 import { Payslip } from "@/components/screens/folha/Payslip";
 import { PayrollSummary } from "@/components/screens/folha/PayrollSummary";
 import { PayrollHistory } from "@/components/screens/folha/PayrollHistory";
-import { SalesRanking } from "@/components/screens/folha/SalesRanking";
 import { TabMetas } from "@/components/screens/folha/TabMetas";
 import { TabComissoes } from "@/components/screens/folha/TabComissoes";
 import { TABS, fmt, FGTS_RATE } from "@/components/screens/folha/types";
@@ -71,8 +70,9 @@ function FormField({ label, required, children, hint, error }: { label: string; 
 }
 
 // PLAN-02 (12/05/2026): UpgradeCard local pras secoes Negocio+ (Folha,
-// Comissoes, Ranking, Metas, Historico). Mesma estrategia que clientes.tsx:
+// Comissoes, Metas, Historico). Mesma estrategia que clientes.tsx:
 // mostra o conteudo da secao como teaser dentro do card + CTA pra planos.
+// (Ranking saiu desta tela em 02/08/2026 -- virou aba de Vendas, sem gate.)
 function UpgradeCard({ title, description, features }: {
   title: string;
   description: string;
@@ -152,8 +152,8 @@ function FolhaScreenInner() {
   const { confirm, modal } = useConfirmModal();
 
   // PLAN-02: Essencial ve form simples (so nome+cargo+contato) e nao tem
-  // acesso ao calculo de folha. Tabs avancadas (Resumo, Historico, Ranking,
-  // Metas, Comissoes) mostram UpgradeCard.
+  // acesso ao calculo de folha. Tabs avancadas (Resumo, Historico, Metas,
+  // Comissoes) mostram UpgradeCard.
   const isEssencial = plan === "essencial";
   // PLAN-02: contagem near-limit (>=85%)
   const nearLimit = planLimit && planLimit < 999999 && active.length / planLimit >= 0.85;
@@ -476,19 +476,12 @@ function FolhaScreenInner() {
         />
       ) : <PayrollHistory />)}
 
-      {tab === 3 && (isEssencial ? (
-        <UpgradeCard
-          title="Ranking de vendas"
-          description="Saiba quem vendeu mais e calcule comissoes automaticamente."
-          features={[
-            "Top vendedores por receita e ticket medio",
-            "Histograma por dia/semana/mes",
-            "Base pra calcular comissoes",
-          ]}
-        />
-      ) : <SalesRanking />)}
+      {/* 02/08/2026: a aba "Ranking" saiu daqui. Ranking de vendas por vendedor
+          agora vive em /vendas (aba propria entre Vendas e Fechamentos de
+          Caixa), liberado pro Essencial. Indices das abas seguintes
+          reduziram em 1 junto com TABS em screens/folha/types.ts. */}
 
-      {tab === 4 && (isEssencial ? (
+      {tab === 3 && (isEssencial ? (
         <UpgradeCard
           title="Metas por vendedor"
           description="Defina metas individuais e acompanhe o progresso em tempo real."
@@ -500,7 +493,7 @@ function FolhaScreenInner() {
         />
       ) : <TabMetas />)}
 
-      {tab === 5 && (isEssencial ? (
+      {tab === 4 && (isEssencial ? (
         <UpgradeCard
           title="Comissoes automaticas"
           description="Configure regras de comissao por vendedor ou produto."
