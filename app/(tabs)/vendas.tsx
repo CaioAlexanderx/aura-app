@@ -6,12 +6,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { useSalesList } from "@/hooks/useSales";
 import { SaleDetailModal } from "@/components/screens/vendas/SaleDetailModal";
 import { FechamentosTab } from "@/components/screens/vendas/FechamentosTab";
+import { SalesRanking } from "@/components/screens/vendas/SalesRanking";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
 import { DateInput } from "@/components/inputs/DateInput";
+import { useLocalSearchParams } from "expo-router";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -46,6 +48,10 @@ import { DateInput } from "@/components/inputs/DateInput";
 // dos produtos (total_amount) riscado/secundario embaixo. Antes mostrava
 // o "levado" cheio, inflando a leitura de faturamento. Backend manda
 // net_amount/returned_value na listagem (Aura-backend#138).
+//
+// 02/08/2026: aba "Ranking" entre Vendas e Fechamentos, migrada da tela
+// de Folha. Ranking por vendedor e leitura de venda, nao de folha — e
+// assim fica visivel tambem pro Essencial (ver Aura-backend#454).
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -157,7 +163,14 @@ export default function VendasScreen() {
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   // 09/05/2026: aba Fechamentos de Caixa (KPIs+lista) ao lado da listagem de Vendas
-  const [activeTab, setActiveTab] = useState<"vendas" | "fechamentos">("vendas");
+  // 02/08/2026: aba "Ranking" entra no meio (Vendas | Ranking | Fechamentos).
+  // Veio da tela de Folha; ranking por vendedor e leitura de venda, nao de
+  // folha — e assim o plano Essencial (que nao tem folha) tambem enxerga.
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const paramTab = typeof params.tab === "string" ? params.tab : undefined;
+  const [activeTab, setActiveTab] = useState<"vendas" | "ranking" | "fechamentos">(
+    paramTab === "ranking" || paramTab === "fechamentos" ? paramTab : "vendas"
+  );
 
   const range = useMemo(function() { return periodToRange(period, customFromIso, customToIso); }, [period, customFromIso, customToIso]);
 
@@ -214,10 +227,13 @@ export default function VendasScreen() {
       <Text style={s.subtitle}>
         {activeTab === "vendas"
           ? "Conferencia das vendas do Caixa. Veja detalhes, edite o lancamento financeiro ou cancele uma venda inteira."
+          : activeTab === "ranking"
+          ? "Quem vendeu mais no periodo: podio, receita, ticket medio e evolucao por vendedor."
           : "Acompanhamento dos fechamentos de caixa: hero com totais do mes, filtros por empresa e por divergencia, drawer com detalhe."}
       </Text>
 
-      {/* 09/05/2026: tabs Vendas / Fechamentos de Caixa */}
+      {/* 09/05/2026: tabs Vendas / Fechamentos de Caixa
+          02/08/2026: "Ranking" entre as duas (migrada de Folha) */}
       <View style={s.tabBar}>
         <Pressable
           onPress={function() { setActiveTab("vendas"); }}
@@ -226,12 +242,34 @@ export default function VendasScreen() {
           <Text style={[s.tabBtnText, activeTab === "vendas" && s.tabBtnTextActive]}>Vendas</Text>
         </Pressable>
         <Pressable
+          onPress={function() { setActiveTab("ranking"); }}
+          style={[s.tabBtn, activeTab === "ranking" && s.tabBtnActive]}
+        >
+          <Text style={[s.tabBtnText, activeTab === "ranking" && s.tabBtnTextActive]}>Ranking</Text>
+        </Pressable>
+        <Pressable
           onPress={function() { setActiveTab("fechamentos"); }}
           style={[s.tabBtn, activeTab === "fechamentos" && s.tabBtnActive]}
         >
           <Text style={[s.tabBtnText, activeTab === "fechamentos" && s.tabBtnTextActive]}>Fechamentos de Caixa</Text>
         </Pressable>
       </View>
+
+      {/* Ranking depende de um CNPJ especifico (o endpoint e
+          /companies/:id/employees/ranking e o vinculo vendedor->empresa e por
+          CNPJ). Em modo consolidado nao ha company.id — avisa em vez de
+          renderizar um ranking vazio que parece "nenhuma venda". */}
+      {activeTab === "ranking" && (consolidatedView || !company?.id ? (
+        <View style={s.consolidatedBanner}>
+          <Icon name="cart" size={14} color="#a78bfa" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.consolidatedTitle}>Ranking disponivel por empresa</Text>
+            <Text style={s.consolidatedSub}>
+              O ranking de vendedores e calculado por CNPJ. Escolha uma empresa especifica no seletor para ver o podio.
+            </Text>
+          </View>
+        </View>
+      ) : <SalesRanking />)}
 
       {activeTab === "fechamentos" && <FechamentosTab />}
 
