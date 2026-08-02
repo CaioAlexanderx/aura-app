@@ -366,13 +366,20 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   // React via "tipo de componente diferente" e DESMONTAVA toda a sub-arvore,
   // incluindo o TextInput em foco — perdia foco a cada digito.
   //
-  // Solucao: calcular needsScroll inline e usar ternaria diretamente no JSX
-  // (sem componente wrapper recriado). Mantem mesmo comportamento visual.
-  var needsScroll = isLinkedToSale || isEditing || (!isEditing && isIncome);
+  // Solucao: `unitFormContent` e um elemento React (constante, nao componente),
+  // criado uma vez abaixo, embrulhado direto no JSX (sem wrapper recriado a
+  // cada render).
+  //
+  // FIX (02/08/2026): o form unitario (modo unit, tanto novo quanto edicao)
+  // agora SEMPRE roda dentro de <ScrollView>. Antes so ganhava scroll quando
+  // isLinkedToSale/isEditing/isIncome eram verdadeiros (`needsScroll`) — uma
+  // despesa NOVA (nao edicao) caia no <View> sem scroll e cortava os campos
+  // de baixo (forma de pagamento, vendedor, botao de salvar) sem como rolar
+  // ate eles. Receita e Despesa novas tem exatamente os mesmos campos, entao
+  // nao fazia sentido uma reservar scroll e a outra nao.
 
   // Conteudo do form unitario, declarado uma vez como elemento React (constante,
-  // nao componente), pra ser embrulhado por <ScrollView> ou <View> sem causar
-  // remount.
+  // nao componente), pra ser embrulhado por <ScrollView> sem causar remount.
   var unitFormContent = (
     <>
       {/* SECAO DA VENDA — so quando editando lancamento que veio do PDV (Item 1 Eryca) */}
@@ -476,15 +483,9 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
           <>
             {!isEditing && <View style={s.modeRow}>{(["unit", "batch"] as const).map(function(m) { return <Pressable key={m} onPress={function() { setMode(m); }} style={[s.modeBtn, mode === m && s.modeBtnActive]}><Text style={[s.modeText, mode === m && s.modeTextActive]}>{m === "unit" ? "Unitario" : "Lote"}</Text></Pressable>; })}</View>}
             {(mode === "unit" || isEditing) ? (
-              needsScroll ? (
-                <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={s.form}>
-                  {unitFormContent}
-                </ScrollView>
-              ) : (
-                <View style={s.form}>
-                  {unitFormContent}
-                </View>
-              )
+              <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={s.form}>
+                {unitFormContent}
+              </ScrollView>
             ) : (
               <View style={s.form}>
                 <Text style={s.label}>Lancamentos em lote</Text>
