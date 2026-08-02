@@ -22,8 +22,20 @@
 // federação exige para adotar/federar um aluno. Endereço entra numa
 // seção RECOLHIDA por padrão (acordeão) pra não alongar ainda mais um
 // formulário que já é longo; abre sozinha ao editar um aluno que já tem
-// algo preenchido. Foto FICA DE FORA: não existe endpoint de upload no
-// lado do dojô — nada a construir aqui.
+// algo preenchido.
+//
+// F8.2 (01/08/2026 — pedido do Caio: "a ficha de cadastro do aluno DEVE
+// ser igual à ficha de cadastro do praticante da federação"):
+//   • Foto: o dojô ganhou o mesmo caminho de upload que o praticante já
+//     usa (endpoint dedicado, criado em PR paralelo do backend) — ver
+//     FotoSection/fileToBase64 (reusados de praticante-ficha/) e
+//     karateDojoStudentsApi.uploadStudentPhoto. Campo permanente:
+//     karate_photo_url.
+//   • Faixa: Marrom ganha os 3 kyus distintos (3º/2º/1º) e Preta ganha o
+//     grau Dan (1º a 10º) — mesma escala oficial FPKT e mesmo de-para
+//     (BELT_KYUS/DAN_OPTIONS/buildBeltName) que a ficha do praticante já
+//     usa em praticante-detalhe/helpers.ts. Grau é opcional: um aluno já
+//     cadastrado com "Marrom" ou "Preta" sem grau continua válido.
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -31,7 +43,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { BeltKey, KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { FormField } from "@/components/karate/FormField";
 import {
@@ -40,9 +52,19 @@ import {
 } from "@/services/karateDojoStudentsApi";
 import { GuardianPicker } from "./GuardianPicker";
 import {
-  COMMON_BELTS, beltOrderForLabel, ageFromISO, isoToBR, brToISO,
+  COMMON_BELTS, beltOrderForLabel, parseCommonBelt, ageFromISO, isoToBR, brToISO,
   maskDateBR, maskCpf, maskCep, onlyDigits, mapStudentSaveError, StudentErrorField,
 } from "./helpers";
+// F8.2: mesmo de-para (kyus/dans) que a ficha do praticante da federação
+// já usa — reaproveitado aqui pra ficha do aluno ter a MESMA escala
+// oficial FPKT (pedido do Caio: "a ficha de cadastro do aluno DEVE ser
+// igual à ficha de cadastro do praticante da federação").
+import { BELT_KYUS, DAN_OPTIONS, buildBeltName } from "../praticante-detalhe/helpers";
+// F8.2: foto do aluno — MESMO caminho de upload já usado pra foto do
+// praticante (endpoint dedicado criado em PR paralelo do backend, mesmo
+// padrão do uploadPractitionerPhoto em services/karateApi.ts).
+import { FotoSection, fileToBase64 } from "@/components/karate/praticante-ficha/FotoSection";
+import { pickFileWeb } from "@/services/studioUploadApi";
 
 interface Props {
   visible: boolean;
@@ -73,7 +95,13 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [sex, setSex] = useState<DojoStudentSex | null>(null);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [beltLabel, setBeltLabel] = useState<string | null>(null);
+  // F8.2: base (BeltKey) + grau (kyu/dan) separados — mesmo modelo da
+  // ficha do praticante (praticante-ficha/FaixaSection.tsx beltKey/danDeg/
+  // kyuDeg), só que aqui os dois graus (kyu de Marrom, dan de Preta)
+  // convergem num único `beltDegree` porque só um deles fica visível de
+  // cada vez (a base escolhida decide qual sub-seletor aparece).
+  const [beltKey, setBeltKey] = useState<BeltKey | null>(null);
+  const [beltDegree, setBeltDegree] = useState<number | null>(null);
   const [beltFree, setBeltFree] = useState(false);
   const [beltFreeText, setBeltFreeText] = useState("");
   const [status, setStatus] = useState<DojoStudentStatus>("active");
@@ -91,6 +119,12 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [neighborhood, setNeighborhood] = useState("");
   const [city, setCity] = useState("");
   const [ufState, setUfState] = useState("");
+  // F8.2: foto do aluno — mesmo trio de estado que a ficha do praticante
+  // usa (PraticanteFichaModal.tsx): preview local (blob URL) até o save,
+  // File pendente guardado em ref pro upload rodar depois do create/update.
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const pendingPhotoFile = useRef<File | null>(null);
   const [errors, setErrors] = useState<Partial<Record<StudentErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
 
@@ -154,10 +188,14 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setPhone(student.phone ?? "");
       setEmail(student.email ?? "");
       const label = student.belt_label ?? null;
-      const isCommon = !!label && COMMON_BELTS.some((b) => b.label.toLowerCase() === label.trim().toLowerCase());
-      setBeltFree(!!label && !isCommon);
-      setBeltFreeText(label && !isCommon ? label : "");
-      setBeltLabel(isCommon ? label : null);
+      // F8.2: parseCommonBelt reconhece as 9 faixas comuns COM ou SEM grau
+      // (ex.: "Marrom 2º kyu", "Preta 5°", "Marrom" cru) — um rótulo fora
+      // dessa escala cai no campo livre "Outra…", igual antes.
+      const parsedBelt = label ? parseCommonBelt(label) : null;
+      setBeltFree(!!label && !parsedBelt);
+      setBeltFreeText(label && !parsedBelt ? label : "");
+      setBeltKey(parsedBelt ? parsedBelt.base : null);
+      setBeltDegree(parsedBelt ? parsedBelt.degree : null);
       setStatus(student.status ?? "active");
       setEnrolledBR(isoToBR(student.enrolled_at));
       setGuardian(student.guardian ?? null);
@@ -170,6 +208,10 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setNeighborhood(student.neighborhood ?? "");
       setCity(student.city ?? "");
       setUfState(student.state ?? "");
+      // F8.2: preview da foto já salva (campo permanente karate_photo_url,
+      // gravado pelo backend após o upload — mesmo padrão do praticante).
+      setPhotoUrl(student.karate_photo_url || "");
+      pendingPhotoFile.current = null;
       // Abre o acordeão sozinho quando já há algo de RG/endereço salvo —
       // esconder dado já preenchido seria pior do que a parede de campos.
       setAddressOpen(
@@ -184,7 +226,8 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setSex(null);
       setPhone("");
       setEmail("");
-      setBeltLabel(null);
+      setBeltKey(null);
+      setBeltDegree(null);
       setBeltFree(false);
       setBeltFreeText("");
       setStatus("active");
@@ -200,13 +243,27 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setCity("");
       setUfState("");
       setAddressOpen(false);
+      setPhotoUrl("");
+      pendingPhotoFile.current = null;
     }
+    setPhotoLoading(false);
   }, [visible, student]);
 
   const birthISO = brToISO(birthBR);
   const age = birthISO ? ageFromISO(birthISO) : null;
   const isMinor = age != null && age < 18;
-  const effectiveBelt = beltFree ? (beltFreeText.trim() || null) : beltLabel;
+  // F8.2: monta o rótulo final (com grau quando aplicável) com o MESMO
+  // helper que a ficha do praticante usa (praticante-detalhe/helpers.ts
+  // buildBeltName) — garante texto idêntico entre dojô e federação.
+  const effectiveBelt = beltFree
+    ? (beltFreeText.trim() || null)
+    : beltKey
+      ? buildBeltName(
+          beltKey,
+          beltKey === "preta" ? (beltDegree ?? undefined) : undefined,
+          beltKey === "marrom" ? (beltDegree ?? undefined) : undefined
+        )
+      : null;
 
   // CEP autopreenche o endereço (ViaCEP) — mesmo padrão já usado na ficha
   // do praticante na federação (praticante-ficha/EnderecoSection.tsx).
@@ -233,6 +290,23 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setCepLoading(false);
     }
   }
+
+  // F8.2: handler de foto — abre picker, gera preview local, guarda File
+  // no ref. Mesmo mecanismo de handlePickPhoto em PraticanteFichaModal.tsx.
+  const handlePickPhoto = async () => {
+    setPhotoLoading(true);
+    try {
+      const file = await pickFileWeb("image/*");
+      if (!file) return;
+      pendingPhotoFile.current = file;
+      const blobUrl = URL.createObjectURL(file);
+      setPhotoUrl(blobUrl);
+    } catch {
+      // erro silencioso — usuário cancelou ou falha de leitura
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
 
   const save = async () => {
     const errs: Partial<Record<StudentErrorField, string>> = {};
@@ -279,7 +353,25 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       const saved = student
         ? await karateDojoStudentsApi.updateStudent(federationId, student.id, payload)
         : await karateDojoStudentsApi.createStudent(federationId, payload);
-      onSaved(saved);
+      let finalStudent = saved;
+
+      // F8.2: upload da foto (se o usuário escolheu uma nova) — ocorre
+      // APÓS o create/update pra garantir que o id exista. Mesmo padrão
+      // do praticante (PraticanteFichaModal.tsx handleSave): falha no
+      // upload NÃO reverte o cadastro, só avisa.
+      const fileToUpload = pendingPhotoFile.current;
+      if (fileToUpload) {
+        try {
+          const { content, content_type } = await fileToBase64(fileToUpload);
+          const photoResult = await karateDojoStudentsApi.uploadStudentPhoto(federationId, saved.id, { content, content_type });
+          finalStudent = { ...saved, karate_photo_url: photoResult.photo_url };
+          pendingPhotoFile.current = null;
+        } catch {
+          setErrors({ general: "Aluno salvo, mas a foto não pôde ser enviada. Tente trocar a foto novamente." });
+        }
+      }
+
+      onSaved(finalStudent);
     } catch (e: any) {
       const m = mapStudentSaveError(e);
       setErrors({ [m.field]: m.message });
@@ -307,6 +399,19 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
             </Text>
 
             <Text style={styles.section}>Dados do aluno</Text>
+
+            {/* F8.2: foto do aluno — mesmo componente/caminho de upload já
+                usado na ficha do praticante (praticante-ficha/FotoSection). */}
+            <FotoSection
+              photoUrl={photoUrl}
+              photoLoading={photoLoading}
+              onPickPhoto={handlePickPhoto}
+              onRemovePhoto={() => {
+                setPhotoUrl("");
+                pendingPhotoFile.current = null;
+              }}
+            />
+
             <View ref={fullNameFieldRef}>
               <FormField
                 label="Nome completo"
@@ -365,14 +470,15 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
             <Text style={styles.label}>Faixa</Text>
             <View style={styles.chips}>
               {COMMON_BELTS.map((b) => {
-                const on = !beltFree && beltLabel === b.label;
+                const on = !beltFree && beltKey === b.key;
                 return (
                   <TouchableOpacity
                     key={b.label}
                     style={[styles.chip, on && styles.chipOn]}
                     onPress={() => {
                       setBeltFree(false);
-                      setBeltLabel(on ? null : b.label);
+                      if (on) { setBeltKey(null); setBeltDegree(null); }
+                      else { setBeltKey(b.key); setBeltDegree(null); }
                     }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
@@ -383,13 +489,68 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               })}
               <TouchableOpacity
                 style={[styles.chip, beltFree && styles.chipOn]}
-                onPress={() => setBeltFree(!beltFree)}
+                onPress={() => {
+                  setBeltFree(!beltFree);
+                  setBeltKey(null);
+                  setBeltDegree(null);
+                }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: beltFree }}
               >
                 <Text style={[styles.chipTxt, beltFree && styles.chipTxtOn]}>Outra…</Text>
               </TouchableOpacity>
             </View>
+
+            {/* F8.2: Marrom tem 3 kyus distintos (escala oficial FPKT) — mesmo
+                de-para da ficha do praticante (praticante-detalhe/helpers.ts
+                BELT_KYUS). Grau opcional: "Marrom" sem kyu continua válido. */}
+            {!beltFree && beltKey === "marrom" && (
+              <View style={styles.degreeBlock}>
+                <Text style={styles.label}>Kyu</Text>
+                <View style={styles.chips}>
+                  {(BELT_KYUS.marrom ?? []).map((k) => {
+                    const on = beltDegree === k;
+                    return (
+                      <TouchableOpacity
+                        key={k}
+                        style={[styles.chip, on && styles.chipOn]}
+                        onPress={() => setBeltDegree(on ? null : k)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{k}º kyu</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* F8.2: Preta aceita grau Dan (1º a 10º) — mesmo de-para da ficha
+                do praticante (praticante-detalhe/helpers.ts DAN_OPTIONS). Grau
+                opcional: "Preta" sem dan continua válido. */}
+            {!beltFree && beltKey === "preta" && (
+              <View style={styles.degreeBlock}>
+                <Text style={styles.label}>Grau Dan</Text>
+                <View style={styles.chips}>
+                  {DAN_OPTIONS.map((d) => {
+                    const on = beltDegree === d;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        style={[styles.chip, on && styles.chipOn]}
+                        onPress={() => setBeltDegree(on ? null : d)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{d}º</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             {beltFree && (
               <FormField
                 label="Faixa (texto livre)"
@@ -592,6 +753,11 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
   chipTxt: { fontSize: 12.5, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   chipTxtOn: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
+  // F8.2: sub-seletor de grau (kyu/dan) — mesmo espaçamento negativo que o
+  // bloco de faixas usa entre si (marginTop: 4 no chips), só que aqui some
+  // a folga extra do <Text style={styles.label}> logo acima (kyu/dan é
+  // continuação visual da faixa base, não uma seção nova).
+  degreeBlock: { marginTop: -4 } as ViewStyle,
   // F7.0: acordeão de endereço — some da vista por padrão, some sem
   // engordar visualmente o resto do formulário.
   addressToggle: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface } as ViewStyle,
