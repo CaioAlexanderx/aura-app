@@ -47,6 +47,11 @@
 //      (grava). O resultado (`applied`) fica visível até o sensei tocar
 //      em "Concluir" — depois disso a seção volta ao estado 'linked'
 //      normal (ver appliedSummary/lastLinkResult abaixo).
+//
+// F8.2 (01/08/2026 — pedido do Caio: ficha do aluno igual à ficha do
+// praticante): rótulo "FPKT" no card 'linked' vira "Matrícula FPKT" —
+// mesmo vocabulário do campo de matrícula na ficha do praticante
+// (praticante-ficha/MatriculaSection.tsx, "Número de matrícula (FPKT)").
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -395,7 +400,7 @@ export function AlunoFederacaoSection({ federationId, student, onChanged }: Prop
             <Icon name="shield" size={13} color={KarateColors.ok} />
             <Text style={styles.linkedBadgeTxt}>Federado</Text>
           </View>
-          <Text style={styles.infoLine}>FPKT: <Text style={styles.infoStrong}>{fed.fpktNumber ?? "—"}</Text></Text>
+          <Text style={styles.infoLine}>Matrícula FPKT: <Text style={styles.infoStrong}>{fed.fpktNumber ?? "—"}</Text></Text>
           <Text style={styles.infoLine}>Praticante: <Text style={styles.infoStrong}>{fed.practitionerName ?? "—"}</Text></Text>
           {!!lastLinkResult?.is_transfer && (
             <Text style={styles.hint}>Este praticante já era federado em outro dojô — a transferência foi registrada.</Text>
