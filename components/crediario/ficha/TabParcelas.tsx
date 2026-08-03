@@ -107,9 +107,14 @@ export function TabParcelas({
         breakdown={buildBreakdown(ins, rem, hasCharges, chargesTotal)}
         actions={
           <>
-            <Button title="Alterar data" variant="ghost" size="sm" full onPress={() => handleEditDueDateOpen(ins)} />
-            <Button title="Pix" variant="success" size="sm" full onPress={() => openInstallmentPix(ins.id)} />
-            <Button title="Receber" variant="primary" size="sm" full onPress={() => prefill(totalHoje)} />
+            {/* Task 03/08 (R5): a ação de 90% dos casos vira o CTA primário de
+                largura cheia (alvo ≥44px); Alterar data e Pix descem para a
+                linha secundária — nada some, nada trunca em 360px. */}
+            <Button title={`Receber ${fmt(totalHoje)}`} variant="primary" size="md" onPress={() => prefill(totalHoje)} />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Button title="Alterar data" variant="ghost" size="md" full onPress={() => handleEditDueDateOpen(ins)} />
+              <Button title="Pix" variant="success" size="md" full onPress={() => openInstallmentPix(ins.id)} />
+            </View>
           </>
         }
       />

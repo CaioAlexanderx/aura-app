@@ -199,6 +199,32 @@ export const m = StyleSheet.create({
   previewLbl: { fontSize: 12, color: Colors.ink3, flex: 1 },
   previewVal: { fontSize: 12, fontWeight: "700", color: Colors.ink, textAlign: "right" },
 
+  // ── Painéis de ação (task 03/08: telas pequenas) ──────────────────
+  // Substituem os sub-sheets que empilhavam de baixo comprimindo o body
+  // (editDueDateSheet/pixOverlay): agora cada ação desliza POR CIMA,
+  // ocupando o sheet inteiro, com header próprio (‹ Voltar) e rodapé
+  // fixo — nada de CTA dentro do scroll, nada de body com 80px.
+  panel: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: Colors.bg2, zIndex: 10,
+  },
+  panelHead: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  panelBack: {
+    flexDirection: "row", alignItems: "center", gap: 2,
+    paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, minHeight: 44,
+  },
+  panelBackTxt: { fontSize: 14, fontWeight: "600", color: Colors.violet3 },
+  panelTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: Colors.ink },
+  panelBody: { flexGrow: 1, flexShrink: 1, minHeight: 0 },
+  panelFoot: {
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    padding: 16, backgroundColor: Colors.bg2,
+  },
+
   // ── Item 2 (16/06): renegociacao de parcelas ──────────────────────
   // Botao "Renegociar" (acao secundaria, estilo outline violeta).
   renegActionBtn: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
