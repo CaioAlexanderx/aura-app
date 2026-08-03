@@ -1,5 +1,6 @@
 // ============================================================
 // AURA DOJÔ — F4: Turmas (CRUD, matrícula, chamada) + check-in QR
+// F9: QR único do dojô (GET /dojo/qr) + janela de tolerância no checkin.
 //
 // Cliente tipado do Aura-backend PR "f4-dojo-turmas" (backend construído
 // em paralelo a partir do MESMO contrato deste arquivo). Base:
@@ -11,12 +12,24 @@
 // Horários 'HH:MM' | null. Datas de chamada 'YYYY-MM-DD' — sempre
 // tz-safe (parse manual / Date.UTC, nunca new Date('YYYY-MM-DD') local).
 //
+// F9 — dois formatos de QR no MESMO endpoint de checkin:
+//   • QR pessoal do aluno (getStudentQr) — token já identifica o aluno;
+//     studentId do 4º parâmetro fica omitido.
+//   • QR único do dojô (getDojoQr) — UM cartaz só, impresso pelo dojô;
+//     quem bipa PRECISA passar studentId (senão 422
+//     STUDENT_ID_REQUIRED). A turma é resolvida por janela de
+//     tolerância em torno do horário; 409 NO_CLASS_NOW se não há aula
+//     agora, 409 AMBIGUOUS_CLASS (+ candidates) se 2+ turmas cabem na
+//     janela — o front pergunta qual (nunca escolhe sozinho).
+//
 // Erros (ApiError.data.code, mapeados em pt-BR por helpers.ts do módulo
 // components/karate/dojoTurmas):
 //   409 HAS_HISTORY (excluir turma com presenças — sugere inativar) ·
 //   409 ALREADY_ENROLLED · 422 (aluno inativo na matrícula) ·
 //   503 SCHEMA_PENDING (migration pendente) ·
-//   409 QR_DESABILITADO / NOT_ENROLLED / NO_CLASS_TODAY (check-in QR).
+//   409 QR_DESABILITADO / NOT_ENROLLED / NO_CLASS_TODAY / NO_CLASS_NOW
+//   (check-in QR) · 422 STUDENT_ID_REQUIRED (QR único sem aluno) ·
+//   409 AMBIGUOUS_CLASS (+ candidates no corpo).
 // ============================================================
 import { request } from "@/services/api";
 
@@ -59,7 +72,9 @@ export interface DojoClassStudentsResponse {
   data: DojoClassStudent[];
 }
 
-export type DojoAttendanceMethod = "manual" | "qr";
+// F9: 'qr_dojo' = check-in pelo QR único do dojô (distinto do 'qr'
+// pessoal, útil pro dojô auditar qual cartaz gerou a presença).
+export type DojoAttendanceMethod = "manual" | "qr" | "qr_dojo";
 
 export interface DojoAttendanceRow {
   student_id: string;
@@ -113,6 +128,11 @@ export interface DojoStudentQrResponse {
   token: string;
 }
 
+// F9 — QR único do dojô (payload sem aluno embutido).
+export interface DojoQrResponse {
+  token: string;
+}
+
 export interface DojoCheckinPersonRef {
   id: string;
   full_name: string;
@@ -129,6 +149,14 @@ export interface DojoCheckinResult {
   class: DojoCheckinClassRef;
   date: string;
   already_checked: boolean;
+}
+
+// F9 — turma candidata devolvida em 409 AMBIGUOUS_CLASS (e.data.candidates).
+export interface DojoCheckinCandidate {
+  id: string;
+  name: string;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 const base = (federationId: string) => `/federation/${federationId}/dojo`;
@@ -186,9 +214,19 @@ export const karateDojoClassesApi = {
   getStudentQr: (federationId: string, studentId: string): Promise<DojoStudentQrResponse> =>
     request<DojoStudentQrResponse>(`${base(federationId)}/students/${studentId}/qr`),
 
-  checkin: (federationId: string, token: string, classId?: string): Promise<DojoCheckinResult> =>
+  // F9 — QR único do dojô: um só, estável, sem aluno embutido.
+  getDojoQr: (federationId: string): Promise<DojoQrResponse> =>
+    request<DojoQrResponse>(`${base(federationId)}/qr`),
+
+  // studentId (F9): obrigatório quando `token` é o QR único do dojô;
+  // omitido quando `token` é o QR pessoal do aluno (já basta).
+  checkin: (federationId: string, token: string, classId?: string, studentId?: string): Promise<DojoCheckinResult> =>
     request<DojoCheckinResult>(`${base(federationId)}/classes/checkin`, {
       method: "POST",
-      body: classId ? { token, class_id: classId } : { token },
+      body: {
+        token,
+        ...(classId ? { class_id: classId } : {}),
+        ...(studentId ? { student_id: studentId } : {}),
+      },
     }),
 };
