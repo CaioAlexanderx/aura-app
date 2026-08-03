@@ -13,9 +13,10 @@
 // a última VENDA, então quem acabou de quitar aparece como "ativo" e é
 // justamente excluído. Públicos quase disjuntos.
 //
-// Fase 2 = listar + ver. O botão de WhatsApp abre a conversa com uma
-// mensagem simples; o modal de cupom (clone do BirthdayCouponModal) e o
-// log de contato entram na Fase 3.
+// Fase 3 (completa): o botão de WhatsApp da linha abre o
+// CreditoLivreCupomModal — cupom + mensagem editável + log de contato.
+// Não abre mais a conversa direto: era uma segunda ação para a mesma
+// intenção, e foi unificada em 03/08/2026.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform } from "react-native";
@@ -255,19 +256,15 @@ function LeadRow({ lead, position, onOpen, onCupom }: {
   const phoneOk = !!normalizeBrPhone(lead.phone || "");
   const isTop = position <= 3;
 
-  function openWhatsApp() {
-    // Abre a conversa VAZIA, de proposito. O app nao redige a mensagem:
-    // a lista mistura quem pagou em dia com quem atrasou, e um texto unico
-    // que soa atencioso pra um soa como cobranca disfarcada pro outro.
-    // Quem conhece o cliente e o lojista -- ele escreve.
-    const digits = normalizeBrPhone(lead.phone || "");
-    if (!digits) return;
-    const url = `https://wa.me/${digits}`;
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const w = window.open(url, "_blank");
-      if (!w) window.location.href = url;
-    }
-  }
+  // 03/08/2026: "Cupom" e WhatsApp viraram UM botao so. Antes o WhatsApp
+  // abria a conversa vazia direto e o cupom era um segundo caminho; duas
+  // acoes pra mesma intencao (chamar o cliente de volta) fazia o lojista
+  // decidir uma coisa que nao precisava decidir. Agora o botao abre o
+  // modal, onde ele cria o cupom E revisa a mensagem antes de enviar.
+  //
+  // Sumiu com isso o atalho de "abrir conversa sem cupom". Quem quiser so
+  // conversar ainda consegue: e so cancelar o modal e usar o telefone do
+  // cliente na ficha.
 
   return (
     <View style={s.row}>
@@ -318,14 +315,18 @@ function LeadRow({ lead, position, onOpen, onCupom }: {
       </View>
 
       <View style={s.acts}>
-        <Pressable onPress={onCupom} style={s.cupomBtn} accessibilityLabel={`Criar cupom para ${lead.name}`}>
-          <Text style={s.cupomText}>Cupom</Text>
-        </Pressable>
+        {/* NAO desabilita sem telefone: o modal cobre esse caso com "So criar
+            cupom" (o lojista entrega o codigo na loja). Desabilitar aqui
+            tiraria o cupom justamente de quem aparece com a tarja "Sem
+            telefone" -- que o backend conta e a lista exibe no rodape. */}
         <Pressable
-          onPress={openWhatsApp}
-          disabled={!phoneOk}
-          style={[s.waBtn, !phoneOk && { opacity: 0.4 }]}
-          accessibilityLabel={`Abrir WhatsApp de ${lead.name}`}
+          onPress={onCupom}
+          style={s.waBtn}
+          accessibilityLabel={
+            phoneOk
+              ? `Criar cupom e chamar ${lead.name} no WhatsApp`
+              : `Criar cupom para ${lead.name} (cliente sem telefone)`
+          }
         >
           <Icon name="whatsapp" size={18} color="#fff" />
         </Pressable>
@@ -395,12 +396,8 @@ const s = StyleSheet.create({
   when: { fontSize: 12, color: Colors.ink2 },
   whenSub: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
 
+  // cupomBtn/cupomText sairam junto com o botao "Cupom" (03/08/2026).
   acts: { flexDirection: "row", gap: 7, alignItems: "center" },
-  cupomBtn: {
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
-    backgroundColor: "rgba(124,58,237,0.11)", borderWidth: 1, borderColor: "rgba(124,58,237,0.42)",
-  },
-  cupomText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   waBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
 
   footerCount: { fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 12, fontStyle: "italic" },
