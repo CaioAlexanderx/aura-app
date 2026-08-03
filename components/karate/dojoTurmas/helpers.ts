@@ -1,5 +1,6 @@
 // ============================================================
-// Helpers — Turmas do dojô (F4: CRUD, matrícula, chamada, check-in QR)
+// Helpers — Turmas do dojô (F4: CRUD, matrícula, chamada, check-in QR;
+// F9: QR único do dojô + janela de tolerância)
 //
 // Datas 'YYYY-MM-DD' são SEMPRE tz-safe: parse manual / Date.UTC, nunca
 // new Date('YYYY-MM-DD') local direto (em UTC-3 isso pode voltar um
@@ -114,6 +115,18 @@ export function mapClassesError(e: any): { code: string | null; message: string 
   }
   if (code === "NO_CLASS_TODAY") {
     return { code, message: "Não há turma prevista para hoje." };
+  }
+  // F9 — QR único do dojô.
+  if (code === "STUDENT_ID_REQUIRED") {
+    return { code, message: "Esse é o QR único do dojô — informe o aluno para confirmar a presença." };
+  }
+  if (code === "NO_CLASS_NOW") {
+    // O back já manda a janela (30/60 min) na mensagem — repassa direto
+    // em vez de reescrever um texto genérico que esconderia o motivo.
+    return { code, message: e?.data?.error || "Não há aula agora (fora da janela de tolerância do horário)." };
+  }
+  if (code === "AMBIGUOUS_CLASS") {
+    return { code, message: "Mais de uma turma possível agora — escolha qual." };
   }
   if (code === "VALIDATION_ERROR") {
     return { code, message: apiErrors[0] || "Dados inválidos — confira o formulário." };
