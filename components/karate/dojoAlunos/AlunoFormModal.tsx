@@ -36,10 +36,28 @@
 //     (BELT_KYUS/DAN_OPTIONS/buildBeltName) que a ficha do praticante já
 //     usa em praticante-detalhe/helpers.ts. Grau é opcional: um aluno já
 //     cadastrado com "Marrom" ou "Preta" sem grau continua válido.
+//
+// F9 (03/08/2026 — pedido do Caio: "na ficha de novo aluno já deve ser
+// possível assinalar ele para uma turma e plano de pagamento"):
+//   • Turma (onde o aluno vai TREINAR) + Plano de pagamento (COMO ele
+//     paga) — duas coisas distintas, tituladas separadamente na tela.
+//     Reusa karateDojoClassesApi (enrollStudent) e karateDojoBillingApi
+//     (subscribeStudent) — os MESMOS endpoints que a tela de Turmas e a
+//     seção "Mensalidade" da ficha (AlunoAssinaturaSection.tsx) já
+//     consomem. Nenhum endpoint novo.
+//   • Só aparecem no CADASTRO (!editing): editar um aluno já existente
+//     usa as seções próprias da ficha (AlunoFichaModal.tsx) —
+//     AlunoTurmaSection (nova) e AlunoAssinaturaSection (já existia) —
+//     que já sabem gerenciar matrícula/assinatura de quem já tem id.
+//   • O aluno criado aqui ainda não tem id no momento em que o sensei
+//     escolhe turma/plano — por isso a matrícula e a assinatura só
+//     ACONTECEM DEPOIS do create (mesmo padrão do upload de foto, acima):
+//     falha em matricular ou assinar NÃO desfaz o cadastro, só avisa
+//     (o aluno já está salvo quando isso roda).
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Modal, View, Text, TouchableOpacity, ScrollView,
+  Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -65,6 +83,15 @@ import { BELT_KYUS, DAN_OPTIONS, buildBeltName } from "../praticante-detalhe/hel
 // padrão do uploadPractitionerPhoto em services/karateApi.ts).
 import { FotoSection, fileToBase64 } from "@/components/karate/praticante-ficha/FotoSection";
 import { pickFileWeb } from "@/services/studioUploadApi";
+// F9: turma (onde o aluno treina) — MESMO service que a tela de Turmas
+// já consome (TurmaDetalhe.tsx: listClasses/enrollStudent). Nenhum
+// endpoint novo.
+import { karateDojoClassesApi, DojoClass } from "@/services/karateDojoClassesApi";
+// F9: plano de pagamento (como o aluno paga) — MESMO service que
+// AlunoAssinaturaSection.tsx (seção "Mensalidade" da ficha) já consome.
+import { karateDojoBillingApi, DojoBillingPlan } from "@/services/karateDojoBillingApi";
+import { fmtBRL, isValidDueDay } from "@/components/karate/dojoMensalidades/helpers";
+import { maskCurrency, unmaskNumber } from "@/utils/masks";
 
 interface Props {
   visible: boolean;
@@ -125,6 +152,21 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
   const pendingPhotoFile = useRef<File | null>(null);
+  // F9: turma — multi-seleção (um aluno pode treinar em mais de uma
+  // turma, ex.: infantil + competição). Só usado no CADASTRO.
+  const [classes, setClasses] = useState<DojoClass[]>([]);
+  const [classesLoading, setClassesLoading] = useState(false);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  // F9: plano de pagamento — espelha o estado "sem assinatura" de
+  // AlunoAssinaturaSection.tsx (mesmos nomes de campo/validação), só que
+  // aqui roda uma vez só, no cadastro.
+  const [plans, setPlans] = useState<DojoBillingPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [customizePlan, setCustomizePlan] = useState(false);
+  const [planAmountMasked, setPlanAmountMasked] = useState("0,00");
+  const [planDueDay, setPlanDueDay] = useState("");
+  const [planPayerIsGuardian, setPlanPayerIsGuardian] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<StudentErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
 
@@ -218,6 +260,15 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
         !!(student.rg || student.zip_code || student.street || student.number ||
            student.complement || student.neighborhood || student.city || student.state)
       );
+      // F9: turma/plano vivem nas seções próprias da ficha (edição) —
+      // reset garante que um cadastro novo aberto em seguida não herde
+      // seleção de uma sessão de edição anterior no mesmo componente.
+      setSelectedClassIds([]);
+      setPlanId(null);
+      setCustomizePlan(false);
+      setPlanAmountMasked("0,00");
+      setPlanDueDay("");
+      setPlanPayerIsGuardian(false);
     } else {
       setFullName("");
       setBirthBR("");
@@ -245,9 +296,36 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setAddressOpen(false);
       setPhotoUrl("");
       pendingPhotoFile.current = null;
+      // F9: cadastro novo — zera turma/plano da sessão anterior.
+      setSelectedClassIds([]);
+      setPlanId(null);
+      setCustomizePlan(false);
+      setPlanAmountMasked("0,00");
+      setPlanDueDay("");
+      setPlanPayerIsGuardian(false);
     }
     setPhotoLoading(false);
   }, [visible, student]);
+
+  // F9: carrega turmas ativas + planos ativos — só no CADASTRO (editar já
+  // tem seções próprias na ficha: AlunoTurmaSection + AlunoAssinaturaSection,
+  // que já sabem gerenciar matrícula/assinatura de quem já tem id). Falha
+  // ao listar não trava o form — mesma filosofia "dado faltante ≠
+  // pendência": sem turmas/planos cadastrados no dojô, o aluno é só salvo
+  // sem nenhum dos dois (dá para configurar depois pela ficha).
+  useEffect(() => {
+    if (!visible || editing) return;
+    setClassesLoading(true);
+    karateDojoClassesApi.listClasses(federationId)
+      .then((r) => setClasses((r.data ?? []).filter((c) => c.active)))
+      .catch(() => setClasses([]))
+      .finally(() => setClassesLoading(false));
+    setPlansLoading(true);
+    karateDojoBillingApi.listPlans(federationId)
+      .then((r) => setPlans((r.data ?? []).filter((p) => p.active)))
+      .catch(() => setPlans([]))
+      .finally(() => setPlansLoading(false));
+  }, [visible, editing, federationId]);
 
   const birthISO = brToISO(birthBR);
   const age = birthISO ? ageFromISO(birthISO) : null;
@@ -308,6 +386,21 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
     }
   };
 
+  // F9: alterna a seleção de uma turma (multi-matrícula — um aluno pode
+  // treinar em mais de uma turma, ex.: infantil + competição).
+  const toggleClass = (id: string) => {
+    setSelectedClassIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  // F9: mesmo padrão de AlunoAssinaturaSection.tsx (pickPlan) — pré-preenche
+  // valor/vencimento a partir do plano escolhido, mas os campos continuam
+  // editáveis ("Personalizar valor e vencimento").
+  const pickPlan = (p: DojoBillingPlan) => {
+    setPlanId((prev) => (prev === p.id ? null : p.id));
+    setPlanAmountMasked(maskCurrency(String(Math.round(p.amount * 100))));
+    setPlanDueDay(String(p.due_day));
+  };
+
   const save = async () => {
     const errs: Partial<Record<StudentErrorField, string>> = {};
     if (!fullName.trim()) errs.full_name = "Informe o nome do aluno — é o único campo obrigatório.";
@@ -318,6 +411,33 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
     if (cpfDigits.length > 0 && cpfDigits.length !== 11) errs.cpf = "CPF incompleto — são 11 dígitos.";
     // Única exceção à regra "dado faltante ≠ pendência": menor sem responsável (LGPD).
     if (isMinor && !guardian) errs.guardian = "Aluno menor de 18 anos precisa de um responsável vinculado (LGPD).";
+
+    // F9: plano de pagamento (opcional) — só valida se o usuário de fato
+    // engajou com algo (plano escolhido, "personalizar" marcado, ou
+    // valor/vencimento digitados). Mesma regra de negócio de
+    // AlunoAssinaturaSection.tsx (dia de vencimento 1–28); só se aplica no
+    // CADASTRO (editar não mostra esta seção — ver useEffect acima).
+    let usingPlanValue = !!planId && !customizePlan;
+    let planAmountNum: number | undefined;
+    let planDueDayNum: number | undefined;
+    if (!usingPlanValue) {
+      planAmountNum = parseInt(unmaskNumber(planAmountMasked) || "0", 10) / 100;
+      planDueDayNum = parseInt(planDueDay, 10);
+    }
+    const wantsPlan = !editing && (
+      !!planId || customizePlan || (planAmountNum != null && planAmountNum > 0) || !!planDueDay.trim()
+    );
+    if (wantsPlan && !usingPlanValue) {
+      if (!(planAmountNum! > 0)) {
+        errs.general = errs.general || "Informe um valor de mensalidade maior que zero, ou deixe os campos de plano em branco.";
+      } else if (!isValidDueDay(planDueDayNum)) {
+        errs.general = errs.general || "Dia de vencimento do plano deve ser entre 1 e 28.";
+      }
+    }
+    if (wantsPlan && planPayerIsGuardian && !guardian) {
+      errs.guardian = errs.guardian || "Escolha o responsável (seção acima) para ele ser o pagador do plano, ou volte para \"O aluno\".";
+    }
+
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
@@ -369,6 +489,42 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
         } catch {
           setErrors({ general: "Aluno salvo, mas a foto não pôde ser enviada. Tente trocar a foto novamente." });
         }
+      }
+
+      // F9: matrícula em turma(s) + plano de pagamento — ocorrem DEPOIS do
+      // create, porque o id do aluno não existia antes (mesmo padrão do
+      // upload de foto, acima). Falha aqui NÃO desfaz o cadastro, só
+      // avisa — o aluno já está salvo quando este trecho roda.
+      const postCreateWarnings: string[] = [];
+      if (!editing && selectedClassIds.length > 0) {
+        for (const classId of selectedClassIds) {
+          try {
+            await karateDojoClassesApi.enrollStudent(federationId, classId, saved.id);
+          } catch {
+            const name = classes.find((c) => c.id === classId)?.name || "turma selecionada";
+            postCreateWarnings.push(`não foi possível matricular em "${name}"`);
+          }
+        }
+      }
+      if (wantsPlan) {
+        try {
+          await karateDojoBillingApi.subscribeStudent(federationId, saved.id, {
+            plan_id: planId ?? undefined,
+            amount: usingPlanValue ? undefined : planAmountNum,
+            due_day: usingPlanValue ? undefined : planDueDayNum,
+            payer_guardian_id: planPayerIsGuardian ? (guardian?.id ?? undefined) : undefined,
+          });
+        } catch {
+          postCreateWarnings.push("não foi possível assinar o plano de pagamento");
+        }
+      }
+      if (postCreateWarnings.length > 0) {
+        setErrors((prev) => ({
+          ...prev,
+          general: [prev.general, `Aluno salvo, mas ${postCreateWarnings.join(" e ")}. Configure pela ficha do aluno.`]
+            .filter(Boolean)
+            .join(" "),
+        }));
       }
 
       onSaved(finalStudent);
@@ -691,6 +847,126 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               />
             </View>
 
+            {/* F9: Turma (onde o aluno vai treinar) + Plano de pagamento
+                (como ele paga) — só no CADASTRO. Editar usa as seções
+                próprias da ficha (AlunoTurmaSection + AlunoAssinaturaSection
+                em AlunoFichaModal.tsx), que já sabem gerenciar quem já tem
+                id. Matrícula/assinatura só acontecem DEPOIS do create — ver
+                save() acima (mesmo padrão do upload de foto). */}
+            {!editing && (
+              <View style={styles.tpBox}>
+                <Text style={styles.section}>Turma</Text>
+                <Text style={styles.sectionSub}>
+                  Onde o aluno vai treinar — não confundir com o plano de pagamento, logo abaixo (como ele paga).
+                </Text>
+                {classesLoading ? (
+                  <ActivityIndicator size="small" color={KarateColors.primary} />
+                ) : classes.length === 0 ? (
+                  <Text style={styles.hint}>Nenhuma turma ativa cadastrada — crie turmas em "Turmas" para matricular o aluno por aqui.</Text>
+                ) : (
+                  <View style={styles.chips}>
+                    {classes.map((c) => {
+                      const on = selectedClassIds.includes(c.id);
+                      return (
+                        <TouchableOpacity
+                          key={c.id}
+                          style={[styles.chip, on && styles.chipOn]}
+                          onPress={() => toggleClass(c.id)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                        >
+                          <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{c.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <Text style={[styles.section, { marginTop: 10 }]}>Plano de pagamento</Text>
+                <Text style={styles.sectionSub}>
+                  Como o aluno paga a mensalidade — opcional, dá para configurar depois pela ficha (seção Mensalidade).
+                </Text>
+                {plansLoading ? (
+                  <ActivityIndicator size="small" color={KarateColors.primary} />
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    {plans.length > 0 && (
+                      <View style={styles.chips}>
+                        {plans.map((p) => {
+                          const on = planId === p.id;
+                          return (
+                            <TouchableOpacity
+                              key={p.id}
+                              style={[styles.chip, on && styles.chipOn]}
+                              onPress={() => pickPlan(p)}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                            >
+                              <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{p.name} · {fmtBRL(p.amount)}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {planId && (
+                      <TouchableOpacity onPress={() => setCustomizePlan((v) => !v)} accessibilityRole="button">
+                        <Text style={styles.linkTxt}>{customizePlan ? "Usar valor do plano" : "Personalizar valor e vencimento"}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {(!planId || customizePlan) && (
+                      <View style={styles.row2}>
+                        <View style={{ flex: 1 }}>
+                          <FormField
+                            label="Valor (R$)"
+                            value={planAmountMasked}
+                            onChangeText={(v) => setPlanAmountMasked(maskCurrency(v))}
+                            keyboardType="decimal-pad"
+                            placeholder="0,00"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <FormField
+                            label="Vencimento (1–28)"
+                            value={planDueDay}
+                            onChangeText={(v) => setPlanDueDay(v.replace(/\D/g, "").slice(0, 2))}
+                            keyboardType="number-pad"
+                            placeholder="10"
+                          />
+                        </View>
+                      </View>
+                    )}
+
+                    <View>
+                      <Text style={styles.label}>Quem paga</Text>
+                      <View style={styles.chips}>
+                        <TouchableOpacity
+                          style={[styles.chip, !planPayerIsGuardian && styles.chipOn]}
+                          onPress={() => setPlanPayerIsGuardian(false)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: !planPayerIsGuardian }}
+                        >
+                          <Text style={[styles.chipTxt, !planPayerIsGuardian && styles.chipTxtOn]}>O aluno</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.chip, planPayerIsGuardian && styles.chipOn]}
+                          onPress={() => setPlanPayerIsGuardian(true)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: planPayerIsGuardian }}
+                        >
+                          <Text style={[styles.chipTxt, planPayerIsGuardian && styles.chipTxtOn]}>Responsável</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {planPayerIsGuardian && !guardian && (
+                        <Text style={styles.hintWarn}>Escolha o responsável na seção acima para ele ser o pagador.</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity
               style={styles.consentRow}
               onPress={() => setConsent(!consent)}
@@ -766,6 +1042,14 @@ const styles = StyleSheet.create({
   addressBox: { gap: 10, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface } as ViewStyle,
   guardianBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
   guardianBoxMinor: { borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  // F9: caixa "Turma + Plano de pagamento" — mesmo padrão visual das
+  // seções inline da ficha (AlunoAssinaturaSection.tsx box), pra deixar
+  // claro que são duas coisas distintas dentro de um único bloco.
+  tpBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
+  sectionSub: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 16, marginTop: -2, marginBottom: 2 } as TextStyle,
+  hint: { fontSize: 12, color: KarateColors.ink3, lineHeight: 17 } as TextStyle,
+  hintWarn: { fontSize: 11.5, color: KarateColors.warn, fontWeight: "600", marginTop: 4 } as TextStyle,
+  linkTxt: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   consentRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 } as ViewStyle,
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: KarateColors.border2, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" } as ViewStyle,
   checkboxOn: { backgroundColor: KarateColors.ink, borderColor: KarateColors.ink } as ViewStyle,

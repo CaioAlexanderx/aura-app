@@ -10,6 +10,10 @@
 // já pré-preenchido com o responsável cadastrado do aluno quando existe).
 // Com assinatura: mostra plano/valor/vencimento/pagador + Cancelar
 // (confirmação inline, mesmo padrão do resto da ficha).
+//
+// F9 (03/08/2026 — pedido do Caio): subtítulo explícito distinguindo
+// esta seção de "Turma" (AlunoTurmaSection, logo acima na ficha) — são
+// coisas diferentes: aqui é COMO o aluno paga; lá é ONDE ele treina.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -137,6 +141,7 @@ export function AlunoAssinaturaSection({ federationId, student, onChanged }: Pro
   return (
     <View style={styles.box}>
       <Text style={styles.title}>Mensalidade</Text>
+      <Text style={styles.subtitle}>Como o aluno paga — não confundir com a Turma (onde ele treina), logo acima.</Text>
 
       {loading && (
         <View style={{ paddingVertical: 8 }}>
@@ -268,6 +273,7 @@ export function AlunoAssinaturaSection({ federationId, student, onChanged }: Pro
 const styles = StyleSheet.create({
   box: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
   title: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
+  subtitle: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 16 } as TextStyle,
   hint: { fontSize: 12, color: KarateColors.ink3, lineHeight: 17 } as TextStyle,
   infoLine: { fontSize: 12.5, color: KarateColors.ink2 } as TextStyle,
   infoStrong: { fontWeight: "700", color: KarateColors.ink } as TextStyle,

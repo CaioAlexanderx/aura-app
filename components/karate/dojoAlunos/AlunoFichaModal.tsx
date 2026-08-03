@@ -1,6 +1,7 @@
 // ============================================================
 // AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a;
-// seções Presenças + QR de check-in F4; seção Federação F5a)
+// seções Presenças + QR de check-in F4; seção Federação F5a; seção
+// Turma F9)
 //
 // Dados + responsável + ações: Editar (delega pro AlunoFormModal via
 // onEdit), Inativar/Reativar (PATCH status) e Excluir (DELETE real na
@@ -30,6 +31,13 @@
 // cabeçalho, leitura — trocar a foto acontece via Editar (AlunoFormModal,
 // mesmo caminho de upload da ficha do praticante).
 //
+// F9 (03/08/2026 — pedido do Caio: "já deve ser possível assinalar ele
+// para uma turma e plano de pagamento" de dentro da ficha): seção
+// "Turma" (AlunoTurmaSection) — matricular/desmatricular sem sair da
+// ficha, ao lado de "Mensalidade" (plano de pagamento). As duas seções
+// têm títulos e subtítulos que deixam a distinção explícita: turma é
+// ONDE o aluno treina; mensalidade é COMO ele paga.
+//
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
 // grupo (dojo), então nada de confirmAsync aqui.
@@ -45,6 +53,7 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudentsApi";
 import { beltViewFor, isoToBR, maskCpf, maskCep, mapStudentSaveError, formatPhone } from "./helpers";
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
+import { AlunoTurmaSection } from "./AlunoTurmaSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
 import { AlunoFederacaoSection } from "./AlunoFederacaoSection";
@@ -225,6 +234,11 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
               </View>
 
               <AlunoFederacaoSection federationId={federationId} student={s} onChanged={onChanged} />
+
+              {/* F9: Turma (onde treina) ao lado de Mensalidade (como paga) —
+                  duas seções distintas, tituladas e subtituladas para deixar
+                  a diferença explícita na tela. */}
+              <AlunoTurmaSection federationId={federationId} student={s} onChanged={onChanged} />
 
               <AlunoAssinaturaSection federationId={federationId} student={s} onChanged={onChanged} />
 
