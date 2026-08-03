@@ -15,6 +15,7 @@ import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
+import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/Button";
 import { Motion, Shadows, webTransition } from "@/constants/motion";
@@ -219,9 +220,13 @@ function HeroStat({ dot, label, value, sub, color, onPress, active }: {
 }
 
 export default function CrediarioScreen() {
-  const { company, refreshMe } = useAuthStore();
+  const { company, refreshMe, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  // Fase 2 do Credito Livre (02/08/2026): esta tela nao tinha abas -- era
+  // uma coluna unica (hero -> carteira por atraso -> carteira). "Carteira"
+  // continua sendo o default pra nao mudar o que o lojista ja faz aqui.
+  const [activeTab, setActiveTab] = useState<"carteira" | "leads">("carteira");
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [showCriar, setShowCriar] = useState(false);
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
@@ -429,6 +434,32 @@ export default function CrediarioScreen() {
           />
         </View>
       </View>
+
+      {/* ── Abas: Carteira | Crédito livre (Fase 2, 02/08/2026) ── */}
+      <View style={s.tabBar}>
+        <Pressable
+          onPress={() => setActiveTab("carteira")}
+          style={[s.tabBtn, activeTab === "carteira" && s.tabBtnOn]}
+        >
+          <Text style={[s.tabText, activeTab === "carteira" && s.tabTextOn]}>Carteira</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setActiveTab("leads")}
+          style={[s.tabBtn, activeTab === "leads" && s.tabBtnOn]}
+        >
+          <Text style={[s.tabText, activeTab === "leads" && s.tabTextOn]}>Crédito livre</Text>
+        </Pressable>
+      </View>
+
+      {activeTab === "leads" && (
+        <CreditoLivreTab
+          companyId={company?.id}
+          consolidated={consolidatedView}
+          onOpenCustomer={(c) => setModalCust(c)}
+        />
+      )}
+
+      {activeTab === "carteira" && (<>
 
       {/* ── Hero GLASS unificado: 1 herói + stats inline (F2) ── */}
       <FadeInUp>
@@ -699,6 +730,8 @@ export default function CrediarioScreen() {
         </Text>
       )}
 
+      </>)}
+
       <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} />
 
       <ClienteCrediarioModal
@@ -734,6 +767,13 @@ export default function CrediarioScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1 },
+  // Fase 2: abas Carteira | Credito livre. Mesmo visual da tab bar de
+  // /vendas (sublinhado violeta), pra nao inventar um terceiro padrao.
+  tabBar: { flexDirection: "row", gap: 4, marginTop: 4, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  tabBtnOn: { borderBottomColor: Colors.violet },
+  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  tabTextOn: { color: Colors.violet3, fontWeight: "700" },
   content: { paddingBottom: 48, maxWidth: 1040, alignSelf: "center", width: "100%" },
 
   // Header
