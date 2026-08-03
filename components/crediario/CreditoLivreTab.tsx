@@ -1,5 +1,9 @@
 // ============================================================
-// AURA. — Crediário · aba "Crédito livre" (Fase 2)
+// AURA. — Crediário · aba "Prontos pra comprar" (Fase 2)
+//
+// O arquivo/componente continua CreditoLivre* de proposito: renomear
+// quebraria imports em 3 telas sem ganho nenhum. "Credito livre" era o nome
+// interno da feature; "Prontos pra comprar" e o rotulo que o lojista le.
 //
 // Clientes que já compraram no fiado e hoje estão zerados. Todo o resto
 // do módulo é construído em cima de balance > 0 — no instante em que o
@@ -97,7 +101,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
       <View style={s.warn}>
         <Icon name="alert" size={15} color={Colors.amber} />
         <View style={{ flex: 1 }}>
-          <Text style={s.warnTitle}>Crédito livre é por empresa</Text>
+          <Text style={s.warnTitle}>Esta lista é por empresa</Text>
           <Text style={s.warnText}>
             O crediário é calculado por CNPJ. Escolha uma empresa específica no seletor para ver os leads.
           </Text>
@@ -228,7 +232,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
             ))}
           </View>
           <Text style={s.footerCount}>
-            {leads.length} cliente{leads.length !== 1 ? "s" : ""} com crédito livre
+            {leads.length} cliente{leads.length !== 1 ? "s" : ""} pronto{leads.length !== 1 ? "s" : ""} pra comprar
             {(data?.without_phone || 0) > 0 ? ` · ${data!.without_phone} sem telefone` : ""}
           </Text>
         </>
@@ -323,7 +327,7 @@ function LeadRow({ lead, position, onOpen, onCupom }: {
           style={[s.waBtn, !phoneOk && { opacity: 0.4 }]}
           accessibilityLabel={`Abrir WhatsApp de ${lead.name}`}
         >
-          <Icon name="whatsapp" size={15} color="#fff" />
+          <Icon name="whatsapp" size={18} color="#fff" />
         </Pressable>
       </View>
     </View>

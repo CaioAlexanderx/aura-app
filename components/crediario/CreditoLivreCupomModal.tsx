@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Crédito Livre · modal "cupom de retorno" (Fase 3)
+// AURA. — Prontos pra comprar · modal "cupom de retorno" (Fase 3)
 //
 // Clone do BirthdayCouponModal: mesmo layout, mesmos dois CTAs, mesmo
 // comportamento de telefone inválido. Reaproveitar mantém o app coerente
@@ -288,7 +288,7 @@ export function CreditoLivreCupomModal({ visible, onClose, lead }: Props) {
             disabled={!canSend}
             style={[s.primaryBtn, !canSend && { opacity: 0.5 }]}
           >
-            <Icon name="whatsapp" size={14} color="#fff" />
+            <Icon name="whatsapp" size={16} color="#fff" />
             <Text style={s.primaryText}>{sending ? "Enviando..." : "Criar e enviar"}</Text>
           </Pressable>
         </View>

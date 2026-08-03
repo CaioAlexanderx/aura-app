@@ -618,7 +618,7 @@ export function ClienteCrediarioModal({
               </View>
               {!!phone && !!onCobrar && (
                 <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)}>
-                  <Icon name="whatsapp" size={14} color={Colors.green} />
+                  <Icon name="whatsapp" size={16} color={Colors.green} />
                   <Text style={m.waTxt}>Cobrar</Text>
                 </Pressable>
               )}
