@@ -435,7 +435,7 @@ export default function CrediarioScreen() {
         </View>
       </View>
 
-      {/* ── Abas: Carteira | Crédito livre (Fase 2, 02/08/2026) ── */}
+      {/* ── Abas: Carteira | Prontos pra comprar (Fase 2, 02/08/2026) ── */}
       <View style={s.tabBar}>
         <Pressable
           onPress={() => setActiveTab("carteira")}
@@ -447,7 +447,7 @@ export default function CrediarioScreen() {
           onPress={() => setActiveTab("leads")}
           style={[s.tabBtn, activeTab === "leads" && s.tabBtnOn]}
         >
-          <Text style={[s.tabText, activeTab === "leads" && s.tabTextOn]}>Crédito livre</Text>
+          <Text style={[s.tabText, activeTab === "leads" && s.tabTextOn]}>Prontos pra comprar</Text>
         </Pressable>
       </View>
 
