@@ -13,9 +13,10 @@
 // a última VENDA, então quem acabou de quitar aparece como "ativo" e é
 // justamente excluído. Públicos quase disjuntos.
 //
-// Fase 2 = listar + ver. O botão de WhatsApp abre a conversa com uma
-// mensagem simples; o modal de cupom (clone do BirthdayCouponModal) e o
-// log de contato entram na Fase 3.
+// Fase 3 (completa): o botão de WhatsApp da linha abre o
+// CreditoLivreCupomModal — cupom + mensagem editável + log de contato.
+// Não abre mais a conversa direto: era uma segunda ação para a mesma
+// intenção, e foi unificada em 03/08/2026.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform } from "react-native";
