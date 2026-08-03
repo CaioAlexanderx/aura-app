@@ -473,7 +473,11 @@ export function usePdvState() {
   async function handleValidateCoupon(code: string) {
     if (!company?.id) return { ok: false, error: "Empresa não identificada" };
     try {
-      const res = await couponsApi.validate(company.id, code, totalRaw);
+      // selectedCustomerId vai junto: cupom nominal (aniversário / crédito
+      // livre) só é válido para o próprio cliente. O backend é quem decide —
+      // aqui só informamos quem está na venda. Sem cliente selecionado o
+      // cupom nominal é recusado com mensagem explicando o que fazer.
+      const res = await couponsApi.validate(company.id, code, totalRaw, selectedCustomerId);
       if (res.valid && res.code) {
         setCouponApplied({ code: res.code, discount: res.discount_amount || 0 });
         setCouponCode(res.code);
