@@ -247,7 +247,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
   );
 }
 
-// ── Linha do lead ────────────────────────────────────────
+// ── Linha do lead ─────────────────────────────────────────
 function LeadRow({ lead, position, onOpen, onCupom }: {
   lead: CreditLead; position: number; onOpen: () => void; onCupom: () => void;
 }) {

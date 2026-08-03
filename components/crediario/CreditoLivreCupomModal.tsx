@@ -148,7 +148,7 @@ export function CreditoLivreCupomModal({ visible, onClose, lead }: Props) {
       const url = buildWaMeUrl(lead.phone || "", finalMessage);
 
       // Loga ANTES de abrir: no web o window.open pode ser bloqueado, e é
-      // pior perder o registro (o lead sumiria da fila "já contatados")
+      // pior perder o registro (o lead sumiria da fila "já contatados"
       // sem motivo) do que registrar um envio que o lojista abortou.
       try {
         await creditLeadsApi.logContact(company.id, lead.id, {
