@@ -98,7 +98,7 @@ export function ClienteCrediarioModal({
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ───────────────────────
   const [renegScope, setRenegScope] = useState<{ accountId: string | null | undefined; label: string; openRemaining: number } | null>(null);
   const [renegTotal, setRenegTotal] = useState("");
   const [renegCount, setRenegCount] = useState(1);
@@ -331,7 +331,7 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ───────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
@@ -618,7 +618,7 @@ export function ClienteCrediarioModal({
               </View>
               {!!phone && !!onCobrar && (
                 <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)}>
-                  <Icon name="whatsapp" size={14} color={Colors.green} />
+                  <Icon name="whatsapp" size={16} color={Colors.green} />
                   <Text style={m.waTxt}>Cobrar</Text>
                 </Pressable>
               )}
