@@ -95,9 +95,7 @@ const PATHS: Record<string, string> = {
   message:        "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z",
   // Balao circular com cantos arredondados (WhatsApp link na home Studio)
   message_circle: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
-  // WhatsApp — balao com cauda inferior-esquerda + fone dentro. Glifo proprio
-  // (stroke feather-style), usado no botao \"Cobrar\" do crediario (16/06).
-  // Logo oficial do WhatsApp — path unico, feito pra PREENCHER (ver FILLED
+  // WhatsApp — logo oficial, path unico, feito pra PREENCHER (ver FILLED
   // abaixo). O path antigo era o fone desenhado como glifo de preenchimento
   // mas renderizado com stroke: a 15px o contorno de 2px fechava por cima de
   // si mesmo e virava um borrao claro dentro do botao.
