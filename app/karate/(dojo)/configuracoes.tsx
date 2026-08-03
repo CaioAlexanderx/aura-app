@@ -27,6 +27,11 @@
 // de check-in por QR na tela Turmas; some sozinho se o endpoint ainda
 // não existir no ambiente (mesmo racional do ContaAuraCard).
 //
+// F9: card "QR único do dojô" (DojoQrCard) — logo abaixo do toggle:
+// exibe/imprime o cartaz único (o sensei liga o check-in por QR e, na
+// sequência, já vê o cartaz pra imprimir). Mesmo racional de degrade
+// silencioso se o endpoint ainda não existir.
+//
 // QA prod 30/07 (item 5): o erro de validação (ex.: "E-mail inválido.")
 // só sumia ao salvar de novo — ficava visível enquanto o sensei
 // corrigia o campo. Cada onChangeText agora limpa o erro DAQUELE campo
@@ -47,6 +52,7 @@ import { karateDojoInfoApi, DojoMeUpdatePayload } from "@/services/karateDojoInf
 import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCard";
 import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/ContaAuraCard";
 import { QrSettingsCard } from "@/components/karate/dojoTurmas/QrSettingsCard";
+import { DojoQrCard } from "@/components/karate/dojoTurmas/DojoQrCard";
 import { isoToBR, brToISO, maskDateBR, isValidEmail } from "@/components/karate/dojoAlunos/helpers";
 import { maskCnpj, maskPhone, onlyDigits } from "@/utils/masks";
 
@@ -320,6 +326,9 @@ export default function DojoConfiguracoes() {
 
       {/* F4: Check-in por QR (Turmas) — some se o endpoint ainda não existir */}
       {!!federationId && <QrSettingsCard federationId={federationId} />}
+
+      {/* F9: QR único do dojô — exibe/imprime o cartaz (mesmo bloco do toggle acima) */}
+      {!!federationId && <DojoQrCard federationId={federationId} dojoName={dojoName} />}
     </ScrollView>
   );
 }
