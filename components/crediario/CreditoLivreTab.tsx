@@ -22,6 +22,7 @@ import { useAuthStore } from "@/stores/auth";
 import { creditLeadsApi, leadReason, relativeDays } from "@/services/creditLeadsApi";
 import type { CreditLead, LeadWindow, LeadSegment } from "@/services/creditLeadsApi";
 import { normalizeBrPhone } from "@/services/messaging";
+import { CreditoLivreCupomModal } from "@/components/crediario/CreditoLivreCupomModal";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -66,6 +67,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
   const [segment, setSegment] = useState<LeadSegment>("pending");
   const [searchInput, setSearchInput] = useState("");
   const [searchQ, setSearchQ] = useState("");
+  const [cupomLead, setCupomLead] = useState<CreditLead | null>(null);
   const debounceRef = useRef<any>(null);
 
   // Mesmo debounce da carteira (300ms) — consistência de comportamento.
@@ -221,6 +223,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
                 lead={lead}
                 position={idx + 1}
                 onOpen={() => onOpenCustomer?.({ id: lead.id, name: lead.name })}
+                onCupom={() => setCupomLead(lead)}
               />
             ))}
           </View>
@@ -230,12 +233,20 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
           </Text>
         </>
       )}
+
+      <CreditoLivreCupomModal
+        visible={!!cupomLead}
+        lead={cupomLead}
+        onClose={() => setCupomLead(null)}
+      />
     </View>
   );
 }
 
 // ── Linha do lead ─────────────────────────────────────────
-function LeadRow({ lead, position, onOpen }: { lead: CreditLead; position: number; onOpen: () => void }) {
+function LeadRow({ lead, position, onOpen, onCupom }: {
+  lead: CreditLead; position: number; onOpen: () => void; onCupom: () => void;
+}) {
   const reason = leadReason(lead);
   const phoneOk = !!normalizeBrPhone(lead.phone || "");
   const isTop = position <= 3;
@@ -302,14 +313,19 @@ function LeadRow({ lead, position, onOpen }: { lead: CreditLead; position: numbe
         <Text style={s.whenSub}>{relativeDays(lead.days_since_activity)}</Text>
       </View>
 
-      <Pressable
-        onPress={openWhatsApp}
-        disabled={!phoneOk}
-        style={[s.waBtn, !phoneOk && { opacity: 0.4 }]}
-        accessibilityLabel={`Abrir WhatsApp de ${lead.name}`}
-      >
-        <Icon name="whatsapp" size={15} color="#fff" />
-      </Pressable>
+      <View style={s.acts}>
+        <Pressable onPress={onCupom} style={s.cupomBtn} accessibilityLabel={`Criar cupom para ${lead.name}`}>
+          <Text style={s.cupomText}>Cupom</Text>
+        </Pressable>
+        <Pressable
+          onPress={openWhatsApp}
+          disabled={!phoneOk}
+          style={[s.waBtn, !phoneOk && { opacity: 0.4 }]}
+          accessibilityLabel={`Abrir WhatsApp de ${lead.name}`}
+        >
+          <Icon name="whatsapp" size={15} color="#fff" />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -375,6 +391,12 @@ const s = StyleSheet.create({
   when: { fontSize: 12, color: Colors.ink2 },
   whenSub: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
 
+  acts: { flexDirection: "row", gap: 7, alignItems: "center" },
+  cupomBtn: {
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "rgba(124,58,237,0.11)", borderWidth: 1, borderColor: "rgba(124,58,237,0.42)",
+  },
+  cupomText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   waBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
 
   footerCount: { fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 12, fontStyle: "italic" },

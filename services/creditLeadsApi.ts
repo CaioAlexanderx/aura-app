@@ -65,6 +65,51 @@ export const creditLeadsApi = {
     const tail = qs.toString() ? `?${qs}` : "";
     return request<CreditLeadsResponse>(`/companies/${companyId}/credit/leads${tail}`);
   },
+
+  /** Cria o cupom do lead (source='credit_lead', código VOLTA-…).
+   *  O backend valida que o cliente é mesmo um lead antes de criar. */
+  createCoupon(
+    companyId: string,
+    customerId: string,
+    body: {
+      discount_type?: "percent" | "fixed";
+      discount_value?: number;
+      validity_days?: number;
+      min_order_value?: number;
+      code?: string;
+    }
+  ) {
+    // body vai como OBJETO: o request() de services/api.ts já faz o
+    // JSON.stringify internamente. Passar stringificado aqui gera
+    // double-stringify e o req.body chega como string no Express --
+    // erro que já aconteceu antes neste repo (ver cabeçalho do creditApi.ts).
+    return request<{ coupon: LeadCoupon; customer: { id: string; name: string; phone: string | null } }>(
+      `/companies/${companyId}/credit/leads/${customerId}/coupon`,
+      { method: "POST", body }
+    );
+  },
+
+  /** Registra o contato. Idempotente por dia no backend — duplo clique
+   *  não duplica, e o lead migra pro segmento "Já contatados". */
+  logContact(
+    companyId: string,
+    customerId: string,
+    body: { coupon_id?: string | null; method?: string; message?: string }
+  ) {
+    return request<{ contact: { id: string; sent_at: string } }>(
+      `/companies/${companyId}/credit/leads/${customerId}/contact`,
+      { method: "POST", body }
+    );
+  },
+};
+
+export type LeadCoupon = {
+  id: string;
+  code: string;
+  discount_type: "percent" | "fixed";
+  discount_value: number;
+  expires_at: string | null;
+  min_order_value: number | null;
 };
 
 // ── Helpers de leitura ────────────────────────────────────
