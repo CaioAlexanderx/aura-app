@@ -20,8 +20,8 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditLeadsApi, leadReason, relativeDays } from "@/services/creditLeadsApi";
-import type { CreditLead, LeadWindow } from "@/services/creditLeadsApi";
-import { normalizeBrPhone, buildWaMeUrl } from "@/services/messaging";
+import type { CreditLead, LeadWindow, LeadSegment } from "@/services/creditLeadsApi";
+import { normalizeBrPhone } from "@/services/messaging";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -59,6 +59,11 @@ type Props = {
 
 export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Props) {
   const [months, setMonths] = useState<LeadWindow>("6");
+  // Segmento: a fila util e a de quem ainda NAO foi contatado. Quem ja
+  // foi vai pro segmento proprio em vez de disputar o topo da lista --
+  // o score nao sabe de contato, entao os contatados ficariam no topo
+  // permanentemente conforme a base cresce.
+  const [segment, setSegment] = useState<LeadSegment>("pending");
   const [searchInput, setSearchInput] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const debounceRef = useRef<any>(null);
@@ -73,14 +78,16 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
   const enabled = !!companyId && !consolidated;
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["credit-leads", companyId, months, searchQ],
-    queryFn: () => creditLeadsApi.list(companyId!, { months, q: searchQ || undefined }),
+    queryKey: ["credit-leads", companyId, months, segment, searchQ],
+    queryFn: () => creditLeadsApi.list(companyId!, { months, segment, q: searchQ || undefined }),
     enabled,
     staleTime: 120_000,
     retry: 1,
   });
 
   const leads = data?.leads || [];
+  const pendingCount = data?.pending_count;
+  const contactedCount = data?.contacted_count;
 
   // ── Consolidado: o crédito é por CNPJ ──
   if (consolidated || !companyId) {
@@ -103,6 +110,30 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
         Clientes que já compraram no fiado e hoje não devem nada. Têm limite livre e histórico de
         pagamento — são os mais prováveis de voltar a comprar.
       </Text>
+
+      {/* ── Segmento: fila útil × já contatados ── */}
+      <View style={s.segmentRow}>
+        {([
+          { key: "pending" as LeadSegment, label: "A contatar", count: pendingCount },
+          { key: "done" as LeadSegment, label: "Já contatados", count: contactedCount },
+        ]).map((sg) => {
+          const on = segment === sg.key;
+          return (
+            <Pressable
+              key={sg.key}
+              onPress={() => setSegment(sg.key)}
+              style={[s.segTab, on && s.segTabOn, IS_WEB && ({ transition: "all 0.15s" } as any)]}
+            >
+              <Text style={[s.segTabText, on && s.segTabTextOn]}>{sg.label}</Text>
+              {sg.count != null && (
+                <View style={[s.segCount, on && s.segCountOn]}>
+                  <Text style={[s.segCountText, on && s.segCountTextOn]}>{sg.count}</Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* ── Filtros ── */}
       <View style={s.filterRow}>
@@ -163,16 +194,20 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
           <Text style={s.emptyTitle}>
             {searchQ
               ? "Nenhum cliente encontrado"
-              : months === "all"
-                ? "Ninguém quitou o carnê ainda"
-                : `Ninguém zerou nos últimos ${months} meses`}
+              : segment === "done"
+                ? "Você ainda não contatou ninguém"
+                : months === "all"
+                  ? "Ninguém quitou o carnê ainda"
+                  : `Ninguém zerou nos últimos ${months} meses`}
           </Text>
           <Text style={s.emptyText}>
             {searchQ
               ? "Tente outro nome ou limpe a busca."
-              : months === "all"
-                ? "Quando um cliente terminar de pagar, ele aparece aqui como oportunidade de venda."
-                : "Quando um cliente termina de pagar o carnê, ele aparece aqui. Experimente ampliar a janela."}
+              : segment === "done"
+                ? "Quem você chamar no WhatsApp aparece aqui, para você não repetir o contato sem querer."
+                : months === "all"
+                  ? "Quando um cliente terminar de pagar, ele aparece aqui como oportunidade de venda."
+                  : "Quando um cliente termina de pagar o carnê, ele aparece aqui. Experimente ampliar a janela."}
           </Text>
         </View>
       )}
@@ -206,14 +241,13 @@ function LeadRow({ lead, position, onOpen }: { lead: CreditLead; position: numbe
   const isTop = position <= 3;
 
   function openWhatsApp() {
-    if (!phoneOk) return;
-    const first = (lead.name || "").split(" ")[0] || lead.name;
-    // Fase 2: mensagem simples e neutra. O texto que menciona a quitação e
-    // anexa cupom vive no modal da Fase 3 — aqui não citamos o carnê, que
-    // pra quem atrasou soaria como cobrança disfarçada.
-    const msg = `Oi, ${first}! Tudo bem? Chegaram novidades aqui na loja e lembrei de você. Quer dar uma olhada?`;
-    const url = buildWaMeUrl(lead.phone || "", msg);
-    if (!url) return;
+    // Abre a conversa VAZIA, de proposito. O app nao redige a mensagem:
+    // a lista mistura quem pagou em dia com quem atrasou, e um texto unico
+    // que soa atencioso pra um soa como cobranca disfarcada pro outro.
+    // Quem conhece o cliente e o lojista -- ele escreve.
+    const digits = normalizeBrPhone(lead.phone || "");
+    if (!digits) return;
+    const url = `https://wa.me/${digits}`;
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const w = window.open(url, "_blank");
       if (!w) window.location.href = url;
@@ -284,6 +318,21 @@ export default CreditoLivreTab;
 
 const s = StyleSheet.create({
   sub: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 16, maxWidth: 640 },
+
+  // Segmento (fila util x ja contatados)
+  segmentRow: { flexDirection: "row", gap: 8, marginBottom: 16, flexWrap: "wrap" },
+  segTab: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10,
+    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border,
+  },
+  segTabOn: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  segTabText: { fontSize: 12.5, color: Colors.ink3, fontWeight: "500" },
+  segTabTextOn: { color: Colors.violet3, fontWeight: "700" },
+  segCount: { backgroundColor: Colors.bg4, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
+  segCountOn: { backgroundColor: "rgba(124,58,237,0.28)" },
+  segCountText: { fontSize: 10.5, color: Colors.ink3, fontWeight: "700" },
+  segCountTextOn: { color: Colors.violet4 },
 
   filterRow: { flexDirection: "row", gap: 14, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 },
   filterLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },

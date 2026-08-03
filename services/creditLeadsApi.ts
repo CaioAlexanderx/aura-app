@@ -37,15 +37,29 @@ export type CreditLeadsResponse = {
   leads: CreditLead[];
   total: number;
   window_months: number | null;
+  segment: "pending" | "done" | "all";
+  /** Contagem dos dois segmentos na janela atual — permite mostrar os
+   *  dois números sem uma segunda chamada. null quando a tabela de
+   *  contatos ainda não existe (deploy parcial). */
+  pending_count: number | null;
+  contacted_count: number | null;
   without_phone: number;
 };
 
 export type LeadWindow = "3" | "6" | "12" | "all";
+/** "pending" = fila útil (ainda não contatados) · "done" = já contatados */
+export type LeadSegment = "pending" | "done";
 
 export const creditLeadsApi = {
-  list(companyId: string, opts?: { months?: LeadWindow; q?: string; limit?: number }) {
+  list(
+    companyId: string,
+    opts?: { months?: LeadWindow; segment?: LeadSegment; q?: string; limit?: number }
+  ) {
     const qs = new URLSearchParams();
     if (opts?.months) qs.set("months", opts.months);
+    // O corte por contato é feito no banco, não aqui: se viesse misturado,
+    // os contatados consumiriam o LIMIT e encurtariam a fila real.
+    if (opts?.segment) qs.set("contacted", opts.segment === "done" ? "1" : "0");
     if (opts?.q) qs.set("q", opts.q);
     if (opts?.limit) qs.set("limit", String(opts.limit));
     const tail = qs.toString() ? `?${qs}` : "";
