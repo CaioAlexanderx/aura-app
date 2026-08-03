@@ -94,7 +94,7 @@ export function ClienteCrediarioModal({
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   const [renegScope, setRenegScope] = useState<{ accountId: string | null | undefined; label: string; openRemaining: number } | null>(null);
   const [renegTotal, setRenegTotal] = useState("");
   const [renegCount, setRenegCount] = useState(1);
@@ -327,7 +327,7 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
@@ -519,7 +519,7 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // ── B3: Pix para recebimento de valor livre ───────────────────────
+  // ── B3: Pix para recebimento de valor livre ───────────────────────────
   async function openFreePix(amount: number) {
     if (!customerId) return;
     setPixInstId("free");
