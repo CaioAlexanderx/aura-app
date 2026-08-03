@@ -19,17 +19,13 @@
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
-  View, Text, StyleSheet, Modal, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Clipboard, Platform,
+  View, Text, StyleSheet, Pressable, ScrollView,
+  TextInput, ActivityIndicator, Clipboard,
 } from "react-native";
-
-// F4.3: o ModalPop (pai sem altura definida) faz o maxHeight:"90%" do sheet
-// ser ignorado no web — o modal crescia além da tela, cortado e sem rolagem.
-// 90vh é resolvido contra a viewport, independente da cadeia de pais.
-const SHEET_MAX_H = Platform.OS === "web" ? ({ maxHeight: "90vh" } as any) : null;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
   creditApi,
   type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
@@ -98,7 +94,7 @@ export function ClienteCrediarioModal({
   const [editDueDateInput, setEditDueDateInput] = useState("");
   const [editDueDateError, setEditDueDateError] = useState("");
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
   const [renegScope, setRenegScope] = useState<{ accountId: string | null | undefined; label: string; openRemaining: number } | null>(null);
   const [renegTotal, setRenegTotal] = useState("");
   const [renegCount, setRenegCount] = useState(1);
@@ -331,7 +327,7 @@ export function ClienteCrediarioModal({
     editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
   }
 
-  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
+  // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
@@ -523,7 +519,7 @@ export function ClienteCrediarioModal({
     }
   }
 
-  // ── B3: Pix para recebimento de valor livre ───────────────────────────
+  // ── B3: Pix para recebimento de valor livre ───────────────────────
   async function openFreePix(amount: number) {
     if (!customerId) return;
     setPixInstId("free");
@@ -579,10 +575,7 @@ export function ClienteCrediarioModal({
   const methodLabel = PAYMENT_METHODS.find(p => p.key === freeMethod)?.label || freeMethod;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={m.backdrop} onPress={onClose}>
-        <ModalPop visible={visible} style={{ width: "100%", maxWidth: 700, alignItems: "center" } as any}>
-        <Pressable style={[m.sheet, { width: "100%" }, SHEET_MAX_H]} onPress={() => {}}>
+    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={700}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -731,21 +724,29 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {/* ── Sheet "Receber pagamento" (ex-card "valor livre" da TabParcelas) ── */}
+          {/* ── Painel "Receber pagamento" (task 03/08): desliza POR CIMA da
+               ficha ocupando o sheet inteiro — não comprime mais o body.
+               Gate e CTA vivem no rodapé FIXO, sempre visíveis. ── */}
           {receberOpen && (
-            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
-              <View style={m.editDueDateHeader}>
-                <Text style={m.editDueDateTitle}>Receber pagamento</Text>
-                <Pressable onPress={() => { setReceberOpen(false); setReceberGate(false); }} style={m.xBtn}>
+            <View style={m.panel}>
+             <ModalPop visible style={{ flex: 1 }}>
+              <View style={m.panelHead}>
+                <Pressable onPress={() => { setReceberOpen(false); setReceberGate(false); }} style={m.panelBack} accessibilityRole="button">
+                  <View style={{ transform: [{ rotate: "180deg" }] }}>
+                    <Icon name="chevron_right" size={15} color={Colors.violet3} />
+                  </View>
+                  <Text style={m.panelBackTxt}>Voltar</Text>
+                </Pressable>
+                <Text style={m.panelTitle}>Receber pagamento</Text>
+                <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
+
+              <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
               </Text>
-
-              {/* HOTFIX: CTA/gate DENTRO do scroll — em tela baixa nada fica inalcançável */}
-              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
                 {realCarnes.length > 1 && (
                   <View style={{ marginBottom: 12 }}>
                     <Text style={m.fieldLabel}>Carnê</Text>
@@ -862,7 +863,11 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
 
-                {/* ConfirmGate — padrão único (substitui o 2-step manual) */}
+              </ScrollView>
+
+              {/* Rodapé FIXO: gate + ações fora do scroll — sempre visíveis,
+                  mesmo em 650px úteis de notebook 720p ou com teclado aberto. */}
+              <View style={m.panelFoot}>
                 <ConfirmGate
                   visible={receberGate}
                   message={`Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`}
@@ -871,7 +876,7 @@ export function ClienteCrediarioModal({
                   loading={freeSubmitting}
                 />
                 {!receberGate && (
-                  <View style={{ flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 4 }}>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
                     <Pressable
                       style={[
                         m.pixBtn,
@@ -894,19 +899,29 @@ export function ClienteCrediarioModal({
                     </Pressable>
                   </View>
                 )}
-              </ScrollView>
+              </View>
+             </ModalPop>
             </View>
           )}
 
+          {/* Painel Pix: renderizado DEPOIS do Receber → empilha por cima;
+              ‹ Voltar devolve ao Receber (se aberto) com os valores intactos. */}
           {!!pixInstId && (
-            <View style={[m.pixOverlay, { flexShrink: 1, minHeight: 0 }]}>
-              <View style={m.pixOverlayHeader}>
-                <Text style={m.editDueDateTitle}>{pixOverlayTitle}</Text>
-                <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.xBtn}>
+            <View style={m.panel}>
+             <ModalPop visible style={{ flex: 1 }}>
+              <View style={m.panelHead}>
+                <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.panelBack} accessibilityRole="button">
+                  <View style={{ transform: [{ rotate: "180deg" }] }}>
+                    <Icon name="chevron_right" size={15} color={Colors.violet3} />
+                  </View>
+                  <Text style={m.panelBackTxt}>Voltar</Text>
+                </Pressable>
+                <Text style={m.panelTitle}>{pixOverlayTitle}</Text>
+                <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
-              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
+              <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               {pixLoading && (
                 <View style={{ alignItems: "center", paddingVertical: 20 }}>
                   <ActivityIndicator color={Colors.violet3} />
@@ -928,8 +943,13 @@ export function ClienteCrediarioModal({
                   <View style={m.pixEmvBox}>
                     <Text style={m.pixEmvTxt} selectable numberOfLines={3}>{pixData.emv}</Text>
                   </View>
+                </>
+              )}
+              </ScrollView>
+              {!pixLoading && !!pixData && (
+                <View style={m.panelFoot}>
                   <Pressable
-                    style={[m.cta, { marginTop: 10, marginBottom: 4 }]}
+                    style={m.cta}
                     onPress={() => {
                       Clipboard.setString(pixData.emv);
                       toast.success("Código Pix copiado!");
@@ -937,21 +957,28 @@ export function ClienteCrediarioModal({
                   >
                     <Text style={m.ctaTxt}>Copiar código</Text>
                   </Pressable>
-                </>
+                </View>
               )}
-              </ScrollView>
+             </ModalPop>
             </View>
           )}
 
           {renegScope && (
-            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
-              <View style={m.editDueDateHeader}>
-                <Text style={m.editDueDateTitle}>Renegociar parcelas</Text>
-                <Pressable onPress={() => setRenegScope(null)} style={m.xBtn}>
+            <View style={m.panel}>
+             <ModalPop visible style={{ flex: 1 }}>
+              <View style={m.panelHead}>
+                <Pressable onPress={() => setRenegScope(null)} style={m.panelBack} accessibilityRole="button">
+                  <View style={{ transform: [{ rotate: "180deg" }] }}>
+                    <Icon name="chevron_right" size={15} color={Colors.violet3} />
+                  </View>
+                  <Text style={m.panelBackTxt}>Voltar</Text>
+                </Pressable>
+                <Text style={m.panelTitle}>Renegociar parcelas</Text>
+                <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
-              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
+              <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão substituídas por este novo cronograma.
               </Text>
@@ -969,8 +996,9 @@ export function ClienteCrediarioModal({
                 />
               </View>
 
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
+              {/* flexWrap: em <380px as duas colunas quebram em vez de espremer */}
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+                <View style={{ flex: 1, minWidth: 150 }}>
                   <Text style={m.fieldLabel}>Nº de parcelas</Text>
                   <View style={m.renegStepRow}>
                     <Pressable
@@ -990,7 +1018,7 @@ export function ClienteCrediarioModal({
                     </Pressable>
                   </View>
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 150 }}>
                   <Text style={m.fieldLabel}>Valor por parcela</Text>
                   <View style={m.amountIn}>
                     <Text style={m.amountPrefix}>R$</Text>
@@ -1027,36 +1055,46 @@ export function ClienteCrediarioModal({
                 </View>
               )}
 
-              <View style={{ flexDirection: "row", gap: 9, marginTop: 14 }}>
-                <Pressable
-                  style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-                  onPress={() => setRenegScope(null)}
-                >
-                  <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
-                </Pressable>
-                <Pressable
-                  style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
-                  onPress={confirmRenegociar}
-                  disabled={renegTotalVal <= 0 || renegSubmitting}
-                >
-                  {renegSubmitting
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={m.ctaTxt}>Confirmar renegociação</Text>}
-                </Pressable>
-              </View>
               </ScrollView>
+              <View style={m.panelFoot}>
+                <View style={{ flexDirection: "row", gap: 9 }}>
+                  <Pressable
+                    style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                    onPress={() => setRenegScope(null)}
+                  >
+                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
+                    onPress={confirmRenegociar}
+                    disabled={renegTotalVal <= 0 || renegSubmitting}
+                  >
+                    {renegSubmitting
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>Confirmar renegociação</Text>}
+                  </Pressable>
+                </View>
+              </View>
+             </ModalPop>
             </View>
           )}
 
           {editingDueDateInst && (
-            <View style={[m.editDueDateSheet, { flexShrink: 1, minHeight: 0 }]}>
-              <View style={m.editDueDateHeader}>
-                <Text style={m.editDueDateTitle}>Alterar Vencimento</Text>
-                <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.xBtn}>
+            <View style={m.panel}>
+             <ModalPop visible style={{ flex: 1 }}>
+              <View style={m.panelHead}>
+                <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.panelBack} accessibilityRole="button">
+                  <View style={{ transform: [{ rotate: "180deg" }] }}>
+                    <Icon name="chevron_right" size={15} color={Colors.violet3} />
+                  </View>
+                  <Text style={m.panelBackTxt}>Voltar</Text>
+                </Pressable>
+                <Text style={m.panelTitle}>Alterar vencimento</Text>
+                <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
-              <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={true}>
+              <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
               </Text>
@@ -1070,31 +1108,31 @@ export function ClienteCrediarioModal({
               {!!editDueDateError && (
                 <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
               )}
-              <View style={{ flexDirection: "row", gap: 9, marginTop: 14 }}>
-                <Pressable
-                  style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-                  onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
-                >
-                  <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
-                </Pressable>
-                <Pressable
-                  style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
-                  onPress={handleEditDueDateConfirm}
-                  disabled={editDueDateMut.isPending}
-                >
-                  {editDueDateMut.isPending
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={m.ctaTxt}>Confirmar</Text>}
-                </Pressable>
-              </View>
               </ScrollView>
+              <View style={m.panelFoot}>
+                <View style={{ flexDirection: "row", gap: 9 }}>
+                  <Pressable
+                    style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+                    onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
+                  >
+                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
+                    onPress={handleEditDueDateConfirm}
+                    disabled={editDueDateMut.isPending}
+                  >
+                    {editDueDateMut.isPending
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={m.ctaTxt}>Confirmar nova data</Text>}
+                  </Pressable>
+                </View>
+              </View>
+             </ModalPop>
             </View>
           )}
 
-        </Pressable>
-        </ModalPop>
-      </Pressable>
-    </Modal>
+    </ResponsiveSheet>
   );
 }
 
