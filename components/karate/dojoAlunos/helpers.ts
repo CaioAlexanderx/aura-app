@@ -99,6 +99,66 @@ export function beltViewFor(label: string | null | undefined): {
   return { label: label || "Sem faixa", color: KarateColors.bg2, textColor: KarateColors.ink2 };
 }
 
+// ── Pirâmide de faixas (summary do backend) ─────────────────────
+
+/** Uma linha de summary.by_belt (GET /dojo/students?summary=true). */
+export interface BeltCountRow {
+  belt_label: string | null;
+  belt_order: number | null;
+  count: number;
+}
+
+/** Uma barra da pirâmide, já agrupada por rótulo. */
+export interface BeltPyramidGroup {
+  belt_label: string | null;
+  belt_order: number | null;
+  count: number;
+}
+
+/**
+ * Agrupa summary.by_belt POR RÓTULO — uma barra por faixa.
+ *
+ * QA 27/07/2026 (aba "Meus alunos"): o summary do backend agrupa por
+ * (belt_label, belt_order) — GROUP BY de propósito — e o MESMO rótulo
+ * pode chegar em duas linhas com belt_order divergente (importação de
+ * planilha, edição manual, aluno sem ordem = NULL). Sem agrupar aqui, a
+ * tela desenhava duas barras "Laranja" e a key={belt_label} duplicava
+ * (React warning). 30/07/2026: o mesmo bug reproduzido no Painel do dojô
+ * (app/karate/(dojo)/index.tsx), que fazia filter+sort+map direto sobre
+ * by_belt sem passar por este agrupamento.
+ *
+ * Soma as contagens do mesmo rótulo; a ORDEM do grupo fica com o item
+ * PREDOMINANTE (maior count; empate → menor ordem) — nunca o máximo: um
+ * registro órfão com ordem alta não pode promover a faixa inteira.
+ *
+ * Fonte ÚNICA desta regra — AlunosList (aba "Meus alunos") e o Painel do
+ * dojô chamam este helper; não reimplementar em nenhum dos dois lugares
+ * (três cópias da mesma regra já nos morderam neste projeto).
+ */
+export function agruparPiramidePorFaixa(byBelt: BeltCountRow[] | null | undefined): BeltPyramidGroup[] {
+  const acc = new Map<string, { belt_label: string | null; belt_order: number | null; count: number; topCount: number }>();
+  for (const b of byBelt ?? []) {
+    if (!b.count) continue;
+    const key = b.belt_label ?? "__sem_faixa__";
+    const cur = acc.get(key);
+    if (!cur) {
+      acc.set(key, { belt_label: b.belt_label ?? null, belt_order: b.belt_order ?? null, count: b.count, topCount: b.count });
+      continue;
+    }
+    cur.count += b.count;
+    const wins = b.count > cur.topCount
+      || (b.count === cur.topCount
+        && (b.belt_order ?? Number.MAX_SAFE_INTEGER) < (cur.belt_order ?? Number.MAX_SAFE_INTEGER));
+    if (wins) {
+      cur.belt_order = b.belt_order ?? null;
+      cur.topCount = b.count;
+    }
+  }
+  return Array.from(acc.values())
+    .sort((a, z) => (z.belt_order ?? -1) - (a.belt_order ?? -1))
+    .map(({ belt_label, belt_order, count }) => ({ belt_label, belt_order, count }));
+}
+
 // ── Datas (tz-safe, string-only) ─────────────────
 
 /** 'YYYY-MM-DD' → idade em anos (null se ausente/inválida). */

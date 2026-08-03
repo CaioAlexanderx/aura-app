@@ -38,6 +38,7 @@ import { karateDojoBillingApi, DojoChargesSummary } from "@/services/karateDojoB
 import { currentCompetence } from "@/components/karate/dojoMensalidades/helpers";
 import { karateDojoClassesApi } from "@/services/karateDojoClassesApi";
 import { todayISO, weekdayOfISO } from "@/components/karate/dojoTurmas/helpers";
+import { agruparPiramidePorFaixa } from "@/components/karate/dojoAlunos/helpers";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -149,21 +150,25 @@ export default function DojoPainel() {
   // controla. Sem nenhum aluno próprio (ou com o endpoint fora do ar),
   // MANTÉM a derivação federada da F1: o painel nunca fica pior do que
   // era antes de existir o registro próprio.
+  //
+  // 30/07/2026: o ramo "próprio" agrupava direto sobre ownSummary.by_belt
+  // (filter+sort+map) sem juntar rótulos repetidos com belt_order
+  // divergente (aluno importado sem ordem, edição manual) — o mesmo bug
+  // já resolvido em AlunosList (aba "Meus alunos"). Passa a usar o MESMO
+  // helper (agruparPiramidePorFaixa, components/karate/dojoAlunos/
+  // helpers.ts) — não reimplementar esta regra pela terceira vez.
   const useOwn = !!ownSummary && ownSummary.total > 0;
   const piramide = useMemo(() => {
     if (useOwn && ownSummary) {
-      return (ownSummary.by_belt ?? [])
-        .filter((b) => b.count > 0)
-        .sort((a, b) => (b.belt_order ?? -1) - (a.belt_order ?? -1))
-        .map((b) => {
-          const key = b.belt_label ? resolveBeltKey(b.belt_label) : null;
-          return {
-            id: `own-${b.belt_label ?? "sem-faixa"}`,
-            label: b.belt_label ?? "Sem faixa",
-            color: key ? KarateBelts[key].color : KarateColors.bg2,
-            n: b.count,
-          };
-        });
+      return agruparPiramidePorFaixa(ownSummary.by_belt).map((b) => {
+        const key = b.belt_label ? resolveBeltKey(b.belt_label) : null;
+        return {
+          id: `own-${b.belt_label ?? "sem-faixa"}`,
+          label: b.belt_label ?? "Sem faixa",
+          color: key ? KarateBelts[key].color : KarateColors.bg2,
+          n: b.count,
+        };
+      });
     }
     const counts = new Map<BeltKey, number>();
     for (const p of pracs ?? []) {
@@ -180,8 +185,6 @@ export default function DojoPainel() {
   const total = useOwn && ownSummary ? ownSummary.total : (pracs?.length ?? 0);
   const ativos = useOwn && ownSummary ? ownSummary.active : (pracs ?? []).filter((p) => p.is_active).length;
   const maxP = Math.max(1, ...piramide.map((p) => p.n));
-  const topFaixas = piramide.slice(0, 4);
-  const outrasFaixas = piramide.length > 4 ? piramide.slice(4).reduce((s, p) => s + p.n, 0) : 0;
 
   const pending = annuity?.pending ?? null;
   const annuityMeta = pending
@@ -227,9 +230,9 @@ export default function DojoPainel() {
                   <Text style={styles.bigNum}>{total}</Text>
                   <Text style={styles.bigSub}>{ativos} ativo{ativos === 1 ? "" : "s"}{useOwn ? "" : " · na federação"}</Text>
                 </View>
-                {topFaixas.length > 0 && (
+                {piramide.length > 0 && (
                   <View style={{ gap: 6, marginTop: 4 }}>
-                    {topFaixas.map((p) => (
+                    {piramide.map((p) => (
                       <View key={p.id} style={styles.pyRow}>
                         <Text style={styles.pyLabel} numberOfLines={1}>{p.label}</Text>
                         <View style={styles.pyTrack}>
@@ -238,9 +241,6 @@ export default function DojoPainel() {
                         <Text style={styles.pyNum}>{p.n}</Text>
                       </View>
                     ))}
-                    {outrasFaixas > 0 && (
-                      <Text style={styles.pyMore}>+ {outrasFaixas} em outras faixas</Text>
-                    )}
                   </View>
                 )}
                 {total === 0 && (
@@ -415,7 +415,6 @@ const styles = StyleSheet.create({
   pyTrack: { flex: 1, height: 12, borderRadius: 6, backgroundColor: KarateColors.bg2, overflow: "hidden" } as ViewStyle,
   pyBar: { height: 12, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)" } as ViewStyle,
   pyNum: { width: 24, textAlign: "right", fontSize: 11.5, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
-  pyMore: { fontSize: 11, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
 
   annuityBox: {
     flexDirection: "row",

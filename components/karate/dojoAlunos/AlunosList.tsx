@@ -32,7 +32,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { DojoStudent, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
-import { beltViewFor, maskCpf, onlyDigits } from "./helpers";
+import { agruparPiramidePorFaixa, beltViewFor, maskCpf, onlyDigits } from "./helpers";
 
 type StatusFilter = "all" | "active" | "inactive";
 type FederatedFilter = "all" | "federated" | "dojo_only";
@@ -64,36 +64,12 @@ export function AlunosList({
   const [belt, setBelt] = useState<string | null>(null);
   const [federated, setFederated] = useState<FederatedFilter>("all");
 
-  // Pirâmide: uma linha POR RÓTULO, faixa mais alta primeiro.
-  //
-  // QA 27/07/2026: o summary do backend agrupa por (belt_label,
-  // belt_order) e o mesmo rótulo pode chegar com ordem divergente
-  // (importação de planilha, edição manual) — a tela mostrava "Amarela
-  // 29" e "Amarela 1" em linhas separadas, e o key={belt_label}
-  // duplicava. Agrupa aqui somando as contagens; a ordem do grupo é a
-  // do item PREDOMINANTE (maior count; empate → menor ordem), nunca o
-  // máximo: um registro órfão com ordem alta não pode promover a faixa.
-  const piramide = useMemo(() => {
-    const acc = new Map<string, { belt_label: string | null; belt_order: number | null; count: number; topCount: number }>();
-    for (const b of summary?.by_belt ?? []) {
-      if (!b.count) continue;
-      const key = b.belt_label ?? "__sem_faixa__";
-      const cur = acc.get(key);
-      if (!cur) {
-        acc.set(key, { belt_label: b.belt_label ?? null, belt_order: b.belt_order ?? null, count: b.count, topCount: b.count });
-        continue;
-      }
-      cur.count += b.count;
-      const wins = b.count > cur.topCount
-        || (b.count === cur.topCount
-          && (b.belt_order ?? Number.MAX_SAFE_INTEGER) < (cur.belt_order ?? Number.MAX_SAFE_INTEGER));
-      if (wins) {
-        cur.belt_order = b.belt_order ?? null;
-        cur.topCount = b.count;
-      }
-    }
-    return Array.from(acc.values()).sort((a, z) => (z.belt_order ?? -1) - (a.belt_order ?? -1));
-  }, [summary]);
+  // Pirâmide: uma linha POR RÓTULO, faixa mais alta primeiro — agrupamento
+  // vive em ./helpers (agruparPiramidePorFaixa), o MESMO helper usado pelo
+  // Painel do dojô (app/karate/(dojo)/index.tsx). Não reimplementar aqui —
+  // já tivemos o mesmo bug (rótulo duplicado com belt_order divergente)
+  // resolvido em dois lugares de formas diferentes.
+  const piramide = useMemo(() => agruparPiramidePorFaixa(summary?.by_belt), [summary]);
   const maxP = Math.max(1, ...piramide.map((b) => b.count));
 
   const beltOptions = useMemo(() => {
