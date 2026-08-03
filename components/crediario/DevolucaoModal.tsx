@@ -11,14 +11,12 @@
 // ============================================================
 import { useState, useCallback } from "react";
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   TextInput,
 } from "react-native";
@@ -28,7 +26,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type RefundResult } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
-import { ModalPop } from "@/components/anim";
+import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import { Motion, webTransition } from "@/constants/motion";
 
@@ -185,15 +183,8 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <Pressable style={s.backdrop} onPress={handleClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={s.kvWrapper}
-        >
-          <ModalPop visible={visible}>
-          {/* F4.3: 90vh no web — ModalPop quebrou o maxHeight:"90%" (pai sem altura) */}
-          <Pressable style={[s.sheet, IS_WEB ? ({ maxHeight: "90vh" } as any) : null]} onPress={(e) => e.stopPropagation()}>
+    <ResponsiveSheet visible={visible} onClose={handleClose} maxWidth={480} sheetStyle={{ backgroundColor: Colors.bg3 }}>
+      <>
 
             {/* ── Header ── */}
             <View style={s.header}>
@@ -528,11 +519,8 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
               </ScrollView>
             )}
 
-          </Pressable>
-          </ModalPop>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+      </>
+    </ResponsiveSheet>
   );
 }
 

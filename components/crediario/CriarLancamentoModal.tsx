@@ -24,7 +24,6 @@
 // ============================================================
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
@@ -32,8 +31,6 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -42,7 +39,8 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
-import { ModalPop, Collapsible } from "@/components/anim";
+import { Collapsible } from "@/components/anim";
+import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 
 // ============================================================
 // F4 do redesign (08/07/2026 — spec §2.4): o passo 2 deixou de ser
@@ -423,15 +421,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   ];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <Pressable style={s.backdrop} onPress={handleClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={s.kvWrapper}
-        >
-          <ModalPop visible={visible}>
-          {/* F4.3: 90vh no web — ModalPop quebrou o maxHeight:"90%" (pai sem altura) */}
-          <Pressable style={[s.sheet, Platform.OS === "web" ? ({ maxHeight: "90vh" } as any) : null]} onPress={(e) => e.stopPropagation()}>
+    <ResponsiveSheet visible={visible} onClose={handleClose} maxWidth={480} sheetStyle={{ backgroundColor: Colors.bg3 }}>
+      <>
             {/* Header */}
             <View style={s.header}>
               <View style={s.headerLeft}>
@@ -937,11 +928,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
               </View>
               </>
             )}
-          </Pressable>
-          </ModalPop>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+      </>
+    </ResponsiveSheet>
   );
 }
 

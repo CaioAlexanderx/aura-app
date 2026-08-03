@@ -11,12 +11,12 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import {
-  Modal, View, Text, Pressable, TextInput, StyleSheet,
+  View, Text, Pressable, TextInput, StyleSheet,
   Platform, Linking, ScrollView,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ModalPop } from "@/components/anim";
+import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { Motion, webTransition } from "@/constants/motion";
 
 const IS_WEB = Platform.OS === "web";
@@ -61,10 +61,8 @@ export function CobrancaPreviewModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={cs.backdrop} onPress={onClose}>
-        <ModalPop visible={visible} style={{ width: "100%", maxWidth: 480 } as any}>
-        <Pressable style={[cs.sheet, IS_WEB ? ({ maxHeight: "88vh" } as any) : null]} onPress={() => {}}>
+    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={480} sheetStyle={{ backgroundColor: Colors.bg3, padding: 20 }}>
+      <>
           {/* Header: X */}
           <View style={cs.headerRow}>
             <Text style={cs.headerTitle}>Prévia da cobrança</Text>
@@ -146,10 +144,8 @@ export function CobrancaPreviewModal({
               </Pressable>
             </View>
           </ScrollView>
-        </Pressable>
-        </ModalPop>
-      </Pressable>
-    </Modal>
+      </>
+    </ResponsiveSheet>
   );
 }
 

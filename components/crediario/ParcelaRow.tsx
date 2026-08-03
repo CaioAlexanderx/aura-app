@@ -131,7 +131,10 @@ const s = StyleSheet.create({
   bLabel: { fontSize: 12, color: Colors.ink2 },
   bValue: { fontSize: 12, color: Colors.ink2, fontVariant: ["tabular-nums"] as any },
   bStrong: { fontWeight: "800", color: Colors.ink },
-  actions: { flexDirection: "row", gap: 8, paddingHorizontal: 14, paddingBottom: 14, paddingTop: 8 },
+  // Task 03/08: coluna — o CTA primário (Receber) ganha a largura toda e
+  // as secundárias dividem a linha de baixo; acaba o truncamento de
+  // "Alterar data" em 3 botões flex:1 abaixo de ~400px de viewport.
+  actions: { flexDirection: "column", gap: 8, paddingHorizontal: 14, paddingBottom: 14, paddingTop: 8 },
   editBtn: {
     width: 34, height: 34, borderRadius: 9,
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
