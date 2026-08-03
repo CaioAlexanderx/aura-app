@@ -38,7 +38,7 @@ const WINDOWS: Array<{ key: LeadWindow; label: string }> = [
 ];
 
 const fmt = (n: number) =>
-  "R$ " + (Number(n) || 0).toFixed(2).replace(".", ",").replace(/\\B(?=(\\d{3})+(?!\\d))/g, ".");
+  "R$ " + (Number(n) || 0).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 const fmtShort = (n: number) => {
   const v = Number(n) || 0;
