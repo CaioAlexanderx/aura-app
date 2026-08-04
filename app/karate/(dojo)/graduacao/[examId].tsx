@@ -32,6 +32,21 @@
 // pra corrigir um lançamento ou completar a turma depois. Esta tela
 // aproveita isso: "Lançar mais / corrigir" reabre o lote pré-preenchido
 // com os resultados já gravados.
+//
+// CERTIFICADO DO DOJÔ (F9.1/F10, ligado nesta leva): o exame precisa
+// estar CONCLUÍDO para fazer sentido emitir — o certificado sai para os
+// APROVADOS do lançamento gravado, então enquanto o exame é rascunho
+// (editing sempre true) a seção só EXPLICA que a emissão libera após
+// concluir, em vez de esconder o recurso sem dizer nada. Uma vez
+// 'completed', a ficha de leitura (não-editing) mostra
+// DojoExamCertificatesManager (components/karate/DojoExamCertificatesManager.tsx,
+// F9.1 #661) — ele mesmo já carrega a explicação de que este é o
+// certificado NÃO OFICIAL do dojô, distinto do OFICIAL da federação
+// (pedido depois em app/karate/(dojo)/certificados.tsx). Ao reabrir para
+// corrigir ("Lançar mais / corrigir"), a seção fica oculta de novo —
+// evita emitir certificado em cima de um lançamento que ainda pode
+// mudar; ela volta assim que o novo lançamento fecha e a ficha some da
+// edição.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -56,6 +71,7 @@ import { karateDojoStudentsApi, DojoStudent, DOJO_STUDENTS_MAX_LIMIT } from "@/s
 import { SelecionarAlunosModal } from "@/components/karate/dojoFederativo/SelecionarAlunosModal";
 import { GraduacaoAlunoRow, GraduacaoRowState, emptyGraduacaoRow } from "@/components/karate/dojoGraduacao/GraduacaoAlunoRow";
 import { quesitoDisplay, mapCertificateReason, mapBeltHistorySkipReason, mapGraduacaoError, fmtDataCurta } from "@/components/karate/dojoGraduacao/helpers";
+import { DojoExamCertificatesManager } from "@/components/karate/DojoExamCertificatesManager";
 
 const STATUS_VIEW: Record<string, { label: string; badge: "neutral" | "ok" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" },
@@ -376,6 +392,22 @@ export default function ExameGraduacaoScreen() {
         </View>
       )}
 
+      {/* Certificado do dojô só faz sentido com o lançamento fechado (ele
+          certifica os APROVADOS do resultado gravado) — enquanto o exame é
+          rascunho, explica em vez de esconder o recurso (ver cabeçalho do
+          arquivo). Mesma linguagem "não oficial" do
+          DojoExamCertificatesManager, adiantada aqui. */}
+      {exam.status === "draft" && (
+        <View style={styles.rulesNote}>
+          <Icon name="info" size={14} color={C.ink3} />
+          <Text style={styles.rulesNoteTxt}>
+            O certificado do dojô (não oficial) fica disponível aqui assim que você concluir o exame — emissão em
+            massa para os aprovados. Ele não substitui o certificado OFICIAL da federação, pedido depois na aba
+            Certificados.
+          </Text>
+        </View>
+      )}
+
       {!!lastSummary && exam.status === "completed" && (
         <KpiBand
           style={{ marginTop: 16 }}
@@ -499,59 +531,81 @@ export default function ExameGraduacaoScreen() {
           )}
         </View>
       ) : (
-        // ── Ficha concluída (read-only) ──
-        <View style={styles.section}>
-          <SectionHead
-            title="Resultado do exame"
-            sub={`${exam.approved_count} aprovado${exam.approved_count === 1 ? "" : "s"} de ${exam.results_count} avaliado${exam.results_count === 1 ? "" : "s"}.`}
-            actions={exam.status === "completed" ? <ShojiButton label="Lançar mais / corrigir" icon="edit" variant="ghost" onPress={startEditing} /> : undefined}
-          />
-          {results.length === 0 ? (
-            <Card><Text style={styles.emptyTxt}>Nenhum aluno avaliado neste exame.</Text></Card>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {results.map((r) => (
-                <View key={r.id} style={styles.resultCard}>
-                  <View style={styles.resultHead}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.resultName}>{r.name || "Aluno"}</Text>
-                      <Text style={styles.resultBeltLine}>
-                        {r.from_belt?.label || "Faixa anterior desconhecida"}
-                        {"  →  "}
-                        <Text style={{ fontWeight: "800", color: P.ink }}>{r.to_belt?.label || r.to_belt_name || "—"}</Text>
-                      </Text>
+        <>
+          {/* ── Ficha concluída (read-only) ── */}
+          <View style={styles.section}>
+            <SectionHead
+              title="Resultado do exame"
+              sub={`${exam.approved_count} aprovado${exam.approved_count === 1 ? "" : "s"} de ${exam.results_count} avaliado${exam.results_count === 1 ? "" : "s"}.`}
+              actions={exam.status === "completed" ? <ShojiButton label="Lançar mais / corrigir" icon="edit" variant="ghost" onPress={startEditing} /> : undefined}
+            />
+            {results.length === 0 ? (
+              <Card><Text style={styles.emptyTxt}>Nenhum aluno avaliado neste exame.</Text></Card>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {results.map((r) => (
+                  <View key={r.id} style={styles.resultCard}>
+                    <View style={styles.resultHead}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultName}>{r.name || "Aluno"}</Text>
+                        <Text style={styles.resultBeltLine}>
+                          {r.from_belt?.label || "Faixa anterior desconhecida"}
+                          {"  →  "}
+                          <Text style={{ fontWeight: "800", color: P.ink }}>{r.to_belt?.label || r.to_belt_name || "—"}</Text>
+                        </Text>
+                      </View>
+                      <ShojiBadge status={r.result === "approved" ? "ok" : "danger"} label={r.result === "approved" ? "Aprovado" : "Reprovado"} />
                     </View>
-                    <ShojiBadge status={r.result === "approved" ? "ok" : "danger"} label={r.result === "approved" ? "Aprovado" : "Reprovado"} />
-                  </View>
 
-                  <View style={styles.quesitosSummary}>
-                    <Text style={styles.quesitoLine}>Kihon: {quesitoDisplay(r.quesitos.kihon)}</Text>
-                    <Text style={styles.quesitoLine}>Kata: {quesitoDisplay(r.quesitos.kata)}</Text>
-                    <Text style={styles.quesitoLine}>Kumite: {quesitoDisplay(r.quesitos.kumite)}</Text>
-                  </View>
-
-                  {!!r.notes && <Text style={styles.resultNotes}>{r.notes}</Text>}
-
-                  {r.result === "approved" && (
-                    <View style={styles.certLine}>
-                      <Icon
-                        name={r.certificate.requested ? "check_circle" : "info"}
-                        size={13}
-                        color={r.certificate.requested ? C.ok : C.ink3}
-                      />
-                      <Text style={styles.certLineTxt}>
-                        {r.certificate.requested
-                          ? (r.certificate.order_id ? "Certificado da federação pedido." : "Certificado pedido — aguardando confirmação.")
-                          : "Certificado da federação não pedido."}
-                        {r.federated ? "" : " (aluno não federado)"}
-                      </Text>
+                    <View style={styles.quesitosSummary}>
+                      <Text style={styles.quesitoLine}>Kihon: {quesitoDisplay(r.quesitos.kihon)}</Text>
+                      <Text style={styles.quesitoLine}>Kata: {quesitoDisplay(r.quesitos.kata)}</Text>
+                      <Text style={styles.quesitoLine}>Kumite: {quesitoDisplay(r.quesitos.kumite)}</Text>
                     </View>
-                  )}
-                </View>
-              ))}
+
+                    {!!r.notes && <Text style={styles.resultNotes}>{r.notes}</Text>}
+
+                    {r.result === "approved" && (
+                      <View style={styles.certLine}>
+                        <Icon
+                          name={r.certificate.requested ? "check_circle" : "info"}
+                          size={13}
+                          color={r.certificate.requested ? C.ok : C.ink3}
+                        />
+                        <Text style={styles.certLineTxt}>
+                          {r.certificate.requested
+                            ? (r.certificate.order_id ? "Certificado da federação pedido." : "Certificado pedido — aguardando confirmação.")
+                            : "Certificado da federação não pedido."}
+                          {r.federated ? "" : " (aluno não federado)"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* ── Certificado do dojô (F9.1 #661 + F10 #662, ligados aqui) ──
+              Exame CONCLUÍDO: o sensei já fechou o lançamento, agora emite
+              o certificado NÃO OFICIAL do dojô para os aprovados.
+              DojoExamCertificatesManager é autossuficiente (editor de
+              modelo, preview, emissão em massa, lista de emitidos) e já
+              carrega no próprio topo a explicação da diferença para o
+              certificado OFICIAL da federação (aba Certificados) — não
+              duplicamos essa explicação aqui. Fica de fora enquanto
+              `editing` (reabertura pra corrigir): evita emitir em cima de
+              um lançamento que ainda pode mudar. */}
+          {exam.status === "completed" && (
+            <View style={styles.section}>
+              <DojoExamCertificatesManager
+                federationId={federationId}
+                exam={{ id: exam.id, title: exam.title, exam_date: exam.exam_date, examiner_name: exam.examiner_name, status: exam.status }}
+                dojoName={dojoName}
+              />
             </View>
           )}
-        </View>
+        </>
       )}
 
       {/* ── Anexos ── */}
