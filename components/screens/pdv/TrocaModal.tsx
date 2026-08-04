@@ -31,6 +31,14 @@
 //     effectiveUnit = total_price / quantity em vez de unit_price bruto
 //     (que ignorava descontos por item). Fallback: se quantity ≤ 0,
 //     cai em unit_price.
+//
+// 04/08/2026 (fix crédito zerado):
+//   - effectiveUnitPrice assumia total_price presente, mas os endpoints
+//     sales-for-troca e sales-by-product-barcode NÃO devolvem o campo:
+//     Number(undefined)=NaN zerava o "Crédito devolução" (fmtBRL trata
+//     NaN como 0) e o netAmount NaN desarmava o gate de pagamento da
+//     diferença. Novo fallback: total_price ausente/não-numérico → usa
+//     unit_price. Caso real: troca Nike 249,99 → crédito "R$ 0,00".
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -86,11 +94,18 @@ function genIdempotencyKey(): string {
 
 // Calcula o preço unitário efetivo de um item devolvido.
 // Usa total_price / quantity para capturar descontos por item.
-// Fallback para unit_price quando quantity é inválido.
-function effectiveUnitPrice(item: { unit_price: number; total_price: number; quantity: number }): number {
+// Fallbacks para unit_price:
+//   - quantity inválido (≤ 0);
+//   - total_price ausente/não-numérico (04/08/2026): os endpoints
+//     sales-for-troca e sales-by-product-barcode não devolvem o campo —
+//     Number(undefined)=NaN zerava o crédito da devolução na UI e
+//     propagava NaN pro netAmount, desarmando o gate de pagamento.
+function effectiveUnitPrice(item: { unit_price: number; total_price?: number | null; quantity: number }): number {
   const qty = Number(item.quantity);
   if (!qty || qty <= 0) return Number(item.unit_price);
-  return Number(item.total_price) / qty;
+  const total = Number(item.total_price);
+  if (item.total_price == null || !Number.isFinite(total)) return Number(item.unit_price);
+  return total / qty;
 }
 
 export function TrocaModal({
