@@ -9,6 +9,11 @@
 // SaleForTrocaItem.original_sale_item_id (sale_items.id real do backend
 // v2) quando disponível; senão cai num fallback sintético "synth-..."
 // que sinaliza ao TrocaModal pra NÃO usar caminho v2.
+//
+// 04/08/2026 — propaga total_price pro ReturnEntry.item (quando o
+// backend devolver o campo). Sem isso o effectiveUnitPrice do
+// TrocaModal não tem como capturar desconto por item e cai no
+// fallback de unit_price bruto.
 // ============================================================
 import { useState, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
@@ -101,6 +106,9 @@ export function Step2Returns({
         product_name_snapshot: item.product_name_snapshot,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        // 04/08/2026: passthrough — necessário pro cálculo de desconto
+        // por item (effectiveUnitPrice) quando o backend enviar o campo.
+        total_price: (item as any).total_price,
       };
       const newEntry: ReturnEntry = {
         saleId: sale.id,
@@ -136,6 +144,8 @@ export function Step2Returns({
             product_name_snapshot: item.product_name_snapshot,
             quantity: item.quantity,
             unit_price: item.unit_price,
+            // 04/08/2026: passthrough — ver setQty acima.
+            total_price: (item as any).total_price,
           } as any,
           returnQty: Number(item.quantity),
           previouslyReturnedQty: 0,
