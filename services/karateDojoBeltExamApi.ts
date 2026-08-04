@@ -24,6 +24,14 @@
 //
 // Normalização DEFENSIVA (mesmo racional dos irmãos): campo ausente vira
 // null em vez de quebrar a UI ("dado faltante ≠ pendência").
+//
+// GAP CONHECIDO (confirmado no backend, F10 #663 — ficha de graduação do
+// aluno): não existe rota "todos os resultados de UM aluno" — GET
+// .../graduation-exams/:examId só devolve results[] de TODOS os alunos
+// DAQUELE exame. `listStudentResults()` abaixo agrega no cliente (lista
+// os exames do dojô paginados + busca cada detalhe, filtrando pelo
+// student_id) — aceitável porque só roda sob demanda (ex.: ao emitir a
+// ficha de graduação em PDF), nunca no mount de uma tela de listagem.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -146,6 +154,21 @@ export interface GetDojoBeltExamResponse {
   results: DojoBeltExamResultRow[];
   count: number;
   attachments: DojoBeltExamAttachment[];
+}
+
+/**
+ * Um resultado do aluno já achatado com a data/título/examinador do
+ * exame que o produziu — formato de saída de `listStudentResults`
+ * (agregação por aluno, ver GAP CONHECIDO no topo do arquivo). Usado
+ * pela Ficha de Graduação do aluno (carteira 10º ao 1º kyu, F10 #663)
+ * para montar o histórico completo de UM aluno a partir de vários
+ * exames do dojô.
+ */
+export interface StudentExamResult extends DojoBeltExamResultRow {
+  exam_date: string | null;
+  exam_title: string | null;
+  /** karate_dojo_belt_exams.examiner_name — texto livre, mora no EXAME (não por resultado). */
+  examiner_name: string | null;
 }
 
 // ── Lançamento em lote ───────────────────────────────────────────────────
@@ -395,6 +418,10 @@ function qs(params: Record<string, string | undefined>): string {
 
 const base = (federationId: string) => `/federation/${federationId}/dojo`;
 
+/** Teto de páginas ao agregar exames de um aluno em listStudentResults — trava de segurança. */
+const LIST_STUDENT_RESULTS_MAX_PAGES = 20;
+const LIST_STUDENT_RESULTS_PAGE_SIZE = 50;
+
 export const karateDojoBeltExamApi = {
   /** GET /dojo/belt-ladder — o que o sensei pode conceder (preta já vem marcada grantable_by_dojo:false). */
   getBeltLadder: async (federationId: string): Promise<BeltLadderResponse> => {
@@ -440,6 +467,49 @@ export const karateDojoBeltExamApi = {
       count: typeof res?.count === "number" ? res.count : 0,
       attachments: Array.isArray(res?.attachments) ? res.attachments.map(normalizeAttachment) : [],
     };
+  },
+
+  /**
+   * Agrega TODOS os resultados de um aluno em todos os exames do dojô
+   * (ver GAP CONHECIDO no topo do arquivo e StudentExamResult, acima):
+   * não existe rota "todos os resultados de UM aluno" no backend. Lista
+   * os exames paginados (listExams), busca o detalhe de cada um
+   * (getExam) e filtra pelo student_id. Ordena por exam_date asc.
+   *
+   * Roda só sob demanda (ex.: ao emitir a Ficha de Graduação em PDF —
+   * components/karate/dojoAlunos/FichaGraduacaoSection.tsx), nunca no
+   * mount de uma tela de listagem — evitaria N+1 requests toda vez que
+   * o sensei abre a ficha de um aluno.
+   *
+   * Falha ao listar uma página encerra a agregação com o que já foi
+   * coletado; falha ao buscar o detalhe de um exame individual só deixa
+   * aquele exame de fora (não derruba os demais).
+   */
+  listStudentResults: async (federationId: string, studentId: string): Promise<StudentExamResult[]> => {
+    const out: StudentExamResult[] = [];
+    let page = 1;
+    for (let i = 0; i < LIST_STUDENT_RESULTS_MAX_PAGES; i++) {
+      let list: DojoBeltExamListResponse;
+      try {
+        list = await karateDojoBeltExamApi.listExams(federationId, { page, pageSize: LIST_STUDENT_RESULTS_PAGE_SIZE });
+      } catch {
+        break;
+      }
+      const exams = list?.data || [];
+      if (!exams.length) break;
+      const details = await Promise.all(
+        exams.map((e) => karateDojoBeltExamApi.getExam(federationId, e.id).catch(() => null))
+      );
+      for (const d of details) {
+        if (!d || !d.exam) continue;
+        const hit = (d.results || []).find((r) => r.student_id === studentId);
+        if (hit) out.push({ ...hit, exam_date: d.exam.exam_date, exam_title: d.exam.title, examiner_name: d.exam.examiner_name });
+      }
+      if (exams.length < LIST_STUDENT_RESULTS_PAGE_SIZE) break;
+      page += 1;
+    }
+    out.sort((a, b) => (a.exam_date || "").localeCompare(b.exam_date || ""));
+    return out;
   },
 
   createExam: async (federationId: string, payload: CreateDojoBeltExamPayload): Promise<DojoBeltExam> => {

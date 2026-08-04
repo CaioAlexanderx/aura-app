@@ -119,6 +119,11 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [birthBR, setBirthBR] = useState("");
   const [cpf, setCpf] = useState("");
   const [rg, setRg] = useState("");
+  // F10 (migration 272): filiação (identidade) — nome da mãe/do pai.
+  // Distinto do Responsável (guardian, abaixo): responsável é quem PAGA e
+  // RECEBE cobrança; mãe/pai é identidade e vai para a ficha de graduação.
+  const [motherName, setMotherName] = useState("");
+  const [fatherName, setFatherName] = useState("");
   const [sex, setSex] = useState<DojoStudentSex | null>(null);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -226,6 +231,8 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setBirthBR(isoToBR(student.birth_date));
       setCpf(student.cpf ? maskCpf(student.cpf) : "");
       setRg(student.rg ?? "");
+      setMotherName(student.mother_name ?? "");
+      setFatherName(student.father_name ?? "");
       setSex(student.sex ?? null);
       setPhone(student.phone ?? "");
       setEmail(student.email ?? "");
@@ -274,6 +281,8 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       setBirthBR("");
       setCpf("");
       setRg("");
+      setMotherName("");
+      setFatherName("");
       setSex(null);
       setPhone("");
       setEmail("");
@@ -448,6 +457,8 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       birth_date: birthISO,
       cpf: cpfDigits || null,
       rg: rg.trim() || null,
+      mother_name: motherName.trim() || null,
+      father_name: fatherName.trim() || null,
       sex,
       phone: phone.trim() || null,
       email: email.trim() || null,
@@ -832,9 +843,30 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
               </View>
             )}
 
+            {/* F10 (migration 272): Filiação — identidade (mãe/pai), NUNCA o
+                responsável financeiro/legal (Responsável, logo abaixo). É
+                comum o sensei achar redundante e preencher a mesma pessoa
+                duas vezes — o aviso abaixo e a separação visual (seção
+                própria, antes do bloco de Responsável) existem pra deixar
+                claro que são coisas diferentes: mãe/pai vai para a ficha
+                de graduação; Responsável é quem paga e recebe cobrança
+                (pode ser a mãe, o pai, ou outra pessoa). */}
+            <Text style={styles.section}>Filiação</Text>
+            <Text style={styles.filiationHint}>
+              Identidade do aluno — vai para a ficha de graduação. NÃO é o responsável financeiro (abaixo): mãe/pai podem ser pessoas diferentes de quem paga a mensalidade.
+            </Text>
+            <View style={styles.row2}>
+              <View style={{ flex: 1 }}>
+                <FormField label="Nome da mãe" value={motherName} onChangeText={setMotherName} placeholder="Nome completo da mãe" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <FormField label="Nome do pai" value={fatherName} onChangeText={setFatherName} placeholder="Nome completo do pai" />
+              </View>
+            </View>
+
             <View ref={guardianFieldRef} style={[styles.guardianBox, isMinor && styles.guardianBoxMinor]}>
               <Text style={styles.section2}>
-                Responsável {isMinor ? "· obrigatório para menor de 18" : "· opcional para adulto"}
+                Responsável {isMinor ? "· obrigatório para menor de 18" : "· opcional para adulto"} · quem paga e recebe cobrança
               </Text>
               <GuardianPicker
                 federationId={federationId}
@@ -1022,6 +1054,7 @@ const styles = StyleSheet.create({
   lead: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
   section: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 4 } as TextStyle,
   section2: { fontSize: 12, fontWeight: "800", color: KarateColors.ink2 } as TextStyle,
+  filiationHint: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 15, marginTop: -4 } as TextStyle,
   label: { fontSize: 12, fontWeight: "700", color: KarateColors.ink2, letterSpacing: 0.2, marginBottom: 4 } as TextStyle,
   row2: { flexDirection: "row", gap: 10 } as ViewStyle,
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,

@@ -111,12 +111,19 @@ const DOJO_NAV: DojoNavItem[] = [
   { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarOnly: true },
 ];
 
-// Polish QA 25/07 (item 3): "Eventos" depende de conexão com a federação
-// (GET /federation/:id/dojo/events só existe conectado — Aura-backend#422).
-// Enquanto linked === false a entrada some da nav; a rota em si segue
-// acessível por URL direta com um estado explicativo (eventos.tsx).
-function visibleDojoNav(linked: boolean): DojoNavItem[] {
-  return linked ? DOJO_NAV : DOJO_NAV.filter((i) => i.match !== "eventos");
+// F10 (04/08/2026 — revertido): "Eventos" ficava escondido da nav
+// enquanto linked === false (Polish QA 25/07, item 3) — herança de quando
+// esta tela só consumia eventos DA FEDERAÇÃO (GET .../dojo/events, que de
+// fato exige conexão). Desde a F9 (ver app/karate/(dojo)/eventos.tsx) o
+// dojô também cria os PRÓPRIOS eventos (curso, seminário) via
+// GET/POST .../dojo/events-hub — isso não depende de vínculo nenhum, e
+// escondida a nav, um dojô ainda não conectado ficava sem CAMINHO até seu
+// primeiro curso (só alcançava por URL direta). O item volta a aparecer
+// sempre; quem depende de vínculo é só a aba "Da federação" dentro da
+// própria tela de Eventos, que já trata linked===false sozinha (mostra a
+// explicação + atalho para "Federação" — mesmo padrão de anuidade.tsx).
+function visibleDojoNav(_linked: boolean): DojoNavItem[] {
+  return DOJO_NAV;
 }
 
 // Segmento de seção da pathname ("/karate/praticantes" → "praticantes").
@@ -201,10 +208,9 @@ function SidebarNav() {
   const logout = useAuthStore((s) => s.logout);
   const userName = (user?.name || user?.email || "Usuário") as string;
 
-  // Polish QA 25/07 (item 3): "Eventos" some da nav enquanto o dojô não
-  // está conectado à federação (linked === false). Fail-open: linked
-  // default true (contexts/KarateDojo), então nada some por engano
-  // durante o loading ou num backend antigo sem o campo.
+  // F10 (04/08/2026): "Eventos" não depende mais de vínculo — ver
+  // visibleDojoNav acima. `linked` segue lido aqui só porque outros itens
+  // futuros podem voltar a precisar (fail-open, nunca esconde por engano).
   const visibleNav = visibleDojoNav(linked);
   const mainItems = visibleNav.filter((i) => !i.sidebarOnly);
   const footerItems = visibleNav.filter((i) => i.sidebarOnly);
@@ -322,7 +328,7 @@ function BottomTabNav() {
   const path = usePathname();
   const { linked } = useKarateDojo();
   // Configurações fica fora da barra mobile (tarefa de mesa, padrão da casa).
-  // Polish QA 25/07 (item 3): mesmo gate de "Eventos" da sidebar.
+  // F10 (04/08/2026): "Eventos" não depende mais de vínculo — ver visibleDojoNav.
   const tabs = visibleDojoNav(linked).filter((i) => !i.sidebarOnly);
 
   return (
@@ -402,7 +408,7 @@ const styles = StyleSheet.create({
     overflow: "hidden" as any,
   } as ViewStyle,
 
-  // ── Topbar oxblood (web) — só breadcrumb ────────────────
+  // ── Topbar oxblood (web) — só breadcrumb ────────────
   topbar: {
     backgroundColor: KarateColors.headRed,
     borderBottomWidth: 1,
@@ -443,7 +449,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Banner de trial in-flow (QA 27/07, item 4) ──────────
+  // ── Banner de trial in-flow (QA 27/07, item 4) ────────────
   trialBar: {
     alignItems: "center",
     paddingVertical: 8,
@@ -690,7 +696,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ──────────
+  // ── Bottom tabs ────────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,

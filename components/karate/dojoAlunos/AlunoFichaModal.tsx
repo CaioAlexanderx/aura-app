@@ -57,6 +57,7 @@ import { AlunoTurmaSection } from "./AlunoTurmaSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
 import { AlunoFederacaoSection } from "./AlunoFederacaoSection";
+import { FichaGraduacaoSection } from "./FichaGraduacaoSection";
 
 interface Props {
   visible: boolean;
@@ -214,8 +215,15 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
               <InfoRow label="Consentimento LGPD" value={s.consent_lgpd ? "Registrado" : "Não registrado"} />
               {!!s.notes && <InfoRow label="Observações" value={s.notes} />}
 
+              {/* F10 (migration 272): Filiação — identidade (mãe/pai), distinta do
+                  Responsável logo abaixo (quem paga/recebe cobrança; pode
+                  ser outra pessoa). Mesma ordem/narrativa do
+                  AlunoFormModal: identidade primeiro, responsável depois. */}
+              <InfoRow label="Mãe" value={s.mother_name} />
+              <InfoRow label="Pai" value={s.father_name} />
+
               <View style={styles.guardianBox}>
-                <Text style={styles.guardianTitle}>Responsável{minor ? " · obrigatório (menor de 18)" : ""}</Text>
+                <Text style={styles.guardianTitle}>Responsável{minor ? " · obrigatório (menor de 18)" : ""} · quem paga e recebe cobrança</Text>
                 {s.guardian ? (
                   <>
                     <Text style={styles.guardianName}>{s.guardian.full_name ?? "—"}</Text>
@@ -234,6 +242,9 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
               </View>
 
               <AlunoFederacaoSection federationId={federationId} student={s} onChanged={onChanged} />
+
+              {/* F10: carteira de graduação (10º ao 1º kyu) pronta pra impressão. */}
+              <FichaGraduacaoSection federationId={federationId} student={s} />
 
               {/* F9: Turma (onde treina) ao lado de Mensalidade (como paga) —
                   duas seções distintas, tituladas e subtituladas para deixar
