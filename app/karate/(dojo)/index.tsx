@@ -18,6 +18,15 @@
 // SCHEMA_PENDING antes da migration rodar) — sem card nenhum, nunca
 // um aviso de erro no painel por causa de uma feature ainda não
 // disponível no ambiente. F4 segue o mesmo racional.
+//
+// F9 (04/08/2026): a rota /karate/(dojo)/solicitacoes saiu da nav do
+// DojoShell (absorvida pela tela "Federação" — conexao.tsx, envio em
+// lote dos alunos do dojô). O card "Solicitações" abaixo continua
+// mostrando as solicitações vindas do link público de atualização
+// cadastral (karateApi.listPractitionerRequests — fluxo separado, não
+// tocado nesta mudança), mas o atalho agora leva direto pra Federação
+// (a antiga /solicitacoes virou redirect fino pra lá; apontar direto
+// evita o hop extra).
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -322,7 +331,10 @@ export default function DojoPainel() {
             </TouchableOpacity>
           </View>
 
-          {/* ── Card: Solicitações ── */}
+          {/* ── Card: Solicitações (link público de atualização cadastral) ──
+              F9 (04/08): o atalho abaixo NÃO leva mais pra uma tela própria de
+              Solicitações (removida da nav) — leva direto pra "Federação", que
+              agora reúne conexão do dojô + envio de alunos em lote. */}
           <View style={styles.card}>
             <View style={styles.cardHead}>
               <Icon name="paper-plane-outline" size={16} color={KarateColors.primary} />
@@ -354,8 +366,8 @@ export default function DojoPainel() {
                 )}
               </>
             )}
-            <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/solicitacoes")} accessibilityRole="link">
-              <Text style={styles.cardLinkTxt}>Solicitar praticante novo</Text>
+            <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/conexao")} accessibilityRole="link">
+              <Text style={styles.cardLinkTxt}>Ir para Federação</Text>
               <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
             </TouchableOpacity>
           </View>
