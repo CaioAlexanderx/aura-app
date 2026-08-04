@@ -97,13 +97,27 @@ export function round2(n: number): number {
 // Backend ja usa AT TIME ZONE 'America/Sao_Paulo' nas queries, entao a
 // agregacao server-side (summary, dashboard, insights) ja vinha certa. Esta
 // funcao corrige o ultimo elo (parsing client-side de date-only strings).
+// 03/08/2026 — o regex ancorado abaixo era o furo: ele so casava com
+// "2026-08-03", e o backend NAO manda nesse formato.
+//
+// `transactions.due_date` e coluna `date`. O pool do pg
+// (Aura-backend/src/config/database.js) sobrescreve o type parser de NUMERIC
+// mas nao o de DATE (oid 1082), entao o driver devolve um objeto Date na
+// meia-noite do fuso do processo -- e o backend nao define TZ, herdando UTC
+// do container. O JSON sai como "2026-08-03T00:00:00.000Z".
+//
+// Essa forma nao casava com o regex, caia no `new Date(s)` do final e virava
+// meia-noite UTC = 21:00 do dia ANTERIOR em horario do Brasil. Vencimento
+// aparecia um dia antes -- mesmo bug que o carne do crediario tinha (#659).
+//
+// Aceita agora as duas formas. Timestamp com hora REAL continua indo pro
+// construtor padrao: o casamento exige meia-noite exata, e timestamps nascem
+// de now() com microssegundos, entao nao caem aqui por acidente.
 export function parseDateLocal(s: string | null | undefined): Date {
   if (!s) return new Date(NaN);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    var parts = s.split("-");
-    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  }
-  // Timestamp com timezone explicito (Z, +offset): construtor padrao acerta.
+  var m = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/.exec(String(s));
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  // Timestamp com hora de verdade: construtor padrao acerta.
   return new Date(s);
 }
 
