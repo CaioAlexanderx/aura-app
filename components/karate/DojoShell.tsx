@@ -32,6 +32,16 @@
 // celular, então ela também aparece nas bottom tabs (não só no rodapé
 // da sidebar, como Configurações).
 //
+// F9 (04/08/2026 — pedido do Caio): o item "Solicitações" SAIU da nav.
+// A tela pedia pro sensei REDIGITAR a ficha de um praticante que
+// provavelmente já está cadastrado no dojô — sem sentido, e redundante
+// com "Federação" (mesmo destino: o vínculo do dojô com a FPKT). As duas
+// telas viraram UMA SÓ, "Federação" (conexao.tsx): o estado da conexão
+// do dojô + o envio em lote (seleção múltipla) dos alunos já cadastrados
+// para a federação validar. A rota antiga /karate/(dojo)/solicitacoes
+// segue viva como redirect fino pra /karate/(dojo)/conexao — bookmarks
+// e o compat /karate/sensei/solicitacoes continuam funcionando.
+//
 // QA 27/07 (item 4): <TrialBanner/> — o aviso não bloqueante de trial
 // ("Seu período de teste termina em N dias") morava em DojoBillingGate
 // como overlay position:absolute (irmão deste shell no _layout) e podia
@@ -89,13 +99,13 @@ const DOJO_NAV: DojoNavItem[] = [
   // F3a: Mensalidades — planos, assinaturas e cobranças (Pix) do dojô,
   // separado da Anuidade (que é a filiação do DOJÔ à federação).
   { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarOnly: false },
-  { label: "Solicitações", icon: "paper-plane-outline", route: "/karate/(dojo)/solicitacoes",  match: "solicitacoes",  sidebarOnly: false },
   { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
   { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
   { label: "Certificados",  icon: "ribbon",              route: "/karate/(dojo)/certificados",  match: "certificados",  sidebarOnly: false },
   // F6: conexão/filiação do dojô à federação — sempre visível (é a
   // própria porta de saída de "não conectado", não pode ficar atrás de
-  // um gate de "já conectado").
+  // um gate de "já conectado"). F9: também é onde o sensei envia alunos
+  // do dojô para a federação validar (ver comentário de topo).
   { label: "Federação",     icon: "link",                route: "/karate/(dojo)/conexao",       match: "conexao",       sidebarOnly: false },
   // Configurações: só na sidebar (rodapé), padrão do shell da federação.
   { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarOnly: true },
