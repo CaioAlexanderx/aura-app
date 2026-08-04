@@ -39,6 +39,7 @@ import { useAuthStore } from "@/stores/auth";
 import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
 import { Collapsible } from "@/components/anim";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 
@@ -115,13 +116,14 @@ function fmtCur(n: number) {
   return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Delega pro fmtDate da ficha em vez de reimplementar: esta cópia tinha o
+// MESMO D-1 do carnê por outro caminho -- sem `timeZone`, o navegador em SP
+// converte a meia-noite UTC que o backend manda para 21:00 do dia anterior.
+// Duas implementações da mesma regra é como o bug sobreviveu num lugar
+// depois de corrigido no outro.
 function fmtDateSafe(input: string | null | undefined): string {
   if (!input) return "—";
-  try {
-    const d = new Date(input);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-  } catch { return "—"; }
+  return fmtDate(String(input)) || "—";
 }
 
 export function CriarLancamentoModal({ visible, onClose }: Props) {
