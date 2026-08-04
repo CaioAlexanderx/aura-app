@@ -38,7 +38,7 @@ export type RegisterBody = {
   terms_version?: string;
 };
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
-export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string };
+export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };
 
 export type SidebarLayoutItem = {
   key: string;
@@ -79,6 +79,11 @@ export var authApi = {
   login: function(email: string, password: string) { return request<LoginResponse>("/auth/login", { method: "POST", body: { email: email, password: password }, retry: 1 }); },
   register: function(body: RegisterBody) { return request<LoginResponse>("/auth/register", { method: "POST", body: body, retry: 1 }); },
   me: function(token: string) { return request<Omit<LoginResponse, "token">>("/auth/me", { method: "POST", token: token, retry: 1 }); },
+  // Task Sign Up 03/08: variante SEM token explícito — usa o token do store e,
+  // portanto, participa do refresh automático de JWT do request(). O polling da
+  // verify-email usava me(token!) e ficava preso em 401 silencioso quando o
+  // access token (1h) expirava durante a espera.
+  meSession: function() { return request<Omit<LoginResponse, "token">>("/auth/me", { method: "POST", retry: 0 }); },
   validateCode: function(code: string) { return request<CodeValidation>("/auth/validate-code", { method: "POST", body: { code: code }, retry: 0 }); },
   forgotPassword: function(email: string) { return request<{ message: string }>("/auth/forgot-password", { method: "POST", body: { email: email }, retry: 0 }); },
   resetPassword: function(token: string, password: string) { return request<{ message: string }>("/auth/reset-password", { method: "POST", body: { token: token, password: password }, retry: 0 }); },

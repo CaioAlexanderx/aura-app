@@ -8,6 +8,7 @@ import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
 import { isMicrositeHost, getMicrositeSlug, micrositeTargetPath } from "@/utils/microsite";
+import { setVerifyLinkError } from "@/utils/verifyLinkStatus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
@@ -26,14 +27,19 @@ const APP_URL = "https://app.getaura.com.br";
 function checkVerifiedParam() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
-  if (params.get("email_verified") === "true") {
+  const verified = params.get("email_verified") === "true";
+  const verifyError = params.get("verify_error");
+  if (verified || verifyError) {
+    // Task Sign Up 03/08: o verify_error era apagado sem nunca ser lido —
+    // link expirado voltava para a tela de espera sem explicação. Agora o
+    // valor é capturado ANTES da limpeza e consumido pela verify-email.
+    if (verifyError) setVerifyLinkError(verifyError);
     const url = new URL(window.location.href);
     url.searchParams.delete("email_verified");
     url.searchParams.delete("verify_error");
     window.history.replaceState({}, "", url.pathname + url.search);
-    return true;
   }
-  return false;
+  return verified;
 }
 
 function AuthGuard() {
