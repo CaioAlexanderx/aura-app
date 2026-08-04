@@ -42,6 +42,7 @@ import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateI
 import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
 import { Collapsible } from "@/components/anim";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
+import { ConfirmGate } from "@/components/ConfirmGate";
 
 // ============================================================
 // F4 do redesign (08/07/2026 — spec §2.4): o passo 2 deixou de ser
@@ -174,6 +175,14 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [unifyPreviewLoading, setUnifyPreviewLoading] = useState(false);
   const [unifyPreviewError, setUnifyPreviewError]     = useState<string | null>(null);
 
+  // feat(unify-confirm-gate): a unificação CANCELA as parcelas em aberto do
+  // carnê e cria um cronograma novo — ação destrutiva e irreversível que
+  // antes disparava com um único toque em "Criar e unificar". Um lançamento
+  // real da Valen Eletrônicos (04/08) teve 5 parcelas avulsas com datas e
+  // valores distintos apagadas dessa forma. Agora exige confirmação explícita
+  // via ConfirmGate (mesmo padrão usado no resto do módulo Crediário).
+  const [unifyGateOpen, setUnifyGateOpen] = useState(false);
+
   const unifyFirstDueIso = parseBrDate(unifyFirstDue);
 
   const reset = useCallback(() => {
@@ -203,6 +212,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setUnifyFirstDue(defaultDueDate());
     setUnifyPreview(null);
     setUnifyPreviewError(null);
+    setUnifyGateOpen(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -299,6 +309,12 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   useEffect(() => {
     if (accountMode !== "existing") setUnifyEnabled(false);
   }, [accountMode]);
+
+  // Fecha o gate de confirmação se o preview mudar (evita confirmar um
+  // resumo desatualizado) ou se o usuário desligar a unificação.
+  useEffect(() => {
+    setUnifyGateOpen(false);
+  }, [unifyEnabled, unifyPreview, selectedAccountId]);
 
   const handleSubmit = async () => {
     const amountNum = parseCurrencyInput(amountRaw);
@@ -913,8 +929,17 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     pressed && { opacity: 0.85 },
                     loading && { opacity: 0.6 },
                   ]}
-                  onPress={handleSubmit}
-                  disabled={loading}
+                  onPress={() => {
+                    // feat(unify-confirm-gate): unificar cancela parcelas
+                    // existentes — nunca dispara direto no 1º toque.
+                    if (unifyEnabled) {
+                      if (!unifyPreview) return;
+                      setUnifyGateOpen(true);
+                      return;
+                    }
+                    handleSubmit();
+                  }}
+                  disabled={loading || (unifyEnabled && (!unifyPreview || unifyGateOpen))}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -927,6 +952,24 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     </>
                   )}
                 </Pressable>
+
+                {unifyEnabled && unifyPreview && selectedAccount && (
+                  <ConfirmGate
+                    visible={unifyGateOpen}
+                    tone="red"
+                    message={
+                      `Isso vai CANCELAR ${selectedAccount.open_count ?? "as"} parcela(s) em aberto ` +
+                      `de "${selectedAccount.name}" (saldo de ${fmtCur(unifyPreview.open_remaining)}) e ` +
+                      `substituir por um novo cronograma de ${unifyPreview.schedule.length}x. ` +
+                      `Essa ação não pode ser desfeita.`
+                    }
+                    confirmLabel="Sim, cancelar e unificar"
+                    cancelLabel="Cancelar"
+                    loading={loading}
+                    onConfirm={handleSubmit}
+                    onCancel={() => setUnifyGateOpen(false)}
+                  />
+                )}
               </View>
               </>
             )}

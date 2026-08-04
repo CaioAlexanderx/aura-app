@@ -26,6 +26,17 @@
  *         2. Após obter o sale_id no onSuccess, chamar creditApi.applyUnify(...).
  *   O caminho SEM unify permanece INTACTO.
  *
+ * feat(unify-warning) (04/08/2026):
+ *   Adicionado aviso inline explícito no preview do cronograma unificado —
+ *   a unificação CANCELA as parcelas atuais do carnê e cria este cronograma
+ *   novo no lugar, ação irreversível. Este modal só propõe o unify (quem
+ *   de fato aplica é usePdvState, depois que a venda é registrada), então
+ *   não há um segundo ponto de confirmação possível aqui sem alterar o
+ *   fluxo de checkout — o aviso garante que isso fique claro ANTES de
+ *   finalizar a venda. Ver também o ConfirmGate equivalente adicionado em
+ *   CriarLancamentoModal.tsx (mesma causa raiz, incidente real da Valen
+ *   Eletrônicos em 04/08 onde parcelas avulsas foram canceladas sem aviso).
+ *
  * Props:
  *   visible        — controla visibilidade
  *   companyId      — empresa atual
@@ -544,6 +555,20 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                     {unifyPreview && !unifyPreviewLoading && (
                       <View style={m.simTable}>
                         <Text style={m.simTitle}>CRONOGRAMA UNIFICADO</Text>
+                        {/* feat(unify-warning) — a unificação CANCELA as parcelas
+                            atuais do carnê selecionado e cria este cronograma novo
+                            no lugar. Isso já apagou lançamentos avulsos reais sem
+                            aviso (Valen Eletrônicos, 04/08); deixamos explícito aqui
+                            porque este modal só "propõe" o unify — quem de fato
+                            cancela é usePdvState após a venda, então não há um
+                            segundo ponto de confirmação depois deste. */}
+                        <View style={[m.alertBox, { marginBottom: 4 }]}>
+                          <Icon name="alert" size={14} color={Colors.red} />
+                          <Text style={m.alertText}>
+                            Isso vai cancelar as parcelas atuais deste carnê e substituir
+                            pelo cronograma abaixo. Não pode ser desfeito depois de confirmar a venda.
+                          </Text>
+                        </View>
                         <View style={m.simRow}>
                           <Text style={[m.simDate, { flex: 1 }]}>Saldo em aberto</Text>
                           <Text style={m.simAmt}>{fmtCur(unifyPreview.open_remaining)}</Text>
