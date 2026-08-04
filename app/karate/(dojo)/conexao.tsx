@@ -1,5 +1,5 @@
 // ============================================================
-// Aura Karatê (dojô) — Federação: conexão/filiação (F6)
+// Aura Karatê (dojô) — Federação: conexão/filiação + envio de alunos (F6 + F9)
 // Rota: /karate/(dojo)/conexao
 //
 // Antes desta tela, o dojô self-serve ficava PRESO: linked=false fazia
@@ -35,6 +35,19 @@
 // Sem Modal: formulário e ações de reenvio ficam INLINE na própria tela
 // (mesmo racional documentado em conexoes/solicitacoes/[requestId].tsx —
 // RN Web renderiza Modal-dentro-de-Modal atrás da tela).
+//
+// F9 (04/08/2026 — pedido do Caio): a aba "Solicitações" (formulário que
+// REDIGITAVA a ficha de um praticante que provavelmente já está
+// registrado no dojô) e a aba "Federação" (esta tela) viravam duas
+// entradas de nav pra uma coisa só — o vínculo do dojô com a FPKT e os
+// envios de alunos convivem no mesmo lugar. A antiga
+// app/karate/(dojo)/solicitacoes.tsx virou redirect fino pra cá; o item
+// "Solicitações" saiu do DojoShell. Quando o dojô está conectado
+// (`info.linked`), esta tela também mostra a lista de seleção múltipla
+// dos alunos do dojô pra enviar em lote pra federação validar — ver
+// components/karate/dojoAlunos/FederacaoEnviarAlunosSection.tsx (reusa
+// karateDojoStudentsApi.requestFederation, a mesma rota que a ficha do
+// aluno já usa em "Solicitar filiação" — sem endpoint novo).
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -51,6 +64,7 @@ import {
 } from "@/services/karateAffiliationApi";
 import { ApiError } from "@/services/api";
 import { toast } from "@/components/Toast";
+import { FederacaoEnviarAlunosSection } from "@/components/karate/dojoAlunos/FederacaoEnviarAlunosSection";
 
 // Formata ISO de data (pura 'YYYY-MM-DD' OU timestamptz completo) sem
 // cair no bug de -1 dia: datas puras usam parse manual; timestamps de
@@ -263,7 +277,8 @@ export default function DojoConexao() {
         <Text style={styles.eyebrow}>Federação</Text>
         <Text style={styles.title}>Conexão com {federationName}</Text>
         <Text style={styles.lead}>
-          A conexão do seu dojô com a federação destrava eventos, anuidade, certificados e a solicitação de praticantes.
+          A conexão do seu dojô com a federação destrava eventos, anuidade, certificados e o envio de alunos
+          para validação da federação.
         </Text>
       </View>
 
@@ -394,6 +409,13 @@ export default function DojoConexao() {
             />
           )}
         </>
+      )}
+
+      {/* F9: envio em lote de alunos do dojô para a federação validar —
+          só quando o dojô já está conectado (a rota reusada exige
+          conexão; ver FederacaoEnviarAlunosSection). */}
+      {info.linked && (
+        <FederacaoEnviarAlunosSection federationId={federationId} />
       )}
 
       <TouchableOpacity style={styles.backLink} onPress={() => router.push("/karate/(dojo)" as any)} accessibilityRole="button">
