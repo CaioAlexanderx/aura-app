@@ -14,9 +14,37 @@ export type Tab = "parcelas" | "historico" | "conta" | "termos" | "bloqueio";
 export function fmt(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// ── D-1 do carnê (03/08/2026) ───────────────────────────────────────────
+// O carnê inteiro exibia o vencimento um dia antes do gravado.
+//
+// Cadeia: o pool do `pg` (backend, src/config/database.js) sobrescreve o
+// type parser de NUMERIC mas NÃO o de DATE (oid 1082). Sem isso o driver
+// devolve coluna `date` como objeto Date na meia-noite do fuso do processo
+// — e o backend não define TZ, então herda UTC do container. Ou seja,
+// `due_date = 2026-08-03` chega na API como "2026-08-03T00:00:00.000Z".
+// Converter isso para America/Sao_Paulo dá 21:00 do dia 02 → "02/08".
+//
+// A correção aqui: data pura é DIA DE CALENDÁRIO. Não tem hora, logo não
+// existe conversão de fuso a fazer — formata os componentes direto. Só
+// timestamp de verdade (occurred_at, created_at) vai para o fuso de SP.
+//
+// O casamento exige meia-noite EXATA em UTC. Timestamps reais nascem de
+// now() com microssegundos (".326931" em produção), então não caem aqui
+// por acidente. O caso patológico seria um evento gravado exatamente em
+// 00:00:00.000Z — 21:00 de SP — que apareceria como o dia seguinte.
+//
+// Isto é o remendo do lado que sangra. A causa raiz é o type parser no
+// backend, que afeta ~90 colunas `date` (financeiro, anuidades,
+// birth_date) e está separada de propósito: mudar o parser altera o
+// formato do JSON no app inteiro e pede auditoria própria.
+const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/;
+
 export function fmtDate(iso: string) {
+  if (!iso) return "";
+  const cal = String(iso).match(CALENDAR_DATE);
+  if (cal) return `${cal[3]}/${cal[2]}/${cal[1].slice(2)}`;
   const d = new Date(iso);
-  if (!iso || isNaN(d.getTime())) return "";
+  if (isNaN(d.getTime())) return "";
   try { return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit" }); }
   catch { return ""; }
 }
