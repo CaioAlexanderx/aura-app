@@ -210,7 +210,9 @@ export default function RegisterScreen() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState(invite_email || "");
   const [senha, setSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
+  // Task Sign Up 03/08: e-mail já cadastrado (409) vira erro inline no campo,
+  // com atalho para o login — em vez de toast genérico de 4s.
+  const [emailTaken, setEmailTaken] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [cnpj, setCnpj] = useState("");
   const [telefoneEmpresa, setTelefoneEmpresa] = useState("");
@@ -272,10 +274,12 @@ export default function RegisterScreen() {
   const passLength = senha.length >= 8;
   const passUpper = /[A-Z]/.test(senha);
   const passNumber = /[0-9]/.test(senha);
-  const passMatch = senha === confirmarSenha && confirmarSenha.length > 0;
   const passValid = passLength && passUpper && passNumber;
+  // Task Sign Up 03/08: campo "Confirmar senha" removido (o toggle Ver/Ocultar
+  // cobre o erro de digitação com menos fricção) + validação real de e-mail.
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   // termsAccepted e obrigatorio para avancar — previne POST sem aceite
-  const step1Valid = nome.length > 0 && email.includes("@") && passValid && passMatch && termsAccepted;
+  const step1Valid = nome.trim().length > 0 && emailValid && passValid && termsAccepted;
   const cnpjValid = cnpj.replace(/\D/g, "").length === 14 && !!cnpjFound && !cnpjError;
   const contatoValid = telefoneContato.replace(/\D/g, "").length >= 10;
   const step2Valid = empresa.length > 0 && contatoValid && cnpjValid;
@@ -309,7 +313,15 @@ export default function RegisterScreen() {
       // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
       // Pagamento fica pra depois do trial -> sempre vai pro onboarding.
       setTimeout(() => router.replace("/(tabs)/onboarding"), 300);
-    } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
+    } catch (err) {
+      // 409: e-mail já cadastrado → volta ao passo 1 com erro inline + atalho de login.
+      if (err instanceof ApiError && err.status === 409) {
+        setEmailTaken(true);
+        setStep(0);
+        return;
+      }
+      toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta");
+    }
   }
 
   const card = (
@@ -327,14 +339,16 @@ export default function RegisterScreen() {
       )}
 
       <Text style={s.title}>{isInviteFlow ? "Aceite o convite" : "Crie sua conta"}</Text>
-      <Text style={s.subtitle}>{isInviteFlow ? "Preencha seus dados para entrar na equipe" : "Organize seu negocio em minutos"}</Text>
+      <Text style={s.subtitle}>{isInviteFlow ? "Preencha seus dados para entrar na equipe" : "Organize seu negócio em minutos"}</Text>
 
       {!isInviteFlow && (
         <View style={s.stepsRow}>
           {STEPS.map((label, i) => (
             <Pressable key={label} onPress={() => { if (i === 0 || step1Valid) setStep(i); }} style={[s.stepItem, step === i && s.stepItemActive]}>
               <View style={[s.stepDot, step === i && s.stepDotActive, i < step && s.stepDotDone]}>
-                <Text style={[s.stepDotText, (step === i || i < step) && { color: "#fff" }]}>{i < step ? "OK" : i + 1}</Text>
+                {i < step
+                  ? <Icon name="check" size={12} color="#fff" />
+                  : <Text style={[s.stepDotText, step === i && { color: "#fff" }]}>{i + 1}</Text>}
               </View>
               <Text style={[s.stepLabel, step === i && s.stepLabelActive]}>{label}</Text>
             </Pressable>
@@ -348,27 +362,25 @@ export default function RegisterScreen() {
           <View style={s.field}>
             <Text style={s.label}>E-mail *</Text>
             <View style={s.inputWrap}>
-              <Icon name="message" size={16} color={Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={email} onChangeText={setEmail} placeholder="maria@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+              <Icon name="mail" size={16} color={emailTaken ? Colors.red : Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={email} onChangeText={(v: string) => { setEmail(v); setEmailTaken(false); }} placeholder="maria@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
             </View>
+            {emailTaken && (
+              <Text style={{ fontSize: 11.5, color: Colors.red, marginTop: 5, lineHeight: 16 }}>
+                Esse e-mail já tem conta na Aura.{" "}
+                <Text style={{ color: Colors.violet3, fontWeight: "700" }} onPress={() => router.replace("/(auth)/login")}>Entrar com ele →</Text>
+              </Text>
+            )}
             {isInviteFlow && invite_email && <Text style={{ fontSize: 10, color: Colors.violet3, marginTop: 4 }}>Sugestao do convite: {invite_email}</Text>}
           </View>
           <View style={s.field}>
             <Text style={s.label}>Senha *</Text>
             <View style={s.inputWrap}>
-              <Icon name="settings" size={16} color={Colors.ink3} />
+              <Icon name="lock" size={16} color={Colors.ink3} />
               <TextInput style={[s.input, inputOutline]} {...webInputProps} value={senha} onChangeText={setSenha} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
               <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}><Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text></Pressable>
             </View>
             {senha.length > 0 && <View style={s.passReqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiuscula" /><Req ok={passNumber} text="1 numero" /></View>}
-          </View>
-          <View style={s.field}>
-            <Text style={s.label}>Confirmar senha *</Text>
-            <View style={s.inputWrap}>
-              <Icon name="check" size={16} color={confirmarSenha.length > 0 ? (passMatch ? Colors.green : Colors.red) : Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={confirmarSenha} onChangeText={setConfirmarSenha} placeholder="Repita a senha" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
-            </View>
-            {confirmarSenha.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>}
           </View>
 
           {/* Aceite dos Termos de Uso — obrigatorio (feat/terms-acceptance) */}
@@ -379,7 +391,7 @@ export default function RegisterScreen() {
               {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta e aceitar convite</Text>}
             </Pressable>
           ) : (
-            <Pressable style={s.btn} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={nextStep}><Text style={s.btnText}>Continuar</Text></Pressable>
+            <Pressable style={[s.btn, !step1Valid && { opacity: 0.5 }]} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={nextStep}><Text style={s.btnText}>Continuar</Text></Pressable>
           )}
         </View>
       )}
@@ -397,8 +409,8 @@ export default function RegisterScreen() {
             {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
             {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serao preenchidos automaticamente.</Text>}
           </View>
-          <View style={s.field}><Text style={s.label}>Nome da empresa *</Text><View style={s.inputWrap}><Icon name="bag" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
-          <View style={s.field}><Text style={s.label}>Telefone da empresa</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="bag" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          <View style={s.field}><Text style={s.label}>Nome da empresa *</Text><View style={s.inputWrap}><Icon name="briefcase" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          <View style={s.field}><Text style={s.label}>Telefone da empresa</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>Seu telefone para contato *</Text><View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View><Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato.</Text></View>
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -463,7 +475,7 @@ export default function RegisterScreen() {
                 </div>
               </div>
               <div className="v2-hero" style={{ display: "flex", gap: 20, fontSize: 11, color: Colors.ink3, letterSpacing: 1, textTransform: "uppercase", position: "relative", zIndex: 2 } as any}>
-                <span>14 dias gratis</span>
+                <span>7 dias grátis</span>
                 <span style={{ opacity: 0.4 }}>·</span>
                 <span>Sem cartao</span>
                 <span style={{ opacity: 0.4 }}>·</span>
