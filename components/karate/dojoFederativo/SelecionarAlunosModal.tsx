@@ -1,9 +1,21 @@
 // ============================================================
 // SelecionarAlunosModal — seletor multi-seleção reutilizável (F5b) entre
-// "Inscrever alunos" (eventos/cursos) e "Enviar candidatos" (exame de
-// faixa). Busca + seleção múltipla; SÓ aluno FEDERADO pode ser
-// selecionado (regra de ouro da fase) — não federado aparece desabilitado
-// com dica + atalho para a tela de Alunos (federar lá).
+// "Inscrever alunos" (eventos/cursos da FEDERAÇÃO) e "Enviar candidatos"
+// (exame de faixa da federação). Busca + seleção múltipla; SÓ aluno
+// FEDERADO pode ser selecionado nesses dois fluxos (regra de ouro da
+// fase) — não federado aparece desabilitado com dica + atalho para a
+// tela de Alunos (federar lá).
+//
+// F9 (curso/seminário PRÓPRIO do dojô): o mesmo seletor é reusado pela
+// tela "Meus eventos" (app/karate/(dojo)/eventos.tsx via
+// components/karate/dojoEventos/MeusEventosTab), mas ali a regra de ouro
+// NÃO se aplica — o backend ancorou a inscrição no aluno do dojô
+// (karate_dojo_students) justamente pra que quem ainda não é federado
+// também possa participar de um curso/seminário organizado pelo próprio
+// dojô. `requireFederated={false}` desliga o filtro: todo aluno ATIVO
+// fica selecionável, sem o aviso/atalho de federar. Default `true`
+// preserva 100% do comportamento existente dos dois fluxos da federação
+// (nenhum call site precisa mudar).
 //
 // Sem <Modal>-dentro-de-<Modal>: esta é a ÚNICA modal do fluxo (o
 // resultado do lote é renderizado depois, inline na tela, via
@@ -36,10 +48,18 @@ interface Props {
   ctaLabel: string;
   busy: boolean;
   onSubmit: (studentIds: string[]) => void;
+  /**
+   * F9: false para eventos PRÓPRIOS do dojô (curso/seminário), onde aluno
+   * não federado também participa. Default true — preserva os dois
+   * fluxos da federação (inscrever em evento / enviar candidato a exame)
+   * sem qualquer mudança de comportamento.
+   */
+  requireFederated?: boolean;
 }
 
 export function SelecionarAlunosModal({
   visible, onClose, federationId, title, subtitle, ctaLabel, busy, onSubmit,
+  requireFederated = true,
 }: Props) {
   const router = useRouter();
   const [students, setStudents] = useState<DojoStudent[]>([]);
@@ -109,7 +129,7 @@ export function SelecionarAlunosModal({
             ) : (
               filtered.map((s) => {
                 const on = selected.has(s.id);
-                const disabled = !s.federated;
+                const disabled = requireFederated && !s.federated;
                 return (
                   <TouchableOpacity
                     key={s.id}
