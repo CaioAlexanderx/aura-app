@@ -123,6 +123,14 @@ export interface DojoStudent {
    * (preview da ficha, avatar) — `photo_url` acima é legado/morto.
    */
   karate_photo_url: string | null;
+  /**
+   * F10 (migration 272) — filiação (identidade), NÃO o responsável
+   * financeiro/legal (guardian_*, abaixo). Mãe e pai podem ser pessoas
+   * diferentes do responsável que paga/recebe cobrança; saem na ficha de
+   * graduação (carteira de graduação impressa).
+   */
+  mother_name: string | null;
+  father_name: string | null;
   belt_label: string | null;
   belt_order: number | null;
   status: DojoStudentStatus;
@@ -187,6 +195,9 @@ export interface DojoStudentPayload {
   cpf?: string | null;
   /** F7.0 (migration 262). */
   rg?: string | null;
+  /** F10 (migration 272) — filiação (identidade); distinto de guardian_id (responsável financeiro/legal). */
+  mother_name?: string | null;
+  father_name?: string | null;
   sex?: DojoStudentSex | null;
   phone?: string | null;
   email?: string | null;
