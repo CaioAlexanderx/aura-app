@@ -1,33 +1,50 @@
 // ============================================================
-// MeusEventosTab — Aura Karatê (dojô) · F9
+// MeusEventosTab — Aura Karatê (dojô) · F9 (+ F10: exame de faixa)
 //
 // Aba "Meus eventos" de app/karate/(dojo)/eventos.tsx: a listagem
 // UNIFICADA do que o PRÓPRIO dojô organiza — curso, seminário (criados
-// aqui) e exame de faixa/kyu (criado na tela de Graduação, ainda por vir
-// — o backend já existe: karate_dojo_belt_exams). Fonte única:
+// aqui) e exame de faixa/kyu. Fonte única:
 // GET /federation/:id/dojo/events-hub (karateDojoEventsApi.listEventsHub),
 // que já devolve os três juntos com o discriminador `source`.
 //
 // NATUREZA DIFERENTE, deixada EXPLÍCITA na interface (pedido do dono do
 // produto — "o sensei não pode confundir evento que eu criei com evento
 // da federação"): aqui a distinção é DENTRO do próprio hub — exame de
-// kyu é uma avaliação do SENSEI (não tem inscrição em lote por aqui,
-// não tem botão de ação nenhum: o consumidor daquele fluxo é outra
-// tela, ainda não construída) enquanto curso/seminário são organizados
-// e preenchidos livremente pelo dojô, com inscrição em lote própria.
+// kyu é uma avaliação do SENSEI (sem inscrição em lote como curso/
+// seminário) enquanto curso/seminário são organizados e preenchidos
+// livremente pelo dojô, com inscrição em lote própria.
 //
-// NÃO oferece criar exame de kyu (CriarEventoDojoModal só sabe
+// F10 (04/08): o exame de kyu deixou de ser só um item passivo na lista.
+// O backend (karateDojoBeltExamService.js) está em produção há dias sem
+// nenhuma tela consumindo — esta aba é ONDE O SENSEI ACHA a tela nova,
+// sem precisar procurar: "Meus eventos" já é o lugar de tudo que o
+// próprio dojô organiza, e o hub já listava o exame de kyu com um
+// marcador `source: 'belt_exam'`. Duas entradas:
+//   1. "Novo exame de faixa" no cabeçalho (ao lado de "Criar evento") —
+//      abre CriarExameKyuModal (só data/título/examinador) e navega pra
+//      app/karate/(dojo)/graduacao/[examId].tsx assim que o rascunho é
+//      criado — é lá que o sensei escolhe os alunos e lança o resultado.
+//   2. Cada card de exame de kyu ganha um botão real ("Lançar resultado"
+//      enquanto rascunho, "Ver ficha" depois de concluído) em vez da nota
+//      estática "gerida por outra tela" que existia antes do consumidor
+//      existir.
+// Não criei uma rota nova na nav do DojoShell: o item de navegação está
+// sendo mexido por outro agente nesta mesma leva (fora do escopo
+// combinado desta PR) — e um segundo caminho pro mesmo destino (a ficha
+// do exame) competiria com este, que já é onde o exame aparece.
+//
+// NÃO oferece criar exame de kyu pelo CriarEventoDojoModal (só sabe
 // curso/seminario) — de propósito, ver cabeçalho do modal.
 //
-// Inscrição: reusa SelecionarAlunosModal (mesmo seletor da federação),
-// mas com requireFederated={false} — aluno não federado também participa
-// de curso/seminário do PRÓPRIO dojô (o backend ancorou a inscrição no
-// aluno do dojô, karate_dojo_students, justamente por isso).
+// Inscrição (curso/seminário): reusa SelecionarAlunosModal (mesmo
+// seletor da federação), mas com requireFederated={false} — aluno não
+// federado também participa de curso/seminário do PRÓPRIO dojô.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, ActivityIndicator, ScrollView, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateFonts as F } from "@/constants/karateTheme";
 import {
@@ -40,7 +57,9 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateDojoEventsApi, EventsHubItem, DojoEventStatus, EnrollmentListRow,
 } from "@/services/karateDojoEventsApi";
+import { DojoBeltExam } from "@/services/karateDojoBeltExamApi";
 import { CriarEventoDojoModal } from "./CriarEventoDojoModal";
+import { CriarExameKyuModal } from "@/components/karate/dojoGraduacao/CriarExameKyuModal";
 import { SelecionarAlunosModal } from "@/components/karate/dojoFederativo/SelecionarAlunosModal";
 import { ResultadoLoteCard } from "@/components/karate/dojoFederativo/ResultadoLoteCard";
 import { formatEventDateShort } from "@/utils/eventDate";
@@ -70,11 +89,13 @@ interface EnrollResultState {
 }
 
 export function MeusEventosTab() {
+  const router = useRouter();
   const { federationId } = useKarateFederation();
   const [items, setItems] = useState<EventsHubItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [showCriar, setShowCriar] = useState(false);
+  const [showCriarExame, setShowCriarExame] = useState(false);
 
   const [enrollTarget, setEnrollTarget] = useState<EventsHubItem | null>(null);
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -144,6 +165,14 @@ export function MeusEventosTab() {
     }
   };
 
+  const handleExameCreated = (exam: DojoBeltExam) => {
+    router.push(`/karate/(dojo)/graduacao/${exam.id}` as any);
+  };
+
+  const openExame = (item: EventsHubItem) => {
+    router.push(`/karate/(dojo)/graduacao/${item.id}` as any);
+  };
+
   if (error) return <KarateErrorState onRetry={load} />;
 
   return (
@@ -152,8 +181,13 @@ export function MeusEventosTab() {
       <PageHead
         eyebrow="Seu dojô"
         title="Meus eventos"
-        sub="Curso, seminário e exame de faixa — tudo o que o seu dojô organiza, num só lugar. O exame de faixa é avaliação do sensei; curso e seminário aceitam qualquer aluno, federado ou não."
-        actions={<ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />}
+        sub="Curso, seminário e exame de faixa — tudo o que o seu dojô organiza, num só lugar. O exame de faixa é avaliação do sensei (até Marrom 1º kyu); curso e seminário aceitam qualquer aluno, federado ou não."
+        actions={
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <ShojiButton label="Novo exame de faixa" icon="ribbon" variant="ghost" onPress={() => setShowCriarExame(true)} />
+            <ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} />
+          </View>
+        }
       />
 
       {loading ? (
@@ -174,7 +208,7 @@ export function MeusEventosTab() {
                 <KarateEmptyState
                   icon="calendar"
                   title="Nenhum evento ainda"
-                  subtitle="Crie um curso ou seminário para começar. Exames de faixa aparecem aqui quando forem lançados."
+                  subtitle="Crie um curso, um seminário ou um exame de faixa para começar."
                   action={<ShojiButton label="Criar evento" icon="add" variant="sumi" onPress={() => setShowCriar(true)} style={{ marginTop: 12 }} />}
                   style={{ paddingVertical: 28 }}
                 />
@@ -221,9 +255,14 @@ export function MeusEventosTab() {
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <Text style={styles.examNote}>
-                        Avaliação conduzida pelo sensei — gerida pelo fluxo de graduação do dojô, não por aqui.
-                      </Text>
+                      <View style={styles.actionsRow}>
+                        <ShojiButton
+                          label={item.native_status === "draft" ? "Lançar resultado" : "Ver ficha"}
+                          icon="ribbon"
+                          variant="ghost"
+                          onPress={() => openExame(item)}
+                        />
+                      </View>
                     )}
 
                     {extra?.expanded && !extra.loading && (
@@ -262,6 +301,13 @@ export function MeusEventosTab() {
       onClose={() => setShowCriar(false)}
       federationId={federationId}
       onCreated={load}
+    />
+
+    <CriarExameKyuModal
+      visible={showCriarExame}
+      onClose={() => setShowCriarExame(false)}
+      federationId={federationId}
+      onCreated={handleExameCreated}
     />
 
     <SelecionarAlunosModal
