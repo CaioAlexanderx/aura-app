@@ -6,18 +6,28 @@
     "enabled": true
   },
   "build": {
-    // Pre-install de deps importadas mas FORA do package-lock.json — evita
-    // regenerar o lockfile (629KB) toda vez que alguém esquece de commitar
-    // o lock junto com o package.json. Mesmo padrão pra react-native-svg.
+    // 03/08/2026: removido o `npm install --no-save react-native-svg@15.8.0
+    // expo-document-picker@~13.0.3 xlsx@^0.18.5 --legacy-peer-deps` que rodava
+    // antes do export.
     //
-    // 17/05/2026 (hotfix): react-native-svg é importado por canal/shared.tsx,
-    //   odontograma, dental sparkline, etc.
-    // 20/05/2026 (hotfix): expo-document-picker + xlsx importados por
-    //   components/admin/ProspecaoAdmin.tsx (admin de leads).
+    // Ele existia porque esses 3 pacotes eram importados pelo app mas nao
+    // estavam no package-lock.json (hotfixes de 17/05 e 20/05). O TODO que
+    // pedia pra regenerar o lockfile ja foi cumprido em algum momento e
+    // ninguem voltou pra tirar o workaround -- os tres estao hoje em
+    // `dependencies` E resolvidos no lock (lockfileVersion 3):
     //
-    // TODO: PR follow-up pra regenerar lockfile localmente e remover esses
-    // --no-save de forma definitiva.
-    "command": "npm install --no-save react-native-svg@15.8.0 expo-document-picker@~13.0.3 xlsx@^0.18.5 --legacy-peer-deps --silent && npx expo export -p web"
+    //   react-native-svg      15.8.0  -> lock 15.8.0
+    //   expo-document-picker  ~13.0.0 -> lock 13.0.3
+    //   xlsx                  ^0.18.5 -> lock 0.18.5
+    //
+    // Ou seja, o `npm ci` do build ja instalava os tres, e este install
+    // extra so repetia trabalho -- com --legacy-peer-deps, que ainda podia
+    // mexer na arvore de node_modules DEPOIS do install principal.
+    //
+    // Se algum dia voltar "Cannot find module" pra um desses no build: o
+    // certo e adicionar ao package.json e commitar o lock junto, nao
+    // ressuscitar o --no-save aqui.
+    "command": "npx expo export -p web"
   },
   "assets": {
     "directory": "dist",
