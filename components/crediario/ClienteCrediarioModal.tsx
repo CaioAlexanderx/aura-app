@@ -665,7 +665,7 @@ export function ClienteCrediarioModal({
             </View>
           </View>
 
-          <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={true}>
             {detailQ.isLoading || profileQ.isLoading ? (
               <View style={{ paddingVertical: 36, alignItems: "center" }}>
                 <ActivityIndicator color={Colors.violet3} />
