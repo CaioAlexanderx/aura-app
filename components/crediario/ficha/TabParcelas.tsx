@@ -55,17 +55,13 @@ export type TabParcelasProps = {
   openInst: CreditInstallment[];
   instByAccount: Map<string | null, CreditInstallment[]>;
   useCarneLayout: boolean;
-  handleCreateAccount: () => void;
-  showNewAccount: boolean;
-  setShowNewAccount: (fn: (v: boolean) => boolean) => void;
-  newAccountName: string;
-  setNewAccountName: (v: string) => void;
-  creatingAccount: boolean;
   expandedAccountId: string | null | undefined;
   setExpandedAccountId: (v: string | null | undefined) => void;
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
   onRenegociar: (accountId: string | null | undefined, scopeLabel: string, openRemaining: number) => void;
   openInstallmentPix: (id: string) => void;
+  /** Abre o modal de novo lançamento com cliente pré-preenchido */
+  onCreateNewLancamento: () => void;
   /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido. */
   prefill: (v: number) => void;
   /** Saldo total em aberto do ledger — pode ser > 0 SEM nenhuma parcela
@@ -80,9 +76,8 @@ export type TabParcelasProps = {
 
 export function TabParcelas({
   accounts, openInst, instByAccount, useCarneLayout,
-  handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, prefill, openBalance,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onCreateNewLancamento, prefill, openBalance,
   companyId, customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
@@ -129,34 +124,12 @@ export function TabParcelas({
         <Text style={m.cardTitle}>Carnês / contas</Text>
         <Pressable
           style={m.newAccBtn}
-          onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+          onPress={onCreateNewLancamento}
         >
           <Icon name="plus" size={12} color={Colors.violet3} />
-          <Text style={m.newAccTxt}>Novo carnê</Text>
+          <Text style={m.newAccTxt}>Novo lançamento</Text>
         </Pressable>
       </View>
-
-      {showNewAccount && (
-        <View style={m.newAccRow}>
-          <TextInput
-            style={m.newAccInput}
-            placeholder="Nome do carnê"
-            placeholderTextColor={Colors.ink3}
-            value={newAccountName}
-            onChangeText={setNewAccountName}
-            autoFocus
-          />
-          <Pressable
-            style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
-            onPress={handleCreateAccount}
-            disabled={creatingAccount}
-          >
-            {creatingAccount
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={m.newAccConfirmTxt}>Criar</Text>}
-          </Pressable>
-        </View>
-      )}
 
       {accounts.map((acc) => {
         const isOverdueAcc = acc.overdue;
