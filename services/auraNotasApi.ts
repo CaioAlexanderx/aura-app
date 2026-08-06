@@ -46,6 +46,18 @@ export type AuraNotasCompany = {
   breaker_open: boolean;
 };
 
+// Item da busca (GET /empresas-sem-config) — empresa que já existe no sistema
+// (cadastrada pelo próprio cliente) mas ainda não tem nfce_config. Alimenta o
+// botão "Adicionar empresa" no painel.
+export type EmpresaSemConfig = {
+  company_id: string;
+  name: string;
+  legal_name: string;
+  trade_name: string | null;
+  cnpj: string | null;
+  address_state: string | null;
+};
+
 // Detalhe (GET /:companyId)
 export type AuraNotasCompanyProfile = {
   legal_name: string;
@@ -63,16 +75,16 @@ export type AuraNotasCompanyProfile = {
 };
 
 export type AuraNotasConfig = {
-  ambiente: string;              // 'homologacao' | 'producao'
+  ambiente: string | null;       // 'homologacao' | 'producao' | null (sem config ainda)
   uf: string | null;
-  provider: ProviderMode;
+  provider: ProviderMode | null;
   serie_nfce: number | null;
   next_number: number | null;
   serie_sefaz_sp: number | null;
   next_number_sefaz_sp: number | null;
   csc_id: string | null;
   csc_ok: boolean;
-  is_active: boolean;
+  is_active: boolean | null;     // null = empresa ainda não tem nfce_config
 };
 
 export type AuraNotasDetail = {
@@ -84,6 +96,7 @@ export type AuraNotasDetail = {
 };
 
 // PUT /:companyId/fiscal — subconjunto editável dos campos fiscais + roteamento
+// (UPSERT no backend: cria a linha de nfce_config se a empresa ainda não tiver)
 export type FiscalUpdateBody = {
   legal_name?: string;
   trade_name?: string | null;
@@ -127,11 +140,23 @@ export var auraNotasApi = {
   listCompanies: function() {
     return request<{ companies: AuraNotasCompany[] }>(BASE + "/companies");
   },
+  // Botão "Adicionar empresa": busca empresas já existentes no sistema (por
+  // nome/CNPJ) que ainda não têm configuração fiscal no Aura Notas.
+  searchEmpresasSemConfig: function(q?: string) {
+    var qs = q && q.trim() ? "?q=" + encodeURIComponent(q.trim()) : "";
+    return request<{ companies: EmpresaSemConfig[] }>(BASE + "/empresas-sem-config" + qs);
+  },
   detail: function(companyId: string) {
     return request<AuraNotasDetail>(BASE + "/" + companyId);
   },
   updateFiscal: function(companyId: string, body: FiscalUpdateBody) {
     return request<{ ok: boolean }>(BASE + "/" + companyId + "/fiscal", { method: "PUT", body: body, retry: 0 });
+  },
+  // Botão "Remover": tira só a configuração fiscal do Aura Notas (nfce_config +
+  // certificado A1) — a empresa em si continua existindo normalmente. Backend
+  // recusa com 409 { code: "HAS_EMISSIONS" } se a empresa já emitiu alguma nota.
+  removeFiscal: function(companyId: string) {
+    return request<{ ok: boolean }>(BASE + "/" + companyId + "/fiscal", { method: "DELETE", retry: 0 });
   },
   updateCsc: function(companyId: string, body: CscUpdateBody) {
     return request<{ ok: boolean }>(BASE + "/" + companyId + "/csc", { method: "PUT", body: body, retry: 0 });
