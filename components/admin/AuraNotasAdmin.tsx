@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, TextInput, ActivityIndicator, Switch } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, TextInput, ActivityIndicator, Switch, Modal, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,10 +9,12 @@ import {
   auraNotasApi,
   type AuraNotasCompany,
   type AuraNotasDetail,
+  type EmpresaSemConfig,
   type ProviderMode,
   type FiscalUpdateBody,
   type TestConexaoResponse,
 } from "@/services/auraNotasApi";
+import { ApiError } from "@/services/api";
 
 var isWeb = Platform.OS === "web";
 
@@ -53,6 +55,7 @@ export function AuraNotasAdmin() {
   var qc = useQueryClient();
   var [selectedId, setSelectedId] = useState<string | null>(null);
   var [q, setQ] = useState("");
+  var [showAddModal, setShowAddModal] = useState(false);
 
   var { data, isLoading, isError, refetch } = useQuery<{ companies: AuraNotasCompany[] }>({
     queryKey: ["aura-notas-companies"],
@@ -109,6 +112,14 @@ export function AuraNotasAdmin() {
             placeholderTextColor={Colors.ink3}
           />
         </View>
+
+        <Pressable
+          onPress={function() { setShowAddModal(true); }}
+          style={[s.addBtn, isWeb && ({ cursor: "pointer" } as any)]}
+        >
+          <Icon name="plus" size={14} color="#7c3aed" />
+          <Text style={s.addBtnText}>Adicionar empresa</Text>
+        </Pressable>
 
         {filtered.length === 0 && (
           <View style={s.emptyList}>
@@ -186,7 +197,15 @@ export function AuraNotasAdmin() {
       {/* ── Detalhe ── */}
       <View style={[s.detailCol, !IS_WIDE && { width: "100%" }]}>
         {selectedId ? (
-          <CompanyDetail key={selectedId} companyId={selectedId} onSaved={function() { qc.invalidateQueries({ queryKey: ["aura-notas-companies"] }); }} />
+          <CompanyDetail
+            key={selectedId}
+            companyId={selectedId}
+            onSaved={function() { qc.invalidateQueries({ queryKey: ["aura-notas-companies"] }); }}
+            onRemoved={function() {
+              setSelectedId(null);
+              qc.invalidateQueries({ queryKey: ["aura-notas-companies"] });
+            }}
+          />
         ) : (
           <View style={s.detailEmpty}>
             <Icon name="file_text" size={30} color={Colors.ink3} />
@@ -194,17 +213,185 @@ export function AuraNotasAdmin() {
           </View>
         )}
       </View>
+
+      <AddEmpresaSemConfigModal
+        visible={showAddModal}
+        onClose={function() { setShowAddModal(false); }}
+        onSelect={function(companyId) {
+          setSelectedId(companyId);
+          setShowAddModal(false);
+        }}
+      />
     </View>
+  );
+}
+
+// ─── Modal: "Adicionar empresa" (buscar empresa já existente sem config) ────────
+
+function AddEmpresaSemConfigModal({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (companyId: string) => void }) {
+  var [q, setQ] = useState("");
+  var [results, setResults] = useState<EmpresaSemConfig[]>([]);
+  var [loading, setLoading] = useState(false);
+  var [searched, setSearched] = useState(false);
+
+  useEffect(function() {
+    if (!visible) { setQ(""); setResults([]); setSearched(false); return; }
+    // Carrega a lista inicial (sem filtro) assim que o modal abre.
+    runSearch("");
+  }, [visible]);
+
+  function runSearch(term: string) {
+    setLoading(true);
+    auraNotasApi.searchEmpresasSemConfig(term)
+      .then(function(r) { setResults(r.companies || []); setSearched(true); })
+      .catch(function(e: any) { toast.error(e?.message || "Erro ao buscar empresas"); })
+      .finally(function() { setLoading(false); });
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 16 }}
+      >
+        <Pressable
+          onPress={function(e: any) { e.stopPropagation(); }}
+          style={{ width: "100%", maxWidth: 480, maxHeight: "85%", backgroundColor: Colors.bg2, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#7c3aed20", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="plus" size={16} color="#7c3aed" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: Colors.ink }}>Adicionar empresa</Text>
+            </View>
+            <Pressable onPress={onClose} style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" }}>
+              <Icon name="x" size={14} color={Colors.ink3} />
+            </Pressable>
+          </View>
+
+          <View style={{ padding: 18, paddingBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 12 }}>
+              Escolha uma empresa que já existe no sistema (cadastrada pelo cliente) mas ainda não tem
+              configuração fiscal no Aura Notas.
+            </Text>
+            <View style={s.searchBox}>
+              <Icon name="search" size={15} color={Colors.ink3} />
+              <TextInput
+                style={s.searchInput}
+                value={q}
+                onChangeText={function(v) { setQ(v); runSearch(v); }}
+                placeholder="Buscar por nome ou CNPJ..."
+                placeholderTextColor={Colors.ink3}
+                autoFocus={isWeb}
+              />
+            </View>
+          </View>
+
+          <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 18 }}>
+            {loading && (
+              <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                <ActivityIndicator color={Colors.violet} />
+              </View>
+            )}
+            {!loading && searched && results.length === 0 && (
+              <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: Colors.ink3, textAlign: "center" }}>
+                  {q.trim()
+                    ? "Nenhuma empresa sem configuração encontrada com esse termo."
+                    : "Todas as empresas ativas já têm configuração fiscal no Aura Notas."}
+                </Text>
+              </View>
+            )}
+            {!loading && results.map(function(c) {
+              return (
+                <Pressable
+                  key={c.company_id}
+                  onPress={function() { onSelect(c.company_id); }}
+                  style={[s.pickRow, isWeb && ({ cursor: "pointer" } as any)]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.pickName} numberOfLines={1}>{c.name}</Text>
+                    <Text style={s.pickMeta}>{fmtCnpj(c.cnpj)}{c.address_state ? " · " + c.address_state : ""}</Text>
+                  </View>
+                  <Icon name="chevron-right" size={16} color={Colors.ink3} />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Modal de confirmação genérico (usado pelo "Remover") ──────────────────────
+
+function ConfirmModal({ visible, title, message, danger, confirmLabel, loading, onConfirm, onCancel }: {
+  visible: boolean; title: string; message: string; danger?: boolean; confirmLabel: string; loading?: boolean;
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable onPress={onCancel} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 16 }}>
+        <Pressable
+          onPress={function(e: any) { e.stopPropagation(); }}
+          style={{ width: "100%", maxWidth: 400, backgroundColor: Colors.bg2, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, padding: 18 }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: danger ? "#dc262620" : "#7c3aed20", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="alert" size={16} color={danger ? "#dc2626" : "#7c3aed"} />
+            </View>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: Colors.ink, flex: 1 }}>{title}</Text>
+          </View>
+          <Text style={{ fontSize: 12, color: Colors.ink2, lineHeight: 18, marginBottom: 16 }}>{message}</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              onPress={onCancel}
+              disabled={loading}
+              style={{ flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center", opacity: loading ? 0.5 : 1 }}
+            >
+              <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              onPress={onConfirm}
+              disabled={loading}
+              style={{ flex: 1, paddingVertical: 11, borderRadius: 10, backgroundColor: danger ? "#dc2626" : "#7c3aed", alignItems: "center", opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontSize: 13, color: "#fff", fontWeight: "700" }}>{confirmLabel}</Text>}
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
 // ─── Detalhe de uma empresa ─────────────────────────────────────────────────────
 
-function CompanyDetail({ companyId, onSaved }: { companyId: string; onSaved: () => void }) {
+function CompanyDetail({ companyId, onSaved, onRemoved }: { companyId: string; onSaved: () => void; onRemoved: () => void }) {
   var qc = useQueryClient();
+  var [showConfirmRemove, setShowConfirmRemove] = useState(false);
   var { data, isLoading, isError, refetch } = useQuery<AuraNotasDetail>({
     queryKey: ["aura-notas-detail", companyId],
     queryFn: function() { return auraNotasApi.detail(companyId); },
+  });
+
+  var removeMut = useMutation({
+    mutationFn: function() { return auraNotasApi.removeFiscal(companyId); },
+    onSuccess: function() {
+      toast.success("Configuração fiscal removida");
+      setShowConfirmRemove(false);
+      onRemoved();
+    },
+    onError: function(e: any) {
+      setShowConfirmRemove(false);
+      if (e instanceof ApiError && e.data?.code === "HAS_EMISSIONS") {
+        toast.error(e.data.error || "Empresa já emitiu notas — desative em vez de remover.");
+      } else {
+        toast.error(e?.message || "Erro ao remover configuração fiscal");
+      }
+    },
   });
 
   if (isLoading) {
@@ -231,12 +418,55 @@ function CompanyDetail({ companyId, onSaved }: { companyId: string; onSaved: () 
     onSaved();
   }
 
+  // is_active só vem null quando a empresa ainda não tem linha em nfce_config
+  // (ver GET /:companyId no backend — cfg={} quando não há config, e nesse
+  // caso is_active nunca é gravado como boolean).
+  var hasConfig = data.config.is_active !== null;
+  var companyName = data.company.trade_name || data.company.legal_name;
+
   return (
     <View style={{ gap: 14 }}>
+      <View style={s.detailHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.detailHeaderName} numberOfLines={1}>{companyName}</Text>
+          <Text style={s.detailHeaderCnpj}>{fmtCnpj(data.company.cnpj)}</Text>
+        </View>
+        {hasConfig && (
+          <Pressable
+            onPress={function() { setShowConfirmRemove(true); }}
+            style={[s.removeBtn, isWeb && ({ cursor: "pointer" } as any)]}
+          >
+            <Icon name="trash" size={13} color="#dc2626" />
+            <Text style={s.removeBtnText}>Remover</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {!hasConfig && (
+        <View style={s.newBanner}>
+          <Icon name="info" size={14} color={Colors.violet3} />
+          <Text style={s.newBannerText}>
+            Empresa ainda sem configuração fiscal no Aura Notas. Preencha e salve os dados fiscais abaixo
+            para criar a configuração desta empresa.
+          </Text>
+        </View>
+      )}
+
       <FiscalBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
-      <CscBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
-      <CertificateBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
-      <StatusBlock companyId={companyId} detail={data} />
+      {hasConfig && <CscBlock companyId={companyId} detail={data} onSaved={invalidateAll} />}
+      {hasConfig && <CertificateBlock companyId={companyId} detail={data} onSaved={invalidateAll} />}
+      {hasConfig && <StatusBlock companyId={companyId} detail={data} />}
+
+      <ConfirmModal
+        visible={showConfirmRemove}
+        title="Remover configuração fiscal?"
+        message={"Isso remove a configuração do Aura Notas (dados fiscais, CSC e certificado A1) de " + companyName + ". A empresa continua existindo normalmente — login, vendas etc. não são afetados. Essa ação não pode ser desfeita; será preciso reconfigurar do zero."}
+        danger
+        confirmLabel="Remover"
+        loading={removeMut.isPending}
+        onConfirm={function() { removeMut.mutate(); }}
+        onCancel={function() { setShowConfirmRemove(false); }}
+      />
     </View>
   );
 }
@@ -248,7 +478,10 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
   var cfg = detail.config;
   var [form, setForm] = useState<FiscalUpdateBody>({});
 
-  // Semeia o form a partir do detalhe carregado
+  // Semeia o form a partir do detalhe carregado. Quando a empresa ainda não
+  // tem UF de emissão definida (cfg.uf null — sem config ainda), pré-preenche
+  // com a UF do endereço cadastrado da empresa, se houver (ajuda o fluxo de
+  // "Adicionar empresa": staff normalmente quer a mesma UF do endereço).
   useEffect(function() {
     setForm({
       legal_name: co.legal_name || "",
@@ -264,10 +497,10 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
       tax_regime: co.tax_regime || "",
       serie_nfce: cfg.serie_nfce,
       serie_sefaz_sp: cfg.serie_sefaz_sp,
-      ambiente: cfg.ambiente,
-      uf: cfg.uf || "",
-      provider: cfg.provider,
-      is_active: cfg.is_active,
+      ambiente: cfg.ambiente || undefined,
+      uf: cfg.uf || co.address_state || "",
+      provider: cfg.provider || undefined,
+      is_active: cfg.is_active === null ? false : cfg.is_active,
     });
   }, [companyId]);
 
@@ -647,6 +880,15 @@ var s = StyleSheet.create({
   emptyList: { padding: 24, alignItems: "center" },
   emptyText: { fontSize: 13, color: Colors.ink3 },
 
+  // "Adicionar empresa" CTA (dashed violet, convencao usada em empresas.tsx)
+  addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1.5, borderStyle: "dashed", borderColor: "#7c3aed", borderRadius: 12, paddingVertical: 10, marginBottom: 12 },
+  addBtnText: { fontSize: 13, color: "#7c3aed", fontWeight: "700" },
+
+  // picker de empresa (modal "Adicionar empresa")
+  pickRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, marginBottom: 8 },
+  pickName: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  pickMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+
   // list card
   card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 8 },
   cardActive: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
@@ -670,6 +912,17 @@ var s = StyleSheet.create({
   // detail empty
   detailEmpty: { paddingVertical: 80, alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border },
   detailEmptyText: { fontSize: 13, color: Colors.ink3, textAlign: "center", maxWidth: 280, lineHeight: 20 },
+
+  // detail header (nome/cnpj + Remover)
+  detailHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  detailHeaderName: { fontSize: 17, fontWeight: "800", color: Colors.ink },
+  detailHeaderCnpj: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  removeBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#dc262614", borderWidth: 1, borderColor: "#dc262640", borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  removeBtnText: { fontSize: 12, color: "#dc2626", fontWeight: "700" },
+
+  // banner "empresa nova, sem config ainda"
+  newBanner: { flexDirection: "row", gap: 9, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, padding: 13 },
+  newBannerText: { flex: 1, fontSize: 12, color: Colors.violet3, lineHeight: 18 },
 
   // block
   block: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 16, padding: 18 },
