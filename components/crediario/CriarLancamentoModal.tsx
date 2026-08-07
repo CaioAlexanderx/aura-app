@@ -355,8 +355,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
 
     // Quando unify ativo: lança com installments=1 (débito puro)
     const nInstallments = unifyEnabled ? 1 : (parseInt(installments, 10) || 1);
-    if (!unifyEnabled && (nInstallments < 1 || nInstallments > 36)) {
-      toast.error("Parcelas: 1 a 36"); return;
+    if (!unifyEnabled && (nInstallments < 1 || nInstallments > 100)) {
+      toast.error("Parcelas: 1 a 100"); return;
     }
 
     const payload: ManualEntryPayload = {
@@ -609,7 +609,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                         placeholderTextColor={Colors.ink3}
                         value={installments}
                         onChangeText={(v) => {
-                          const n = v.replace(/\D/g, "").slice(0, 2);
+                          const n = v.replace(/\D/g, "").slice(0, 3);
                           setInstallments(n);
                         }}
                         keyboardType="numeric"
@@ -726,7 +726,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                               placeholder="2"
                               placeholderTextColor={Colors.ink3}
                               value={unifyInstallments}
-                              onChangeText={(v) => setUnifyInstallments(v.replace(/\D/g, "").slice(0, 2))}
+                              onChangeText={(v) => setUnifyInstallments(v.replace(/\D/g, "").slice(0, 3))}
                               keyboardType="numeric"
                             />
 

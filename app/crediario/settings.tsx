@@ -309,7 +309,7 @@ export default function CrediarioSettingsScreen() {
               <View style={st.col}>
                 <Text style={st.lbl}>Nº máximo de parcelas</Text>
                 <TextInput style={st.input} value={maxInst} keyboardType="numeric"
-                  onChangeText={(v) => { setMaxInst(v.replace(/\D/g, "").slice(0, 2)); touch(); }} />
+                  onChangeText={(v) => { setMaxInst(v.replace(/\D/g, "").slice(0, 3)); touch(); }} />
               </View>
               <View style={st.col}>
                 <Text style={st.lbl}>Valor mínimo da parcela</Text>

@@ -332,7 +332,7 @@ export function ClienteCrediarioModal({
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
       : (instByAccount.get(accountId) || []);
-    const count = Math.max(1, Math.min(36, scopeInst.length || 1));
+    const count = Math.max(1, Math.min(100, scopeInst.length || 1));
     setRenegScope({ accountId, label, openRemaining });
     setRenegTotal(openRemaining > 0 ? openRemaining.toFixed(2).replace(".", ",") : "");
     setRenegCount(count);
@@ -344,7 +344,7 @@ export function ClienteCrediarioModal({
   }
 
   function setRenegCountSafe(n: number) {
-    const c = Math.max(1, Math.min(36, n));
+    const c = Math.max(1, Math.min(100, n));
     setRenegCount(c);
     const total = parseAmount(renegTotal);
     setRenegPerParcel((total / c).toFixed(2).replace(".", ","));
@@ -361,7 +361,7 @@ export function ClienteCrediarioModal({
     const per = parseAmount(clean);
     const total = parseAmount(renegTotal);
     if (per > 0 && total > 0) {
-      setRenegCount(Math.max(1, Math.min(36, Math.round(total / per))));
+      setRenegCount(Math.max(1, Math.min(100, Math.round(total / per))));
     }
   }
 
@@ -1010,8 +1010,8 @@ export function ClienteCrediarioModal({
                     </Pressable>
                     <Text style={m.renegStepVal}>{renegCount}</Text>
                     <Pressable
-                      style={[m.renegStepBtn, renegCount >= 36 && m.renegStepBtnDisabled]}
-                      disabled={renegCount >= 36}
+                      style={[m.renegStepBtn, renegCount >= 100 && m.renegStepBtnDisabled]}
+                      disabled={renegCount >= 100}
                       onPress={() => setRenegCountSafe(renegCount + 1)}
                     >
                       <Icon name="plus" size={16} color={Colors.violet3} />

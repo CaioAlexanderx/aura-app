@@ -174,7 +174,7 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
 
   const profile = profileQ.data;
   const config = profile?.config;
-  const maxInstallments = Math.min(config?.max_installments || 12, 12);
+  const maxInstallments = Math.min(config?.max_installments || 12, 100);
   const totalNum = parseFloat(amount.replace(",", ".")) || 0;
   const available = profile ? (Number(profile.credit_limit) - Number(profile.credit_used)) : 0;
   const isBlocked = profile?.status === "blocked";

@@ -197,7 +197,7 @@ export function TabConta({
           placeholder={profile?.terms?.effective?.max_installments ? String(profile.terms.effective.max_installments) + " (padrão)" : "padrão"}
           placeholderTextColor={Colors.ink3}
           keyboardType="numeric"
-          onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 2)); ajustes.setTermsDirty(true); }}
+          onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
         />
         <Text style={[m.fieldLabel, { marginTop: 10 }]}>Juros ao mês (%)</Text>
         <TextInput
