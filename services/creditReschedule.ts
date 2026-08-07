@@ -27,7 +27,7 @@ export type ReschedulePlan = {
   target_total: number;
   /** target_total − open_remaining. <0 = desconto, >0 = acréscimo, 0 = só reorganizou. */
   delta: number;
-  /** Nº de parcelas do novo cronograma (clampado 1..36 no backend). */
+  /** Nº de parcelas do novo cronograma (clampado 1..100 no backend). */
   installments_count: number;
   /** Cronograma resultante. */
   schedule: RescheduleScheduleLine[];
