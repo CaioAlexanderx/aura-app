@@ -1,15 +1,24 @@
 // ============================================================
 // MeusAlunosTab — aba "Meus alunos" da tela Alunos (F2)
 //
-// Dono do estado: carrega a lista (com summary) UMA vez e filtra
-// client-side no AlunosList; orquestra os 3 modais (form, ficha,
-// importação), todos irmãos — nunca modal dentro de modal (RN-web).
+// Dono do estado: carrega a lista (com summary) e filtra client-side no
+// AlunosList; orquestra os 3 modais (form, ficha, importação), todos
+// irmãos — nunca modal dentro de modal (RN-web).
 //
 // QA prod 30/07 (item 1, regressão): o backend agora pagina (default
 // 100, máximo 500 — Aura-backend#429). Pedimos o teto de uma vez
 // (DOJO_STUDENTS_MAX_LIMIT) e repassamos `count` (total sem paginação)
 // pro AlunosList, que avisa quando `count` > alunos carregados — sem
 // paginação de verdade ainda, mas sem esconder aluno em silêncio.
+//
+// F11 (09/08/2026 — migration 274): filtro por tag é a PRIMEIRA exceção
+// ao "carrega uma vez e filtra local" acima — tags não vêm embutidas no
+// DojoStudent, então `tagFilter` entra como parâmetro `?tag_id=` do
+// próprio listStudents (round-trip novo a cada troca de tag, igual
+// status/q/belt fariam se o backend os recebesse — aqui o backend
+// recebe de fato). `tags` (catálogo do dojô pra desenhar o filtro) é
+// carregado à parte, uma vez, e não precisa re-buscar a cada troca de
+// aluno filtrado.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView, View, StyleSheet, ViewStyle } from "react-native";
@@ -19,6 +28,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateDojoStudentsApi, DojoStudent, DojoStudentsSummary, DOJO_STUDENTS_MAX_LIMIT,
 } from "@/services/karateDojoStudentsApi";
+import { karateDojoTagsApi, DojoTag } from "@/services/karateDojoTagsApi";
 import { AlunosList } from "./AlunosList";
 import { AlunoFormModal } from "./AlunoFormModal";
 import { AlunoFichaModal } from "./AlunoFichaModal";
@@ -33,6 +43,10 @@ export function MeusAlunosTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // F11: catálogo de tags do dojô (pro filtro) + tag selecionada.
+  const [tags, setTags] = useState<DojoTag[]>([]);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [formStudent, setFormStudent] = useState<DojoStudent | null>(null);
   const [fichaStudent, setFichaStudent] = useState<DojoStudent | null>(null);
@@ -46,6 +60,8 @@ export function MeusAlunosTab() {
       const res = await karateDojoStudentsApi.listStudents(federationId, {
         summary: true,
         limit: DOJO_STUDENTS_MAX_LIMIT,
+        // F11: server-side — ausente/null = sem filtro (todos os alunos).
+        tag_id: tagFilter ?? undefined,
       });
       const data = res.data ?? [];
       setStudents(data);
@@ -57,11 +73,22 @@ export function MeusAlunosTab() {
     } finally {
       setLoading(false);
     }
-  }, [federationId]);
+  }, [federationId, tagFilter]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // F11: catálogo de tags — carregado à parte (não depende de tagFilter,
+  // só de federationId), pra não refazer o GET de tags a cada troca de
+  // seleção no filtro. Falha ao listar esconde o filtro (dado faltante ≠
+  // pendência) — nunca trava a lista de alunos.
+  useEffect(() => {
+    if (!federationId) return;
+    karateDojoTagsApi.listTags(federationId)
+      .then((r) => setTags(r.data ?? []))
+      .catch(() => setTags([]));
+  }, [federationId]);
 
   if (!federationId) return null;
 
@@ -96,6 +123,9 @@ export function MeusAlunosTab() {
           setFormOpen(true);
         }}
         onImport={() => setImportOpen(true)}
+        tags={tags}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
       />
 
       <AlunoFormModal

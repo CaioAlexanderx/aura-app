@@ -32,6 +32,14 @@
 // sequência, já vê o cartaz pra imprimir). Mesmo racional de degrade
 // silencioso se o endpoint ainda não existir.
 //
+// F11: card "Tags dos alunos" (TagsConfigCard) — CRUD completo (criar,
+// renomear, desativar, excluir com bloqueio se em uso) das tags
+// configuráveis do aluno (migration 274). Import próprio de
+// components/karate/dojoTags/ — diferente de DadosDojoCard/FiliacaoCard
+// (definidos localmente nesta tela), porque o CRUD de tags é grande o
+// bastante pra merecer arquivo próprio, mesmo racional dos outros
+// cards importados abaixo (PixConfigCard, ContaAuraCard etc).
+//
 // QA prod 30/07 (item 5): o erro de validação (ex.: "E-mail inválido.")
 // só sumia ao salvar de novo — ficava visível enquanto o sensei
 // corrigia o campo. Cada onChangeText agora limpa o erro DAQUELE campo
@@ -53,6 +61,7 @@ import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCar
 import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/ContaAuraCard";
 import { QrSettingsCard } from "@/components/karate/dojoTurmas/QrSettingsCard";
 import { DojoQrCard } from "@/components/karate/dojoTurmas/DojoQrCard";
+import { TagsConfigCard } from "@/components/karate/dojoTags/TagsConfigCard";
 import { isoToBR, brToISO, maskDateBR, isValidEmail } from "@/components/karate/dojoAlunos/helpers";
 import { maskCnpj, maskPhone, onlyDigits } from "@/utils/masks";
 
@@ -317,6 +326,10 @@ export default function DojoConfiguracoes() {
           <FiliacaoCard />
         </>
       )}
+
+      {/* F11: tags configuráveis do aluno (local de treino, bolsista…) —
+          CRUD completo com contagem de alunos por tag. */}
+      {!!federationId && <TagsConfigCard federationId={federationId} />}
 
       {/* F3a: chave Pix de recebimento das mensalidades */}
       {!!federationId && <PixConfigCard federationId={federationId} alwaysShow />}

@@ -11,13 +11,24 @@
 // listStudents, mas o MeusAlunosTab faz UMA busca e filtra aqui, igual
 // já fazia pra status/faixa; sem round-trip extra).
 //
+// F11 (09/08/2026 — migration 274): filtro por TAG é DIFERENTE dos
+// acima — é SERVER-SIDE, não client-side. Tags não vêm embutidas no
+// DojoStudent (ver services/karateDojoStudentsApi.ts), então não há
+// como filtrar localmente sem um GET por aluno (N+1). `tags`/`tagFilter`
+// vêm prontos do MeusAlunosTab (que já fez o round-trip com `?tag_id=` e
+// só entrega aqui a lista JÁ filtrada); esta tela só desenha os chips e
+// avisa a troca via `onTagFilterChange` — a busca (`q`) e a paginação
+// (banner `hasMore`) continuam funcionando em cima do resultado, sem
+// mudança nenhuma nelas.
+//
 // QA prod 30/07 (item 1, regressão): o backend agora pagina (default
 // 100, máximo 500 — Aura-backend#429); o MeusAlunosTab já pede o teto
 // (500), mas um dojô com mais alunos que isso ainda teria parte da
 // lista fora do alcance da busca/filtros abaixo (tudo client-side).
-// `count` é o total real do dojô (sem paginação) — quando maior que o
-// que foi carregado, mostramos um aviso discreto e NEUTRO (não é erro,
-// é informação) em vez de deixar aluno sumir em silêncio.
+// `count` é o total real do dojô (sem paginação, já considerando o
+// filtro de tag quando ativo) — quando maior que o que foi carregado,
+// mostramos um aviso discreto e NEUTRO (não é erro, é informação) em
+// vez de deixar aluno sumir em silêncio.
 //
 // Regra da casa: dado faltante é NEUTRO (idade/CPF ausentes não viram
 // alerta). A única sinalização é menor de 18 sem responsável (LGPD) —
@@ -32,6 +43,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { DojoStudent, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
+import { DojoTag } from "@/services/karateDojoTagsApi";
 import { agruparPiramidePorFaixa, beltViewFor, maskCpf, onlyDigits } from "./helpers";
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -39,7 +51,7 @@ type FederatedFilter = "all" | "federated" | "dojo_only";
 
 interface Props {
   students: DojoStudent[];
-  /** Total real do dojô (sem paginação) — pode ser maior que students.length. */
+  /** Total real do dojô (sem paginação; já considera o filtro de tag quando ativo) — pode ser maior que students.length. */
   count: number;
   summary: DojoStudentsSummary | null;
   loading: boolean;
@@ -49,11 +61,17 @@ interface Props {
   onOpenStudent: (s: DojoStudent) => void;
   onNew: () => void;
   onImport: () => void;
+  /** F11: tags do dojô (todas, ativas e desativadas) — para o filtro. Lista vazia esconde o filtro. */
+  tags: DojoTag[];
+  /** F11: tag selecionada no filtro (null = todas). Controlado pelo pai — mudar dispara um novo GET com ?tag_id=. */
+  tagFilter: string | null;
+  onTagFilterChange: (tagId: string | null) => void;
 }
 
 export function AlunosList({
   students, count, summary, loading, error, schemaPending,
   onRetry, onOpenStudent, onNew, onImport,
+  tags, tagFilter, onTagFilterChange,
 }: Props) {
   const [q, setQ] = useState("");
   // 22/07/2026 — auditoria ativo/inativo (Caio, 21/07/2026: "não podemos
@@ -123,6 +141,21 @@ export function AlunosList({
   }
 
   if (students.length === 0) {
+    // F11: lista vazia por causa do filtro de tag (não é "nenhum aluno
+    // cadastrado") — mensagem e ação diferentes: limpar o filtro, não
+    // cadastrar/importar.
+    if (tagFilter) {
+      const tagName = tags.find((t) => t.id === tagFilter)?.name ?? "esta tag";
+      return (
+        <View style={styles.stateBox}>
+          <Icon name="pricetag-outline" size={28} color={KarateColors.ink3} />
+          <Text style={styles.stateTxt}>Nenhum aluno com a tag "{tagName}".</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => onTagFilterChange(null)} accessibilityRole="button">
+            <Text style={styles.retryTxt}>Limpar filtro de tag</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <View style={styles.stateBox}>
         <Icon name="people-outline" size={30} color={KarateColors.ink3} />
@@ -149,7 +182,7 @@ export function AlunosList({
         <View style={styles.moreBanner}>
           <Icon name="information-circle-outline" size={16} color={KarateColors.ink3} />
           <Text style={styles.moreBannerTxt}>
-            Mostrando {students.length} de {count} alunos cadastrados.
+            Mostrando {students.length} de {count} alunos {tagFilter ? "com esta tag" : "cadastrados"}.
           </Text>
         </View>
       )}
@@ -215,6 +248,38 @@ export function AlunosList({
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* F11: filtro por tag — SERVER-SIDE (ver nota no topo do arquivo);
+          selecionar dispara um novo GET no MeusAlunosTab, diferente dos
+          filtros acima (client-side sobre a lista já carregada). */}
+      {tags.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.beltFilters}>
+          <TouchableOpacity
+            style={[styles.chipBtn, !tagFilter && styles.chipBtnOn]}
+            onPress={() => onTagFilterChange(null)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: !tagFilter }}
+          >
+            <Text style={[styles.chipBtnTxt, !tagFilter && styles.chipBtnTxtOn]}>Todas as tags</Text>
+          </TouchableOpacity>
+          {tags.map((t) => {
+            const on = tagFilter === t.id;
+            return (
+              <TouchableOpacity
+                key={t.id}
+                style={[styles.chipBtn, on && styles.chipBtnOn, !t.active && styles.chipBtnHistoric]}
+                onPress={() => onTagFilterChange(on ? null : t.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.chipBtnTxt, on && styles.chipBtnTxtOn]}>
+                  {t.name}{!t.active ? " · desativada" : ""}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {beltOptions.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.beltFilters}>
@@ -320,6 +385,9 @@ const styles = StyleSheet.create({
   beltFilters: { flexDirection: "row", gap: 8, paddingRight: 8 } as ViewStyle,
   chipBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface } as ViewStyle,
   chipBtnOn: { backgroundColor: KarateColors.primarySoft, borderColor: KarateColors.primaryLine } as ViewStyle,
+  // F11: tag desativada no filtro (ainda pode ter alunos marcados no
+  // histórico) — mesma sinalização tracejada usada no seletor de tags do form.
+  chipBtnHistoric: { borderStyle: "dashed" } as ViewStyle,
   chipBtnTxt: { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   chipBtnTxtOn: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 

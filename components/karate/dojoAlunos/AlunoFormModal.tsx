@@ -54,8 +54,20 @@
 //     ACONTECEM DEPOIS do create (mesmo padrão do upload de foto, acima):
 //     falha em matricular ou assinar NÃO desfaz o cadastro, só avisa
 //     (o aluno já está salvo quando isso roda).
+//
+// F11 (09/08/2026 — migration 274): seção "Tags" — diferente de
+// Turma/Plano acima, aparece em CRIAR **e** EDITAR (tag é rótulo de
+// identidade, não algo que só faz sentido depois que o aluno já existe
+// na ficha própria). `studentTags` guarda o que o aluno JÁ tem —
+// inclusive tag DESATIVADA (histórico: nunca escondida nem apagada
+// sozinha, só fica na lista de seleção para poder ser desmarcada) — e
+// serve de base pro diff em save() (mesmo padrão do assign/remove do
+// backend: só tag ATIVA pode ser NOVA atribuição, 422 TAG_INATIVA senão).
+// A sincronização roda DEPOIS do create/update (precisa do id do aluno) e
+// segue o mesmo padrão de foto/turma/plano: falha aqui NÃO desfaz o
+// cadastro, só avisa.
 // ============================================================
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal, View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
@@ -92,6 +104,9 @@ import { karateDojoClassesApi, DojoClass } from "@/services/karateDojoClassesApi
 import { karateDojoBillingApi, DojoBillingPlan } from "@/services/karateDojoBillingApi";
 import { fmtBRL, isValidDueDay } from "@/components/karate/dojoMensalidades/helpers";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
+// F11: tags do dojô (local de treino, bolsista…) — CRUD em si vive em
+// Configurações (TagsConfigCard); aqui só listar ativas + atribuir/remover.
+import { karateDojoTagsApi, DojoTag } from "@/services/karateDojoTagsApi";
 
 interface Props {
   visible: boolean;
@@ -172,6 +187,13 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
   const [planAmountMasked, setPlanAmountMasked] = useState("0,00");
   const [planDueDay, setPlanDueDay] = useState("");
   const [planPayerIsGuardian, setPlanPayerIsGuardian] = useState(false);
+  // F11: tags do dojô — multi-seleção, SEMPRE (criar e editar). Ver nota
+  // no cabeçalho do arquivo.
+  const [activeTags, setActiveTags] = useState<DojoTag[]>([]);
+  const [activeTagsLoading, setActiveTagsLoading] = useState(false);
+  const [studentTags, setStudentTags] = useState<DojoTag[]>([]);
+  const [studentTagsLoading, setStudentTagsLoading] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Partial<Record<StudentErrorField, string>>>({});
   const [saving, setSaving] = useState(false);
 
@@ -336,6 +358,42 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       .finally(() => setPlansLoading(false));
   }, [visible, editing, federationId]);
 
+  // F11: tags ATIVAS do dojô — SEMPRE (criar e editar), diferente de
+  // turma/plano acima. Falha ao listar não trava o form (mesma filosofia
+  // "dado faltante ≠ pendência").
+  useEffect(() => {
+    if (!visible) return;
+    setActiveTagsLoading(true);
+    karateDojoTagsApi.listTags(federationId, { active: true })
+      .then((r) => setActiveTags(r.data ?? []))
+      .catch(() => setActiveTags([]))
+      .finally(() => setActiveTagsLoading(false));
+  }, [visible, federationId]);
+
+  // F11: tags JÁ atribuídas ao aluno (editar) — pré-marca a seleção e
+  // guarda o estado inicial para o diff em save(). Cadastro novo começa
+  // sem nenhuma (o aluno ainda não existe, não tem tag nenhuma).
+  useEffect(() => {
+    if (!visible) return;
+    if (!student) {
+      setStudentTags([]);
+      setSelectedTagIds([]);
+      return;
+    }
+    setStudentTagsLoading(true);
+    karateDojoTagsApi.listStudentTags(federationId, student.id)
+      .then((r) => {
+        const list = r.data ?? [];
+        setStudentTags(list);
+        setSelectedTagIds(list.map((t) => t.id));
+      })
+      .catch(() => {
+        setStudentTags([]);
+        setSelectedTagIds([]);
+      })
+      .finally(() => setStudentTagsLoading(false));
+  }, [visible, student, federationId]);
+
   const birthISO = brToISO(birthBR);
   const age = birthISO ? ageFromISO(birthISO) : null;
   const isMinor = age != null && age < 18;
@@ -351,6 +409,21 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
           beltKey === "marrom" ? (beltDegree ?? undefined) : undefined
         )
       : null;
+
+  // F11: lista de seleção = tags ATIVAS do dojô ∪ tags que o aluno JÁ TEM
+  // (mesmo desativada — histórico visível e desmarcável, nunca escondido).
+  // Uma tag desativada que o aluno NUNCA teve não entra aqui — não dá
+  // para atribuir tag desativada (422 TAG_INATIVA no backend).
+  const selectableTags = useMemo(() => {
+    const map = new Map<string, DojoTag>();
+    for (const t of activeTags) map.set(t.id, t);
+    for (const t of studentTags) if (!map.has(t.id)) map.set(t.id, t);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [activeTags, studentTags]);
+
+  const toggleTag = (id: string) => {
+    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   // CEP autopreenche o endereço (ViaCEP) — mesmo padrão já usado na ficha
   // do praticante na federação (praticante-ficha/EnderecoSection.tsx).
@@ -529,6 +602,33 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
           postCreateWarnings.push("não foi possível assinar o plano de pagamento");
         }
       }
+
+      // F11: tags — diff entre o que o aluno tinha (studentTags, carregado
+      // no hidratar) e o que ficou selecionado agora. Funciona igual em
+      // criar (studentTags começa vazio → tudo é adição) e editar (só
+      // sincroniza o que mudou). Mesmo padrão de foto/matrícula acima:
+      // roda DEPOIS do create/update (precisa do id) e falha aqui NÃO
+      // desfaz o cadastro, só avisa.
+      const initialTagIds = studentTags.map((t) => t.id);
+      const tagsToAdd = selectedTagIds.filter((id) => !initialTagIds.includes(id));
+      const tagsToRemove = initialTagIds.filter((id) => !selectedTagIds.includes(id));
+      for (const tagId of tagsToAdd) {
+        try {
+          await karateDojoTagsApi.assignTag(federationId, saved.id, tagId);
+        } catch {
+          const name = selectableTags.find((t) => t.id === tagId)?.name || "tag selecionada";
+          postCreateWarnings.push(`não foi possível atribuir a tag "${name}"`);
+        }
+      }
+      for (const tagId of tagsToRemove) {
+        try {
+          await karateDojoTagsApi.removeTag(federationId, saved.id, tagId);
+        } catch {
+          const name = studentTags.find((t) => t.id === tagId)?.name || "tag removida";
+          postCreateWarnings.push(`não foi possível remover a tag "${name}"`);
+        }
+      }
+
       if (postCreateWarnings.length > 0) {
         setErrors((prev) => ({
           ...prev,
@@ -754,6 +854,43 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
                   ))}
                 </View>
               </View>
+            </View>
+
+            {/* F11: Tags — rótulo livre do dojô (local de treino, turma da
+                manhã, bolsista…), diferente de Turma (dia/horário e presença,
+                mais abaixo/na ficha) — aparece em CRIAR e EDITAR, ao
+                contrário de Turma/Plano (só no cadastro). Só tags ATIVAS
+                entram como opção nova; uma tag desativada só aparece aqui
+                se o aluno JÁ tiver ela (histórico, desmarcável). */}
+            <View style={styles.tagsBox}>
+              <Text style={styles.section2}>Tags</Text>
+              <Text style={styles.tagsHint}>
+                Rótulos livres do dojô (local de treino, turma da manhã, bolsista…) — não é Turma, que tem dia/horário e controla presença (isso fica na ficha depois de cadastrar).
+              </Text>
+              {activeTagsLoading || studentTagsLoading ? (
+                <ActivityIndicator size="small" color={KarateColors.primary} />
+              ) : selectableTags.length === 0 ? (
+                <Text style={styles.hint}>Nenhuma tag cadastrada ainda — crie em Configurações › Tags dos alunos.</Text>
+              ) : (
+                <View style={styles.chips}>
+                  {selectableTags.map((t) => {
+                    const on = selectedTagIds.includes(t.id);
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[styles.chip, on && styles.chipOn, !t.active && styles.chipHistoric]}
+                        onPress={() => toggleTag(t.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>
+                          {t.name}{!t.active ? " · desativada" : ""}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             <Text style={styles.section}>Contato</Text>
@@ -1079,6 +1216,14 @@ const styles = StyleSheet.create({
   // seções inline da ficha (AlunoAssinaturaSection.tsx box), pra deixar
   // claro que são duas coisas distintas dentro de um único bloco.
   tpBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
+  // F11: caixa "Tags" — mesmo padrão visual de tpBox/guardianBox acima,
+  // só que aparece em CRIAR e EDITAR (não só no cadastro).
+  tagsBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.border, borderRadius: KarateRadius.md, padding: 12, backgroundColor: KarateColors.surface, marginTop: 4 } as ViewStyle,
+  tagsHint: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 16, marginTop: -2 } as TextStyle,
+  // Tag desativada que o aluno já tem (histórico) — borda tracejada pra
+  // sinalizar visualmente que ela não é uma opção nova, mesmo aparecendo
+  // na lista (ela só está ali porque já está atribuída).
+  chipHistoric: { borderStyle: "dashed" } as ViewStyle,
   sectionSub: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 16, marginTop: -2, marginBottom: 2 } as TextStyle,
   hint: { fontSize: 12, color: KarateColors.ink3, lineHeight: 17 } as TextStyle,
   hintWarn: { fontSize: 11.5, color: KarateColors.warn, fontWeight: "600", marginTop: 4 } as TextStyle,

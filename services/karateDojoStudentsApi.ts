@@ -48,6 +48,15 @@
 // abaixo). O antigo `photo_url` (campo morto da 242, nunca teve endpoint)
 // segue aqui só por compatibilidade — não usar para leitura/escrita novas.
 //
+// F11 (09/08/2026 — migration 274): parâmetro `tag_id` em listStudents —
+// filtro SERVER-SIDE (diferente de status/belt/federated em
+// AlunosList.tsx, que são client-side sobre a lista já carregada): tags
+// não vêm embutidas no shape de DojoStudent abaixo, então filtrar por tag
+// exige um round-trip novo ao backend a cada troca de tag (MeusAlunosTab
+// refaz o listStudents com tag_id, não filtra localmente). O CRUD de
+// tags em si (criar/renomear/desativar/atribuir) vive em
+// services/karateDojoTagsApi.ts — não duplicado aqui.
+//
 // Vive num service pequeno separado: karateApi.ts tem 125 KB e a regra
 // da casa é edição cirúrgica (mesmo racional do karateDojoInfoApi).
 //
@@ -60,8 +69,8 @@
 // era LIMIT 1000 fixo, sem paginação real). Dojô com >100 alunos via só
 // os 100 primeiros, e busca/filtros da tela (client-side) não alcançam
 // quem ficou de fora. `limit`/`offset` abaixo deixam o caller pedir o
-// teto (DOJO_STUDENTS_MAX_LIMIT) — paginação de verdade fica pra depois;
-// por ora, ninguém pode sumir em silêncio.
+// teto (DOJO_STUDENTS_MAX_LIMIT); paginação real fica pra depois; por
+// ora, ninguém pode sumir em silêncio.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -368,7 +377,7 @@ export interface FederateConfirmResult {
 
 // ── F8.2: upload de foto do aluno (mesmo padrão do praticante, ver
 // karateApi.ts#uploadPractitionerPhoto) — endpoint criado em PR paralelo
-// do backend. ─────────────────────────────────────────────────────────
+// do backend. ────────────────────────────────────────────────────
 
 export interface UploadStudentPhotoInput {
   /** Base64 puro, sem prefixo "data:<type>;base64,". */
@@ -401,6 +410,8 @@ export const karateDojoStudentsApi = {
       summary?: boolean;
       /** Ausente = todos; convive com status/q/belt. */
       federated?: boolean;
+      /** F11 (migration 274) — filtra pela tag; ausente/"" = sem filtro (todos, com e sem tag). */
+      tag_id?: string;
       /** Aura-backend#429: default 100, máximo 500 (ver DOJO_STUDENTS_MAX_LIMIT). */
       limit?: number;
       offset?: number;
@@ -413,6 +424,7 @@ export const karateDojoStudentsApi = {
         belt: opts.belt,
         summary: opts.summary ? "1" : undefined,
         federated: opts.federated == null ? undefined : String(opts.federated),
+        tag_id: opts.tag_id,
         limit: opts.limit == null ? undefined : String(opts.limit),
         offset: opts.offset == null ? undefined : String(opts.offset),
       })}`

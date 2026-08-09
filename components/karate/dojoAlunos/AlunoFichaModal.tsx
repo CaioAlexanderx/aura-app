@@ -1,7 +1,7 @@
 // ============================================================
 // AlunoFichaModal — ficha do aluno do dojô (F2; seção Mensalidade F3a;
 // seções Presenças + QR de check-in F4; seção Federação F5a; seção
-// Turma F9)
+// Turma F9; seção Tags F11)
 //
 // Dados + responsável + ações: Editar (delega pro AlunoFormModal via
 // onEdit), Inativar/Reativar (PATCH status) e Excluir (DELETE real na
@@ -38,6 +38,12 @@
 // têm títulos e subtítulos que deixam a distinção explícita: turma é
 // ONDE o aluno treina; mensalidade é COMO ele paga.
 //
+// F11 (09/08/2026): seção "Tags" (AlunoTagsSection) — rótulo livre do
+// dojô (local de treino, bolsista, turma da manhã…), logo ao lado de
+// Turma para a distinção ficar evidente (turma tem dia/horário e
+// controla presença; tag não). Somente leitura aqui — atribuir/remover
+// tags é feito pelo Editar (seletor múltiplo em AlunoFormModal.tsx).
+//
 // Confirmações INLINE dentro do próprio modal (mesmo padrão askConfirm
 // da tela de carteirinhas) — o ConfirmHost global não está montado no
 // grupo (dojo), então nada de confirmAsync aqui.
@@ -54,6 +60,7 @@ import { karateDojoStudentsApi, DojoStudent } from "@/services/karateDojoStudent
 import { beltViewFor, isoToBR, maskCpf, maskCep, mapStudentSaveError, formatPhone } from "./helpers";
 import { AlunoAssinaturaSection } from "./AlunoAssinaturaSection";
 import { AlunoTurmaSection } from "./AlunoTurmaSection";
+import { AlunoTagsSection } from "./AlunoTagsSection";
 import { AlunoPresencasSection } from "./AlunoPresencasSection";
 import { AlunoQrSection } from "./AlunoQrSection";
 import { AlunoFederacaoSection } from "./AlunoFederacaoSection";
@@ -250,6 +257,12 @@ export function AlunoFichaModal({ visible, federationId, student, onClose, onEdi
                   duas seções distintas, tituladas e subtituladas para deixar
                   a diferença explícita na tela. */}
               <AlunoTurmaSection federationId={federationId} student={s} onChanged={onChanged} />
+
+              {/* F11: Tags — rótulo livre do dojô (local de treino, bolsista…),
+                  logo ao lado de Turma para a distinção (dia/horário/presença
+                  × rótulo livre) ficar evidente. Somente leitura aqui;
+                  atribuir/remover é feito pelo Editar (AlunoFormModal). */}
+              <AlunoTagsSection federationId={federationId} studentId={s.id} />
 
               <AlunoAssinaturaSection federationId={federationId} student={s} onChanged={onChanged} />
 
