@@ -147,7 +147,7 @@ function isItemActive(item: DojoNavItem, path: string): boolean {
 // bem pra toda rota que É um item de menu. Rotas que só são ALCANÇADAS
 // de dentro de uma seção (ex.: /karate/(dojo)/graduacao/[examId], aberta
 // de dentro de "Meus eventos", sem item próprio na nav) não têm segmento
-// correspondente e caiãm sempre no fallback "Painel" — errado, não é onde
+// correspondente e caíam sempre no fallback "Painel" — errado, não é onde
 // o usuário está (QA 09/08/2026). Este contexto deixa a PRÓPRIA tela
 // declarar o rótulo certo, em vez do shell inventar ou mentir.
 const DojoSectionLabelContext = createContext<{
