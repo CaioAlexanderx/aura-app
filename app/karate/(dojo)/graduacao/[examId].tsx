@@ -20,6 +20,13 @@
 // É o lugar onde o sensei olha pra tudo que o próprio dojô organiza —
 // duplicar a entrada na nav seria um segundo caminho pro mesmo destino.
 //
+// QA 09/08/2026 (item 2): por não ser ela mesma um item de DOJO_NAV, o
+// breadcrumb do Topbar (components/karate/DojoShell.tsx) caia sempre no
+// fallback "Painel" — errado, não é onde o usuário está. Corrigido
+// declarando o rótulo certo via useDojoSectionLabel("Eventos") abaixo,
+// consistente com o comentário acima (a tela é alcançada de dentro de
+// Eventos → Meus eventos).
+//
 // LANÇAMENTO EM LOTE, TUDO-OU-NADA: POST .../results devolve 422 com
 // `errors: [{student_id, code, message}]` e NADA é gravado quando
 // qualquer aluno tem pendência — diferente do idioma "skipped" do resto
@@ -72,6 +79,7 @@ import { SelecionarAlunosModal } from "@/components/karate/dojoFederativo/Seleci
 import { GraduacaoAlunoRow, GraduacaoRowState, emptyGraduacaoRow } from "@/components/karate/dojoGraduacao/GraduacaoAlunoRow";
 import { quesitoDisplay, mapCertificateReason, mapBeltHistorySkipReason, mapGraduacaoError, fmtDataCurta } from "@/components/karate/dojoGraduacao/helpers";
 import { DojoExamCertificatesManager } from "@/components/karate/DojoExamCertificatesManager";
+import { useDojoSectionLabel } from "@/components/karate/DojoShell";
 
 const STATUS_VIEW: Record<string, { label: string; badge: "neutral" | "ok" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" },
@@ -86,6 +94,11 @@ export default function ExameGraduacaoScreen() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
   const { dojoName } = useKarateDojo();
+
+  // QA 09/08/2026 (item 2): esta tela não é ela mesma um item da nav do
+  // dojô (só é alcançada de dentro de "Meus eventos" — ver cabeçalho do
+  // arquivo); sem isto o breadcrumb do Topbar caia no fallback "Painel".
+  useDojoSectionLabel("Eventos");
 
   const [exam, setExam] = useState<DojoBeltExam | null>(null);
   const [results, setResults] = useState<DojoBeltExamResultRow[]>([]);
