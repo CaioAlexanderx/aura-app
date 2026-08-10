@@ -60,6 +60,18 @@
 // altera os arquivos reusados) — UMA janela, UMA impressão, um
 // certificado por página. Download individual continua sendo
 // printCertificate (mesmo caminho já usado pela federação).
+//
+// ── QA 09/08/2026 (item 1): "Sensei Sensei X" no texto de apoio e no
+// próprio certificado ─────────────────────────────────────────
+// O examiner_name do exame já vem preenchido como "Sensei X" — é assim
+// que o examinador se identifica ao preencher o campo em outra tela.
+// Este componente prefixava "Sensei " de novo por cima (tanto no texto
+// de apoio abaixo quanto em instructorsText, que alimenta o PREVIEW e
+// é o mesmo padrão usado para montar o texto que vai pro documento
+// emitido via buildCertificateHtml), duplicando SEMPRE. Corrigido na
+// raiz: nenhum prefixo é inventado aqui — nome do examinador e de cada
+// assinatura aparecem exatamente como foram digitados. Quem quiser o
+// título no certificado escreve o próprio nome/cargo.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Switch, Platform, ViewStyle, TextStyle } from "react-native";
@@ -191,10 +203,19 @@ export function DojoExamCertificatesManager({ federationId, exam, dojoName }: {
     layout, title, body_mode: customText ? "custom" : "default", body_text: customText ? bodyText : null, seals, font, ...sizeFields,
   };
 
+  // QA 09/08/2026 (item 1): nomes exibidos EXATAMENTE como digitados —
+  // nunca inventamos um prefixo de tratamento aqui. O examinador já é
+  // cadastrado como "Sensei Fulano" (é assim que ele mesmo se identifica
+  // ao preencher o exame), então prefixar de novo duplicava ("Sensei
+  // Sensei Fulano"). Isso alimenta tanto o PREVIEW quanto — via
+  // instructors_text — o mesmo tipo de campo que acaba indo pro documento
+  // renderizado por buildCertificateHtml. Quem quiser o título no
+  // certificado escreve o próprio nome/cargo (signatories já tem um campo
+  // "role" separado pra isso).
   const instructorsText = signatories.length
-    ? (signatories.length === 1 ? `Sensei ${signatories[0].name}`
-      : signatories.slice(0, -1).map((s) => `Sensei ${s.name}`).join(", ") + ` e Sensei ${signatories[signatories.length - 1].name}`)
-    : (exam.examiner_name ? `Sensei ${exam.examiner_name}` : "");
+    ? (signatories.length === 1 ? signatories[0].name
+      : signatories.slice(0, -1).map((s) => s.name).join(", ") + ` e ${signatories[signatories.length - 1].name}`)
+    : (exam.examiner_name || "");
 
   const previewData: CertData = {
     participant_name: "NOME DO ALUNO",
@@ -372,7 +393,7 @@ export function DojoExamCertificatesManager({ federationId, exam, dojoName }: {
           <Text style={s.lbl}>Assinatura(s) do modelo</Text>
           <Text style={s.hint}>
             Se você não adicionar nenhuma assinatura, o certificado usa automaticamente o examinador do exame
-            {exam.examiner_name ? ` (Sensei ${exam.examiner_name})` : ""}.
+            {exam.examiner_name ? ` (${exam.examiner_name})` : ""}.
           </Text>
           {signatories.map((sig, i) => (
             <View key={i} style={s.sigRow}>
