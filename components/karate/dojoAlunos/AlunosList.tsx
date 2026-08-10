@@ -21,14 +21,24 @@
 // (banner `hasMore`) continuam funcionando em cima do resultado, sem
 // mudança nenhuma nelas.
 //
-// QA prod 30/07 (item 1, regressão): o backend agora pagina (default
-// 100, máximo 500 — Aura-backend#429); o MeusAlunosTab já pede o teto
-// (500), mas um dojô com mais alunos que isso ainda teria parte da
-// lista fora do alcance da busca/filtros abaixo (tudo client-side).
-// `count` é o total real do dojô (sem paginação, já considerando o
-// filtro de tag quando ativo) — quando maior que o que foi carregado,
-// mostramos um aviso discreto e NEUTRO (não é erro, é informação) em
-// vez de deixar aluno sumir em silêncio.
+// QA prod 09/08/2026 (item 3, regressão): o filtro de faixa (linha
+// "Todas as faixas · Amarela · …") sumia POR COMPLETO ao escolher uma
+// tag. Causa: `beltOptions` (abaixo) é derivado da lista `students` JÁ
+// CARREGADA — igual aos filtros de status/federação, que também só
+// enxergam opções presentes no que foi carregado. Isso sempre foi
+// verdade, mas só virou visível com o filtro de tag (F11) porque ele é o
+// PRIMEIRO filtro server-side: ao trocar de tag, `students` é TROCADO
+// (não filtrado em cima da mesma lista), então uma tag cujos alunos
+// dividem uma faixa só encolhia beltOptions pra length 1 — e a linha
+// inteira, gated em `beltOptions.length > 1`, desaparecia sem aviso.
+// Parecia bug, não "nada pra filtrar aqui".
+//
+// DECISÃO (documentada também no PR): o filtro de faixa reflete o
+// SUBCONJUNTO atual — mesmo comportamento dos filtros de status/
+// federação logo acima, que nunca têm gate de visibilidade. Removido o
+// `> 1`: a linha fica sempre visível enquanto houver aluno carregado
+// (igual aos irmãos), mesmo com uma faixa só (chip único é inofensivo,
+// e é melhor que sumir sem explicação).
 //
 // Regra da casa: dado faltante é NEUTRO (idade/CPF ausentes não viram
 // alerta). A única sinalização é menor de 18 sem responsável (LGPD) —
@@ -281,27 +291,32 @@ export function AlunosList({
         </ScrollView>
       )}
 
-      {beltOptions.length > 1 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.beltFilters}>
+      {/* QA 09/08/2026 (item 3): antes gated em `beltOptions.length > 1` —
+          quando o filtro de tag (server-side, ver nota no topo do arquivo)
+          estreitava a lista a uma faixa só, a linha inteira sumia sem
+          explicação (parecia bug, não "sem o que filtrar"). Removido o
+          corte: agora se comporta como os filtros de status/federação acima
+          (sem gate nenhum) — reflete o SUBCONJUNTO atual e fica sempre
+          visível enquanto houver aluno carregado, mesmo com uma faixa só. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.beltFilters}>
+        <TouchableOpacity
+          style={[styles.chipBtn, !belt && styles.chipBtnOn]}
+          onPress={() => setBelt(null)}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.chipBtnTxt, !belt && styles.chipBtnTxtOn]}>Todas as faixas</Text>
+        </TouchableOpacity>
+        {beltOptions.map((b) => (
           <TouchableOpacity
-            style={[styles.chipBtn, !belt && styles.chipBtnOn]}
-            onPress={() => setBelt(null)}
+            key={b}
+            style={[styles.chipBtn, belt === b && styles.chipBtnOn]}
+            onPress={() => setBelt(belt === b ? null : b)}
             accessibilityRole="button"
           >
-            <Text style={[styles.chipBtnTxt, !belt && styles.chipBtnTxtOn]}>Todas as faixas</Text>
+            <Text style={[styles.chipBtnTxt, belt === b && styles.chipBtnTxtOn]}>{b}</Text>
           </TouchableOpacity>
-          {beltOptions.map((b) => (
-            <TouchableOpacity
-              key={b}
-              style={[styles.chipBtn, belt === b && styles.chipBtnOn]}
-              onPress={() => setBelt(belt === b ? null : b)}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.chipBtnTxt, belt === b && styles.chipBtnTxtOn]}>{b}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+        ))}
+      </ScrollView>
 
       {list.map((s) => {
         const v = beltViewFor(s.belt_label);
