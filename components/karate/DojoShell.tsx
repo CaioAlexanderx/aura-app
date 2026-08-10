@@ -52,12 +52,16 @@
 // null). Usa o hook useDojoTrialBanner (components/karate/DojoBillingGate)
 // com consulta própria e leve ao gate.
 //
+// QA 09/08/2026 (item 2): breadcrumb declarado pela própria rota — ver
+// DojoSectionLabelContext/useDojoSectionLabel abaixo, e o comentário
+// dentro de Topbar().
+//
 // ⚠️ Ícones SÓ via wrapper @/components/Icon (nomes abaixo já são
 // usados em telas karatê existentes — nada de @expo/vector-icons).
 // ⚠️ Armadilha RN-web: entradas top-level de StyleSheet.create devem
 // ser objetos (cor/string solta crasha weak map).
 // ============================================================
-import React from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -137,6 +141,36 @@ function isItemActive(item: DojoNavItem, path: string): boolean {
   return sectionSeg(path) === item.match;
 }
 
+// ── Breadcrumb: rótulo de seção declarado pela PRÓPRIA rota ────────────
+// O breadcrumb do Topbar ("<dojô> / <seção>") por padrão deriva o rótulo
+// do item de DOJO_NAV cujo `match` bate com o segmento da URL — funciona
+// bem pra toda rota que É um item de menu. Rotas que só são ALCANÇADAS
+// de dentro de uma seção (ex.: /karate/(dojo)/graduacao/[examId], aberta
+// de dentro de "Meus eventos", sem item próprio na nav) não têm segmento
+// correspondente e caiãm sempre no fallback "Painel" — errado, não é onde
+// o usuário está (QA 09/08/2026). Este contexto deixa a PRÓPRIA tela
+// declarar o rótulo certo, em vez do shell inventar ou mentir.
+const DojoSectionLabelContext = createContext<{
+  label: string | null;
+  setLabel: (label: string | null) => void;
+} | null>(null);
+
+/**
+ * Chame no topo de uma tela do dojô que NÃO é ela mesma um item de
+ * DOJO_NAV, pra declarar o rótulo de seção mostrado no breadcrumb do
+ * Topbar enquanto ela estiver montada — limpa sozinho ao desmontar (ex.:
+ * ao navegar pra outra tela), devolvendo o breadcrumb ao comportamento
+ * padrão (item de nav correspondente, ou "Painel").
+ */
+export function useDojoSectionLabel(label: string | null | undefined) {
+  const ctx = useContext(DojoSectionLabelContext);
+  useEffect(() => {
+    if (!ctx) return;
+    ctx.setLabel(label ?? null);
+    return () => ctx.setLabel(null);
+  }, [ctx, label]);
+}
+
 const ROLE_LABEL: Record<string, string> = {
   dojo_owner: "Dono do dojô",
   dojo_sensei: "Sensei",
@@ -164,7 +198,12 @@ function Topbar() {
   const { dojoName } = useKarateDojo();
   const seg = sectionSeg(path);
   const item = DOJO_NAV.find((i) => i.match === seg);
-  const section = item ? item.label : "Painel";
+  // QA 09/08/2026 (item 2): rotas que não são elas mesmas um item de nav
+  // (ver DojoSectionLabelContext acima) declaram o próprio rótulo via
+  // useDojoSectionLabel(); só cai no fallback "Painel" quando ninguém
+  // declarou nada E não há item de nav correspondente.
+  const override = useContext(DojoSectionLabelContext)?.label;
+  const section = override || (item ? item.label : "Painel");
 
   return (
     <View style={styles.topbar}>
@@ -361,35 +400,48 @@ export function DojoShell() {
   const { dojoName } = useKarateDojo();
   const isWide = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
 
+  // QA 09/08/2026 (item 2): estado do breadcrumb "declarado" (ver
+  // DojoSectionLabelContext acima) — vive aqui, no topo do grupo, pra ser
+  // visível tanto pro Topbar quanto pra qualquer tela renderizada dentro
+  // do <Slot/> via useDojoSectionLabel(). Provider envolve os dois layouts
+  // (wide e mobile) — o hook precisa ser seguro de chamar independente de
+  // qual esteja ativo, mesmo que só o Topbar (wide) leia o valor hoje.
+  const [sectionLabel, setSectionLabel] = useState<string | null>(null);
+  const sectionCtx = useMemo(() => ({ label: sectionLabel, setLabel: setSectionLabel }), [sectionLabel]);
+
   if (isWide) {
     return (
-      <View style={styles.wideContainer}>
-        <SidebarNav />
-        <View style={styles.content}>
-          <Topbar />
-          <TrialBanner />
-          <Slot />
+      <DojoSectionLabelContext.Provider value={sectionCtx}>
+        <View style={styles.wideContainer}>
+          <SidebarNav />
+          <View style={styles.content}>
+            <Topbar />
+            <TrialBanner />
+            <Slot />
+          </View>
         </View>
-      </View>
+      </DojoSectionLabelContext.Provider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.mobileContainer}>
-      {/* Topbar mobile: logo + eyebrow Aura Karatê + nome do dojô */}
-      <View style={styles.mobileTopbar}>
-        <FpktLogo size={26} style={{ marginRight: 9 }} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.mobileTopbarEyebrow}>Aura Karatê</Text>
-          <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{dojoName}</Text>
+    <DojoSectionLabelContext.Provider value={sectionCtx}>
+      <SafeAreaView style={styles.mobileContainer}>
+        {/* Topbar mobile: logo + eyebrow Aura Karatê + nome do dojô */}
+        <View style={styles.mobileTopbar}>
+          <FpktLogo size={26} style={{ marginRight: 9 }} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.mobileTopbarEyebrow}>Aura Karatê</Text>
+            <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{dojoName}</Text>
+          </View>
         </View>
-      </View>
-      <TrialBanner />
-      <View style={styles.content}>
-        <Slot />
-      </View>
-      <BottomTabNav />
-    </SafeAreaView>
+        <TrialBanner />
+        <View style={styles.content}>
+          <Slot />
+        </View>
+        <BottomTabNav />
+      </SafeAreaView>
+    </DojoSectionLabelContext.Provider>
   );
 }
 
@@ -449,7 +501,7 @@ const styles = StyleSheet.create({
     color: "rgba(253,248,242,0.4)",
   } as TextStyle,
 
-  // ── Banner de trial in-flow (QA 27/07, item 4) ────────────
+  // ── Banner de trial in-flow (QA 27/07, item 4) ──────────
   trialBar: {
     alignItems: "center",
     paddingVertical: 8,
@@ -670,7 +722,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   } as ViewStyle,
 
-  // ── Topbar mobile ──────────────
+  // ── Topbar mobile ──────────────────
   mobileTopbar: {
     height: 54,
     backgroundColor: KarateColors.glass,
@@ -696,7 +748,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   } as TextStyle,
 
-  // ── Bottom tabs ────────
+  // ── Bottom tabs ────
   bottomBar: {
     flexDirection: "row",
     borderTopWidth: 1,
