@@ -8,6 +8,7 @@ import { Link, router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi, ApiError } from "@/services/api";
 import { inviteApi } from "@/services/inviteApi";
+import { karateSignupApi, type SignupFederation } from "@/services/karateSignupApi";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
@@ -88,6 +89,13 @@ if (typeof document !== "undefined" && !document.getElementById("aura-login-v2-c
 const STEPS = ["Sua conta", "Sua empresa"];
 const webInputProps = isWeb ? { className: "v2-input" } as any : {};
 const inputOutline = isWeb ? { outlineWidth: 0 } as any : {};
+
+// ── F11: ramo declarado no cadastro ──────────────────────────
+// "varejo" e o caminho de sempre (nao manda `vertical` nenhum pro backend).
+// "dojo" e o unico ramo self-serve hoje: manda vertical='karate_dojo' +
+// federation_id. A lista e FECHADA no backend (SELF_SERVE_VERTICALS em
+// src/routes/auth.js) — nao adicionar opcao aqui sem abrir la primeiro.
+type Branch = "varejo" | "dojo";
 
 function Req({ ok, text }: { ok: boolean; text: string }) {
   return (
@@ -200,6 +208,27 @@ function TermsCheckbox({ accepted, onToggle }: { accepted: boolean; onToggle: ()
   );
 }
 
+// Cartao de escolha de ramo (varejo x dojo). Sem dependencia nova: so
+// Pressable + Icon do set canonico (components/Icon.tsx).
+function BranchCard({
+  active, icon, title, desc, onPress,
+}: { active: boolean; icon: string; title: string; desc: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[s.branchCard, active && s.branchCardActive]}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+    >
+      <View style={[s.branchIconWrap, active && s.branchIconWrapActive]}>
+        <Icon name={icon} size={16} color={active ? Colors.violet3 : Colors.ink3} />
+      </View>
+      <Text style={[s.branchTitle, active && s.branchTitleActive]}>{title}</Text>
+      <Text style={s.branchDesc}>{desc}</Text>
+    </Pressable>
+  );
+}
+
 export default function RegisterScreen() {
   const { invite_token, invite_email } = useLocalSearchParams<{ invite_token?: string; invite_email?: string }>();
   const isInviteFlow = !!invite_token;
@@ -226,7 +255,16 @@ export default function RegisterScreen() {
   const [codeChecking, setCodeChecking] = useState(false);
   // Aceite dos Termos de Uso — obrigatorio para prosseguir no cadastro
   const [termsAccepted, setTermsAccepted] = useState(false);
+  // F11 — ramo + federacao escolhida (so quando branch === 'dojo')
+  const [branch, setBranch] = useState<Branch>("varejo");
+  const [federations, setFederations] = useState<SignupFederation[]>([]);
+  const [federationId, setFederationId] = useState<string | null>(null);
+  const [fedLoading, setFedLoading] = useState(false);
+  const [fedError, setFedError] = useState<string | null>(null);
+  const fedLoadedRef = useRef(false);
   const { register, isLoading } = useAuthStore();
+
+  const isDojo = branch === "dojo";
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
@@ -236,6 +274,39 @@ export default function RegisterScreen() {
       Animated.timing(translateY, { toValue: 0, duration: 600, delay: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
+
+  // F11: carrega as federacoes SOB DEMANDA (so quando a pessoa marca "dojo").
+  // Quem cadastra varejo — a esmagadora maioria — nao paga nenhuma request
+  // por isso.
+  async function loadFederations(force = false) {
+    if (fedLoading) return;
+    if (fedLoadedRef.current && !force) return;
+    setFedLoading(true);
+    setFedError(null);
+    try {
+      const list = await karateSignupApi.listFederations();
+      fedLoadedRef.current = true;
+      setFederations(list);
+      // Uma federacao so (caso real hoje: FPKT) — ja seleciona pra poupar
+      // um clique. Continua visivel e trocavel se aparecerem outras.
+      if (list.length === 1) setFederationId(list[0].id);
+    } catch {
+      setFedError("Nao foi possivel carregar as federacoes.");
+    } finally {
+      setFedLoading(false);
+    }
+  }
+
+  function selectBranch(next: Branch) {
+    setBranch(next);
+    if (next === "dojo") {
+      loadFederations();
+    } else {
+      // Sair do ramo dojo limpa a escolha — nunca mandar federation_id num
+      // cadastro de varejo.
+      setFederationId(null);
+    }
+  }
 
   async function lookupCNPJ(formatted: string) {
     const nums = formatted.replace(/\D/g, ""); if (nums.length !== 14) return;
@@ -282,7 +353,11 @@ export default function RegisterScreen() {
   const step1Valid = nome.trim().length > 0 && emailValid && passValid && termsAccepted;
   const cnpjValid = cnpj.replace(/\D/g, "").length === 14 && !!cnpjFound && !cnpjError;
   const contatoValid = telefoneContato.replace(/\D/g, "").length >= 10;
-  const step2Valid = empresa.length > 0 && contatoValid && cnpjValid;
+  // F11: dojo so fecha o cadastro com a federacao escolhida (o backend
+  // devolve 400 FEDERATION_REQUIRED sem ela). Varejo: exatamente a mesma
+  // regra de antes.
+  const federationValid = !isDojo || !!federationId;
+  const step2Valid = empresa.length > 0 && contatoValid && cnpjValid && federationValid;
 
   function nextStep() { if (!step1Valid) { toast.error(!termsAccepted ? "Voce precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; } setStep(1); }
 
@@ -306,16 +381,38 @@ export default function RegisterScreen() {
   async function handleRegister() {
     if (!cnpjValid) { toast.error("CNPJ obrigatorio. Insira um CNPJ valido."); return; }
     if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
-    if (!empresa) { toast.error("Preencha o nome da empresa"); return; }
+    if (!empresa) { toast.error(isDojo ? "Preencha o nome do dojo" : "Preencha o nome da empresa"); return; }
+    if (isDojo && !federationId) { toast.error("Escolha a federacao do seu dojo"); return; }
     try {
-      await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, company_name: empresa.trim(), phone: telefoneContato.replace(/\D/g, ""), cnpj: cnpj.replace(/\D/g, ""), access_code: codigo.trim() || undefined, self_serve: true, terms_accepted: true, terms_version: TERMS_VERSION });
-      toast.success("Conta criada com sucesso!");
+      await register({
+        name: nome.trim(),
+        email: email.trim().toLowerCase(),
+        password: senha,
+        company_name: empresa.trim(),
+        phone: telefoneContato.replace(/\D/g, ""),
+        cnpj: cnpj.replace(/\D/g, ""),
+        access_code: codigo.trim() || undefined,
+        self_serve: true,
+        terms_accepted: true,
+        terms_version: TERMS_VERSION,
+        // F11: so vao no corpo quando o ramo e dojo. O backend trata a
+        // ausencia deles como o cadastro de sempre.
+        ...(isDojo ? { vertical: "karate_dojo" as const, federation_id: federationId! } : {}),
+      });
+      toast.success(isDojo ? "Conta do dojo criada!" : "Conta criada com sucesso!");
       // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
       // Pagamento fica pra depois do trial -> sempre vai pro onboarding.
       setTimeout(() => router.replace("/(tabs)/onboarding"), 300);
     } catch (err) {
-      // 409: e-mail já cadastrado → volta ao passo 1 com erro inline + atalho de login.
+      // 409 tem dois significados; o `code` do backend desempata.
       if (err instanceof ApiError && err.status === 409) {
+        // F11: CNPJ ja cadastrado — o dojo NUNCA entra numa empresa existente
+        // (nao ha reivindicacao silenciosa de registro alheio). Fica no passo 2.
+        if ((err.data as any)?.code === "CNPJ_ALREADY_REGISTERED") {
+          toast.error(err.message);
+          return;
+        }
+        // e-mail já cadastrado → volta ao passo 1 com erro inline + atalho de login.
         setEmailTaken(true);
         setStep(0);
         return;
@@ -323,6 +420,87 @@ export default function RegisterScreen() {
       toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta");
     }
   }
+
+  // ── F11: bloco de ramo + federacao (so no passo 2, fora do convite) ──
+  const branchBlock = (
+    <View style={s.field}>
+      <Text style={s.label}>Ramo do seu negocio *</Text>
+      <View style={s.branchRow}>
+        <BranchCard
+          active={!isDojo}
+          icon="shopping_bag"
+          title="Comercio / Servicos"
+          desc="Loja, salao, clinica, estudio..."
+          onPress={() => selectBranch("varejo")}
+        />
+        <BranchCard
+          active={isDojo}
+          icon="ribbon"
+          title="Dojo de karate"
+          desc="Alunos, mensalidades, faixas"
+          onPress={() => selectBranch("dojo")}
+        />
+      </View>
+
+      {isDojo && (
+        <View style={s.fedBlock}>
+          <Text style={s.fedLabel}>Federacao *</Text>
+
+          {fedLoading && (
+            <View style={s.fedLoadingRow}>
+              <ActivityIndicator size="small" color={Colors.violet3} />
+              <Text style={s.fedLoadingText}>Carregando federacoes...</Text>
+            </View>
+          )}
+
+          {!fedLoading && fedError && (
+            <View style={s.fedErrorWrap}>
+              <Text style={s.fedErrorText}>{fedError}</Text>
+              <Pressable onPress={() => loadFederations(true)}>
+                <Text style={s.fedRetry}>Tentar novamente</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {!fedLoading && !fedError && federations.length === 0 && (
+            <Text style={s.fedEmpty}>
+              Nenhuma federacao disponivel no momento. Fale com a equipe Aura.
+            </Text>
+          )}
+
+          {!fedLoading && !fedError && federations.map((f) => {
+            const selected = federationId === f.id;
+            return (
+              <Pressable
+                key={f.id}
+                onPress={() => setFederationId(f.id)}
+                style={[s.fedItem, selected && s.fedItemActive]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <View style={[s.fedRadio, selected && s.fedRadioActive]}>
+                  {selected && <Icon name="check" size={10} color="#fff" />}
+                </View>
+                <Text style={[s.fedItemText, selected && s.fedItemTextActive]} numberOfLines={2}>
+                  {f.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {/* Copy que impede o mal-entendido central da fase: escolher a
+              federacao no cadastro NAO filia o dojo. */}
+          <View style={s.fedNoteWrap}>
+            <Icon name="info" size={13} color={Colors.violet3} />
+            <Text style={s.fedNote}>
+              Escolher a federacao aqui nao filia seu dojo. Depois de criar a conta,
+              voce envia o pedido de filiacao e a federacao aprova.
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
 
   const card = (
     <View style={s.card} {...(isWeb ? { className: "v2-card" } as any : {})}>
@@ -398,6 +576,7 @@ export default function RegisterScreen() {
 
       {!isInviteFlow && step === 1 && (
         <View>
+          {branchBlock}
           <View style={s.field}>
             <Text style={s.label}>CNPJ *</Text>
             <View style={[s.inputWrap, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }]}>
@@ -409,8 +588,8 @@ export default function RegisterScreen() {
             {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
             {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serao preenchidos automaticamente.</Text>}
           </View>
-          <View style={s.field}><Text style={s.label}>Nome da empresa *</Text><View style={s.inputWrap}><Icon name="briefcase" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder="Minha Empresa Ltda" placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
-          <View style={s.field}><Text style={s.label}>Telefone da empresa</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          <View style={s.field}><Text style={s.label}>{isDojo ? "Nome do dojo *" : "Nome da empresa *"}</Text><View style={s.inputWrap}><Icon name={isDojo ? "building" : "briefcase"} size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder={isDojo ? "Dojo Shotokan Centro" : "Minha Empresa Ltda"} placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          <View style={s.field}><Text style={s.label}>{isDojo ? "Telefone do dojo" : "Telefone da empresa"}</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>Seu telefone para contato *</Text><View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View><Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato.</Text></View>
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -428,10 +607,11 @@ export default function RegisterScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
             <Pressable style={[s.btn, { flex: 1 }, (isLoading || !step2Valid) && { opacity: 0.6 }]} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={handleRegister} disabled={isLoading || !step2Valid}>
-              {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Criar conta</Text>}
+              {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{isDojo ? "Criar conta do dojo" : "Criar conta"}</Text>}
             </Pressable>
           </View>
           {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validacao do CNPJ para liberar o cadastro.</Text>}
+          {!step2Valid && isDojo && !federationId && !fedLoading && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Escolha a federacao para liberar o cadastro.</Text>}
         </View>
       )}
 
@@ -555,4 +735,32 @@ const s = StyleSheet.create({
   checkboxBoxChecked: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   termsText: { fontSize: 12, color: Colors.ink3, lineHeight: 18, flexWrap: "wrap" },
   termsLink: { color: Colors.violet3, fontWeight: "600" },
+  // ── F11: ramo do negocio + federacao ────────────────────────
+  // Nota RN-web: os cartoes ficam num container ROW, entao `flex: 1` e seguro
+  // (a armadilha de colapso e `flex: 0` em container COLUMN). Os itens da
+  // lista de federacao ficam em coluna e por isso nao usam flex nenhum.
+  branchRow: { flexDirection: "row", gap: 8 },
+  branchCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, padding: 12 },
+  branchCardActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  branchIconWrap: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  branchIconWrapActive: { backgroundColor: Colors.bg4 },
+  branchTitle: { fontSize: 12.5, color: Colors.ink2, fontWeight: "700", marginBottom: 2 },
+  branchTitleActive: { color: Colors.ink },
+  branchDesc: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
+  fedBlock: { marginTop: 14 },
+  fedLabel: { fontSize: 11, color: Colors.ink3, marginBottom: 6, fontWeight: "600", letterSpacing: 0.5, textTransform: "uppercase" },
+  fedLoadingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 },
+  fedLoadingText: { fontSize: 12, color: Colors.ink3 },
+  fedErrorWrap: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.redD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  fedErrorText: { fontSize: 11, color: Colors.red, flexShrink: 1 },
+  fedRetry: { fontSize: 11, color: Colors.violet3, fontWeight: "700", marginLeft: 8 },
+  fedEmpty: { fontSize: 11.5, color: Colors.amber, lineHeight: 17, paddingVertical: 6 },
+  fedItem: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 8 },
+  fedItemActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  fedRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  fedRadioActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  fedItemText: { fontSize: 12.5, color: Colors.ink2, fontWeight: "600", flexShrink: 1, lineHeight: 17 },
+  fedItemTextActive: { color: Colors.ink },
+  fedNoteWrap: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, marginTop: 2, borderWidth: 1, borderColor: Colors.border2 },
+  fedNote: { fontSize: 11, color: Colors.ink3, lineHeight: 16, flexShrink: 1 },
 });
