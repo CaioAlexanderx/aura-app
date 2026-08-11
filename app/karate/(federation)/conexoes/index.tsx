@@ -1,7 +1,8 @@
 // ============================================================
 // Conexões — Aura Karatê (federação) · Shoji
 //
-// Container de 2 abas de nível superior (H3 + convergência 27/07/2026):
+// Container de 3 abas de nível superior (H3 + convergência 27/07/2026
+// + F11.3 em 11/08/2026):
 //   1. "Filiações" (FiliacoesTab)    — inbox self-serve de pedidos de
 //      filiação (karate_affiliation_requests). A federação NUNCA abre
 //      filiação pelo dojô — é SEMPRE o dojô que se filia. É a PÁGINA
@@ -10,6 +11,14 @@
 //      (criação/transferência) vindas dos dojôs, pra federação
 //      conferir/numerar/aprovar. Nome interno do componente ("Solicitações")
 //      preservado — é o rótulo do domínio de praticante, não da aba.
+//   3. "Revisão de plantel" (AvisosPlantelTab) — F11.3 (migration 276):
+//      avisos de "não reconheço esta pessoa como aluno atual" vindos de um
+//      dojô que revisou o plantel herdado do registro federativo. Entra
+//      AQUI, e não em seção nova, porque é a terceira coisa que chega DO
+//      DOJÔ e se resolve com o mesmo par de gestos das outras duas abas:
+//      conferir e decidir. ⚠️ O aviso é do SENSEI, não uma constatação da
+//      federação — e "não reconhecido" não é "inativo" (a pessoa pode ter
+//      mudado de dojô). Ver o cabeçalho de tabs/AvisosPlantelTab.tsx.
 //
 // A aba "Sincronização" (ConexoesTab — native/manual/reconnect) SAIU do
 // container (27/07/2026): expunha uma feature parqueada e vazia. O
@@ -45,11 +54,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { KarateColors, ShojiPalette } from "@/constants/karateTheme";
 import { SolicitacoesTab } from "./tabs/SolicitacoesTab";
 import { FiliacoesTab } from "./tabs/FiliacoesTab";
+import { AvisosPlantelTab } from "./tabs/AvisosPlantelTab";
 import { karateApi } from "@/services/karateApi";
 import { karateAffiliationApi } from "@/services/karateAffiliationApi";
+import { karateRosterReviewNoticesApi } from "@/services/karateRosterReviewNoticesApi";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 
-type Tab = "filiacoes" | "solicitacoes";
+type Tab = "filiacoes" | "solicitacoes" | "plantel";
 
 const firstParam = (v: string | string[] | undefined): string | undefined =>
   Array.isArray(v) ? v[0] : v;
@@ -69,11 +80,15 @@ export default function ConexoesScreen() {
     // ?tab=conexoes é o nome antigo (apontava pra "Sincronização", que
     // saiu do container) — cai graciosamente no default (Filiações).
     if (raw === "solicitacoes") return "solicitacoes";
+    if (raw === "plantel") return "plantel";
     return "filiacoes";
   });
 
   const [pendentesPraticantes, setPendentesPraticantes] = useState<number | null>(null);
   const [pendentesFiliacoes, setPendentesFiliacoes] = useState<number | null>(null);
+  // Badge da 3ª aba: avisos de revisão de plantel ainda SEM DECISÃO. Falha
+  // aqui só esconde o número — nunca esconde a aba nem quebra as outras.
+  const [pendentesPlantel, setPendentesPlantel] = useState<number | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!federationId) return;
@@ -84,6 +99,9 @@ export default function ConexoesScreen() {
     karateAffiliationApi.getMetrics(federationId)
       .then((m) => { if (!cancelled) setPendentesFiliacoes(m.pending); })
       .catch(() => { if (!cancelled) setPendentesFiliacoes(null); });
+    karateRosterReviewNoticesApi.getMetrics(federationId)
+      .then((m) => { if (!cancelled) setPendentesPlantel(m.pending); })
+      .catch(() => { if (!cancelled) setPendentesPlantel(null); });
     return () => { cancelled = true; };
   }, [federationId]));
 
@@ -132,12 +150,31 @@ export default function ConexoesScreen() {
             )}
           </View>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === "plantel" && styles.tabItemActive]}
+          onPress={() => setActiveTab("plantel")}
+          accessibilityRole="tab"
+          accessibilityLabel="Revisão de plantel"
+          accessibilityState={{ selected: activeTab === "plantel" }}
+        >
+          <View style={styles.tabLabelRow}>
+            <Text style={[styles.tabLabel, activeTab === "plantel" && styles.tabLabelActive]}>
+              Revisão de plantel
+            </Text>
+            {!!pendentesPlantel && pendentesPlantel > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{pendentesPlantel > 99 ? "99+" : pendentesPlantel}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Tab content */}
       <View style={styles.content}>
         {activeTab === "filiacoes" && <FiliacoesTab />}
         {activeTab === "solicitacoes" && <SolicitacoesTab />}
+        {activeTab === "plantel" && <AvisosPlantelTab />}
       </View>
     </View>
   );
