@@ -14,6 +14,9 @@ export type LoginResponse = {
     trial_active?: boolean;
     trial_ends_at?: string;
     vertical_active?: VerticalKey | null;
+    // Identidade permanente da empresa (canônica). vertical_active reflete o
+    // módulo ligado; as duas nascem iguais no cadastro de dojô (F11).
+    vertical?: VerticalKey | null;
     member_role?: string;
     billing_status?: string | null;
     access_code_used?: boolean;
@@ -21,6 +24,12 @@ export type LoginResponse = {
     // company.id (federação) ou federation_id do pai (dojô); null fora de karatê.
     federation_id?: string | null;
     karate_role?: string | null;
+    // Fase 0 Dojô: id do próprio dojô (null quando a company é a federação).
+    dojo_id?: string | null;
+    // F11: sempre null na resposta de /auth/register. Existe no contrato para
+    // o front NUNCA inferir filiação a partir de federation_id — quem preenche
+    // é o ACEITE da federação, nunca o cadastro.
+    karate_dojo_linked_at?: string | null;
   } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
@@ -36,6 +45,14 @@ export type RegisterBody = {
   self_serve?: boolean;
   terms_accepted?: boolean;
   terms_version?: string;
+  // ── F11 (autocadastro de dojô) ────────────────────────────
+  // Lista FECHADA no backend: hoje só 'karate_dojo'. Sem este campo o
+  // cadastro segue exatamente o caminho de varejo de sempre.
+  vertical?: "karate_dojo";
+  // Obrigatório quando vertical==='karate_dojo' (senão 400 FEDERATION_REQUIRED).
+  // É DECLARAÇÃO DE INTENÇÃO — define o roteamento técnico, não filia: a
+  // filiação vem do aceite da federação, depois do cadastro.
+  federation_id?: string;
 };
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };
