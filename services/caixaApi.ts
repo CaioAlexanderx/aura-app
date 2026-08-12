@@ -11,7 +11,7 @@
 
 import { request } from "@/services/api";
 
-// ── Tipos ──────────────────────────────────────────────────────────────
+// ── Tipos ────────────────────────────────────────────────────────
 
 export type CaixaTotais = {
   pix:            number;
@@ -68,6 +68,15 @@ export type CaixaFechamentoFull = {
   // Métricas adicionais (preenchidas pelo backend ao fechar)
   sales_count?:         number;
   new_customers_count?: number;
+  /**
+   * 12/08/2026 — Vendas do período (SUM sales.total_amount, fonte única de
+   * "vendas", regime competência). Deliberadamente DIFERENTE de total_geral
+   * (entradas no caixa por método): num dia com troca/crediário os dois
+   * divergem por design. Opcional: backend antigo não envia.
+   */
+  total_vendas?:        number;
+  /** Reembolsos de troca pagos ao cliente que saíram do caixa na sessão. */
+  total_devolucoes?:    number;
 };
 
 export type CaixaSessaoHistorico = {
@@ -105,7 +114,7 @@ export type CaixaHistoricoParams = {
   ate?:    string;
 };
 
-// ── API ────────────────────────────────────────────────────────────────
+// ── API ────────────────────────────────────────────────────────────
 
 export var caixaApi = {
   /** Status ao vivo — sessão aberta com totais em tempo real, ou null */
