@@ -63,12 +63,22 @@ import { isoToBR, ageFromISO } from "./helpers";
 const STEPS = ["Dados", "Prévia", "Importar", "Resultado"];
 
 // ── Cabeçalhos aceitos (normalizados: minúsculo, sem acento/pontuação) ──
+
+/**
+ * Combining diacritical marks (U+0300–U+036F) — os acentos que o NFD
+ * separa da letra ("Graduação" → "Graduac" + acento + "ao"). Construído
+ * por CODE POINT de propósito: escrito como literal, este range é
+ * invisível no editor e já foi fonte de corrupção de encoding neste repo
+ * (ver fix-unicode-all.js na raiz). Regex global só é usada em .replace(),
+ * que não depende de lastIndex — reusar a mesma instância é seguro.
+ */
+const COMBINING_MARKS = new RegExp(
+  "[" + String.fromCharCode(0x300) + "-" + String.fromCharCode(0x36f) + "]",
+  "g"
+);
+
 function stripAccents(s: string): string {
-  // U+0300–U+036F = combining diacritical marks, que o NFD separa das
-  // letras ("Graduação" → "Graduacao"). Escapado de propósito: o literal
-  // cru deste range é invisível no editor e já foi fonte de corrupção de
-  // encoding neste repo (ver fix-unicode-all.js na raiz).
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return s.normalize("NFD").replace(COMBINING_MARKS, "");
 }
 function normHeader(v: any): string {
   return stripAccents(String(v ?? ""))
