@@ -29,6 +29,13 @@
 //
 // ⚠️ `dojo_id` da resposta é o do REGISTRO quando houve apontamento — a
 // conta que pediu volta em `requester_company_id`. Não trocar um pelo outro.
+//
+// ⚠️ QA 11/08/2026: `approve()` com `target_company_id` roda, na mesma
+// transação, transferência de dono + migração dos cadastros do sensei +
+// desativação da company de origem + gravação de trilha — mais pesado que
+// uma chamada comum. O timeout PADRÃO de services/api.ts (10s) é para o
+// produto inteiro; aqui, só quando há apontamento, usamos um timeout maior
+// (30s) para essa chamada específica, sem mexer no default global.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -303,6 +310,11 @@ function normalizeRegistryAnnuityRow(raw: any): RegistryAnnuityRow {
   };
 }
 
+// Só a chamada de approve COM apontamento (target_company_id) recebe este
+// timeout maior — o default de services/api.ts (10s) segue valendo para
+// todo o resto do produto, inclusive para approve() sem apontamento.
+const APPROVE_WITH_TARGET_TIMEOUT_MS = 30000;
+
 export const karateAffiliationApi = {
   // ── Lado dojô ──────────────────────────────────────────────
   getConnection: async (federationId: string): Promise<DojoConnectionInfo> =>
@@ -388,6 +400,11 @@ export const karateAffiliationApi = {
    * Aprovar = conectar. E, quando `targetCompanyId` vem, também APONTAR:
    * a conta do sensei passa a SER aquele registro federativo.
    * Sem `targetCompanyId` o corpo é exatamente o de antes (dojô novo).
+   *
+   * QA 11/08/2026: COM apontamento, o backend roda transferência de dono +
+   * migração de cadastros + desativação da company de origem + trilha na
+   * MESMA transação — mais lento que o approve comum. Timeout maior só
+   * neste caso, para não estourar os 10s padrão em dojô com dados reais.
    */
   approve: (
     federationId: string,
@@ -401,6 +418,7 @@ export const karateAffiliationApi = {
       body: target
         ? { fpkt_number: fpktNumber, target_company_id: target }
         : { fpkt_number: fpktNumber },
+      ...(target ? { timeout: APPROVE_WITH_TARGET_TIMEOUT_MS } : {}),
     });
   },
 

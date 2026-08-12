@@ -105,33 +105,47 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
             // Falha terminal: refresh token expirado/revogado. Dispara logout
             // imediatamente — não continua pro retry loop (não adianta repetir).
             if (_onUnauthorized) _onUnauthorized();
-            throw new ApiError((data as any).error || "Sessao expirada", 401, data, false, "session_expired");
+            throw new ApiError((data as any).error || "Sessão expirada", 401, data, false, "session_expired");
           }
           // network_error no refresh: NÃO desloga o user (pode ser internet
           // intermitente). Lança ApiError de rede pro caller saber.
-          throw new ApiError("Falha de conexao ao renovar sessao. Verifique sua internet.", 0, null, true, "network");
+          throw new ApiError("Falha de conexão ao renovar sessão. Verifique sua internet.", 0, null, true, "network");
         }
         // 401 após retry: sessão realmente inválida.
         if (_onUnauthorized) _onUnauthorized();
-        throw new ApiError((data as any).error || "Sessao expirada", 401, data, false, "session_expired");
+        throw new ApiError((data as any).error || "Sessão expirada", 401, data, false, "session_expired");
       }
-      if (res.status === 401) throw new ApiError((data as any).error || "Nao autorizado", 401, data, false, "unauthorized");
+      if (res.status === 401) throw new ApiError((data as any).error || "Não autorizado", 401, data, false, "unauthorized");
       if (res.status === 429 && attempt < retry) { await new Promise(function(r) { setTimeout(r, 1000 * (attempt + 1)); }); continue; }
+      if (res.status >= 500) {
+        // Erro do NOSSO servidor (bug, instabilidade, timeout interno etc.) —
+        // nunca da conexão do operador. A mensagem não pode sugerir que ele
+        // depure a internet dele quando quem falhou fomos nós. Achado de QA
+        // (11/08/2026): a tela de aprovação de filiação mostrava "verifique
+        // sua conexão" para um 500 real do backend, mandando o operador
+        // investigar o lugar errado.
+        throw new ApiError((data as any).error || "Não foi possível concluir por um erro do nosso servidor — a falha foi nossa, não sua. Tente de novo em instantes; se a ação não tiver desfazer, confira se ela já foi concluída antes de repetir.", res.status, data, false, "server_error");
+      }
       if (!res.ok) throw new ApiError((data as any).error || "Erro HTTP " + res.status, res.status, data);
       return data as T;
     } catch (err: any) {
       lastError = err;
       if (err instanceof ApiError) throw err;
-      // AbortError = timeout do AbortController disparou. Não tem sentido
-      // retentar (o próximo attempt também vai abortar no mesmo timeout).
-      // Lança imediatamente com mensagem clara em vez de repetir N vezes.
+      // AbortError = o NOSSO AbortController abortou porque o `timeout`
+      // configurado estourou. É um timeout de verdade do lado do cliente
+      // (não é um 5xx mal classificado — aquele caminho está tratado acima,
+      // antes deste catch, e nunca lança AbortError). Mas isso NÃO significa
+      // que a operação falhou: o servidor pode ter recebido a requisição e
+      // concluído normalmente depois que desistimos de esperar a resposta.
+      // Por isso a mensagem não incentiva repetir sem checar antes —
+      // especialmente crítico em ações sem desfazer pela tela.
       if (err && err.name === "AbortError") {
-        throw new ApiError("Tempo limite excedido. Verifique sua conexao e tente novamente.", 0, null, true, "timeout");
+        throw new ApiError("Não recebemos resposta a tempo. A operação pode ter sido concluída mesmo assim — confira antes de tentar de novo.", 0, null, true, "timeout");
       }
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
     }
   }
-  throw lastError || new ApiError("Erro de conexao. Verifique sua internet.", 0, null, true, "network");
+  throw lastError || new ApiError("Erro de conexão. Verifique sua internet.", 0, null, true, "network");
 }
 
 export { BASE_URL };

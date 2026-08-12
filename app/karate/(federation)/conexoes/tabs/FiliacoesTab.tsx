@@ -138,11 +138,18 @@ function localLine(c: RegistryCandidate): string {
   return cityUf || c.region || "";
 }
 
+// Achado de QA (11/08/2026): os 3 ramos devolviam plural fixo
+// ("1 praticantes ativos") — cada um agora concorda com o número.
 function ativosLabel(c: RegistryCandidate): string {
   const ativos = c.active_practitioner_count;
-  if (ativos == null) return `${c.practitioner_count} praticantes`;
-  if (ativos === c.practitioner_count) return `${ativos} praticantes ativos`;
-  return `${ativos} ativos de ${c.practitioner_count}`;
+  if (ativos == null) {
+    const total = c.practitioner_count;
+    return `${total} ${total === 1 ? "praticante" : "praticantes"}`;
+  }
+  if (ativos === c.practitioner_count) {
+    return `${ativos} ${ativos === 1 ? "praticante ativo" : "praticantes ativos"}`;
+  }
+  return `${ativos} ${ativos === 1 ? "ativo" : "ativos"} de ${c.practitioner_count}`;
 }
 
 type Mode = "approve" | "reject" | null;
@@ -551,7 +558,7 @@ export function FiliacoesTab() {
                       <View style={st.metaItem}><Icon name="location-outline" size={12} color={C.ink3} /><Text style={st.metaTxt}>{cityLine}</Text></View>
                     )}
                     {row.students_count != null && (
-                      <View style={st.metaItem}><Icon name="people" size={12} color={C.ink3} /><Text style={st.metaTxt}>{row.students_count} alunos</Text></View>
+                      <View style={st.metaItem}><Icon name="people" size={12} color={C.ink3} /><Text style={st.metaTxt}>{row.students_count} {row.students_count === 1 ? "aluno" : "alunos"}</Text></View>
                     )}
                   </View>
 
