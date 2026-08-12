@@ -173,14 +173,7 @@ describe("matchHeaderLoose — tolerante, mas nunca adivinha em silêncio", () =
     expect(matchHeaderLoose("Bairro/Distrito")).toBe("neighborhood");
     expect(matchHeaderLoose("Cidade/UF")).toBe("city");
     expect(matchHeaderLoose("WhatsApp do Responsável")).toBe("guardian_phone");
-    expect(matchHeaderLoese_safe()).toBe(true);
   });
-
-  // guarda contra typo no teste acima (mantém a suíte honesta se alguém
-  // renomear a função exportada).
-  function matchHeaderLoese_safe() {
-    return typeof matchHeaderLoose === "function";
-  }
 
   it("cabeçalho AMBÍGUO (2 regras) cai em ignorada, não escolhe uma", () => {
     // "faixa" ativa belt_label e "academia" ativa academia — empate.

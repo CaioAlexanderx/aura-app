@@ -64,8 +64,9 @@ const STEPS = ["Dados", "Prévia", "Importar", "Resultado"];
 
 // ── Cabeçalhos aceitos (normalizados: minúsculo, sem acento/pontuação) ──
 function stripAccents(s: string): string {
-  // ̀-ͯ = combining diacritical marks (escapado de propósito:
-  // literal cru neste range já foi corrompido em push antes).
+  // U+0300–U+036F = combining diacritical marks. Escapado de propósito: o
+  // literal cru deste range já chegou corrompido em push antes neste repo
+  // (ver fix-unicode-all.js na raiz).
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 function normHeader(v: any): string {
@@ -209,7 +210,7 @@ const LOOSE_RULES: LooseRule[] = [
   },
   {
     field: "birth_date",
-    groups: [["nascimento", "nasc", "nascto", "aniversario", "aniversario"]],
+    groups: [["nascimento", "nasc", "nascto", "aniversario"]],
     reject: [...RESP_TOKENS, ...PARENT_TOKENS],
   },
   { field: "cpf", groups: [["cpf"]], reject: [...RESP_TOKENS, ...PARENT_TOKENS] },
