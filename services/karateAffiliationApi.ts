@@ -1,5 +1,6 @@
 // ============================================================
-// AURA KARATÊ — Filiação do dojô à federação (F6)
+// AURA KARATÊ — Filiação do dojô à federação (F6) + apontamento de
+// registro no aceite (F11)
 //
 // Duas pontas do MESMO fluxo (Aura-backend#424 + migration 252):
 //   • Lado DOJÔ (JWT do dojô)       — GET/POST /federation/:id/dojo/connection
@@ -18,6 +19,16 @@
 // 255), `pending_by_origin` e `openRequest()` (POST /affiliation-requests)
 // foram REMOVIDOS daqui — o backend também está revertendo esses campos.
 // Contrato self-serve puro: list, metrics, approve, reject.
+//
+// ── F11 (10/08/2026): APROVAR TAMBÉM É APONTAR ──────────────
+// A federação tem 105 dojôs cadastrados como REGISTRO FEDERATIVO (código
+// FPKT + praticantes), e o sensei que assina a Aura chega por uma conta
+// NOVA e vazia. No aceite a federação diz QUAL daqueles registros é ele
+// (`target_company_id`) e a conta do sensei PASSA A SER aquela linha.
+// O campo é OPCIONAL: sem ele o aceite é o de sempre (dojô novo).
+//
+// ⚠️ `dojo_id` da resposta é o do REGISTRO quando houve apontamento — a
+// conta que pediu volta em `requester_company_id`. Não trocar um pelo outro.
 // ============================================================
 import { request } from "@/services/api";
 
@@ -110,19 +121,103 @@ export interface AffiliationRequestsMetrics {
   mais_antiga: AffiliationOldestPending | null;
 }
 
+/**
+ * F11 — o que o backend devolve QUANDO houve apontamento de registro.
+ * Ausente no aceite comum (dojô novo). Campos opcionais porque a resposta
+ * vem crua do backend: `migrated`/`kept_at_source` são objetos livres
+ * (tabela → nº de linhas) e a tela só usa o total.
+ */
+export interface AffiliationAssumption {
+  assumed: boolean;
+  from_company_id: string | null;
+  from_company_name: string | null;
+  to_company_id: string | null;
+  to_company_name: string | null;
+  user_id?: string | null;
+  from_company_was_empty?: boolean;
+  from_company_discarded?: boolean;
+  migrated?: Record<string, number>;
+  kept_at_source?: Record<string, number>;
+  schema_pending?: string[];
+  migrated_rows?: number;
+  trail_persisted?: boolean;
+}
+
 export interface AffiliationApproveResult {
   ok: boolean;
+  /** ⚠️ COM apontamento este é o id do REGISTRO, não o da conta que pediu. */
   dojo_id: string;
   fpkt_affiliation_id: string;
   linked_at: string;
+  /** Só quando houve apontamento. */
+  assumption?: AffiliationAssumption | null;
+  /** Só quando houve apontamento: a conta que pediu (e foi desativada). */
+  requester_company_id?: string | null;
+  /** Só quando houve apontamento: frase pronta do backend. */
+  message?: string | null;
 }
 
 export interface AffiliationRejectResult {
   ok: boolean;
 }
 
+// ── F11: registros federativos candidatos ────────────────────
+// Fonte: GET /federation/:id/dojos — a MESMA rota da lista de dojôs da
+// federação. Ela aceita `q` (ILIKE em companies.name OR
+// fpkt_affiliation_id), `page` e `pageSize` (camelCase na entrada,
+// `page_size` na saída) e devolve as contagens de praticantes por dojô.
+//
+// ⚠️ LIMITE CONHECIDO DO CONTRATO (F11 front): essa rota NÃO expõe o dono
+// do registro (owner_id / "é o usuário-sistema?"), então NÃO existe filtro
+// "dojôs desta federação ainda sem dono" e a lista NÃO consegue marcar de
+// antemão quais registros já foram reclamados. Quem adjudica é o backend,
+// no approve: TARGET_ALREADY_CLAIMED / TARGET_OWNER_INCONSISTENT. A tela
+// trata os dois com mensagem própria. Fase de backend pendente: parâmetro
+// `unclaimed=true` + booleano por linha.
+export interface RegistryCandidate {
+  id: string;
+  name: string;
+  fpkt_affiliation_id: string | null;
+  city: string | null;
+  state: string | null;
+  region: string | null;
+  /** DATE puro (YYYY-MM-DD) — formatar sem `new Date()` para não deslocar fuso. */
+  affiliation_since: string | null;
+  /** karate_annuity_plan: anual|semestral|trimestral, null = federação não definiu. */
+  annuity_plan: string | null;
+  is_active: boolean;
+  practitioner_count: number;
+  active_practitioner_count: number | null;
+}
+
+export interface RegistryCandidatesPage {
+  data: RegistryCandidate[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface RegistryAnnuityRow {
+  reference_period: string | null;
+  amount: number | null;
+  due_date: string | null;
+  paid_at: string | null;
+  status: string | null;
+}
+
+export interface RegistryAnnuitySummary {
+  total: number;
+  open_count: number;
+  latest: RegistryAnnuityRow | null;
+}
+
 function num(v: any): number | null {
   const n = typeof v === "string" ? parseInt(v, 10) : v;
+  return typeof n === "number" && isFinite(n) ? n : null;
+}
+/** numeric do Postgres chega como string ("150.00") — parseInt truncaria. */
+function dec(v: any): number | null {
+  const n = typeof v === "string" ? parseFloat(v) : v;
   return typeof n === "number" && isFinite(n) ? n : null;
 }
 function str(v: any): string | null {
@@ -177,6 +272,37 @@ function normalizeAffiliationRow(raw: any): AffiliationRequestRow {
   };
 }
 
+// O endereço vem DECOMPOSTO da rota de dojôs (address_city/address_state).
+// `city`/`state` aparecem em tipos antigos do repo e são aceitos como
+// fallback — ausência aqui é neutra, nunca erro.
+function normalizeRegistryCandidate(raw: any): RegistryCandidate {
+  const r = raw && typeof raw === "object" ? raw : {};
+  return {
+    id: String(r.id),
+    name: str(r.name) || "Registro sem nome",
+    fpkt_affiliation_id: str(r.fpkt_affiliation_id),
+    city: str(r.address_city) || str(r.city),
+    state: str(r.address_state) || str(r.state),
+    region: str(r.region),
+    affiliation_since: str(r.affiliation_since),
+    annuity_plan: str(r.karate_annuity_plan),
+    is_active: r.is_active !== false,
+    practitioner_count: num(r.practitioner_count) ?? 0,
+    active_practitioner_count: num(r.active_practitioner_count),
+  };
+}
+
+function normalizeRegistryAnnuityRow(raw: any): RegistryAnnuityRow {
+  const r = raw && typeof raw === "object" ? raw : {};
+  return {
+    reference_period: str(r.reference_period),
+    amount: dec(r.amount),
+    due_date: str(r.due_date),
+    paid_at: str(r.paid_at),
+    status: str(r.status),
+  };
+}
+
 export const karateAffiliationApi = {
   // ── Lado dojô ──────────────────────────────────────────────
   getConnection: async (federationId: string): Promise<DojoConnectionInfo> =>
@@ -210,15 +336,73 @@ export const karateAffiliationApi = {
     };
   },
 
+  // ── F11: busca de registros candidatos ─────────────────────
+  // São 105 registros: a tela EXIGE busca (nome ou número FPKT) e nunca
+  // despeja a lista inteira. `pageSize` é intencionalmente pequeno — o
+  // objetivo é reconhecer o dojô, não paginar um catálogo.
+  listRegistryCandidates: async (
+    federationId: string,
+    opts: { q?: string; page?: number; pageSize?: number } = {}
+  ): Promise<RegistryCandidatesPage> => {
+    const qs = new URLSearchParams();
+    const q = (opts.q || "").trim();
+    if (q) qs.set("q", q);
+    qs.set("page", String(opts.page && opts.page > 0 ? opts.page : 1));
+    qs.set("pageSize", String(opts.pageSize && opts.pageSize > 0 ? opts.pageSize : 8));
+    const res = await request<any>(`/federation/${federationId}/dojos?${qs.toString()}`);
+    const data = Array.isArray(res?.data) ? res.data.map(normalizeRegistryCandidate) : [];
+    return {
+      data,
+      total: num(res?.total) ?? data.length,
+      page: num(res?.page) ?? 1,
+      // saída é `page_size` (snake); `pageSize` aceito por segurança.
+      page_size: num(res?.page_size) ?? num(res?.pageSize) ?? data.length,
+    };
+  },
+
+  // ── F11: anuidade do registro, só para a PRÉVIA ────────────
+  // A lista de dojôs não carrega anuidade (só o PLANO); o histórico real
+  // vive no detalhe. É consulta de enfeite da prévia: qualquer falha vira
+  // `null` e a tela simplesmente não mostra o bloco — nunca um erro que
+  // atrapalhe a aprovação.
+  getRegistryAnnuity: async (
+    federationId: string,
+    dojoId: string
+  ): Promise<RegistryAnnuitySummary | null> => {
+    try {
+      const res = await request<any>(`/federation/${federationId}/dojos/${dojoId}`);
+      const raw = Array.isArray(res?.annuity_history) ? res.annuity_history : [];
+      const rows: RegistryAnnuityRow[] = raw.map(normalizeRegistryAnnuityRow);
+      return {
+        total: rows.length,
+        open_count: rows.filter((r) => !r.paid_at).length,
+        // o backend já devolve ORDER BY reference_period DESC
+        latest: rows.length ? rows[0] : null,
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Aprovar = conectar. E, quando `targetCompanyId` vem, também APONTAR:
+   * a conta do sensei passa a SER aquele registro federativo.
+   * Sem `targetCompanyId` o corpo é exatamente o de antes (dojô novo).
+   */
   approve: (
     federationId: string,
     requestId: string,
-    fpktNumber: string
-  ): Promise<AffiliationApproveResult> =>
-    request(`/federation/${federationId}/affiliation-requests/${requestId}/approve`, {
+    fpktNumber: string,
+    targetCompanyId?: string | null
+  ): Promise<AffiliationApproveResult> => {
+    const target = (targetCompanyId || "").trim();
+    return request(`/federation/${federationId}/affiliation-requests/${requestId}/approve`, {
       method: "POST",
-      body: { fpkt_number: fpktNumber },
-    }),
+      body: target
+        ? { fpkt_number: fpktNumber, target_company_id: target }
+        : { fpkt_number: fpktNumber },
+    });
+  },
 
   reject: (
     federationId: string,
