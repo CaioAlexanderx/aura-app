@@ -197,7 +197,12 @@ export function OpenCloseCashModal({
       sessaoLabel: closeResult.sessao_label || undefined,
       salesCount: toNum(closeResult.sales_count),
       newCustomersCount: toNum(closeResult.new_customers_count),
-      grossRevenue: toNum(closeResult.total_geral),
+      // 12/08/2026 — grossRevenue = VENDAS do período (fonte única
+      // sales.total_amount), não as entradas no caixa. Fallback pro
+      // total_geral quando o backend ainda não envia total_vendas.
+      grossRevenue: closeResult.total_vendas != null ? toNum(closeResult.total_vendas) : toNum(closeResult.total_geral),
+      entradasTotal: toNum(closeResult.total_geral),
+      devolucoes: toNum(closeResult.total_devolucoes),
       trocoInicial, vendasEmDinheiro,
       dinheiroEsperado: closeResult.dinheiro_esperado != null ? toNum(closeResult.dinheiro_esperado) : dinheiroEsperado,
       dinheiroContado: closeResult.dinheiro_contado != null ? toNum(closeResult.dinheiro_contado) : dinheiroContado,
@@ -229,8 +234,15 @@ export function OpenCloseCashModal({
 
   const resultDiferenca = closeResult ? toNum(closeResult.diferenca) : 0;
   const resultGeral     = closeResult ? toNum(closeResult.total_geral) : 0;
+  // 12/08/2026 — "Vendas do período" (fonte única) ≠ "Entradas no caixa"
+  // (total_geral). Fallback pro total_geral quando o backend antigo ainda
+  // não envia total_vendas.
+  const resultVendas    = closeResult
+    ? (closeResult.total_vendas != null ? toNum(closeResult.total_vendas) : toNum(closeResult.total_geral))
+    : 0;
   const resultSales     = closeResult ? toNum(closeResult.sales_count) : 0;
-  const resultNewCust   = closeResult ? toNum(closeResult.new_customers_count) : 0;
+  // Clientes novos saiu do KPI grid (deu lugar a Vendas do período ×
+  // Entradas no caixa) mas segue no PDF via new_customers_count.
 
   // ── Build current step body + footer (footer renderiza FORA do ScrollView) ──
   let bodyNode: ReactNode = null;
@@ -503,8 +515,8 @@ export function OpenCloseCashModal({
         </View>
         <View style={s.kpiGrid}>
           <View style={s.kpi}><Text style={s.kpiL}>Vendas</Text><Text style={[s.kpiV, { color: "#a78bfa" }]}>{resultSales}</Text></View>
-          <View style={s.kpi}><Text style={s.kpiL}>Clientes novos</Text><Text style={[s.kpiV, { color: "#a78bfa" }]}>{resultNewCust}</Text></View>
-          <View style={s.kpi}><Text style={s.kpiL}>Faturamento</Text><Text style={[s.kpiV, { color: Colors.green }]}>{fmt(resultGeral)}</Text></View>
+          <View style={s.kpi}><Text style={s.kpiL}>Vendas do período</Text><Text style={[s.kpiV, { color: "#a78bfa" }]}>{fmt(resultVendas)}</Text></View>
+          <View style={s.kpi}><Text style={s.kpiL}>Entradas no caixa</Text><Text style={[s.kpiV, { color: Colors.green }]}>{fmt(resultGeral)}</Text></View>
           <View style={s.kpi}>
             <Text style={s.kpiL}>Diferenca</Text>
             <Text style={[s.kpiV, { color: resultDiferenca === 0 ? Colors.green : resultDiferenca > 0 ? "#a78bfa" : Colors.red }]}>
