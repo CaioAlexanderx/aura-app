@@ -64,9 +64,10 @@ const STEPS = ["Dados", "Prévia", "Importar", "Resultado"];
 
 // ── Cabeçalhos aceitos (normalizados: minúsculo, sem acento/pontuação) ──
 function stripAccents(s: string): string {
-  // U+0300–U+036F = combining diacritical marks. Escapado de propósito: o
-  // literal cru deste range é invisível no editor e já chegou corrompido em
-  // push neste repo (ver fix-unicode-all.js na raiz).
+  // U+0300–U+036F = combining diacritical marks, que o NFD separa das
+  // letras ("Graduação" → "Graduacao"). Escapado de propósito: o literal
+  // cru deste range é invisível no editor e já foi fonte de corrupção de
+  // encoding neste repo (ver fix-unicode-all.js na raiz).
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 function normHeader(v: any): string {
