@@ -1,4 +1,3 @@
-// ============================================================
 // Detalhe do Dojô — Aura Karatê (federação) · Shoji
 // Dados reais via GET /federation/{id}/dojos/{dojoId}.
 //
@@ -12,10 +11,16 @@
 //   Alunos/Histórico) para o dojô editar e reimportar. Ver DojoExportModal.
 //
 // Gestão da federação (fix/karate-dojo-edit-delete-ui): a federação pode
-//   SUSPENDER/REATIVAR e EXCLUIR o dojô daqui, além de EDITAR/ESTORNAR
-//   anuidades lançadas. Exclusão segue o contrato HAS_HISTORY do backend:
-//   sem histórico → hard delete; com histórico → escolha entre Desativar
-//   (soft, is_active:false) e Excluir definitivamente (cascade). Confirmações
+//   SUSPENDER/REATIVAR e REMOVER o dojô daqui, além de EDITAR/ESTORNAR
+//   anuidades lançadas.
+//
+// 11/08/2026 (compliance, back#485/PR#486): DELETE /federation/:id/dojos/:dojoId
+//   NUNCA MAIS apaga nada — o backend responde desativando (is_active:false)
+//   e preservando praticantes, graduações e histórico (retenção de 60 dias
+//   pelos termos de uso). O antigo contrato HAS_HISTORY (409 com escolha entre
+//   Desativar/Excluir definitivamente/cascade) SAIU: a rota agora só desativa,
+//   é sempre reversível (PATCH is_active:true — mesmo botão "Reativar dojô"
+//   do menu) e nunca mais devolve 409 para este endpoint. Confirmações
 //   destrutivas via window.confirm / modal in-app — NUNCA Alert.alert com
 //   botões (no-op em RN-Web).
 //
@@ -47,7 +52,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   ScrollView, View, Text, StyleSheet, ViewStyle, TextStyle, Alert, Linking,
-  Modal, Pressable, TouchableOpacity, ActivityIndicator, Animated, Platform, Switch,
+  Modal, Pressable, TouchableOpacity, Animated, Platform, Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateSpacing as SP, KarateType as T } from "@/constants/karateTheme";
@@ -57,7 +62,7 @@ import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { Badge } from "@/components/karate/Badge";
 import { BeltBadge } from "@/components/karate/BeltBadge";
 import {
-  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Mono, Body, Eyebrow, H1, KpiBand, BarRow, Chip,
+  ShojiBackground, PageHead, SectionHead, Card, KV, ShojiBadge, BeltTag, ShojiButton, Body, Eyebrow, H1, KpiBand, BarRow, Chip,
 } from "@/components/karate/shoji";
 import { Icon } from "@/components/Icon";
 import DojoFichaModal from "@/components/karate/DojoFichaModal";
@@ -72,7 +77,7 @@ import RosterValidationBanner from "@/components/karate/RosterValidationBanner";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { ModalPop } from "@/components/anim/ModalPop";
 import {
-  karateApi, DojoDetail, HasHistoryError, HasHistoryCounts, DojoMemberStanding, DojoRosterSummary,
+  karateApi, DojoDetail, DojoMemberStanding, DojoRosterSummary,
   RosterStatusFilter, RosterValidation, RosterEvent, DojoAnnuity, AnnuityReceiveResult, AnnuityStatus,
   AnnuityPaymentMethod,
 } from "@/services/karateApi";
@@ -141,16 +146,6 @@ const fmtCityLine = (city?: string | null, state?: string | null): string | null
   const u = (state || "").trim();
   if (c && u) return `${c} · ${u}`;
   return c || u || null;
-};
-
-// Rótulos PT-BR para os counts do HAS_HISTORY (back manda chaves canônicas).
-const COUNT_LABEL: Record<string, string> = {
-  practitioners: "praticantes",
-  annuities: "anuidades",
-  transactions: "transações",
-  belt_history: "histórico de faixas",
-  transfers: "transferências",
-  connections: "conexões",
 };
 
 // dd/mm/aaaa <- YYYY-MM-DD — ainda usado por RosterUpdatesSection
@@ -232,13 +227,6 @@ export default function DojoDetailScreen() {
 
   // Gestão da federação: estado das ações destrutivas / de ciclo de vida.
   const [busy, setBusy] = useState(false);
-  const [histModal, setHistModal] = useState<HasHistoryCounts | null>(null);
-  // fix/karate-excluir-dojo: "Excluir definitivamente" virou uma 2ª etapa
-  // INLINE dentro do próprio modal HAS_HISTORY (em vez de confirmAsync — ver
-  // nota grande acima de excluirDefinitivo). histStep controla qual etapa o
-  // modal mostra; histErr guarda erro da exclusão para exibir inline + retry.
-  const [histStep, setHistStep] = useState<"choice" | "confirm">("choice");
-  const [histErr, setHistErr] = useState<string | null>(null);
 
   // ── F6 — Anuidades do dojô como recebível (fonte: listDojoAnnuities com
   // dojo_id, mesmo shape da aba Anuidades do hub financeiro) ──────────────
@@ -758,82 +746,31 @@ export default function DojoDetailScreen() {
     }
   }, [federationId, dojoId]);
 
-  // ── Excluir dojô ─────────────────────────────────────────────────
+  // ── Remover (desativar) dojô ───────────────────────────────────────
+  // 11/08/2026 (compliance, back#485/PR#486): DELETE /federation/:id/dojos/:dojoId
+  // não apaga mais nada — desativa (is_active:false), preserva praticantes,
+  // graduações e histórico (retenção de 60 dias) e é reversível pelo mesmo
+  // "Reativar dojô" do menu (PATCH is_active:true). O antigo 409 HAS_HISTORY
+  // e o caminho "Excluir definitivamente" (cascade) SAÍRAM — o backend aceita
+  // e ignora ?cascade=true (cascade_ignored:true), então este front nem
+  // manda mais o parâmetro.
   const deleteDojo = useCallback(async () => {
     if (!data || busy) return;
-    if (!(await confirmAsync({ title: "Excluir dojô?", message: `Excluir o dojô "${data.name}"? Esta ação não pode ser desfeita.`, confirmLabel: "Excluir", destructive: true }))) return;
+    if (!(await confirmAsync({
+      title: "Remover dojô?",
+      message: `O dojô "${data.name}" será desativado: sai das listagens ativas, mas nada é apagado — praticantes, graduações e histórico continuam no Aura. É reversível a qualquer momento em "Reativar dojô".`,
+      confirmLabel: "Desativar",
+      destructive: true,
+    }))) return;
     setBusy(true);
     try {
-      await karateApi.deleteDojo(federationId, dojoId!);
-      showToast("Dojô excluído");
+      const res = await karateApi.deleteDojo(federationId, dojoId!);
+      showToast(res?.already_inactive ? "Este dojô já estava desativado" : "Dojô desativado. Nenhum dado foi apagado.");
       setTimeout(() => router.replace("/karate/dojos" as any), 320);
-    } catch (e: any) {
-      if (e instanceof HasHistoryError) {
-        setHistModal(e.counts || {});
-      } else {
-        Alert.alert("Não foi possível excluir", e?.message || "Tente novamente.");
-      }
-    } finally { setBusy(false); }
-  }, [data, busy, federationId, dojoId, router, showToast]);
-
-  const desativarFromModal = useCallback(async () => {
-    if (!dojoId || busy) return;
-    setBusy(true);
-    try {
-      await karateApi.updateDojo(federationId, dojoId, { is_active: false });
-      setHistModal(null);
-      showToast("Dojô desativado");
-      load();
     } catch (e: any) {
       Alert.alert("Não foi possível desativar", e?.message || "Tente novamente.");
     } finally { setBusy(false); }
-  }, [dojoId, busy, federationId, load, showToast]);
-
-  // fix/karate-excluir-dojo: sempre que o modal HAS_HISTORY abre (histModal
-  // passa a não-nulo, inclusive reabrindo depois de um cancelamento
-  // anterior), volta pra etapa "choice" com erro limpo.
-  useEffect(() => {
-    if (histModal) { setHistStep("choice"); setHistErr(null); }
-  }, [histModal]);
-
-  // Passo 1 (dentro do modal HAS_HISTORY): sai da escolha e entra na etapa
-  // de confirmação inline — NÃO chama a API ainda.
-  const goToExcluirConfirm = useCallback(() => {
-    if (busy) return;
-    setHistErr(null);
-    setHistStep("confirm");
-  }, [busy]);
-
-  const backToHistChoice = useCallback(() => {
-    if (busy) return;
-    setHistErr(null);
-    setHistStep("choice");
-  }, [busy]);
-
-  // Passo 2: dispara o DELETE cascade=true de fato. fix/karate-excluir-dojo:
-  // antes chamava confirmAsync (outro <Modal>, ver components/karate/
-  // ConfirmDialog.tsx) daqui de dentro do modal HAS_HISTORY já aberto — no
-  // RN Web um <Modal> aninhado renderiza ATRÁS do <Modal> pai (o portal do
-  // ConfirmHost é montado uma única vez lá em cima no layout, então fica
-  // atrás do portal do HAS_HISTORY, montado depois), então o diálogo de
-  // confirmação nunca aparecia e "Excluir definitivamente" parecia não fazer
-  // nada, sem nenhum feedback. Corrigido trocando por uma etapa de
-  // confirmação INLINE no mesmo card (histStep "confirm" acima) — sem 2º
-  // <Modal>. Erro também fica inline (com retry) em vez de Alert.alert, que
-  // no RN Web também ficaria escondido atrás do modal HAS_HISTORY.
-  const excluirDefinitivo = useCallback(async () => {
-    if (!data || !dojoId || busy) return;
-    setBusy(true);
-    setHistErr(null);
-    try {
-      await karateApi.deleteDojo(federationId, dojoId, { cascade: true });
-      setHistModal(null);
-      showToast("Dojô e histórico excluídos");
-      setTimeout(() => router.replace("/karate/dojos" as any), 320);
-    } catch (e: any) {
-      setHistErr(e?.message || "Não foi possível excluir. Tente novamente.");
-    } finally { setBusy(false); }
-  }, [data, dojoId, busy, federationId, router, showToast]);
+  }, [data, busy, federationId, dojoId, router, showToast]);
 
   if (loading) return <ShojiBackground><View style={styles.content}>{[1, 2, 3, 4].map((k) => <Skeleton key={k} height={24} style={{ marginBottom: 12 }} />)}</View></ShojiBackground>;
   if (error || !data) return <ShojiBackground><KarateErrorState onRetry={load} /></ShojiBackground>;
@@ -843,12 +780,6 @@ export default function DojoDetailScreen() {
   const cityLine = fmtCityLine(data.address_city, data.address_state);
   const cepLine = fmtCep(data.address_zip);
   const hasStructuredAddress = !!(streetLine || data.address_complement || data.address_neighborhood || cityLine || cepLine);
-
-  // fix/karate-excluir-dojo: resumo dos counts do histModal ("N praticantes,
-  // N anuidades...") pra reforçar o texto da etapa de confirmação inline.
-  const histCountsSummary = histModal
-    ? Object.entries(histModal).filter(([, n]) => Number(n) > 0).map(([k, n]) => `${n} ${COUNT_LABEL[k] || k}`).join(", ")
-    : "";
 
   // DJ2: nome do sensei responsável (praticante vinculado tem precedência).
   const senseiDisplay = (data as any).sensei_practitioner_name || (data as any).sensei_name || null;
@@ -909,7 +840,7 @@ export default function DojoDetailScreen() {
             <View style={styles.headBtns}>
               {/* Item 2 (overflow do header): só os primários ficam soltos —
                   Ver praticantes + Editar. O resto (Exportar, Solicitar
-                  atualização cadastral, Suspender, Excluir dojô) foi para o
+                  atualização cadastral, Suspender, Remover dojô) foi para o
                   menu kebab abaixo, MESMOS handlers/estados de antes. */}
               <ShojiButton
                 label="Ver praticantes"
@@ -950,7 +881,7 @@ export default function DojoDetailScreen() {
                     destructive: !isSuspended,
                   },
                   {
-                    type: "action", key: "delete", label: "Excluir dojô", icon: "trash",
+                    type: "action", key: "delete", label: "Remover dojô", icon: "trash",
                     onPress: deleteDojo, disabled: busy, destructive: true,
                   },
                 ]}
@@ -1449,90 +1380,6 @@ export default function DojoDetailScreen() {
         onSuccess={onRedistributeSuccess}
       />
 
-      {/* Modal HAS_HISTORY — duas etapas no MESMO card (fix/karate-excluir-dojo,
-          ver nota grande em excluirDefinitivo acima): "choice" (Desativar vs
-          Excluir definitivamente vs Cancelar, mesmo comportamento de antes) e
-          "confirm" (etapa inline que SUBSTITUI o confirmAsync aninhado —
-          reforça o texto irreversível + counts, com [Voltar]/[Confirmar
-          exclusão] e erro inline com retry). */}
-      <Modal visible={!!histModal} transparent animationType="fade" onRequestClose={() => !busy && setHistModal(null)}>
-        <View style={styles.backdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => !busy && setHistModal(null)} />
-          <View style={styles.modalCard}>
-            {histStep === "choice" ? (
-              <>
-                <Text style={styles.modalEyebrow}>空  FPKT · Exclusão de dojô</Text>
-                <Text style={styles.modalTitle}>Este dojô tem histórico<Text style={{ color: P.red }}>.</Text></Text>
-                <Text style={styles.modalBody}>
-                  Não dá para excluir direto porque há registros vinculados. Você pode
-                  desativar (mantém os dados, some das listas ativas) ou excluir tudo
-                  em cascata — irreversível.
-                </Text>
-
-                {histModal ? (
-                  <View style={styles.countsBox}>
-                    {Object.entries(histModal)
-                      .filter(([, n]) => Number(n) > 0)
-                      .map(([k, n]) => (
-                        <View key={k} style={styles.countRow}>
-                          <Mono style={styles.countNum}>{String(n)}</Mono>
-                          <Text style={styles.countLbl}>{COUNT_LABEL[k] || k}</Text>
-                        </View>
-                      ))}
-                    {Object.values(histModal).every((n) => Number(n) === 0) ? (
-                      <Text style={styles.countLbl}>Registros vinculados encontrados.</Text>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.primaryBtn, busy && styles.btnDisabled]} disabled={busy} onPress={desativarFromModal}>
-                    {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={styles.primaryBtnTxt}>Desativar</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={goToExcluirConfirm}>
-                    <Icon name="trash" size={14} color="#fdf8f2" />
-                    <Text style={styles.dangerBtnTxt}>Excluir definitivamente</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={() => setHistModal(null)}>
-                    <Text style={styles.ghostBtnTxt}>Cancelar</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.modalEyebrow}>空  FPKT · Exclusão definitiva</Text>
-                <Text style={styles.modalTitle}>Confirmar exclusão<Text style={{ color: P.red }}>?</Text></Text>
-                <Text style={styles.modalBody}>
-                  Isto vai apagar DEFINITIVAMENTE o dojô "{data.name}" e todo o histórico
-                  vinculado{histCountsSummary ? ` (${histCountsSummary})` : ""}. Não pode ser desfeito.
-                </Text>
-
-                {histErr ? (
-                  <View style={styles.errBoxInline}>
-                    <Icon name="alert_circle" size={15} color={P.red} />
-                    <Text style={styles.errTxtInline}>{histErr}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.dangerBtnWide, busy && styles.btnDisabled]} disabled={busy} onPress={excluirDefinitivo}>
-                    {busy ? <ActivityIndicator color="#fdf8f2" size="small" /> : (
-                      <>
-                        <Icon name="trash" size={14} color="#fdf8f2" />
-                        <Text style={styles.dangerBtnTxt}>{histErr ? "Tentar novamente" : "Confirmar exclusão"}</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.ghostBtn} disabled={busy} onPress={backToHistChoice}>
-                    <Text style={styles.ghostBtnTxt}>Voltar</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
       {/* F6 — os 3 modais canônicos do recebível, TOP-LEVEL (irmãos dos
           demais desta tela, nunca aninhados — RN Web renderiza o 2º <Modal>
           atrás do 1º e vira no-op silencioso). Mesmo padrão "fecha um antes
@@ -1800,12 +1647,11 @@ function HeaderOverflowMenu({
                 // (setTimeout 0) — o menu kebab também é um <Modal>
                 // (visible={visible} acima), e várias ações daqui abrem
                 // outro <Modal>/confirmAsync (Exportar, Suspender/Reativar,
-                // Excluir dojô). Mesmo onClose() e it.onPress() rodando no
+                // Remover dojô). Mesmo onClose() e it.onPress() rodando no
                 // mesmo handler síncrono, o desmonte do <Modal> do menu
                 // acontece via efeito/animação um tick depois do setState —
                 // sem o adiamento, o novo diálogo pode abrir enquanto o
-                // menu ainda está no ar e sair escondido atrás dele (mesmo
-                // sintoma do modal HAS_HISTORY, ver excluirDefinitivo).
+                // menu ainda está no ar e sair escondido atrás dele.
                 onSelect={() => { onClose(); setTimeout(() => it.onPress(), 0); }}
               />
             )
@@ -1933,7 +1779,10 @@ const styles = StyleSheet.create({
 
   // Botão kebab do header (Item 2 — abre o menu de overflow)
   kebabBtn: { width: 38, height: 38, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glass2, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  // dangerBtnTxt segue usado no modal HAS_HISTORY ("Excluir definitivamente").
+  // dangerBtnTxt/backdrop/modalCard/countsBox/etc. abaixo ficaram sem uso
+  // depois da remoção do modal HAS_HISTORY (11/08/2026, back#485/PR#486) —
+  // mantidos como estilos órfãos por ora (sem custo em runtime; reaproveitar
+  // em outro modal futuro é natural).
   dangerBtnTxt: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
   btnDisabled: { opacity: 0.5 } as ViewStyle,
 
@@ -1956,7 +1805,6 @@ const styles = StyleSheet.create({
   ghostBtn: { paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: P.line2, alignItems: "center" } as ViewStyle,
   ghostBtnTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: P.ink } as TextStyle,
 
-  // fix/karate-excluir-dojo: erro inline da etapa "confirm" do HAS_HISTORY
   // (mesma família visual do errBox de RedistribuirPraticantesModal.tsx).
   errBoxInline: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: 12, padding: 11, marginTop: 14 } as ViewStyle,
   errTxtInline: { fontFamily: F.body, fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
