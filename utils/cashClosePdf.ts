@@ -12,9 +12,9 @@ import { Platform } from "react-native";
 //
 // Layout (Aura DNA):
 //   - Header: gradiente violeta (#6d28d9 -> #4f5bd5) + logo
-//   - 4 KPIs do dia (vendas, clientes novos, faturamento, ticket médio)
+//   - 4 KPIs do dia (vendas, vendas do periodo, entradas, ticket médio)
 //   - Conferência de caixa (esperado vs contado vs diferença)
-//   - Distribuição por forma de pagamento (barras horizontais)
+//   - Entradas no caixa por forma de pagamento (barras horizontais)
 //   - Footer com identidade Aura
 // ============================================================
 
@@ -40,9 +40,24 @@ export type CashCloseData = {
   // Métricas do dia
   salesCount: number;
   newCustomersCount: number;
+  /**
+   * Vendas do período (fonte única sales.total_amount, regime competência)
+   * — o MESMO número da tela de Vendas. NÃO é o total de entradas no caixa.
+   */
   grossRevenue: number;
   /** ticket médio — calculamos se não vier */
   averageTicket?: number;
+
+  /**
+   * 12/08/2026 — Entradas no caixa (total_geral do fechamento): o que
+   * efetivamente entrou por método na sessão. Num dia com troca ou
+   * crediário difere das vendas do período POR DESIGN — o PDF mostra os
+   * dois com rótulos distintos pra conferência não parecer furada.
+   * Opcional para compat com backend antigo (cai no somatório do mix).
+   */
+  entradasTotal?: number;
+  /** Reembolsos de troca pagos ao cliente (saíram do caixa na sessão). */
+  devolucoes?: number;
 
   // Conferência de caixa
   trocoInicial: number;
@@ -84,10 +99,9 @@ function escapeHtml(str: string): string {
 }
 
 export function buildCashClosePdfHtml(data: CashCloseData): string {
-  const total = Math.max(
-    1,
-    data.paymentMix.reduce((acc, p) => acc + p.amount, 0)
-  );
+  const mixSum = data.paymentMix.reduce((acc, p) => acc + p.amount, 0);
+  const total = Math.max(1, mixSum);
+  const entradas = data.entradasTotal != null ? data.entradasTotal : mixSum;
   const ticket =
     data.averageTicket != null
       ? data.averageTicket
@@ -180,15 +194,23 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     '<div class="s-title">Resumo do dia</div>' +
     '<div class="kpi-grid">' +
     '<div class="kpi"><div class="l">Vendas</div><div class="v violet">' + data.salesCount + "</div></div>" +
-    '<div class="kpi"><div class="l">Clientes novos</div><div class="v violet">' + data.newCustomersCount + "</div></div>" +
-    '<div class="kpi"><div class="l">Faturamento</div><div class="v">' + fmt(data.grossRevenue) + "</div></div>" +
+    '<div class="kpi"><div class="l">Vendas do periodo</div><div class="v">' + fmt(data.grossRevenue) + "</div></div>" +
+    '<div class="kpi"><div class="l">Entradas no caixa</div><div class="v violet">' + fmt(entradas) + "</div></div>" +
     '<div class="kpi"><div class="l">Ticket medio</div><div class="v">' + fmt(ticket) + "</div></div>" +
+    "</div>" +
+    '<div style="font-size:10px; color:#6a608e; margin-top:8px; line-height:1.5;">' +
+    "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). Entradas no caixa = o que entrou por forma de pagamento nesta sessao" +
+    (data.devolucoes && data.devolucoes > 0
+      ? ", ja descontados " + fmt(data.devolucoes) + " devolvidos ao cliente em trocas"
+      : "") +
+    ". Trocas e crediario fazem os dois numeros diferirem — isso nao e falta no caixa." +
     "</div>" +
     '<div class="s-title">Conferencia de caixa</div>' +
     '<div class="summary">' +
     '<div class="row"><span class="lab">Operador</span><span class="val">' + escapeHtml(data.operatorName) + "</span></div>" +
+    '<div class="row"><span class="lab">Clientes novos</span><span class="val">' + data.newCustomersCount + "</span></div>" +
     '<div class="row"><span class="lab">Troco de abertura</span><span class="val">' + fmt(data.trocoInicial) + "</span></div>" +
-    '<div class="row"><span class="lab">Vendas em dinheiro</span><span class="val">' + fmt(data.vendasEmDinheiro) + "</span></div>" +
+    '<div class="row"><span class="lab">Dinheiro (liquido na sessao)</span><span class="val">' + fmt(data.vendasEmDinheiro) + "</span></div>" +
     '<div class="row"><span class="lab">Esperado em caixa</span><span class="val">' + fmt(data.dinheiroEsperado) + "</span></div>" +
     '<div class="row"><span class="lab">Contado em caixa</span><span class="val">' + fmt(data.dinheiroContado) + "</span></div>" +
     '<div class="row"><span class="lab">Diferenca</span><span class="val diff" style="color:' + diffColor + ';">' + diffLabel + "</span></div>" +
@@ -196,9 +218,17 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
       ? '<div class="row"><span class="lab">Observacao</span><span class="val" style="font-style:italic; color:#6a608e; font-weight:500;">' + escapeHtml(data.observacao) + "</span></div>"
       : "") +
     "</div>" +
-    '<div class="s-title">Distribuicao por forma de pagamento</div>' +
+    '<div class="s-title">Entradas no caixa por forma de pagamento</div>' +
     (mixRows ||
       '<div style="font-size:12px; color:#6a608e; padding:8px 0;">Sem pagamentos registrados nesta sessao.</div>') +
+    (mixRows
+      ? '<div class="pay-row" style="border-top:1px solid rgba(109,40,217,0.16);">' +
+        '<span class="pay-name" style="font-weight:700;">Total de entradas</span>' +
+        '<div class="bar-wrap" style="background:transparent;"></div>' +
+        '<span class="pay-pct"></span>' +
+        '<span class="pay-val" style="font-weight:700;">' + fmt(entradas) + "</span>" +
+        "</div>"
+      : "") +
     "</div>" +
     '<div class="foot">' +
     '<span>Gerado por <span class="brand">Aura</span> - getaura.com.br</span>' +
