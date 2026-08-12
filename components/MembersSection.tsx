@@ -538,6 +538,20 @@ function MemberRow(props: {
           {isOwnerLabel
             ? <View style={[bdg.wrap, { backgroundColor: Colors.violetD }]}><Text style={[bdg.text, { color: Colors.violet3 }]}>Titular</Text></View>
             : <StatusBadge status={member.status} soon={expiry?.soon} />}
+          {/* TEAM-RM: lixeirinha de acesso rapido na linha do membro — evita
+              precisar expandir ate os botoes Suspender/Remover pra apagar.
+              So ativos/suspensos (dono e convites pendentes tem seus proprios
+              fluxos: Titular nao pode ser removido, pendente usa "Cancelar convite"). */}
+          {!isOwnerLabel && !isPending && (
+            <Pressable
+              onPress={(e: any) => { e.stopPropagation?.(); setConfirmDelete(true); }}
+              disabled={isDeleting}
+              style={s.trashBtn}
+              hitSlop={8}
+            >
+              <Icon name="trash" size={15} color={Colors.red} />
+            </Pressable>
+          )}
           {canExpand && <Icon name={expanded ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />}
         </View>
       </Pressable>
@@ -1200,6 +1214,7 @@ const s = StyleSheet.create({
   sendBtnText:   { fontSize: 12.5, color: "#fff", fontWeight: "700" },
 
   memberRow:    { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  trashBtn:     { padding: 4, borderRadius: 6 },
   avatar:       { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   avatarText:   { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
   memberName:   { fontSize: 13, fontWeight: "600", color: Colors.ink },
