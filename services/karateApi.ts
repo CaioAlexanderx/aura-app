@@ -1,4 +1,3 @@
-// ============================================================
 // KARATE API — Aura Karâtê
 //
 // Wired against karate-fase0-openapi.yaml (Fase 0),
@@ -15,8 +14,13 @@ import { request, ApiError } from "@/services/api";
 // HAS_HISTORY — propagação estruturada do 409 de exclusão
 //
 // O backend responde 409 com body { code:'HAS_HISTORY', counts:{...} }
-// quando um dojô/praticante tem histórico que impede o hard delete; a
-// tela então oferece "Desativar" em vez de "Excluir definitivamente".
+// quando um PRATICANTE tem histórico que impede o hard delete (ver
+// deletePractitioner abaixo); a tela então oferece "Desativar" em vez de
+// "Excluir definitivamente".
+//
+// 11/08/2026 (compliance, aura-backend PR#486): DOJÔ SAIU deste contrato —
+// DELETE /federation/:id/dojos/:dojoId nunca mais devolve 409 HAS_HISTORY
+// nem apaga nada; ver o doc-comment de deleteDojo mais abaixo.
 //
 // O request() core já lança ApiError(status:409, data) nesse caso; aqui
 // re-lançamos um erro com `code:'HAS_HISTORY'`, `counts` e `status:409`
@@ -272,6 +276,25 @@ export interface DojoDetail extends Dojo {
   // Campos adicionais consumidos por app/karate/(federation)/dojos/[dojoId].tsx
   // (tipo historicamente incompleto — resto do shape segue implícito/any).
   technical_team: TechnicalTeamMember[];
+}
+
+/** Resposta de DELETE /federation/:id/dojos/:dojoId (desativação, PR#486). */
+export interface DeactivateDojoResult {
+  deactivated: boolean;
+  deleted: false;
+  code: string;
+  id: string;
+  name: string | null;
+  is_active: false;
+  already_inactive: boolean;
+  counts: Record<string, number>;
+  roster_cascade: { affected_count: number; action?: string } | null;
+  retention: { policy_days: number; removal_requested_at: string | null; note: string };
+  reactivate: { method: string; path: string; body: { is_active: true }; note: string };
+  cascade_requested: boolean;
+  cascade_ignored: boolean;
+  message: string;
+  identity_released?: { count: number; practitioners: any[]; message: string };
 }
 
 export interface DojoInput {
@@ -2139,22 +2162,24 @@ export const karateApi = {
     request(`/federation/${federationId}/dojos/${dojoId}`, { method: "PATCH", body }),
 
   /**
-   * Exclui o dojô. Sem histórico → hard delete (204/JSON). Com histórico,
-   * o backend responde 409 { code:'HAS_HISTORY', counts } e este método
-   * rejeita com HasHistoryError (status:409, counts) para a tela decidir
-   * entre Desativar (updateDojo is_active:false) e Excluir definitivamente
-   * (cascade). `cascade:true` força a remoção em cascata do histórico.
+   * DESATIVA o dojô — NÃO apaga nada.
+   *
+   * 11/08/2026 (compliance, aura-backend PR#486): o backend não faz mais
+   * hard delete desta rota. `companies.is_active` vira `false` (mesma
+   * cascata dojô→praticantes do PATCH is_active:false — ver updateDojo),
+   * os termos de uso exigem reter os dados por 60 dias, e a operação é
+   * SEMPRE reversível por `updateDojo(federationId, dojoId, { is_active: true })`.
+   * O 409 `HAS_HISTORY` que esta rota tinha SAIU — nunca mais rejeita com
+   * HasHistoryError (esse erro continua existindo para deletePractitioner,
+   * que é outra rota). `?cascade=true` continua sendo aceito pelo backend,
+   * mas é IGNORADO (`cascade_ignored:true` na resposta) — por isso este
+   * método não expõe mais o parâmetro `cascade`.
    */
   deleteDojo: (
     federationId: string,
-    dojoId: string,
-    { cascade }: { cascade?: boolean } = {}
-  ): Promise<{ deleted: boolean }> => {
-    const query = cascade ? "?cascade=true" : "";
-    return withHasHistory(
-      request(`/federation/${federationId}/dojos/${dojoId}${query}`, { method: "DELETE" })
-    );
-  },
+    dojoId: string
+  ): Promise<DeactivateDojoResult> =>
+    request(`/federation/${federationId}/dojos/${dojoId}`, { method: "DELETE" }),
 
   /**
    * Solicita atualização cadastral ao dojô — gera/renova um token público e
