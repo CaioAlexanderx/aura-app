@@ -728,7 +728,7 @@ export function mensagemImportInterrompido(i: ImportInterrompido): string {
         ? `A linha ${ok + 1} estava`
         : `As linhas ${ok + 1} a ${ok + emVoo} estavam`;
     partes.push(
-      `${trecho} a caminho quando o envio parou — essas podem ter sido gravadas sem a gente ` +
+      `${trecho} a caminho quando o envio parou — essa parte pode ter sido gravada sem a gente ` +
         "receber a confirmação." +
         (depois <= 0 && ok > 0 ? " Era a última parte." : "")
     );
