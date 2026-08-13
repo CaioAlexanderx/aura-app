@@ -1,5 +1,6 @@
 // ============================================================
-// ImportAlunosModal — de-para de colunas, escolha de aba e prévia do import
+// ImportAlunosModal — de-para de colunas, escolha de aba, prévia do import
+// e o envio em partes (fatiamento, progresso e mensagem de interrupção)
 //
 // Este arquivo nasceu do achado de produção de 12/08/2026: a planilha real
 // do dojô Areikan (484 alunos, 15 colunas) entrava com 10 colunas
@@ -8,17 +9,28 @@
 // e a interface DojoImportRow só tipava 7 campos. O backend já aceitava as
 // 15 desde o Aura-backend#480 (F12).
 //
-// 13/08/2026: o MESMO arquivo barrou de novo, antes do de-para sequer
-// rodar — ele tem três abas e o importador lia sempre a primeira
+// 13/08/2026 (manhã): o MESMO arquivo barrou de novo, antes do de-para
+// sequer rodar — ele tem três abas e o importador lia sempre a primeira
 // ("Planilha1", que é lista auxiliar de validação de dados). Daí o bloco
 // "escolha da aba", que exercita pickSheet/scoreSheetHeader com as abas
 // reais.
 //
+// 13/08/2026 (à noite, com os 484 já importados): o envio em si. Medição
+// de produção: MAIS de 60 s para 100 linhas, contra um lote de 500 linhas
+// numa requisição de 60 s — nunca cabia. O dono do dojô quebrou a planilha
+// em 5 arquivos na mão; os 5 mostraram erro de tempo esgotado, 4 gravaram
+// assim mesmo e 1 não gravou nada. E a mensagem afirmava, fixa, que "os
+// lotes anteriores já entraram" — inclusive quando NADA tinha entrado.
+// Daí o bloco final: fatiarEmPartes/textoProgresso/
+// mensagemImportInterrompido, com o caso "nenhuma parte concluída" como
+// teste de regressão do texto que mentia.
+//
 // Só as funções puras são exercitadas (rowsToImport/parseCsv/resumoPrevia/
 // responsavelDerivado/matchHeaderLoose/pareceInativo/pickSheet/
-// scoreSheetHeader/sheetMissingNameError) — elas já são exportadas
-// justamente para isso. Os módulos de UI/rede são mockados por nome: nada
-// aqui depende de React, QueryClient, tema, request() ou SheetJS.
+// scoreSheetHeader/sheetMissingNameError/fatiarEmPartes/textoProgresso/
+// mensagemImportInterrompido) — elas já são exportadas justamente para
+// isso. Os módulos de UI/rede são mockados por nome: nada aqui depende de
+// React, QueryClient, tema, request() ou SheetJS.
 // ============================================================
 
 jest.mock("react-native", () => ({
@@ -37,11 +49,14 @@ jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/karate/KarateButton", () => ({ KarateButton: "KarateButton" }));
 jest.mock("@/components/karate/Stepper", () => ({ Stepper: "Stepper" }));
 
-// Sem rede: DojoImportRow é só tipo (apagado na compilação); o único valor
-// realmente usado em runtime é DOJO_IMPORT_MAX_ROWS.
+// Sem rede: DojoImportRow/DojoImportWarning são só tipos (apagados na
+// compilação); o único valor realmente usado em runtime é
+// DOJO_IMPORT_MAX_ROWS. O 40 abaixo ESPELHA a constante real do service —
+// se ela mudar, este mock muda junto (é o tamanho da parte que os testes
+// de fatiamento assumem).
 jest.mock("@/services/karateDojoStudentsApi", () => ({
   karateDojoStudentsApi: { importStudents: jest.fn() },
-  DOJO_IMPORT_MAX_ROWS: 500,
+  DOJO_IMPORT_MAX_ROWS: 40,
 }));
 
 jest.mock("@/constants/karateTheme", () => ({
@@ -66,6 +81,9 @@ import {
   pickSheet,
   scoreSheetHeader,
   sheetMissingNameError,
+  fatiarEmPartes,
+  textoProgresso,
+  mensagemImportInterrompido,
 } from "@/components/karate/dojoAlunos/ImportAlunosModal";
 
 // Idade é relativa a HOJE — 01/01 evita qualquer dúvida de mês/dia.
@@ -453,5 +471,252 @@ describe("parseCsv", () => {
       ["Nome", "CPF"],
       ["Davi", "111"],
     ]);
+  });
+});
+
+// ── Envio em partes (13/08/2026, depois do import real dos 484) ──────────
+
+/** N linhas plausíveis — só o volume importa nestes testes. */
+const linhas = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({ full_name: `Aluno ${i + 1}` }));
+
+// Custo medido em produção: MAIS de 60 s para 100 linhas (~10 idas ao
+// banco por aluno). 0,6 s/linha é o piso dessa medição.
+const SEG_POR_LINHA = 0.6;
+const TIMEOUT_S = 60;
+
+describe("fatiarEmPartes — 500 linhas nunca coube; 40 cabe com folga", () => {
+  it("as 484 linhas do Areikan viram 13 partes de até 40", () => {
+    const partes = fatiarEmPartes(linhas(484));
+    expect(partes).toHaveLength(13);
+    expect(partes.slice(0, 12).every((p) => p.length === 40)).toBe(true);
+    expect(partes[12]).toHaveLength(4);
+    expect(partes.reduce((n, p) => n + p.length, 0)).toBe(484);
+  });
+
+  it("não perde nem duplica linha: a concatenação é a lista original", () => {
+    const original = linhas(97);
+    expect(fatiarEmPartes(original).flat()).toEqual(original);
+  });
+
+  it("cada parte cabe no orçamento de 60 s do request", () => {
+    const maior = Math.max(...fatiarEmPartes(linhas(484)).map((p) => p.length));
+    expect(maior * SEG_POR_LINHA).toBeLessThan(TIMEOUT_S);
+    // …e o tamanho antigo NÃO cabia: era esse o bug, não a planilha.
+    expect(500 * SEG_POR_LINHA).toBeGreaterThan(TIMEOUT_S);
+  });
+
+  it("múltiplo exato não gera parte vazia no fim", () => {
+    const partes = fatiarEmPartes(linhas(80));
+    expect(partes).toHaveLength(2);
+    expect(partes.every((p) => p.length === 40)).toBe(true);
+  });
+
+  it("lista vazia não vira uma parte vazia", () => {
+    expect(fatiarEmPartes([])).toEqual([]);
+  });
+
+  it("tamanho explícito é respeitado (os ~100 que o dono do dojô fatiou na mão)", () => {
+    const partes = fatiarEmPartes(linhas(484), 100);
+    expect(partes).toHaveLength(5);
+    expect(partes[4]).toHaveLength(84);
+    // Justamente o tamanho que estourava: 100 × 0,6 s = 60 s.
+    expect(100 * SEG_POR_LINHA).toBeGreaterThanOrEqual(TIMEOUT_S);
+  });
+
+  it("tamanho inválido não trava o laço", () => {
+    expect(fatiarEmPartes(linhas(3), 0)).toHaveLength(3);
+  });
+});
+
+describe("textoProgresso — conta ALUNOS, não número de requisição", () => {
+  it("antes da primeira resposta não finge que algo entrou", () => {
+    const t = textoProgresso({
+      partesConcluidas: 0, totalPartes: 13,
+      linhasConfirmadas: 0, totalLinhas: 484, alunosConfirmados: 0,
+    });
+    expect(t).toBe("Enviando a parte 1 de 13 — 484 linhas no total, nenhuma confirmada ainda.");
+  });
+
+  it("com partes concluídas mostra quantos alunos já entraram", () => {
+    const t = textoProgresso({
+      partesConcluidas: 3, totalPartes: 13,
+      linhasConfirmadas: 120, totalLinhas: 484, alunosConfirmados: 118,
+    });
+    expect(t).toBe("Enviando a parte 4 de 13 — 118 alunos já entraram (120 de 484 linhas confirmadas).");
+  });
+
+  it("parte confirmada sem nenhum aluno novo diz isso, em vez de '0 alunos'", () => {
+    const t = textoProgresso({
+      partesConcluidas: 2, totalPartes: 13,
+      linhasConfirmadas: 80, totalLinhas: 484, alunosConfirmados: 0,
+    });
+    expect(t).toContain("nenhum aluno novo até aqui");
+    expect(t).toContain("(80 de 484 linhas confirmadas)");
+  });
+
+  it("um aluno só concorda no singular", () => {
+    const t = textoProgresso({
+      partesConcluidas: 1, totalPartes: 2,
+      linhasConfirmadas: 40, totalLinhas: 41, alunosConfirmados: 1,
+    });
+    expect(t).toContain("1 aluno já entrou");
+  });
+
+  it("a última parte não passa do total (o contador não estoura)", () => {
+    const t = textoProgresso({
+      partesConcluidas: 13, totalPartes: 13,
+      linhasConfirmadas: 484, totalLinhas: 484, alunosConfirmados: 480,
+    });
+    expect(t).toContain("parte 13 de 13");
+  });
+
+  it("nunca usa jargão de engenheiro", () => {
+    const t = textoProgresso({
+      partesConcluidas: 3, totalPartes: 13,
+      linhasConfirmadas: 120, totalLinhas: 484, alunosConfirmados: 118,
+    });
+    expect(t).not.toMatch(/lote|timeout|batch|request/i);
+  });
+});
+
+describe("mensagemImportInterrompido — só afirma o que o servidor confirmou", () => {
+  it("NENHUMA parte concluída: não afirma que algo entrou (a regressão do texto que mentia)", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 0,
+      alunosConfirmados: 0,
+      linhasConfirmadas: 0,
+      totalLinhas: 484,
+      loteEmAndamento: 40,
+      semResposta: true,
+    });
+
+    expect(msg).toBe(
+      "O envio parou sem resposta do servidor. " +
+        "Nenhum aluno foi confirmado até aqui — não temos como afirmar que alguma coisa tenha sido salva. " +
+        "As linhas 1 a 40 estavam a caminho quando o envio parou — essa parte pode ter sido gravada sem a gente receber a confirmação. " +
+        "Pode enviar as 484 linhas de novo desde o começo. " +
+        "Quem tem CPF na planilha não entra duas vezes; quem está sem CPF pode duplicar — vale conferir esses na lista de alunos depois."
+    );
+
+    // O texto antigo dizia, fixo, "os lotes anteriores já entraram" —
+    // exatamente nesta situação, em que NADA tinha entrado.
+    expect(msg).not.toMatch(/já entrou|já entraram|anteriores/);
+  });
+
+  it("ALGUMAS partes concluídas: diz quantos alunos entraram e de onde retomar", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 3,
+      alunosConfirmados: 118,
+      linhasConfirmadas: 120,
+      totalLinhas: 484,
+      loteEmAndamento: 40,
+      semResposta: true,
+    });
+
+    expect(msg).toContain("118 alunos já entraram — 120 de 484 linhas confirmadas.");
+    expect(msg).toContain(
+      "As linhas 121 a 160 estavam a caminho quando o envio parou — essa parte pode ter sido gravada sem a gente receber a confirmação."
+    );
+    expect(msg).toContain(
+      'Faltam 364 linhas: toque em "Continuar de onde parou" e o envio recomeça na linha 121, sem repetir o que já entrou.'
+    );
+    expect(msg).not.toContain("Era a última parte");
+  });
+
+  it("TODAS concluídas menos a última, que ficou sem resposta", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 12,
+      alunosConfirmados: 470,
+      linhasConfirmadas: 480,
+      totalLinhas: 484,
+      loteEmAndamento: 4,
+      semResposta: true,
+    });
+
+    expect(msg).toContain("470 alunos já entraram — 480 de 484 linhas confirmadas.");
+    expect(msg).toContain("As linhas 481 a 484 estavam a caminho");
+    expect(msg).toContain("Era a última parte.");
+    expect(msg).toContain("o envio recomeça na linha 481");
+  });
+
+  it("uma linha só a caminho concorda no singular", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 12,
+      alunosConfirmados: 470,
+      linhasConfirmadas: 480,
+      totalLinhas: 481,
+      loteEmAndamento: 1,
+      semResposta: true,
+    });
+    expect(msg).toContain("A linha 481 estava a caminho");
+    expect(msg).toContain("Faltam 1 linha:");
+  });
+
+  it("partes confirmadas sem nenhum aluno novo não viram '0 alunos já entraram'", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 2,
+      alunosConfirmados: 0,
+      linhasConfirmadas: 80,
+      totalLinhas: 484,
+      loteEmAndamento: 40,
+      semResposta: true,
+    });
+    expect(msg).toContain(
+      "80 de 484 linhas foram enviadas e confirmadas, mas nenhuma virou aluno novo (quem já estava cadastrado é pulado)."
+    );
+  });
+
+  it("erro COM resposta do servidor abre com a mensagem dele, não com 'sem resposta'", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 1,
+      alunosConfirmados: 40,
+      linhasConfirmadas: 40,
+      totalLinhas: 484,
+      loteEmAndamento: 40,
+      semResposta: false,
+      detalhe: "Limite de alunos do plano atingido.",
+    });
+    expect(msg.startsWith("Limite de alunos do plano atingido.")).toBe(true);
+    expect(msg).not.toContain("sem resposta do servidor");
+    expect(msg).toContain("40 alunos já entraram");
+  });
+
+  it("erro sem mensagem nenhuma ainda diz alguma coisa útil", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 0,
+      alunosConfirmados: 0,
+      linhasConfirmadas: 0,
+      totalLinhas: 10,
+      loteEmAndamento: 10,
+      semResposta: false,
+      detalhe: null,
+    });
+    expect(msg.startsWith("O envio parou por uma falha do servidor.")).toBe(true);
+  });
+
+  it("nada a reenviar: não oferece retomada e não fala em duplicar", () => {
+    const msg = mensagemImportInterrompido({
+      lotesConcluidos: 13,
+      alunosConfirmados: 480,
+      linhasConfirmadas: 484,
+      totalLinhas: 484,
+      loteEmAndamento: 0,
+      semResposta: true,
+    });
+    expect(msg).toContain("Não sobrou linha nenhuma para reenviar");
+    expect(msg).not.toContain("Continuar de onde parou");
+    expect(msg).not.toContain("pode duplicar");
+  });
+
+  it("nunca usa jargão de engenheiro em nenhum dos caminhos", () => {
+    const casos = [
+      { lotesConcluidos: 0, alunosConfirmados: 0, linhasConfirmadas: 0, totalLinhas: 484, loteEmAndamento: 40, semResposta: true },
+      { lotesConcluidos: 3, alunosConfirmados: 118, linhasConfirmadas: 120, totalLinhas: 484, loteEmAndamento: 40, semResposta: true },
+      { lotesConcluidos: 12, alunosConfirmados: 470, linhasConfirmadas: 480, totalLinhas: 484, loteEmAndamento: 4, semResposta: true },
+    ];
+    for (const c of casos) {
+      expect(mensagemImportInterrompido(c)).not.toMatch(/lote|timeout|batch|request|transação/i);
+    }
   });
 });
