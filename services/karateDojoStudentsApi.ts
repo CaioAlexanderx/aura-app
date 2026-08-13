@@ -309,8 +309,42 @@ export interface DojoImportResult {
   warnings: DojoImportWarning[];
 }
 
-/** Máximo de linhas por request de import (o front fatia em lotes). */
-export const DOJO_IMPORT_MAX_ROWS = 500;
+/**
+ * Teto de linhas que o ENDPOINT aceita numa chamada (validação do
+ * Aura-backend#480). Nada a ver com o que o front manda de verdade — ver
+ * DOJO_IMPORT_MAX_ROWS abaixo, que é bem menor por causa do TEMPO, não do
+ * limite do backend. Mantido exportado para documentar o contrato.
+ */
+export const DOJO_IMPORT_BACKEND_MAX_ROWS = 500;
+
+/**
+ * Linhas por requisição de import — o front fatia a planilha em partes
+ * deste tamanho.
+ *
+ * 13/08/2026 — MEDIÇÃO DE PRODUÇÃO (import real dos 484 alunos do dojô
+ * Areikan, o primeiro dojô de verdade): MAIS DE 60 SEGUNDOS para 100
+ * linhas. Cada aluno custa ~10 idas ao banco (aluno + responsável + tag
+ * de academia + deduplicação por CPF + …), então o custo é linear no
+ * NÚMERO DE LINHAS, não no tamanho do payload — dobrar a parte dobra o
+ * tempo, e não existe ganho de escala que salve um lote grande.
+ *
+ * Com esse custo, o valor antigo (500 = o teto do backend) NUNCA cabia no
+ * timeout de 60 s do request abaixo: precisaria de ~5 minutos. Na prática
+ * o dono do dojô quebrou a planilha em 5 arquivos de ~100 linhas na mão e
+ * os 5 mostraram erro de tempo esgotado — 4 gravaram assim mesmo, 1 não
+ * gravou nada, e só dava para saber qual foi qual consultando o banco.
+ *
+ * 40 linhas × ~0,6 s/linha ≈ 25 s, ou seja ~2,4× de folga dentro dos
+ * mesmos 60 s — sobra espaço para dojô em horário de pico e para a
+ * planilha "pesada" (todas as 15 colunas preenchidas, que é justamente o
+ * caso do Areikan). Subir para 50 ainda caberia (~30 s), mas encosta
+ * demais no teto para o ganho de uma requisição a menos a cada 8.
+ *
+ * Efeito colateral bom: 484 linhas viram 13 partes em vez de 1 — o
+ * "Parte X de Y" passa a andar e o operador vê ALUNOS CONFIRMADOS
+ * subindo, em vez de encarar uma tela parada por um minuto inteiro.
+ */
+export const DOJO_IMPORT_MAX_ROWS = 40;
 
 /**
  * Teto de itens por página aceito por GET .../students (Aura-backend#429:
@@ -503,12 +537,35 @@ export const karateDojoStudentsApi = {
       method: "DELETE",
     }),
 
-  /** Lote ≤ 500 linhas por chamada; o import do backend é TOLERANTE (warnings, não 422). */
+  /**
+   * Uma PARTE do import (≤ DOJO_IMPORT_MAX_ROWS = 40 linhas; o endpoint
+   * aceitaria até DOJO_IMPORT_BACKEND_MAX_ROWS, mas 500 linhas levariam
+   * ~5 min — ver a nota de medição na constante). O import do backend é
+   * TOLERANTE: linha com dado inválido entra sem o campo + warning, CPF
+   * duplicado é pulado, menor sem responsável entra com aviso — 422 só em
+   * caso de payload malformado.
+   *
+   * Cada parte é uma transação do backend: ou entra inteira, ou não entra.
+   * O que o front NÃO consegue saber é o destino da parte cujo tempo
+   * esgotou (o servidor pode ter concluído depois que desistimos de
+   * esperar) — daí a UI de retomada em ImportAlunosModal, que reenvia a
+   * partir da primeira linha NÃO CONFIRMADA e avisa que linha sem CPF
+   * pode duplicar.
+   *
+   * O `retry` do request() fica no default (2) DE PROPÓSITO: o caminho de
+   * 401 → refresh de token consome uma tentativa (ele faz `continue`), e
+   * com retry: 0 um token que expira no meio de um import longo cairia
+   * fora do laço e viraria um "Erro de conexão" mentiroso. Timeout
+   * (AbortError) já não é repetido pelo request() — ele lança de imediato,
+   * que é o comportamento correto aqui.
+   */
   importStudents: (federationId: string, rows: DojoImportRow[]): Promise<DojoImportResult> =>
     request<DojoImportResult>(`${base(federationId)}/students/import`, {
       method: "POST",
       body: { rows },
-      // Lote grande numa transação única pode passar dos 10s default.
+      // 40 linhas × ~0,6 s/linha ≈ 25 s medidos em produção — ~2,4× de
+      // folga dentro deste orçamento. Mexer no tamanho da parte sem
+      // revisar este número é como o import dos 484 quebrou.
       timeout: 60000,
     }),
 
