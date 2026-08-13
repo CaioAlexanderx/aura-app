@@ -60,10 +60,32 @@
 // Dan"). O front manda o texto CRU sob a chave certa — duplicar
 // normalização só cria divergência entre os dois lados.
 //
-// Envio em LOTES de 500 (limite do backend); o import do backend é
-// TOLERANTE (linha com dado inválido entra sem o campo + warning; CPF
-// duplicado é pulado; menor sem responsável entra com aviso). O nº da
-// linha nos warnings é ajustado pelo offset do lote antes de exibir.
+// ENVIO EM PARTES + O QUE DIZER QUANDO FALHA (13/08/2026, depois do import
+// real dos 484): o envio saía em lotes de 500 linhas numa requisição de
+// 60 s. Medição de produção: MAIS DE 60 s para 100 linhas (cada aluno
+// custa ~10 idas ao banco — o gargalo é round-trip, não volume), ou seja,
+// 500 nunca coube. O dono do dojô quebrou a planilha em 5 arquivos de
+// ~100 linhas na mão: os 5 mostraram erro de tempo esgotado, 4 gravaram
+// assim mesmo, 1 não gravou nada — e só dava para saber qual foi qual
+// consultando o banco.
+//
+// Pior que a lentidão foi a MENSAGEM. Ela afirmava, fixa: "os lotes
+// anteriores já entraram" — inclusive na tentativa em que NADA entrou.
+// Afirmar sucesso parcial sem saber é pior do que não dizer nada: leva o
+// operador a não reenviar, achando que parte do trabalho está salva.
+//
+// O que mudou:
+//   • parte de DOJO_IMPORT_MAX_ROWS = 40 linhas (~25 s medidos, ~2,4× de
+//     folga nos 60 s de timeout) — 484 linhas viram 13 partes, e o
+//     progresso passa a andar de verdade;
+//   • o progresso conta ALUNOS CONFIRMADOS, não número de requisição;
+//   • mensagemImportInterrompido() usa o número REAL de partes que
+//     responderam. Zero partes → diz que não há confirmação de nada;
+//     N partes → diz quantos alunos entraram e de qual linha o envio
+//     recomeça. A parte que estava A CAMINHO quando o tempo acabou é
+//     sempre declarada como incerta, porque é exatamente isso que ela é;
+//   • "Continuar de onde parou" reenvia a partir da primeira linha NÃO
+//     confirmada, em vez de recomeçar do zero.
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -75,7 +97,8 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Stepper } from "@/components/karate/Stepper";
 import {
-  karateDojoStudentsApi, DojoImportRow, DojoImportResult, DOJO_IMPORT_MAX_ROWS,
+  karateDojoStudentsApi, DojoImportRow, DojoImportResult, DojoImportWarning,
+  DOJO_IMPORT_MAX_ROWS,
 } from "@/services/karateDojoStudentsApi";
 import { isoToBR, ageFromISO } from "./helpers";
 
@@ -580,6 +603,162 @@ export function resumoPrevia(rows: DojoImportRow[]): PreviaResumo {
   };
 }
 
+// ── Envio em partes: fatiar, contar e (sobretudo) contar a VERDADE ───────
+
+/** Concordância curta — a tela é lida por sensei, não por engenheiro. */
+function plural(n: number, um: string, muitos: string): string {
+  return n === 1 ? um : muitos;
+}
+
+/**
+ * Fatia as linhas em partes do tamanho de envio. Exportada porque este
+ * fatiamento é a diferença entre "cabe no tempo" e "o operador encara uma
+ * tela parada por um minuto sem saber se gravou" — ver a nota de medição
+ * em DOJO_IMPORT_MAX_ROWS.
+ */
+export function fatiarEmPartes<T>(rows: T[], tamanho: number = DOJO_IMPORT_MAX_ROWS): T[][] {
+  const passo = Math.max(1, Math.floor(tamanho));
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += passo) out.push(rows.slice(i, i + passo));
+  return out;
+}
+
+export interface ProgressoImport {
+  /** Partes que JÁ responderam com sucesso (somando tentativas anteriores). */
+  partesConcluidas: number;
+  totalPartes: number;
+  /** Linhas cobertas pelas partes concluídas — é daqui que a retomada continua. */
+  linhasConfirmadas: number;
+  totalLinhas: number;
+  /** Alunos que o backend CONFIRMOU ter criado. */
+  alunosConfirmados: number;
+}
+
+/**
+ * Texto do passo "Importar". Antes era "Lote 0 de 1" — com 484 linhas num
+ * lote só, o número nunca saía de 0 e a tela parecia travada por um minuto
+ * inteiro. O que interessa ao sensei é quantos ALUNOS já entraram.
+ */
+export function textoProgresso(p: ProgressoImport): string {
+  const totalPartes = Math.max(1, Math.floor(p.totalPartes));
+  const feitas = Math.max(0, Math.min(Math.floor(p.partesConcluidas), totalPartes));
+  const atual = Math.min(feitas + 1, totalPartes);
+  const cabeca = `Enviando a parte ${atual} de ${totalPartes}`;
+  if (feitas <= 0) {
+    return (
+      `${cabeca} — ${p.totalLinhas} ${plural(p.totalLinhas, "linha", "linhas")} no total, ` +
+      "nenhuma confirmada ainda."
+    );
+  }
+  const corpo =
+    p.alunosConfirmados > 0
+      ? `${p.alunosConfirmados} ${plural(p.alunosConfirmados, "aluno já entrou", "alunos já entraram")}`
+      : "nenhum aluno novo até aqui";
+  return `${cabeca} — ${corpo} (${p.linhasConfirmadas} de ${p.totalLinhas} linhas confirmadas).`;
+}
+
+export interface ImportInterrompido {
+  /** Partes que responderam com SUCESSO antes da falha (todas as tentativas). */
+  lotesConcluidos: number;
+  /** Alunos que o backend confirmou ter criado nessas partes. */
+  alunosConfirmados: number;
+  /** Linhas cobertas por essas partes. */
+  linhasConfirmadas: number;
+  /** Total de linhas desta planilha. */
+  totalLinhas: number;
+  /** Linhas da parte que estava A CAMINHO quando parou (0 = nenhuma). */
+  loteEmAndamento: number;
+  /** true quando não veio resposta (tempo esgotado ou conexão caiu). */
+  semResposta: boolean;
+  /** Mensagem que o servidor devolveu, quando devolveu alguma. */
+  detalhe?: string | null;
+}
+
+/**
+ * O que dizer quando o envio para no meio.
+ *
+ * A versão antiga afirmava, SEMPRE, "os lotes anteriores já entraram" —
+ * frase fixa, escrita sem olhar para o estado real. Na tentativa dos 484
+ * ela apareceu com ZERO linhas gravadas (o lote único estourou e nem
+ * chegou a commitar). Afirmar sucesso parcial sem saber é pior que não
+ * dizer nada: o operador lê "já entraram", não reenvia, e o trabalho fica
+ * pela metade sem ninguém perceber.
+ *
+ * Três blocos, nesta ordem, e cada um só afirma o que é sabido:
+ *   1) o que aconteceu;
+ *   2) o que está CONFIRMADO (resposta do servidor recebida) — ou a
+ *      admissão de que não há confirmação de nada;
+ *   3) a parte que estava a caminho, declarada como incerta, e o que
+ *      fazer agora (com a ressalva de duplicidade para linha sem CPF).
+ */
+export function mensagemImportInterrompido(i: ImportInterrompido): string {
+  const total = Math.max(0, Math.floor(i.totalLinhas));
+  const ok = Math.max(0, Math.min(Math.floor(i.linhasConfirmadas), total));
+  const emVoo = Math.max(0, Math.min(Math.floor(i.loteEmAndamento), total - ok));
+  const faltam = total - ok;
+  const depois = faltam - emVoo;
+  const criados = Math.max(0, Math.floor(i.alunosConfirmados));
+  const partes: string[] = [];
+
+  partes.push(
+    i.semResposta
+      ? "O envio parou sem resposta do servidor."
+      : txt(i.detalhe) || "O envio parou por uma falha do servidor."
+  );
+
+  if (i.lotesConcluidos <= 0 || ok <= 0) {
+    partes.push(
+      "Nenhum aluno foi confirmado até aqui — não temos como afirmar que alguma coisa tenha sido salva."
+    );
+  } else if (criados > 0) {
+    partes.push(
+      `${criados} ${plural(criados, "aluno já entrou", "alunos já entraram")} — ` +
+        `${ok} de ${total} ${plural(total, "linha confirmada", "linhas confirmadas")}.`
+    );
+  } else {
+    partes.push(
+      `${ok} de ${total} linhas foram enviadas e confirmadas, mas nenhuma virou aluno novo ` +
+        "(quem já estava cadastrado é pulado)."
+    );
+  }
+
+  if (emVoo > 0) {
+    const trecho =
+      emVoo === 1
+        ? `A linha ${ok + 1} estava`
+        : `As linhas ${ok + 1} a ${ok + emVoo} estavam`;
+    partes.push(
+      `${trecho} a caminho quando o envio parou — essas podem ter sido gravadas sem a gente ` +
+        "receber a confirmação." +
+        (depois <= 0 && ok > 0 ? " Era a última parte." : "")
+    );
+  }
+
+  if (faltam <= 0) {
+    partes.push(
+      "Não sobrou linha nenhuma para reenviar — confira a lista de alunos antes de importar de novo."
+    );
+  } else if (ok > 0) {
+    partes.push(
+      `Faltam ${faltam} ${plural(faltam, "linha", "linhas")}: toque em "Continuar de onde parou" ` +
+        `e o envio recomeça na linha ${ok + 1}, sem repetir o que já entrou.`
+    );
+  } else {
+    partes.push(
+      `Pode enviar as ${total} ${plural(total, "linha", "linhas")} de novo desde o começo.`
+    );
+  }
+
+  if (faltam > 0) {
+    partes.push(
+      "Quem tem CPF na planilha não entra duas vezes; quem está sem CPF pode duplicar — " +
+        "vale conferir esses na lista de alunos depois."
+    );
+  }
+
+  return partes.join(" ");
+}
+
 interface Props {
   visible: boolean;
   federationId: string;
@@ -596,6 +775,21 @@ interface LoadedSheet {
   score: number;
 }
 
+/**
+ * O que o SERVIDOR já confirmou nesta planilha, somando as tentativas.
+ * `linhas` é o ponto exato de retomada: primeira linha ainda não
+ * confirmada = linhas + 1. Nada entra aqui sem resposta do backend.
+ */
+interface Confirmado {
+  partes: number;
+  linhas: number;
+  created: number;
+  skipped: number;
+  warnings: DojoImportWarning[];
+}
+
+const NADA_CONFIRMADO: Confirmado = { partes: 0, linhas: 0, created: 0, skipped: 0, warnings: [] };
+
 export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Props) {
   const [step, setStep] = useState(0);
   const [pasteText, setPasteText] = useState("");
@@ -606,7 +800,7 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
   const [unknownHeaders, setUnknownHeaders] = useState<string[]>([]);
   const [mappedFields, setMappedFields] = useState<(keyof DojoImportRow)[]>([]);
   const [parsing, setParsing] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [confirmado, setConfirmado] = useState<Confirmado>(NADA_CONFIRMADO);
   const [result, setResult] = useState<DojoImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -619,7 +813,7 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
     setRows([]);
     setUnknownHeaders([]);
     setMappedFields([]);
-    setProgress({ done: 0, total: 0 });
+    setConfirmado(NADA_CONFIRMADO);
     setResult(null);
     setErr(null);
   };
@@ -656,6 +850,10 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
     setUnknownHeaders(parsed.unknownHeaders);
     setMappedFields(parsed.mappedFields);
     setFileName(name);
+    // Lista NOVA (ou outra aba) → o ponto de retomada da anterior não vale
+    // mais: "continuar da linha 201" com outro arquivo pularia 200 alunos.
+    setConfirmado(NADA_CONFIRMADO);
+    setResult(null);
     setErr(null);
     setStep(1);
   };
@@ -727,39 +925,71 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
     finishParse(parseCsv(pasteText), null);
   };
 
-  const runImport = async () => {
-    const chunks: DojoImportRow[][] = [];
-    for (let i = 0; i < rows.length; i += DOJO_IMPORT_MAX_ROWS) {
-      chunks.push(rows.slice(i, i + DOJO_IMPORT_MAX_ROWS));
-    }
+  /**
+   * Envia da linha `deIndex` (0-based) em diante, em partes de
+   * DOJO_IMPORT_MAX_ROWS. `deIndex > 0` é a retomada: só as linhas ainda
+   * NÃO confirmadas voltam para o servidor.
+   *
+   * O acumulado corre numa variável local (`atual`) porque setState não é
+   * síncrono e o laço precisa do valor exato para dois usos onde errar é
+   * caro: o offset do nº da linha nos warnings e o ponto de retomada.
+   */
+  const runImport = async (deIndex = 0) => {
+    const inicio = Math.min(Math.max(0, deIndex), rows.length);
+    const chunks = fatiarEmPartes(rows.slice(inicio), DOJO_IMPORT_MAX_ROWS);
+    if (!chunks.length) return;
     setStep(2);
     setErr(null);
-    setProgress({ done: 0, total: chunks.length });
-    const acc: DojoImportResult = { created: 0, skipped: 0, warnings: [] };
-    try {
-      for (let i = 0; i < chunks.length; i++) {
-        const res = await karateDojoStudentsApi.importStudents(federationId, chunks[i]);
-        acc.created += res.created ?? 0;
-        acc.skipped += res.skipped ?? 0;
-        const offset = i * DOJO_IMPORT_MAX_ROWS;
-        for (const w of res.warnings ?? []) acc.warnings.push({ ...w, row: w.row + offset });
-        setProgress({ done: i + 1, total: chunks.length });
+
+    let atual: Confirmado = { ...confirmado, linhas: inicio, warnings: [...confirmado.warnings] };
+    setConfirmado(atual);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const parte = chunks[i];
+      try {
+        const res = await karateDojoStudentsApi.importStudents(federationId, parte);
+        const offset = atual.linhas; // nº da linha nos warnings é relativo à parte
+        atual = {
+          partes: atual.partes + 1,
+          linhas: atual.linhas + parte.length,
+          created: atual.created + (res.created ?? 0),
+          skipped: atual.skipped + (res.skipped ?? 0),
+          warnings: [
+            ...atual.warnings,
+            ...(res.warnings ?? []).map((w) => ({ ...w, row: w.row + offset })),
+          ],
+        };
+        setConfirmado(atual);
+      } catch (e: any) {
+        // Cada parte é uma transação do backend. As que responderam JÁ
+        // entraram — e são exatamente essas que a mensagem pode afirmar.
+        // O destino desta aqui (`parte`) é DESCONHECIDO: sem resposta, o
+        // servidor pode ter concluído depois que desistimos de esperar.
+        setConfirmado(atual);
+        setErr(
+          mensagemImportInterrompido({
+            lotesConcluidos: atual.partes,
+            alunosConfirmados: atual.created,
+            linhasConfirmadas: atual.linhas,
+            totalLinhas: rows.length,
+            loteEmAndamento: parte.length,
+            semResposta: e?.code === "timeout" || e?.isNetworkError === true,
+            detalhe: e?.data?.error || e?.message || null,
+          })
+        );
+        setStep(1);
+        return;
       }
-      setResult(acc);
-      setStep(3);
-    } catch (e: any) {
-      // Cada lote é uma transação: os anteriores JÁ entraram. Reenviar é
-      // razoavelmente seguro (CPF duplicado é pulado), mas linha sem CPF
-      // pode duplicar — por isso o aviso explícito.
-      setErr(
-        `${e?.data?.error || e?.message || "Falha ao importar."} Os lotes anteriores já entraram — linhas com CPF não duplicam ao reenviar; linhas sem CPF podem duplicar.`
-      );
-      setStep(1);
     }
+
+    setResult({ created: atual.created, skipped: atual.skipped, warnings: atual.warnings });
+    setStep(3);
   };
 
   const resumo = React.useMemo(() => resumoPrevia(rows), [rows]);
-  const batches = Math.ceil(rows.length / DOJO_IMPORT_MAX_ROWS);
+  const totalPartes = Math.max(1, Math.ceil(rows.length / DOJO_IMPORT_MAX_ROWS));
+  const restantes = Math.max(0, rows.length - confirmado.linhas);
+  const retomando = confirmado.linhas > 0 && restantes > 0;
   const abaAtual = sheets[sheetIndex]?.name ?? null;
 
   return (
@@ -832,6 +1062,9 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                   </Text>
                   <Text style={styles.docHint}>
                     Arquivo .xlsx com várias abas: leio a que tiver mais colunas reconhecidas e você pode trocar antes da prévia.
+                  </Text>
+                  <Text style={styles.docHint}>
+                    Lista grande vai em partes de {DOJO_IMPORT_MAX_ROWS} linhas, uma de cada vez — dá para acompanhar quantos alunos já entraram e, se alguma parte falhar, continuar de onde parou.
                   </Text>
                 </View>
 
@@ -912,8 +1145,18 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                       {resumo.academias.length > 6 ? `… (+${resumo.academias.length - 6})` : ""}
                     </Text>
                   )}
-                  {batches > 1 && (
-                    <Text style={styles.docHint}>Acima de {DOJO_IMPORT_MAX_ROWS} linhas o envio sai em {batches} lotes, automaticamente.</Text>
+                  {totalPartes > 1 && !retomando && (
+                    <Text style={styles.docHint}>
+                      O envio sai em {totalPartes} partes de até {DOJO_IMPORT_MAX_ROWS} linhas, uma de cada vez — cada parte que chega já fica gravada.
+                    </Text>
+                  )}
+                  {retomando && (
+                    <Text style={styles.docHint}>
+                      {confirmado.created > 0
+                        ? `${confirmado.created} aluno${confirmado.created === 1 ? "" : "s"} desta lista já ${confirmado.created === 1 ? "entrou" : "entraram"} (${confirmado.linhas} de ${rows.length} linhas confirmadas).`
+                        : `${confirmado.linhas} de ${rows.length} linhas já foram confirmadas.`}{" "}
+                      Continuar envia só da linha {confirmado.linhas + 1} em diante — o que já entrou não é reenviado.
+                    </Text>
                   )}
                 </View>
 
@@ -945,7 +1188,17 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                     onPress={() => setStep(0)}
                     style={{ flex: 1 }}
                   />
-                  <KarateButton label={`Importar ${rows.length} linha${rows.length === 1 ? "" : "s"}`} variant="sumi" size="md" onPress={runImport} style={{ flex: 2 }} />
+                  <KarateButton
+                    label={
+                      retomando
+                        ? `Continuar de onde parou — ${restantes} linha${restantes === 1 ? "" : "s"}`
+                        : `Importar ${rows.length} linha${rows.length === 1 ? "" : "s"}`
+                    }
+                    variant="sumi"
+                    size="md"
+                    onPress={() => runImport(retomando ? confirmado.linhas : 0)}
+                    style={{ flex: 2 }}
+                  />
                 </View>
               </View>
             )}
@@ -954,7 +1207,18 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={KarateColors.primary} />
                 <Text style={styles.centerTxt}>Importando…</Text>
-                <Text style={styles.prevMeta}>Lote {progress.done} de {progress.total}</Text>
+                <Text style={styles.prevMeta}>
+                  {textoProgresso({
+                    partesConcluidas: confirmado.partes,
+                    totalPartes,
+                    linhasConfirmadas: confirmado.linhas,
+                    totalLinhas: rows.length,
+                    alunosConfirmados: confirmado.created,
+                  })}
+                </Text>
+                <Text style={styles.prevMeta}>
+                  Cada parte fica gravada assim que chega — se algo falhar, dá para continuar de onde parou.
+                </Text>
               </View>
             )}
 
