@@ -236,14 +236,63 @@ export interface DojoGuardianPayload {
   relationship?: string | null;
 }
 
-/** Linha do import em lote (já parseada pelo front — o backend não lê arquivo). */
+/**
+ * Linha do import em lote (já parseada pelo front — o backend não lê arquivo).
+ *
+ * ATENÇÃO: as chaves NÃO seguem o português da planilha do dojô — elas
+ * seguem o que o import do backend (Aura-backend#480 / F12, mergeado em
+ * 10/08/2026) espera. O de-para "cabeçalho da planilha → chave daqui"
+ * mora em HEADER_MAP, em components/karate/dojoAlunos/ImportAlunosModal.tsx:
+ *
+ *   Nome           → full_name      Graduação KYU → belt_label
+ *   Academia       → academia       Ativo         → status
+ *   Data Nascimento→ birth_date     RG            → rg
+ *   CPF            → cpf            Pai           → father_name
+ *   Mãe            → mother_name    Telefone      → phone
+ *   Endereço       → address        CEP           → zip_code
+ *   Bairro         → neighborhood   Cidade        → city
+ *   Email          → email
+ *
+ * Esta interface é o GARGALO TIPADO do importador: rowsToImport indexa o
+ * objeto da linha por `keyof DojoImportRow`, então campo que não estiver
+ * aqui simplesmente não é carregado, por mais que HEADER_MAP conheça o
+ * cabeçalho. Foi exatamente o que aconteceu com a planilha do Areikan
+ * (484 alunos, 15 colunas) até 12/08/2026.
+ *
+ * Todos os valores vão CRUS (texto como está na planilha) — o backend é
+ * quem normaliza telefone com máscara quebrada, CPF com DV inválido
+ * (warning, não bloqueio), número grudado no endereço e grafia de faixa.
+ * A única exceção é birth_date, convertida para ISO por ser FORMATO de
+ * data, não normalização de dado.
+ */
 export interface DojoImportRow {
   full_name: string;
+  /** 'YYYY-MM-DD' (o front converte DD/MM/AAAA; formato desconhecido vai cru + warning). */
   birth_date?: string | null;
   cpf?: string | null;
+  /** F12 — coluna "RG" da planilha. */
+  rg?: string | null;
   phone?: string | null;
   email?: string | null;
+  /** Coluna "Graduação KYU"/"Faixa" — texto livre; o backend resolve a grafia. */
   belt_label?: string | null;
+  /** F12 — coluna "Academia": vira TAG do aluno (karate_dojo_tags, migration 274). */
+  academia?: string | null;
+  /** F12 — coluna "Ativo" (Sim/Não, Ativo/Inativo…); o backend interpreta e grava active/inactive. */
+  status?: string | null;
+  /** F12 — coluna "Pai" (filiação/identidade, não o responsável financeiro). */
+  father_name?: string | null;
+  /** F12 — coluna "Mãe". O backend DERIVA o responsável do menor daqui quando não há guardian_name (cai no pai se a mãe estiver vazia). */
+  mother_name?: string | null;
+  /** F12 — coluna "Endereço" inteira, inclusive número grudado; o backend separa em street/number. */
+  address?: string | null;
+  /** F12 — coluna "CEP". */
+  zip_code?: string | null;
+  /** F12 — coluna "Bairro". */
+  neighborhood?: string | null;
+  /** F12 — coluna "Cidade". */
+  city?: string | null;
+  /** Legado (planilhas que já traziam a coluna "Responsável") — vence a derivação por mãe/pai. */
   guardian_name?: string | null;
   guardian_phone?: string | null;
 }
