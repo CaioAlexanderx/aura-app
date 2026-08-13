@@ -1,5 +1,5 @@
 // ============================================================
-// ImportAlunosModal — de-para de colunas e prévia do import de alunos
+// ImportAlunosModal — de-para de colunas, escolha de aba e prévia do import
 //
 // Este arquivo nasceu do achado de produção de 12/08/2026: a planilha real
 // do dojô Areikan (484 alunos, 15 colunas) entrava com 10 colunas
@@ -8,10 +8,17 @@
 // e a interface DojoImportRow só tipava 7 campos. O backend já aceitava as
 // 15 desde o Aura-backend#480 (F12).
 //
+// 13/08/2026: o MESMO arquivo barrou de novo, antes do de-para sequer
+// rodar — ele tem três abas e o importador lia sempre a primeira
+// ("Planilha1", que é lista auxiliar de validação de dados). Daí o bloco
+// "escolha da aba", que exercita pickSheet/scoreSheetHeader com as abas
+// reais.
+//
 // Só as funções puras são exercitadas (rowsToImport/parseCsv/resumoPrevia/
-// responsavelDerivado/matchHeaderLoose/pareceInativo) — elas já eram
-// exportadas justamente para isso. Os módulos de UI/rede são mockados por
-// nome: nada aqui depende de React, QueryClient, tema ou request().
+// responsavelDerivado/matchHeaderLoose/pareceInativo/pickSheet/
+// scoreSheetHeader/sheetMissingNameError) — elas já são exportadas
+// justamente para isso. Os módulos de UI/rede são mockados por nome: nada
+// aqui depende de React, QueryClient, tema, request() ou SheetJS.
 // ============================================================
 
 jest.mock("react-native", () => ({
@@ -56,6 +63,9 @@ import {
   resumoPrevia,
   responsavelDerivado,
   pareceInativo,
+  pickSheet,
+  scoreSheetHeader,
+  sheetMissingNameError,
 } from "@/components/karate/dojoAlunos/ImportAlunosModal";
 
 // Idade é relativa a HOJE — 01/01 evita qualquer dúvida de mês/dia.
@@ -162,6 +172,132 @@ describe("rowsToImport — coluna desconhecida continua sendo reportada", () => 
   it("sem coluna de nome, hasNameCol é false (a tela recusa o arquivo)", () => {
     const { hasNameCol } = rowsToImport([["CPF", "Telefone"], ["111", "999"]]);
     expect(hasNameCol).toBe(false);
+  });
+});
+
+// ── Escolha da aba (13/08/2026) ─────────────────────────────────────────
+//
+// As TRÊS abas do arquivo real do Areikan, na ordem em que aparecem no
+// workbook. O importador antigo lia SheetNames[0] — a "Planilha1", que é
+// lista de validação de dados — e devolvia "Não achei a coluna Nome" com a
+// planilha certa na mão.
+
+const PLANILHA1_HEADER = ["ATIVO / INATIVO", "Graduacao", "ACADEMIAS"];
+
+const ANIVERSARIOS_HEADER = [
+  "Nome", "Graduação KYU", "Academia", "Data Nascimento", "Mês", "Dia",
+  "Idade", "Categoria", "Ativo",
+];
+
+const AREIKAN_WORKBOOK = [
+  { name: "Planilha1", firstRow: PLANILHA1_HEADER, rowCount: 18 },
+  { name: "CADASTRO", firstRow: AREIKAN_HEADER, rowCount: 484 },
+  { name: "aniversarios campeonato", firstRow: ANIVERSARIOS_HEADER, rowCount: 484 },
+];
+
+describe("scoreSheetHeader — pontua a aba pelo cabeçalho", () => {
+  it("aba dos alunos pontua pelas 15 colunas reconhecidas", () => {
+    expect(scoreSheetHeader(AREIKAN_HEADER)).toBe(15);
+  });
+
+  it("aba de listas de validação vale ZERO, mesmo reconhecendo colunas", () => {
+    // "ATIVO / INATIVO" casa situação e "Graduacao" casa faixa — mas sem
+    // coluna de NOME a aba não é candidata a virar aluno.
+    expect(rowsToImport([PLANILHA1_HEADER]).mappedFields).toEqual(["status", "belt_label"]);
+    expect(scoreSheetHeader(PLANILHA1_HEADER)).toBe(0);
+  });
+
+  it("aba derivada tem Nome e pontua — só pontua MENOS que a de cadastro", () => {
+    const derivada = scoreSheetHeader(ANIVERSARIOS_HEADER);
+    expect(derivada).toBeGreaterThan(0);
+    expect(derivada).toBeLessThan(scoreSheetHeader(AREIKAN_HEADER));
+  });
+
+  it("aba vazia não quebra", () => {
+    expect(scoreSheetHeader([])).toBe(0);
+  });
+});
+
+describe("pickSheet — o caso real do Areikan (3 abas)", () => {
+  it("escolhe CADASTRO, não a primeira aba", () => {
+    const pick = pickSheet(AREIKAN_WORKBOOK);
+    expect(AREIKAN_WORKBOOK[pick.index].name).toBe("CADASTRO");
+    expect(pick.index).toBe(1);
+    expect(pick.score).toBe(15);
+    expect(pick.ambiguous).toBe(false);
+    expect(pick.scores[0]).toBe(0); // Planilha1
+    expect(pick.scores[2]).toBeGreaterThan(0); // aniversarios também é plausível
+  });
+
+  it("arquivo de aba única: nada muda (continua sendo a aba 0)", () => {
+    const pick = pickSheet([{ name: "Sheet1", firstRow: AREIKAN_HEADER, rowCount: 484 }]);
+    expect(pick.index).toBe(0);
+    expect(pick.score).toBe(15);
+    expect(pick.ambiguous).toBe(false);
+  });
+
+  it("nenhuma aba com colunas reconhecidas → primeira aba (comportamento antigo)", () => {
+    const pick = pickSheet([
+      { name: "Resumo", firstRow: ["Total", "Mês"], rowCount: 12 },
+      { name: "Planilha1", firstRow: PLANILHA1_HEADER, rowCount: 18 },
+    ]);
+    expect(pick.index).toBe(0);
+    expect(pick.score).toBe(0);
+    expect(pick.ambiguous).toBe(false);
+    expect(pick.scores).toEqual([0, 0]);
+  });
+
+  it("workbook vazio não quebra", () => {
+    expect(pickSheet([])).toEqual({ index: 0, score: 0, ambiguous: false, scores: [] });
+  });
+
+  it("EMPATE entre duas abas plausíveis: fica na primeira e marca ambiguous", () => {
+    // Duas exportações do mesmo cadastro (jan e fev) — nós não temos como
+    // saber qual é a boa, então a tela mostra o seletor.
+    const pick = pickSheet([
+      { name: "Cadastro Jan", firstRow: ["Nome", "CPF", "Ativo"], rowCount: 400 },
+      { name: "Cadastro Fev", firstRow: ["Nome", "CPF", "Ativo"], rowCount: 484 },
+    ]);
+    expect(pick.index).toBe(0);
+    expect(pick.score).toBe(3);
+    expect(pick.ambiguous).toBe(true);
+  });
+
+  it("empate só conta entre as MELHORES — aba fraca não gera ambiguidade", () => {
+    const pick = pickSheet([
+      { name: "aniversarios", firstRow: ANIVERSARIOS_HEADER, rowCount: 484 },
+      { name: "CADASTRO", firstRow: AREIKAN_HEADER, rowCount: 484 },
+    ]);
+    expect(pick.index).toBe(1);
+    expect(pick.ambiguous).toBe(false);
+  });
+});
+
+describe("sheetMissingNameError — o sensei entende sem abrir o Excel", () => {
+  it("diz qual aba foi lida e quais outras existem", () => {
+    expect(sheetMissingNameError("Planilha1", ["Planilha1", "CADASTRO", "aniversarios campeonato"]))
+      .toBe(
+        'Li a aba "Planilha1" e não achei a coluna "Nome". Este arquivo tem outras abas: ' +
+        "CADASTRO, aniversarios campeonato — escolha a aba certa logo abaixo. " +
+        "A primeira linha precisa ser o cabeçalho (Nome, Nascimento, CPF…)."
+      );
+  });
+
+  it("CSV / texto colado: mensagem de sempre, sem falar em aba", () => {
+    const msg = sheetMissingNameError(null, []);
+    expect(msg).toBe('Não achei a coluna "Nome". A primeira linha precisa ser o cabeçalho (Nome, Nascimento, CPF…).');
+    expect(msg).not.toMatch(/aba/);
+  });
+
+  it("arquivo .xlsx de aba única também não fala em outras abas", () => {
+    const msg = sheetMissingNameError("Sheet1", ["Sheet1"]);
+    expect(msg).toBe('Não achei a coluna "Nome". A primeira linha precisa ser o cabeçalho (Nome, Nascimento, CPF…).');
+  });
+
+  it("não repete a aba lida na lista das outras", () => {
+    const msg = sheetMissingNameError("Resumo", ["Resumo", "Base"]);
+    expect(msg).toContain("outras abas: Base");
+    expect(msg.match(/Resumo/g)).toHaveLength(1);
   });
 });
 
