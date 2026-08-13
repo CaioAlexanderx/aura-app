@@ -567,8 +567,16 @@ export const creditApi = {
     return request(`${base(companyId)}/customers/search?q=${encodeURIComponent(q)}`);
   },
 
-  createManualEntry(companyId: string, payload: ManualEntryPayload): Promise<ManualEntryResult> {
-    return request(`${base(companyId)}/manual-entry`, { method: 'POST', body: payload });
+  // 13/08/2026: aceita idempotencyKey opcional (gerada 1x por sessão de
+  // submissão no CriarLancamentoModal e reenviada em retries) -- protege
+  // contra o incidente Valen (timeout no cliente com a tx já commitada no
+  // servidor recriando a dívida inteira a cada nova tentativa).
+  createManualEntry(companyId: string, payload: ManualEntryPayload, idempotencyKey?: string): Promise<ManualEntryResult> {
+    return request(`${base(companyId)}/manual-entry`, {
+      method: 'POST',
+      body: payload,
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+    });
   },
 
   // ── B1 (DESIGN-38): Histórico unificado (timeline paginada por cursor) ──
