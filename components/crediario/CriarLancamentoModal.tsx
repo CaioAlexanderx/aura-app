@@ -142,6 +142,15 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Incidente Valen (13/08/2026): timeout de rede não cancela a tx no
+  // servidor — ela pode ter comitado mesmo assim. Se o usuário tentar de
+  // novo após o erro, o handleSubmit reenvia com a MESMA Idempotency-Key
+  // (só é gerada uma vez por "sessão" de submissão e só é limpa no reset(),
+  // ou seja: em sucesso ou fechamento do modal). O backend deduplica por
+  // essa key (UNIQUE idempotency_key) e devolve o lançamento já criado em
+  // vez de duplicar conta+parcelas.
+  const idempKeyRef = useRef<string | null>(null);
+
   // New customer fields
   const [newName, setNewName]   = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -213,6 +222,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setUnifyPreview(null);
     setUnifyPreviewError(null);
     setUnifyGateOpen(false);
+    idempKeyRef.current = null;
   }, []);
 
   const handleClose = useCallback(() => {
@@ -376,9 +386,16 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       new_account_name: accountMode === "new" ? newAccountName.trim() : undefined,
     };
 
+    // Gerada uma única vez por sessão de submissão: se este handleSubmit for
+    // chamado de novo (retry manual após timeout), reenvia a MESMA key —
+    // isso é o que permite o backend deduplicar em vez de criar dívida nova.
+    if (!idempKeyRef.current) {
+      idempKeyRef.current = "me-" + company!.id + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    }
+
     setLoading(true);
     try {
-      const result = await creditApi.createManualEntry(company!.id, payload);
+      const result = await creditApi.createManualEntry(company!.id, payload, idempKeyRef.current);
 
       // feat(unify): se unify ativo, aplicar o cronograma unificado
       if (unifyEnabled && selectedAccountId && unifyFirstDueIso && selectedCustomer?.id) {
