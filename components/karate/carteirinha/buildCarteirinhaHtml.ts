@@ -210,10 +210,11 @@ const ADV_DEFAULT = 0.58;
 const NARROW_CHARS = "iIlJjtfr1.,;:'\"!|()[]{}-/\\";
 const WIDE_CHARS = "MWmw@%";
 
-// " " = espaço não-separável (NBSP), escrito escapado de propósito: em
-// literal cru ele fica invisível na review (parece a mesma condição repetida)
-// e não sobrevive bem a round-trip de encoding.
-const NBSP = " ";
+// Espaço não-separável (U+00A0). Montado por código em vez de digitado como
+// caractere: assim a linha fica 100% ASCII, aparece igual em qualquer
+// editor/diff e não vira "condição repetida invisível" na review.
+// Nomes colados de planilha/Word costumam trazer NBSP no lugar do espaço.
+const NBSP = String.fromCharCode(0xa0);
 
 function advanceEm(ch: string): number {
   if (ch === " " || ch === "\t" || ch === NBSP) return ADV_SPACE;
