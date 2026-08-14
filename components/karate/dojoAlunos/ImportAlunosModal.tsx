@@ -11,6 +11,25 @@
 //   • COLAR CSV → parser manual pequeno (aspas + delimitador ; , TAB
 //     detectado no cabeçalho) — funciona também no nativo.
 //
+// ESCOLHA DA ABA (13/08/2026 — mesma planilha do Areikan): o arquivo real
+// tem TRÊS abas — "Planilha1" (listas auxiliares de validação de dados:
+// ATIVO/INATIVO, Graduacao, ACADEMIAS), "CADASTRO" (os 484 alunos, 15
+// colunas) e "aniversarios campeonato" (visão derivada, 9 colunas). Como
+// o importador lia sempre `SheetNames[0]`, o sensei recebeu "Não achei a
+// coluna Nome" com a planilha CERTA na mão. Planilha de verdade quase
+// sempre tem aba de apoio (lista de validação, dashboard, tabela
+// dinâmica) — ler a primeira só funciona por sorte.
+//
+// A regra agora: pontuar CADA aba pelo nº de colunas que a primeira linha
+// reconhece (scoreSheetHeader reusa o próprio rowsToImport, para não
+// existir um segundo de-para divergindo do oficial), exigindo coluna de
+// NOME — aba sem "Nome" não é candidata, vale 0. Maior pontuação vence;
+// empate ou pontuação zero → primeira aba (comportamento antigo) e o erro
+// aparece, agora dizendo QUAL aba foi lida e quais outras existem. Com
+// mais de uma aba o usuário escolhe na mão, com nº de linhas e de colunas
+// reconhecidas de cada uma à vista — porque "aniversarios campeonato"
+// também tem "Nome" e "Graduação KYU" e é plausível, só não é a certa.
+//
 // DE-PARA DE COLUNAS (12/08/2026 — planilha real do Areikan, 484 alunos):
 // a planilha do dojô tem 15 colunas — Nome · Graduação KYU · Academia ·
 // Ativo · Data Nascimento · RG · CPF · Pai · Mãe · Telefone · Endereço ·
@@ -41,10 +60,32 @@
 // Dan"). O front manda o texto CRU sob a chave certa — duplicar
 // normalização só cria divergência entre os dois lados.
 //
-// Envio em LOTES de 500 (limite do backend); o import do backend é
-// TOLERANTE (linha com dado inválido entra sem o campo + warning; CPF
-// duplicado é pulado; menor sem responsável entra com aviso). O nº da
-// linha nos warnings é ajustado pelo offset do lote antes de exibir.
+// ENVIO EM PARTES + O QUE DIZER QUANDO FALHA (13/08/2026, depois do import
+// real dos 484): o envio saía em lotes de 500 linhas numa requisição de
+// 60 s. Medição de produção: MAIS DE 60 s para 100 linhas (cada aluno
+// custa ~10 idas ao banco — o gargalo é round-trip, não volume), ou seja,
+// 500 nunca coube. O dono do dojô quebrou a planilha em 5 arquivos de
+// ~100 linhas na mão: os 5 mostraram erro de tempo esgotado, 4 gravaram
+// assim mesmo, 1 não gravou nada — e só dava para saber qual foi qual
+// consultando o banco.
+//
+// Pior que a lentidão foi a MENSAGEM. Ela afirmava, fixa: "os lotes
+// anteriores já entraram" — inclusive na tentativa em que NADA entrou.
+// Afirmar sucesso parcial sem saber é pior do que não dizer nada: leva o
+// operador a não reenviar, achando que parte do trabalho está salva.
+//
+// O que mudou:
+//   • parte de DOJO_IMPORT_MAX_ROWS = 40 linhas (~25 s medidos, ~2,4× de
+//     folga nos 60 s de timeout) — 484 linhas viram 13 partes, e o
+//     progresso passa a andar de verdade;
+//   • o progresso conta ALUNOS CONFIRMADOS, não número de requisição;
+//   • mensagemImportInterrompido() usa o número REAL de partes que
+//     responderam. Zero partes → diz que não há confirmação de nada;
+//     N partes → diz quantos alunos entraram e de qual linha o envio
+//     recomeça. A parte que estava A CAMINHO quando o tempo acabou é
+//     sempre declarada como incerta, porque é exatamente isso que ela é;
+//   • "Continuar de onde parou" reenvia a partir da primeira linha NÃO
+//     confirmada, em vez de recomeçar do zero.
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -56,7 +97,8 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Stepper } from "@/components/karate/Stepper";
 import {
-  karateDojoStudentsApi, DojoImportRow, DojoImportResult, DOJO_IMPORT_MAX_ROWS,
+  karateDojoStudentsApi, DojoImportRow, DojoImportResult, DojoImportWarning,
+  DOJO_IMPORT_MAX_ROWS,
 } from "@/services/karateDojoStudentsApi";
 import { isoToBR, ageFromISO } from "./helpers";
 
@@ -410,6 +452,76 @@ export function rowsToImport(matrix: any[][]): ParsedSheet {
   return { rows: out, unknownHeaders, mappedFields, hasNameCol };
 }
 
+// ── Qual das abas do arquivo é a dos alunos? ────────────────────────────
+
+/** Uma aba do workbook, do ponto de vista da escolha (sem SheetJS no meio). */
+export interface SheetCandidate {
+  name: string;
+  /** Primeira linha da aba — é ela que decide (é o cabeçalho, se houver). */
+  firstRow: any[];
+  /** Linhas de dados (sem o cabeçalho) — só informativo, para a tela. */
+  rowCount: number;
+}
+
+export interface SheetPick {
+  /** Índice escolhido. Sem candidata plausível → 0 (comportamento antigo). */
+  index: number;
+  /** Pontuação da escolhida (0 = nenhuma aba parece ter cabeçalho de alunos). */
+  score: number;
+  /** Duas ou mais abas empataram na melhor pontuação → deixe o usuário decidir. */
+  ambiguous: boolean;
+  /** Pontuação de cada aba, na ordem do workbook (para exibir na tela). */
+  scores: number[];
+}
+
+/**
+ * Quantas colunas de aluno o cabeçalho desta aba reconhece.
+ *
+ * Reusa o PRÓPRIO rowsToImport (com a matriz de uma linha só) de propósito:
+ * um segundo de-para aqui inevitavelmente divergiria do oficial — que é o
+ * validado em produção (app#679) e não deve ser tocado.
+ *
+ * Aba sem coluna de NOME vale 0, mesmo reconhecendo outras colunas: a
+ * "Planilha1" do Areikan é uma lista de validação de dados cujo cabeçalho é
+ * "ATIVO / INATIVO ; Graduacao ; ACADEMIAS" — casa "situação" e "faixa" e,
+ * sem esta regra, competiria com a aba dos 484 alunos.
+ */
+export function scoreSheetHeader(firstRow: any[]): number {
+  const parsed = rowsToImport([firstRow ?? []]);
+  return parsed.hasNameCol ? parsed.mappedFields.length : 0;
+}
+
+/**
+ * Escolhe a aba com MAIS colunas reconhecidas. Empate ou pontuação zero →
+ * primeira aba (o comportamento antigo) e o erro aparece normalmente — na
+ * dúvida a gente não chuta, mostra o seletor e deixa o sensei decidir.
+ */
+export function pickSheet(sheets: SheetCandidate[]): SheetPick {
+  const scores = sheets.map((s) => scoreSheetHeader(s.firstRow));
+  const best = scores.reduce((a, b) => (b > a ? b : a), 0);
+  if (best === 0) return { index: 0, score: 0, ambiguous: false, scores };
+  const tied = scores.reduce<number[]>((acc, s, i) => (s === best ? [...acc, i] : acc), []);
+  return { index: tied[0], score: best, ambiguous: tied.length > 1, scores };
+}
+
+const CABECALHO_HINT = "A primeira linha precisa ser o cabeçalho (Nome, Nascimento, CPF…).";
+
+/**
+ * Erro de "sem coluna Nome" que diz o que fazer. Com uma aba só (ou CSV) é
+ * a mensagem de sempre; com várias, nomeia a aba LIDA e lista as outras —
+ * o sensei entende sem precisar abrir o Excel para conferir.
+ */
+export function sheetMissingNameError(sheetName: string | null, allSheetNames: string[] = []): string {
+  const outras = allSheetNames.filter((n) => n !== sheetName);
+  if (!sheetName || outras.length === 0) {
+    return `Não achei a coluna "Nome". ${CABECALHO_HINT}`;
+  }
+  return (
+    `Li a aba "${sheetName}" e não achei a coluna "Nome". Este arquivo tem outras abas: ` +
+    `${outras.join(", ")} — escolha a aba certa logo abaixo. ${CABECALHO_HINT}`
+  );
+}
+
 // ── Prévia: replicar a regra do BACKEND, não inventar outra ──────────────
 
 function txt(v: any): string {
@@ -491,6 +603,162 @@ export function resumoPrevia(rows: DojoImportRow[]): PreviaResumo {
   };
 }
 
+// ── Envio em partes: fatiar, contar e (sobretudo) contar a VERDADE ───────
+
+/** Concordância curta — a tela é lida por sensei, não por engenheiro. */
+function plural(n: number, um: string, muitos: string): string {
+  return n === 1 ? um : muitos;
+}
+
+/**
+ * Fatia as linhas em partes do tamanho de envio. Exportada porque este
+ * fatiamento é a diferença entre "cabe no tempo" e "o operador encara uma
+ * tela parada por um minuto sem saber se gravou" — ver a nota de medição
+ * em DOJO_IMPORT_MAX_ROWS.
+ */
+export function fatiarEmPartes<T>(rows: T[], tamanho: number = DOJO_IMPORT_MAX_ROWS): T[][] {
+  const passo = Math.max(1, Math.floor(tamanho));
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += passo) out.push(rows.slice(i, i + passo));
+  return out;
+}
+
+export interface ProgressoImport {
+  /** Partes que JÁ responderam com sucesso (somando tentativas anteriores). */
+  partesConcluidas: number;
+  totalPartes: number;
+  /** Linhas cobertas pelas partes concluídas — é daqui que a retomada continua. */
+  linhasConfirmadas: number;
+  totalLinhas: number;
+  /** Alunos que o backend CONFIRMOU ter criado. */
+  alunosConfirmados: number;
+}
+
+/**
+ * Texto do passo "Importar". Antes era "Lote 0 de 1" — com 484 linhas num
+ * lote só, o número nunca saía de 0 e a tela parecia travada por um minuto
+ * inteiro. O que interessa ao sensei é quantos ALUNOS já entraram.
+ */
+export function textoProgresso(p: ProgressoImport): string {
+  const totalPartes = Math.max(1, Math.floor(p.totalPartes));
+  const feitas = Math.max(0, Math.min(Math.floor(p.partesConcluidas), totalPartes));
+  const atual = Math.min(feitas + 1, totalPartes);
+  const cabeca = `Enviando a parte ${atual} de ${totalPartes}`;
+  if (feitas <= 0) {
+    return (
+      `${cabeca} — ${p.totalLinhas} ${plural(p.totalLinhas, "linha", "linhas")} no total, ` +
+      "nenhuma confirmada ainda."
+    );
+  }
+  const corpo =
+    p.alunosConfirmados > 0
+      ? `${p.alunosConfirmados} ${plural(p.alunosConfirmados, "aluno já entrou", "alunos já entraram")}`
+      : "nenhum aluno novo até aqui";
+  return `${cabeca} — ${corpo} (${p.linhasConfirmadas} de ${p.totalLinhas} linhas confirmadas).`;
+}
+
+export interface ImportInterrompido {
+  /** Partes que responderam com SUCESSO antes da falha (todas as tentativas). */
+  lotesConcluidos: number;
+  /** Alunos que o backend confirmou ter criado nessas partes. */
+  alunosConfirmados: number;
+  /** Linhas cobertas por essas partes. */
+  linhasConfirmadas: number;
+  /** Total de linhas desta planilha. */
+  totalLinhas: number;
+  /** Linhas da parte que estava A CAMINHO quando parou (0 = nenhuma). */
+  loteEmAndamento: number;
+  /** true quando não veio resposta (tempo esgotado ou conexão caiu). */
+  semResposta: boolean;
+  /** Mensagem que o servidor devolveu, quando devolveu alguma. */
+  detalhe?: string | null;
+}
+
+/**
+ * O que dizer quando o envio para no meio.
+ *
+ * A versão antiga afirmava, SEMPRE, "os lotes anteriores já entraram" —
+ * frase fixa, escrita sem olhar para o estado real. Na tentativa dos 484
+ * ela apareceu com ZERO linhas gravadas (o lote único estourou e nem
+ * chegou a commitar). Afirmar sucesso parcial sem saber é pior que não
+ * dizer nada: o operador lê "já entraram", não reenvia, e o trabalho fica
+ * pela metade sem ninguém perceber.
+ *
+ * Três blocos, nesta ordem, e cada um só afirma o que é sabido:
+ *   1) o que aconteceu;
+ *   2) o que está CONFIRMADO (resposta do servidor recebida) — ou a
+ *      admissão de que não há confirmação de nada;
+ *   3) a parte que estava a caminho, declarada como incerta, e o que
+ *      fazer agora (com a ressalva de duplicidade para linha sem CPF).
+ */
+export function mensagemImportInterrompido(i: ImportInterrompido): string {
+  const total = Math.max(0, Math.floor(i.totalLinhas));
+  const ok = Math.max(0, Math.min(Math.floor(i.linhasConfirmadas), total));
+  const emVoo = Math.max(0, Math.min(Math.floor(i.loteEmAndamento), total - ok));
+  const faltam = total - ok;
+  const depois = faltam - emVoo;
+  const criados = Math.max(0, Math.floor(i.alunosConfirmados));
+  const partes: string[] = [];
+
+  partes.push(
+    i.semResposta
+      ? "O envio parou sem resposta do servidor."
+      : txt(i.detalhe) || "O envio parou por uma falha do servidor."
+  );
+
+  if (i.lotesConcluidos <= 0 || ok <= 0) {
+    partes.push(
+      "Nenhum aluno foi confirmado até aqui — não temos como afirmar que alguma coisa tenha sido salva."
+    );
+  } else if (criados > 0) {
+    partes.push(
+      `${criados} ${plural(criados, "aluno já entrou", "alunos já entraram")} — ` +
+        `${ok} de ${total} ${plural(total, "linha confirmada", "linhas confirmadas")}.`
+    );
+  } else {
+    partes.push(
+      `${ok} de ${total} linhas foram enviadas e confirmadas, mas nenhuma virou aluno novo ` +
+        "(quem já estava cadastrado é pulado)."
+    );
+  }
+
+  if (emVoo > 0) {
+    const trecho =
+      emVoo === 1
+        ? `A linha ${ok + 1} estava`
+        : `As linhas ${ok + 1} a ${ok + emVoo} estavam`;
+    partes.push(
+      `${trecho} a caminho quando o envio parou — essa parte pode ter sido gravada sem a gente ` +
+        "receber a confirmação." +
+        (depois <= 0 && ok > 0 ? " Era a última parte." : "")
+    );
+  }
+
+  if (faltam <= 0) {
+    partes.push(
+      "Não sobrou linha nenhuma para reenviar — confira a lista de alunos antes de importar de novo."
+    );
+  } else if (ok > 0) {
+    partes.push(
+      `Faltam ${faltam} ${plural(faltam, "linha", "linhas")}: toque em "Continuar de onde parou" ` +
+        `e o envio recomeça na linha ${ok + 1}, sem repetir o que já entrou.`
+    );
+  } else {
+    partes.push(
+      `Pode enviar as ${total} ${plural(total, "linha", "linhas")} de novo desde o começo.`
+    );
+  }
+
+  if (faltam > 0) {
+    partes.push(
+      "Quem tem CPF na planilha não entra duas vezes; quem está sem CPF pode duplicar — " +
+        "vale conferir esses na lista de alunos depois."
+    );
+  }
+
+  return partes.join(" ");
+}
+
 interface Props {
   visible: boolean;
   federationId: string;
@@ -499,15 +767,40 @@ interface Props {
   onDone: () => void;
 }
 
+/** Aba já lida do arquivo — a matriz fica em memória para trocar sem reler. */
+interface LoadedSheet {
+  name: string;
+  matrix: any[][];
+  rowCount: number;
+  score: number;
+}
+
+/**
+ * O que o SERVIDOR já confirmou nesta planilha, somando as tentativas.
+ * `linhas` é o ponto exato de retomada: primeira linha ainda não
+ * confirmada = linhas + 1. Nada entra aqui sem resposta do backend.
+ */
+interface Confirmado {
+  partes: number;
+  linhas: number;
+  created: number;
+  skipped: number;
+  warnings: DojoImportWarning[];
+}
+
+const NADA_CONFIRMADO: Confirmado = { partes: 0, linhas: 0, created: 0, skipped: 0, warnings: [] };
+
 export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Props) {
   const [step, setStep] = useState(0);
   const [pasteText, setPasteText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [sheets, setSheets] = useState<LoadedSheet[]>([]);
+  const [sheetIndex, setSheetIndex] = useState(0);
   const [rows, setRows] = useState<DojoImportRow[]>([]);
   const [unknownHeaders, setUnknownHeaders] = useState<string[]>([]);
   const [mappedFields, setMappedFields] = useState<(keyof DojoImportRow)[]>([]);
   const [parsing, setParsing] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [confirmado, setConfirmado] = useState<Confirmado>(NADA_CONFIRMADO);
   const [result, setResult] = useState<DojoImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -515,30 +808,63 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
     setStep(0);
     setPasteText("");
     setFileName(null);
+    setSheets([]);
+    setSheetIndex(0);
     setRows([]);
     setUnknownHeaders([]);
     setMappedFields([]);
-    setProgress({ done: 0, total: 0 });
+    setConfirmado(NADA_CONFIRMADO);
     setResult(null);
     setErr(null);
   };
 
-  const finishParse = (matrix: any[][], name: string | null) => {
+  /**
+   * `sheetList`/`idx` só existem para a MENSAGEM de erro citar a aba lida e
+   * as outras do arquivo. CSV e texto colado passam lista vazia — nada muda
+   * nesses caminhos.
+   */
+  const finishParse = (
+    matrix: any[][],
+    name: string | null,
+    sheetList: LoadedSheet[] = [],
+    idx = 0
+  ) => {
     const parsed = rowsToImport(matrix);
+    const sheetName = sheetList[idx]?.name ?? null;
+    const allNames = sheetList.map((s) => s.name);
     if (!parsed.hasNameCol) {
-      setErr('Não achei a coluna "Nome". A primeira linha precisa ser o cabeçalho (Nome, Nascimento, CPF…).');
+      setErr(sheetMissingNameError(sheetName, allNames));
+      setStep(0);
       return;
     }
     if (!parsed.rows.length) {
-      setErr("Nenhuma linha de dados encontrada abaixo do cabeçalho.");
+      setErr(
+        sheetName
+          ? `A aba "${sheetName}" tem o cabeçalho, mas nenhuma linha de dados abaixo dele.`
+          : "Nenhuma linha de dados encontrada abaixo do cabeçalho."
+      );
+      setStep(0);
       return;
     }
     setRows(parsed.rows);
     setUnknownHeaders(parsed.unknownHeaders);
     setMappedFields(parsed.mappedFields);
     setFileName(name);
+    // Lista NOVA (ou outra aba) → o ponto de retomada da anterior não vale
+    // mais: "continuar da linha 201" com outro arquivo pularia 200 alunos.
+    setConfirmado(NADA_CONFIRMADO);
+    setResult(null);
     setErr(null);
     setStep(1);
+  };
+
+  /** Troca de aba na mão: a matriz já está em memória, não relê o arquivo. */
+  const selectSheet = (i: number) => {
+    const s = sheets[i];
+    if (!s) return;
+    setSheetIndex(i);
+    setErr(null);
+    finishParse(s.matrix, fileName, sheets, i);
   };
 
   const handlePickFile = () => {
@@ -552,17 +878,37 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
       if (!file) return;
       setParsing(true);
       try {
-        let matrix: any[][];
         if (/\.csv$/i.test(file.name)) {
-          matrix = parseCsv(await file.text());
+          // CSV é arquivo de aba única — nada de seletor aqui.
+          setSheets([]);
+          setSheetIndex(0);
+          finishParse(parseCsv(await file.text()), file.name);
         } else {
           const buf = await file.arrayBuffer();
           const xlsx = await import("xlsx"); // já no bundle (importação FPKT)
           const wb = xlsx.read(buf, { type: "array" });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          matrix = xlsx.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false }) as any[][];
+          // Lê TODAS as abas: o custo é o de já ter o arquivo em memória, e
+          // com elas em mão a troca de aba é instantânea e o seletor mostra
+          // quantas linhas cada uma tem.
+          const loaded: LoadedSheet[] = wb.SheetNames.map((sn) => {
+            const matrix = xlsx.utils.sheet_to_json(wb.Sheets[sn], {
+              header: 1, defval: null, raw: false,
+            }) as any[][];
+            return {
+              name: sn,
+              matrix,
+              rowCount: Math.max(0, matrix.length - 1),
+              score: scoreSheetHeader(matrix[0] ?? []),
+            };
+          });
+          const pick = pickSheet(
+            loaded.map((s) => ({ name: s.name, firstRow: s.matrix[0] ?? [], rowCount: s.rowCount }))
+          );
+          setSheets(loaded);
+          setSheetIndex(pick.index);
+          setFileName(file.name);
+          finishParse(loaded[pick.index]?.matrix ?? [], file.name, loaded, pick.index);
         }
-        finishParse(matrix, file.name);
       } catch {
         setErr("Não consegui ler o arquivo. Confirme que é .xlsx ou .csv — ou salve como CSV e tente de novo.");
       } finally {
@@ -574,42 +920,77 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
 
   const handlePaste = () => {
     setErr(null);
+    setSheets([]);
+    setSheetIndex(0);
     finishParse(parseCsv(pasteText), null);
   };
 
-  const runImport = async () => {
-    const chunks: DojoImportRow[][] = [];
-    for (let i = 0; i < rows.length; i += DOJO_IMPORT_MAX_ROWS) {
-      chunks.push(rows.slice(i, i + DOJO_IMPORT_MAX_ROWS));
-    }
+  /**
+   * Envia da linha `deIndex` (0-based) em diante, em partes de
+   * DOJO_IMPORT_MAX_ROWS. `deIndex > 0` é a retomada: só as linhas ainda
+   * NÃO confirmadas voltam para o servidor.
+   *
+   * O acumulado corre numa variável local (`atual`) porque setState não é
+   * síncrono e o laço precisa do valor exato para dois usos onde errar é
+   * caro: o offset do nº da linha nos warnings e o ponto de retomada.
+   */
+  const runImport = async (deIndex = 0) => {
+    const inicio = Math.min(Math.max(0, deIndex), rows.length);
+    const chunks = fatiarEmPartes(rows.slice(inicio), DOJO_IMPORT_MAX_ROWS);
+    if (!chunks.length) return;
     setStep(2);
     setErr(null);
-    setProgress({ done: 0, total: chunks.length });
-    const acc: DojoImportResult = { created: 0, skipped: 0, warnings: [] };
-    try {
-      for (let i = 0; i < chunks.length; i++) {
-        const res = await karateDojoStudentsApi.importStudents(federationId, chunks[i]);
-        acc.created += res.created ?? 0;
-        acc.skipped += res.skipped ?? 0;
-        const offset = i * DOJO_IMPORT_MAX_ROWS;
-        for (const w of res.warnings ?? []) acc.warnings.push({ ...w, row: w.row + offset });
-        setProgress({ done: i + 1, total: chunks.length });
+
+    let atual: Confirmado = { ...confirmado, linhas: inicio, warnings: [...confirmado.warnings] };
+    setConfirmado(atual);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const parte = chunks[i];
+      try {
+        const res = await karateDojoStudentsApi.importStudents(federationId, parte);
+        const offset = atual.linhas; // nº da linha nos warnings é relativo à parte
+        atual = {
+          partes: atual.partes + 1,
+          linhas: atual.linhas + parte.length,
+          created: atual.created + (res.created ?? 0),
+          skipped: atual.skipped + (res.skipped ?? 0),
+          warnings: [
+            ...atual.warnings,
+            ...(res.warnings ?? []).map((w) => ({ ...w, row: w.row + offset })),
+          ],
+        };
+        setConfirmado(atual);
+      } catch (e: any) {
+        // Cada parte é uma transação do backend. As que responderam JÁ
+        // entraram — e são exatamente essas que a mensagem pode afirmar.
+        // O destino desta aqui (`parte`) é DESCONHECIDO: sem resposta, o
+        // servidor pode ter concluído depois que desistimos de esperar.
+        setConfirmado(atual);
+        setErr(
+          mensagemImportInterrompido({
+            lotesConcluidos: atual.partes,
+            alunosConfirmados: atual.created,
+            linhasConfirmadas: atual.linhas,
+            totalLinhas: rows.length,
+            loteEmAndamento: parte.length,
+            semResposta: e?.code === "timeout" || e?.isNetworkError === true,
+            detalhe: e?.data?.error || e?.message || null,
+          })
+        );
+        setStep(1);
+        return;
       }
-      setResult(acc);
-      setStep(3);
-    } catch (e: any) {
-      // Cada lote é uma transação: os anteriores JÁ entraram. Reenviar é
-      // razoavelmente seguro (CPF duplicado é pulado), mas linha sem CPF
-      // pode duplicar — por isso o aviso explícito.
-      setErr(
-        `${e?.data?.error || e?.message || "Falha ao importar."} Os lotes anteriores já entraram — linhas com CPF não duplicam ao reenviar; linhas sem CPF podem duplicar.`
-      );
-      setStep(1);
     }
+
+    setResult({ created: atual.created, skipped: atual.skipped, warnings: atual.warnings });
+    setStep(3);
   };
 
   const resumo = React.useMemo(() => resumoPrevia(rows), [rows]);
-  const batches = Math.ceil(rows.length / DOJO_IMPORT_MAX_ROWS);
+  const totalPartes = Math.max(1, Math.ceil(rows.length / DOJO_IMPORT_MAX_ROWS));
+  const restantes = Math.max(0, rows.length - confirmado.linhas);
+  const retomando = confirmado.linhas > 0 && restantes > 0;
+  const abaAtual = sheets[sheetIndex]?.name ?? null;
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -634,6 +1015,40 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
 
             {step === 0 && (
               <View style={{ gap: 12 }}>
+                {sheets.length > 1 && (
+                  <View style={styles.sheetBox}>
+                    <Text style={styles.docTitle}>
+                      Abas de {fileName || "arquivo"} — lendo "{abaAtual}"
+                    </Text>
+                    <Text style={styles.docHint}>
+                      Escolhi a aba com mais colunas reconhecidas. Planilha costuma ter aba de apoio (listas, aniversários, resumo) — se a dos alunos for outra, toque nela.
+                    </Text>
+                    <View style={styles.sheetRow}>
+                      {sheets.map((s, i) => (
+                        <TouchableOpacity
+                          key={`${s.name}-${i}`}
+                          onPress={() => selectSheet(i)}
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: i === sheetIndex }}
+                          accessibilityLabel={`Aba ${s.name}, ${s.rowCount} linhas`}
+                          style={[styles.sheetChip, i === sheetIndex && styles.sheetChipOn]}
+                        >
+                          <Text style={[styles.sheetChipTxt, i === sheetIndex && styles.sheetChipTxtOn]} numberOfLines={1}>
+                            {s.name}
+                          </Text>
+                          <Text style={[styles.sheetChipMeta, i === sheetIndex && styles.sheetChipMetaOn]} numberOfLines={1}>
+                            {s.rowCount} linha{s.rowCount === 1 ? "" : "s"} ·{" "}
+                            {s.score > 0
+                              ? `${s.score} coluna${s.score === 1 ? "" : "s"} reconhecida${s.score === 1 ? "" : "s"}`
+                              : "sem coluna de nome"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.docBox}>
                   <Text style={styles.docTitle}>Colunas reconhecidas (1ª linha = cabeçalho)</Text>
                   <Text style={styles.docMono}>
@@ -644,6 +1059,12 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                   </Text>
                   <Text style={styles.docHint}>
                     "Academia" vira uma tag do aluno · "Ativo" = Não/Inativo entra como aluno inativo · menor de 18 sem "Responsável" usa a Mãe (ou o Pai, se não houver mãe); sem nenhum dos dois ele entra assim mesmo, com aviso para você completar depois.
+                  </Text>
+                  <Text style={styles.docHint}>
+                    Arquivo .xlsx com várias abas: leio a que tiver mais colunas reconhecidas e você pode trocar antes da prévia.
+                  </Text>
+                  <Text style={styles.docHint}>
+                    Lista grande vai em partes de {DOJO_IMPORT_MAX_ROWS} linhas, uma de cada vez — dá para acompanhar quantos alunos já entraram e, se alguma parte falhar, continuar de onde parou.
                   </Text>
                 </View>
 
@@ -683,12 +1104,18 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                   {!!fileName && (
                     <Text style={styles.fileRow}>
                       <Icon name="document-text-outline" size={13} color={KarateColors.ink3} /> {fileName}
+                      {sheets.length > 1 ? ` · aba "${abaAtual}"` : ""}
                     </Text>
                   )}
                   <Text style={styles.docTitle}>
                     {resumo.total} linha{resumo.total === 1 ? "" : "s"} · {resumo.comNasc} com nascimento · {resumo.comResp} com responsável
                     {resumo.semNome > 0 ? ` · ${resumo.semNome} sem nome (serão puladas)` : ""}
                   </Text>
+                  {sheets.length > 1 && (
+                    <Text style={styles.docHint}>
+                      Este arquivo tem {sheets.length} abas — se "{abaAtual}" não for a dos alunos, volte e escolha outra.
+                    </Text>
+                  )}
                   {mappedFields.length > 0 && (
                     <Text style={styles.docHint}>
                       Campos reconhecidos: {mappedFields.map((f) => FIELD_LABEL[f]).join(" · ")}
@@ -718,8 +1145,18 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                       {resumo.academias.length > 6 ? `… (+${resumo.academias.length - 6})` : ""}
                     </Text>
                   )}
-                  {batches > 1 && (
-                    <Text style={styles.docHint}>Acima de {DOJO_IMPORT_MAX_ROWS} linhas o envio sai em {batches} lotes, automaticamente.</Text>
+                  {totalPartes > 1 && !retomando && (
+                    <Text style={styles.docHint}>
+                      O envio sai em {totalPartes} partes de até {DOJO_IMPORT_MAX_ROWS} linhas, uma de cada vez — cada parte que chega já fica gravada.
+                    </Text>
+                  )}
+                  {retomando && (
+                    <Text style={styles.docHint}>
+                      {confirmado.created > 0
+                        ? `${confirmado.created} aluno${confirmado.created === 1 ? "" : "s"} desta lista já ${confirmado.created === 1 ? "entrou" : "entraram"} (${confirmado.linhas} de ${rows.length} linhas confirmadas).`
+                        : `${confirmado.linhas} de ${rows.length} linhas já foram confirmadas.`}{" "}
+                      Continuar envia só da linha {confirmado.linhas + 1} em diante — o que já entrou não é reenviado.
+                    </Text>
                   )}
                 </View>
 
@@ -744,8 +1181,24 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
                 </View>
 
                 <View style={{ flexDirection: "row", gap: 10 }}>
-                  <KarateButton label="Voltar" variant="ghost" size="md" onPress={() => setStep(0)} style={{ flex: 1 }} />
-                  <KarateButton label={`Importar ${rows.length} linha${rows.length === 1 ? "" : "s"}`} variant="sumi" size="md" onPress={runImport} style={{ flex: 2 }} />
+                  <KarateButton
+                    label={sheets.length > 1 ? "Voltar / trocar aba" : "Voltar"}
+                    variant="ghost"
+                    size="md"
+                    onPress={() => setStep(0)}
+                    style={{ flex: 1 }}
+                  />
+                  <KarateButton
+                    label={
+                      retomando
+                        ? `Continuar de onde parou — ${restantes} linha${restantes === 1 ? "" : "s"}`
+                        : `Importar ${rows.length} linha${rows.length === 1 ? "" : "s"}`
+                    }
+                    variant="sumi"
+                    size="md"
+                    onPress={() => runImport(retomando ? confirmado.linhas : 0)}
+                    style={{ flex: 2 }}
+                  />
                 </View>
               </View>
             )}
@@ -754,7 +1207,18 @@ export function ImportAlunosModal({ visible, federationId, onClose, onDone }: Pr
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={KarateColors.primary} />
                 <Text style={styles.centerTxt}>Importando…</Text>
-                <Text style={styles.prevMeta}>Lote {progress.done} de {progress.total}</Text>
+                <Text style={styles.prevMeta}>
+                  {textoProgresso({
+                    partesConcluidas: confirmado.partes,
+                    totalPartes,
+                    linhasConfirmadas: confirmado.linhas,
+                    totalLinhas: rows.length,
+                    alunosConfirmados: confirmado.created,
+                  })}
+                </Text>
+                <Text style={styles.prevMeta}>
+                  Cada parte fica gravada assim que chega — se algo falhar, dá para continuar de onde parou.
+                </Text>
               </View>
             )}
 
@@ -811,6 +1275,14 @@ const styles = StyleSheet.create({
   docTitle: { fontSize: 12.5, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   docMono: { fontSize: 12, color: KarateColors.ink2, fontFamily: "monospace", lineHeight: 18 } as TextStyle,
   docHint: { fontSize: 11.5, color: KarateColors.ink3, lineHeight: 16 } as TextStyle,
+  sheetBox: { gap: 8, borderWidth: 1, borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, padding: 12 } as ViewStyle,
+  sheetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
+  sheetChip: { minWidth: 150, gap: 2, borderWidth: 1.5, borderColor: KarateColors.border, backgroundColor: KarateColors.glass2, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 10 } as ViewStyle,
+  sheetChipOn: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primary } as ViewStyle,
+  sheetChipTxt: { fontSize: 12.5, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  sheetChipTxtOn: { color: "#fff" } as TextStyle,
+  sheetChipMeta: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
+  sheetChipMetaOn: { color: "#f3e8ff" } as TextStyle,
   fileRow: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
   drop: { borderWidth: 2, borderStyle: "dashed", borderColor: KarateColors.border2, borderRadius: KarateRadius.lg, paddingVertical: 26, alignItems: "center", gap: 8 } as ViewStyle,
   dropTxt: { fontSize: 13.5, fontWeight: "700", color: KarateColors.ink } as TextStyle,
