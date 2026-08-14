@@ -25,6 +25,8 @@
 // Discrepância sinalizada (ver PR): o cliente pediu para remover a
 // assinatura "Presidente", mas o mock APROVADO mantém essa linha no
 // footer da frente. Seguimos o mock (fiel ao design aprovado).
+// (O CSS do rodapé "Presidente/validade" foi removido em 13/08/2026 — ele
+// existia mas NENHUM render emitia os elementos; a decisão acima segue de pé.)
 //
 // Layout de impressão: para cada praticante, a FRENTE e o VERSO são
 // emitidos em sequência no mesmo grid 2 colunas (frente, depois verso logo
@@ -132,6 +134,150 @@ function qrImgUrl(data: string, size = 220): string {
     "&data=" + encodeURIComponent(data) + "&bgcolor=ffffff&color=1a1611&margin=1";
 }
 
+// ============================================================
+// CAMPO NOME — altura reservada + fonte adaptativa + reticências
+//
+// Cicatriz (13/08/2026, cartão FÍSICO impresso, faixa-preta): o nome
+// "MARJORIE BARRAGAN REBELLO DA SILVA" quebrou em 2 linhas, empurrou todo o
+// conteúdo abaixo dele e os campos "Faixa" e "Nº CBKT" saíram pela borda de
+// baixo do cartão — os rótulos apareciam, os VALORES sumiam.
+//
+// Por que acontecia: .cr80 tem height:54mm FIXO com overflow:hidden, o
+// conteúdo está em fluxo normal dentro de um flex-column, e .fvalue.name
+// tinha font-size:9pt fixo com white-space:normal, sem limite de linhas nem
+// altura reservada. O text-overflow:ellipsis herdado de .fvalue é INERTE
+// nesse caso — ellipsis só atua em linha única com white-space:nowrap.
+//
+// Por que ancorar o rodapé (margin-top:auto) NÃO resolve: o cartão não tem
+// folga para redistribuir. Empurrar o bloco Faixa/CBKT para o fim apenas
+// transfere o estouro para o bloco do meio (.grid2 — nascimento/dojô,
+// CPF/registro). O orçamento tem que ENCOLHER, não ser rearranjado.
+//
+// Regra decidida pelo dono do produto, três degraus nesta ordem:
+//   1) altura RESERVADA para no máximo 2 linhas (o resto do cartão deixa de
+//      depender do conteúdo do nome — é isso que garante o encaixe);
+//   2) fonte adaptativa (9 → 8.2 → 7.5 → 7pt): o nome é o dado principal de
+//      um documento de identificação, truncar é o último recurso;
+//   3) reticências via -webkit-line-clamp:2 quando nem a 7pt couber
+//      (line-clamp produz as reticências sozinho em texto multi-linha).
+//
+// Como a fonte é escolhida: este arquivo monta HTML em STRING, não há DOM
+// para medir texto na hora da montagem. A escolha é feita aqui no JS por
+// estimativa de largura, com quebra gulosa por palavra (é assim que o
+// navegador quebra), e está isolada em funções puras exportadas para poder
+// ser testada sem navegador (__tests__/components/CarteirinhaLayout.test.ts).
+// ============================================================
+
+const MM_PER_PT = 25.4 / 72;
+
+// Largura útil do campo Nome, derivada do próprio CSS abaixo:
+//   85.6mm (.cr80)
+//   − 2 × 6.2mm (padding lateral de .face-pad)
+//   − 21.7mm     (.photo, flex-shrink:0)
+//   − 4.3mm      (gap de .body-row)
+//   = 47.2mm
+export const NAME_FIELD_WIDTH_MM = 47.2;
+
+// Degraus de fonte do nome, do maior para o menor (decisão do dono do produto).
+export const NAME_FONT_STEPS_PT = [9, 8.2, 7.5, 7];
+
+// Máximo de linhas do nome — precisa bater com o -webkit-line-clamp de
+// .fvalue.name em cardCss(). Ver NAME_RESERVED_H_MM.
+export const NAME_MAX_LINES = 2;
+
+// Altura reservada (mm) da caixa do nome. É CONSTANTE de propósito: não
+// depende do conteúdo nem do tamanho de fonte escolhido — é o que torna o
+// orçamento vertical determinístico. Dimensionada para o PIOR caso do maior
+// degrau: 2 linhas a 9pt com line-height 1.06
+//   2 × 9pt × (25.4/72) × 1.06 = 6.731mm  →  reservado 6.75mm.
+export const NAME_RESERVED_H_MM = 6.75;
+
+// Avanço médio por caractere, em "em" (1em = font-size).
+//
+// Calibração: no cartão real, "MARJORIE BARRAGAN REBELLO DA SILVA" (34
+// caracteres) ocupa ~59mm a 9pt/peso 700 em Zen Kaku Gothic New — foi
+// justamente por passar dos 47.2mm disponíveis que ele quebrou em 2 linhas.
+// 59mm / (9pt × 25.4/72) = ~18.6em para esses 34 caracteres. Os pesos abaixo
+// reproduzem 18.10em para essa string (~57.5mm), dentro da margem da medida.
+// Não é métrica de fonte real (não temos DOM aqui) — é uma estimativa
+// deliberadamente um pouco CONSERVADORA na direção segura: superestimar a
+// largura reduz a fonte antes da hora (nome menor, porém inteiro), enquanto
+// subestimar truncaria o nome, que é o dado principal do documento.
+const ADV_SPACE = 0.28;
+const ADV_NARROW = 0.34;
+const ADV_WIDE = 0.88;
+const ADV_DEFAULT = 0.58;
+const NARROW_CHARS = "iIlJjtfr1.,;:'\"!|()[]{}-/\\";
+const WIDE_CHARS = "MWmw@%";
+
+// Espaço não-separável (U+00A0). Montado por código em vez de digitado como
+// caractere: assim a linha fica 100% ASCII, aparece igual em qualquer
+// editor/diff e não vira "condição repetida invisível" na review.
+// Nomes colados de planilha/Word costumam trazer NBSP no lugar do espaço.
+const NBSP = String.fromCharCode(0xa0);
+
+function advanceEm(ch: string): number {
+  if (ch === " " || ch === "\t" || ch === NBSP) return ADV_SPACE;
+  if (WIDE_CHARS.indexOf(ch) >= 0) return ADV_WIDE;
+  if (NARROW_CHARS.indexOf(ch) >= 0) return ADV_NARROW;
+  return ADV_DEFAULT;
+}
+
+/** Largura estimada de um texto, em "em" (multiplicar por font-size para ter mm/pt). */
+export function estimateTextWidthEm(text: string | null | undefined): number {
+  const s = String(text ?? "");
+  let sum = 0;
+  for (let i = 0; i < s.length; i++) sum += advanceEm(s[i]);
+  return sum;
+}
+
+/**
+ * Quantas linhas o nome ocuparia em NAME_FIELD_WIDTH_MM no tamanho dado.
+ * Reproduz a quebra GULOSA por palavra do navegador (palavra não é partida,
+ * exceto quando ela sozinha já é mais larga que a linha inteira).
+ */
+export function estimateNameLines(name: string | null | undefined, fontPt: number): number {
+  const words = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 1;
+
+  const emMm = fontPt * MM_PER_PT;
+  const spaceMm = ADV_SPACE * emMm;
+  let lines = 1;
+  let cur = 0;
+
+  for (const w of words) {
+    const wMm = estimateTextWidthEm(w) * emMm;
+    // Palavra sozinha maior que a linha: o navegador a parte em N linhas.
+    if (wMm > NAME_FIELD_WIDTH_MM) {
+      if (cur > 0) { lines++; cur = 0; }
+      const need = Math.ceil(wMm / NAME_FIELD_WIDTH_MM);
+      lines += need - 1;
+      cur = wMm - (need - 1) * NAME_FIELD_WIDTH_MM;
+      continue;
+    }
+    const add = cur === 0 ? wMm : spaceMm + wMm;
+    if (cur + add <= NAME_FIELD_WIDTH_MM) cur += add;
+    else { lines++; cur = wMm; }
+  }
+  return lines;
+}
+
+/**
+ * Tamanho de fonte (pt) do campo Nome: o MAIOR degrau em que o nome cabe em
+ * NAME_MAX_LINES linhas. Se não couber nem no menor, devolve o menor — aí o
+ * -webkit-line-clamp entra e corta com reticências (degrau 3 da regra).
+ *
+ * Função pura de propósito: dá para testar sem navegador.
+ */
+export function pickNameFontPt(name: string | null | undefined): number {
+  const n = String(name ?? "").trim();
+  if (!n) return NAME_FONT_STEPS_PT[0];
+  for (const pt of NAME_FONT_STEPS_PT) {
+    if (estimateNameLines(n, pt) <= NAME_MAX_LINES) return pt;
+  }
+  return NAME_FONT_STEPS_PT[NAME_FONT_STEPS_PT.length - 1];
+}
+
 // Opacidade única da marca (frente = verso), por pedido da federação.
 // NÃO MEXER — a frente (logo FPKT) já foi impressa e aprovada nessa opacidade.
 const WM_OPACITY = 0.18;
@@ -178,6 +324,11 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
   const photo = card.photo_url
     ? '<img class="photo" src="' + esc(card.photo_url) + '" alt="">'
     : '<div class="photo photo-empty"><span>FOTO</span><span class="photo-sub">3 &times; 4</span></div>';
+
+  // Degrau 2 da regra do nome: o tamanho é escolhido no JS (não há como medir
+  // texto montando HTML em string). A altura da caixa NÃO muda com ele —
+  // .fvalue.name tem height fixa em cardCss(); ver NAME_RESERVED_H_MM.
+  const namePt = pickNameFontPt(card.student_name);
 
   const headerRight = isPreta
     ? '<div class="hd-carteira">Carteira</div><div class="hd-badge"><span class="badge-sq"></span>faixa-preta</div>'
@@ -228,7 +379,7 @@ function renderFront(card: MembershipCard, options?: CarteirinhaBatchOptions): s
         '<div class="body-row">' +
           photo +
           '<div class="fields">' +
-            '<div class="fld name-fld"><div class="flabel">Nome</div><div class="fvalue name">' + esc(card.student_name) + '</div></div>' +
+            '<div class="fld name-fld"><div class="flabel">Nome</div><div class="fvalue name" style="font-size:' + namePt + 'pt">' + esc(card.student_name) + '</div></div>' +
             fieldsGrid +
           '</div>' +
         '</div>' +
@@ -341,39 +492,59 @@ function cardCss(): string {
   html += '.photo-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;font-family:"DM Mono","Consolas","Courier New",monospace;font-size:4.6pt;font-weight:600;letter-spacing:0.5pt;color:' + INK_4 + '}';
   html += '.photo-sub{font-size:4.2pt}';
   html += '.fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:2.4mm}';
-  html += '.flabel{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + '}';
-  html += '.fvalue{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:6.4pt;font-weight:700;color:' + INK + ';margin-top:0.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+  // line-height EXPLÍCITO em .flabel/.fvalue (13/08/2026): sem isso a altura de
+  // cada campo dependia do "normal" do navegador (que varia por família — as
+  // japonesas costumam pedir ~1.4) e o orçamento vertical do cartão era
+  // impossível de somar. Os valores abaixo são a base da aritmética do teste
+  // __tests__/components/CarteirinhaLayout.test.ts. Mexer aqui = refazer a conta.
+  html += '.flabel{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.1}';
+  html += '.fvalue{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:6.4pt;font-weight:700;color:' + INK + ';margin-top:0.7mm;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm;font-weight:900}';
-  html += '.frow{display:flex;gap:2.6mm}';
-  html += '.f-date{width:14mm;flex:none;min-width:0}';
-  html += '.f-dojo{flex:1;min-width:0}';
-  html += '.f-half{flex:1;min-width:0}';
-  html += '.fvalue.name{font-size:9pt;font-weight:700;white-space:normal}';
+  // NOME — mesmo padrão do .fvalue.dojo acima (caixa de altura fixa +
+  // -webkit-line-clamp), pelos motivos documentados no cabeçalho do bloco
+  // "CAMPO NOME" lá em cima. Três pontos que NÃO podem ser afrouxados:
+  //   • height fixa (NAME_RESERVED_H_MM) — é o que impede o nome de empurrar
+  //     Faixa/Nº CBKT para fora do cartão. NUNCA trocar por min-height;
+  //   • -webkit-line-clamp:2 (= NAME_MAX_LINES) — e é ELE que gera as
+  //     reticências. O text-overflow:ellipsis herdado de .fvalue é inerte aqui
+  //     (só vale para linha única com nowrap);
+  //   • o font-size:9pt abaixo é só o padrão/fallback — em cada cartão ele é
+  //     sobrescrito por style inline com o degrau escolhido por pickNameFontPt().
+  //     line-height sem unidade (1.06) para acompanhar o degrau escolhido.
+  html += '.fvalue.name{font-size:9pt;font-weight:700;white-space:normal;display:-webkit-box;-webkit-line-clamp:' + NAME_MAX_LINES + ';-webkit-box-orient:vertical;line-height:1.06;height:' + NAME_RESERVED_H_MM + 'mm;overflow:hidden}';
   html += '.fvalue.mono{font-family:"DM Mono","Consolas","Courier New",monospace;font-weight:700}';
   html += '.name-fld{margin-bottom:0.4mm}';
   html += '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2.6mm 2.7mm}';
   html += '.reg-fld{margin-top:1.6mm}';
   html += '.is-preta .body-row{margin-top:0.5mm}';
-  html += '.is-preta .fields{gap:1.1mm}';
+  // ── orçamento vertical do faixa-preta ──
+  // O Design 02 tem 29.65mm para o corpo (46.95 de área útil − 12.4 do header
+  // − 3.15 da régua − 1.25 da barra preta − 0.5 do margin-top do .body-row),
+  // contra 29.6mm do Design 01, mas carrega um bloco a mais (Faixa/Nº CBKT).
+  // Reservar 2 linhas para o Nome custou ~2.9mm; os ajustes abaixo compram
+  // essa altura de volta SEM tirar nenhum campo (a conta fechada está no
+  // teste __tests__/components/CarteirinhaLayout.test.ts):
+  //   • fields gap 1.1 → 0.9mm  (2 ocorrências, −0.4mm)
+  //   • .fvalue margin-top 0.7 → 0.45mm  (4 ocorrências, −1.0mm)
+  //   • dojo height 5.0 → 4.4mm — estava SUPER-reservado: com clamp de 2
+  //     linhas a 5.8pt/line-height 1.05 o texto ocupa 2×5.8×(25.4/72)×1.05
+  //     = 4.30mm; 4.4mm mantém 0.1mm de folga (−0.6mm).
+  html += '.is-preta .fields{gap:0.9mm}';
   html += '.is-preta .name-fld{margin-bottom:0mm}';
   html += '.is-preta .reg-fld{margin-top:0.6mm}';
   html += '.is-preta .grid2{gap:1.7mm 2.7mm}';
-  html += '.is-preta .fvalue.dojo{height:5.0mm;-webkit-line-clamp:2}';
+  html += '.is-preta .fvalue{margin-top:0.45mm}';
+  html += '.is-preta .fvalue.dojo{height:4.4mm;-webkit-line-clamp:2}';
+  // .belt-label já tem margin-top:0 lá embaixo, mas com especificidade (0,0,1,0)
+  // — perde para o ".is-preta .fvalue" acima (0,0,2,0). Sem esta linha o valor
+  // da Faixa ganharia 0.45mm de margem e desalinharia do quadrado preto.
+  html += '.is-preta .belt-label{margin-top:0}';
   html += '.is-preta .belt-line{margin-top:0.5mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:700;color:' + RED + ';letter-spacing:0.2pt}';
-  html += '.cbkt-fld{margin-top:1.0mm}';
   html += '.cbkt-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-weight:700;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
   html += '.belt-label{margin-top:0;font-weight:900}';
-
-  // footer
-  html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:flex-end}';
-  html += '.pres-line{width:20mm;height:0.15mm;background:' + INK_4 + '}';
-  html += '.pres-label{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.4pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';margin-top:0.9mm}';
-  html += '.valid-col{display:flex;align-items:center;gap:1.2mm}';
-  html += '.valid-dot{width:0.7mm;height:0.7mm;border-radius:0.4mm;background:' + RED + ';flex-shrink:0}';
-  html += '.valid-text{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.2pt;font-weight:600;letter-spacing:0.4pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;line-height:1.5}';
 
   // verso body
   html += '.back-row{display:flex;flex:1;margin-top:1.8mm;min-height:0}';
@@ -445,20 +616,23 @@ function cardCss(): string {
   html += '.ruler-red{height:0.4mm}';
   html += '.black-bar{height:1.3mm}';
   // rótulos pequenos — sobe tamanho mínimo (nada abaixo de 4.5pt), peso e escurece
+  // ⚠️ .flabel sobe de 3.9pt para 4.6pt SÓ no print. A altura da linha continua
+  // presa ao line-height:1.1 declarado acima, mas a caixa cresce ~0.27mm por
+  // rótulo — já contabilizado na folga do orçamento (ver teste de layout).
   html += '.hd-sub{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.hd-verso{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.flabel{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.kun-eyebrow{font-size:4.6pt;font-weight:700}';
   html += '.kun-dot{font-size:9.5pt}';
   html += '.verify-eyebrow{font-size:4.6pt;font-weight:700;color:' + PRINT_LABEL + '}';
-  html += '.pres-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
-  html += '.valid-text{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.issued-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.photo-sub{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.photo-empty{font-size:4.8pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.hd-badge{font-weight:600;color:' + INK_2 + '}';
   html += '.hd-carteira{font-weight:600}';
   // valores — cor sólida + peso >=600 (nome, faixa, nº registro, CBKT, etc.)
+  // ⚠️ NÃO mexer em font-size do .fvalue.name aqui: o tamanho vem do style
+  // inline por cartão (pickNameFontPt) e a caixa tem altura reservada fixa.
   html += '.fvalue{font-weight:700;color:' + INK + '}';
   html += '.fvalue.mono{font-weight:700}';
   html += '.fvalue.name{font-weight:700}';
