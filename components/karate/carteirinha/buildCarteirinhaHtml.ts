@@ -25,6 +25,8 @@
 // Discrepância sinalizada (ver PR): o cliente pediu para remover a
 // assinatura "Presidente", mas o mock APROVADO mantém essa linha no
 // footer da frente. Seguimos o mock (fiel ao design aprovado).
+// (O CSS do rodapé "Presidente/validade" foi removido em 13/08/2026 — ele
+// existia mas NENHUM render emitia os elementos; a decisão acima segue de pé.)
 //
 // Layout de impressão: para cada praticante, a FRENTE e o VERSO são
 // emitidos em sequência no mesmo grid 2 colunas (frente, depois verso logo
@@ -209,7 +211,7 @@ const NARROW_CHARS = "iIlJjtfr1.,;:'\"!|()[]{}-/\\";
 const WIDE_CHARS = "MWmw@%";
 
 function advanceEm(ch: string): number {
-  if (ch === " " || ch === "\t" || ch === " ") return ADV_SPACE;
+  if (ch === " " || ch === "\t" || ch === " ") return ADV_SPACE;
   if (WIDE_CHARS.indexOf(ch) >= 0) return ADV_WIDE;
   if (NARROW_CHARS.indexOf(ch) >= 0) return ADV_NARROW;
   return ADV_DEFAULT;
@@ -492,10 +494,6 @@ function cardCss(): string {
   html += '.flabel{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.9pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';line-height:1.1}';
   html += '.fvalue{font-family:"Zen Kaku Gothic New","Arial","Helvetica Neue",Arial,sans-serif;font-size:6.4pt;font-weight:700;color:' + INK + ';margin-top:0.7mm;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.fvalue.dojo{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.05;font-size:5.8pt;height:6.2mm;font-weight:900}';
-  html += '.frow{display:flex;gap:2.6mm}';
-  html += '.f-date{width:14mm;flex:none;min-width:0}';
-  html += '.f-dojo{flex:1;min-width:0}';
-  html += '.f-half{flex:1;min-width:0}';
   // NOME — mesmo padrão do .fvalue.dojo acima (caixa de altura fixa +
   // -webkit-line-clamp), pelos motivos documentados no cabeçalho do bloco
   // "CAMPO NOME" lá em cima. Três pontos que NÃO podem ser afrouxados:
@@ -537,19 +535,10 @@ function cardCss(): string {
   html += '.is-preta .belt-label{margin-top:0}';
   html += '.is-preta .belt-line{margin-top:0.5mm}';
   html += '.reg-num{font-size:7.6pt;font-weight:700;color:' + RED + ';letter-spacing:0.2pt}';
-  html += '.cbkt-fld{margin-top:1.0mm}';
   html += '.cbkt-num{font-family:"DM Mono","Consolas","Courier New",monospace;font-weight:700;font-size:6.8pt;color:' + INK + ';letter-spacing:0.2pt}';
   html += '.belt-line{display:flex;align-items:center;gap:1.1mm;margin-top:0.7mm}';
   html += '.belt-sq{width:1.9mm;height:1.9mm;background:' + BLACK_BAR + ';border-radius:0.3mm;flex-shrink:0}';
   html += '.belt-label{margin-top:0;font-weight:900}';
-
-  // footer
-  html += '.footer-row{margin-top:auto;display:flex;align-items:flex-end;justify-content:flex-end}';
-  html += '.pres-line{width:20mm;height:0.15mm;background:' + INK_4 + '}';
-  html += '.pres-label{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.4pt;font-weight:600;letter-spacing:0.5pt;text-transform:uppercase;color:' + INK_3 + ';margin-top:0.9mm}';
-  html += '.valid-col{display:flex;align-items:center;gap:1.2mm}';
-  html += '.valid-dot{width:0.7mm;height:0.7mm;border-radius:0.4mm;background:' + RED + ';flex-shrink:0}';
-  html += '.valid-text{font-family:"DM Mono","Consolas","Courier New",monospace;font-size:3.2pt;font-weight:600;letter-spacing:0.4pt;text-transform:uppercase;color:' + INK_3 + ';text-align:right;line-height:1.5}';
 
   // verso body
   html += '.back-row{display:flex;flex:1;margin-top:1.8mm;min-height:0}';
@@ -630,8 +619,6 @@ function cardCss(): string {
   html += '.kun-eyebrow{font-size:4.6pt;font-weight:700}';
   html += '.kun-dot{font-size:9.5pt}';
   html += '.verify-eyebrow{font-size:4.6pt;font-weight:700;color:' + PRINT_LABEL + '}';
-  html += '.pres-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
-  html += '.valid-text{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.issued-label{font-size:4.5pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.photo-sub{font-size:4.6pt;font-weight:600;color:' + PRINT_LABEL + '}';
   html += '.photo-empty{font-size:4.8pt;font-weight:600;color:' + PRINT_LABEL + '}';
