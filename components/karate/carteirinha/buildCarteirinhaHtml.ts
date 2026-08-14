@@ -210,8 +210,13 @@ const ADV_DEFAULT = 0.58;
 const NARROW_CHARS = "iIlJjtfr1.,;:'\"!|()[]{}-/\\";
 const WIDE_CHARS = "MWmw@%";
 
+// " " = espaço não-separável (NBSP), escrito escapado de propósito: em
+// literal cru ele fica invisível na review (parece a mesma condição repetida)
+// e não sobrevive bem a round-trip de encoding.
+const NBSP = " ";
+
 function advanceEm(ch: string): number {
-  if (ch === " " || ch === "\t" || ch === " ") return ADV_SPACE;
+  if (ch === " " || ch === "\t" || ch === NBSP) return ADV_SPACE;
   if (WIDE_CHARS.indexOf(ch) >= 0) return ADV_WIDE;
   if (NARROW_CHARS.indexOf(ch) >= 0) return ADV_NARROW;
   return ADV_DEFAULT;
