@@ -39,7 +39,7 @@ import { LancarAnuidadeModal } from "@/components/karate/praticante-detalhe/Lanc
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateApi, DojoAnnuity, AnnuityStatusFilter, AnnuityStatus,
-  AnnuityPaymentMethod, AnnuityReceiveResult, AnnuityDojoStatusFilter,
+  AnnuityPaymentMethod, AnnuityReceiveResult, AnnuityDojoStatusFilter, AnnuityPractitionerStatusFilter,
 } from "@/services/karateApi";
 import { BatchLaunchModal } from "@/components/karate/BatchLaunchModal";
 import { SendEmailBatchModal, EmailBatchTarget } from "@/components/karate/SendEmailBatchModal";
@@ -210,11 +210,15 @@ interface Props {
    *  (AnnuitiesHub), fonte única compartilhada com o summary/KPIs. Só é
    *  usado quando seg==="dojo" (listCpfAnnuities não tem esse parâmetro). */
   dojoStatus: AnnuityDojoStatusFilter;
+  /** Filtro ativo/inativo do segmento Praticante — F6.5 (13/08/2026,
+   *  backend). Mesmo espírito de dojoStatus, vem do hub como fonte única
+   *  compartilhada com o summary/KPIs. Só é usado quando seg==="cpf". */
+  cpfStatus: AnnuityPractitionerStatusFilter;
   onMutated: () => void;
   headerElement: React.ReactNode;
 }
 
-export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatusFilterChange, dojoStatus, onMutated, headerElement }: Props) {
+export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatusFilterChange, dojoStatus, cpfStatus, onMutated, headerElement }: Props) {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
 
@@ -240,6 +244,9 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   // MESMO LancarAnuidadeDojoModal (mode="edit"), que já tem plano +
   // parcelas carregados a partir da própria linha da tabela (sem fetch
   // extra — a listagem já traz installments/plan, ver toRowVM).
+  // F6.5 (13/08/2026) — mesmo estado (editTargetKey) agora abre também
+  // LancarAnuidadeModal (mode="edit") para seg==="cpf", ver bloco de
+  // modais mais abaixo.
   const [editTargetKey, setEditTargetKey] = useState<string | null>(null);
   const [pixTarget, setPixTarget] = useState<{ installmentId: string; amount: number; label: string } | null>(null);
   // BUGFIX P0 (11/07/2026) — "Registrar pagamento" em lote agora exige
@@ -273,18 +280,20 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
   const [receiveTargetKey, setReceiveTargetKey] = useState<string | null>(null);
   const [statementTargetKey, setStatementTargetKey] = useState<string | null>(null);
 
-  // Volta pra página 1 sempre que o filtro/busca/segmento/ano/dojo_status
-  // muda; limpa seleção (evita agir sobre linhas que já não estão na
-  // tela). BUGFIX real já visto no roster: trocar de filtro sem resetar a
-  // página deixa a lista vazia (ex.: página 3 de "Ativos" pode não existir
-  // em "Inativos") sem explicar o motivo pro operador.
-  useEffect(() => { setPage(1); setSelected(new Set()); setExpandedKey(null); }, [seg, year, statusFilter, dojoStatus, debouncedQ]);
+  // Volta pra página 1 sempre que o filtro/busca/segmento/ano/dojo_status/
+  // practitioner_status muda; limpa seleção (evita agir sobre linhas que
+  // já não estão na tela). BUGFIX real já visto no roster: trocar de
+  // filtro sem resetar a página deixa a lista vazia (ex.: página 3 de
+  // "Ativos" pode não existir em "Inativos") sem explicar o motivo pro
+  // operador.
+  useEffect(() => { setPage(1); setSelected(new Set()); setExpandedKey(null); }, [seg, year, statusFilter, dojoStatus, cpfStatus, debouncedQ]);
 
   // Condição de corrida: cada fetch carrega um id incremental; só a
   // resposta MAIS RECENTE pode escrever no estado (mesmo padrão de
-  // DojosListTab/CadastralTab). Trocar o filtro dojo_status rápido demais
-  // (ou junto de outro filtro) antes disparava duas requisições concorrentes
-  // e a mais lenta podia sobrescrever a lista com dados do recorte errado.
+  // DojosListTab/CadastralTab). Trocar o filtro dojo_status/practitioner_status
+  // rápido demais (ou junto de outro filtro) antes disparava duas
+  // requisições concorrentes e a mais lenta podia sobrescrever a lista
+  // com dados do recorte errado.
   const reqIdRef = useRef(0);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -292,14 +301,14 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(false);
     try {
-      // dojo_status só existe na rota de dojô (PR #413) — a rota de CPF
-      // (listCpfAnnuities) não tem esse parâmetro no backend, então só
-      // entra no payload quando seg==="dojo". Mesmo valor que o hub manda
-      // pro summary (getAnnuitySummary) nesse mesmo recorte — garante que
-      // lista e KPIs nunca divergem.
+      // dojo_status só existe na rota de dojô (PR #413) e practitioner_status
+      // só na rota de CPF (F6.5) — cada um só entra no payload quando o seg
+      // correspondente está ativo. Mesmo valor que o hub manda pro summary
+      // (getAnnuitySummary) nesse mesmo recorte — garante que lista e KPIs
+      // nunca divergem.
       const params = seg === "dojo"
         ? { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE, dojo_status: dojoStatus }
-        : { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE };
+        : { status: statusFilter, year, q: debouncedQ || undefined, page, pageSize: PAGE_SIZE, practitioner_status: cpfStatus };
       const res = seg === "dojo"
         ? await karateApi.listDojoAnnuities(federationId, params)
         : await karateApi.listCpfAnnuities(federationId, params);
@@ -314,7 +323,7 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
         isRefresh ? setRefreshing(false) : setLoading(false);
       }
     }
-  }, [federationId, seg, year, statusFilter, dojoStatus, debouncedQ, page]);
+  }, [federationId, seg, year, statusFilter, dojoStatus, cpfStatus, debouncedQ, page]);
   useEffect(() => { load(); }, [load]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -431,6 +440,14 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
     installments: editTargetVm.installments,
     paid_total: editTargetVm.paidTotal,
     total: editTargetVm.total,
+  } : null;
+  // F6.5 — shape mínimo pra alimentar LancarAnuidadeModal (mode="edit")
+  // quando seg==="cpf": só amount/due_date/reference_period (CPF é sempre
+  // 1x/ano, sem plano/parcelas configuráveis — ver AnnuityCpfUpdateInput).
+  const editCpfAnnuityVm: { amount: number; due_date: string; reference_period: string } | null = editTargetVm ? {
+    amount: editTargetVm.amount,
+    due_date: editTargetVm.dueDate || "",
+    reference_period: editTargetVm.referencePeriod,
   } : null;
 
   // ── Multi-seleção — pagamento em lote (nunca all-or-nothing silencioso) ──
@@ -841,10 +858,11 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
         />
       )}
 
-      {/* F4.5 — editar a anuidade (valor/plano/parcelas), independente do
-          status. `editAnnuityVm` já vem com plan/installments da própria
-          linha da tabela (sem fetch extra). onDone recarrega lista/KPIs
-          pela mesma via de sempre (load(true) + onMutated). */}
+      {/* F4.5 — editar a anuidade de DOJÔ (valor/plano/parcelas),
+          independente do status. `editAnnuityVm` já vem com
+          plan/installments da própria linha da tabela (sem fetch extra).
+          onDone recarrega lista/KPIs pela mesma via de sempre
+          (load(true) + onMutated). */}
       {editTargetVm && editTargetVm.rowId && seg === "dojo" && (
         <LancarAnuidadeDojoModal
           visible={!!editTargetVm}
@@ -854,6 +872,25 @@ export function AnnuitiesTable({ federationId, seg, year, statusFilter, onStatus
           dojoName={editTargetVm.name}
           annuityId={editTargetVm.rowId}
           annuity={editAnnuityVm}
+          onClose={closeEdit}
+          onDone={() => { closeEdit(); load(true); onMutated(); }}
+        />
+      )}
+
+      {/* F6.5 (13/08/2026) — editar a anuidade CPF (valor/vencimento/
+          período), independente do status. Mesmo padrão do bloco de
+          dojô acima: `editCpfAnnuityVm` já vem da própria linha da
+          tabela (sem fetch extra); onDone recarrega lista/KPIs pela
+          mesma via de sempre. */}
+      {editTargetVm && editTargetVm.rowId && seg === "cpf" && (
+        <LancarAnuidadeModal
+          visible={!!editTargetVm}
+          mode="edit"
+          federationId={federationId}
+          practitionerId={editTargetVm.key}
+          practitionerName={editTargetVm.name}
+          annuityId={editTargetVm.rowId}
+          annuity={editCpfAnnuityVm}
           onClose={closeEdit}
           onDone={() => { closeEdit(); load(true); onMutated(); }}
         />
