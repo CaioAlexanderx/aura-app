@@ -1,4 +1,3 @@
-// ============================================================
 // AURA. — CriarLancamentoModal
 // Modal 2 etapas: seleção de cliente + detalhes do lançamento.
 //
@@ -439,9 +438,15 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const rateNum    = interestRate.trim()
     ? parseFloat(interestRate.replace(",", ".")) / 100
     : 0;
+  // 13/08/2026 (feedback Caio): juros total FLAT sobre o valor do lançamento,
+  // independente do número de parcelas -- ANTES multiplicava por nParcelas
+  // (juros linear por parcela), escalando o juros total junto com o
+  // parcelamento (ex: 10% em 10x cobrava 100% de juros). Preview precisa
+  // bater com o cálculo do backend (credit.js / ledger.js), senão o valor
+  // mostrado aqui diverge do lançamento realmente criado.
   const totalComJuros =
     rateNum > 0
-      ? parseFloat((amountNum * (1 + rateNum * nParcelas)).toFixed(2))
+      ? parseFloat((amountNum * (1 + rateNum)).toFixed(2))
       : amountNum;
   const valorParcela = amountNum > 0 ? totalComJuros / nParcelas : 0;
 
