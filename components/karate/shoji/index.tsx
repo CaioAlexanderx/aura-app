@@ -229,17 +229,39 @@ export type KpiItem = { label: string; value: string | number; meta?: string; ac
 // Count-up só quando o value já chega como NÚMERO puro (não string
 // pré-formatada, ex. moeda/percentual — essas já vêm prontas dos callers
 // via fmtMoney/fmtPct/toLocaleString e são mostradas direto, sem animar).
+//
+// Fonte dinâmica por comprimento de string (fix KpiBand truncation,
+// 13/08/2026): `adjustsFontSizeToFit` é iOS-only e é SILENCIOSAMENTE
+// ignorado no React Native Web/Android — em telas largas com muitas
+// colunas (ex. hub de anuidades com 4+ KPIs), valores monetários longos
+// (ex. "R$ 37.465,90") estouravam a célula sem encolher. Calculamos o
+// fontSize explicitamente a partir de `display.length`, multiplataforma.
+function kpiFontSizeForLength(len: number): number {
+  if (len <= 4) return 48;
+  if (len <= 7) return 36;
+  if (len <= 10) return 28;
+  if (len <= 14) return 22;
+  return 18;
+}
+
 function KpiCell({ item, isLast }: { item: KpiItem; isLast: boolean }) {
   const isNumeric = typeof item.value === "number" && Number.isFinite(item.value);
   const animated = useCountUp(isNumeric ? (item.value as number) : 0, 700);
   const display = isNumeric ? Math.round(animated).toLocaleString("pt-BR") : String(item.value);
+  const dynamicFontSize = kpiFontSizeForLength(display.length);
   return (
     <View style={[styles.kpiCell, !isLast && styles.kpiCellDivider]}>
       <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
-      {/* numberOfLines={1}: defesa contra bandas com muitas colunas — sem isso um
-          valor monetário longo (ex. "R$ 37.465") pode quebrar NO MEIO do número
-          em vez de truncar de forma previsível. */}
-      <Text style={[styles.kpiNum, item.accent && { color: P.red }]} numberOfLines={1} adjustsFontSizeToFit>{display}</Text>
+      {/* numberOfLines={1} + fontSize dinâmico por comprimento: defesa contra
+          bandas com muitas colunas e valores monetários longos (ver
+          kpiFontSizeForLength acima — substitui adjustsFontSizeToFit, que
+          é iOS-only e não funciona em RN Web/Android). */}
+      <Text
+        style={[styles.kpiNum, item.accent && { color: P.red }, { fontSize: dynamicFontSize, lineHeight: dynamicFontSize * 1.05 }]}
+        numberOfLines={1}
+      >
+        {display}
+      </Text>
       {item.meta ? <Text style={styles.kpiMeta} numberOfLines={1}>{item.meta}</Text> : null}
     </View>
   );
