@@ -889,7 +889,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                 )}
 
                 <Text style={[s.label, { marginTop: 14 }]}>
-                  Juros ao mês %{" "}
+                  Juros Total %{" "}
                   <Text style={s.labelOptional}>(opcional)</Text>
                 </Text>
                 <TextInput
