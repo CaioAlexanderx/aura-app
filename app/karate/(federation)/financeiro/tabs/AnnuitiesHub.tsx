@@ -40,7 +40,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import {
   karateApi, AnnuitySummaryResponse, AnnuitySummaryBucket, AnnuityStatusFilter,
   AnnuityCampaignPreviewResponse, AnnuityCampaignScope, AnnuityCampaignResult,
-  AnnuityDojoStatusFilter,
+  AnnuityDojoStatusFilter, AnnuityPractitionerStatusFilter,
 } from "@/services/karateApi";
 import { AnnuitiesTable } from "./AnnuitiesTable";
 import { AnnuityPlansPanel } from "./AnnuityPlansPanel";
@@ -63,6 +63,16 @@ const YEAR_MAX = CURRENT_YEAR + 1;
 // arquivo). Só existe pro segmento Dojôs — a rota de CPF
 // (listCpfAnnuities) não tem esse toggle no backend.
 const DOJO_STATUS_SEGMENTS: { key: AnnuityDojoStatusFilter; label: string }[] = [
+  { key: "active", label: "Ativos" },
+  { key: "inactive", label: "Inativos" },
+  { key: "all", label: "Todos" },
+];
+
+// Filtro ativo/inativo do segmento PRATICANTE — F6.5 (13/08/2026, backend):
+// espelha DOJO_STATUS_SEGMENTS, agora sobre customers.is_active do
+// praticante (faixa-preta continua sendo pré-requisito FIXO — este filtro
+// só muda o critério de ativo/inativo). Só aparece com seg==="cpf".
+const PRACTITIONER_STATUS_SEGMENTS: { key: AnnuityPractitionerStatusFilter; label: string }[] = [
   { key: "active", label: "Ativos" },
   { key: "inactive", label: "Inativos" },
   { key: "all", label: "Todos" },
@@ -146,6 +156,7 @@ export function AnnuitiesSeasonHeader({
   area, seg, year, summary, summaryLoading, summaryError, onArea, onSeg, onYear, onRetrySummary,
   statusFilter, onStatusFilter,
   dojoStatus, onDojoStatus,
+  cpfStatus, onCpfStatus,
   onNovaCampanha, newMembersCount, newMembersLoading, newMembersDojos, newMembersPracts, onOpenCampaignFromBanner,
 }: {
   area: AreaKey; seg: SegKey; year: string;
@@ -158,6 +169,10 @@ export function AnnuitiesSeasonHeader({
    *  (AnnuitiesTable → listDojoAnnuities) e o summary (getAnnuitySummary)
    *  logo abaixo, pra nunca divergirem. */
   dojoStatus: AnnuityDojoStatusFilter; onDojoStatus: (s: AnnuityDojoStatusFilter) => void;
+  /** Filtro ativo/inativo do segmento Praticante — F6.5 (13/08/2026,
+   *  backend). Mesma fonte única no hub, alimenta listCpfAnnuities
+   *  (AnnuitiesTable) e getAnnuitySummary (loadSummary) juntos. */
+  cpfStatus: AnnuityPractitionerStatusFilter; onCpfStatus: (s: AnnuityPractitionerStatusFilter) => void;
   /** Fase F3 — abre o CampaignWizard (botão "Nova campanha" e banner de
    *  novos filiados sem cobrança compartilham o mesmo wizard). */
   onNovaCampanha: () => void;
@@ -376,6 +391,26 @@ export function AnnuitiesSeasonHeader({
           ))}
         </View>
       )}
+
+      {/* Filtro ativo/inativo (segmento PRATICANTE) — F6.5 (13/08/2026,
+          backend): mesmo espírito do filtro de dojô acima, agora sobre
+          customers.is_active do praticante. Só aparece com seg==="cpf".
+          `cpfStatus` é a MESMA fonte de estado que alimenta a listagem
+          (AnnuitiesTable → listCpfAnnuities) e o summary/KPIs (loadSummary,
+          abaixo) — nunca duas cópias, senão a lista e o topo do hub
+          divergem. */}
+      {area === "cobrancas" && seg === "cpf" && (
+        <View style={styles.dojoStatusRow}>
+          {PRACTITIONER_STATUS_SEGMENTS.map((s) => (
+            <Chip
+              key={s.key}
+              label={s.label}
+              active={cpfStatus === s.key}
+              onPress={() => onCpfStatus(s.key)}
+            />
+          ))}
+        </View>
+      )}
     </RaisedHeader>
   );
 }
@@ -409,6 +444,11 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
   // continua fazendo sentido pro gestor entre temporadas).
   const [dojoStatus, setDojoStatus] = useState<AnnuityDojoStatusFilter>("active");
 
+  // Filtro ativo/inativo do segmento Praticante — F6.5 (13/08/2026,
+  // backend). Espelha dojoStatus acima, mesma FONTE ÚNICA (listCpfAnnuities
+  // + getAnnuitySummary). Default "active".
+  const [cpfStatus, setCpfStatus] = useState<AnnuityPractitionerStatusFilter>("active");
+
   const [summary, setSummary] = useState<AnnuitySummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(false);
@@ -426,6 +466,10 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
         // fatia de dojô do summary com um valor que a tela de Praticantes
         // não está mostrando controle nenhum pra escolher.
         dojo_status: seg === "dojo" ? dojoStatus : undefined,
+        // practitioner_status (F6.5) — mesmo espírito: só mandamos quando
+        // seg==="cpf" é o segmento ativo, MESMO valor que listCpfAnnuities
+        // usa (ver AnnuitiesTable), pra lista e KPIs nunca divergirem.
+        practitioner_status: seg === "cpf" ? cpfStatus : undefined,
       });
       setSummary(res);
     } catch {
@@ -433,7 +477,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
     } finally {
       setSummaryLoading(false);
     }
-  }, [federationId, year, seg, dojoStatus]);
+  }, [federationId, year, seg, dojoStatus, cpfStatus]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
   // ── Fase F3 — campanha anual de anuidades ────────────────────────
@@ -490,6 +534,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
       onArea={setArea} onSeg={setSeg} onYear={setYear} onRetrySummary={loadSummary}
       statusFilter={statusFilter} onStatusFilter={setStatusFilter}
       dojoStatus={dojoStatus} onDojoStatus={setDojoStatus}
+      cpfStatus={cpfStatus} onCpfStatus={setCpfStatus}
       onNovaCampanha={() => openCampaignWizard(undefined)}
       newMembersCount={newMembersCount}
       newMembersLoading={newMembersLoading}
@@ -499,7 +544,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
     />
   ), [
     area, seg, year, summary, summaryLoading, summaryError, setArea, setSeg, setYear, loadSummary, statusFilter,
-    dojoStatus,
+    dojoStatus, cpfStatus,
     newMembersCount, newMembersLoading, newMembersDojos, newMembersPracts, openCampaignWizard,
   ]);
 
@@ -549,6 +594,7 @@ export function AnnuitiesHub({ federationId }: { federationId: string }) {
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         dojoStatus={dojoStatus}
+        cpfStatus={cpfStatus}
         onMutated={loadSummary}
         headerElement={header}
       />
