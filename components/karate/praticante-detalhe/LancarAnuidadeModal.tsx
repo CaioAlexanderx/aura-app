@@ -1,8 +1,20 @@
 // ============================================================
-// LancarAnuidadeModal — lançar cobrança de anuidade CPF a partir da
-// ficha do praticante. Reusa POST /federation/{id}/financial/annuities/
-// cpf/{practitionerId}/charge (karateApi.chargeCpfAnnuity), o MESMO
-// endpoint usado pela aba financeiro (CpfAnnuitiesTab).
+// LancarAnuidadeModal — lançar OU editar cobrança de anuidade CPF a
+// partir da ficha do praticante / hub de Anuidades.
+//
+// mode="charge" (default): lança uma cobrança nova — POST
+// /federation/{id}/financial/annuities/cpf/{practitionerId}/charge
+// (karateApi.chargeCpfAnnuity), o MESMO endpoint usado pela aba
+// financeiro (CpfAnnuitiesTab).
+//
+// mode="edit" (F6.5, 13/08/2026) — edita uma anuidade CPF JÁ LANÇADA:
+// PATCH /federation/{id}/financial/annuities/cpf/{practitionerId}/
+// {annuityId} (karateApi.updateCpfAnnuity). Precisa de `annuityId` e
+// `annuity` (amount/due_date/reference_period atuais, pra prefill —
+// mesmo padrão do LancarAnuidadeDojoModal em modo edit: os campos vêm
+// já carregados da própria linha da tabela, sem fetch extra). SEM lock
+// de status no backend — funciona mesmo já paga (422 AMOUNT_BELOW_PAID
+// se o novo valor ficar abaixo do já recebido).
 //
 // Padrão de modal segue RegistrarGraduacaoModal (mesma pasta):
 // backdrop + card + header + form + footer com Cancelar/Confirmar.
@@ -17,8 +29,10 @@
 // trimestral para CPF configurável em lugar nenhum do produto. Oferecer
 // esses regimes aqui seria uma opção que sempre erra (sem amount manual)
 // ou que engana (com amount manual, vira só um rótulo sem efeito). Envia
-// `plan: "anual"` explicitamente para não depender do default silencioso
-// da rota (mesmo comportamento de hoje, só que documentado no payload).
+// `plan: "anual"` explicitamente no charge para não depender do default
+// silencioso da rota (mesmo comportamento de hoje, só que documentado no
+// payload) — em modo edit, `plan` nem é aceito pelo backend (ver
+// AnnuityCpfUpdateInput em karateApi.ts), então não é enviado.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -27,8 +41,8 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
-import { karateApi, ChargeInput } from "@/services/karateApi";
-import { maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
+import { karateApi, ChargeInput, AnnuityCpfUpdateInput } from "@/services/karateApi";
+import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import { toast } from "@/components/Toast";
 
 interface Props {
@@ -38,11 +52,27 @@ interface Props {
   practitionerId: string;
   practitionerName?: string;
   onDone: () => void;
+  /** "charge" (default) lança cobrança nova; "edit" corrige uma anuidade
+   *  já lançada (F6.5) — precisa de `annuityId` + `annuity`. */
+  mode?: "charge" | "edit";
+  /** Obrigatório quando mode==="edit". */
+  annuityId?: string;
+  /** Valores atuais da anuidade, pra prefill do formulário em modo edit —
+   *  vêm da própria linha da tabela (sem fetch extra), mesmo padrão do
+   *  LancarAnuidadeDojoModal. */
+  annuity?: { amount: number; due_date: string; reference_period: string } | null;
+}
+
+function fmtAmountInput(n: number): string {
+  return n.toFixed(2).replace(".", ",");
 }
 
 export function LancarAnuidadeModal({
   visible, onClose, federationId, practitionerId, practitionerName, onDone,
+  mode = "charge", annuityId, annuity,
 }: Props) {
+  const isEdit = mode === "edit";
+
   const [period, setPeriod] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDateBr, setDueDateBr] = useState("");
@@ -50,8 +80,19 @@ export function LancarAnuidadeModal({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (visible) { setPeriod(""); setAmount(""); setDueDateBr(""); setErr(null); setSaving(false); }
-  }, [visible]);
+    if (!visible) return;
+    if (isEdit && annuity) {
+      setPeriod(annuity.reference_period || "");
+      setAmount(annuity.amount != null ? fmtAmountInput(annuity.amount) : "");
+      setDueDateBr(annuity.due_date ? formatIsoToBr(annuity.due_date) : "");
+    } else {
+      setPeriod("");
+      setAmount("");
+      setDueDateBr("");
+    }
+    setErr(null);
+    setSaving(false);
+  }, [visible, isEdit, annuity]);
 
   const dueComplete = dueDateBr.length === 10;
   const dueIso = parseBrDate(dueDateBr);
@@ -65,18 +106,28 @@ export function LancarAnuidadeModal({
     setErr(null);
     setSaving(true);
     try {
-      const body: ChargeInput = {
-        reference_period: period.trim(),
-        amount: n,
-        due_date: dueIso,
-        plan: "anual",
-      };
-      await karateApi.chargeCpfAnnuity(federationId, practitionerId, body);
+      if (isEdit) {
+        if (!annuityId) { setSaving(false); setErr("Anuidade não identificada."); return; }
+        const body: AnnuityCpfUpdateInput = {
+          amount: n,
+          due_date: dueIso,
+          reference_period: period.trim(),
+        };
+        await karateApi.updateCpfAnnuity(federationId, practitionerId, annuityId, body);
+      } else {
+        const body: ChargeInput = {
+          reference_period: period.trim(),
+          amount: n,
+          due_date: dueIso,
+          plan: "anual",
+        };
+        await karateApi.chargeCpfAnnuity(federationId, practitionerId, body);
+      }
       setSaving(false);
       onDone();
     } catch (e: any) {
       setSaving(false);
-      const msg = e?.message || "Não foi possível lançar a anuidade.";
+      const msg = e?.message || (isEdit ? "Não foi possível salvar as alterações." : "Não foi possível lançar a anuidade.");
       setErr(msg);
       toast.error(msg);
     }
@@ -88,14 +139,19 @@ export function LancarAnuidadeModal({
         <Pressable style={StyleSheet.absoluteFill} onPress={() => !saving && onClose()} />
         <View style={st.card}>
           <View style={st.head}>
-            <Text style={st.title}>Lançar anuidade</Text>
+            <Text style={st.title}>{isEdit ? "Editar anuidade" : "Lançar anuidade"}</Text>
             <TouchableOpacity onPress={onClose} disabled={saving} hitSlop={10}>
               <Icon name="x" size={20} color={KarateColors.ink3} />
             </TouchableOpacity>
           </View>
 
           <View style={{ padding: 16, gap: 12 }}>
-            {practitionerName ? <Text style={st.hint}>Cobrança de anuidade CPF para {practitionerName}.</Text> : null}
+            {practitionerName ? (
+              <Text style={st.hint}>
+                {isEdit ? "Corrigindo a cobrança de anuidade CPF de " : "Cobrança de anuidade CPF para "}
+                {practitionerName}.
+              </Text>
+            ) : null}
             <Text style={st.hint}>Regime: Anual (1x) — única opção para anuidade de praticante.</Text>
 
             <Text style={st.label}>Período de referência <Text style={st.required}>*</Text></Text>
@@ -145,7 +201,7 @@ export function LancarAnuidadeModal({
               <Text style={st.btnGhostTxt}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleSave} disabled={saving} style={[st.btnPrimary, saving && { opacity: 0.6 }]}>
-              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={st.btnPrimaryTxt}>Lançar anuidade</Text>}
+              {saving ? <ActivityIndicator color="#fdf8f2" size="small" /> : <Text style={st.btnPrimaryTxt}>{isEdit ? "Salvar alterações" : "Lançar anuidade"}</Text>}
             </TouchableOpacity>
           </View>
         </View>
