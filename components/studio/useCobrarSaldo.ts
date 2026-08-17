@@ -4,73 +4,59 @@
 // 17/08/2026. Usado pelo Kanban de Produção e pela aba "A receber" do Hub
 // de Pedidos — por isso mora aqui, e não dentro de uma tela.
 //
-// Reusa o motor de cobrança que já existe no crediário
-// (POST /credit/collection/trigger/:iid): ele monta a mensagem, calcula
-// dias de atraso e gera o Pix copia-e-cola com encargos do dia. Aqui só
-// escolhemos o tom certo e abrimos o WhatsApp.
+// Chama POST /studio/orders/:oid/cobrar-saldo — endpoint do PRÓPRIO Studio,
+// que NÃO passa pelo gate de crediário.
 //
-// Vocabulário: a lojista de personalizados não fala "fiado" nem
-// "crediário" — fala em encomenda com saldo. Toda mensagem visível segue
-// esse vocabulário, mesmo que o dado por baixo seja uma parcela.
+// Por que não usar /credit/collection/trigger: aquelas rotas ficam atrás de
+// assertCrediarioEnabled, e o Studio não tem crediário — não existe fiado
+// nesse mercado. Exigir o toggle pra cobrar uma encomenda já vendida seria
+// pedir pra lojista habilitar um produto que ela não usa; a venda fecharia e
+// o dinheiro ficaria sem porta de saída.
+//
+// A separação é de superfície, não de dado: por baixo é a mesma parcela, e o
+// backend reusa o mesmo motor de mensagem + Pix.
+//
+// Vocabulário: a lojista de personalizados não fala "fiado" nem "crediário" —
+// fala em encomenda com saldo. O template 'encomenda' cuida do texto que o
+// CLIENTE FINAL lê, sem "parcela 1/1".
 // ============================================================
 import { useCallback, useState } from "react";
 import { Linking } from "react-native";
 import { toast } from "@/components/Toast";
-import { creditApi } from "@/services/creditApi";
+import { studioApi } from "@/services/studioApi";
 
 export type SaldoAlvo = {
-  installmentId: string;
+  orderId: string;
+  installmentId?: string | null; // só pra marcar o botão em carregamento
   phone?: string | null;
   customerName?: string | null;
   dueDate?: string | null;
   status?: "pending" | "overdue" | null;
 };
 
-// O backend tem 6 templates. Três servem aqui, e escolher errado é
-// constrangedor: cobrar "X dias em atraso" um saldo que vence semana que
-// vem queima a lojista com o cliente dela.
-export function templateParaSaldo(dueDate?: string | null, status?: string | null): string {
-  if (status === "overdue") return "atraso_1";
-  if (!dueDate) return "lembrete";
-  const hoje = new Date();
-  const hojeISO = new Date(hoje.getTime() - hoje.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
-  if (dueDate < hojeISO) return "atraso_1";
-  if (dueDate === hojeISO) return "vencimento";
-  return "lembrete";
-}
-
 export function useCobrarSaldo(companyId?: string | null) {
   const [cobrandoId, setCobrandoId] = useState<string | null>(null);
 
   const cobrar = useCallback(
     async function (alvo: SaldoAlvo) {
-      if (!companyId || !alvo?.installmentId) return;
-      setCobrandoId(alvo.installmentId);
+      if (!companyId || !alvo?.orderId) return;
+      const marca = alvo.installmentId || alvo.orderId;
+      setCobrandoId(marca);
       try {
-        const r = await creditApi.triggerCollection(companyId, alvo.installmentId, {
-          template: templateParaSaldo(alvo.dueDate, alvo.status),
-          channel: "whatsapp",
-        });
+        // O tom (vence / vence hoje / venceu) sai da data no backend — um
+        // template só, sem risco de cobrar "em atraso" o que ainda nem venceu.
+        const r = await studioApi.cobrarSaldo(companyId, alvo.orderId);
 
         const fone = String(r?.phone || alvo.phone || "").replace(/\D/g, "");
-        const texto = encodeURIComponent(String(r?.message || ""));
         if (!fone) {
-          // Sem telefone não há como abrir a conversa. A mensagem já foi
-          // gerada, então entregamos ela em vez de só falhar.
           toast.error("Este cliente não tem telefone cadastrado.");
           return;
         }
+        const texto = encodeURIComponent(String(r?.message || ""));
         await Linking.openURL(`https://wa.me/${fone}${texto ? "?text=" + texto : ""}`);
       } catch (e: any) {
-        // As rotas de /credit ficam atrás de assertCrediarioEnabled. Sem o
-        // toggle, a venda com sinal fecha normalmente mas a cobrança volta
-        // 403 — meia funcionalidade. O erro genérico não diz o que fazer.
-        if (e?.status === 403 || e?.data?.code === "CREDIARIO_DISABLED") {
-          toast.error(
-            "Para cobrar o saldo, ative Crediário em Configurações › PDV › Políticas do Caixa."
-          );
+        if (e?.data?.code === "NO_OPEN_BALANCE") {
+          toast.error("Esta encomenda não tem saldo em aberto.");
           return;
         }
         toast.error(e?.data?.error || e?.message || "Não foi possível preparar a cobrança.");

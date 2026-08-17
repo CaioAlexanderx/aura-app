@@ -404,6 +404,7 @@ export default function StudioProducao() {
   const onCobrar = useCallback((o: StudioOrder) => {
     if (!o.balance_installment_id) return;
     cobrar({
+      orderId: o.id,
       installmentId: o.balance_installment_id,
       phone: o.customer_phone,
       customerName: o.customer_name,

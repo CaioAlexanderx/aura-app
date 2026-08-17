@@ -688,6 +688,18 @@ export const studioApi = {
   },
   getOrder: (cid: string, oid: string) =>
     request<StudioOrderDetail>(base(cid) + "/orders/" + oid, { method: "GET", retry: 1, timeout: 8000 }),
+  // 17/08/2026 — cobrança do saldo da encomenda. Endpoint do próprio Studio,
+  // fora do gate de crediário: o mercado de personalizados não tem fiado, e
+  // exigir o toggle deixaria a lojista sem como receber o que já vendeu.
+  cobrarSaldo: (cid: string, oid: string) =>
+    request<{
+      success: boolean;
+      installment_id: string;
+      message: string;
+      pix_copia_cola: string | null;
+      phone: string | null;
+      days_late: number;
+    }>(base(cid) + "/orders/" + oid + "/cobrar-saldo", { method: "POST", body: {}, retry: 0, timeout: 12000 }),
   // P1 (30/05): force?: boolean — bypassa gate require_deposit_for_production no backend
   updateProductionStatus: (cid: string, oid: string, status: StudioProductionStatus, force?: boolean) =>
     request<{ id: string; studio_production_status: StudioProductionStatus }>(

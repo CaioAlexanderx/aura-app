@@ -287,6 +287,7 @@ export default function StudioPedidosHub() {
                         onPress={(e: any) => {
                           e?.stopPropagation?.();
                           cobrar({
+                            orderId: item.id,
                             installmentId: item.balance_installment_id as string,
                             phone: item.customer_phone,
                             customerName: item.name,
