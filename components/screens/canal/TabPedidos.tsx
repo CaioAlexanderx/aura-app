@@ -37,6 +37,12 @@
 //   autenticado do store. Terceiro fix: o KPI "Aguardando aprov." lia
 //   `(kpi as any).awaiting_approval`, chave que o hook nunca montava — o
 //   `as any` matou o type-check e o card mostrava 0 permanentemente.
+// 17/08: FIX — contraste no modo escuro. `cardHighlight`/`cardWarn` tinham
+//   backgroundColor FIXO claro (#fff5f5 / #fffbeb) pensado só pro tema claro.
+//   No escuro, o texto do card (Colors.ink/ink3) vira quase branco — e ficava
+//   branco sobre fundo quase branco, ilegível. Trocado pelos tokens de tema
+//   Colors.redD/amberD (translúcidos, já usados no resto do arquivo), que
+//   se adaptam ao fundo escuro/claro mantendo contraste com o texto.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -613,8 +619,12 @@ function buildStyles(accent: AccentTokens) {
     emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
     emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
     card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
-    cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
-    cardWarn: { borderColor: "#fde68a", borderWidth: 2, backgroundColor: "#fffbeb" },
+    // 17/08: eram backgroundColor fixo claro (#fff5f5/#fffbeb) — no tema
+    // escuro o texto do card (Colors.ink/ink3, quase branco) ficava sobre
+    // esse fundo claro fixo e virava ilegível. Colors.redD/amberD são
+    // translúcidos e já respeitam o tema ativo, como o resto do arquivo.
+    cardHighlight: { borderColor: Colors.red, borderWidth: 2, backgroundColor: Colors.redD },
+    cardWarn: { borderColor: Colors.amber, borderWidth: 2, backgroundColor: Colors.amberD },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
     cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
     cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
