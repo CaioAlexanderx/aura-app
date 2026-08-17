@@ -91,7 +91,11 @@ export default function CanalDigitalScreen() {
           )}
           {tab === 2 && <TabVitrine config={config} saveConfig={saveConfig} isSaving={isSaving} />}
           {tab === 3 && <TabEntrega config={config} saveConfig={saveConfig} isSaving={isSaving} />}
-          {tab === 4 && <TabPedidos />}
+          {/* 17/08/2026: a prop `companyId` passou a ser explícita. Sem ela,
+              TabPedidos derivava o cid de `orders[0]?.company_id` e fazia
+              early-return mudo quando a lista não trazia esse campo. O hook
+              ainda cai na empresa do store se a prop vier undefined. */}
+          {tab === 4 && <TabPedidos companyId={company?.id} />}
         </>
       )}
     </ScrollView>
