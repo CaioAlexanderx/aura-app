@@ -15,7 +15,17 @@ import type { CartLine, PaymentEntry } from "./types";
 import { PAY_METHODS } from "./types";
 import { FInput, money } from "./ui";
 import { Ic } from "./icons";
-import { lineSalePrice, lineListPrice, lineDiscount, MAX_DISCOUNT_PCT } from "./checkoutMath";
+import {
+  lineSalePrice, lineListPrice, lineDiscount, MAX_DISCOUNT_PCT,
+  signalBalance, signalError, signalIsValid, todayISO,
+} from "./checkoutMath";
+
+/** 'YYYY-MM-DD' → 'DD/MM'. Sem new Date(): a string é data pura e seria
+ *  lida como UTC, voltando um dia no fuso de São Paulo. */
+function fmtDueBR(iso: string): string {
+  const [, m, d] = String(iso || "").slice(0, 10).split("-");
+  return d && m ? `${d}/${m}` : String(iso || "");
+}
 
 const webPointer = () => (Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {});
 const webNoOutline = () => (Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {});
@@ -177,6 +187,7 @@ export function StageCheckout({
   discountType, setDiscountType, discountValue, setDiscountValue, manualDiscount,
   couponInput, setCouponInput, couponApplied, couponValidating, onApplyCoupon, onClearCoupon,
   splitMode, splitPayments, onToggleSplit, onAddSplit, onUpdateSplit, onRemoveSplit, splitRemaining, splitBalanced,
+  signalMode, onToggleSignal, signalValue, setSignalValue, signalMethod, setSignalMethod, signalDueDate, setSignalDueDate,
   couponDiscount, total,
 }: {
   t: StudioPalette; cart: CartLine[]; subtotal: number; count: number; customCount: number;
@@ -188,13 +199,25 @@ export function StageCheckout({
   discountType: "%" | "R$"; setDiscountType: (x: "%" | "R$") => void; discountValue: string; setDiscountValue: (s: string) => void; manualDiscount: number;
   couponInput: string; setCouponInput: (s: string) => void; couponApplied: { code: string; discount: number } | null; couponValidating: boolean; onApplyCoupon: () => void; onClearCoupon: () => void;
   splitMode: boolean; splitPayments: PaymentEntry[]; onToggleSplit: () => void; onAddSplit: () => void; onUpdateSplit: (idx: number, patch: Partial<PaymentEntry>) => void; onRemoveSplit: (idx: number) => void; splitRemaining: number; splitBalanced: boolean;
+  signalMode: boolean; onToggleSignal: () => void;
+  signalValue: string; setSignalValue: (s: string) => void;
+  signalMethod: string; setSignalMethod: (s: string) => void;
+  signalDueDate: string; setSignalDueDate: (s: string) => void;
   couponDiscount: number; total: number;
 }) {
   const hasCustom = customCount > 0;
   const discountTotal = Math.round((manualDiscount + couponDiscount) * 100) / 100;
   const discRaw = parseFloat((discountValue || "").replace(",", ".")) || 0;
   const overMax = discountType === "%" && discRaw > MAX_DISCOUNT_PCT;
-  const blockFinalize = sending || cart.length === 0 || (splitMode && !splitBalanced);
+
+  const signalNum = parseFloat((signalValue || "").replace(",", ".")) || 0;
+  const signalMsg = signalError(total, signalNum);
+  // Só acusa erro depois que ela digitou algo — campo vazio não é erro ainda.
+  const signalBad = signalMode && signalValue.trim() !== "" && signalMsg !== null;
+  const signalIncomplete = signalMode && (!signalIsValid(total, signalNum) || !signalDueDate);
+
+  const blockFinalize =
+    sending || cart.length === 0 || (splitMode && !splitBalanced) || signalIncomplete;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -265,6 +288,79 @@ export function StageCheckout({
               <View style={{ marginTop: 10, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: splitBalanced ? t.successSoft : t.warningSoft }}>
                 <Text style={{ fontSize: 12.5, fontWeight: "700", textAlign: "center", color: splitBalanced ? t.successInk : t.warning }}>
                   {splitBalanced ? "✓ Pagamentos batem com o total" : (splitRemaining > 0 ? `Faltam R$ ${money(splitRemaining)} pra fechar` : `Sobrando R$ ${money(Math.abs(splitRemaining))} nos pagamentos`)}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── Venda com sinal (F3) ──────────────────────────────
+              Irmã do "dividir pagamento", e não um modal: é uma forma de
+              receber, e o lugar dela é junto das outras. As duas são
+              exclusivas — sinal não é split, é `sinal + saldo = total`. */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.ink5 }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: t.ink2 }}>Receber sinal agora</Text>
+              <Text style={{ fontSize: 11.5, color: t.ink3, marginTop: 2 }}>
+                O cliente paga uma entrada e o restante numa data combinada.
+              </Text>
+            </View>
+            <Pressable onPress={onToggleSignal} style={{ width: 46, height: 26, borderRadius: 999, backgroundColor: signalMode ? t.accent : t.ink5, padding: 3, ...webPointer() }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", marginLeft: signalMode ? 20 : 0 }} />
+            </Pressable>
+          </View>
+
+          {signalMode && (
+            <View style={{ marginTop: 14, gap: 12 }}>
+              <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11.5, color: t.ink3, marginBottom: 5, fontWeight: "700" }}>Sinal (entrada)</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: signalBad ? t.warning : t.ink5, borderRadius: 9, backgroundColor: t.bgSoft, paddingHorizontal: 10 }}>
+                    <Text style={{ fontSize: 12.5, color: t.ink3, fontWeight: "700" }}>R$</Text>
+                    <TextInput
+                      value={signalValue}
+                      onChangeText={setSignalValue}
+                      placeholder="0,00"
+                      placeholderTextColor={t.ink4}
+                      keyboardType="decimal-pad"
+                      style={{ flex: 1, height: 40, textAlign: "right", fontSize: 14, fontWeight: "800", color: t.ink, paddingHorizontal: 8, ...webNoOutline() }}
+                    />
+                  </View>
+                </View>
+                <View style={{ flex: 1.2 }}>
+                  <Text style={{ fontSize: 11.5, color: t.ink3, marginBottom: 5, fontWeight: "700" }}>Recebido em</Text>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {PAY_METHODS.map((m) => {
+                      const on = signalMethod === m.id;
+                      return (
+                        <Pressable key={m.id} onPress={() => setSignalMethod(m.id)}
+                          style={{ flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 9, backgroundColor: on ? t.primarySoft : t.bgSoft, borderWidth: 1, borderColor: on ? t.primary : t.ink5, ...webPointer() }}>
+                          <Text style={{ fontSize: 11.5, fontWeight: "700", color: on ? t.primary : t.ink2 }}>{m.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 11.5, color: t.ink3, marginBottom: 5, fontWeight: "700" }}>Saldo combinado para</Text>
+                <TextInput
+                  value={signalDueDate}
+                  onChangeText={setSignalDueDate}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor={t.ink4}
+                  style={{ height: 40, borderWidth: 1, borderColor: t.ink5, borderRadius: 9, backgroundColor: t.bgSoft, paddingHorizontal: 12, fontSize: 13.5, fontWeight: "700", color: t.ink, ...webNoOutline() }}
+                  {...(Platform.OS === "web" ? ({ type: "date", min: todayISO() } as any) : {})}
+                />
+              </View>
+
+              {/* O saldo é o número que a lojista combina em voz alta com o
+                  cliente — tem que estar na tela antes de concluir. */}
+              <View style={{ borderRadius: 9, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: signalBad ? t.warningSoft : t.accentSoft }}>
+                <Text style={{ fontSize: 12.5, fontWeight: "700", textAlign: "center", color: signalBad ? t.warning : t.accentInk }}>
+                  {signalBad
+                    ? signalMsg
+                    : `Entra agora R$ ${money(signalNum)} · saldo de R$ ${money(signalBalance(total, signalNum))}${signalDueDate ? ` para ${fmtDueBR(signalDueDate)}` : ""}`}
                 </Text>
               </View>
             </View>
@@ -352,7 +448,15 @@ export function StageCheckout({
           onPress={onFinalize} disabled={blockFinalize}
           style={{ maxWidth: 920, alignSelf: "center", width: "100%", paddingVertical: 15, borderRadius: 12, backgroundColor: t.primary, alignItems: "center", opacity: blockFinalize ? 0.5 : 1, ...webPointer() }}
         >
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>{sending ? "Registrando…" : `Concluir venda · R$ ${money(total)}`}</Text>
+          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+            {sending
+              ? "Registrando…"
+              : signalMode
+                // Com sinal, o botão anuncia o que ENTRA agora — não o total,
+                // que não é o que o cliente vai passar no cartão hoje.
+                ? `Concluir com sinal · R$ ${money(signalNum)}`
+                : `Concluir venda · R$ ${money(total)}`}
+          </Text>
         </Pressable>
       </View>
     </View>

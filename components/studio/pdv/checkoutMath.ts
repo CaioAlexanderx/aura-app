@@ -67,3 +67,37 @@ export function splitRemaining(total: number, splits: PaymentEntry[]): number {
 export function splitIsBalanced(total: number, splits: PaymentEntry[]): boolean {
   return Math.abs(splitRemaining(total, splits)) < 0.01;
 }
+
+// ── Venda com sinal (F3) ─────────────────────────────────────
+// Não é split: aqui `sinal + saldo = total` por construção, porque o saldo é
+// o que sobra do total. Por isso splitIsBalanced não se aplica — a única
+// regra é 0 < sinal < total. Sem piso de sinal (decisão de produto): a
+// lojista decide quanto pedir de entrada.
+//
+// Espelha a validação do backend (POST /pdv/sale-com-sinal), mas quem manda
+// é ele: o total é recalculado no servidor a partir dos itens.
+
+/** Saldo que fica pra data combinada. Nunca negativo. */
+export function signalBalance(total: number, sinal: number): number {
+  return round2(Math.max(0, total - (Number(sinal) || 0)));
+}
+
+/** Sinal válido = maior que zero e menor que o total (sobra saldo). */
+export function signalIsValid(total: number, sinal: number): boolean {
+  const v = Number(sinal) || 0;
+  return v > 0 && v < round2(total);
+}
+
+/** Motivo da recusa, pro texto de erro na tela. null = válido. */
+export function signalError(total: number, sinal: number): string | null {
+  const v = Number(sinal) || 0;
+  if (v <= 0) return "Informe quanto o cliente está pagando agora.";
+  if (v >= round2(total)) return "O sinal precisa ser menor que o total — senão a venda está paga.";
+  return null;
+}
+
+/** 'YYYY-MM-DD' de hoje no fuso local (o backend valida o formato). */
+export function todayISO(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}

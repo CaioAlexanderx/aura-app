@@ -31,6 +31,13 @@ export var pdvApi = {
   createSale: function(companyId: string, body: any) {
     return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body });
   },
+  // 17/08/2026 (F3) — venda com sinal: recebe parte agora, saldo numa data
+  // combinada. Endpoint próprio, e não /pdv/sale com payments[]: o saldo é
+  // DERIVADO do total calculado no servidor, e o cliente é resolvido (ou
+  // criado) dentro da mesma transação da venda.
+  createSaleComSinal: function(companyId: string, body: any) {
+    return request<any>("/companies/" + companyId + "/pdv/sale-com-sinal", { method: "POST", body: body });
+  },
   scan: function(companyId: string, code: string) {
     return request<PdvScanResult>("/companies/" + companyId + "/pdv/scan/" + encodeURIComponent(code), { retry: 0, timeout: 5000 });
   },
