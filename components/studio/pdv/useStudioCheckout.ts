@@ -247,7 +247,16 @@ export function useStudioCheckout(cid: string | undefined) {
           }),
           payment_method: primaryPayment,
           notes: notes.trim() || null,
-          seller_name: customer.trim() || null,
+          // 17/08/2026 (F5): o nome do cliente ia em `seller_name` — o campo
+          // do VENDEDOR. Na tela de Vendas a venda saía como "Consumidor" e o
+          // nome do cliente aparecia na posição de quem vendeu, e o cliente
+          // nunca passava a existir no cadastro. Agora vai em `customer`, e o
+          // backend resolve ou cria dentro da própria transação da venda.
+          customer: {
+            name:     customer.trim() || null,
+            phone:    phone.trim() ? phone.replace(/\D/g, "") : null,
+            cpf_cnpj: cpf.trim() ? cpf.replace(/\D/g, "") : null,
+          },
         };
         if (payments) saleBody.payments = payments;
         if (cpf.trim()) saleBody.customer_cpf = cpf.replace(/\D/g, "");
@@ -260,11 +269,6 @@ export function useStudioCheckout(cid: string | undefined) {
         if (signalMode) {
           saleBody.sinal = { method: signalMethod, amount: sinalNum };
           saleBody.saldo_due_date = signalDueDate;
-          saleBody.customer = {
-            name:     customer.trim() || null,
-            phone:    phone.trim() ? phone.replace(/\D/g, "") : null,
-            cpf_cnpj: cpf.trim() ? cpf.replace(/\D/g, "") : null,
-          };
           delete saleBody.payments;
           delete saleBody.payment_method;
         }
