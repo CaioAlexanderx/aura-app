@@ -47,6 +47,7 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
+import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import {
   useStudioKanbanDnD,
   useDraggableCardRef,
@@ -101,11 +102,19 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
   return                   { txt: `${Math.round(hours / 24)}d (urgente)`,  tone: "late" };
 }
 
+// Vencimento vem como 'YYYY-MM-DD' (date puro) — construir Date a partir
+// disso interpreta como UTC e volta um dia no fuso de São Paulo.
+function fmtDueShort(iso?: string | null) {
+  if (!iso) return "";
+  const [, m, d] = String(iso).slice(0, 10).split("-");
+  return d && m ? `${d}/${m}` : String(iso);
+}
+
 // ── DraggableCard (sub-componente que consome o ref do hook) ─────────────────
 // Separado para poder chamar useDraggableCardRef como hook (regra dos hooks:
 // não pode ser chamado dentro de .map() diretamente).
 function DraggableCard({
-  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, router,
+  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, router,
 }: {
   o: StudioOrder;
   col: Column;
@@ -116,6 +125,8 @@ function DraggableCard({
   PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
   onAdvance: (order: StudioOrder) => void;
   onApproval: (order: StudioOrder) => void;
+  onCobrar: (order: StudioOrder) => void;
+  cobrandoId: string | null;
   router: ReturnType<typeof useRouter>;
 }) {
   const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
@@ -168,6 +179,29 @@ function DraggableCard({
           <Text style={s.approvalBadgeTxt}>Aprovação enviada</Text>
         </View>
       )}
+      {/* 17/08/2026 — saldo da encomenda fechada com sinal.
+          Cobrança e produção são eixos INDEPENDENTES: cobrar não move o
+          pedido de coluna, e o pedido anda de coluna com saldo em aberto. */}
+      {o.balance_amount != null && (
+        <View style={[s.balanceBadge, o.balance_status === "overdue" && { backgroundColor: t.dangerSoft }]}>
+          <Icon name="dollar-sign" size={10} color={o.balance_status === "overdue" ? t.dangerInk : t.warningInk} />
+          <Text style={[s.balanceBadgeTxt, o.balance_status === "overdue" && { color: t.dangerInk }]}>
+            R$ {Number(o.balance_amount).toFixed(2)} · {o.balance_status === "overdue" ? "venceu" : "vence"} {fmtDueShort(o.balance_due_date)}
+          </Text>
+        </View>
+      )}
+      {o.balance_installment_id && (
+        <Pressable
+          style={s.btnCobrar}
+          disabled={cobrandoId === o.balance_installment_id}
+          onPress={(e) => { e.stopPropagation && e.stopPropagation(); onCobrar(o); }}
+        >
+          <Icon name="message-circle" size={12} color={t.primary} />
+          <Text style={s.btnCobrarTxt}>
+            {cobrandoId === o.balance_installment_id ? "Abrindo..." : "Cobrar saldo"}
+          </Text>
+        </Pressable>
+      )}
       <View style={s.cardActions}>
         {col.key === "awaiting_customization" && (
           <Pressable
@@ -206,7 +240,7 @@ function DraggableCard({
 // O genérico é omitido na chamada (inferência de tipo) para evitar que o
 // Babel interprete o angle-bracket como JSX em contexto de expressão.
 function KanbanColumn({
-  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, router,
+  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, router,
 }: {
   col: Column;
   orders: StudioOrder[];
@@ -216,6 +250,8 @@ function KanbanColumn({
   PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
   onAdvance: (order: StudioOrder) => void;
   onApproval: (order: StudioOrder) => void;
+  onCobrar: (order: StudioOrder) => void;
+  cobrandoId: string | null;
   router: ReturnType<typeof useRouter>;
 }) {
   // Hook chamado no top-level do componente — sem genérico explícito (inferido).
@@ -256,6 +292,8 @@ function KanbanColumn({
             PLATFORM_LABELS={PLATFORM_LABELS}
             onAdvance={onAdvance}
             onApproval={onApproval}
+            onCobrar={onCobrar}
+            cobrandoId={cobrandoId}
             router={router}
           />
         ))}
@@ -359,6 +397,22 @@ export default function StudioProducao() {
 
   const dnd = useStudioKanbanDnD(onDrop);
 
+  // Cobrar o saldo da encomenda. Deliberadamente NÃO recarrega o board nem
+  // mexe no status: a lojista só abriu o WhatsApp; o saldo continua em aberto
+  // até o pagamento entrar de fato.
+  const { cobrar, cobrandoId } = useCobrarSaldo(company?.id);
+  const onCobrar = useCallback((o: StudioOrder) => {
+    if (!o.balance_installment_id) return;
+    cobrar({
+      orderId: o.id,
+      installmentId: o.balance_installment_id,
+      phone: o.customer_phone,
+      customerName: o.customer_name,
+      dueDate: o.balance_due_date,
+      status: o.balance_status,
+    });
+  }, [cobrar]);
+
   const byStatus: Record<string, StudioOrder[]> = {};
   for (const col of COLUMNS) byStatus[col.key] = [];
   for (const o of orders) {
@@ -420,6 +474,8 @@ export default function StudioProducao() {
               PLATFORM_LABELS={PLATFORM_LABELS}
               onAdvance={advance}
               onApproval={setApprovalFor}
+              onCobrar={onCobrar}
+              cobrandoId={cobrandoId}
               router={router}
             />
           ))}
@@ -508,6 +564,20 @@ function buildStyles(t: StudioPalette) {
       alignSelf: "flex-start", marginTop: 4,
     },
     approvalBadgeTxt: { fontSize: 10.5, color: t.infoInk, fontWeight: "700" },
+    // 17/08/2026 — saldo da encomenda
+    balanceBadge: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      alignSelf: "flex-start", marginTop: 6,
+      paddingHorizontal: 7, paddingVertical: 3,
+      borderRadius: 6, backgroundColor: t.warningSoft,
+    },
+    balanceBadgeTxt: { fontSize: 10.5, color: t.warningInk, fontWeight: "700" },
+    btnCobrar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+      marginTop: 6, paddingVertical: 6, borderRadius: 8,
+      borderWidth: 1, borderColor: t.primary,
+    },
+    btnCobrarTxt: { fontSize: 11.5, color: t.primary, fontWeight: "700" },
 
     cardActions: { gap: 6, marginTop: 8 },
     btnApproval: {

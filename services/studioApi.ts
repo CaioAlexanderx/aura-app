@@ -116,6 +116,15 @@ export type StudioOrder = {
   // Camada 1: gate de produção por sinal
   deposit_required?: number | null;
   deposit_paid?: boolean;
+  // 17/08/2026 — saldo a receber da encomenda (venda com sinal / F2).
+  // Só vem preenchido em source='pdv'; nos demais canais fica null.
+  // NÃO confundir com deposit_required/deposit_paid acima, que é o
+  // depósito da Loja Digital — outro mecanismo, sem parcela e sem id
+  // que os endpoints de cobrança aceitem.
+  balance_installment_id?: string | null;
+  balance_amount?: number | string | null;
+  balance_due_date?: string | null;
+  balance_status?: "pending" | "overdue" | null;
 };
 
 export type StudioOrderItem = {
@@ -667,16 +676,30 @@ export const studioApi = {
     request<{ compositions: CompositionSummary[]; count: number }>(base(cid) + "/compositions/summary", { method: "GET", retry: 1, timeout: 8000 }),
 
   // ── F4 KDS Orders ──
-  listOrders: (cid: string, q?: { status?: StudioProductionStatus; days?: number; limit?: number }) => {
+  listOrders: (cid: string, q?: { status?: StudioProductionStatus; days?: number; limit?: number; withBalance?: boolean }) => {
     const qs = new URLSearchParams();
     if (q?.status) qs.set("status", q.status);
     if (q?.days)   qs.set("days", String(q.days));
     if (q?.limit)  qs.set("limit", String(q.limit));
+    // Aba "A receber": só encomendas com saldo em aberto.
+    if (q?.withBalance) qs.set("with_balance", "true");
     const suffix = qs.toString() ? "?" + qs.toString() : "";
     return request<{ orders: StudioOrder[] }>(base(cid) + "/orders" + suffix, { method: "GET", retry: 1, timeout: 10000 });
   },
   getOrder: (cid: string, oid: string) =>
     request<StudioOrderDetail>(base(cid) + "/orders/" + oid, { method: "GET", retry: 1, timeout: 8000 }),
+  // 17/08/2026 — cobrança do saldo da encomenda. Endpoint do próprio Studio,
+  // fora do gate de crediário: o mercado de personalizados não tem fiado, e
+  // exigir o toggle deixaria a lojista sem como receber o que já vendeu.
+  cobrarSaldo: (cid: string, oid: string) =>
+    request<{
+      success: boolean;
+      installment_id: string;
+      message: string;
+      pix_copia_cola: string | null;
+      phone: string | null;
+      days_late: number;
+    }>(base(cid) + "/orders/" + oid + "/cobrar-saldo", { method: "POST", body: {}, retry: 0, timeout: 12000 }),
   // P1 (30/05): force?: boolean — bypassa gate require_deposit_for_production no backend
   updateProductionStatus: (cid: string, oid: string, status: StudioProductionStatus, force?: boolean) =>
     request<{ id: string; studio_production_status: StudioProductionStatus }>(

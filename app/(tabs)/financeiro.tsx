@@ -68,7 +68,15 @@ function brToISO(br: string): string | null {
 // Consome GET /financial/receivables (Negocio+).
 // Gating no backend: planos inferiores recebem 403 e o card nao renderiza.
 // Mostra KPIs: total aberto, vencido, recebido no mes. Link para /crediario.
+// 17/08/2026 — vocabulário por vertical.
+// Em personalizados quase não existe fiado: a lojista não pensa "crediário",
+// pensa em encomenda com saldo em aberto. O DADO continua sendo crediário
+// (mesma tabela, mesma categoria 'Crediario - A Receber' gravada pelo ledger)
+// — só o rótulo muda. Renomear a categoria no backend quebraria o varejo, que
+// compartilha o mesmo código, e o _mapCategory do DRE, que casa por string.
 function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
+  const { company } = useAuthStore();
+  const isStudio = (company as any)?.vertical_active === "studio";
   const { data, isLoading } = useQuery({
     queryKey: ["financial-receivables", companyId],
     queryFn: () => creditApi.getReceivables(companyId),
@@ -89,9 +97,11 @@ function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
         <View style={rcv.iconBox}>
           <Icon name="percent" size={15} color={Colors.violet3} />
         </View>
-        <Text style={rcv.title}>Crediário — A Receber</Text>
+        <Text style={rcv.title}>{isStudio ? "Encomendas — A Receber" : "Crediário — A Receber"}</Text>
+        {/* No Studio o detalhe mora na aba "A receber" do Hub de Pedidos —
+            mandar pra tela de Crediário do varejo tiraria ela do shell. */}
         <Pressable
-          onPress={() => router.push("/(tabs)/crediario" as any)}
+          onPress={() => router.push((isStudio ? "/studio/pedidos" : "/(tabs)/crediario") as any)}
           style={rcv.linkBtn}
         >
           <Text style={rcv.linkBtnText}>Ver detalhes</Text>
