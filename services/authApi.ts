@@ -90,6 +90,13 @@ export type PdvSettings = {
   studio_gallery_enabled?: boolean;
   studio_approval_enabled?: boolean;
   studio_approval_mode?: "wa_me" | "whatsapp_business";
+  // 17/08/2026 (taxa da maquininha, migration 283): vale pro shell Negocio
+  // E pro Studio. Ligado, toda venda no cartao gera a despesa sozinha.
+  // Credito ("cartao") e debito tem aliquotas SEPARADAS — a adquirente
+  // cobra diferente em cada um. Percentuais 0..100.
+  card_fee_enabled?: boolean;
+  card_fee_credit_pct?: number;
+  card_fee_debit_pct?: number;
 };
 
 export var authApi = {

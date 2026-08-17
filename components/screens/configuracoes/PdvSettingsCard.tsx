@@ -18,6 +18,7 @@ import { Card } from "@/components/screens/configuracoes/shared";
 //   - Ativar módulo de Abertura/Fechamento de Caixa
 //   - Ativar Crediário (fiado por cliente) — 09/05/2026
 //   - Modal de troco em venda dinheiro — 12/05/2026
+//   - Taxa da maquininha (crédito/débito) — 17/08/2026
 //   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
 //
 // Persistido em companies.pdv_settings (jsonb).
@@ -29,6 +30,10 @@ export function PdvSettingsCard() {
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [feeInput, setFeeInput] = useState<string>("");
+  // 17/08/2026 — taxa da maquininha: crédito e débito têm alíquotas próprias,
+  // então cada campo guarda o texto em edição separadamente.
+  const [creditFeeInput, setCreditFeeInput] = useState<string>("");
+  const [debitFeeInput, setDebitFeeInput] = useState<string>("");
 
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
@@ -175,6 +180,82 @@ export function PdvSettingsCard() {
         </Pressable>
       )}
 
+      <View style={s.divider} />
+
+      {/* 17/08/2026: Taxa da maquininha.
+          NAO e gated por vertical de proposito — vale pro shell Negocio e
+          pro shell Studio. Ligada, toda venda no cartao lanca sozinha a
+          despesa do que a adquirente retem, com aliquotas SEPARADAS de
+          credito e debito. A receita bruta fica intacta: a taxa e uma
+          despesa a parte, na data da venda (competencia, nao repasse). */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Taxa da maquininha</Text>
+          <Text style={s.rowDesc}>Lança sozinho a despesa do que a maquininha retém em cada venda no cartão. Sua receita continua cheia — a taxa entra separada, na data da venda.</Text>
+        </View>
+        <Switch
+          value={display.card_fee_enabled === true}
+          onValueChange={function(v) { toggle("card_fee_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.card_fee_enabled === true ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      {display.card_fee_enabled === true && (
+        <View style={s.cardFeeBox}>
+          <View style={s.cardFeeRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardFeeLabel}>Crédito</Text>
+              <Text style={s.cardFeeHint}>Quanto a adquirente retém no crédito</Text>
+            </View>
+            <TextInput
+              value={creditFeeInput || String(display.card_fee_credit_pct ?? "")}
+              onChangeText={setCreditFeeInput}
+              onBlur={() => {
+                const n = Math.max(0, Math.min(100, Number((creditFeeInput || "").replace(/[^\d.]/g, "")) || 0));
+                setCreditFeeInput("");
+                if (n !== Number(display.card_fee_credit_pct || 0)) {
+                  toggle("card_fee_credit_pct" as keyof PdvSettings, n);
+                }
+              }}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={Colors.ink4}
+              style={s.feeInput}
+              editable={!saving}
+            />
+            <Text style={s.pctSign}>%</Text>
+          </View>
+
+          <View style={s.cardFeeRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardFeeLabel}>Débito</Text>
+              <Text style={s.cardFeeHint}>Quanto a adquirente retém no débito</Text>
+            </View>
+            <TextInput
+              value={debitFeeInput || String(display.card_fee_debit_pct ?? "")}
+              onChangeText={setDebitFeeInput}
+              onBlur={() => {
+                const n = Math.max(0, Math.min(100, Number((debitFeeInput || "").replace(/[^\d.]/g, "")) || 0));
+                setDebitFeeInput("");
+                if (n !== Number(display.card_fee_debit_pct || 0)) {
+                  toggle("card_fee_debit_pct" as keyof PdvSettings, n);
+                }
+              }}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={Colors.ink4}
+              style={s.feeInput}
+              editable={!saving}
+            />
+            <Text style={s.pctSign}>%</Text>
+          </View>
+
+          <Text style={s.cardFeeFoot}>As alíquotas estão no extrato da sua adquirente. Taxa extra por parcelamento não entra nesta conta.</Text>
+        </View>
+      )}
+
       {/* Fase 7 (Restaurante): so aparece se vertical_active === "food" */}
       {isFoodVertical && (
         <>
@@ -297,6 +378,16 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
     fontSize: 14, fontWeight: "700", minWidth: 80, textAlign: "center",
   },
+  // 17/08/2026 — Taxa da maquininha
+  pctSign:      { color: Colors.ink3, fontSize: 13, fontWeight: "700" },
+  cardFeeBox:   {
+    marginTop: 2, marginBottom: 6, paddingLeft: 10,
+    borderLeftWidth: 2, borderLeftColor: Colors.border2,
+  },
+  cardFeeRow:   { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  cardFeeLabel: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  cardFeeHint:  { fontSize: 10, color: Colors.ink4, marginTop: 1 },
+  cardFeeFoot:  { fontSize: 10, color: Colors.ink4, marginTop: 4, lineHeight: 14 },
   warnBox: {
     flexDirection: "row", gap: 6, alignItems: "flex-start",
     backgroundColor: Colors.amberD || "rgba(245,158,11,0.1)", padding: 8, borderRadius: 6,
