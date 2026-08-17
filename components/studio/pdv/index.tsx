@@ -277,6 +277,14 @@ export default function StudioCaixaPage() {
         onRemoveSplit={checkout.removeSplit}
         splitRemaining={splitRem}
         splitBalanced={splitBal}
+        signalMode={checkout.signalMode}
+        onToggleSignal={checkout.toggleSignal}
+        signalValue={checkout.signalValue}
+        setSignalValue={checkout.setSignalValue}
+        signalMethod={checkout.signalMethod}
+        setSignalMethod={checkout.setSignalMethod}
+        signalDueDate={checkout.signalDueDate}
+        setSignalDueDate={checkout.setSignalDueDate}
         couponDiscount={couponDiscount}
         total={totalFinal}
       />

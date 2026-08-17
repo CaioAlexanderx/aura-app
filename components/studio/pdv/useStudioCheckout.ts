@@ -32,8 +32,17 @@ import {
   lineDiscount,
   splitRemaining,
   splitIsBalanced,
+  signalBalance,
+  signalError,
   MAX_DISCOUNT_PCT,
 } from "./checkoutMath";
+
+/** 'YYYY-MM-DD' → 'DD/MM' pro texto do WhatsApp (sem passar por Date: a
+ *  string é data pura e new Date() a interpretaria como UTC). */
+function fmtBR(iso: string): string {
+  const [, m, d] = String(iso || "").slice(0, 10).split("-");
+  return d && m ? `${d}/${m}` : String(iso || "");
+}
 
 export function useStudioCheckout(cid: string | undefined) {
   const [customer, setCustomer] = useState("");
@@ -88,6 +97,22 @@ export function useStudioCheckout(cid: string | undefined) {
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
 
+  // ── Venda com sinal (F3) ──
+  // Exclusiva do split: sinal não é split, é forma de pagamento própria em
+  // que `sinal + saldo = total` por construção.
+  const [signalMode, setSignalMode] = useState(false);
+  const [signalValue, setSignalValue] = useState("");
+  const [signalMethod, setSignalMethod] = useState("pix");
+  const [signalDueDate, setSignalDueDate] = useState("");
+
+  const toggleSignal = useCallback(() => {
+    setSignalMode((prev) => {
+      const next = !prev;
+      if (next) { setSplitMode(false); setSplitPayments([]); }
+      return next;
+    });
+  }, []);
+
   const clearDiscount = useCallback(() => setDiscountValue(""), []);
   const clearCoupon = useCallback(() => {
     setCouponApplied(null);
@@ -123,6 +148,7 @@ export function useStudioCheckout(cid: string | undefined) {
     (total: number) => {
       setSplitMode((prev) => {
         const next = !prev;
+        if (next) setSignalMode(false); // split e sinal são exclusivos
         setSplitPayments(next ? [{ method: pay, value: round2(total) }] : []);
         return next;
       });
@@ -179,6 +205,24 @@ export function useStudioCheckout(cid: string | undefined) {
         }
       }
 
+      // Venda com sinal: validação espelha o backend, que recalcula o total
+      // a partir dos itens e manda de verdade.
+      const sinalNum = round2(parseFloat((signalValue || "").replace(",", ".")) || 0);
+      if (signalMode) {
+        const err = signalError(total, sinalNum);
+        if (err) { setError(err); return false; }
+        if (!signalDueDate) {
+          setError("Escolha a data combinada pro saldo.");
+          return false;
+        }
+        // O saldo é de ALGUÉM. Sem nada que identifique, o backend recusa —
+        // melhor dizer isso aqui do que voltar 422 depois de tentar.
+        if (!customer.trim() && !phone.trim() && !cpf.trim()) {
+          setError("Pra vender com sinal, informe ao menos o nome ou o WhatsApp do cliente.");
+          return false;
+        }
+      }
+
       setSending(true);
       setError(null);
       try {
@@ -207,6 +251,23 @@ export function useStudioCheckout(cid: string | undefined) {
         };
         if (payments) saleBody.payments = payments;
         if (cpf.trim()) saleBody.customer_cpf = cpf.replace(/\D/g, "");
+
+        // Venda com sinal: o endpoint próprio recebe o sinal e a data do
+        // saldo, e resolve (ou cria) o cliente na mesma transação da venda.
+        // Aqui o cliente vai no campo CERTO — `customer`, não `seller_name` —
+        // então a venda com sinal nasce com customer_id preenchido, e o saldo
+        // fica atrelado a alguém de verdade.
+        if (signalMode) {
+          saleBody.sinal = { method: signalMethod, amount: sinalNum };
+          saleBody.saldo_due_date = signalDueDate;
+          saleBody.customer = {
+            name:     customer.trim() || null,
+            phone:    phone.trim() ? phone.replace(/\D/g, "") : null,
+            cpf_cnpj: cpf.trim() ? cpf.replace(/\D/g, "") : null,
+          };
+          delete saleBody.payments;
+          delete saleBody.payment_method;
+        }
         if (couponApplied?.code) saleBody.coupon_code = couponApplied.code;
         if (manual > 0) {
           if (discountType === "%") {
@@ -217,7 +278,9 @@ export function useStudioCheckout(cid: string | undefined) {
           }
         }
 
-        const saleRes = await pdvApi.createSale(cid, saleBody);
+        const saleRes = signalMode
+          ? await pdvApi.createSaleComSinal(cid, saleBody)
+          : await pdvApi.createSale(cid, saleBody);
         const saleId = saleRes?.sale?.id;
         const saleItems: any[] = saleRes?.sale?.items || [];
 
@@ -242,11 +305,16 @@ export function useStudioCheckout(cid: string | undefined) {
           const digits = phone.replace(/\D/g, "");
           const ph = digits.startsWith("55") ? digits : "55" + digits;
           const first = customer.split(" ")[0] || "tudo bem";
-          const msg = encodeURIComponent(
-            `Oi ${first}! Sua arte personalizada já está na produção\n` +
-              `Pedido #${String(saleId).slice(0, 8)} · R$ ${total.toFixed(2)}\n\n` +
-              `Em breve te mando o mockup pra aprovação.`,
-          );
+          // Com sinal, o comprovante que ela manda precisa deixar claro o que
+          // entrou e o que ficou combinado — é o registro do acerto.
+          const corpo = signalMode
+            ? `Pedido #${String(saleId).slice(0, 8)} · total R$ ${total.toFixed(2)}\n` +
+              `Sinal recebido: R$ ${sinalNum.toFixed(2)}\n` +
+              `Saldo de R$ ${signalBalance(total, sinalNum).toFixed(2)} pra ${fmtBR(signalDueDate)}\n\n` +
+              `Em breve te mando o mockup pra aprovação.`
+            : `Pedido #${String(saleId).slice(0, 8)} · R$ ${total.toFixed(2)}\n\n` +
+              `Em breve te mando o mockup pra aprovação.`;
+          const msg = encodeURIComponent(`Oi ${first}! Sua arte personalizada já está na produção\n` + corpo);
           waLink = `https://wa.me/${ph}?text=${msg}`;
         }
 
@@ -266,10 +334,19 @@ export function useStudioCheckout(cid: string | undefined) {
           customer_name: customer.trim() || null,
           customer_cpf: cpf.trim() ? cpf.replace(/\D/g, "") : null,
           customer_phone: phone.trim() || null,
-          payment_method: primaryPayment,
+          payment_method: signalMode ? signalMethod : primaryPayment,
           payments,
           auto_emit: autoEmitNfce,
           fiscal_enabled: fiscalEnabled,
+          // Vem do backend, que é quem calcula o saldo a partir do total real.
+          signal: signalMode
+            ? {
+                amount:           Number(saleRes?.signal?.amount ?? sinalNum),
+                method:           String(saleRes?.signal?.method ?? signalMethod),
+                balance:          Number(saleRes?.signal?.balance ?? signalBalance(total, sinalNum)),
+                balance_due_date: String(saleRes?.signal?.balance_due_date ?? signalDueDate),
+              }
+            : null,
         });
         return true;
       } catch (e: any) {
@@ -279,7 +356,7 @@ export function useStudioCheckout(cid: string | undefined) {
         setSending(false);
       }
     },
-    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled],
+    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled, signalMode, signalValue, signalMethod, signalDueDate],
   );
 
   const reset = useCallback(() => {
@@ -296,6 +373,10 @@ export function useStudioCheckout(cid: string | undefined) {
     setSplitMode(false);
     setSplitPayments([]);
     setPay("pix");
+    setSignalMode(false);
+    setSignalValue("");
+    setSignalMethod("pix");
+    setSignalDueDate("");
   }, []);
 
   return {
@@ -309,5 +390,10 @@ export function useStudioCheckout(cid: string | undefined) {
     couponInput, setCouponInput, couponApplied, couponValidating, validateCoupon, clearCoupon,
     // split
     splitMode, splitPayments, toggleSplit, addSplit, updateSplit, removeSplit,
+    // venda com sinal (F3)
+    signalMode, toggleSignal,
+    signalValue, setSignalValue,
+    signalMethod, setSignalMethod,
+    signalDueDate, setSignalDueDate,
   };
 }

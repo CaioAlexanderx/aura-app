@@ -19,6 +19,12 @@ import type { SaleDone } from "./types";
 import { money } from "./ui";
 import { Ic } from "./icons";
 
+/** 'YYYY-MM-DD' → 'DD/MM'. Sem new Date(): data pura seria lida como UTC. */
+function fmtDueBR(iso: string): string {
+  const [, m, d] = String(iso || "").slice(0, 10).split("-");
+  return d && m ? `${d}/${m}` : String(iso || "");
+}
+
 // Comprovante NÃO-fiscal — HTML térmico servido pelo backend, aberto numa
 // janela síncrona (printWindow) pra não perder a user activation do clique.
 function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
@@ -57,8 +63,25 @@ export function StageDone({ t, done, onNewSale }: { t: StudioPalette; done: Sale
       </Text>
 
       <View style={{ backgroundColor: t.paperCardElev, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: t.ink5, alignItems: "center", gap: 6, minWidth: 280, marginTop: 18 }}>
-        <Text style={{ fontSize: 11, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>Total</Text>
-        <Text style={{ fontSize: 28, color: t.primary, fontWeight: "800" }}>R$ {money(done.total)}</Text>
+        <Text style={{ fontSize: 11, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {done.signal ? "Recebido agora" : "Total"}
+        </Text>
+        <Text style={{ fontSize: 28, color: t.primary, fontWeight: "800" }}>
+          R$ {money(done.signal ? done.signal.amount : done.total)}
+        </Text>
+        {/* Venda com sinal: o saldo é o combinado que ela precisa lembrar —
+            e a nota saiu pelo valor CHEIO, o que evita susto na conferência. */}
+        {done.signal && (
+          <>
+            <View style={{ height: 1, alignSelf: "stretch", backgroundColor: t.ink5, marginVertical: 8 }} />
+            <Text style={{ fontSize: 13, color: t.ink2, fontWeight: "700" }}>
+              Saldo de R$ {money(done.signal.balance)} para {fmtDueBR(done.signal.balance_due_date)}
+            </Text>
+            <Text style={{ fontSize: 11, color: t.ink3, textAlign: "center", maxWidth: 300 }}>
+              Total da encomenda R$ {money(done.total)}. Você cobra o saldo pelo card no Fluxo de Produção.
+            </Text>
+          </>
+        )}
       </View>
 
       {/* ── Fiscal: comprovante não-fiscal + NFC-e (paridade Negócio) ── */}

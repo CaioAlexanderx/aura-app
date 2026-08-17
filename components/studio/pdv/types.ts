@@ -82,6 +82,14 @@ export type SaleDone = {
   payments?: { method: string; value: number }[];
   auto_emit: boolean;      // nfce_config.auto_emit_nfce && is_active
   fiscal_enabled: boolean; // nfce_config.is_active
+  // 17/08/2026 (F3) — venda com sinal. Presente só quando a venda fechou
+  // com entrada; a NFC-e sai pelo valor CHEIO mesmo assim.
+  signal?: {
+    amount: number;
+    method: string;
+    balance: number;
+    balance_due_date: string;
+  } | null;
 };
 
 // Multi-pagamento (split): cada entrada vira uma detPag no backend
