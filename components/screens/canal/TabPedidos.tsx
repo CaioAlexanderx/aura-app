@@ -23,6 +23,26 @@
 //   entra accent tematizado por vertical. Comportamento 100% preservado.
 // 25/05: StyleSheet local agora é buildStyles(accent) memoizado — last violet
 //   refs (refreshText, proofPdfText, advBtn, lightboxOpenBtn) viram accent.*.
+// 17/08: FIX — aprovar/rejeitar Pix NUNCA funcionou (quebrado desde 03/05).
+//   Esta tela importava `{ api }` de "@/services/api", símbolo que aquele
+//   arquivo nunca exportou; o Metro não faz type-check no bundle, então
+//   `api` era `undefined` e `api.post(...)` estourava
+//   "Cannot read properties of undefined (reading 'post')" — engolido pelo
+//   catch e virando um toast genérico. Nenhum pedido do produto chegou a
+//   `confirmed`/`preparing`/`ready` desde então. Segundo modo de falha
+//   independente, que escondia o primeiro: o `cid` vinha de
+//   `orders[0]?.company_id` (canal.tsx não passava a prop `companyId`), e
+//   `if (!targetOrder || !cid) return` fazia early-return SEM nem toast.
+//   Agora as duas chamadas vivem em useDigitalOrders(), que já tem o cid
+//   autenticado do store. Terceiro fix: o KPI "Aguardando aprov." lia
+//   `(kpi as any).awaiting_approval`, chave que o hook nunca montava — o
+//   `as any` matou o type-check e o card mostrava 0 permanentemente.
+// 17/08: FIX — contraste no modo escuro. `cardHighlight`/`cardWarn` tinham
+//   backgroundColor FIXO claro (#fff5f5 / #fffbeb) pensado só pro tema claro.
+//   No escuro, o texto do card (Colors.ink/ink3) vira quase branco — e ficava
+//   branco sobre fundo quase branco, ilegível. Trocado pelos tokens de tema
+//   Colors.redD/amberD (translúcidos, já usados no resto do arquivo), que
+//   se adaptam ao fundo escuro/claro mantendo contraste com o texto.
 // ============================================================
 import { useMemo, useState } from "react";
 import {
@@ -32,7 +52,6 @@ import {
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useDigitalOrders } from "@/hooks/useDigitalOrders";
-import { api } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
@@ -149,10 +168,13 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   // Hook sempre busca "all" — filtro de grupo é aplicado client-side
   // pra mapear N status granulares -> 1 chip sem precisar mudar a API.
-  const { orders, kpi, counts, isLoading, refetch, updateStatus, isUpdating, deleteOrder, isDeleting } = useDigitalOrders("all");
-
-  // companyId pode vir via prop OU ser pego do hook (fallback usa qualquer endpoint que ja tem cid)
-  const cid = companyId || (orders[0]?.company_id) || null;
+  // `companyId` é opcional: sem ele o hook usa a empresa autenticada do store
+  // (era daqui que vinha o bug do `cid` montado a partir de orders[0]).
+  const {
+    orders, kpi, counts, isLoading, refetch,
+    updateStatus, isUpdating, deleteOrder, isDeleting,
+    approvePayment: approvePaymentApi, rejectPayment: rejectPaymentApi,
+  } = useDigitalOrders("all", companyId);
 
   // Filtragem client-side por grupo. Os status do backend continuam
   // chegando intactos — só agrupamos pra UI.
@@ -193,7 +215,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   // `fromList` indica se foi acionado via quick-action no card (loading
   // inline) ou via modal (loading global).
   async function approvePayment(targetOrder: any, opts?: { fromList?: boolean }) {
-    if (!targetOrder || !cid) return;
+    if (!targetOrder) return;
     const fromList = !!opts?.fromList;
     if (fromList) {
       setApprovingId(targetOrder.id);
@@ -201,7 +223,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
       setWorking(true);
     }
     try {
-      await api.post(`/companies/${cid}/digital-channel/orders/${targetOrder.id}/approve-payment`, {});
+      await approvePaymentApi(targetOrder.id);
       toast.success("Pagamento confirmado · pedido #" + targetOrder.order_number);
       if (!fromList) setOrder(null);
       refetch();
@@ -214,12 +236,10 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   }
 
   async function rejectPayment() {
-    if (!order || !cid) return;
+    if (!order) return;
     setWorking(true);
     try {
-      await api.post(`/companies/${cid}/digital-channel/orders/${order.id}/reject-payment`, {
-        reason: rejectReason.trim() || undefined,
-      });
+      await rejectPaymentApi(order.id, rejectReason.trim() || undefined);
       toast.success("Pedido rejeitado");
       setOrder(null);
       setShowRejectInput(false);
@@ -233,7 +253,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
   }
 
   async function handleDelete() {
-    if (!order || !cid) return;
+    if (!order) return;
     try {
       await deleteOrder(order.id);
       setOrder(null);
@@ -250,7 +270,7 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
       {/* KPI Row */}
       <View style={s.kpiRow}>
         <View style={[s.kpiCard, { borderTopColor: "#dc2626" }]}>
-          <Text style={[s.kpiNum, { color: "#dc2626" }]}>{(kpi as any).awaiting_approval || 0}</Text>
+          <Text style={[s.kpiNum, { color: "#dc2626" }]}>{kpi.awaiting_approval}</Text>
           <Text style={s.kpiLabel}>Aguardando aprov.</Text>
         </View>
         <View style={[s.kpiCard, { borderTopColor: accent.primary }]}>
@@ -599,8 +619,12 @@ function buildStyles(accent: AccentTokens) {
     emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
     emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
     card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
-    cardHighlight: { borderColor: "#fecaca", borderWidth: 2, backgroundColor: "#fff5f5" },
-    cardWarn: { borderColor: "#fde68a", borderWidth: 2, backgroundColor: "#fffbeb" },
+    // 17/08: eram backgroundColor fixo claro (#fff5f5/#fffbeb) — no tema
+    // escuro o texto do card (Colors.ink/ink3, quase branco) ficava sobre
+    // esse fundo claro fixo e virava ilegível. Colors.redD/amberD são
+    // translúcidos e já respeitam o tema ativo, como o resto do arquivo.
+    cardHighlight: { borderColor: Colors.red, borderWidth: 2, backgroundColor: Colors.redD },
+    cardWarn: { borderColor: Colors.amber, borderWidth: 2, backgroundColor: Colors.amberD },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
     cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
     cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },

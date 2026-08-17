@@ -23,7 +23,7 @@ type RefreshResult = { status: "ok"; token: string } | { status: "invalid" } | {
 // A3-FE: headers?: Record<string, string> added so callers can pass Idempotency-Key
 // without touching the Authorization flow. Spread happens BEFORE the token assignment
 // so Authorization always wins (a caller cannot accidentally clobber Bearer).
-type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number; headers?: Record<string, string> };
+export type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number; headers?: Record<string, string> };
 
 // ─── Refresh JWT singleton (race-safe) ───────────────────────────────────────
 // Múltiplas requisições paralelas que recebem 401 devem compartilhar a MESMA
@@ -149,6 +149,45 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
 }
 
 export { BASE_URL };
+
+// ─── `api`: açúcar verbal sobre request() ────────────────────────────────────
+// 17/08/2026 — POR QUE ISSO EXISTE:
+// Vários módulos faziam `import { api } from "@/services/api"` e chamavam
+// `api.post(...)` / `api.get(...)`. Esse símbolo NUNCA foi exportado daqui.
+// Como o Metro não faz type-check no bundle, o import resolvia para `undefined`
+// silenciosamente e só estourava em runtime como
+//   TypeError: Cannot read properties of undefined (reading 'post')
+// — engolido pelo `catch` da tela (virava um toast genérico) ou pelo React Query
+// (virava lista vazia). Dois efeitos confirmados:
+//   1. Canal Digital: o botão de aprovar/rejeitar Pix nunca funcionou desde
+//      03/05/2026. Nenhum pedido na história do produto chegou a `confirmed`.
+//   2. hooks/useModules.ts: a query sempre falhava -> `[]` -> hasModule() === false.
+// A correção é fazer o contrato virar real, em vez de caçar call sites um a um
+// (o Metro não avisaria os que sobrassem).
+//
+// ATENÇÃO ao editar: `scripts/check-source-integrity.mjs` (o mesmo check do CI)
+// parseia TODO arquivo com @babel/parser usando plugins ["typescript", "jsx"] —
+// os dois ligados, inclusive em `.ts`. Com o plugin `jsx` ativo, uma arrow
+// genérica `<T = any>(...) => ...` é lida como abertura de tag JSX e quebra o
+// parse. Por isso estes métodos usam `function <T = any>(...)`, que não é
+// ambíguo. Mesma armadilha vale pra qualquer arrow genérica nova no repo.
+export const api = {
+  get: function <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "GET" });
+  },
+  post: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "POST", body });
+  },
+  put: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "PUT", body });
+  },
+  patch: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "PATCH", body });
+  },
+  delete: function <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "DELETE" });
+  },
+};
 
 // ─── Re-exports de compatibilidade ───────────────────────────────────────────
 // Imports existentes de "@/services/api" continuam funcionando sem alteração.
