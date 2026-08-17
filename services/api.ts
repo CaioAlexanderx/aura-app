@@ -23,7 +23,7 @@ type RefreshResult = { status: "ok"; token: string } | { status: "invalid" } | {
 // A3-FE: headers?: Record<string, string> added so callers can pass Idempotency-Key
 // without touching the Authorization flow. Spread happens BEFORE the token assignment
 // so Authorization always wins (a caller cannot accidentally clobber Bearer).
-type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number; headers?: Record<string, string> };
+export type RequestOpts = { method?: string; body?: unknown; token?: string | null; retry?: number; timeout?: number; headers?: Record<string, string> };
 
 // ─── Refresh JWT singleton (race-safe) ───────────────────────────────────────
 // Múltiplas requisições paralelas que recebem 401 devem compartilhar a MESMA
@@ -149,6 +149,33 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
 }
 
 export { BASE_URL };
+
+// ─── `api`: açúcar verbal sobre request() ────────────────────────────────────
+// 17/08/2026 — POR QUE ISSO EXISTE:
+// Vários módulos faziam `import { api } from "@/services/api"` e chamavam
+// `api.post(...)` / `api.get(...)`. Esse símbolo NUNCA foi exportado daqui.
+// Como o Metro não faz type-check no bundle, o import resolvia para `undefined`
+// silenciosamente e só estourava em runtime como
+//   TypeError: Cannot read properties of undefined (reading 'post')
+// — engolido pelo `catch` da tela (virava um toast genérico) ou pelo React Query
+// (virava lista vazia). Dois efeitos confirmados:
+//   1. Canal Digital: o botão de aprovar/rejeitar Pix nunca funcionou desde
+//      03/05/2026. Nenhum pedido na história do produto chegou a `confirmed`.
+//   2. hooks/useModules.ts: a query sempre falhava -> `[]` -> hasModule() === false.
+// A correção é fazer o contrato virar real, em vez de caçar call sites um a um
+// (o Metro não avisaria os que sobrassem).
+export const api = {
+  get: <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
+    request<T>(path, { ...opts, method: "GET" }),
+  post: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
+    request<T>(path, { ...opts, method: "POST", body }),
+  put: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
+    request<T>(path, { ...opts, method: "PUT", body }),
+  patch: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
+    request<T>(path, { ...opts, method: "PATCH", body }),
+  delete: <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
+    request<T>(path, { ...opts, method: "DELETE" }),
+};
 
 // ─── Re-exports de compatibilidade ───────────────────────────────────────────
 // Imports existentes de "@/services/api" continuam funcionando sem alteração.

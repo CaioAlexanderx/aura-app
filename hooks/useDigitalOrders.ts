@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -17,12 +18,30 @@ const ordersApi = {
     request<any>(`/companies/${cid}/digital-channel/orders/${oid}`, {
       method: "DELETE",
     }),
+  // 17/08/2026: approve/reject moram AQUI, não na tela. Antes TabPedidos
+  // chamava `api.post(...)` com um símbolo que services/api.ts nunca exportou
+  // (undefined em runtime) e montava o `cid` na mão a partir de
+  // `orders[0]?.company_id`. Os dois modos de falha somem quando a chamada
+  // vive no hook, que já tem o cid autenticado do store.
+  approvePayment: (cid: string, oid: string) =>
+    request<any>(
+      `/companies/${cid}/digital-channel/orders/${oid}/approve-payment`,
+      { method: "POST", body: {} }
+    ),
+  rejectPayment: (cid: string, oid: string, reason?: string) =>
+    request<any>(
+      `/companies/${cid}/digital-channel/orders/${oid}/reject-payment`,
+      { method: "POST", body: { reason: reason || undefined } }
+    ),
 };
 
-export function useDigitalOrders(statusFilter = "all") {
+// `companyIdOverride` permite que uma tela force a empresa (multi-CNPJ);
+// sem ele, cai na empresa autenticada do store. Nunca mais no company_id
+// do primeiro pedido da lista.
+export function useDigitalOrders(statusFilter = "all", companyIdOverride?: string) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
-  const cid = company?.id;
+  const cid = companyIdOverride || company?.id;
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["digitalOrders", cid, statusFilter],
@@ -54,10 +73,48 @@ export function useDigitalOrders(statusFilter = "all") {
   const orders: any[] = data?.orders || [];
   const counts = data?.counts || {};
 
+  // Sem cid não existe chamada possível — erro explícito em vez de
+  // early-return silencioso (o caller mostra o toast).
+  const assertCid = useCallback(() => {
+    if (!cid) {
+      throw new Error("Empresa não identificada — recarregue a página e tente de novo.");
+    }
+    return cid;
+  }, [cid]);
+
+  const approvePayment = useCallback(
+    async (oid: string) => {
+      const res = await ordersApi.approvePayment(assertCid(), oid);
+      qc.invalidateQueries({ queryKey: ["digitalOrders", cid] });
+      return res;
+    },
+    [assertCid, qc, cid]
+  );
+
+  const rejectPayment = useCallback(
+    async (oid: string, reason?: string) => {
+      const res = await ordersApi.rejectPayment(assertCid(), oid, reason);
+      qc.invalidateQueries({ queryKey: ["digitalOrders", cid] });
+      return res;
+    },
+    [assertCid, qc, cid]
+  );
+
+  // Contagem por status: prefere o `counts` do backend (conta o banco inteiro);
+  // se a chave não vier, cai na contagem client-side da página carregada.
+  // `??` e não `||` pra respeitar um 0 legítimo do backend.
+  const countOf = (key: string) =>
+    (counts[key] as number | undefined) ??
+    orders.filter((o: any) => o.status === key).length;
+
   const today = new Date();
   const kpi = {
-    pending_payment: counts.pending_payment || 0,
-    confirmed: counts.confirmed || 0,
+    // 17/08/2026: `awaiting_approval` faltava aqui. TabPedidos lia
+    // `(kpi as any).awaiting_approval` — o `as any` matou o type-check e o
+    // card "Aguardando aprov." mostrava 0 permanentemente.
+    awaiting_approval: countOf("awaiting_approval"),
+    pending_payment: countOf("pending_payment"),
+    confirmed: countOf("confirmed"),
     revenue_today: orders
       .filter((o) => {
         const d = new Date(o.created_at);
@@ -82,5 +139,7 @@ export function useDigitalOrders(statusFilter = "all") {
     isUpdating: statusMutation.isPending,
     deleteOrder: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+    approvePayment,
+    rejectPayment,
   };
 }
