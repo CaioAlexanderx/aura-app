@@ -41,6 +41,8 @@ import {
   studioBulkHubApi,
   type HubStats, type HubFeedItem, type HubAlert,
 } from "@/services/studioBulkHubApi";
+import { studioApi } from "@/services/studioApi";
+import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { BulkOrderWizard } from "@/components/studio/BulkOrderWizard";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -56,6 +58,27 @@ function fmtDate(iso: string) {
     const d = new Date(iso);
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   } catch { return iso; }
+}
+
+// 17/08/2026 — a aba "A receber" carrega de studioApi.listOrders, e não do
+// hubFeed: o feed do hub lê só digital_orders + bulk_events, e a venda com
+// sinal é uma venda de PDV. A view studio_orders cobre os três canais.
+type FeedRow = HubFeedItem & {
+  balance_amount?: number | null;
+  balance_due_date?: string | null;
+  balance_status?: "pending" | "overdue" | null;
+  balance_installment_id?: string | null;
+  customer_phone?: string | null;
+};
+
+const TAB_LABEL: Record<string, string> = {
+  all: "Tudo", orders: "Pedidos", bulk: "Eventos", receivable: "A receber",
+};
+
+function fmtDueDate(iso?: string | null) {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).slice(0, 10).split("-");
+  return d && m ? `${d}/${m}` : String(iso);
 }
 
 function severityTone(t: StudioPalette) {
@@ -74,19 +97,43 @@ export default function StudioPedidosHub() {
   const s = useMemo(() => makeStyles(t), [t]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<HubStats | null>(null);
-  const [feed, setFeed] = useState<HubFeedItem[]>([]);
+  const [feed, setFeed] = useState<FeedRow[]>([]);
   const [alerts, setAlerts] = useState<HubAlert[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [products, setProducts] = useState<Array<{ id: string; name: string; price: number }>>([]);
-  const [tab, setTab] = useState<"all" | "orders" | "bulk">("all");
+  const [tab, setTab] = useState<"all" | "orders" | "bulk" | "receivable">("all");
+  const { cobrar, cobrandoId } = useCobrarSaldo(company?.id);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
     setLoading(true);
     try {
+      // "A receber" tem fonte própria — ver comentário do type FeedRow.
+      // Janela maior (180d): encomenda com saldo em aberto envelhece mais
+      // que pedido em produção, e sumir da lista seria perder a cobrança.
+      const feedPromise = tab === "receivable"
+        ? studioApi.listOrders(company.id, { withBalance: true, days: 180, limit: 100 })
+            .then((r) => ({
+              items: (r.orders || []).map((o) => ({
+                id: o.id,
+                kind: "order" as const,
+                created_at: o.created_at,
+                amount: Number(o.total_amount) || 0,
+                status: o.studio_production_status || "",
+                name: o.customer_name || o.display_name || null,
+                qty: o.item_count || 0,
+                balance_amount: o.balance_amount != null ? Number(o.balance_amount) : null,
+                balance_due_date: o.balance_due_date ?? null,
+                balance_status: o.balance_status ?? null,
+                balance_installment_id: o.balance_installment_id ?? null,
+                customer_phone: o.customer_phone ?? null,
+              })),
+            }))
+        : studioBulkHubApi.hubFeed(company.id, tab, 100);
+
       const [st, f, a] = await Promise.all([
         studioBulkHubApi.hubStats(company.id),
-        studioBulkHubApi.hubFeed(company.id, tab, 100),
+        feedPromise,
         studioBulkHubApi.hubAlerts(company.id),
       ]);
       setStats(st); setFeed(f.items || []); setAlerts(a.alerts || []);
@@ -175,14 +222,14 @@ export default function StudioPedidosHub() {
 
       {/* Tabs */}
       <View style={s.tabs}>
-        {(["all", "orders", "bulk"] as const).map((tk) => (
+        {(["all", "orders", "bulk", "receivable"] as const).map((tk) => (
           <Pressable
             key={tk}
             style={[s.tab, tab === tk && s.tabActive]}
             onPress={() => setTab(tk)}
           >
             <Text style={[s.tabTxt, tab === tk && s.tabTxtActive]}>
-              {tk === "all" ? "Tudo" : tk === "orders" ? "Pedidos" : "Eventos"}
+              {TAB_LABEL[tk]}
             </Text>
           </Pressable>
         ))}
@@ -190,12 +237,20 @@ export default function StudioPedidosHub() {
 
       {/* Feed */}
       {feed.length === 0 && !loading ? (
+        tab === "receivable" ? (
+          <StudioEmpty
+            icon="check-circle"
+            title="Nada a receber"
+            desc="Encomendas fechadas com sinal aparecem aqui até o saldo entrar. No momento não há saldo em aberto."
+          />
+        ) : (
         <StudioEmpty
           icon="shopping-bag"
           title="Nenhum pedido no período"
           desc="Quando entrar um pedido, ele aparece aqui automaticamente — Loja Digital, PDV e marketplaces."
           primaryCta={{ label: "Configurar Loja Digital", onPress: () => router.push("/studio/vendas/loja-digital" as any) }}
         />
+        )
       ) : (
         <View style={s.feedList}>
           {feed.map((item) => (
@@ -216,10 +271,47 @@ export default function StudioPedidosHub() {
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={s.feedAmount}>{fmtBRL(item.amount)}</Text>
-                <View style={s.feedStatus}>
-                  <Text style={s.feedStatusTxt}>{item.status || "—"}</Text>
-                </View>
+                {/* Na aba "A receber" o número que importa é o saldo, não o
+                    total da encomenda — é o que ela vai cobrar agora. */}
+                {item.balance_amount != null ? (
+                  <>
+                    <Text style={[s.feedAmount, item.balance_status === "overdue" && { color: t.dangerInk }]}>
+                      {fmtBRL(item.balance_amount)}
+                    </Text>
+                    <Text style={s.feedBalanceMeta}>
+                      {item.balance_status === "overdue" ? "venceu " : "vence "}
+                      {fmtDueDate(item.balance_due_date)} · de {fmtBRL(item.amount)}
+                    </Text>
+                    {item.balance_installment_id ? (
+                      <Pressable
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          cobrar({
+                            installmentId: item.balance_installment_id as string,
+                            phone: item.customer_phone,
+                            customerName: item.name,
+                            dueDate: item.balance_due_date,
+                            status: item.balance_status,
+                          });
+                        }}
+                        disabled={cobrandoId === item.balance_installment_id}
+                        style={s.cobrarBtn}
+                      >
+                        <Icon name="message-circle" size={12} color={t.primary} />
+                        <Text style={s.cobrarBtnTxt}>
+                          {cobrandoId === item.balance_installment_id ? "Abrindo..." : "Cobrar"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <Text style={s.feedAmount}>{fmtBRL(item.amount)}</Text>
+                    <View style={s.feedStatus}>
+                      <Text style={s.feedStatusTxt}>{item.status || "—"}</Text>
+                    </View>
+                  </>
+                )}
               </View>
             </Pressable>
           ))}
@@ -304,5 +396,13 @@ function makeStyles(t: StudioPalette) {
     feedAmount: { fontSize: 13.5, fontWeight: "800", color: t.ink },
     feedStatus: { backgroundColor: t.bgSoft, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, marginTop: 3 },
     feedStatusTxt: { fontSize: 10, color: t.ink3, fontWeight: "700", textTransform: "uppercase" },
+    // 17/08/2026 — aba "A receber"
+    feedBalanceMeta: { fontSize: 10, color: t.ink3, marginTop: 1 },
+    cobrarBtn: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      marginTop: 6, paddingHorizontal: 8, paddingVertical: 4,
+      borderRadius: 999, borderWidth: 1, borderColor: t.primary,
+    },
+    cobrarBtnTxt: { fontSize: 11, color: t.primary, fontWeight: "700" },
   });
 }

@@ -116,6 +116,15 @@ export type StudioOrder = {
   // Camada 1: gate de produção por sinal
   deposit_required?: number | null;
   deposit_paid?: boolean;
+  // 17/08/2026 — saldo a receber da encomenda (venda com sinal / F2).
+  // Só vem preenchido em source='pdv'; nos demais canais fica null.
+  // NÃO confundir com deposit_required/deposit_paid acima, que é o
+  // depósito da Loja Digital — outro mecanismo, sem parcela e sem id
+  // que os endpoints de cobrança aceitem.
+  balance_installment_id?: string | null;
+  balance_amount?: number | string | null;
+  balance_due_date?: string | null;
+  balance_status?: "pending" | "overdue" | null;
 };
 
 export type StudioOrderItem = {
@@ -667,11 +676,13 @@ export const studioApi = {
     request<{ compositions: CompositionSummary[]; count: number }>(base(cid) + "/compositions/summary", { method: "GET", retry: 1, timeout: 8000 }),
 
   // ── F4 KDS Orders ──
-  listOrders: (cid: string, q?: { status?: StudioProductionStatus; days?: number; limit?: number }) => {
+  listOrders: (cid: string, q?: { status?: StudioProductionStatus; days?: number; limit?: number; withBalance?: boolean }) => {
     const qs = new URLSearchParams();
     if (q?.status) qs.set("status", q.status);
     if (q?.days)   qs.set("days", String(q.days));
     if (q?.limit)  qs.set("limit", String(q.limit));
+    // Aba "A receber": só encomendas com saldo em aberto.
+    if (q?.withBalance) qs.set("with_balance", "true");
     const suffix = qs.toString() ? "?" + qs.toString() : "";
     return request<{ orders: StudioOrder[] }>(base(cid) + "/orders" + suffix, { method: "GET", retry: 1, timeout: 10000 });
   },
