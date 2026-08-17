@@ -164,17 +164,29 @@ export { BASE_URL };
 //   2. hooks/useModules.ts: a query sempre falhava -> `[]` -> hasModule() === false.
 // A correção é fazer o contrato virar real, em vez de caçar call sites um a um
 // (o Metro não avisaria os que sobrassem).
+//
+// ATENÇÃO ao editar: `scripts/check-source-integrity.mjs` (o mesmo check do CI)
+// parseia TODO arquivo com @babel/parser usando plugins ["typescript", "jsx"] —
+// os dois ligados, inclusive em `.ts`. Com o plugin `jsx` ativo, uma arrow
+// genérica `<T = any>(...) => ...` é lida como abertura de tag JSX e quebra o
+// parse. Por isso estes métodos usam `function <T = any>(...)`, que não é
+// ambíguo. Mesma armadilha vale pra qualquer arrow genérica nova no repo.
 export const api = {
-  get: <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
-    request<T>(path, { ...opts, method: "GET" }),
-  post: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
-    request<T>(path, { ...opts, method: "POST", body }),
-  put: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
-    request<T>(path, { ...opts, method: "PUT", body }),
-  patch: <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
-    request<T>(path, { ...opts, method: "PATCH", body }),
-  delete: <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) =>
-    request<T>(path, { ...opts, method: "DELETE" }),
+  get: function <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "GET" });
+  },
+  post: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "POST", body });
+  },
+  put: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "PUT", body });
+  },
+  patch: function <T = any>(path: string, body?: unknown, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "PATCH", body });
+  },
+  delete: function <T = any>(path: string, opts: Omit<RequestOpts, "method" | "body"> = {}) {
+    return request<T>(path, { ...opts, method: "DELETE" });
+  },
 };
 
 // ─── Re-exports de compatibilidade ───────────────────────────────────────────
