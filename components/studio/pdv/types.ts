@@ -82,6 +82,9 @@ export type SaleDone = {
   payments?: { method: string; value: number }[];
   auto_emit: boolean;      // nfce_config.auto_emit_nfce && is_active
   fiscal_enabled: boolean; // nfce_config.is_active
+  // 18/08/2026 (K3) — link público de acompanhamento da encomenda. Vai
+  // automático na mensagem do WhatsApp; aqui fica pra tela de sucesso.
+  track_url?: string | null;
   // 17/08/2026 (F3) — venda com sinal. Presente só quando a venda fechou
   // com entrada; a NFC-e sai pelo valor CHEIO mesmo assim.
   signal?: {

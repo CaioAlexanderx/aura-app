@@ -129,6 +129,10 @@ function AuthGuard() {
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
+    // K3 (18/08/2026): acompanhamento público da encomenda em
+    // /acompanhar/[token]. Link vai na mensagem da venda — o cliente final
+    // não tem conta, então exigir login mataria a função.
+    const onPublicTrack = segments[0] === "acompanhar";
     // Track D Karatê: páginas PÚBLICAS sob /karate (sem login). Ficam FORA do
     // grupo autenticado (federation) — que é transparente, então também tem
     // segments[0]==="karate". Distinguimos pelos marcadores públicos:
@@ -158,7 +162,7 @@ function AuthGuard() {
       segments[1] === "roster-self" ||
       segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onKaratePublic) return;
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicTrack || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
