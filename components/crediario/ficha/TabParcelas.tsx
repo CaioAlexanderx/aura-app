@@ -15,6 +15,7 @@
 // shell e chega por props — este arquivo é só apresentação.
 // ============================================================
 import { useState } from "react";
+import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Animated } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -90,7 +91,9 @@ export function TabParcelas({
 
   const renderParcela = (ins: CreditInstallment) => {
     const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
-    const late = ins.status === "overdue";
+    // Regra ÚNICA: nunca `status === "overdue"` (congela entre sincronizações).
+    const late = isInstallmentOverdue(ins);
+    const toReview = !late && needsReview(ins);
     const chargesTotal = ins.charges_total ?? 0;
     const hasCharges = late && chargesTotal > 0;
     const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
@@ -98,7 +101,13 @@ export function TabParcelas({
       <ParcelaRow
         key={ins.id}
         title={`Parcela ${ins.installment_number}/${ins.total_installments}`}
-        subtitle={late ? `venceu ${fmtDate(ins.due_date)}${(ins.days_charged ?? 0) > 0 ? ` · ${ins.days_charged}d de atraso` : ""}` : `vence ${fmtDate(ins.due_date)} · no prazo`}
+        subtitle={
+          late
+            ? `venceu ${fmtDate(ins.due_date)}${(ins.days_late ?? ins.days_charged ?? 0) > 0 ? ` · ${ins.days_late ?? ins.days_charged}d de atraso` : ""}`
+            : toReview
+              ? `venceu ${fmtDate(ins.due_date)} · anterior ao cadastro do carnê — confira se já foi paga`
+              : `vence ${fmtDate(ins.due_date)} · no prazo`
+        }
         amount={fmt(totalHoje)}
         overdue={late}
         expanded={expandedInstId === ins.id}

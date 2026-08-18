@@ -18,6 +18,7 @@
 // B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
   TextInput, ActivityIndicator, Clipboard,
@@ -210,7 +211,15 @@ export function ClienteCrediarioModal({
     return map;
   }, [openInst]);
 
-  const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => i.status === "overdue");
+  // Regra ÚNICA de atraso. ANTES: `i.status === "overdue"` — status persistido,
+  // só sincronizado quando alguém abre o dashboard/lista de parcelas. Resultado:
+  // ficha da livia aline (Valen, 18/08/2026) com pill vermelha "Em atraso" e os
+  // DOIS carnês verdes "Em dia" — 23 parcelas vencendo em 2027 ainda estavam
+  // marcadas overdue. Agora usa is_overdue (data + carência + resíduo, sem
+  // parcela retroativa), com fallback local para backend antigo.
+  const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => isInstallmentOverdue(i));
+  /** Parcelas retroativas: carnê histórico a conferir — não é inadimplência. */
+  const toReviewCount = openInst.filter(i => needsReview(i)).length;
 
   const realCarnes = accounts.filter(a => a && a.id != null);
   const useCarneLayout = realCarnes.length > 0;
@@ -601,6 +610,13 @@ export function ClienteCrediarioModal({
                         {hasOverdue ? "Em atraso" : "Em dia"}
                       </Text>
                     </View>
+                    {!hasOverdue && toReviewCount > 0 && (
+                      <View style={[m.pill, { backgroundColor: Colors.amber + "22" }]}>
+                        <Text style={[m.pillTxt, { color: Colors.amber }]}>
+                          {toReviewCount} a conferir
+                        </Text>
+                      </View>
+                    )}
                     {isBlocked && (
                       <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
                         <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
