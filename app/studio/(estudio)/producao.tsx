@@ -48,6 +48,7 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
+import { resumoDaSemana, colunaGargalo, riscoDoCard } from "@/components/studio/fluxoDoQuadro";
 import {
   useStudioKanbanDnD,
   useDraggableCardRef,
@@ -161,6 +162,9 @@ function DraggableCard({
 }) {
   const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
   const sla = fmtPrazo(o.promised_date, o.created_at);
+  // K4: risco não é só "o prazo está perto" — é prazo perto COM o trabalho
+  // ainda no começo. Entrega amanhã já pronta não é risco, é entrega amanhã.
+  const risco = riscoDoCard(o);
   // A imagem pode faltar (54% de cobertura hoje) e pode falhar ao carregar.
   // Os dois casos caem no mesmo lugar: o monograma, que sempre existe.
   const [imgFalhou, setImgFalhou] = useState(false);
@@ -241,6 +245,12 @@ function DraggableCard({
           </Text>
         </View>
       )}
+      {risco === "apertado" && (
+        <View style={s.riscoAviso}>
+          <Icon name="alert-triangle" size={11} color={t.warningInk} />
+          <Text style={s.riscoTxt}>Entrega chegando e ainda não foi pra produção</Text>
+        </View>
+      )}
       {o.balance_installment_id && (
         <Pressable
           style={s.btnCobrar}
@@ -291,7 +301,7 @@ function DraggableCard({
 // O genérico é omitido na chamada (inferência de tipo) para evitar que o
 // Babel interprete o angle-bracket como JSX em contexto de expressão.
 function KanbanColumn({
-  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, router,
+  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, ehGargalo, router,
 }: {
   col: Column;
   orders: StudioOrder[];
@@ -303,6 +313,7 @@ function KanbanColumn({
   onApproval: (order: StudioOrder) => void;
   onCobrar: (order: StudioOrder) => void;
   cobrandoId: string | null;
+  ehGargalo: boolean;
   router: ReturnType<typeof useRouter>;
 }) {
   // Hook chamado no top-level do componente — sem genérico explícito (inferido).
@@ -328,6 +339,14 @@ function KanbanColumn({
           color={t.ink2}
         />
       </View>
+      {/* K4: a etapa que está segurando o fluxo. Sem número pra configurar e
+          sem jargão — a frase diz o que fazer com a informação. */}
+      {ehGargalo && (
+        <View style={s.gargaloAviso}>
+          <Icon name="alert-circle" size={12} color={t.warningInk} />
+          <Text style={s.gargaloTxt}>A fila está parando aqui</Text>
+        </View>
+      )}
       <ScrollView style={s.colScroll} contentContainerStyle={{ padding: 10, gap: 10 }}>
         {orders.length === 0 ? (
           <Text style={s.colEmpty}>—</Text>
@@ -477,6 +496,12 @@ export default function StudioProducao() {
   );
   const allCaughtUp = !loading && orders.length > 0 && activeCount === 0;
 
+  // K4: leitura do fluxo. Tudo derivado do que já está na tela — nenhum
+  // campo novo, nenhuma configuração, nenhuma chamada extra.
+  const semana = useMemo(() => resumoDaSemana(orders), [orders]);
+  const colunasAtivas = useMemo(() => COLUMNS.filter((c) => c.key !== "delivered").map((c) => c.key), [COLUMNS]);
+  const gargalo = useMemo(() => colunaGargalo(byStatus, colunasAtivas), [byStatus, colunasAtivas]);
+
   return (
     <StudioScreen variant="board" scroll={false} padded={false}>
       <View style={s.headerWrap}>
@@ -498,6 +523,36 @@ export default function StudioProducao() {
             </View>
           }
         />
+
+      {/* K4: régua da semana. Só aparece quando há prazo pra falar — sem
+          prazo combinado, o quadro fica igual ao que era. */}
+      {(semana.total > 0 || semana.atrasadas > 0) && (
+        <View style={s.reguaWrap}>
+          <View style={s.regua}>
+            <Icon name="calendar-outline" size={15} color={t.ink2} />
+            <Text style={s.reguaTxt}>
+              {semana.total > 0
+                ? `${semana.total} ${semana.total === 1 ? "entrega" : "entregas"} até o fim da semana`
+                : "Nenhuma entrega marcada para esta semana"}
+              {semana.hoje > 0 ? ` · ${semana.hoje} hoje` : ""}
+            </Text>
+            {semana.atrasadas > 0 && (
+              <View style={[s.reguaSelo, { backgroundColor: sem.danger.soft }]}>
+                <Text style={[s.reguaSeloTxt, { color: sem.danger.base }]}>
+                  {semana.atrasadas} {semana.atrasadas === 1 ? "atrasada" : "atrasadas"}
+                </Text>
+              </View>
+            )}
+            {semana.emRisco > semana.atrasadas && (
+              <View style={[s.reguaSelo, { backgroundColor: sem.waiting.soft }]}>
+                <Text style={[s.reguaSeloTxt, { color: sem.waiting.base }]}>
+                  {semana.emRisco - semana.atrasadas} em cima da hora
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
       </View>
 
       {loading && orders.length === 0 ? (
@@ -534,6 +589,7 @@ export default function StudioProducao() {
               onApproval={setApprovalFor}
               onCobrar={onCobrar}
               cobrandoId={cobrandoId}
+              ehGargalo={gargalo === col.key}
               router={router}
             />
           ))}
@@ -632,6 +688,27 @@ function buildStyles(t: StudioPalette) {
       alignSelf: "flex-start", marginTop: 4,
     },
     approvalBadgeTxt: { fontSize: 10.5, color: t.infoInk, fontWeight: "700" },
+    // 18/08/2026 (K4) — leitura do fluxo
+    reguaWrap:   { paddingHorizontal: 20, paddingBottom: 10 },
+    regua: {
+      flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap",
+      backgroundColor: t.bgSoft, borderRadius: 10, borderWidth: 1, borderColor: t.ink5,
+      paddingHorizontal: 14, paddingVertical: 10,
+    },
+    reguaTxt:    { fontSize: 13, color: t.ink2, fontWeight: "600", flexShrink: 1 },
+    reguaSelo:   { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
+    reguaSeloTxt:{ fontSize: 11.5, fontWeight: "800" },
+    gargaloAviso: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      paddingHorizontal: 12, paddingVertical: 6, backgroundColor: t.warningSoft,
+    },
+    gargaloTxt:  { fontSize: 11, color: t.warningInk, fontWeight: "700" },
+    riscoAviso: {
+      flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
+      marginTop: 6, paddingHorizontal: 7, paddingVertical: 3,
+      borderRadius: 6, backgroundColor: t.warningSoft,
+    },
+    riscoTxt:    { fontSize: 10.5, color: t.warningInk, fontWeight: "700", flexShrink: 1 },
     // 17/08/2026 — saldo da encomenda
     balanceBadge: {
       flexDirection: "row", alignItems: "center", gap: 5,
