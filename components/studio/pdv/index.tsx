@@ -285,6 +285,8 @@ export default function StudioCaixaPage() {
         setSignalMethod={checkout.setSignalMethod}
         signalDueDate={checkout.signalDueDate}
         setSignalDueDate={checkout.setSignalDueDate}
+        promisedDate={checkout.promisedDate}
+        setPromisedDate={checkout.setPromisedDate}
         couponDiscount={couponDiscount}
         total={totalFinal}
       />
