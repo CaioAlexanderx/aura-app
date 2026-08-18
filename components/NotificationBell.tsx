@@ -6,6 +6,14 @@
 //   - Glow suave (pulsa de leve) só quando há item NÃO VISTO.
 //   - Abrir o sino marca como visto (persistido): o glow some e não
 //     volta em refresh/nova sessão. O banner continua acessível no drawer.
+//
+// 18/08/2026 — o sino saiu do Shell Negócio e passou a valer também para
+// Aura Dojô, Aura Karatê e Aura Studio (backend: target_vertical, PR #506).
+// Daí a prop `tone`: a topbar da federação é OXBLOOD (KarateColors.headRed)
+// e o sino default — borda/fundo claros de useColors() — some nela. Com
+// tone="onDark" a moldura vira vidro translúcido e o ícone/glow ficam
+// brancos. `tone` é OPCIONAL e o default reproduz byte a byte o visual
+// antigo, então nenhum ponto de uso existente muda.
 // ============================================================
 import { useState, useCallback, useEffect } from 'react';
 import { Pressable, View, Text, Platform, StyleSheet } from 'react-native';
@@ -13,7 +21,11 @@ import { useColors } from '@/constants/colors';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 
-// Injeta o keyframe do glow uma única vez (web).
+export type BellTone = 'default' | 'onDark';
+
+// Injeta os keyframes do glow uma única vez (web). São dois: o roxo do
+// Shell Negócio e um branco para topbar escura (oxblood do Karatê), onde
+// roxo sobre vermelho fica sujo.
 function ensureGlowStyle() {
   if (typeof document === 'undefined') return;
   if (document.getElementById('aura-bell-glow')) return;
@@ -22,7 +34,10 @@ function ensureGlowStyle() {
   el.textContent =
     '@keyframes auraBellGlow{' +
     '0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0)}' +
-    '50%{box-shadow:0 0 0 4px rgba(124,58,237,0.16),0 0 12px 2px rgba(124,58,237,0.34)}}';
+    '50%{box-shadow:0 0 0 4px rgba(124,58,237,0.16),0 0 12px 2px rgba(124,58,237,0.34)}}' +
+    '@keyframes auraBellGlowOnDark{' +
+    '0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}' +
+    '50%{box-shadow:0 0 0 4px rgba(255,255,255,0.20),0 0 12px 2px rgba(255,255,255,0.30)}}';
   document.head.appendChild(el);
 }
 
@@ -45,8 +60,9 @@ function BellSVG({ color, size = 18 }: { color: string; size?: number }) {
   ) as any;
 }
 
-export function NotificationBell() {
+export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {}) {
   const C      = useColors();
+  const onDark = tone === 'onDark';
   const [open, setOpen] = useState(false);
   const notifs = useNotifications();
   const count  = notifs.unreadCount;
@@ -98,15 +114,17 @@ export function NotificationBell() {
           width:          36,
           height:         36,
           borderRadius:   10,
-          border:         `1px solid ${C.border}`,
-          background:     C.bg3,
+          border:         `1px solid ${onDark ? 'rgba(255,255,255,0.30)' : C.border}`,
+          background:     onDark ? 'rgba(255,255,255,0.12)' : C.bg3,
           cursor:         'pointer',
           flexShrink:     0,
           transition:     'background 0.15s',
-          animation:      glow ? 'auraBellGlow 2.2s ease-in-out infinite' : undefined,
+          animation:      glow
+            ? `${onDark ? 'auraBellGlowOnDark' : 'auraBellGlow'} 2.2s ease-in-out infinite`
+            : undefined,
         } as any}
       >
-        <BellSVG color={glow ? '#7c3aed' : C.ink3} size={18} />
+        <BellSVG color={onDark ? '#fff' : glow ? '#7c3aed' : C.ink3} size={18} />
         {count > 0 && (
           <div style={{
             position:       'absolute',
@@ -115,14 +133,14 @@ export function NotificationBell() {
             minWidth:       17,
             height:         17,
             borderRadius:   9,
-            background:     '#7c3aed',
+            background:     onDark ? '#fff' : '#7c3aed',
             display:        'flex',
             alignItems:     'center',
             justifyContent: 'center',
             padding:        '0 3px',
             boxShadow:      '0 0 0 2px var(--bg, #fff)',
           } as any}>
-            <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 } as any}>
+            <span style={{ color: onDark ? '#a44c3e' : '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 } as any}>
               {count > 9 ? '9+' : count}
             </span>
           </div>

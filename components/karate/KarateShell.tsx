@@ -42,8 +42,13 @@
 //   • Sidebar — rodapé: chip de usuário (avatar com iniciais + nome +
 //     papel + botão Sair).
 //   • Topbar OXBLOOD (head-red #a44c3e) no topo da área de conteúdo (web):
-//     SÓ o breadcrumb (FPKT / <página atual>) em texto claro. Sem logos,
-//     sem busca, sem sino — header reduzido a uma faixa fina com o caminho.
+//     o breadcrumb (FPKT / <página atual>) em texto claro à esquerda e o
+//     SINO de notificações à direita. Sem logos e sem busca (vivem na
+//     sidebar) — o header segue uma faixa fina.
+//     ⚠️ 18/08/2026: o sino VOLTOU (decisão Caio). Até então este bloco
+//     dizia "sem sino" e a faixa era só o caminho; a expansão das
+//     notificações para Dojô/Karatê/Studio (backend PR #506) trouxe o
+//     sino para os três shells. Sobre o oxblood ele usa tone="onDark".
 //   • Sidebar refinada: nav-labels em maiúsculas + separadores vermelhos.
 //
 //   Usuário/papel: useAuthStore (user.name || user.email;
@@ -86,6 +91,7 @@ import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMoti
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 import { useAuthStore } from "@/stores/auth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
@@ -240,6 +246,9 @@ function Topbar() {
         </View>
 
         <View style={{ flex: 1 }} />
+
+        {/* Sino de notificações — tone onDark porque a faixa é oxblood */}
+        <NotificationBell tone="onDark" />
       </View>
     </View>
   );
@@ -531,6 +540,9 @@ export function KarateShell() {
       <View style={styles.mobileTopbar}>
         <FpktLogo size={26} style={{ marginRight: 9 }} />
         <Text style={styles.mobileTopbarTitle}>Aura Karatê</Text>
+        <View style={{ flex: 1 }} />
+        {/* Topbar mobile é clara (KarateColors.glass) — sino no tom default */}
+        <NotificationBell />
       </View>
       <View style={styles.content}>
         <Slot />

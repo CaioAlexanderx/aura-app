@@ -15,6 +15,7 @@ import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { AuraStudioLockup } from "@/components/studio/AuraStudioMark";
 import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
+import { NotificationBell } from "@/components/NotificationBell";
 import { MobileChip } from "./MobileChip";
 import { GROUPS, makeTones } from "./types";
 import { makeStyles } from "./styles";
@@ -75,14 +76,23 @@ export function MobileBar({
 
   return (
     <View style={s.mobileBar}>
-      <Pressable
-        onPress={() => go("/studio")}
-        accessibilityLabel="Ir para início do Aura Studio"
-        accessibilityRole="button"
-        style={{ alignSelf: "flex-start", paddingHorizontal: 4, paddingVertical: 4 }}
-      >
-        <AuraStudioLockup size={26} variant="dark" />
-      </Pressable>
+      {/* Linha da marca: logo à esquerda, sino no canto superior direito.
+          Fica AQUI (e não na mobileBarRow) porque a variante "tablet" não
+          renderiza aquela linha — só os chips — e ficaria sem sino.
+          A Topbar do Studio, que tem o sino no desktop, é exclusiva do
+          branch isWide (>=900px). */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Pressable
+          onPress={() => go("/studio")}
+          accessibilityLabel="Ir para início do Aura Studio"
+          accessibilityRole="button"
+          style={{ paddingHorizontal: 4, paddingVertical: 4 }}
+        >
+          <AuraStudioLockup size={26} variant="dark" />
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        <NotificationBell />
+      </View>
       {variant === "mobile" ? (
         <View style={s.mobileBarRow}>
           <StudioThemeToggle compact />
