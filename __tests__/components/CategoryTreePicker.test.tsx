@@ -32,6 +32,24 @@ jest.mock("@/constants/colors", () => ({
   }),
 }));
 
+// FIX 18/08 (C1): este arquivo falhava ao CARREGAR desde que foi escrito.
+// O requireActual abaixo puxa stores/auth -> expo-secure-store, e
+// expo-modules-core nao inicializa sob Jest ("Cannot read properties of
+// undefined (reading 'EventEmitter')"). Nenhum teste rodava. Passou
+// despercebido porque o CI do app nao executa jest -- so o parse
+// no-base64. Mock da raiz do problema, mesmo do teste do C1.
+jest.mock("expo-secure-store", () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+}));
+// O mock de @/constants/colors abaixo exporta so useColors; Toast.tsx le
+// o objeto Colors no topo do modulo e quebra. Mockar o Toast e mais
+// barato que espelhar a paleta inteira.
+jest.mock("@/components/Toast", () => ({
+  toast: { error: jest.fn(), success: jest.fn() },
+}));
+
 jest.mock("@/hooks/useCategories", () => {
   const actual = jest.requireActual("@/hooks/useCategories");
   return { ...actual, useCategories: jest.fn() };
