@@ -37,6 +37,31 @@
  *   CriarLancamentoModal.tsx (mesma causa raiz, incidente real da Valen
  *   Eletrônicos em 04/08 onde parcelas avulsas foram canceladas sem aviso).
  *
+ * BUGFIX (18/08/2026): NotFoundError "Failed to execute 'insertBefore' on
+ * 'Node'" ao alterar o nº de parcelas. Causa: o `<Modal>` de RN-web
+ * renderiza o conteúdo via portal para document.body e a lista de
+ * simulação era um `map` com keys posicionais (`ins.num` = 1..N). Quando N
+ * mudava, a reconciliação DOM dentro do portal ocasionalmente tentava
+ * insertBefore o container do simTable antes de um irmão que já não
+ * estava mais no lugar — patologia clássica portal+key-posicional.
+ * Latente extra no mesmo arquivo: os step dots trocavam entre <Icon>
+ * (svg) e <Text> (div) na mesma posição/key quando o step avançava —
+ * outra fonte histórica de insertBefore em portals.
+ *   Fix aplicado:
+ *     1. Key composta no wrapper do simTable (`sim-table-${N}-${dateIso}`)
+ *        e do cronograma unificado — força remount limpo em vez de
+ *        reconciliar filhos in-place dentro do portal.
+ *     2. Keys prefixadas explícitas em todos os `map` (`sim-row-`,
+ *        `chip-`, `u-chip-`, `u-sim-row-`, `unify-acc-`, `step-dot-`).
+ *     3. Step dots sempre renderizam <Text> com "✓" quando concluídos.
+ *   O warning de `useNativeDriver` que aparecia junto vem do próprio
+ *   Modal do RN-web (animationType="fade") — não é fixável no
+ *   consumidor. É ruído, não o crash.
+ *
+ * feat(numeric-input) (18/08/2026): input digitável de nº de parcelas ao
+ * lado dos chips. Aceita só dígitos, limita a 1..max_installments, e
+ * mostra hint "Máx Nx". Mesma UX no fluxo de unify.
+ *
  * Props:
  *   visible        — controla visibilidade
  *   companyId      — empresa atual
@@ -283,14 +308,16 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
             </Pressable>
           </View>
 
-          {/* Steps indicator */}
+          {/* Steps indicator
+              Sempre renderiza <Text> como filho para evitar swap de tipo
+              de nó DOM (Icon=svg × Text=div) na mesma posição — outra
+              fonte histórica de insertBefore NotFoundError em portals. */}
           <View style={m.stepsRow}>
             {[1, 2].map(s => (
-              <View key={s} style={[m.stepDot, s <= step && m.stepDotActive, s === step && m.stepDotCurrent]}>
-                {s < step
-                  ? <Icon name="check" size={10} color="#fff" />
-                  : <Text style={[m.stepDotNum, s <= step && { color: "#fff" }]}>{s}</Text>
-                }
+              <View key={`step-dot-${s}`} style={[m.stepDot, s <= step && m.stepDotActive, s === step && m.stepDotCurrent]}>
+                <Text style={[m.stepDotNum, s <= step && { color: "#fff" }]}>
+                  {s < step ? "✓" : s}
+                </Text>
               </View>
             ))}
           </View>
@@ -399,7 +426,7 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                       <View style={m.unifyAccountList}>
                         {openAccounts.map(acc => (
                           <Pressable
-                            key={acc.id}
+                            key={`unify-acc-${acc.id}`}
                             style={[m.unifyAccountRow, unifyAccountId === acc.id && m.unifyAccountRowOn]}
                             onPress={() => setUnifyAccountId(acc.id as string)}
                           >
@@ -448,11 +475,31 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                 {/* Fluxo SEM unify: seletor de parcelas normal */}
                 {!unifyEnabled && (
                   <>
-                    <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
+                    <View style={m.installHeaderRow}>
+                      <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
+                      <View style={m.installTyperWrap}>
+                        <TextInput
+                          style={m.installTyper}
+                          value={String(numInstallments)}
+                          onChangeText={(raw) => {
+                            const onlyDigits = String(raw).replace(/\D/g, "").slice(0, 3);
+                            if (onlyDigits === "") { setNumInstallments(1); return; }
+                            const n = Math.max(1, Math.min(maxInstallments, parseInt(onlyDigits, 10) || 1));
+                            setNumInstallments(n);
+                          }}
+                          keyboardType="numeric"
+                          inputMode="numeric"
+                          maxLength={3}
+                          selectTextOnFocus
+                        />
+                        <Text style={m.installTyperSuffix}>x</Text>
+                      </View>
+                    </View>
+                    <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
                     <View style={m.installChips}>
                       {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
                         <Pressable
-                          key={n}
+                          key={`chip-${n}`}
                           onPress={() => setNumInstallments(n)}
                           style={[m.chip, numInstallments === n && m.chipActive]}
                         >
@@ -478,10 +525,17 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                     </View>
 
                     {simInstallments.length > 0 && (
-                      <View style={m.simTable}>
+                      // Chave composta força remount limpo do simTable quando
+                      // o nº de parcelas ou a data base muda — evita
+                      // insertBefore NotFoundError na reconciliação DOM
+                      // dentro do portal do Modal (RN-web).
+                      <View
+                        key={`sim-table-${numInstallments}-${firstDueDateIso || "no-date"}`}
+                        style={m.simTable}
+                      >
                         <Text style={m.simTitle}>SIMULAÇÃO</Text>
                         {simInstallments.map(ins => (
-                          <View key={ins.num} style={m.simRow}>
+                          <View key={`sim-row-${ins.num}`} style={m.simRow}>
                             <Text style={m.simNum}>{ins.num}ª</Text>
                             <Text style={m.simDate}>{ins.dateBr}</Text>
                             <Text style={m.simAmt}>{fmtCur(ins.amount)}</Text>
@@ -515,11 +569,31 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                       );
                     })()}
 
-                    <Text style={m.fieldLabel}>Novo nº de parcelas</Text>
+                    <View style={m.installHeaderRow}>
+                      <Text style={m.fieldLabel}>Novo nº de parcelas</Text>
+                      <View style={m.installTyperWrap}>
+                        <TextInput
+                          style={m.installTyper}
+                          value={String(unifyInstallments)}
+                          onChangeText={(raw) => {
+                            const onlyDigits = String(raw).replace(/\D/g, "").slice(0, 3);
+                            if (onlyDigits === "") { setUnifyInstallments(1); return; }
+                            const n = Math.max(1, Math.min(maxInstallments, parseInt(onlyDigits, 10) || 1));
+                            setUnifyInstallments(n);
+                          }}
+                          keyboardType="numeric"
+                          inputMode="numeric"
+                          maxLength={3}
+                          selectTextOnFocus
+                        />
+                        <Text style={m.installTyperSuffix}>x</Text>
+                      </View>
+                    </View>
+                    <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
                     <View style={m.installChips}>
                       {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
                         <Pressable
-                          key={n}
+                          key={`u-chip-${n}`}
                           onPress={() => setUnifyInstallments(n)}
                           style={[m.chip, unifyInstallments === n && m.chipActive]}
                         >
@@ -553,7 +627,11 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                       </View>
                     )}
                     {unifyPreview && !unifyPreviewLoading && (
-                      <View style={m.simTable}>
+                      // Chave composta: mesmo racional do simTable normal.
+                      <View
+                        key={`u-sim-table-${unifyInstallments}-${unifyFirstDueIso || "no-date"}-${unifyPreview.schedule.length}`}
+                        style={m.simTable}
+                      >
                         <Text style={m.simTitle}>CRONOGRAMA UNIFICADO</Text>
                         {/* feat(unify-warning) — a unificação CANCELA as parcelas
                             atuais do carnê selecionado e cria este cronograma novo
@@ -588,7 +666,7 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                           <Text style={m.simTotalValue}>{fmtCur(unifyPreview.total)}</Text>
                         </View>
                         {unifyPreview.schedule.map(s => (
-                          <View key={s.number} style={m.simRow}>
+                          <View key={`u-sim-row-${s.number}`} style={m.simRow}>
                             <Text style={m.simNum}>{s.number}ª</Text>
                             <Text style={m.simDate}>{fmtDateSafe(s.due_date)}</Text>
                             <Text style={m.simAmt}>{fmtCur(s.amount_due)}</Text>
@@ -701,6 +779,28 @@ const m = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase" },
   fieldInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: Colors.ink },
 
+  installHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  installTyperWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.bg3,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  installTyper: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.ink,
+    minWidth: 32,
+    textAlign: "center",
+    paddingVertical: 4,
+  },
+  installTyperSuffix: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
+  installMaxHint: { fontSize: 10, color: Colors.ink3, marginTop: -6 },
   installChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minWidth: 56, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
   chipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
