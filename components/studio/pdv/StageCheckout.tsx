@@ -14,6 +14,7 @@ import { maskPhone } from "@/utils/masks";
 import type { CartLine, PaymentEntry } from "./types";
 import { PAY_METHODS } from "./types";
 import { FInput, money } from "./ui";
+import { DataBR } from "./DataBR";
 import { Ic } from "./icons";
 import {
   lineSalePrice, lineListPrice, lineDiscount, MAX_DISCOUNT_PCT,
@@ -281,13 +282,12 @@ export function StageCheckout({
             Quando você combinou de entregar. Aparece no card da produção e avisa quando o prazo aperta.
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <TextInput
+            <DataBR
               value={promisedDate}
-              onChangeText={setPromisedDate}
-              placeholder="AAAA-MM-DD"
-              placeholderTextColor={t.ink4}
-              style={{ height: 42, minWidth: 190, borderWidth: 1, borderColor: t.ink5, borderRadius: 10, backgroundColor: t.bgSoft, paddingHorizontal: 12, fontSize: 14, fontWeight: "700", color: t.ink, ...webNoOutline() }}
-              {...(Platform.OS === "web" ? ({ type: "date", min: todayISO() } as any) : {})}
+              onChange={setPromisedDate}
+              t={t}
+              min={todayISO()}
+              accessibilityLabel="Data de entrega combinada"
             />
             {promisedDate ? (
               <Text style={{ fontSize: 12.5, color: t.ink3 }}>{descrevePrazo(promisedDate)}</Text>
@@ -396,13 +396,13 @@ export function StageCheckout({
 
               <View>
                 <Text style={{ fontSize: 11.5, color: t.ink3, marginBottom: 5, fontWeight: "700" }}>Saldo combinado para</Text>
-                <TextInput
+                <DataBR
                   value={signalDueDate}
-                  onChangeText={setSignalDueDate}
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={t.ink4}
-                  style={{ height: 40, borderWidth: 1, borderColor: t.ink5, borderRadius: 9, backgroundColor: t.bgSoft, paddingHorizontal: 12, fontSize: 13.5, fontWeight: "700", color: t.ink, ...webNoOutline() }}
-                  {...(Platform.OS === "web" ? ({ type: "date", min: todayISO() } as any) : {})}
+                  onChange={setSignalDueDate}
+                  t={t}
+                  min={todayISO()}
+                  compact
+                  accessibilityLabel="Data combinada para o saldo"
                 />
               </View>
 
