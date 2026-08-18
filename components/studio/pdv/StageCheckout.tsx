@@ -22,6 +22,24 @@ import {
 
 /** 'YYYY-MM-DD' → 'DD/MM'. Sem new Date(): a string é data pura e seria
  *  lida como UTC, voltando um dia no fuso de São Paulo. */
+// Traduz a data escolhida pra linguagem de quem combina entrega: "sábado,
+// daqui a 4 dias" diz mais que "2026-08-22" no meio de uma venda.
+function descrevePrazo(iso: string): string {
+  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const n = new Date();
+  const dias = Math.round(
+    (Date.UTC(y, m - 1, d) - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000,
+  );
+  const semana = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"][
+    new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  ];
+  if (dias < 0)   return `${Math.abs(dias)} dias atrás`;
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "amanhã";
+  return `${semana}, daqui a ${dias} dias`;
+}
+
 function fmtDueBR(iso: string): string {
   const [, m, d] = String(iso || "").slice(0, 10).split("-");
   return d && m ? `${d}/${m}` : String(iso || "");
@@ -188,6 +206,7 @@ export function StageCheckout({
   couponInput, setCouponInput, couponApplied, couponValidating, onApplyCoupon, onClearCoupon,
   splitMode, splitPayments, onToggleSplit, onAddSplit, onUpdateSplit, onRemoveSplit, splitRemaining, splitBalanced,
   signalMode, onToggleSignal, signalValue, setSignalValue, signalMethod, setSignalMethod, signalDueDate, setSignalDueDate,
+  promisedDate, setPromisedDate,
   couponDiscount, total,
 }: {
   t: StudioPalette; cart: CartLine[]; subtotal: number; count: number; customCount: number;
@@ -203,6 +222,7 @@ export function StageCheckout({
   signalValue: string; setSignalValue: (s: string) => void;
   signalMethod: string; setSignalMethod: (s: string) => void;
   signalDueDate: string; setSignalDueDate: (s: string) => void;
+  promisedDate: string; setPromisedDate: (s: string) => void;
   couponDiscount: number; total: number;
 }) {
   const hasCustom = customCount > 0;
@@ -247,6 +267,38 @@ export function StageCheckout({
             <FInput t={t} value={customer} onChangeText={setCustomer} placeholder="Nome do cliente" />
             <FInput t={t} value={phone} onChangeText={(v) => setPhone(maskPhone(v))} placeholder="WhatsApp (00) 00000-0000" keyboardType="phone-pad" />
             <FInput t={t} value={cpf} onChangeText={setCpf} placeholder="CPF/CNPJ na nota (opcional)" keyboardType="number-pad" />
+          </View>
+        </View>
+
+        {/* Entrega — K1 (18/08/2026)
+            Encomenda personalizada tem data combinada; ela vive na cabeça da
+            lojista ou num caderno. Aqui o campo já vem preenchido com uma
+            sugestão: fechar a venda não exige abrir calendário. Limpar é
+            legítimo — sem prazo o card do Kanban usa a idade do pedido. */}
+        <View style={panel(t)}>
+          <Text style={panelTitle(t)}>Entrega</Text>
+          <Text style={{ fontSize: 12, color: t.ink3, marginBottom: 10 }}>
+            Quando você combinou de entregar. Aparece no card da produção e avisa quando o prazo aperta.
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <TextInput
+              value={promisedDate}
+              onChangeText={setPromisedDate}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={t.ink4}
+              style={{ height: 42, minWidth: 190, borderWidth: 1, borderColor: t.ink5, borderRadius: 10, backgroundColor: t.bgSoft, paddingHorizontal: 12, fontSize: 14, fontWeight: "700", color: t.ink, ...webNoOutline() }}
+              {...(Platform.OS === "web" ? ({ type: "date", min: todayISO() } as any) : {})}
+            />
+            {promisedDate ? (
+              <Text style={{ fontSize: 12.5, color: t.ink3 }}>{descrevePrazo(promisedDate)}</Text>
+            ) : (
+              <Text style={{ fontSize: 12.5, color: t.ink4 }}>Sem prazo combinado</Text>
+            )}
+            {promisedDate ? (
+              <Pressable onPress={() => setPromisedDate("")} style={{ marginLeft: "auto", ...webPointer() }}>
+                <Text style={{ fontSize: 12, color: t.ink3, fontWeight: "700" }}>Limpar</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 

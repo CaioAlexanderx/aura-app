@@ -31,7 +31,7 @@
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal, Alert,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal, Alert, Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -102,6 +102,36 @@ function fmtSla(createdAt: string): { txt: string; tone: "fresh" | "warm" | "lat
   return                   { txt: `${Math.round(hours / 24)}d (urgente)`,  tone: "late" };
 }
 
+// K1 (18/08/2026) — dias até a data prometida. Compara em UTC a partir das
+// partes da string: 'YYYY-MM-DD' é data pura, e passar por new Date() a
+// leria como UTC, voltando um dia no fuso de São Paulo.
+function diasAte(iso: string): number {
+  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return NaN;
+  const n = new Date();
+  return Math.round(
+    (Date.UTC(y, m - 1, d) - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000,
+  );
+}
+
+// A urgência vem da PROMESSA, não da idade do pedido. Um pedido de 3 dias
+// pode estar tranquilo (entrega semana que vem) ou estourando (era pra
+// ontem) — a idade não distingue os dois, então o vermelho estava medindo a
+// coisa errada. Sem prazo combinado, cai na idade: comportamento de sempre.
+function fmtPrazo(
+  promised: string | null | undefined,
+  createdAt: string,
+): { txt: string; tone: "fresh" | "warm" | "late" } {
+  if (!promised) return fmtSla(createdAt);
+  const dias = diasAte(promised);
+  if (isNaN(dias)) return fmtSla(createdAt);
+  if (dias < 0)   return { txt: `atrasou ${Math.abs(dias)}d`,          tone: "late" };
+  if (dias === 0) return { txt: "entrega hoje",                        tone: "late" };
+  if (dias === 1) return { txt: "entrega amanhã",                      tone: "warm" };
+  if (dias <= 3)  return { txt: `entrega ${fmtDueShort(promised)}`,    tone: "warm" };
+  return            { txt: `entrega ${fmtDueShort(promised)}`,         tone: "fresh" };
+}
+
 // Vencimento vem como 'YYYY-MM-DD' (date puro) — construir Date a partir
 // disso interpreta como UTC e volta um dia no fuso de São Paulo.
 function fmtDueShort(iso?: string | null) {
@@ -130,7 +160,12 @@ function DraggableCard({
   router: ReturnType<typeof useRouter>;
 }) {
   const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
-  const sla = fmtSla(o.created_at);
+  const sla = fmtPrazo(o.promised_date, o.created_at);
+  // A imagem pode faltar (54% de cobertura hoje) e pode falhar ao carregar.
+  // Os dois casos caem no mesmo lugar: o monograma, que sempre existe.
+  const [imgFalhou, setImgFalhou] = useState(false);
+  const capa = !imgFalhou ? (o.card_image_url || null) : null;
+  const inicial = (o.customer_name || o.display_name || "?").trim().charAt(0).toUpperCase();
   const next = NEXT[col.key];
   const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
   const isDragging = dnd.draggingId === o.id;
@@ -145,6 +180,22 @@ function DraggableCard({
       {dnd.isWeb && (
         <View style={s.dragHandle}>
           <Icon name="drag-handle" size={14} color={t.ink4} />
+        </View>
+      )}
+      {/* K1: o produto é a imagem. Personalizado se vende pelo olho — um card
+          só de texto é uma planilha em pé. Sem foto, o monograma segura a
+          composição em vez de deixar um vão. */}
+      {capa ? (
+        <Image
+          source={{ uri: capa }}
+          style={s.capa}
+          resizeMode="cover"
+          onError={() => setImgFalhou(true)}
+          accessibilityLabel={`Arte de ${o.customer_name || o.display_name || "encomenda"}`}
+        />
+      ) : (
+        <View style={[s.capa, s.capaVazia]}>
+          <Text style={s.capaInicial}>{inicial}</Text>
         </View>
       )}
       <View style={s.cardHead}>
@@ -545,6 +596,16 @@ function buildStyles(t: StudioPalette) {
       alignSelf: "center",
       marginBottom: 2,
     },
+    // K1 — capa do card
+    capa: {
+      width: "100%", aspectRatio: 16 / 10, borderRadius: 8,
+      marginBottom: 8, backgroundColor: t.bgSoft,
+    },
+    capaVazia: {
+      alignItems: "center", justifyContent: "center",
+      borderWidth: 1, borderColor: t.ink5,
+    },
+    capaInicial: { fontSize: 26, fontWeight: "800", color: t.ink4 },
     cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     cardId: { fontSize: 10.5, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
     slaChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: t.bgSoft },

@@ -34,6 +34,7 @@ import {
   splitIsBalanced,
   signalBalance,
   signalError,
+  prazoSugerido,
   MAX_DISCOUNT_PCT,
 } from "./checkoutMath";
 
@@ -96,6 +97,11 @@ export function useStudioCheckout(cid: string | undefined) {
   // ── Split de pagamento ──
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
+
+  // ── Prazo prometido de entrega (K1) ──
+  // Já nasce preenchido com uma data plausível: ferramenta fácil de usar não
+  // começa com campo vazio. Opcional — limpar o campo é válido e a venda passa.
+  const [promisedDate, setPromisedDate] = useState<string>(prazoSugerido);
 
   // ── Venda com sinal (F3) ──
   // Exclusiva do split: sinal não é split, é forma de pagamento própria em
@@ -258,6 +264,9 @@ export function useStudioCheckout(cid: string | undefined) {
             cpf_cnpj: cpf.trim() ? cpf.replace(/\D/g, "") : null,
           },
         };
+        // K1: prazo combinado. Vazio é legítimo — aí o card do Kanban usa a
+        // idade do pedido, como sempre fez, e nada trava.
+        if (promisedDate) saleBody.promised_date = promisedDate;
         if (payments) saleBody.payments = payments;
         if (cpf.trim()) saleBody.customer_cpf = cpf.replace(/\D/g, "");
 
@@ -360,7 +369,7 @@ export function useStudioCheckout(cid: string | undefined) {
         setSending(false);
       }
     },
-    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled, signalMode, signalValue, signalMethod, signalDueDate],
+    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled, signalMode, signalValue, signalMethod, signalDueDate, promisedDate],
   );
 
   const reset = useCallback(() => {
@@ -377,6 +386,7 @@ export function useStudioCheckout(cid: string | undefined) {
     setSplitMode(false);
     setSplitPayments([]);
     setPay("pix");
+    setPromisedDate(prazoSugerido());
     setSignalMode(false);
     setSignalValue("");
     setSignalMethod("pix");
@@ -394,6 +404,8 @@ export function useStudioCheckout(cid: string | undefined) {
     couponInput, setCouponInput, couponApplied, couponValidating, validateCoupon, clearCoupon,
     // split
     splitMode, splitPayments, toggleSplit, addSplit, updateSplit, removeSplit,
+    // prazo prometido (K1)
+    promisedDate, setPromisedDate,
     // venda com sinal (F3)
     signalMode, toggleSignal,
     signalValue, setSignalValue,

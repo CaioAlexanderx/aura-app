@@ -101,3 +101,25 @@ export function todayISO(): string {
   const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
+
+// ── K1: prazo prometido ──────────────────────────────────────
+// A premissa é que ferramenta boa é fácil de usar: o campo já vem com uma
+// data plausível preenchida, e a lojista só ajusta se o combinado for outro.
+// Ninguém precisa abrir calendário pra fechar uma venda.
+//
+// O padrão é uma semana. Quando houver histórico de prazo cumprido, dá pra
+// inferir o dela — hoje esse dado não existe (promised_date nasceu agora),
+// então um palpite honesto e editável vale mais que um campo vazio.
+export const DIAS_PRAZO_PADRAO = 7;
+
+/** Soma dias a uma data 'YYYY-MM-DD' sem passar por fuso. */
+export function addDiasISO(iso: string, dias: number): string {
+  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + dias));
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Sugestão de prazo pra pré-preencher o checkout. */
+export function prazoSugerido(): string {
+  return addDiasISO(todayISO(), DIAS_PRAZO_PADRAO);
+}

@@ -125,6 +125,14 @@ export type StudioOrder = {
   balance_amount?: number | string | null;
   balance_due_date?: string | null;
   balance_status?: "pending" | "overdue" | null;
+  // 18/08/2026 (K1) — a cara do card.
+  // card_image_url sai de uma cascata no backend (mockup da aprovação →
+  // render do Visual Engine → foto do produto). Vem null quando nada foi
+  // encontrado, e aí o card mostra o monograma. Sem configuração nenhuma.
+  card_image_url?: string | null;
+  // Data prometida de entrega. Opcional: sem ela o card usa a idade do
+  // pedido, como sempre fez.
+  promised_date?: string | null;
 };
 
 export type StudioOrderItem = {
