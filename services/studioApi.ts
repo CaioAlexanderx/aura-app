@@ -135,6 +135,23 @@ export type StudioOrder = {
   promised_date?: string | null;
 };
 
+// K3 — o que a página pública recebe. Espelha exatamente o que a rota
+// devolve: nada de CPF, telefone, endereço, sobrenome ou dado comercial.
+export type PublicTrack = {
+  cancelado: boolean;
+  loja: string | null;
+  cliente: string;
+  pedido: string;
+  criado_em?: string;
+  entrega_combinada?: string | null;
+  imagem?: string | null;
+  itens?: { nome: string; qtd: number }[];
+  total?: number;
+  etapa_atual?: number;
+  etapas?: { key: string; label: string }[];
+  saldo?: { valor: number; vencimento: string; pix: string | null } | null;
+};
+
 export type StudioOrderItem = {
   id: string;
   product_id: string;
@@ -726,6 +743,10 @@ export const studioApi = {
     request<{ cancelled: true }>(base(cid) + "/approval/" + approvalId + "/cancel", { method: "POST", retry: 0, timeout: 5000 }),
 
   // ── F5 Approval pública (sem auth) ──
+  // K3 — acompanhamento público da encomenda. skipAuth: quem abre é o
+  // cliente final, que não tem conta. O token é a credencial.
+  getPublicTrack: (token: string) =>
+    request<PublicTrack>("/acompanhar/" + token, { method: "GET", retry: 1, timeout: 8000, skipAuth: true } as any),
   getPublicApproval: (token: string) =>
     request<PublicApproval>("/aprovacao/" + token, { method: "GET", retry: 1, timeout: 8000, skipAuth: true } as any),
   respondPublicApproval: (token: string, body: { action: "approve" | "request_changes"; note?: string }) =>

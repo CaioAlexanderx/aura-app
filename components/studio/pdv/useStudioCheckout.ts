@@ -327,7 +327,11 @@ export function useStudioCheckout(cid: string | undefined) {
               `Em breve te mando o mockup pra aprovação.`
             : `Pedido #${String(saleId).slice(0, 8)} · R$ ${total.toFixed(2)}\n\n` +
               `Em breve te mando o mockup pra aprovação.`;
-          const msg = encodeURIComponent(`Oi ${first}! Sua arte personalizada já está na produção\n` + corpo);
+          // K3: o link de acompanhamento viaja AQUI, na mensagem que a venda
+          // já gerava. A lojista não copia, não gera e não ativa nada — e o
+          // cliente para de perguntar "cadê meu pedido?" porque tem onde ver.
+          const track = saleRes?.track_url ? `\n\nAcompanhe por aqui: ${saleRes.track_url}` : "";
+          const msg = encodeURIComponent(`Oi ${first}! Sua arte personalizada já está na produção\n` + corpo + track);
           waLink = `https://wa.me/${ph}?text=${msg}`;
         }
 
@@ -352,6 +356,7 @@ export function useStudioCheckout(cid: string | undefined) {
           auto_emit: autoEmitNfce,
           fiscal_enabled: fiscalEnabled,
           // Vem do backend, que é quem calcula o saldo a partir do total real.
+          track_url: saleRes?.track_url || null,
           signal: signalMode
             ? {
                 amount:           Number(saleRes?.signal?.amount ?? sinalNum),
