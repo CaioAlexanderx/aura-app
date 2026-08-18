@@ -485,10 +485,17 @@ export default function StudioProducao() {
           title="Fila de produção"
           subtitle="Arraste os cards (ou use os botoes) pra mover."
           rightSlot={
-            <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
-              <Icon name="refresh-cw" size={14} color={t.ink2} />
-              <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {/* K2: um botão, nada pra configurar antes. */}
+              <Pressable style={s.reloadBtn} onPress={() => router.push("/studio/vitrine" as any)}>
+                <Icon name="layout-grid" size={14} color={t.ink2} />
+                <Text style={s.reloadTxt}>Modo vitrine</Text>
+              </Pressable>
+              <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
+                <Icon name="refresh-cw" size={14} color={t.ink2} />
+                <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
+              </Pressable>
+            </View>
           }
         />
       </View>

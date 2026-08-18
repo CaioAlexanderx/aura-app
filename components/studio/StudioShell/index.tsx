@@ -150,6 +150,21 @@ export function StudioShell() {
 
   const fabConfig = useMemo(() => resolveFab(pathname), [pathname]);
 
+  // ─── Modo Vitrine (K2, 18/08/2026) ─────────────────────────
+  // A vitrine é o board numa TV da loja ou na câmera de um story: sidebar,
+  // topbar e FAB não têm público ali e roubam a tela que interessa. Ela
+  // continua DENTRO do (estudio) pra herdar os gates de auth e plano do
+  // _layout — sai do chrome, não da proteção.
+  if (pathname.includes("/studio/vitrine")) {
+    return (
+      <StudioAccentTheme tokens={resolvedAccent}>
+        <View style={{ flex: 1, backgroundColor: tk.bg }}>
+          <Slot />
+        </View>
+      </StudioAccentTheme>
+    );
+  }
+
   // ─── Mobile ────────────────────────────────────────────────
   if (isMobile) {
     return (
