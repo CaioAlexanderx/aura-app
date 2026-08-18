@@ -103,14 +103,39 @@ export type MigrationStatus = {
 // Nomes de campo confirmados contra o backend real: sao as colunas de
 // category_migration_staging (product_count, sample_product_names), nao
 // os nomes genericos que eu tinha assumido antes da revisao.
+// `kind` -- CORRIGIDO EM 18/08/2026 (Bloco C2).
+//
+// O B3 tipou como "existing" | "new" | "ignore", construindo contra mock.
+// O backend NAO aceita nenhum dos tres: a rota valida contra
+// VALID_KINDS = ['category','brand','attribute','collection','discard']
+// (src/services/categoryMigration.js) e o CHECK da migration 260 repete a
+// mesma lista. Todo PATCH do wizard daria 400.
+//
+// O contrato secao 5 descrevia o corpo como `{ kind, target_path?, status }`
+// sem NUNCA enumerar os valores -- e a licao da secao 9.1.1 se repetindo:
+// congelar objeto e lista de rotas nao e congelar contrato. Os valores
+// foram escritos no contrato junto com esta correcao.
+//
+// Semantica de cada valor, lida do apply do backend:
+//   category   -> vincula os produtos ao target_path (applyCategoryRow)
+//   brand      -> o texto era marca, nao categoria
+//   attribute  -> era atributo (cor, tamanho, material)
+//   collection -> era colecao/campanha
+//   discard    -> lixo de cadastro, joga fora
+// Os quatro ultimos caem no applyNonCategoryRow: limpam products.category
+// de quem nao ganhou vinculo, sem criar categoria nenhuma.
+export type MigrationKind = "category" | "brand" | "attribute" | "collection" | "discard";
+
+export type MigrationStagingStatus = "pending" | "approved" | "rejected" | "applied";
+
 export type MigrationProposalItem = {
   id: string;
   raw_value: string;
   product_count: number;
   sample_product_names: string[];
-  kind?: "existing" | "new" | "ignore" | null;
+  kind?: MigrationKind | null;
   target_path?: string | null;
-  status?: string;
+  status?: MigrationStagingStatus;
 };
 // O envelope tem `orphan` (a linha orfa do diagnostico, sem raw_value de
 // categoria) alem de `items` -- confirmado contra o backend, necessario
@@ -121,9 +146,14 @@ export type MigrationProposalResponse = {
 };
 
 export type MigrationItemPatchBody = {
-  kind: "existing" | "new" | "ignore";
+  kind: MigrationKind;
+  // Obrigatorio quando kind === 'category': o apply RESOLVE o caminho,
+  // nunca cria o no. Se o caminho nao existir na arvore, o apply devolve
+  // erro acionavel -- criar categoria e sempre ato deliberado do lojista.
   target_path?: string;
-  status?: string;
+  // 'approved' e o que entra na fila do apply. Sem isso o item fica em
+  // 'pending' e o apply o ignora.
+  status?: Exclude<MigrationStagingStatus, "applied">;
 };
 
 // Nome de campo confirmado contra o backend real: product_count (mesmo
