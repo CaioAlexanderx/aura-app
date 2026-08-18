@@ -82,6 +82,7 @@ import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useDojoTrialBanner } from "@/components/karate/DojoBillingGate";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
 import { useAuthStore } from "@/stores/auth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 interface DojoNavItem {
   label: string;
@@ -214,6 +215,10 @@ function Topbar() {
           <Text style={styles.crumbCurrent} numberOfLines={1}>{section}</Text>
         </View>
         <View style={{ flex: 1 }} />
+
+        {/* Sino de notificações (18/08/2026) — tone onDark porque a faixa
+            é oxblood. Mesmo tratamento do KarateShell da federação. */}
+        <NotificationBell tone="onDark" />
       </View>
     </View>
   );
@@ -434,6 +439,8 @@ export function DojoShell() {
             <Text style={styles.mobileTopbarEyebrow}>Aura Karatê</Text>
             <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{dojoName}</Text>
           </View>
+          {/* Topbar mobile é clara — sino no tom default */}
+          <NotificationBell />
         </View>
         <TrialBanner />
         <View style={styles.content}>

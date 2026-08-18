@@ -4,7 +4,11 @@
 // 31/05/2026: topbar desktop horizontal acima do conteúdo. 3 áreas:
 //   - Breadcrumb à esquerda (derivado de pathname via GROUPS)
 //   - Busca placeholder no meio (visual, sem backend ainda)
-//   - StudioThemeToggle à direita
+//   - NotificationBell + StudioThemeToggle à direita
+//
+// 18/08/2026: sino de notificações no canto superior direito (expansão das
+// notificações para Dojô/Karatê/Studio — backend PR #506). Vem ANTES do
+// theme toggle: o toggle é chrome permanente da barra e o sino, conteúdo.
 //
 // Mobile/tablet: a top bar atual (MobileBar) continua sem topbar adicional.
 // Topbar é EXCLUSIVA do branch desktop (isWide).
@@ -22,6 +26,7 @@ import { View, Text, TextInput } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
+import { NotificationBell } from "@/components/NotificationBell";
 import { GROUPS } from "./types";
 
 // Mapa pathname → segments de breadcrumb. Lê GROUPS pra resolver
@@ -161,6 +166,9 @@ export function Topbar({ pathname }: { pathname: string }) {
           }}
         />
       </View>
+
+      {/* Sino de notificações */}
+      <NotificationBell />
 
       {/* Theme toggle */}
       <StudioThemeToggle />
