@@ -129,6 +129,14 @@ function AuthGuard() {
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
+    // 2026-08-18 Studio: orçamento público em /orcamento/[token]. Mesma família
+    // do /aprovacao — link enviado via wa.me pro cliente externo (não usuário
+    // do Aura). A rota já foi construída como pública (app/orcamento/[token].tsx
+    // usa studioApi.getPublicQuote com skipAuth), e o backend GET/POST
+    // /api/v1/orcamento/:token[/respond] responde 200 sem Authorization. Faltava
+    // apenas o pass-through aqui — sem ele o AuthGuard mandava o cliente para
+    // /(auth)/login, matando o link de venda.
+    const onPublicOrcamento = segments[0] === "orcamento";
     // K3 (18/08/2026): acompanhamento público da encomenda em
     // /acompanhar/[token]. Link vai na mensagem da venda — o cliente final
     // não tem conta, então exigir login mataria a função.
@@ -162,7 +170,7 @@ function AuthGuard() {
       segments[1] === "roster-self" ||
       segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicTrack || onKaratePublic) return;
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicOrcamento || onPublicTrack || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
