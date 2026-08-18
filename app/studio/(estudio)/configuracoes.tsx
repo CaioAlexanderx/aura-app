@@ -23,6 +23,9 @@ import { useStudioTokens, useStudioTheme, type StudioThemeMode } from "@/context
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { studioApi, type StudioHealth } from "@/services/studioApi";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -54,11 +57,78 @@ function EquipeGateStudio({ t }: { t: ReturnType<typeof useStudioTokens> }) {
   );
 }
 
+// ============================================================
+// TAXA DA MAQUININHA — 18/08/2026
+// A taxa vale pro shell Negocio E pro Studio (backend PR #501),
+// mas empresas studio são redirecionadas de /configuracoes pelo
+// guard do _layout e nunca viam o toggle do PdvSettingsCard.
+// Este card renderiza a CardFeeSection compartilhada com tokens
+// do Studio e o mesmo ciclo de save do varejo: PUT imediato do
+// pdv_settings COMPLETO (o backend substitui o jsonb inteiro,
+// então o payload parte sempre do GET com todas as chaves).
+// ============================================================
+function CardFeeCardStudio({ t, s }: { t: ReturnType<typeof useStudioTokens>; s: ReturnType<typeof buildStyles> }) {
+  const { company } = useAuthStore();
+  const { settings: serverSettings, isLoading, error, invalidate } = usePdvSettings();
+  const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
+  const [feeSaving, setFeeSaving] = useState(false);
+
+  const display = pendingSettings || serverSettings;
+
+  const palette: CardFeePalette = useMemo(() => ({
+    label:       t.ink,
+    desc:        t.ink3,
+    hint:        t.ink3,
+    trackOff:    t.ink5,
+    trackOn:     t.primary,
+    thumbOff:    "#fff",
+    thumbOn:     "#fff",
+    inputBg:     t.paperCardElev,
+    inputBorder: t.ink5,
+    inputText:   t.ink,
+    boxBorder:   t.ink5,
+  }), [t]);
+
+  async function toggle(key: keyof PdvSettings, value: boolean | number) {
+    if (!company?.id || feeSaving) return;
+    const next: PdvSettings = { ...display, [key]: value } as PdvSettings;
+    setPendingSettings(next);
+    setFeeSaving(true);
+    try {
+      await pdvSettingsApi.save(company.id, next);
+      invalidate();
+      setPendingSettings(null);
+    } catch (err: any) {
+      setPendingSettings(null);
+      toast.error(err?.data?.error || "Erro ao salvar");
+    } finally {
+      setFeeSaving(false);
+    }
+  }
+
+  return (
+    <View style={s.card}>
+      <Text style={s.cardTitle}>Taxa da maquininha</Text>
+      <Text style={s.cardSub}>Vale pras vendas no cartão do Studio inteiro. Salva na hora, sem precisar do botão lá embaixo.</Text>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={t.primary} />
+      ) : error ? (
+        // Sem o GET não dá pra montar o payload completo — salvar aqui
+        // zeraria as outras chaves do pdv_settings (o PUT substitui tudo).
+        <Text style={s.hint}>Não consegui carregar as configurações do caixa. Recarregue a página pra editar a taxa.</Text>
+      ) : (
+        <CardFeeSection display={display} saving={feeSaving} onToggle={toggle} palette={palette} />
+      )}
+    </View>
+  );
+}
+
 export default function StudioConfiguracoes() {
   const { company } = useAuthStore();
   const t = useStudioTokens();
   const { mode, setMode } = useStudioTheme();
   const s = useMemo(() => buildStyles(t), [t]);
+  const qc = useQueryClient();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,17 +185,27 @@ export default function StudioConfiguracoes() {
     console.log("[StudioConfig] save start", { cid: company.id, approvalEnabled, approvalMode, slaDaysNum, phoneTrimmed, requireDeposit });
 
     try {
-      let currentPdv: PdvSettings;
+      // 18/08/2026: o PUT /pdv-settings SUBSTITUI o jsonb inteiro — chave
+      // ausente do payload volta pro default no backend. Antes, GET falho
+      // caía num objeto mínimo hardcoded e o save zerava o resto (inclusive
+      // card_fee_* agora que a taxa é editável aqui). Sem o GET, pula o PUT
+      // em vez de salvar por cima.
+      let currentPdv: PdvSettings | null = null;
       try {
         const cur = await pdvSettingsApi.get(company.id);
         currentPdv = cur.settings;
       } catch (getErr: any) {
-        console.warn("[StudioConfig] pdvSettingsApi.get falhou, usando defaults:", getErr?.message);
-        currentPdv = { require_customer: false, require_seller: false, caixa_enabled: false, crediario_enabled: false, cash_tender_modal_enabled: true } as PdvSettings;
+        console.warn("[StudioConfig] pdvSettingsApi.get falhou, pulando save do pdv_settings:", getErr?.message);
       }
 
-      const mergedPdv: PdvSettings = { ...currentPdv, studio_approval_enabled: approvalEnabled, studio_approval_mode: approvalMode };
-      await pdvSettingsApi.save(company.id, mergedPdv);
+      let pdvSaved = false;
+      if (currentPdv) {
+        const mergedPdv: PdvSettings = { ...currentPdv, studio_approval_enabled: approvalEnabled, studio_approval_mode: approvalMode };
+        await pdvSettingsApi.save(company.id, mergedPdv);
+        pdvSaved = true;
+        // Mantém o card da taxa da maquininha em sincronia (cache infinito).
+        qc.invalidateQueries({ queryKey: ["pdv-settings", company.id] });
+      }
 
       const studioPatch: Record<string, any> = {};
       if (!isNaN(slaDaysNum) && slaDaysNum > 0) studioPatch.default_sla_days = slaDaysNum;
@@ -144,7 +224,11 @@ export default function StudioConfiguracoes() {
         }
       }
 
-      toast.success("Configurações salvas!");
+      if (pdvSaved) {
+        toast.success("Configurações salvas!");
+      } else {
+        toast.error("Prazo/WhatsApp salvos, mas a aprovação de arte não foi — recarregue e tente de novo.");
+      }
       load();
     } catch (e: any) {
       console.error("[StudioConfig] save error", { status: e?.status, code: e?.code, data: e?.data, message: e?.message });
@@ -272,6 +356,9 @@ export default function StudioConfiguracoes() {
           </View>
         )}
       </View>
+
+      {/* Taxa da maquininha — save imediato, fora do botão Salvar */}
+      <CardFeeCardStudio t={t} s={s} />
 
       {/* Equipe & acessos */}
       <View style={s.card}>
