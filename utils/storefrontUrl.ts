@@ -1,27 +1,24 @@
 // ============================================================
 // AURA STUDIO — endereco publico da vitrine de personalizados
 //
-// A vitrine do Studio (onde o cliente escolhe o produto, preenche os
-// campos e fecha o pedido) e uma rota do proprio app:
-// app/cardapio/studio/[slug].tsx.
+// A vitrine em si e uma rota do app (app/cardapio/studio/[slug].tsx), mas
+// o endereco que a lojista divulga e o da loja: loja.getaura.com.br. O
+// backend faz a ponte (GET /storefront/:slug/studio → 302), entao o
+// cliente nunca ve o endereco interno.
 //
-// O painel divulgava `loja.getaura.com.br/:slug/studio`, que nunca
-// existiu: esse dominio serve o backend, e o backend nao tem essa rota.
-// A lojista clicava "Ver como cliente" e caia num JSON de erro; o card de
-// WhatsApp saia com o mesmo endereco morto impresso.
-//
-// Se um dia loja.getaura.com.br passar a redirecionar pra ca, basta
-// trocar aqui — os dois lugares que divulgam o endereco usam esta funcao.
+// Ate 19/08/2026 esse endereco era divulgado sem existir do outro lado: a
+// lojista clicava em "Ver como cliente" e caia num JSON de erro, e o card
+// de WhatsApp saia com o mesmo endereco morto impresso na imagem.
 // ============================================================
 
-export const STUDIO_STOREFRONT_HOST = "app.getaura.com.br";
+export const STUDIO_STOREFRONT_HOST = "loja.getaura.com.br";
 
 /** URL completa da vitrine de personalizados da loja. */
 export function studioStorefrontUrl(slug: string): string {
-  return `https://${STUDIO_STOREFRONT_HOST}/cardapio/studio/${encodeURIComponent(slug)}`;
+  return `https://${STUDIO_STOREFRONT_HOST}/${encodeURIComponent(slug)}/studio`;
 }
 
 /** Mesma URL sem o esquema — pra imprimir em imagem/legenda. */
 export function studioStorefrontLabel(slug: string): string {
-  return `${STUDIO_STOREFRONT_HOST}/cardapio/studio/${slug}`;
+  return `${STUDIO_STOREFRONT_HOST}/${slug}/studio`;
 }

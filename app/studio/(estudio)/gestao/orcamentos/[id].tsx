@@ -45,6 +45,7 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { notify } from "@/utils/webAlert";
+import { copyText } from "@/utils/clipboard";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -86,6 +87,53 @@ const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   expired:   { bg: "#FEF3C7", text: "#92400E" },
   converted: { bg: "#EDE9FE", text: "#5B21B6" },
 };
+// ─── Acompanhamento do orçamento ────────────────────────────
+// O link público, o "enviado em" e o "cliente abriu" sempre existiram no
+// banco, mas morriam na tela de pós-envio: bastava recarregar e a lojista
+// perdia o link pra sempre. Pra reenviar, só apertando "Enviar ao cliente"
+// de novo — e ficando sem saber se o cliente tinha ao menos aberto.
+const APP_ORIGIN = "https://app.getaura.com.br";
+
+function urlDoOrcamento(token: string): string {
+  return `${APP_ORIGIN}/orcamento/${token}`;
+}
+
+function dataHora(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+    + " às " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Dias inteiros até a data (negativo = já passou). */
+function diasAte(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const alvo = new Date(iso);
+  if (isNaN(alvo.getTime())) return null;
+  return Math.ceil((alvo.getTime() - Date.now()) / 86400000);
+}
+
+function textoValidade(expiresAt: string | null | undefined): { txt: string; alerta: boolean } | null {
+  const dias = diasAte(expiresAt);
+  if (dias === null) return null;
+  if (dias < 0) return { txt: "Venceu", alerta: true };
+  if (dias === 0) return { txt: "Vence hoje", alerta: true };
+  if (dias === 1) return { txt: "Vence amanhã", alerta: true };
+  return { txt: `Vence em ${dias} dias`, alerta: dias <= 2 };
+}
+
+/** wa.me pro NÚMERO DO CLIENTE — o botão do pós-envio mandava pro número
+ *  do próprio estúdio, o que só servia pra reencaminhar na mão. */
+function linkWhatsAppCliente(telefone: string | null | undefined, url: string, nome: string | null): string | null {
+  const digitos = String(telefone || "").replace(/\D/g, "");
+  if (digitos.length < 10) return null;
+  const completo = digitos.length === 10 || digitos.length === 11 ? "55" + digitos : digitos;
+  const primeiro = (nome || "").trim().split(" ")[0];
+  const saudacao = primeiro ? `Oi, ${primeiro}! ` : "";
+  return `https://wa.me/${completo}?text=${encodeURIComponent(saudacao + "Segue seu orçamento: " + url)}`;
+}
+
 function StatusPill({ status }: { status: StudioQuoteStatus }) {
   const c = STATUS_COLORS[status] || STATUS_COLORS.draft;
   return (
@@ -596,6 +644,106 @@ export default function OrcamentoEditorScreen() {
           </View>
         ) : null}
 
+        {/* Acompanhamento — só depois que existe link pra acompanhar */}
+        {quote?.token ? (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>Acompanhamento</Text>
+
+            <Text style={s.trackLabel}>Link do orçamento</Text>
+            <Pressable
+              onPress={() => copyText(urlDoOrcamento(quote.token!), "Link copiado!")}
+              style={s.trackLinkBox}
+            >
+              <Text style={s.trackLink} numberOfLines={1}>{urlDoOrcamento(quote.token!)}</Text>
+              <Icon name="copy" size={15} color={t.ink3} />
+            </Pressable>
+
+            <View style={s.trackActions}>
+              <Pressable
+                style={s.trackBtn}
+                onPress={() => copyText(urlDoOrcamento(quote.token!), "Link copiado!")}
+              >
+                <Icon name="copy" size={15} color={t.ink} />
+                <Text style={s.trackBtnTxt}>Copiar link</Text>
+              </Pressable>
+              <Pressable
+                style={s.trackBtn}
+                onPress={() => Linking.openURL(urlDoOrcamento(quote.token!))}
+              >
+                <Icon name="external-link" size={15} color={t.ink} />
+                <Text style={s.trackBtnTxt}>Abrir</Text>
+              </Pressable>
+              {linkWhatsAppCliente(quote.customer_phone, urlDoOrcamento(quote.token!), quote.customer_name) ? (
+                <Pressable
+                  style={[s.trackBtn, s.trackBtnWa]}
+                  onPress={() =>
+                    Linking.openURL(
+                      linkWhatsAppCliente(quote.customer_phone, urlDoOrcamento(quote.token!), quote.customer_name)!
+                    )
+                  }
+                >
+                  <Icon name="message-circle" size={15} color="#fff" />
+                  <Text style={[s.trackBtnTxt, { color: "#fff" }]}>Mandar no WhatsApp</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Linha do tempo: o que a lojista quer saber é se chegou,
+                se abriu e se respondeu — nessa ordem. */}
+            <View style={s.timeline}>
+              <View style={s.tlRow}>
+                <View style={[s.tlDot, { backgroundColor: t.success }]} />
+                <Text style={s.tlLabel}>Enviado</Text>
+                <Text style={s.tlValue}>{dataHora(quote.sent_at) || "—"}</Text>
+              </View>
+
+              <View style={s.tlRow}>
+                <View style={[s.tlDot, { backgroundColor: quote.viewed_at ? t.success : t.ink5 }]} />
+                <Text style={s.tlLabel}>Cliente abriu</Text>
+                <Text style={[s.tlValue, !quote.viewed_at && s.tlValueMuted]}>
+                  {quote.viewed_at ? dataHora(quote.viewed_at) : "ainda não abriu"}
+                </Text>
+              </View>
+
+              <View style={s.tlRow}>
+                <View
+                  style={[
+                    s.tlDot,
+                    {
+                      backgroundColor:
+                        quote.status === "accepted" ? t.success
+                        : quote.status === "rejected" ? t.danger
+                        : t.ink5,
+                    },
+                  ]}
+                />
+                <Text style={s.tlLabel}>Resposta</Text>
+                <Text style={[s.tlValue, !quote.responded_at && s.tlValueMuted]}>
+                  {quote.responded_at
+                    ? `${quote.status === "accepted" ? "Aceito" : quote.status === "rejected" ? "Recusado" : "Respondido"} · ${dataHora(quote.responded_at)}`
+                    : "aguardando"}
+                </Text>
+              </View>
+            </View>
+
+            {quote.response_note ? (
+              <View style={s.trackNote}>
+                <Text style={s.trackNoteLabel}>O cliente escreveu</Text>
+                <Text style={s.trackNoteTxt}>{quote.response_note}</Text>
+              </View>
+            ) : null}
+
+            {/* Validade só enquanto ela ainda decide alguma coisa: depois
+                de aceito ou virado pedido, o prazo não importa mais. */}
+            {(quote.status === "sent" || quote.status === "expired") && textoValidade(quote.expires_at) ? (
+              <Text style={[s.trackValidade, textoValidade(quote.expires_at)!.alerta && s.trackValidadeAlerta]}>
+                {textoValidade(quote.expires_at)!.txt}
+                {quote.expires_at ? ` · válido até ${new Date(quote.expires_at).toLocaleDateString("pt-BR")}` : ""}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Dados do cliente */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>CLIENTE</Text>
@@ -813,6 +961,40 @@ function buildStyles(t: StudioPalette) {
     convertedBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
 
     section: { backgroundColor: t.paperCard, borderRadius: 14, padding: 16, gap: 10, borderWidth: 1, borderColor: t.ink5 },
+
+    // ── Acompanhamento ──────────────────────────────────────
+    trackLabel: { fontSize: 12, color: t.ink3, fontWeight: "600" },
+    trackLinkBox: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5,
+      borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    },
+    trackLink: { flex: 1, fontSize: 12.5, color: t.ink2 },
+    trackActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    trackBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9,
+      backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5,
+    },
+    trackBtnWa: { backgroundColor: "#25D366", borderColor: "#25D366" },
+    trackBtnTxt: { fontSize: 12.5, fontWeight: "700", color: t.ink },
+
+    timeline: { gap: 8, marginTop: 4 },
+    tlRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    tlDot: { width: 9, height: 9, borderRadius: 5 },
+    tlLabel: { fontSize: 12.5, color: t.ink2, fontWeight: "700", width: 108 },
+    tlValue: { flex: 1, fontSize: 12.5, color: t.ink },
+    tlValueMuted: { color: t.ink3, fontStyle: "italic" },
+
+    trackNote: {
+      backgroundColor: t.bgSoft, borderRadius: 10, padding: 12,
+      borderLeftWidth: 3, borderLeftColor: t.primary, gap: 3,
+    },
+    trackNoteLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 },
+    trackNoteTxt: { fontSize: 13, color: t.ink },
+
+    trackValidade: { fontSize: 12, color: t.ink3, fontWeight: "600" },
+    trackValidadeAlerta: { color: t.dangerInk, fontWeight: "800" },
     sectionLabel: {
       fontSize: 10, color: t.ink3, fontWeight: "800",
       letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4,

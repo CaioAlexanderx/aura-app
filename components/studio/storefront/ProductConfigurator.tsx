@@ -263,7 +263,7 @@ export function ProductConfigurator({
         <View style={linhaConteudo}>
         <View style={colunaPreview}>
           <LivePreview
-            config={cfg}
+            config={cfg ?? null}
             values={editingValues}
             size={telaLarga ? 360 : defaultConfiguratorSize()}
             productName={activeProduct.name}
