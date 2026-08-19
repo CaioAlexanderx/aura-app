@@ -93,24 +93,42 @@ export default function ProductGalleryEditor({ productId, companyId, galleryUrls
 
   async function addPhoto() {
     if (gallery.length >= MAX_PHOTOS || busy) return;
-    const picked = await pickImageBase64().catch((e: any) => {
-      const status = e?.status ? `[${e.status}] ` : "";
-      toast.error(`${status}${e?.data?.error || e?.message || "Não foi possível abrir a galeria."}`);
-      return null;
-    });
-    if (!picked) return;
 
+    // TRAVA ANTES de abrir o seletor, não depois: o picker é UI do
+    // sistema e pode ficar aberto minutos. Travando só no retorno, a
+    // lojista continuava podendo remover uma foto nesse intervalo — e
+    // quando o upload voltasse, a lista capturada aqui (sem a remoção)
+    // seria persistida, RESSUSCITANDO a foto que ela acabou de apagar.
     setUploading(true);
     try {
+      const picked = await pickImageBase64().catch((e: any) => {
+        const status = e?.status ? `[${e.status}] ` : "";
+        toast.error(`${status}${e?.data?.error || e?.message || "Não foi possível abrir a galeria."}`);
+        return null;
+      });
+      if (!picked) return; // cancelou o seletor — nada a fazer
+
       const uploaded = await uploadStudioMockup(companyId, {
         content_base64: picked.base64,
         content_type: picked.content_type,
         kind: "product",
       });
-      // Otimista: adiciona no fim da lista já na UI, PATCH em seguida.
-      const prev = gallery;
-      const next = [...gallery, uploaded.url];
-      setGallery(next);
+
+      // Otimista sobre o estado MAIS RECENTE (functional update), não
+      // sobre a closure desta render. `prev` guarda o que desfazer.
+      let prev: string[] = [];
+      let next: string[] = [];
+      setGallery((atual) => {
+        prev = atual;
+        // Limite reavaliado aqui: outra aba/dispositivo pode ter enchido
+        // a galeria enquanto o seletor estava aberto.
+        next = atual.length >= MAX_PHOTOS ? atual : [...atual, uploaded.url];
+        return next;
+      });
+      if (next.length === prev.length) {
+        toast.error(`Máximo de ${MAX_PHOTOS} fotos por produto`);
+        return;
+      }
       const ok = await persist(next);
       if (!ok) setGallery(prev); // rollback
       else toast.success("Foto adicionada");
@@ -242,12 +260,16 @@ function GalleryThumb({
         </View>
       )}
 
-      {/* Remover — sempre disponível */}
+      {/* Remover — sempre disponível. hitSlop generoso: o botão é 18px
+          por caber na miniatura, mas é ação destrutiva e no celular
+          precisa de alvo de toque de verdade. */}
       <Pressable
         onPress={onRemove}
         disabled={disabled}
-        hitSlop={6}
+        hitSlop={12}
         style={s.removeBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Remover foto"
       >
         <Icon name="x" size={11} color="#fff" />
       </Pressable>
@@ -258,6 +280,8 @@ function GalleryThumb({
           onPress={onSetCover}
           disabled={disabled}
           style={s.setCoverBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Definir esta foto como capa"
         >
           <Icon name="star" size={10} color={t.primary} />
           <Text style={s.setCoverBtnTxt}>Definir capa</Text>
