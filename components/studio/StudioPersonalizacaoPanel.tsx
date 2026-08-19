@@ -57,6 +57,7 @@ import {
   type Template,
 } from "@/services/studioApi";
 import { EnginePreview, invalidateProductTemplate } from "@/components/studio/visualEngine/EnginePreview";
+import { studioStorefrontUrl } from "@/utils/storefrontUrl";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
@@ -869,7 +870,7 @@ export function StudioPersonalizacaoPanel({
           <Pressable
             onPress={() => {
               if (Platform.OS !== "web") return;
-              const url = `https://loja.getaura.com.br/${slug}/studio/${productId}`;
+              const url = studioStorefrontUrl(slug);
               try { window.open(url, "_blank"); } catch (e) {
                 console.error("[StudioPersonalizacao] window.open failed", e);
               }

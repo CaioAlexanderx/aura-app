@@ -17,7 +17,8 @@
 //
 // Web-only no caminho do motor (canvas DOM) — nativo cai no fallback.
 // ============================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { valuesForSide } from "@/components/studio/customizationConfig";
 import { Platform, View } from "react-native";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { composeView } from "@/components/studio/visualEngine/compose2d";
@@ -96,6 +97,13 @@ export function EnginePreview(props: Props) {
   const { companyId, productId, values, size } = props;
   const engineEnabled = !!companyId && !!productId && Platform.OS === "web";
 
+  // Ver valuesForSide: sem traduzir, o motor nao acha os campos de verso
+  // e de meio e pinta a peca vazia.
+  const engineValues = useMemo(
+    () => valuesForSide(values, props.side ?? "front"),
+    [values, props.side],
+  );
+
   // undefined = carregando; null = sem template (fallback SVG)
   const [template, setTemplate] = useState<VisualTemplate | null | undefined>(undefined);
 
@@ -124,13 +132,13 @@ export function EnginePreview(props: Props) {
       return (
         <Engine2DCanvas
           view={porId || porOrdem || views[0]}
-          values={values}
+          values={engineValues}
           size={size ?? 280}
         />
       );
     }
     if (template.kind === "model3d" && template.spec) {
-      return <Mug3DPreview spec={template.spec} values={values} size={size ?? 280} side={props.side} />;
+      return <Mug3DPreview spec={template.spec} values={engineValues} size={size ?? 280} side={props.side} />;
     }
   }
 

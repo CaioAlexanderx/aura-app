@@ -4,6 +4,7 @@ import { Icon } from "@/components/Icon";
 import { StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { toast } from "@/components/Toast";
+import { studioStorefrontLabel } from "@/utils/storefrontUrl";
 
 type Props = {
   visible: boolean;
@@ -113,7 +114,7 @@ export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props)
       ctx.font = "28px sans-serif";
       ctx.fillText("Personalize do seu jeito 🎨", 540, 1620);
       ctx.font = "bold 28px sans-serif";
-      ctx.fillText("loja.getaura.com.br/" + shop.slug + "/studio", 540, 1680);
+      ctx.fillText(studioStorefrontLabel(shop.slug), 540, 1680);
 
       // 6. Aura logo no rodapé
       ctx.fillStyle = "rgba(255,255,255,0.4)";

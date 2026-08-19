@@ -18,7 +18,7 @@
 // empty state, linha da lista (editar) e o deep-link acima todos abrem
 // o mesmo NovoInsumoModal (que agora também cobre edição).
 // ============================================================
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Image,
 } from "react-native";
@@ -90,14 +90,18 @@ export default function StudioInsumos() {
 
   useEffect(() => { load(); }, [load]);
 
+  // O router.replace que "consumia" o param rodava no MESMO efeito que abre
+  // o modal — e a navegação levava o estado junto, então o modal nunca
+  // chegava a aparecer. Quem consome o param agora é uma ref: o efeito não
+  // repete e nenhuma navegação acontece. A URL fica como está, então
+  // recarregar a página reabre o modal — que é o que o link pede.
+  const deepLinkDoneRef = useRef(false);
   useEffect(() => {
-    if (params.action === "novo-insumo") {
-      setEditingInsumo(null);
-      setInsumoModalOpen(true);
-      // Consome o param para não reabrir em re-renders/voltas de navegação
-      router.replace("/studio/insumos" as any);
-    }
-  }, [params.action, router]);
+    if (params.action !== "novo-insumo" || deepLinkDoneRef.current) return;
+    deepLinkDoneRef.current = true;
+    setEditingInsumo(null);
+    setInsumoModalOpen(true);
+  }, [params.action]);
 
   const lowStock = inputs.filter((i) => i.is_low_stock);
 
