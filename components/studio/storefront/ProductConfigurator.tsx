@@ -237,6 +237,7 @@ export function ProductConfigurator({
             showLabel={false}
             slug={slug}
             productId={activeProduct.id}
+            allowSideToggle
           />
         </View>
 

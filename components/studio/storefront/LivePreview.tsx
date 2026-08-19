@@ -132,6 +132,7 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
+  allowSideToggle = false,
 }: {
   config: CustomizationConfig | null;
   values: Record<string, any>;
@@ -142,6 +143,12 @@ export function LivePreview({
   slug?: string;
   /** F3: id do produto — junto com slug habilita o motor visual */
   productId?: string;
+  /**
+   * Mostra o alternador Frente/Verso/Meio. So o configurador liga: nas
+   * miniaturas do carrinho (56px) e da lista (72px) os chips nao cabem e
+   * nao ha o que alternar — o cliente ainda nem escolheu nada.
+   */
+  allowSideToggle?: boolean;
 }) {
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
@@ -197,7 +204,7 @@ export function LivePreview({
     ...(showBackToggle ? [{ id: "back" as const, label: "Verso" }] : []),
     ...(showMiddleToggle ? [{ id: "middle" as const, label: "Meio" }] : []),
   ];
-  const showViewToggle = viewToggleOptions.length > 1;
+  const showViewToggle = allowSideToggle && viewToggleOptions.length > 1;
 
   // Os motores leem as chaves da frente; ver valuesForSide.
   const engineValues = valuesForSide(safeValues, viewId);
