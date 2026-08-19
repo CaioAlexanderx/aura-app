@@ -115,6 +115,33 @@ export function canonicalFieldId(
   return ordinal === 0 ? base : `${base}_${ordinal + 1}`;
 }
 
+/**
+ * Traduz os valores de um lado para as chaves canonicas da FRENTE.
+ *
+ * Os motores visuais (compose2d, compose3dMug) leem `values.text`,
+ * `values.image` e `values.template` na unha — eles nao sabem o que e
+ * lado. Mas o id canonico carrega o sufixo (`text_back`, `text_middle`),
+ * entao entregar os valores crus faz o motor nao achar nada e pintar a
+ * peca vazia.
+ *
+ * Aqui o lado pedido vira o "front" do motor. So o que esta naquele lado
+ * entra: o verso nao mostra a arte da frente, que e o certo.
+ */
+export function valuesForSide(
+  values: Record<string, any> | null | undefined,
+  side: CustomizationFieldSide
+): Record<string, any> {
+  const v = values || {};
+  if (side === "front") return v;
+  const out: Record<string, any> = {};
+  const re = new RegExp("^(.+?)_" + side + "(_\d+)?$");
+  for (const k of Object.keys(v)) {
+    const m = k.match(re);
+    if (m) out[m[1] + (m[2] || "")] = v[k];
+  }
+  return out;
+}
+
 export function sideOf(f: { side?: string } | null | undefined): CustomizationFieldSide {
   const s = (f as any)?.side;
   return s === "back" || s === "middle" ? s : "front";

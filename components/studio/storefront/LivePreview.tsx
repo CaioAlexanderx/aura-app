@@ -29,6 +29,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
+import { valuesForSide } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "./types";
 import { T } from "./types";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
@@ -184,21 +185,57 @@ export function LivePreview({
     : viewId === "middle" && middleView
     ? middleView
     : photoViews[0];
-  const showBackToggle = !!backView && config?.has_back === true;
-  const showMiddleToggle = !!middleView && config?.has_middle === true;
-  // Alternador de vista: sempre tem "Frente"; "Verso"/"Meio" só entram
-  // quando existe view dedicada E o produto liga o respectivo lado.
+  // O alternador segue o PRODUTO, nao o template visual. Antes ele exigia
+  // uma view dedicada, entao quem nao tem template (a maioria) nunca via o
+  // verso nem o meio: o cliente digitava o nome e a peca ficava vazia,
+  // parecendo quebrada. Sem view dedicada o desenho degrada, mas o lado
+  // continua acessivel.
+  const showBackToggle = config?.has_back === true;
+  const showMiddleToggle = config?.has_middle === true;
   const viewToggleOptions: Array<{ id: "front" | "back" | "middle"; label: string }> = [
     { id: "front", label: "Frente" },
     ...(showBackToggle ? [{ id: "back" as const, label: "Verso" }] : []),
     ...(showMiddleToggle ? [{ id: "middle" as const, label: "Meio" }] : []),
   ];
   const showViewToggle = viewToggleOptions.length > 1;
-  const safeValuesKey = JSON.stringify(safeValues);
+
+  // Os motores leem as chaves da frente; ver valuesForSide.
+  const engineValues = valuesForSide(safeValues, viewId);
+  const safeValuesKey = JSON.stringify(engineValues);
+
+  // O lado escolhido pode sumir se a lojista desligar verso/meio com a
+  // tela aberta — sem isso o cliente ficaria preso numa vista morta.
+  useEffect(() => {
+    if (viewId === "back" && !showBackToggle) setViewId("front");
+    if (viewId === "middle" && !showMiddleToggle) setViewId("front");
+  }, [viewId, showBackToggle, showMiddleToggle]);
+
+  const viewToggle = showViewToggle ? (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      {viewToggleOptions.map(({ id, label }) => {
+        const sel = viewId === id;
+        return (
+          <Pressable
+            key={id}
+            onPress={() => setViewId(id)}
+            style={{
+              paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+              backgroundColor: sel ? T.primary : "transparent",
+              borderWidth: 1.5, borderColor: sel ? T.primary : T.border,
+            }}
+          >
+            <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  ) : null;
 
   useEffect(() => {
     if (!engineView || !canvasRef.current) return;
-    composeView(canvasRef.current, engineView, safeValues, {
+    composeView(canvasRef.current, engineView, engineValues, {
       showAreas: false,
       pixelWidth: 800,
     });
@@ -210,10 +247,12 @@ export function LivePreview({
   if (tpl?.kind === "model3d" && tpl.spec) {
     return (
       <View style={{ alignItems: "center", gap: 6 }}>
+        {viewToggle}
         <Mug3DPreview
           spec={tpl.spec}
-          values={safeValues}
+          values={engineValues}
           size={size}
+          side={viewId}
           accentColor={T.primary}
           // S3 — a cor da louca vinha do default do motor (#F5F2EA) e
           // ninguem a alimentava: toda caneca renderizava bege, qualquer
@@ -230,28 +269,7 @@ export function LivePreview({
     const h = Math.round(size * (engineView.base.h / engineView.base.w));
     return (
       <View style={{ alignItems: "center", gap: 6 }}>
-        {showViewToggle && (
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {viewToggleOptions.map(({ id, label }) => {
-              const sel = viewId === id;
-              return (
-                <Pressable
-                  key={id}
-                  onPress={() => setViewId(id)}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-                    backgroundColor: sel ? T.primary : "transparent",
-                    borderWidth: 1.5, borderColor: sel ? T.primary : T.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {viewToggle}
         <View style={{ width: size, height: h, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: T.border }}>
           {/* @ts-ignore — canvas DOM no web (motor compose2d) */}
           <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" } as any} />
@@ -264,9 +282,11 @@ export function LivePreview({
   // ── Fallback: comportamento antigo (SVG) ────────────────────
   return (
     <View style={{ alignItems: "center", gap: 6 }}>
+      {viewToggle}
       <PersonalizationPreviewBase
         config={config}
         values={safeValues}
+        side={viewId}
         size={size}
         productName={productName}
         showLabel={showLabel}

@@ -288,12 +288,16 @@ export function ProductConfigurator({
           <>{allFields.map(renderField)}</>
         ) : (
           <>
-            {/* Frente */}
-            <View style={{ gap: 4, marginTop: 4 }}>
-              <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-                Frente
-              </Text>
-            </View>
+            {/* Frente — o titulo so faz sentido com algo embaixo dele.
+                Produto que so personaliza o meio mostrava "FRENTE" e nada
+                mais, parecendo secao quebrada. */}
+            {frontFields.length > 0 && (
+              <View style={{ gap: 4, marginTop: 4 }}>
+                <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                  Frente
+                </Text>
+              </View>
+            )}
             {frontFields.map(renderField)}
 
             {shouldRenderBack && (

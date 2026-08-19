@@ -18,6 +18,7 @@
 // Web-only no caminho do motor (canvas DOM) — nativo cai no fallback.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
+import { valuesForSide } from "@/components/studio/customizationConfig";
 import { Platform, View } from "react-native";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { composeView } from "@/components/studio/visualEngine/compose2d";
@@ -96,24 +97,12 @@ export function EnginePreview(props: Props) {
   const { companyId, productId, values, size } = props;
   const engineEnabled = !!companyId && !!productId && Platform.OS === "web";
 
-  // Os motores procuram as chaves canonicas da FRENTE — `values.text`,
-  // `values.image`, `values.template`. Nos outros lados o id canonico
-  // carrega o sufixo do lado (`text_back`, `text_middle`), entao sem
-  // traduzir o motor nao acha nada e pinta a peca vazia: era assim que o
-  // verso se comportava desde que ganhou campos proprios.
-  // Aqui o lado escolhido vira o "front" do motor. So o que esta naquele
-  // lado entra — verso nao mostra a arte da frente, que e o certo.
-  const engineValues = useMemo(() => {
-    const side = props.side ?? "front";
-    if (side === "front") return values || {};
-    const out: Record<string, any> = {};
-    const re = new RegExp("^(.+?)_" + side + "(_\d+)?$");
-    for (const k of Object.keys(values || {})) {
-      const m = k.match(re);
-      if (m) out[m[1] + (m[2] || "")] = (values as any)[k];
-    }
-    return out;
-  }, [values, props.side]);
+  // Ver valuesForSide: sem traduzir, o motor nao acha os campos de verso
+  // e de meio e pinta a peca vazia.
+  const engineValues = useMemo(
+    () => valuesForSide(values, props.side ?? "front"),
+    [values, props.side],
+  );
 
   // undefined = carregando; null = sem template (fallback SVG)
   const [template, setTemplate] = useState<VisualTemplate | null | undefined>(undefined);
