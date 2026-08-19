@@ -16,6 +16,15 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
   const sendDisabled =
     sf.sending || sf.cart.length === 0 || !sf.customerName.trim() || !sf.customerPhone.trim();
 
+  // S8 — modalidades do config da loja. Sem o bloco `delivery` no payload
+  // (backend anterior ao S8) cai no par de antes, que era o comportamento
+  // fixo — assim uma loja em versão velha não fica sem opção nenhuma.
+  const d = sf.store.delivery;
+  const modalidades: Array<{ value: "pickup" | "delivery" | "courier"; label: string }> = [];
+  if (!d || d.pickup_enabled) modalidades.push({ value: "pickup", label: "Retirar na loja" });
+  if (!d || d.delivery_enabled) modalidades.push({ value: "delivery", label: "Receber em casa" });
+  if (d?.courier_pickup_enabled) modalidades.push({ value: "courier", label: "Retirada por app" });
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View
@@ -44,25 +53,40 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         <FInput v={sf.customerPhone} on={sf.setCustomerPhone} ph="WhatsApp *" kb="phone-pad" />
         <FInput v={sf.customerEmail} on={sf.setCustomerEmail} ph="E-mail (opcional)" kb="email-address" />
 
-        {(sf.store.payment.pay_on_delivery_enabled || sf.store.payment.has_pix || sf.store.payment.has_card) ? (
+        {/* S8 — as modalidades vêm do config da loja. Antes eram duas
+            fixas, e uma loja com delivery_enabled=false oferecia "Receber
+            em casa" para o cliente tomar 400 no fechamento. */}
+        {modalidades.length > 0 ? (
           <>
-            <Text style={sectionLabel}>Retirada ou entrega?</Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Pressable
-                onPress={() => sf.setDeliveryType("pickup")}
-                style={[chip, sf.deliveryType === "pickup" && chipActive]}
-              >
-                <Text style={[chipTxt, sf.deliveryType === "pickup" && chipTxtActive]}>Retirar na loja</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => sf.setDeliveryType("delivery")}
-                style={[chip, sf.deliveryType === "delivery" && chipActive]}
-              >
-                <Text style={[chipTxt, sf.deliveryType === "delivery" && chipTxtActive]}>Receber em casa</Text>
-              </Pressable>
+            <Text style={sectionLabel}>Como você quer receber?</Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {modalidades.map((m) => (
+                <Pressable
+                  key={m.value}
+                  onPress={() => sf.setDeliveryType(m.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sf.deliveryType === m.value }}
+                  style={[chip, sf.deliveryType === m.value && chipActive]}
+                >
+                  <Text style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Text>
+                </Pressable>
+              ))}
             </View>
           </>
         ) : null}
+
+        {/* S8 — quem vai buscar. Sem nome e placa a lojista entrega a arte
+            de um cliente para o primeiro motoboy que citar o pedido. */}
+        {sf.deliveryType === "courier" && (
+          <>
+            <Text style={sectionLabel}>Quem vai retirar</Text>
+            <Text style={{ fontSize: 11, color: T.ink3, marginTop: -4 }}>
+              Você chama o entregador pelo app e nos diz quem é. O frete é pago direto no aplicativo.
+            </Text>
+            <FInput v={sf.courierName} on={sf.setCourierName} ph="Nome do entregador *" />
+            <FInput v={sf.courierPlate} on={sf.setCourierPlate} ph="Placa (ABC-1234) *" />
+          </>
+        )}
 
         {sf.deliveryType === "delivery" && (
           <>
@@ -79,6 +103,31 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
               <FInput v={sf.addressState} on={sf.setAddressState} ph="UF" flex={1} />
               <FInput v={sf.addressZip} on={sf.setAddressZip} ph="CEP" flex={2} kb="numeric" />
             </View>
+
+            {/* S2 — frete cotado no servidor pelo CEP. A cotação é uma ação
+                explícita: são 8 dígitos e o servidor geocodifica o CEP,
+                então não vale disparar a cada tecla. */}
+            <Pressable
+              onPress={() => sf.quoteShipping()}
+              disabled={sf.quotingShipping}
+              accessibilityRole="button"
+              style={[chip, { alignSelf: "flex-start", opacity: sf.quotingShipping ? 0.6 : 1 }]}
+            >
+              <Text style={chipTxt}>
+                {sf.quotingShipping ? "Calculando frete..." : "Calcular frete"}
+              </Text>
+            </Pressable>
+
+            {sf.shippingError ? (
+              <Text style={{ fontSize: 12, color: T.red, fontWeight: "700" }}>{sf.shippingError}</Text>
+            ) : sf.shippingQuote && typeof sf.shippingQuote.fee === "number" ? (
+              <Text style={{ fontSize: 12, color: T.ink2 }}>
+                {sf.shippingQuote.free_shipping
+                  ? "Frete grátis para este CEP"
+                  : "Frete: R$ " + sf.shippingQuote.fee.toFixed(2)}
+                {sf.shippingQuote.eta ? " · " + sf.shippingQuote.eta : ""}
+              </Text>
+            ) : null}
           </>
         )}
 
@@ -122,8 +171,13 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           }}
         >
           <TotalRow l="Subtotal" v={sf.cartSubtotal} />
+          {/* S2 — o frete só entra na conta depois de cotado. Antes disso
+              o total mostra o subtotal, sem inventar um valor. */}
+          {sf.deliveryType === "delivery" && sf.shippingQuote && typeof sf.shippingQuote.fee === "number" ? (
+            <TotalRow l="Frete" v={sf.shippingFee} />
+          ) : null}
           <View style={{ height: 1, backgroundColor: T.border, marginVertical: 4 }} />
-          <TotalRow l="Total" v={sf.cartSubtotal} big />
+          <TotalRow l="Total" v={sf.cartTotal} big />
         </View>
 
         <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", marginTop: 4 }}>
@@ -147,7 +201,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           }}
         >
           <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
-            {sf.sending ? "Enviando..." : "Enviar pedido • R$ " + sf.cartSubtotal.toFixed(2)}
+            {sf.sending ? "Enviando..." : "Enviar pedido • R$ " + sf.cartTotal.toFixed(2)}
           </Text>
         </Pressable>
       </View>
