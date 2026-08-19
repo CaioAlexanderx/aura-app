@@ -120,8 +120,27 @@ export interface DojoAttendanceSummary {
   recent: DojoAttendanceRecent[];
 }
 
+// Faixa de start_time aceita no cadastro de turma ('HH:MM').
+//
+// O backend DERIVA esses limites das constantes da janela de tolerância do
+// check-in (CHECKIN_WINDOW_BEFORE/AFTER_MIN): uma turma que começa na
+// virada do dia ficaria com a janela vazando pro dia vizinho e o check-in
+// por QR falharia justamente na hora da aula, então ele recusa no cadastro.
+// Por isso a faixa vem do SERVIDOR em vez de hardcodada aqui — se a janela
+// mudar lá (30/60 → 90/120 min), a dica do formulário acompanha sozinha.
+//
+// Opcional de propósito: backend anterior a este contrato não manda o
+// campo. Sem ele o front não mostra dica e não valida nada — o 422 do
+// servidor continua sendo a rede de segurança (mesmo degrade silencioso
+// do painel de QR quando o settings falha).
+export interface DojoClassStartTimeRange {
+  min: string;
+  max: string;
+}
+
 export interface DojoClassesSettings {
   qr_checkin_enabled: boolean;
+  class_start_time_range?: DojoClassStartTimeRange | null;
 }
 
 export interface DojoStudentQrResponse {
@@ -208,7 +227,12 @@ export const karateDojoClassesApi = {
   getSettings: (federationId: string): Promise<DojoClassesSettings> =>
     request<DojoClassesSettings>(`${base(federationId)}/classes/settings`),
 
-  updateSettings: (federationId: string, payload: DojoClassesSettings): Promise<DojoClassesSettings> =>
+  // Payload restrito ao campo gravável: class_start_time_range é constante
+  // derivada do backend, só leitura — o tipo impede mandar de volta.
+  updateSettings: (
+    federationId: string,
+    payload: Pick<DojoClassesSettings, "qr_checkin_enabled">
+  ): Promise<DojoClassesSettings> =>
     request<DojoClassesSettings>(`${base(federationId)}/classes/settings`, { method: "PUT", body: payload }),
 
   getStudentQr: (federationId: string, studentId: string): Promise<DojoStudentQrResponse> =>
