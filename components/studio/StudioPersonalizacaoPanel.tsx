@@ -20,16 +20,27 @@
 //      - Form: print area + verso opcional + lista de fields + "+ Adicionar" +
 //        Sugestões IA (suggestTemplates) + Preview WhatsApp + Salvar
 //
+// Editor CANÔNICO de personalização (19/08/2026)
+//   Este painel é o único editor da coluna `customization_config`. O
+//   wizard `produtos/[id]/personalizacao.tsx`, que gravava a mesma
+//   coluna em outro formato, virou redirect para cá.
+//
+//   A forma do que se grava não mora mais aqui: mora em
+//   components/studio/customizationConfig.ts. Este arquivo tem a UI e
+//   nada mais. Ver docs/studio/PERSONALIZACAO_CANONICA.md para o
+//   porquê — em resumo, `f_${Date.now()}` como id nunca alimentou o
+//   motor visual, que lê `values.text` / `values.image` por id.
+//
 // Convenções (não negociar):
 //   - useStudioTokens() de @/contexts/StudioThemeMode
 //   - toast de @/components/Toast
 //   - useMemo(() => buildStyles(t), [t])
-//   - sanitizeConfig inline (id/required/type/label/side)
+//   - a forma do config vem de customizationConfig.ts, nunca inline
 //   - Toast erro: [status] data.error || message
 //   - console.log + console.error com {status, code, message, data}
 //   - NUNCA logar payload completo (PII) — só counts/sizes
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, Pressable, TextInput, ActivityIndicator,
   StyleSheet, ScrollView, Modal, Platform, useWindowDimensions, Switch,
@@ -48,6 +59,15 @@ import {
 import { EnginePreview } from "@/components/studio/visualEngine/EnginePreview";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { request } from "@/services/api";
+import {
+  normalizeCustomizationConfig, canonicalizeIds, makeField, makeArtServiceFields,
+  artSourceRequired, isArtSourceType, isArtServiceField, isArtBriefField,
+  ART_SERVICE_FIELD_ID, ART_SERVICE_BRIEF_ID,
+} from "@/components/studio/customizationConfig";
+import {
+  ART_ADJUST, ART_DESIGNER, parseArtPrice, buildArtServiceChoices,
+} from "@/components/studio/artService";
 
 // ────────────────────────────────────────────────────────────
 // Props
@@ -80,72 +100,66 @@ const POSITIONS: Array<{ value: "left" | "center" | "right"; label: string }> = 
 
 // ────────────────────────────────────────────────────────────
 // Sanitizer
+//
+// Toda a forma vem de customizationConfig.ts. O que sobra aqui é a
+// única decisão de UI: produto sem nenhum campo abre com um campo de
+// texto, para a tela não nascer vazia.
 // ────────────────────────────────────────────────────────────
 function sanitizeConfig(cfg: CustomizationConfig | null | undefined): CustomizationConfig {
-  const fallback: CustomizationConfig = {
-    print_area: { width_cm: 10, height_cm: 10, position: "center" },
-    fields: [{ id: `f_${Date.now()}_0`, type: "text", label: "Nome a estampar", required: true, config: { max_chars: 30 }, side: "front" } as any],
-  };
-  if (!cfg) return fallback;
-  const pa: any = cfg.print_area || {};
-  const width = Number(pa.width_cm);
-  const height = Number(pa.height_cm);
-  const print_area = {
-    width_cm: Number.isFinite(width) && width > 0 ? width : 10,
-    height_cm: Number.isFinite(height) && height > 0 ? height : 10,
-    position: (["center", "left", "right"] as const).includes(pa.position) ? pa.position : "center",
-  } as CustomizationConfig["print_area"];
+  const base = normalizeCustomizationConfig(cfg);
+  if (base.fields.length > 0) return base;
+  return normalizeCustomizationConfig({
+    ...base,
+    fields: [{ ...makeField("text"), label: "Nome a estampar" }],
+  });
+}
 
-  // ── Verso (passa por se já existir no objeto cfg, fora do tipo CustomizationConfig)
-  const cfgAny: any = cfg;
-  const hasBack = !!cfgAny.has_back;
-  let backPrintArea: any = undefined;
-  if (hasBack) {
-    const bp: any = cfgAny.back_print_area || {};
-    const bw = Number(bp.width_cm);
-    const bh = Number(bp.height_cm);
-    backPrintArea = {
-      width_cm: Number.isFinite(bw) && bw > 0 ? bw : 10,
-      height_cm: Number.isFinite(bh) && bh > 0 ? bh : 10,
-      position: (["center", "left", "right"] as const).includes(bp.position) ? bp.position : "center",
-    };
-  }
-  const backChargeEnabled = hasBack && !!cfgAny.back_charge_enabled;
-  let backPriceDelta: number | undefined;
-  if (backChargeEnabled) {
-    const bpd = Number(cfgAny.back_price_delta);
-    backPriceDelta = Number.isFinite(bpd) && bpd >= 0 ? bpd : 0;
-  }
+/**
+ * Reaplica os ids canônicos depois de qualquer mudança estrutural.
+ *
+ * Adicionar, remover, reordenar ou trocar de lado muda quem é o
+ * primeiro campo de cada tipo — e o id acompanha, porque é derivado do
+ * tipo e da ordem. Chamar isto em todo mutator é o que impede o painel
+ * de voltar a gravar id que não bate com o motor visual.
+ */
+function comIdsCanonicos(cfg: CustomizationConfig): CustomizationConfig {
+  return { ...cfg, fields: canonicalizeIds(cfg.fields).fields };
+}
 
-  const validTypes: CustomizationFieldType[] = ["text", "image", "template", "color", "option"];
-  const fields: CustomizationField[] = (Array.isArray(cfg.fields) ? cfg.fields : [])
-    .filter((f: any) => f && validTypes.includes(f.type))
-    .map((f: any, i: number) => {
-      const rawSide: any = f.side;
-      const side: FieldSide = rawSide === "back" && hasBack ? "back" : "front";
-      return {
-        id: typeof f.id === "string" && f.id.trim() ? f.id : `f_${Date.now()}_${i}`,
-        type: f.type as CustomizationFieldType,
-        label: typeof f.label === "string" && f.label.trim() ? f.label : `Campo ${i + 1}`,
-        required: typeof f.required === "boolean" ? f.required : false,
-        config: f.config && typeof f.config === "object" ? f.config : {},
-        side,
-      } as any;
-    });
-  if (fields.length === 0) {
-    fields.push({ id: `f_${Date.now()}_0`, type: "text", label: "Nome a estampar", required: true, config: { max_chars: 30 }, side: "front" } as any);
-  }
+// ── Guia de medidas ─────────────────────────────────────────
+// Herdado do wizard, junto com a única tela que o oferecia. O
+// storefront lê `customization_config.size_guide` e mostra o link "Ver
+// guia de medidas" (SizeGuideModal); sem esta seção aqui, apagar o
+// wizard apagaria a única forma de alimentar aquele link.
+export type SizeGuideShape = { file_url: string; content_type: string };
 
-  const out: any = { print_area, fields };
-  if (hasBack) {
-    out.has_back = true;
-    out.back_print_area = backPrintArea;
-    if (backChargeEnabled) {
-      out.back_charge_enabled = true;
-      out.back_price_delta = backPriceDelta ?? 0;
+const GUIA_TIPOS_ACEITOS = [
+  "image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf",
+];
+const GUIA_MAX_MB = 15;
+
+async function uploadSizeGuide(
+  companyId: string,
+  file: File
+): Promise<{ url: string; content_type: string }> {
+  const reader = new FileReader();
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+    reader.readAsDataURL(file);
+  });
+  const data = await request<{ url: string }>(
+    "/companies/" + companyId + "/studio/upload-mockup",
+    {
+      method: "POST",
+      body: {
+        content_base64: dataUrl.split(",")[1],
+        content_type: file.type,
+        filename: file.name,
+      },
     }
-  }
-  return out as CustomizationConfig;
+  );
+  return { url: data.url, content_type: file.type };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -173,6 +187,11 @@ export function StudioPersonalizacaoPanel({
   const [suggestions, setSuggestions] = useState<Array<{ template_id: string; reason: string; score: number }>>([]);
   const [suggestChecked, setSuggestChecked] = useState<Record<string, boolean>>({});
 
+  // ── Guia de medidas ────────────────────────────────────
+  const [guideUploading, setGuideUploading] = useState(false);
+  const [guideError, setGuideError] = useState<string | null>(null);
+  const guideInputRef = useRef<any>(null);
+
   // ── Verso — derive flags do config ───────────────────
   const cfgAny: any = config;
   const hasBack: boolean = !!cfgAny.has_back;
@@ -180,6 +199,46 @@ export function StudioPersonalizacaoPanel({
   const backPriceDelta: number | undefined = typeof cfgAny.back_price_delta === "number" ? cfgAny.back_price_delta : undefined;
   const backPrintArea: { width_cm: number; height_cm: number; position: "left" | "center" | "right" } | undefined =
     cfgAny.back_print_area && typeof cfgAny.back_print_area === "object" ? cfgAny.back_print_area : undefined;
+
+  // ── Serviço de arte — derive do campo art_service ────
+  // O campo é `type:'option'` com `is_art_service:true`; as choices
+  // carregam o price_delta de cada caminho. A UI mostra dois preços e
+  // o resto é buildArtServiceChoices (compartilhado com a vitrine).
+  const artField = useMemo(
+    () => config.fields.find((f) => isArtServiceField(f)),
+    [config.fields]
+  );
+  const artEnabled = !!artField;
+  const artChoices = (artField?.config?.choices || []) as Array<{ value: string; price_delta?: number }>;
+  const artAdjustPrice = artChoices.find((c) => c.value === ART_ADJUST)?.price_delta ?? 0;
+  const artDesignPrice = artChoices.find((c) => c.value === ART_DESIGNER)?.price_delta ?? 0;
+
+  // ── Guia de medidas — chave de raiz do config ────────
+  const sizeGuide: SizeGuideShape | null =
+    cfgAny.size_guide && typeof cfgAny.size_guide === "object" && cfgAny.size_guide.file_url
+      ? cfgAny.size_guide
+      : null;
+
+  // Os dois campos do serviço de arte não entram na lista editável: o
+  // par é ligado pelo card "Serviço premium", e deixar a lojista
+  // renomear ou apagar `art_service` solto quebraria FieldArtService.
+  const camposEditaveis = useMemo(
+    () => config.fields.filter((f) => !isArtServiceField(f) && !isArtBriefField(f)),
+    [config.fields]
+  );
+
+  // ── Origem da arte — obrigatoriedade é do grupo ──────
+  // `image` e `template` preenchem o mesmo slot; um toggle só, por lado.
+  // Ver o S0 da F1: dois checkboxes independentes produziram uma
+  // condição impossível numa loja publicada.
+  const artSourceFront = useMemo(
+    () => config.fields.filter((f) => isArtSourceType(f.type) && (f as any).side !== "back"),
+    [config.fields]
+  );
+  const artSourceBack = useMemo(
+    () => config.fields.filter((f) => isArtSourceType(f.type) && (f as any).side === "back"),
+    [config.fields]
+  );
 
   // ── Counts de Frente/Verso para o sumário ────────────
   const frontFieldsCount = useMemo(
@@ -316,74 +375,148 @@ export function StudioPersonalizacaoPanel({
       toast.error("Habilite verso no topo");
       return;
     }
-    patchField(id, { side } as any);
+    // O lado entra no id (`image` na frente, `image_back` no verso),
+    // então trocar de lado renumera.
+    setConfig((prev) => comIdsCanonicos({
+      ...prev,
+      fields: prev.fields.map((f) => (f.id === id ? ({ ...f, side } as any) : f)),
+    }));
   }
   function removeField(id: string) {
-    setConfig((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== id) }));
+    setConfig((prev) => comIdsCanonicos({
+      ...prev,
+      fields: prev.fields.filter((f) => f.id !== id),
+    }));
   }
   function moveField(id: string, dir: -1 | 1) {
     setConfig((prev) => {
       const idx = prev.fields.findIndex((f) => f.id === id);
       if (idx < 0) return prev;
-      const next = idx + dir;
+      // Pula os campos do serviço de arte: eles não aparecem na lista
+      // (quem os edita é o card próprio), e trocar de lugar com um
+      // deles seria um clique que não faz nada visível.
+      let next = idx + dir;
+      while (
+        next >= 0 && next < prev.fields.length &&
+        (isArtServiceField(prev.fields[next]) || isArtBriefField(prev.fields[next]))
+      ) {
+        next += dir;
+      }
       if (next < 0 || next >= prev.fields.length) return prev;
       const arr = [...prev.fields];
       const [item] = arr.splice(idx, 1);
       arr.splice(next, 0, item);
-      return { ...prev, fields: arr };
+      // Reordenar dois campos do mesmo tipo troca quem é o primeiro —
+      // e o primeiro é quem fica com o id que o motor visual procura.
+      return comIdsCanonicos({ ...prev, fields: arr });
     });
   }
   function addField(type: CustomizationFieldType) {
     setAddMenuOpen(false);
-    const defaults: Record<CustomizationFieldType, CustomizationField> = {
-      text:     { id: `f_${Date.now()}`, type: "text",     label: "Texto",      required: false, config: { max_chars: 30 } } as any,
-      color:    { id: `f_${Date.now()}`, type: "color",    label: "Cor",        required: false, config: { colors: ["#FFFFFF", "#000000", "#EF4444"] } } as any,
-      option:   { id: `f_${Date.now()}`, type: "option",   label: "Opção",      required: false, config: { choices: [{ value: "p", label: "P" }, { value: "m", label: "M" }, { value: "g", label: "G" }] } } as any,
-      template: { id: `f_${Date.now()}`, type: "template", label: "Template",   required: false, config: {} } as any,
-      image:    { id: `f_${Date.now()}`, type: "image",    label: "Imagem",     required: false, config: { max_mb: 5, formats: ["png", "jpg"] } } as any,
-    };
-    const newField: any = { ...defaults[type], side: "front" as FieldSide };
-    setConfig((prev) => ({ ...prev, fields: [...prev.fields, newField] }));
+    setConfig((prev) => comIdsCanonicos({
+      ...prev,
+      fields: [...prev.fields, makeField(type, "front")],
+    }));
+  }
+
+  // ── Origem da arte: um toggle para o grupo inteiro ─────
+  function setArtSourceRequired(side: FieldSide, next: boolean) {
+    setConfig((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) =>
+        isArtSourceType(f.type) && ((f as any).side === "back") === (side === "back")
+          ? { ...f, required: next }
+          : f
+      ),
+    }));
+  }
+
+  // ── Serviço de arte ────────────────────────────────────
+  // Liga/desliga o par art_service + briefing. Estava só no wizard, que
+  // ninguém alcançava — era por isso que nenhuma lojista conseguia
+  // precificar a criação de arte.
+  function toggleArtService(next: boolean) {
+    setConfig((prev) => {
+      if (!next) {
+        return {
+          ...prev,
+          fields: prev.fields.filter((f) => !isArtServiceField(f) && !isArtBriefField(f)),
+        };
+      }
+      if (prev.fields.some((f) => isArtServiceField(f))) return prev;
+      return { ...prev, fields: [...prev.fields, ...makeArtServiceFields(0, 0)] };
+    });
+  }
+  function patchArtPrices(adjust: number, design: number) {
+    setConfig((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) =>
+        isArtServiceField(f)
+          ? { ...f, config: { ...f.config, is_art_service: true, choices: buildArtServiceChoices(adjust, design) } }
+          : f
+      ),
+    }));
+  }
+
+  // ── Guia de medidas ────────────────────────────────────
+  async function handleGuideFileSelect(ev: any) {
+    const file: File | undefined = ev?.target?.files?.[0];
+    if (!file) return;
+    if (!GUIA_TIPOS_ACEITOS.includes(file.type)) {
+      setGuideError("Aceitos: PNG, JPG, WEBP ou PDF");
+      return;
+    }
+    if (file.size > GUIA_MAX_MB * 1024 * 1024) {
+      setGuideError(`Arquivo grande demais (max ${GUIA_MAX_MB} MB)`);
+      return;
+    }
+    setGuideUploading(true);
+    setGuideError(null);
+    try {
+      const { url, content_type } = await uploadSizeGuide(companyId, file);
+      setConfig((prev) => ({ ...prev, size_guide: { file_url: url, content_type } } as any));
+      toast.success("Guia de medidas enviado! Salve para publicar.");
+      try { if (guideInputRef.current) guideInputRef.current.value = ""; } catch (_) {}
+    } catch (e: any) {
+      console.error("[StudioPersonalizacao] guide upload error", {
+        status: e?.status, code: e?.code, message: e?.message,
+      });
+      setGuideError(e?.data?.error || e?.message || "Erro no upload do guia");
+    } finally {
+      setGuideUploading(false);
+    }
+  }
+  function removeGuide() {
+    setConfig((prev) => ({ ...prev, size_guide: null } as any));
+    setGuideError(null);
   }
 
   // ── Save ───────────────────────────────────────────────
   async function save() {
     const cfgAnyLocal: any = config;
-    const sanitizeForSave = (): CustomizationConfig | null => {
-      const base: any = {
-        print_area: config.print_area,
-        fields: config.fields.map((f: any) => ({ ...f, side: (f.side === "back" && cfgAnyLocal.has_back) ? "back" : "front" })),
-      };
-      if (cfgAnyLocal.has_back) {
-        const bp = cfgAnyLocal.back_print_area;
-        if (!bp || !(bp.width_cm > 0) || !(bp.height_cm > 0) || !["left", "center", "right"].includes(bp.position)) {
-          toast.error("Configure as dimensões do verso");
-          return null;
-        }
-        base.has_back = true;
-        base.back_print_area = {
-          width_cm: Number(bp.width_cm),
-          height_cm: Number(bp.height_cm),
-          position: bp.position,
-        };
-        if (cfgAnyLocal.back_charge_enabled) {
-          const bpd = Number(cfgAnyLocal.back_price_delta);
-          if (!Number.isFinite(bpd) || bpd < 0) {
-            toast.error("Valor de cobrança inválido");
-            return null;
-          }
-          base.back_charge_enabled = true;
-          base.back_price_delta = bpd;
-        }
-      } else {
-        // Force side=front em todos
-        base.fields = base.fields.map((f: any) => ({ ...f, side: "front" }));
-      }
-      return base as CustomizationConfig;
-    };
 
-    const cfg = sanitizeForSave();
-    if (!cfg) return;
+    // As dimensões do verso são a única validação que sobrou aqui: a
+    // normalização preencheria 10×10 em silêncio, e para uma medida de
+    // impressão o silêncio é pior do que o erro.
+    if (cfgAnyLocal.has_back) {
+      const bp = cfgAnyLocal.back_print_area;
+      if (!bp || !(bp.width_cm > 0) || !(bp.height_cm > 0)) {
+        toast.error("Configure as dimensões do verso");
+        return;
+      }
+      if (cfgAnyLocal.back_charge_enabled) {
+        const bpd = Number(cfgAnyLocal.back_price_delta);
+        if (!Number.isFinite(bpd) || bpd < 0) {
+          toast.error("Valor de cobrança inválido");
+          return;
+        }
+      }
+    }
+
+    // Tudo o que se grava passa por aqui: ids canônicos, config
+    // completo por tipo, obrigatoriedade coerente. É este ponto que
+    // impede o painel de reintroduzir uma config como a da Sheid.
+    const cfg = normalizeCustomizationConfig(config);
     if (!cfg.fields.length) { toast.error("Adicione 1 campo"); return; }
     setSaving(true);
     console.log("[StudioPersonalizacao] save start", {
@@ -395,6 +528,10 @@ export function StudioPersonalizacaoPanel({
     try {
       const resp = await studioApi.saveCustomizationConfig(companyId, productId, cfg);
       console.log("[StudioPersonalizacao] save OK", resp);
+      // A tela passa a mostrar o que foi gravado, não o que estava
+      // digitado: a normalização pode ter renomeado ids e preenchido
+      // config, e esconder isso faria o painel divergir do banco.
+      setConfig(cfg);
       toast.success("Configuracao salva!");
       onSaved?.(cfg);
     } catch (e: any) {
@@ -453,20 +590,18 @@ export function StudioPersonalizacaoPanel({
           ),
         };
       }
-      return {
+      const novo = makeField("template", "front");
+      return comIdsCanonicos({
         ...prev,
         fields: [
           ...prev.fields,
           {
-            id: `f_${Date.now()}`,
-            type: "template",
+            ...novo,
             label: "Template (sugestão IA)",
-            required: false,
-            config: { suggested_template_ids: selected.map((sg) => sg.template_id) },
-            side: "front",
+            config: { ...novo.config, suggested_template_ids: selected.map((sg) => sg.template_id) },
           } as any,
         ],
-      };
+      });
     });
     setSuggestOpen(false);
     toast.success(`${selected.length} sugestão(ões) aplicada(s)`);
@@ -746,14 +881,14 @@ export function StudioPersonalizacaoPanel({
           <Text style={s.empty}>Nenhum campo. Adicione pelo menos 1.</Text>
         ) : (
           <View style={{ gap: 10, marginTop: 6 }}>
-            {config.fields.map((f, i) => (
+            {camposEditaveis.map((f, i) => (
               <FieldRow
                 key={f.id}
                 t={t}
                 s={s}
                 field={f}
                 index={i}
-                total={config.fields.length}
+                total={camposEditaveis.length}
                 hasBack={hasBack}
                 onPatch={(p) => patchField(f.id, p)}
                 onPatchConfig={(p) => patchFieldConfig(f.id, p)}
@@ -764,6 +899,186 @@ export function StudioPersonalizacaoPanel({
               />
             ))}
           </View>
+        )}
+
+        {/* Origem da arte — obrigatoriedade do GRUPO.
+            Fica fora das linhas de campo de propósito: exigir "Foto" e
+            "Template da galeria" separadamente é a condição impossível
+            que travou a compra na sheid-mania. Aqui é uma pergunta só,
+            e ela não tem como sair errada. */}
+        {(artSourceFront.length > 0 || artSourceBack.length > 0) && (
+          <View style={s.artSourceBox}>
+            <Text style={s.eyebrow}>ORIGEM DA ARTE</Text>
+            {artSourceFront.length > 0 && (
+              <Pressable
+                onPress={() => setArtSourceRequired("front", !artSourceRequired(config.fields, "front"))}
+                style={s.requiredRow}
+              >
+                <View style={[s.checkbox, artSourceRequired(config.fields, "front") && s.checkboxOn]}>
+                  {artSourceRequired(config.fields, "front") && <Icon name="check" size={11} color="#fff" />}
+                </View>
+                <Text style={s.requiredTxt}>
+                  O cliente precisa escolher uma arte
+                  {hasBack ? " (frente)" : ""}
+                </Text>
+              </Pressable>
+            )}
+            {artSourceBack.length > 0 && (
+              <Pressable
+                onPress={() => setArtSourceRequired("back", !artSourceRequired(config.fields, "back"))}
+                style={s.requiredRow}
+              >
+                <View style={[s.checkbox, artSourceRequired(config.fields, "back") && s.checkboxOn]}>
+                  {artSourceRequired(config.fields, "back") && <Icon name="check" size={11} color="#fff" />}
+                </View>
+                <Text style={s.requiredTxt}>O cliente precisa escolher uma arte (verso)</Text>
+              </Pressable>
+            )}
+            <Text style={s.helpTxt}>
+              {artSourceFront.length + artSourceBack.length > 1
+                ? "Vale qualquer um dos caminhos de arte — enviar arquivo OU escolher da galeria. Não são cumulativos."
+                : "Sem isso marcado, o cliente pode comprar sem enviar arte."}
+              {artEnabled ? " Quem contrata a criação da arte fica dispensado." : ""}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Serviço de arte */}
+      <View style={s.card}>
+        <View style={s.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.eyebrow}>SERVIÇO PREMIUM</Text>
+            <Text style={s.cardHeader}>Vocês criam ou ajustam a arte?</Text>
+            <Text style={s.helpTxt}>
+              Três caminhos na vitrine: o cliente manda a arte pronta, manda e vocês
+              ajustam, ou vocês criam do zero. Os dois últimos entram no preço do pedido.
+            </Text>
+          </View>
+          <Switch
+            value={artEnabled}
+            onValueChange={toggleArtService}
+            trackColor={{ false: t.ink5, true: t.accent }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {artEnabled && (
+          <View style={{ marginTop: 10, gap: 8 }}>
+            <View style={s.inlineRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>Ajustar a arte do cliente (R$)</Text>
+                <TextInput
+                  value={artAdjustPrice ? String(artAdjustPrice) : ""}
+                  onChangeText={(txt) => patchArtPrices(parseArtPrice(txt), artDesignPrice)}
+                  keyboardType="decimal-pad"
+                  style={s.input}
+                  placeholder="0,00"
+                  placeholderTextColor={t.ink4}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>Criar a arte do zero (R$)</Text>
+                <TextInput
+                  value={artDesignPrice ? String(artDesignPrice) : ""}
+                  onChangeText={(txt) => patchArtPrices(artAdjustPrice, parseArtPrice(txt))}
+                  keyboardType="decimal-pad"
+                  style={s.input}
+                  placeholder="30,00"
+                  placeholderTextColor={t.ink4}
+                />
+              </View>
+            </View>
+            <Text style={s.helpTxt}>
+              Preço 0 mantém o caminho visível e sem custo — útil para dizer "a gente
+              ajusta por nossa conta" e ainda assim saber que aquele pedido dá trabalho.
+              O briefing do cliente vai junto, no campo "{ART_SERVICE_BRIEF_ID}".
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Guia de medidas */}
+      <View style={s.card}>
+        <Text style={s.eyebrow}>GUIA DE MEDIDAS</Text>
+        <Text style={s.cardHeader}>Tabela de tamanhos (opcional)</Text>
+        <Text style={s.helpTxt}>
+          Imagem ou PDF com as medidas do produto. O cliente vê um link
+          "Ver guia de medidas" na tela de personalização.
+        </Text>
+
+        {sizeGuide ? (
+          <View style={s.guidePreview}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+              <Icon
+                name={sizeGuide.content_type === "application/pdf" ? "file_text" : "image"}
+                size={16}
+                color={t.primary}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.guideFileName} numberOfLines={1}>
+                  {sizeGuide.content_type === "application/pdf" ? "Guia PDF enviado" : "Imagem do guia enviada"}
+                </Text>
+                <Text style={s.guideFileType}>{sizeGuide.content_type}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {Platform.OS === "web" && (
+                <Pressable
+                  onPress={() => {
+                    try { window.open(sizeGuide.file_url, "_blank"); } catch (e) {
+                      console.error("[StudioPersonalizacao] window.open failed", e);
+                    }
+                  }}
+                  style={s.smallBtn}
+                >
+                  <Text style={s.smallBtnTxt}>Abrir</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={removeGuide} style={s.guideRemoveBtn}>
+                <Text style={s.guideRemoveTxt}>Remover</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : Platform.OS === "web" ? (
+          <View style={{ marginTop: 8 }}>
+            {/* @ts-ignore — label/input nativos no web */}
+            <label
+              style={{
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 6,
+                padding: 18,
+                backgroundColor: t.bgSoft,
+                border: "2px dashed " + t.ink5,
+                borderRadius: 10,
+                cursor: guideUploading ? "wait" : "pointer",
+                opacity: guideUploading ? 0.6 : 1,
+              } as any}
+            >
+              <Text style={{ fontSize: 13, color: t.ink, fontWeight: "700" }}>
+                {guideUploading ? "Enviando..." : "Escolher arquivo"}
+              </Text>
+              <Text style={{ fontSize: 11, color: t.ink3 }}>
+                PNG, JPG, WEBP ou PDF — até {GUIA_MAX_MB} MB
+              </Text>
+              {/* @ts-ignore */}
+              <input
+                ref={guideInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                onChange={handleGuideFileSelect}
+                disabled={guideUploading}
+                style={{ display: "none" } as any}
+              />
+            </label>
+          </View>
+        ) : (
+          <Text style={s.helpTxt}>
+            Upload de guia de medidas disponível somente na versão web do Studio.
+          </Text>
+        )}
+        {guideError && (
+          <Text style={{ fontSize: 11.5, color: t.danger, marginTop: 6 }}>{guideError}</Text>
         )}
       </View>
 
@@ -914,6 +1229,70 @@ export function StudioPersonalizacaoPanel({
 }
 
 // ────────────────────────────────────────────────────────────
+// Serialização dos campos de texto livre
+//
+// Choices e paleta são editadas como uma linha de texto. O price_delta
+// é o terceiro pedaço, opcional — sem ele não havia como cobrar por
+// tamanho ou por cor, e `computeChoicesDelta` (que já existe nos dois
+// lados) ficava sem dado para somar.
+// ────────────────────────────────────────────────────────────
+type Choice = { label: string; value: string; price_delta?: number };
+
+function choicesParaTexto(choices: Choice[] | undefined): string {
+  return (choices || [])
+    .map((c) => {
+      const base = `${c.label}:${c.value}`;
+      return c.price_delta ? `${base}:${c.price_delta}` : base;
+    })
+    .join(", ");
+}
+
+function textoParaChoices(txt: string): Choice[] {
+  return txt
+    .split(",")
+    .map((par) => {
+      const partes = par.split(":").map((x) => x.trim());
+      if (partes.length < 2 || !partes[0] || !partes[1]) return null;
+      const delta = partes.length > 2 ? parseArtPrice(partes[2]) : 0;
+      const c: Choice = { label: partes[0], value: partes[1] };
+      if (delta) c.price_delta = delta;
+      return c;
+    })
+    .filter(Boolean) as Choice[];
+}
+
+/**
+ * A cor é dois campos no config: `colors` (o que a vitrine desenha) e
+ * `choices` (de onde sai o price_delta, casado pelo hex). FieldColor
+ * procura a choice cujo `value` é o hex — então os dois têm que sair
+ * do mesmo texto, ou o preço não aparece.
+ */
+function corParaTexto(config: any): string {
+  const cores: string[] = config?.colors || [];
+  const choices: Choice[] = config?.choices || [];
+  return cores
+    .map((c) => {
+      const ch = choices.find((x) => x.value === c);
+      return ch?.price_delta ? `${c}:${ch.price_delta}` : c;
+    })
+    .join(", ");
+}
+
+function textoParaCor(txt: string): { colors: string[]; choices: Choice[] } {
+  const colors: string[] = [];
+  const choices: Choice[] = [];
+  for (const par of txt.split(",")) {
+    const partes = par.split(":").map((x) => x.trim());
+    const hex = partes[0];
+    if (!hex) continue;
+    colors.push(hex);
+    const delta = partes.length > 1 ? parseArtPrice(partes[1]) : 0;
+    if (delta) choices.push({ label: hex, value: hex, price_delta: delta });
+  }
+  return { colors, choices };
+}
+
+// ────────────────────────────────────────────────────────────
 // FieldRow — edição inline de um campo
 // ────────────────────────────────────────────────────────────
 function FieldRow({
@@ -995,15 +1374,24 @@ function FieldRow({
           </Pressable>
         </View>
 
-        <Pressable
-          onPress={() => onPatch({ required: !field.required })}
-          style={s.requiredRow}
-        >
-          <View style={[s.checkbox, field.required && s.checkboxOn]}>
-            {field.required && <Icon name="check" size={11} color="#fff" />}
-          </View>
-          <Text style={s.requiredTxt}>Obrigatório</Text>
-        </Pressable>
+        {/* Origem da arte não tem checkbox próprio: a pergunta é do
+            grupo e vive no fim da lista. Ver o S0 da F1. */}
+        {isArtSourceType(field.type) ? (
+          <Text style={s.helpTxt}>
+            Obrigatoriedade em "Origem da arte", no fim da lista — vale para
+            enviar arquivo e escolher da galeria ao mesmo tempo.
+          </Text>
+        ) : (
+          <Pressable
+            onPress={() => onPatch({ required: !field.required })}
+            style={s.requiredRow}
+          >
+            <View style={[s.checkbox, field.required && s.checkboxOn]}>
+              {field.required && <Icon name="check" size={11} color="#fff" />}
+            </View>
+            <Text style={s.requiredTxt}>Obrigatório</Text>
+          </Pressable>
+        )}
 
         {field.type === "text" && (
           <View style={{ marginTop: 8 }}>
@@ -1024,39 +1412,39 @@ function FieldRow({
 
         {field.type === "color" && (
           <View style={{ marginTop: 8 }}>
-            <Text style={s.fieldLabel}>Paleta (hex, vírgula)</Text>
+            <Text style={s.fieldLabel}>Paleta (hex, vírgula — hex:preço cobra a mais)</Text>
             <TextInput
-              value={((field.config?.colors as string[] | undefined) || []).join(",")}
-              onChangeText={(txt) => {
-                const list = txt.split(",").map((x) => x.trim()).filter(Boolean);
-                onPatchConfig({ colors: list });
-              }}
+              value={corParaTexto(field.config)}
+              onChangeText={(txt) => onPatchConfig(textoParaCor(txt))}
               style={s.input}
-              placeholder="#FFFFFF, #000000, #EF4444"
+              placeholder="#FFFFFF, #000000, #EF4444:5"
               placeholderTextColor={t.ink4}
               autoCapitalize="characters"
             />
+            {/* Swatches: a paleta é o que a vitrine mostra ao cliente, e
+                ver a cor errada aqui é mais rápido do que ler o hex. */}
+            <View style={s.swatchRow}>
+              {((field.config?.colors as string[] | undefined) || []).map((c) => (
+                <View key={c} style={[s.swatch, { backgroundColor: c }]} />
+              ))}
+            </View>
           </View>
         )}
 
         {field.type === "option" && (
           <View style={{ marginTop: 8 }}>
-            <Text style={s.fieldLabel}>Choices (label:value, vírgula)</Text>
+            <Text style={s.fieldLabel}>Opções (label:value:preço, vírgula)</Text>
             <TextInput
-              value={(((field.config?.choices as Array<{ label: string; value: string }> | undefined) || [])
-                .map((c) => `${c.label}:${c.value}`).join(", "))}
-              onChangeText={(txt) => {
-                const choices = txt.split(",").map((pair) => {
-                  const parts = pair.split(":").map((x) => x.trim());
-                  if (parts.length < 2) return null;
-                  return { label: parts[0], value: parts[1] };
-                }).filter(Boolean) as Array<{ label: string; value: string }>;
-                onPatchConfig({ choices });
-              }}
+              value={choicesParaTexto(field.config?.choices as any)}
+              onChangeText={(txt) => onPatchConfig({ choices: textoParaChoices(txt) })}
               style={s.input}
-              placeholder="P:p, M:m, G:g"
+              placeholder="P:p, M:m, G:g:3"
               placeholderTextColor={t.ink4}
             />
+            <Text style={s.helpTxt}>
+              O terceiro pedaço é opcional e entra no preço do pedido — "G:g:3"
+              cobra R$ 3 a mais no tamanho G.
+            </Text>
           </View>
         )}
       </View>
@@ -1291,6 +1679,40 @@ function buildStyles(t: StudioPalette) {
 
     requiredRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
     requiredTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
+
+    artSourceBox: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: t.ink5,
+      gap: 4,
+    },
+
+    swatchRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 8 },
+    swatch: {
+      width: 20, height: 20, borderRadius: 10,
+      borderWidth: 1, borderColor: t.ink5,
+    },
+
+    guidePreview: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 8,
+      backgroundColor: t.bgSoft,
+      borderRadius: 10,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: t.ink5,
+    },
+    guideFileName: { fontSize: 13, fontWeight: "700", color: t.ink },
+    guideFileType: { fontSize: 10.5, color: t.ink4, marginTop: 1 },
+    guideRemoveBtn: {
+      paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10,
+      borderWidth: 1.5, borderColor: t.dangerSoft,
+      backgroundColor: t.dangerSoft,
+    },
+    guideRemoveTxt: { fontSize: 12, fontWeight: "800", color: t.danger },
 
     checkbox: {
       width: 18, height: 18, borderRadius: 4,
