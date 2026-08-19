@@ -60,7 +60,13 @@ export { ART_SERVICE_FIELD_ID, ART_SERVICE_BRIEF_ID };
 // Vieram do wizard, que era o lado que tinha config rico.
 export const FONTS_PRESET = ["Pacifico", "Caveat", "Playfair Display", "Bebas Neue", "Inter"];
 export const COLORS_PRESET = ["#0F172A", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#EC4899", "#FFFFFF"];
-export const FORMATS_PRESET = ["png", "jpg", "jpeg", "pdf"];
+// MIME, nao extensao solta: e o que o atributo `accept` do input de
+// arquivo entende e o que a vitrine espera. Com "png" solto o rotulo
+// de formatos estourava e derrubava a loja inteira — e como TODO campo
+// de imagem nascia daqui, valia pra qualquer produto que pedisse arte.
+// A vitrine hoje aceita as duas formas (ver FieldImage), entao os
+// produtos ja gravados continuam funcionando sem migration.
+export const FORMATS_PRESET = ["image/png", "image/jpeg", "application/pdf"];
 export const TEXT_MAX_CHARS_PADRAO = 20;
 export const IMAGE_MAX_MB_PADRAO = 10;
 export const IMAGE_MIN_DPI_PADRAO = 150;

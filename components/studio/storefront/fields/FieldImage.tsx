@@ -36,13 +36,46 @@ const FORMAT_LABELS: Record<string, string> = {
   "application/pdf": "PDF",
 };
 
+// `formats` deveria ser sempre MIME ("image/png"), mas na pratica ha
+// produtos gravados com a extensao solta ("png"). Nesses, o split("/")[1]
+// devolvia undefined e o .toUpperCase() derrubava a VITRINE INTEIRA no
+// ErrorBoundary — o cliente clicava em "Personalizar" e via tela de erro,
+// sem nenhuma pista de que era so um rotulo de formato. Aqui os dois
+// formatos sao aceitos, e o que nao der pra entender e simplesmente
+// ignorado: rotulo feio e problema pequeno, loja fora do ar nao e.
+function normalizaFormato(f: unknown): { mime: string | null; ext: string | null } {
+  const s = typeof f === "string" ? f.trim() : "";
+  if (!s) return { mime: null, ext: null };
+  if (s.includes("/")) {
+    const parte = s.split("/")[1] || "";
+    return { mime: s, ext: parte || null };
+  }
+  return { mime: null, ext: s.replace(/^\./, "") || null };
+}
+
 function buildAccept(formats: string[]): string {
-  return formats.join(",");
+  // O atributo accept entende MIME ("image/png") e extensao com ponto
+  // (".png") — nunca "png" solto, que o navegador descarta.
+  const partes = (formats || [])
+    .map((f) => {
+      const { mime, ext } = normalizaFormato(f);
+      if (mime) return mime;
+      return ext ? "." + ext.toLowerCase() : null;
+    })
+    .filter(Boolean) as string[];
+  return [...new Set(partes)].join(",");
 }
 
 function buildFormatLabel(formats: string[]): string {
-  const labels = [...new Set(formats.map((f) => FORMAT_LABELS[f] ?? f.split("/")[1].toUpperCase()))];
-  return labels.join(", ");
+  const labels = (formats || [])
+    .map((f) => {
+      if (typeof f === "string" && FORMAT_LABELS[f]) return FORMAT_LABELS[f];
+      const { ext } = normalizaFormato(f);
+      if (!ext) return null;
+      return FORMAT_LABELS["image/" + ext.toLowerCase()] ?? ext.toUpperCase();
+    })
+    .filter(Boolean) as string[];
+  return [...new Set(labels)].join(", ");
 }
 
 function isPdf(contentType: string): boolean {
