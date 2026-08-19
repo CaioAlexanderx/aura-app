@@ -4,8 +4,10 @@
 // CONTRATO CONGELADO — Onda 0. Não alterar sem versionar.
 // ============================================================
 import type { CustomizationConfig, CustomizationField } from "@/services/studioApi";
+import type { StoreCategory } from "./categoryGrouping";
 
 export type { CustomizationConfig, CustomizationField };
+export type { StoreCategory };
 
 export type StudioStoreProduct = {
   id: string;
@@ -14,6 +16,11 @@ export type StudioStoreProduct = {
   price: number;
   image_url: string | null;
   category: string | null;
+  // S1 — vinculo primario da arvore da F0. null em catalogo pre-migracao
+  // ou quando a categoria nao e visivel na vitrine (o backend ja filtra).
+  category_id?: string | null;
+  category_slug?: string | null;
+  category_path?: string | null;
   stock_qty: number;
   customization_config: CustomizationConfig | null;
   templates: Array<{
@@ -38,6 +45,19 @@ export type StorePayload = {
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };
   payment: { has_pix: boolean; has_card: boolean; pay_on_delivery_enabled: boolean };
   revisions: StoreRevisions;
+  // S1 — lista FLAT com parent_id; o cliente deriva a hierarquia.
+  // Ausente/vazia em base sem as migrations 257/258 da F0.
+  categories?: StoreCategory[];
+  // S8 — modalidades de entrega. Antes o checkout do Studio oferecia
+  // retirada e entrega fixas, sem consultar o config da loja.
+  delivery?: {
+    pickup_enabled: boolean;
+    delivery_enabled: boolean;
+    courier_pickup_enabled: boolean;
+    delivery_fee: number;
+    pickup_eta_text: string | null;
+    delivery_eta_text: string | null;
+  };
   total_products: number;
 };
 
