@@ -8,7 +8,7 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { FieldRenderer } from "./FieldRenderer";
@@ -145,6 +145,35 @@ export function ProductConfigurator({
     );
   };
 
+  // A vitrine nasceu so pra celular: sem largura maxima, num monitor os
+  // campos iam de ponta a ponta e o "Quantidade" ficava a mais de mil
+  // pixels do proprio contador. No desktop o conteudo passa a viver numa
+  // coluna centrada, com o preview FIXO ao lado dos campos — o cliente ve
+  // a peca mudando enquanto digita, que e o ponto da tela.
+  const { width: larguraTela } = useWindowDimensions();
+  const telaLarga = larguraTela >= 900;
+  const LARGURA_MAX = 980;
+  // Sobra de cada lado pra alinhar cabecalho e rodape com a coluna.
+  const recuoLateral = telaLarga ? Math.max(28, (larguraTela - LARGURA_MAX) / 2) : 16;
+
+  const linhaConteudo = {
+    flexDirection: telaLarga ? ("row" as const) : ("column" as const),
+    gap: telaLarga ? 28 : 16,
+    width: "100%" as const,
+    maxWidth: LARGURA_MAX,
+    alignSelf: "center" as const,
+    alignItems: telaLarga ? ("flex-start" as const) : ("stretch" as const),
+  };
+  const colunaPreview = {
+    width: telaLarga ? 360 : ("100%" as const),
+    alignItems: "center" as const,
+  };
+  const colunaCampos = {
+    flex: telaLarga ? 1 : undefined,
+    width: telaLarga ? undefined : ("100%" as const),
+    gap: 16,
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       {/* Modal guia de medidas */}
@@ -159,7 +188,7 @@ export function ProductConfigurator({
       <View
         style={{
           backgroundColor: T.card,
-          paddingHorizontal: 16, paddingTop: 20, paddingBottom: 14,
+          paddingHorizontal: recuoLateral, paddingTop: 20, paddingBottom: 14,
           borderBottomWidth: 1, borderBottomColor: T.border,
           flexDirection: "row", alignItems: "center", gap: 10,
         }}
@@ -227,12 +256,16 @@ export function ProductConfigurator({
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 160 }}>
-        <View style={{ alignItems: "center" }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: telaLarga ? 28 : 16, paddingBottom: 160 }}
+      >
+        <View style={linhaConteudo}>
+        <View style={colunaPreview}>
           <LivePreview
             config={cfg}
             values={editingValues}
-            size={defaultConfiguratorSize()}
+            size={telaLarga ? 360 : defaultConfiguratorSize()}
             productName={activeProduct.name}
             showLabel={false}
             slug={slug}
@@ -240,6 +273,8 @@ export function ProductConfigurator({
             allowSideToggle
           />
         </View>
+
+        <View style={colunaCampos}>
 
         {/* S1 — seletor de modelo. Só aparece quando o produto foi aberto
             por uma categoria com 2+ modelos; produto solto não ganha uma
@@ -527,13 +562,24 @@ export function ProductConfigurator({
         {error && (
           <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Text>
         )}
+        </View>
+        </View>
       </ScrollView>
 
       {/* Botao CTA */}
-      <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
+      <View
+        style={{
+          backgroundColor: T.card, paddingVertical: 14, paddingHorizontal: recuoLateral,
+          borderTopWidth: 1, borderTopColor: T.border,
+          alignItems: telaLarga ? "center" : "stretch",
+        }}
+      >
         <Pressable
           onPress={commitConfigure}
-          style={{ backgroundColor: T.primary, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
+          style={{
+            backgroundColor: T.primary, paddingVertical: 14, borderRadius: 10, alignItems: "center",
+            width: "100%", maxWidth: telaLarga ? 420 : undefined,
+          }}
         >
           <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
             {(sf as any)._editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}

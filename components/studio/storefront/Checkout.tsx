@@ -44,7 +44,13 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 180 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16, gap: 10, paddingBottom: 180,
+          width: "100%", maxWidth: 720, alignSelf: "center",
+        }}
+      >
         <Text style={sectionLabel}>Itens personalizados</Text>
         <CartItemList sf={sf} />
 
