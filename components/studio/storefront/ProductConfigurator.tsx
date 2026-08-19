@@ -13,6 +13,7 @@ import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
+import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { SizeGuideModal } from "./SizeGuideModal";
 
@@ -87,6 +88,11 @@ export function ProductConfigurator({
   const hasSizeGuide = !!(sizeGuide?.file_url);
 
   const allFields = cfg?.fields || [];
+
+  // S6 — escada vinda do backend, já com preço unitário por faixa.
+  const escada = activeProduct?.qty_tiers || [];
+  const faixaAtual = matchTier(escada, editingQty);
+  const proxima = proximaFaixa(escada, editingQty);
   const frontFields = allFields.filter((f) => ((f as any).side || "front") === "front");
   const backFields = allFields.filter((f) => (f as any).side === "back");
   const hasBack = cfg?.has_back === true;
@@ -357,6 +363,55 @@ export function ProductConfigurator({
             </Pressable>
           </View>
         </View>
+
+        {/* S6 — escada de desconto. Fica ao lado da quantidade, não no
+            carrinho: é argumento de venda para atacado e some se o cliente
+            só descobrir depois de fechar. Cada faixa é tocável — o pulo
+            para a quantidade que ativa o desconto é o gesto todo. */}
+        {escada.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+              Quanto mais, mais barato
+            </Text>
+            {escada.map((t) => {
+              const ativa = faixaAtual && faixaAtual.min_qty === t.min_qty;
+              return (
+                <Pressable
+                  key={t.min_qty}
+                  onPress={() => setEditingQty(Math.max(editingQty, t.min_qty))}
+                  accessibilityRole="button"
+                  accessibilityLabel={faixaLabel(t) + ": R$ " + Number(t.unit_price).toFixed(2) + " por unidade"}
+                  style={{
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+                    backgroundColor: ativa ? T.primary + "12" : T.card,
+                    borderWidth: ativa ? 2 : 1,
+                    borderColor: ativa ? T.primary : T.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: ativa ? T.primary : T.ink2, fontWeight: ativa ? "800" : "600" }}>
+                    {faixaLabel(t)}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 12, color: ativa ? T.primary : T.ink, fontWeight: "800" }}>
+                      R$ {Number(t.unit_price).toFixed(2)}
+                    </Text>
+                    <View style={{ backgroundColor: T.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>
+                        -{Number(t.discount_pct).toFixed(0)}%
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+            {proxima ? (
+              <Text style={{ fontSize: 11, color: T.ink3 }}>
+                Leve {proxima.min_qty} e pague R$ {Number(proxima.unit_price).toFixed(2)} por unidade.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {error && (
           <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Text>
