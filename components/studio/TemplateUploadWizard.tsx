@@ -29,7 +29,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import { pickFileWeb, fileToBase64Web, uploadStudioMockup } from "@/services/studioUploadApi";
+import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 type Props = {
   categories: TemplateCategory[];
@@ -130,18 +130,19 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
 
   async function pickAndUpload() {
     if (!company?.id) return;
-    if (Platform.OS !== "web") {
-      toast.error("Upload do dispositivo disponível na versão web. Use URL pública por enquanto no app.");
-      return;
-    }
-    const file = await pickFileWeb("image/*");
-    if (!file) return;
+    // Cross-platform (QA celular): web usa <input type=file>, native abre a
+    // galeria via expo-image-picker. Pega a imagem ANTES de setUploading(true)
+    // pra não piscar loading quando a lojista só cancelou o seletor.
+    const picked = await pickImageBase64().catch((e: any) => {
+      toast.error(e?.message || "Não foi possível abrir a galeria.");
+      return null;
+    });
+    if (!picked) return;
     setUploading(true);
     try {
-      const { base64, content_type } = await fileToBase64Web(file);
       const r = await uploadStudioMockup(company.id, {
-        content_base64: base64,
-        content_type,
+        content_base64: picked.base64,
+        content_type: picked.content_type,
         kind: "template",
       });
       upd({ image_url: r.url });

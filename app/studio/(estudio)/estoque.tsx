@@ -64,7 +64,7 @@ import { studioApi } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { toast } from "@/components/Toast";
-import { pickFileWeb, fileToBase64Web, uploadStudioMockup } from "@/services/studioUploadApi";
+import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -823,18 +823,21 @@ function BasicoForm({
   }, [product.id]);
 
   async function uploadImage() {
-    if (!companyId || Platform.OS !== "web") {
-      toast.error("Upload disponivel apenas na versao web");
-      return;
-    }
-    const file = await pickFileWeb("image/*");
-    if (!file) return;
+    if (!companyId) return;
+    // Cross-platform (QA celular): web mantém <input type=file>, native abre
+    // a galeria via expo-image-picker — antes travava com toast pedindo
+    // versão web mesmo sendo o editor inline onde a lojista mais troca foto.
+    const picked = await pickImageBase64().catch((e: any) => {
+      const status = e?.status ? `[${e.status}] ` : "";
+      toast.error(`${status}${e?.data?.error || e?.message || "Não foi possível abrir a galeria."}`);
+      return null;
+    });
+    if (!picked) return;
     setUploadingImg(true);
     try {
-      const { base64, content_type } = await fileToBase64Web(file);
       const r = await uploadStudioMockup(companyId, {
-        content_base64: base64,
-        content_type,
+        content_base64: picked.base64,
+        content_type: picked.content_type,
         kind: "product",
       });
       await request<any>(`/companies/${companyId}/products/${product.id}`, {
