@@ -11,7 +11,7 @@
 // arte "assenta" nas dobras) → outline opcional da área.
 //
 // Web-only (usa DOM canvas). Callers nativos usam o fallback
-// PersonalizationPreview — ver PersonalizacaoLivePreview.tsx.
+// PersonalizationPreview — ver EnginePreview.tsx.
 //
 // 03/07/2026 — F1 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
