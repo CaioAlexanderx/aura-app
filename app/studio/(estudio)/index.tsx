@@ -24,10 +24,11 @@
 // e hover-lift web-only nos cards (KpiCard + chart cards). Tudo
 // behind AccessibilityInfo.isReduceMotionEnabled().
 //
-// 02/06/2026 (Onda 2 — Agente F): integra checklist-herói
-// StudioOnboarding no topo. KPIs ficam discretos (opacity 0.55)
-// enquanto temVenda=false. Quando temVenda=true, oculta checklist
-// e KPIs voltam ao normal. guia 5 passos antigo removido.
+// 19/08/2026: feature de onboarding (checklist-herói) removida —
+// decisão de produto, o checklist de primeiros passos não fez
+// sentido no produto. Painel volta ao estado normal: sem o card de
+// checklist no topo e sem os KPIs discretos (opacity reduzida)
+// enquanto ele estava visível.
 // ============================================================
 import { useEffect, useState, useMemo, useCallback, ReactNode } from "react";
 import {
@@ -52,7 +53,6 @@ import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
-import { StudioOnboarding } from "@/components/studio/StudioOnboarding";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
@@ -168,10 +168,6 @@ export default function StudioPainel() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  // ─── Checklist-herói: controla se KPIs ficam discretos ───
-  // temVenda=true → checklist some, KPIs tomam o papel principal
-  const [setupComplete, setSetupComplete] = useState(false);
-
   // ─── Painel data ──────────────────────────────────────────
   const [period, setPeriod] = useState<Period>("7d");
   const [painel, setPainel] = useState<PainelData | null>(null);
@@ -204,12 +200,6 @@ export default function StudioPainel() {
 
   useEffect(() => { fetchPainel(); }, [fetchPainel]);
 
-  // QA item 8: onComplete recriado a cada render entrava nas deps de
-  // fetchStatus (StudioOnboarding), que entra no useEffect de lá → loop de
-  // refetch (GET /onboarding-status a cada render, checklist "piscando"
-  // Verificando seu progresso... eternamente). useCallback estabiliza a ref.
-  const handleOnboardingComplete = useCallback(() => setSetupComplete(true), []);
-
   // ─── Data shortcuts ───────────────────────────────────────
   const d = painel || EMPTY_PAINEL;
   const kpiVendas = d.kpis.vendas_dia;
@@ -225,19 +215,9 @@ export default function StudioPainel() {
   // Prejuizo no mes: faixa danger + valor em vermelho
   const isLoss = kpiLucro.value < 0;
 
-  // KPIs secundários enquanto setup não completo
-  const kpiOpacity = setupComplete ? 1 : 0.55;
-
   return (
     <StudioScreen variant="board" scroll={false} padded={false}>
       <ScrollView style={s.scroll} contentContainerStyle={s.container}>
-
-        {/* ═══════ CHECKLIST-HERÓI (Onda 2) ═══════
-            Visível enquanto temVenda=false. Quando completo some.
-            onComplete seta setupComplete=true → KPIs voltam ao normal. */}
-        <StudioOnboarding
-          onComplete={handleOnboardingComplete}
-        />
 
         {/* ═══════ HEADER + Toggle periodo ═══════ */}
         <View style={s.pageHeader}>
@@ -285,38 +265,36 @@ export default function StudioPainel() {
         {/* ═══════ Conteudo (mesmo durante refetch, com opacity reduzida) ═══════ */}
         {(!painelLoading || painel) && (
           <View style={[painelLoading && { opacity: 0.6 }]}>
-            {/* ─── KPI row — discretos enquanto setup não completo ─── */}
-            <View style={[{ opacity: kpiOpacity }]}>
-              <View style={s.kpiRow}>
-                <KpiCard
-                  t={t}
-                  variant="primary"
-                  label="Vendas no dia"
-                  value={kpiVendas.value}
-                  format="currency"
-                  deltaPct={kpiVendas.delta_pct}
-                  subLabel={kpiVendas.sub_label || "Hoje"}
-                />
-                <KpiCard
-                  t={t}
-                  variant="accent"
-                  label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
-                  value={kpiTicket.value}
-                  format="currency"
-                  deltaPct={kpiTicket.delta_pct}
-                  subLabel={kpiTicket.sub_label || "Periodo selecionado"}
-                />
-                <KpiCard
-                  t={t}
-                  variant={isLoss ? "danger" : "success"}
-                  label="Lucro Liquido . mes"
-                  value={kpiLucro.value}
-                  format="currency"
-                  deltaPct={kpiLucro.delta_pct}
-                  subLabel={lucroSubLabel}
-                  valueIsNegative={isLoss}
-                />
-              </View>
+            {/* ─── KPI row ─── */}
+            <View style={s.kpiRow}>
+              <KpiCard
+                t={t}
+                variant="primary"
+                label="Vendas no dia"
+                value={kpiVendas.value}
+                format="currency"
+                deltaPct={kpiVendas.delta_pct}
+                subLabel={kpiVendas.sub_label || "Hoje"}
+              />
+              <KpiCard
+                t={t}
+                variant="accent"
+                label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
+                value={kpiTicket.value}
+                format="currency"
+                deltaPct={kpiTicket.delta_pct}
+                subLabel={kpiTicket.sub_label || "Periodo selecionado"}
+              />
+              <KpiCard
+                t={t}
+                variant={isLoss ? "danger" : "success"}
+                label="Lucro Liquido . mes"
+                value={kpiLucro.value}
+                format="currency"
+                deltaPct={kpiLucro.delta_pct}
+                subLabel={lucroSubLabel}
+                valueIsNegative={isLoss}
+              />
             </View>
 
             {/* ─── Charts row ─── */}

@@ -11,11 +11,12 @@
 //
 // Deep-link: ?action=novo-insumo → abre NovoInsumoModal (depende de
 // params.action, não só do mount — re-dispara em qualquer navegação com
-// esse query param, param consumido via router.replace).
+// esse query param, param consumido via router.replace). Útil por si só
+// (pode ser usado por links externos); não depende de nenhum checklist.
 //
 // Cadastro/edição: form inline eliminado (19/08/2026 QA) — CTA do header,
-// empty state, linha da lista (editar) e deep-link do onboarding todos
-// abrem o mesmo NovoInsumoModal (que agora também cobre edição).
+// empty state, linha da lista (editar) e o deep-link acima todos abrem
+// o mesmo NovoInsumoModal (que agora também cobre edição).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
@@ -59,7 +60,7 @@ export default function StudioInsumos() {
 
   // ── Deep-link: ?action=novo-insumo abre modal ──────────────────────────────
   // QA item 9: antes o useEffect tinha deps [] (só no mount) — se a tela já
-  // estivesse montada, clicar "Cadastrar insumo" no checklist não abria nada.
+  // estivesse montada, navegar pra cá com esse param não abria nada.
   // Agora depende de params.action e consome o param via router.replace,
   // então volta a disparar em toda navegação com esse query param.
   const params = useLocalSearchParams<{ action?: string }>();
@@ -70,7 +71,7 @@ export default function StudioInsumos() {
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<StudioInput[]>([]);
   // QA item 5: unificado — o form inline foi eliminado. openNew/openEdit
-  // controlam o mesmo NovoInsumoModal usado pelo deep-link do onboarding.
+  // controlam o mesmo NovoInsumoModal usado pelo deep-link ?action=novo-insumo.
   const [insumoModalOpen, setInsumoModalOpen] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState<StudioInput | null>(null);
 
@@ -420,8 +421,8 @@ export default function StudioInsumos() {
       )}
       </ScrollView>
 
-      {/* Modal novo/editar insumo — acessível via CTA, linha da lista (editar),
-          deep-link do onboarding (novo) e checklist ("Cadastrar insumo"). */}
+      {/* Modal novo/editar insumo — acessível via CTA, linha da lista (editar)
+          e deep-link ?action=novo-insumo (novo). */}
       <NovoInsumoModal
         visible={insumoModalOpen}
         companyId={company?.id || ""}
