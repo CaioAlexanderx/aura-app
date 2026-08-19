@@ -15,13 +15,38 @@
 // chamava refreshMe; o layout passa a chamar).
 // ============================================================
 import { useEffect } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { EmptyState } from "@/components/EmptyState";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { PLAN_LEVEL } from "@/hooks/useVisibleModules";
+import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
+
+// ── Tipografia Aura no Studio (19/08/2026) ──────────────────
+// O link do Google Fonts só era injetado no layout do Negócio
+// ((tabs)/_layout) — quem entrava direto em /studio ficava no
+// system-ui e até o wordmark caía no fallback Georgia. Injeta o
+// mesmo link (id compartilhado, sem duplicar) + DM Sans como fonte
+// base de todo texto do Studio. Textos com fontFamily explícita
+// (Instrument Serif do wordmark, monospace) têm estilo inline e
+// não são afetados pela regra CSS.
+function injectStudioFonts() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return;
+  if (!document.getElementById("aura-fonts")) {
+    const lk = document.createElement("link");
+    lk.id = "aura-fonts"; lk.rel = "stylesheet"; lk.href = GOOGLE_FONTS_CSS;
+    document.head.appendChild(lk);
+  }
+  if (!document.getElementById("studio-typography")) {
+    const st = document.createElement("style");
+    st.id = "studio-typography";
+    st.textContent =
+      `#root div[dir="auto"], #root input, #root textarea, #root button { font-family: ${Fonts.body}; }`;
+    document.head.appendChild(st);
+  }
+}
 
 export default function StudioLayout() {
   const { company, isHydrated, user } = useAuthStore();
@@ -33,6 +58,11 @@ export default function StudioLayout() {
   useEffect(() => {
     if (typeof refreshMe === "function") refreshMe();
   }, [refreshMe]);
+
+  // Fontes Aura (Instrument Serif + DM Sans) no Studio.
+  useEffect(() => {
+    injectStudioFonts();
+  }, []);
 
   if (!isHydrated) return null;
 

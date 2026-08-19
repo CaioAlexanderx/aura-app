@@ -467,7 +467,15 @@ export type PublicQuote = {
   token: string;
   status: StudioQuoteStatus;
   expires_at: string;
-  shop: { name: string };
+  // 19/08/2026 — marca do lojista (digital_channel_config) no orçamento público
+  shop: {
+    name: string;
+    logo_url?: string | null;
+    primary_color?: string | null;
+    secondary_color?: string | null;
+    whatsapp?: string | null;
+    instagram?: string | null;
+  };
   customer_name: string | null;
   subtotal: number;
   discount: number;

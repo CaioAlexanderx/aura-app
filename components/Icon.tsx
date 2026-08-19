@@ -8,6 +8,13 @@ const PATHS: Record<string, string> = {
   plus_circle:    "M12 22a10 10 0 100-20 10 10 0 000 20z M12 8v8 M8 12h8",
   // Migrados de Ionicons (fix/karate-icons-svg)
   check_circle:   "M22 11.08V12a10 10 0 11-5.93-9.14 M22 4L12 14.01l-3-3",
+  // QA 19/08/2026 — nomes usados no Studio que renderizavam vazio (Feather)
+  x_circle:       "M12 22a10 10 0 100-20 10 10 0 000 20z M15 9l-6 6 M9 9l6 6",
+  zap:            "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
+  play_circle:    "M12 22a10 10 0 100-20 10 10 0 000 20z M10 8l6 4-6 4V8z",
+  rotate_ccw:     "M1 4v6h6 M3.51 15a9 9 0 102.13-9.36L1 10",
+  share_2:        "M18 8a3 3 0 100-6 3 3 0 000 6z M6 15a3 3 0 100-6 3 3 0 000 6z M18 22a3 3 0 100-6 3 3 0 000 6z M8.59 13.51l6.83 3.98 M15.41 6.51l-6.82 3.98",
+  circle:         "M12 22a10 10 0 100-20 10 10 0 000 20z",
   mail:           "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6",
   user:           "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z",
   link:           "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71 M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
@@ -329,6 +336,13 @@ const ALIASES: Record<string, string> = {
   // home → dashboard
   "home":                     "dashboard",
   "home-outline":             "dashboard",
+  // QA 19/08/2026 — variantes com hífen usadas no Studio
+  "check-circle":             "check_circle",
+  "x-circle":                 "x_circle",
+  "play-circle":              "play_circle",
+  "rotate-ccw":               "rotate_ccw",
+  "share-2":                  "share_2",
+  "clipboard-list":           "clipboard",
   // chevron-back → chevron_left; chevron-down-outline → chevron_down
   "chevron-back":             "chevron_left",
   "chevron-down-outline":     "chevron_down",
@@ -411,6 +425,9 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     truck: "T", resize: "R", location: "P",
     // Novos (fix/karate-shell) — glifos da shell de karate
     bell: "N", activity: "~", building: "D", network: "C", ribbon: "M", trophy: "T",
+    // QA 19/08/2026 — novos ícones do Studio
+    check_circle: "V", x_circle: "X", zap: "Z", play_circle: ">",
+    rotate_ccw: "R", share_2: "S", circle: "O",
   };
 
   return (
