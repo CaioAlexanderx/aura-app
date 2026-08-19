@@ -144,7 +144,7 @@ export function LivePreview({
 }) {
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
-  const [viewId, setViewId] = useState<"front" | "back">("front");
+  const [viewId, setViewId] = useState<"front" | "back" | "middle">("front");
   const canvasRef = useRef<any>(null);
 
   useEffect(() => {
@@ -169,10 +169,31 @@ export function LivePreview({
     tpl?.kind === "photo2d" && Array.isArray(tpl.spec?.views) && tpl.spec!.views!.length
       ? (tpl.spec!.views as VisualView[])
       : [];
-  const engineView = photoViews.length
-    ? (viewId === "back" && photoViews[1] ? photoViews[1] : photoViews[0])
-    : null;
-  const showBackToggle = photoViews.length > 1 && config?.has_back === true;
+  // O verso sempre foi photoViews[1] — vista fixa, template com 2 fotos.
+  // O meio (wrap 360 / faixa central de caneca e copo) não tem posição
+  // fixa nesse array: só existe se o template visual tiver uma view com
+  // id='middle'. Sem ela NÃO inventamos asset — o preview degrada pro
+  // mesmo caminho que já existe quando falta a view do verso (front, ou
+  // o SVG genérico mais abaixo quando nem front tem template).
+  const backView = photoViews[1] || null;
+  const middleView = photoViews.find((v) => v.id === "middle") || null;
+  const engineView = !photoViews.length
+    ? null
+    : viewId === "back" && backView
+    ? backView
+    : viewId === "middle" && middleView
+    ? middleView
+    : photoViews[0];
+  const showBackToggle = !!backView && config?.has_back === true;
+  const showMiddleToggle = !!middleView && config?.has_middle === true;
+  // Alternador de vista: sempre tem "Frente"; "Verso"/"Meio" só entram
+  // quando existe view dedicada E o produto liga o respectivo lado.
+  const viewToggleOptions: Array<{ id: "front" | "back" | "middle"; label: string }> = [
+    { id: "front", label: "Frente" },
+    ...(showBackToggle ? [{ id: "back" as const, label: "Verso" }] : []),
+    ...(showMiddleToggle ? [{ id: "middle" as const, label: "Meio" }] : []),
+  ];
+  const showViewToggle = viewToggleOptions.length > 1;
   const safeValuesKey = JSON.stringify(safeValues);
 
   useEffect(() => {
@@ -209,14 +230,14 @@ export function LivePreview({
     const h = Math.round(size * (engineView.base.h / engineView.base.w));
     return (
       <View style={{ alignItems: "center", gap: 6 }}>
-        {showBackToggle && (
+        {showViewToggle && (
           <View style={{ flexDirection: "row", gap: 8 }}>
-            {(["front", "back"] as const).map((v) => {
-              const sel = viewId === v;
+            {viewToggleOptions.map(({ id, label }) => {
+              const sel = viewId === id;
               return (
                 <Pressable
-                  key={v}
-                  onPress={() => setViewId(v)}
+                  key={id}
+                  onPress={() => setViewId(id)}
                   style={{
                     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
                     backgroundColor: sel ? T.primary : "transparent",
@@ -224,7 +245,7 @@ export function LivePreview({
                   }}
                 >
                   <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
-                    {v === "front" ? "Frente" : "Verso"}
+                    {label}
                   </Text>
                 </Pressable>
               );

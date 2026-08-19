@@ -16,6 +16,10 @@ import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { SizeGuideModal } from "./SizeGuideModal";
+// sideOf: fonte unica pra decidir o lado de um campo (front/back/middle).
+// Usar aqui em vez de reimplementar o ternario evita a mesma divergencia
+// que ja aconteceu entre painel/backend/storefront (ver customizationConfig.ts).
+import { sideOf } from "@/components/studio/customizationConfig";
 
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
@@ -34,7 +38,9 @@ export function ProductConfigurator({
 }) {
   const {
     activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
-    editingAddBack, setEditingAddBack, configuringUnitPrice, commitConfigure,
+    editingAddBack, setEditingAddBack,
+    editingAddMiddle, setEditingAddMiddle,
+    configuringUnitPrice, commitConfigure,
     goTo, error,
     // editingLineId nao e exposto diretamente — inferimos pelo comportamento:
     // quando activeProduct nao e null E tem um lineId travado, e edicao.
@@ -93,13 +99,26 @@ export function ProductConfigurator({
   const escada = activeProduct?.qty_tiers || [];
   const faixaAtual = matchTier(escada, editingQty);
   const proxima = proximaFaixa(escada, editingQty);
-  const frontFields = allFields.filter((f) => ((f as any).side || "front") === "front");
-  const backFields = allFields.filter((f) => (f as any).side === "back");
+  const frontFields = allFields.filter((f) => sideOf(f) === "front");
+  const backFields = allFields.filter((f) => sideOf(f) === "back");
   const hasBack = cfg?.has_back === true;
   const backCharge = cfg?.back_charge_enabled === true;
   const backPrice = Number(cfg?.back_price_delta) || 0;
   const shouldRenderBack = hasBack && backFields.length > 0;
   const showBackBody = shouldRenderBack && (!backCharge || editingAddBack);
+
+  // Meio (faixa central / wrap 360 de caneca e copo) — mesmo padrao do
+  // verso acima: so tem secao propria quando o produto liga has_middle
+  // E tem campo(s) marcados side="middle".
+  const middleFields = allFields.filter((f) => sideOf(f) === "middle");
+  const hasMiddle = cfg?.has_middle === true;
+  const middleCharge = cfg?.middle_charge_enabled === true;
+  const middlePrice = Number(cfg?.middle_price_delta) || 0;
+  const shouldRenderMiddle = hasMiddle && middleFields.length > 0;
+  const showMiddleBody = shouldRenderMiddle && (!middleCharge || editingAddMiddle);
+  // Flat (sem secoes) so quando NENHUM lado extra existe — com back OU
+  // middle, o layout vira sempre "Frente" + secao(oes) do(s) lado(s) extra(s).
+  const shouldRenderAnySide = shouldRenderBack || shouldRenderMiddle;
 
   // Agente J: designer=true quando o campo art_service existe e tem valor 'designer'
   const artServiceDesigner =
@@ -263,8 +282,9 @@ export function ProductConfigurator({
           </View>
         ) : null}
 
-        {/* Fields: flat quando sem verso, agrupados quando com verso */}
-        {!shouldRenderBack ? (
+        {/* Fields: flat quando so tem frente, agrupados por secao quando
+            o produto tem verso e/ou meio (faixa central/wrap 360). */}
+        {!shouldRenderAnySide ? (
           <>{allFields.map(renderField)}</>
         ) : (
           <>
@@ -276,75 +296,161 @@ export function ProductConfigurator({
             </View>
             {frontFields.map(renderField)}
 
-            {/* Divisor VERSO */}
-            <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                <Text style={{ fontSize: 12, color: T.primary }}>↻</Text>
-                <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Text>
-              </View>
-              <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-            </View>
-
-            {/* Opt-in verso cobrado */}
-            {backCharge ? (
-              <Pressable
-                onPress={() => {
-                  const next = !editingAddBack;
-                  setEditingAddBack(next);
-                  if (next && backPrice > 0) {
-                    console.log("[storefront] verso adicionado: +R$ " + backPrice.toFixed(2));
-                  }
-                }}
-                style={{
-                  flexDirection: "row", alignItems: "center", gap: 10,
-                  backgroundColor: T.card, borderRadius: 10, padding: 12,
-                  borderWidth: 1.5,
-                  borderColor: editingAddBack ? T.primary : T.border,
-                }}
-              >
-                <View
-                  style={{
-                    width: 22, height: 22, borderRadius: 6,
-                    borderWidth: 2,
-                    borderColor: editingAddBack ? T.primary : T.ink4,
-                    backgroundColor: editingAddBack ? T.primary : "transparent",
-                    alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {editingAddBack && (
-                    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
-                    Personalizar também o verso
-                  </Text>
-                  {!editingAddBack && (
-                    <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
-                      Opcional · adiciona arte no lado de trás da peça
-                    </Text>
-                  )}
-                  {editingAddBack && backPrice > 0 && (
-                    <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
-                      +R$ {backPrice.toFixed(2)} no total
-                    </Text>
-                  )}
-                </View>
-                {!editingAddBack && backPrice > 0 && (
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                    <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {backPrice.toFixed(2)}</Text>
+            {shouldRenderBack && (
+              <>
+                {/* Divisor VERSO */}
+                <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
+                    <Text style={{ fontSize: 12, color: T.primary }}>↻</Text>
+                    <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Text>
                   </View>
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                </View>
+
+                {/* Opt-in verso cobrado */}
+                {backCharge ? (
+                  <Pressable
+                    onPress={() => {
+                      const next = !editingAddBack;
+                      setEditingAddBack(next);
+                      if (next && backPrice > 0) {
+                        console.log("[storefront] verso adicionado: +R$ " + backPrice.toFixed(2));
+                      }
+                    }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 10,
+                      backgroundColor: T.card, borderRadius: 10, padding: 12,
+                      borderWidth: 1.5,
+                      borderColor: editingAddBack ? T.primary : T.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 22, height: 22, borderRadius: 6,
+                        borderWidth: 2,
+                        borderColor: editingAddBack ? T.primary : T.ink4,
+                        backgroundColor: editingAddBack ? T.primary : "transparent",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {editingAddBack && (
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
+                        Personalizar também o verso
+                      </Text>
+                      {!editingAddBack && (
+                        <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                          Opcional · adiciona arte no lado de trás da peça
+                        </Text>
+                      )}
+                      {editingAddBack && backPrice > 0 && (
+                        <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                          +R$ {backPrice.toFixed(2)} no total
+                        </Text>
+                      )}
+                    </View>
+                    {!editingAddBack && backPrice > 0 && (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
+                        <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {backPrice.toFixed(2)}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
+                    Verso incluso · sem custo adicional
+                  </Text>
                 )}
-              </Pressable>
-            ) : (
-              <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
-                Verso incluso · sem custo adicional
-              </Text>
+
+                {/* Fields do verso (so quando ativo) */}
+                {showBackBody && backFields.map(renderField)}
+              </>
             )}
 
-            {/* Fields do verso (so quando ativo) */}
-            {showBackBody && backFields.map(renderField)}
+            {shouldRenderMiddle && (
+              <>
+                {/* Divisor MEIO — mesmo padrao visual do verso acima,
+                    so troca o rotulo/icone. Caneca e copo tem arte que da
+                    a volta (wrap 360) ou faixa central: nao e frente nem
+                    verso, e um terceiro lado com a mesma regra de opt-in. */}
+                <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
+                    <Text style={{ fontSize: 12, color: T.primary }}>▭</Text>
+                    <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Text>
+                  </View>
+                  <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+                </View>
+
+                {/* Opt-in meio cobrado — regra de ativacao identica ao
+                    verso: sem cobranca fica sempre ativo, com cobranca so
+                    quando o cliente marca (has_middle_selected). Espelha
+                    middleIsActive em src/routes/studioStorefront.js
+                    (aura-backend); divergir aqui derruba o pedido no
+                    fechamento. */}
+                {middleCharge ? (
+                  <Pressable
+                    onPress={() => {
+                      const next = !editingAddMiddle;
+                      setEditingAddMiddle(next);
+                      if (next && middlePrice > 0) {
+                        console.log("[storefront] meio adicionado: +R$ " + middlePrice.toFixed(2));
+                      }
+                    }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 10,
+                      backgroundColor: T.card, borderRadius: 10, padding: 12,
+                      borderWidth: 1.5,
+                      borderColor: editingAddMiddle ? T.primary : T.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 22, height: 22, borderRadius: 6,
+                        borderWidth: 2,
+                        borderColor: editingAddMiddle ? T.primary : T.ink4,
+                        backgroundColor: editingAddMiddle ? T.primary : "transparent",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {editingAddMiddle && (
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
+                        Personalizar também o meio
+                      </Text>
+                      {!editingAddMiddle && (
+                        <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                          Opcional · arte na faixa central / ao redor da peça
+                        </Text>
+                      )}
+                      {editingAddMiddle && middlePrice > 0 && (
+                        <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                          +R$ {middlePrice.toFixed(2)} no total
+                        </Text>
+                      )}
+                    </View>
+                    {!editingAddMiddle && middlePrice > 0 && (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
+                        <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {middlePrice.toFixed(2)}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
+                    Meio incluso · sem custo adicional
+                  </Text>
+                )}
+
+                {/* Fields do meio (so quando ativo) */}
+                {showMiddleBody && middleFields.map(renderField)}
+              </>
+            )}
           </>
         )}
 

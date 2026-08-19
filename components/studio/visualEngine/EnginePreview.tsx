@@ -36,6 +36,8 @@ type Props = {
   showLabel?: boolean;
   companyId?: string;   // junto com productId, habilita o motor visual
   productId?: string;
+  /** Lado desenhado (front/back/middle). Default "front". */
+  side?: "front" | "back" | "middle";
 };
 
 // ── Cache module-level do template por produto ───────────────
@@ -113,9 +115,15 @@ export function EnginePreview(props: Props) {
 
   if (engineEnabled && template) {
     if (template.kind === "photo2d" && template.spec?.views?.length) {
+      // A view do lado pedido: os templates de vestuário trazem
+      // views[0]=frente e views[1]=verso. Sem view correspondente, cai na
+      // primeira — melhor mostrar a frente do que um quadro vazio.
+      const views = template.spec.views;
+      const porId = views.find((v: any) => v?.id === props.side);
+      const porOrdem = props.side === "back" ? views[1] : undefined;
       return (
         <Engine2DCanvas
-          view={template.spec.views[0]}
+          view={porId || porOrdem || views[0]}
           values={values}
           size={size ?? 280}
         />
@@ -134,6 +142,7 @@ export function EnginePreview(props: Props) {
       size={props.size}
       productName={props.productName}
       showLabel={props.showLabel}
+      side={props.side}
     />
   );
 }

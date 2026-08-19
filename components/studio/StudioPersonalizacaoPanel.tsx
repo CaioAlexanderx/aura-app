@@ -64,7 +64,7 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { request } from "@/services/api";
 import {
   normalizeCustomizationConfig, canonicalizeIds, makeField, makeArtServiceFields,
-  artSourceRequired, isArtSourceType, isArtServiceField, isArtBriefField,
+  artSourceRequired, isArtSourceType, isArtServiceField, isArtBriefField, sideOf,
   ART_SERVICE_FIELD_ID, ART_SERVICE_BRIEF_ID,
 } from "@/components/studio/customizationConfig";
 import {
@@ -83,8 +83,9 @@ type Props = {
   onSaved?: (cfg: CustomizationConfig) => void;
 };
 
-// Field side helper — backend espera "front" | "back"
-type FieldSide = "front" | "back";
+// Field side helper — backend espera "front" | "back" | "middle"
+// (meio adicionado 19/08/2026 — caneca/copo com arte que dá a volta)
+type FieldSide = "front" | "back" | "middle";
 
 const FIELD_TYPE_META: Record<CustomizationFieldType, { label: string; icon: string; desc: string }> = {
   text:     { label: "Texto",     icon: "type",       desc: "Cliente digita um texto (nome, frase)" },
@@ -218,6 +219,17 @@ export function StudioPersonalizacaoPanel({
   const [savingVisual, setSavingVisual] = useState(false);
   const [visualEpoch, setVisualEpoch] = useState(0);
 
+  // Lado desenhado no preview. Antes mostrava SEMPRE a frente, entao
+  // quem configurava verso ou meio o fazia as cegas.
+  const [previewSide, setPreviewSide] = useState<FieldSide>("front");
+
+  // Desligou o lado que estava sendo visto? Volta pra frente, senao o
+  // preview ficaria mostrando uma area que nao existe mais.
+  useEffect(() => {
+    if (previewSide === "back" && !hasBack) setPreviewSide("front");
+    if (previewSide === "middle" && !hasMiddle) setPreviewSide("front");
+  }, [previewSide, hasBack, hasMiddle]);
+
   // ── Guia de medidas ────────────────────────────────────
   const [guideUploading, setGuideUploading] = useState(false);
   const [guideError, setGuideError] = useState<string | null>(null);
@@ -230,6 +242,15 @@ export function StudioPersonalizacaoPanel({
   const backPriceDelta: number | undefined = typeof cfgAny.back_price_delta === "number" ? cfgAny.back_price_delta : undefined;
   const backPrintArea: { width_cm: number; height_cm: number; position: "left" | "center" | "right" } | undefined =
     cfgAny.back_print_area && typeof cfgAny.back_print_area === "object" ? cfgAny.back_print_area : undefined;
+
+  // ── Meio — deriva flags do config, mesmo padrão do verso ─
+  // Caneca/copo com faixa central ou arte que dá a volta (wrap 360°).
+  // Desligado por padrão: frente/verso continua cobrindo ~80% dos produtos.
+  const hasMiddle: boolean = !!cfgAny.has_middle;
+  const middleChargeEnabled: boolean = !!cfgAny.middle_charge_enabled;
+  const middlePriceDelta: number | undefined = typeof cfgAny.middle_price_delta === "number" ? cfgAny.middle_price_delta : undefined;
+  const middlePrintArea: { width_cm: number; height_cm: number; position: "left" | "center" | "right" } | undefined =
+    cfgAny.middle_print_area && typeof cfgAny.middle_print_area === "object" ? cfgAny.middle_print_area : undefined;
 
   // ── Serviço de arte — derive do campo art_service ────
   // O campo é `type:'option'` com `is_art_service:true`; as choices
@@ -262,22 +283,34 @@ export function StudioPersonalizacaoPanel({
   // `image` e `template` preenchem o mesmo slot; um toggle só, por lado.
   // Ver o S0 da F1: dois checkboxes independentes produziram uma
   // condição impossível numa loja publicada.
+  // Os três grupos são mutuamente exclusivos por sideOf(): antes do
+  // meio existir, "front" era só "!== back" — com 3 lados isso juntava
+  // meio dentro de frente por engano, então o filtro passou a ser
+  // exato (mesma lógica que o backend usa em applyRequiredRules).
   const artSourceFront = useMemo(
-    () => config.fields.filter((f) => isArtSourceType(f.type) && (f as any).side !== "back"),
+    () => config.fields.filter((f) => isArtSourceType(f.type) && sideOf(f) === "front"),
     [config.fields]
   );
   const artSourceBack = useMemo(
-    () => config.fields.filter((f) => isArtSourceType(f.type) && (f as any).side === "back"),
+    () => config.fields.filter((f) => isArtSourceType(f.type) && sideOf(f) === "back"),
+    [config.fields]
+  );
+  const artSourceMiddle = useMemo(
+    () => config.fields.filter((f) => isArtSourceType(f.type) && sideOf(f) === "middle"),
     [config.fields]
   );
 
-  // ── Counts de Frente/Verso para o sumário ────────────
+  // ── Counts de Frente/Verso/Meio para o sumário ────────
   const frontFieldsCount = useMemo(
-    () => config.fields.filter((f: any) => (f.side ?? "front") !== "back").length,
+    () => config.fields.filter((f: any) => sideOf(f) === "front").length,
     [config.fields]
   );
   const backFieldsCount = useMemo(
-    () => config.fields.filter((f: any) => f.side === "back").length,
+    () => config.fields.filter((f: any) => sideOf(f) === "back").length,
+    [config.fields]
+  );
+  const middleFieldsCount = useMemo(
+    () => config.fields.filter((f: any) => sideOf(f) === "middle").length,
     [config.fields]
   );
 
@@ -399,11 +432,13 @@ export function StudioPersonalizacaoPanel({
           : { width_cm: 10, height_cm: 10, position: "center" };
         return { ...prev, has_back: true, back_print_area: existingBack };
       }
-      // Desligar: limpa back_*, força side="front" em todos os fields
+      // Desligar: limpa back_*, força side="front" só em quem estava no
+      // verso — mapear todo mundo pra frente (como era antes do meio
+      // existir) apagaria o lado dos campos que estão no meio.
       const { has_back, back_print_area, back_charge_enabled, back_price_delta, ...rest } = prev;
       return {
         ...rest,
-        fields: prev.fields.map((f: any) => ({ ...f, side: "front" as FieldSide })),
+        fields: prev.fields.map((f: any) => (f.side === "back" ? { ...f, side: "front" as FieldSide } : f)),
       };
     });
   }
@@ -432,6 +467,49 @@ export function StudioPersonalizacaoPanel({
     setConfig((prev: any) => ({ ...prev, back_price_delta: value }));
   }
 
+  // Meio — toggle e mutators (mesmo padrão do verso acima)
+  function toggleHasMiddle(next: boolean) {
+    setConfig((prev: any) => {
+      if (next) {
+        const existingMiddle = prev.middle_print_area && typeof prev.middle_print_area === "object"
+          ? prev.middle_print_area
+          : { width_cm: 10, height_cm: 10, position: "center" };
+        return { ...prev, has_middle: true, middle_print_area: existingMiddle };
+      }
+      // Desligar: limpa middle_*, força side="front" só em quem estava
+      // no meio — mesma ressalva do verso: não mexe em quem está no verso.
+      const { has_middle, middle_print_area, middle_charge_enabled, middle_price_delta, ...rest } = prev;
+      return {
+        ...rest,
+        fields: prev.fields.map((f: any) => (f.side === "middle" ? { ...f, side: "front" as FieldSide } : f)),
+      };
+    });
+  }
+  function patchMiddlePrintArea(patch: Partial<{ width_cm: number; height_cm: number; position: "left" | "center" | "right" }>) {
+    setConfig((prev: any) => {
+      const current = prev.middle_print_area && typeof prev.middle_print_area === "object"
+        ? prev.middle_print_area
+        : { width_cm: 10, height_cm: 10, position: "center" };
+      return { ...prev, has_middle: true, middle_print_area: { ...current, ...patch } };
+    });
+  }
+  function toggleMiddleCharge(next: boolean) {
+    setConfig((prev: any) => {
+      if (next) {
+        return {
+          ...prev,
+          middle_charge_enabled: true,
+          middle_price_delta: typeof prev.middle_price_delta === "number" ? prev.middle_price_delta : 0,
+        };
+      }
+      const { middle_charge_enabled, middle_price_delta, ...rest } = prev;
+      return rest;
+    });
+  }
+  function patchMiddlePriceDelta(value: number) {
+    setConfig((prev: any) => ({ ...prev, middle_price_delta: value }));
+  }
+
   function patchField(id: string, patch: Partial<CustomizationField> & { side?: FieldSide }) {
     setConfig((prev) => ({
       ...prev,
@@ -449,6 +527,10 @@ export function StudioPersonalizacaoPanel({
   function setFieldSide(id: string, side: FieldSide) {
     if (side === "back" && !hasBack) {
       toast.error("Habilite verso no topo");
+      return;
+    }
+    if (side === "middle" && !hasMiddle) {
+      toast.error("Habilite meio no topo");
       return;
     }
     // O lado entra no id (`image` na frente, `image_back` no verso),
@@ -500,7 +582,7 @@ export function StudioPersonalizacaoPanel({
     setConfig((prev) => ({
       ...prev,
       fields: prev.fields.map((f) =>
-        isArtSourceType(f.type) && ((f as any).side === "back") === (side === "back")
+        isArtSourceType(f.type) && sideOf(f) === side
           ? { ...f, required: next }
           : f
       ),
@@ -589,6 +671,22 @@ export function StudioPersonalizacaoPanel({
       }
     }
 
+    // Mesma validação do verso, aplicada ao meio.
+    if (cfgAnyLocal.has_middle) {
+      const mp = cfgAnyLocal.middle_print_area;
+      if (!mp || !(mp.width_cm > 0) || !(mp.height_cm > 0)) {
+        toast.error("Configure as dimensões do meio");
+        return;
+      }
+      if (cfgAnyLocal.middle_charge_enabled) {
+        const mpd = Number(cfgAnyLocal.middle_price_delta);
+        if (!Number.isFinite(mpd) || mpd < 0) {
+          toast.error("Valor de cobrança inválido");
+          return;
+        }
+      }
+    }
+
     // Tudo o que se grava passa por aqui: ids canônicos, config
     // completo por tipo, obrigatoriedade coerente. É este ponto que
     // impede o painel de reintroduzir uma config como a da Sheid.
@@ -600,6 +698,8 @@ export function StudioPersonalizacaoPanel({
       fieldsCount: cfg.fields.length,
       hasBack: !!(cfg as any).has_back,
       backChargeEnabled: !!(cfg as any).back_charge_enabled,
+      hasMiddle: !!(cfg as any).has_middle,
+      middleChargeEnabled: !!(cfg as any).middle_charge_enabled,
     });
     try {
       const resp = await studioApi.saveCustomizationConfig(companyId, productId, cfg);
@@ -723,9 +823,33 @@ export function StudioPersonalizacaoPanel({
     <View style={[s.previewCol, isWide ? s.previewColWide : s.previewColStack]}>
       <View style={s.previewCard}>
         <Text style={s.eyebrow}>PREVIEW AO VIVO</Text>
+
+        {/* Alternar lado — so aparece quando ha mais de um pra ver. */}
+        {(hasBack || hasMiddle) && (
+          <View style={s.previewSideRow}>
+            {[
+              { key: "front" as FieldSide, label: "Frente", on: true },
+              { key: "back" as FieldSide, label: "Verso", on: hasBack },
+              { key: "middle" as FieldSide, label: "Meio", on: hasMiddle },
+            ].filter((o) => o.on).map((o) => {
+              const active = previewSide === o.key;
+              return (
+                <Pressable
+                  key={o.key}
+                  onPress={() => setPreviewSide(o.key)}
+                  style={[s.chip, active && s.chipActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver ${o.label.toLowerCase()} no preview`}
+                >
+                  <Text style={[s.chipTxt, active && s.chipTxtActive]}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
         <View style={s.previewBox}>
           <EnginePreview
-            key={`${visualEpoch}-${visualKey || "none"}`}
+            key={`${visualEpoch}-${visualKey || "none"}-${previewSide}`}
             config={config}
             values={previewValues}
             size={isWide ? 320 : 280}
@@ -733,6 +857,7 @@ export function StudioPersonalizacaoPanel({
             showLabel
             companyId={companyId}
             productId={productId}
+            side={previewSide}
           />
         </View>
         {slug ? (
@@ -869,6 +994,64 @@ export function StudioPersonalizacaoPanel({
             </View>
           </View>
         ) : null}
+
+        {/* Meio: switch inline no mesmo card — caneca/copo com faixa
+            central ou arte que dá a volta (wrap 360°). Desligado por
+            padrão: frente/verso continua cobrindo ~80% dos produtos. */}
+        <View style={[s.toggleRow, s.backToggleRow]}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.rowTitle}>Tem impressão no meio?</Text>
+            <Text style={s.helpTxt}>Faixa central ou arte que dá a volta — comum em canecas e copos.</Text>
+          </View>
+          <Switch
+            value={hasMiddle}
+            onValueChange={(v) => toggleHasMiddle(v)}
+            trackColor={{ false: t.ink5, true: t.primary }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {hasMiddle && middlePrintArea ? (
+          <View style={{ gap: 10 }}>
+            <PrintAreaRow
+              t={t}
+              s={s}
+              title="Meio"
+              area={middlePrintArea}
+              onPatch={(p) => patchMiddlePrintArea(p)}
+            />
+
+            {/* Cobrança pelo meio — inline compacto */}
+            <View style={s.backChargeRow}>
+              <View style={s.toggleRow}>
+                <Text style={[s.rowTitle, { flex: 1 }]}>Cobrar pelo meio?</Text>
+                <Switch
+                  value={middleChargeEnabled}
+                  onValueChange={(v) => toggleMiddleCharge(v)}
+                  trackColor={{ false: t.ink5, true: t.warning }}
+                  thumbColor="#fff"
+                />
+              </View>
+              {middleChargeEnabled ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={s.fieldLabel}>Valor extra (R$)</Text>
+                  <TextInput
+                    value={typeof middlePriceDelta === "number" ? String(middlePriceDelta) : ""}
+                    onChangeText={(txt) => {
+                      const n = Number(txt.replace(",", "."));
+                      patchMiddlePriceDelta(Number.isFinite(n) && n >= 0 ? n : 0);
+                    }}
+                    keyboardType="decimal-pad"
+                    style={[s.input, s.inputSm]}
+                    placeholder="0,00"
+                    placeholderTextColor={t.ink4}
+                  />
+                  <Text style={[s.helpTxt, { flex: 1 }]}>Somado ao preço quando o cliente marcar meio.</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* Fields list */}
@@ -897,6 +1080,7 @@ export function StudioPersonalizacaoPanel({
                 index={i}
                 total={camposEditaveis.length}
                 hasBack={hasBack}
+                hasMiddle={hasMiddle}
                 onPatch={(p) => patchField(f.id, p)}
                 onPatchConfig={(p) => patchFieldConfig(f.id, p)}
                 onSetSide={(side) => setFieldSide(f.id, side)}
@@ -913,7 +1097,7 @@ export function StudioPersonalizacaoPanel({
             "Template da galeria" separadamente é a condição impossível
             que travou a compra na sheid-mania. Aqui é uma pergunta só,
             e ela não tem como sair errada. */}
-        {(artSourceFront.length > 0 || artSourceBack.length > 0) && (
+        {(artSourceFront.length > 0 || artSourceBack.length > 0 || artSourceMiddle.length > 0) && (
           <View style={s.artSourceBox}>
             <Text style={s.eyebrow}>ORIGEM DA ARTE</Text>
             {artSourceFront.length > 0 && (
@@ -926,7 +1110,7 @@ export function StudioPersonalizacaoPanel({
                 </View>
                 <Text style={s.requiredTxt}>
                   O cliente precisa escolher uma arte
-                  {hasBack ? " (frente)" : ""}
+                  {hasBack || hasMiddle ? " (frente)" : ""}
                 </Text>
               </Pressable>
             )}
@@ -941,8 +1125,19 @@ export function StudioPersonalizacaoPanel({
                 <Text style={s.requiredTxt}>O cliente precisa escolher uma arte (verso)</Text>
               </Pressable>
             )}
+            {artSourceMiddle.length > 0 && (
+              <Pressable
+                onPress={() => setArtSourceRequired("middle", !artSourceRequired(config.fields, "middle"))}
+                style={s.requiredRow}
+              >
+                <View style={[s.checkbox, artSourceRequired(config.fields, "middle") && s.checkboxOn]}>
+                  {artSourceRequired(config.fields, "middle") && <Icon name="check" size={11} color="#fff" />}
+                </View>
+                <Text style={s.requiredTxt}>O cliente precisa escolher uma arte (meio)</Text>
+              </Pressable>
+            )}
             <Text style={s.helpTxt}>
-              {artSourceFront.length + artSourceBack.length > 1
+              {artSourceFront.length + artSourceBack.length + artSourceMiddle.length > 1
                 ? "Vale qualquer um dos caminhos de arte — enviar arquivo OU escolher da galeria. Não são cumulativos."
                 : "Sem isso marcado, o cliente pode comprar sem enviar arte."}
               {artEnabled ? " Quem contrata a criação da arte fica dispensado." : ""}
@@ -1107,6 +1302,7 @@ export function StudioPersonalizacaoPanel({
           <Text style={s.saveSummaryTxt}>
             Frente: {frontFieldsCount} {frontFieldsCount === 1 ? "campo" : "campos"}
             {hasBack ? ` · Verso: ${backFieldsCount} ${backFieldsCount === 1 ? "campo" : "campos"}` : ""}
+            {hasMiddle ? ` · Meio: ${middleFieldsCount} ${middleFieldsCount === 1 ? "campo" : "campos"}` : ""}
           </Text>
         </View>
         <Pressable
@@ -1533,7 +1729,7 @@ function OptionChoicesEditor({
 // FieldRow — edição inline de um campo
 // ────────────────────────────────────────────────────────────
 function FieldRow({
-  t, s, field, index, total, hasBack, onPatch, onPatchConfig, onSetSide, onRemove, onMoveUp, onMoveDown,
+  t, s, field, index, total, hasBack, hasMiddle, onPatch, onPatchConfig, onSetSide, onRemove, onMoveUp, onMoveDown,
 }: {
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
@@ -1541,6 +1737,7 @@ function FieldRow({
   index: number;
   total: number;
   hasBack: boolean;
+  hasMiddle: boolean;
   onPatch: (p: Partial<CustomizationField>) => void;
   onPatchConfig: (p: Record<string, any>) => void;
   onSetSide: (side: FieldSide) => void;
@@ -1600,9 +1797,10 @@ function FieldRow({
             </Pressable>
           )}
 
-          {/* Side picker — só aparece se o produto tem verso (19/08/2026:
-              chip Verso desabilitado em todo campo era só ruído) */}
-          {hasBack ? (
+          {/* Side picker — só aparece se o produto tem verso e/ou meio
+              (19/08/2026: chip Verso desabilitado em todo campo era só
+              ruído; meio segue a mesma regra — só mostra o que existe). */}
+          {(hasBack || hasMiddle) ? (
             <View style={s.sideRow}>
               <Text style={s.sideLabel}>Lado:</Text>
               <Pressable
@@ -1611,12 +1809,22 @@ function FieldRow({
               >
                 <Text style={[s.sideChipTxt, currentSide === "front" && s.sideChipTxtActive]}>Frente</Text>
               </Pressable>
-              <Pressable
-                onPress={() => onSetSide("back")}
-                style={[s.sideChip, currentSide === "back" && s.sideChipActiveBack]}
-              >
-                <Text style={[s.sideChipTxt, currentSide === "back" && { color: t.accent }]}>Verso</Text>
-              </Pressable>
+              {hasBack ? (
+                <Pressable
+                  onPress={() => onSetSide("back")}
+                  style={[s.sideChip, currentSide === "back" && s.sideChipActiveBack]}
+                >
+                  <Text style={[s.sideChipTxt, currentSide === "back" && { color: t.accent }]}>Verso</Text>
+                </Pressable>
+              ) : null}
+              {hasMiddle ? (
+                <Pressable
+                  onPress={() => onSetSide("middle")}
+                  style={[s.sideChip, currentSide === "middle" && s.sideChipActiveMiddle]}
+                >
+                  <Text style={[s.sideChipTxt, currentSide === "middle" && { color: t.warning }]}>Meio</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -1676,6 +1884,12 @@ function buildStyles(t: StudioPalette) {
     previewColWide: { width: 360, position: "sticky" as any, top: 0, alignSelf: "flex-start" as any },
     previewColStack: { marginBottom: 16 },
 
+    previewSideRow: {
+      flexDirection: "row",
+      gap: 6,
+      flexWrap: "wrap",
+      justifyContent: "center",
+    },
     previewCard: {
       backgroundColor: t.paperCard,
       borderRadius: 14,
@@ -1872,6 +2086,10 @@ function buildStyles(t: StudioPalette) {
     sideChipActiveBack: {
       backgroundColor: t.accentSoft,
       borderColor: t.accent,
+    },
+    sideChipActiveMiddle: {
+      backgroundColor: t.warningSoft,
+      borderColor: t.warning,
     },
     sideChipDisabled: {
       opacity: 0.45,
