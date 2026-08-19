@@ -29,16 +29,24 @@ import { studioApi, type CustomizationConfig, type CustomizationField } from "@/
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { request } from "@/services/api";
+import {
+  ART_SERVICE_FIELD_ID as ART_FIELD, ART_SERVICE_BRIEF_ID as ART_BRIEF,
+  buildArtServiceChoices,
+} from "@/components/studio/artService";
 
 const FONTS_PRESET   = ["Pacifico", "Caveat", "Playfair Display", "Bebas Neue", "Inter"];
 const COLORS_PRESET  = ["#0F172A", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#EC4899", "#FFFFFF"];
 const FORMATS_PRESET = ["png", "jpg", "jpeg", "pdf"];
 
 // ─── ART_SERVICE_FIELD_ID canônico ───────────────────────────────────────
-// Usado em buildConfig() e na seção de preview (Step 3).
-// Manter em sincronia com FieldArtService.tsx (ART_FIELD_ID = 'art_service').
-export const ART_SERVICE_FIELD_ID  = "art_service";
-export const ART_SERVICE_BRIEF_ID  = "art_service_brief";
+// S4: os ids, os values e os labels passaram a viver em
+// components/studio/artService.ts, compartilhados com a vitrine e com os
+// testes. Antes cada lado tinha a sua cópia — foi assim que o `kind` do
+// wizard de categorias divergiu do backend na F0.
+// Reexportados aqui porque outras telas já importam deste módulo.
+export {
+  ART_SERVICE_FIELD_ID, ART_SERVICE_BRIEF_ID,
+} from "@/components/studio/artService";
 
 // ─── Agente I: tipo do guia de medidas ─────────────────────────────────────
 // Shape gravado em customization_config.size_guide:
@@ -86,7 +94,10 @@ type DraftState = {
   text_max_chars: string;
   // ─── Agente H: Serviço de Arte ───
   allow_art_service: boolean;
-  art_service_price: string;  // R$ como string (input de texto)
+  art_service_price: string;  // R$ como string (input de texto) — CRIACAO da arte
+  // S4 — ajuste da arte que o cliente envia. E o caminho mais frequente e
+  // era o unico sem onde cobrar.
+  art_adjust_price: string;
   // ─── Agente I: Guia de Medidas ───
   size_guide: SizeGuideShape | null;
 };
@@ -102,6 +113,7 @@ const DEFAULT_DRAFT: DraftState = {
   // Agente H
   allow_art_service: false,
   art_service_price: "30,00",
+  art_adjust_price: "10,00",
   // Agente I
   size_guide: null,
 };
@@ -241,18 +253,16 @@ export default function PersonalizacaoWizard() {
     //   }
     // }
     if (draft.allow_art_service) {
-      const artPrice = parseArtPrice(draft.art_service_price);
       fields.push({
-        id: ART_SERVICE_FIELD_ID,
+        id: ART_FIELD,
         type: "option",
         label: "Crie minha arte",
         required: false,
         config: {
           is_art_service: true,
-          choices: [
-            { value: "none",     label: "Vou enviar minha arte",   price_delta: 0        },
-            { value: "designer", label: "Crie minha arte pra mim", price_delta: artPrice },
-          ],
+          // S4 — tres caminhos. O builder e compartilhado com a vitrine
+          // e com os testes, para os labels e os values nao divergirem.
+          choices: buildArtServiceChoices(draft.art_adjust_price, draft.art_service_price),
         } as any,  // is_art_service é extensão do config; backend ignora campos extras
       });
 
@@ -260,7 +270,7 @@ export default function PersonalizacaoWizard() {
       // Armazenado em values['art_service_brief'] — não influi no preço,
       // apenas enriquece o pedido para o lojista/designer.
       fields.push({
-        id: ART_SERVICE_BRIEF_ID,
+        id: ART_BRIEF,
         type: "text",
         label: "Briefing da arte",
         required: false,
@@ -415,8 +425,8 @@ export default function PersonalizacaoWizard() {
           </View>
 
           <Toggle
-            label="Oferecer 'Crie minha arte'"
-            sub="Cliente paga pra sua equipe criar a arte (sem precisar ter arquivo)"
+            label="Oferecer serviço de arte"
+            sub="Cobrar pelo ajuste da arte do cliente e pela criação do zero"
             checked={draft.allow_art_service}
             onToggle={() => updateDraft({ allow_art_service: !draft.allow_art_service })}
             tone="pink"
@@ -424,7 +434,27 @@ export default function PersonalizacaoWizard() {
 
           {draft.allow_art_service && (
             <View style={s.subBlock}>
-              <Text style={s.label}>Preço do serviço (R$)</Text>
+              {/* S4 — dois preços, porque são dois trabalhos diferentes.
+                  O ajuste é o mais frequente e era o que não tinha onde
+                  ser cobrado: o cliente manda a arte, ela não cabe no
+                  produto ou não fecha nas cores de impressão, e alguém
+                  refaz. Esse alguém trabalhava de graça. */}
+              <Text style={s.label}>Ajustar a arte do cliente (R$)</Text>
+              <TextInput
+                style={[s.input, { width: 160 }]}
+                keyboardType="decimal-pad"
+                value={draft.art_adjust_price}
+                placeholder="10,00"
+                placeholderTextColor="#94A3B8"
+                onChangeText={(v) => updateDraft({ art_adjust_price: v })}
+              />
+              <Text style={s.subHelp}>
+                Cobrado quando o cliente escolher "Envio minha arte e vocês ajustam".
+                Deixe 0 para oferecer o ajuste sem custo — a opção continua aparecendo,
+                e você passa a saber quais pedidos precisam de trabalho antes de imprimir.
+              </Text>
+
+              <Text style={[s.label, { marginTop: 14 }]}>Criar a arte do zero (R$)</Text>
               <TextInput
                 style={[s.input, { width: 160 }]}
                 keyboardType="decimal-pad"
@@ -434,8 +464,8 @@ export default function PersonalizacaoWizard() {
                 onChangeText={(v) => updateDraft({ art_service_price: v })}
               />
               <Text style={s.subHelp}>
-                Cobrado automaticamente quando o cliente escolher "Crie minha arte pra mim".
-                O campo de upload (Minha arte) continua disponível como opção gratuita.
+                Cobrado quando o cliente escolher "Criem a arte pra mim". Nesse caminho
+                ele não precisa enviar arquivo nenhum.
               </Text>
               <View style={s.artServiceNote}>
                 <Text style={s.artServiceNoteTxt}>
