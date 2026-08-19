@@ -4,6 +4,13 @@
 // Nome + dias da semana (chips toggle 0-6) + horário início/fim (HH:MM
 // mascarado) + modalidade (texto livre) + ativo (só na edição, mesmo
 // padrão do PlanoFormModal).
+//
+// O campo de início mostra a FAIXA aceita pelo backend (turma na virada
+// do dia é recusada — quebraria a janela do check-in por QR). A faixa vem
+// de GET /classes/settings, derivada lá das constantes da janela: nunca
+// hardcodamos '00:30'/'22:59' aqui, senão afrouxar a janela no servidor
+// deixaria a dica mentindo. Se a faixa não vier, o formulário não mostra
+// dica nem bloqueia — o 422 do servidor continua sendo a rede.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
@@ -13,8 +20,16 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { FormField } from "@/components/karate/FormField";
-import { karateDojoClassesApi, DojoClass } from "@/services/karateDojoClassesApi";
-import { WEEKDAY_LONG, WEEKDAY_SHORT, isValidTimeOrEmpty, maskTimeHHMM, mapClassesError } from "./helpers";
+import { karateDojoClassesApi, DojoClass, DojoClassStartTimeRange } from "@/services/karateDojoClassesApi";
+import {
+  WEEKDAY_LONG, WEEKDAY_SHORT, isValidTimeOrEmpty, maskTimeHHMM, mapClassesError,
+  startTimeRangeHint, isStartTimeOutOfRange,
+} from "./helpers";
+
+// A faixa é constante do backend (derivada da janela do check-in), então
+// uma leitura por federação basta pra sessão inteira — o modal abre e
+// fecha muitas vezes e não faz sentido refazer o GET a cada vez.
+const rangeCache = new Map<string, DojoClassStartTimeRange | null>();
 
 interface Props {
   visible: boolean;
@@ -37,6 +52,28 @@ export function TurmaFormModal({ visible, federationId, turma, onClose, onSaved 
   const [weekdaysErr, setWeekdaysErr] = useState<string | null>(null);
   const [timeErr, setTimeErr] = useState<string | null>(null);
   const [generalErr, setGeneralErr] = useState<string | null>(null);
+  const [startRange, setStartRange] = useState<DojoClassStartTimeRange | null>(
+    () => rangeCache.get(federationId) ?? null
+  );
+
+  // Busca a faixa uma vez por federação. Falha é silenciosa de propósito:
+  // sem faixa o formulário só não mostra dica nem valida — o backend
+  // continua recusando. Mesmo degrade do painel de QR na tela de turmas.
+  useEffect(() => {
+    if (!visible || !federationId || rangeCache.has(federationId)) return;
+    let alive = true;
+    karateDojoClassesApi
+      .getSettings(federationId)
+      .then((cfg) => {
+        const r = cfg.class_start_time_range ?? null;
+        rangeCache.set(federationId, r);
+        if (alive) setStartRange(r);
+      })
+      .catch(() => {
+        rangeCache.set(federationId, null);
+      });
+    return () => { alive = false; };
+  }, [visible, federationId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -68,6 +105,10 @@ export function TurmaFormModal({ visible, federationId, turma, onClose, onSaved 
     if (weekdays.length === 0) { setWeekdaysErr("Escolha ao menos um dia da semana."); ok = false; } else setWeekdaysErr(null);
     if (!isValidTimeOrEmpty(startTime) || !isValidTimeOrEmpty(endTime)) {
       setTimeErr("Horário inválido — use HH:MM.");
+      ok = false;
+    } else if (isStartTimeOutOfRange(startTime, startRange)) {
+      // Só bloqueia quando a faixa é CONHECIDA — ver isStartTimeOutOfRange.
+      setTimeErr(`A turma deve começar entre ${startRange!.min} e ${startRange!.max}.`);
       ok = false;
     } else setTimeErr(null);
     return ok;
@@ -142,6 +183,7 @@ export function TurmaFormModal({ visible, federationId, turma, onClose, onSaved 
                 onChangeText={(v) => setStartTime(maskTimeHHMM(v))}
                 placeholder="18:00"
                 keyboardType="number-pad"
+                hint={startTimeRangeHint(startRange) ?? undefined}
                 style={{ flex: 1 }}
               />
               <FormField

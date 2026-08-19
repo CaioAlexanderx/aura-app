@@ -9,6 +9,7 @@
 // fuso horário, então isso é seguro (mesmo racional de brToISO no
 // módulo dojoAlunos, que usa Date.UTC só para VALIDAR o dia).
 // ============================================================
+import type { DojoClassStartTimeRange } from "@/services/karateDojoClassesApi";
 
 export const WEEKDAY_SHORT = ["D", "S", "T", "Q", "Q", "S", "S"];
 export const WEEKDAY_LONG = [
@@ -80,6 +81,50 @@ export function isValidTimeOrEmpty(v: string): boolean {
   const h = parseInt(m[1], 10);
   const mi = parseInt(m[2], 10);
   return h >= 0 && h <= 23 && mi >= 0 && mi <= 59;
+}
+
+/** 'HH:MM' → minutos do dia (0..1439). null se vazio/inválido. */
+export function timeToMinutes(v: string): number | null {
+  const m = String(v || "").match(/^(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mi = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+// ── Faixa de início da turma (virada do dia) ──────────────────────────
+//
+// O backend recusa turma que começa na virada do dia: a janela de
+// tolerância do check-in por QR é linear dentro de uma data e vazaria pro
+// dia vizinho, quebrando o check-in bem na hora da aula. Os limites vêm
+// do servidor (settings.class_start_time_range), derivados lá das
+// constantes da janela — nunca hardcodados aqui.
+//
+// SEM faixa conhecida (backend antigo, ou o settings falhou) as duas
+// funções viram no-op: nada de dica, nada de bloqueio. O 422 do servidor
+// segue valendo — o front nunca inventa um limite que não conhece.
+
+/** Dica pro campo de início. null quando a faixa é desconhecida. */
+export function startTimeRangeHint(range: DojoClassStartTimeRange | null | undefined): string | null {
+  if (!range?.min || !range?.max) return null;
+  return `Entre ${range.min} e ${range.max} — o check-in por QR precisa de uma janela que não atravesse a meia-noite.`;
+}
+
+/**
+ * O horário digitado cai fora da faixa aceita?
+ * Vazio (campo é opcional) e faixa desconhecida nunca bloqueiam.
+ */
+export function isStartTimeOutOfRange(
+  value: string,
+  range: DojoClassStartTimeRange | null | undefined
+): boolean {
+  if (!value || !range?.min || !range?.max) return false;
+  const v = timeToMinutes(value);
+  const min = timeToMinutes(range.min);
+  const max = timeToMinutes(range.max);
+  if (v == null || min == null || max == null) return false;
+  return v < min || v > max;
 }
 
 /** 'HH:MM'–'HH:MM' formatado para exibição, ou null quando ambos ausentes. */
