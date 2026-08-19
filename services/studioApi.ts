@@ -455,6 +455,8 @@ export type StudioQuote = {
   validity_days: number;
   expires_at: string | null;
   sent_at: string | null;
+  /** Primeira abertura do link publico pelo cliente (migration 292). */
+  viewed_at?: string | null;
   responded_at: string | null;
   response_note?: string | null;
   order_id: string | null;
