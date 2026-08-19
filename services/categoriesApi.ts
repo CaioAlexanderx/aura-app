@@ -167,6 +167,29 @@ export type ApplyBrandResponse = {
   results: Array<{ token: string; brand: string; updated: number }>;
 };
 
+// ── Mutações de árvore (Bloco C1) ───────────────────────────
+// O B3 expôs só leitura + create. As rotas abaixo são as do contrato §3
+// que a tela Organizar catálogo precisa.
+
+export type UpdateCategoryBody = {
+  name?: string;
+  color?: string | null;
+  sort_order?: number;
+};
+
+// `move_to` aceita uuid OU nome (decisão DEC-02). Sem ele, apagar uma
+// categoria que tem produtos devolve 409 CATEGORY_HAS_PRODUCTS com a
+// contagem — a tela usa isso para oferecer o destino.
+export type DeleteCategoryParams = { move_to?: string };
+
+export type MoveCategoryBody = { parent_id: string | null; sort_order?: number };
+
+export type MergeCategoriesBody = { source_ids: string[]; target_id: string };
+
+export type ReorderCategoriesBody = { parent_id: string | null; ordered_ids: string[] };
+
+export type CloneFromBody = { source_company_id: string };
+
 const base = (companyId: string) => "/companies/" + companyId + "/product-categories";
 const migrationBase = (companyId: string) => "/companies/" + companyId + "/categories/migration";
 
@@ -189,6 +212,29 @@ export const categoriesApi = {
   // (contrato secao 1). Hooks novos nunca enviam type.
   create: (companyId: string, body: CreateCategoryBody) =>
     request<Category>(base(companyId), { method: "POST", body }),
+
+  update: (companyId: string, catId: string, body: UpdateCategoryBody) =>
+    request<Category>(base(companyId) + "/" + catId, { method: "PATCH", body }),
+
+  // `path` e `slug` NÃO são enviados: o trigger os recalcula (contrato §3).
+  remove: (companyId: string, catId: string, params?: DeleteCategoryParams) => {
+    const qs = params?.move_to ? "?move_to=" + encodeURIComponent(params.move_to) : "";
+    return request<{ deleted: true }>(base(companyId) + "/" + catId + qs, { method: "DELETE" });
+  },
+
+  move: (companyId: string, catId: string, body: MoveCategoryBody) =>
+    request<Category>(base(companyId) + "/" + catId + "/move", { method: "POST", body }),
+
+  merge: (companyId: string, body: MergeCategoriesBody) =>
+    request<{ merged: number }>(base(companyId) + "/merge", { method: "POST", body }),
+
+  reorder: (companyId: string, body: ReorderCategoriesBody) =>
+    request<{ ok: true }>(base(companyId) + "/reorder", { method: "POST", body }),
+
+  // Copia a árvore VAZIA de outra unidade do mesmo grupo de faturamento
+  // (contrato §3.2). Origem fora do grupo → 403.
+  cloneFrom: (companyId: string, body: CloneFromBody) =>
+    request<{ created: number }>(base(companyId) + "/clone-from", { method: "POST", body }),
 
   assignProductCategories: (companyId: string, productId: string, body: AssignProductCategoriesBody) =>
     request<AssignProductCategoriesResponse>("/companies/" + companyId + "/products/" + productId + "/categories", {
