@@ -223,13 +223,6 @@ export function StudioPersonalizacaoPanel({
   // quem configurava verso ou meio o fazia as cegas.
   const [previewSide, setPreviewSide] = useState<FieldSide>("front");
 
-  // Desligou o lado que estava sendo visto? Volta pra frente, senao o
-  // preview ficaria mostrando uma area que nao existe mais.
-  useEffect(() => {
-    if (previewSide === "back" && !hasBack) setPreviewSide("front");
-    if (previewSide === "middle" && !hasMiddle) setPreviewSide("front");
-  }, [previewSide, hasBack, hasMiddle]);
-
   // ── Guia de medidas ────────────────────────────────────
   const [guideUploading, setGuideUploading] = useState(false);
   const [guideError, setGuideError] = useState<string | null>(null);
@@ -251,6 +244,16 @@ export function StudioPersonalizacaoPanel({
   const middlePriceDelta: number | undefined = typeof cfgAny.middle_price_delta === "number" ? cfgAny.middle_price_delta : undefined;
   const middlePrintArea: { width_cm: number; height_cm: number; position: "left" | "center" | "right" } | undefined =
     cfgAny.middle_print_area && typeof cfgAny.middle_print_area === "object" ? cfgAny.middle_print_area : undefined;
+
+  // Desligou o lado que estava sendo visto? Volta pra frente, senao o
+  // preview ficaria mostrando uma area que nao existe mais.
+  // MORA AQUI, depois de hasBack/hasMiddle: o array de dependencias e
+  // avaliado no render, entao declarar isso antes das flags estourava
+  // TDZ ("Cannot access before initialization") e derrubava a aba.
+  useEffect(() => {
+    if (previewSide === "back" && !hasBack) setPreviewSide("front");
+    if (previewSide === "middle" && !hasMiddle) setPreviewSide("front");
+  }, [previewSide, hasBack, hasMiddle]);
 
   // ── Serviço de arte — derive do campo art_service ────
   // O campo é `type:'option'` com `is_art_service:true`; as choices
