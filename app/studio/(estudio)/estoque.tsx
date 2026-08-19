@@ -57,6 +57,7 @@ import type { CustomizationConfig } from "@/services/studioApi";
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
 import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
+import ProductGalleryEditor from "@/components/studio/ProductGalleryEditor";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { Icon } from "@/components/Icon";
 import { request } from "@/services/api";
@@ -64,7 +65,6 @@ import { studioApi } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { toast } from "@/components/Toast";
-import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -76,6 +76,8 @@ type StudioProduct = {
   stock_qty?: number | null;
   description?: string | null;
   image_url?: string | null;
+  /** Galeria de fotos (índice 0 = capa; backend espelha image_url a partir dela). */
+  gallery_urls?: string[];
   is_personalizable?: boolean;
   customization_config?: any;
   template_count?: number;
@@ -216,6 +218,7 @@ export default function StudioEstoque() {
         stock_qty: p.stock_qty ?? null,
         description: p.description || null,
         image_url: p.image_url || null,
+        gallery_urls: Array.isArray(p.gallery_urls) ? p.gallery_urls : [],
         is_personalizable: !!p.is_personalizable,
         customization_config: p.customization_config || null,
         template_count: Number(p.template_count) || 0,
@@ -281,6 +284,7 @@ export default function StudioEstoque() {
         stock_qty: r.stock_qty ?? null,
         description: r.description ?? null,
         image_url: r.image_url ?? null,
+        gallery_urls: Array.isArray(r.gallery_urls) ? r.gallery_urls : [],
         is_personalizable: !!r.is_personalizable,
         customization_config: r.customization_config || null,
         template_count: Number(r.template_count) || 0,
@@ -810,8 +814,6 @@ function BasicoForm({
   const [qty, setQty] = useState(product.stock_qty != null ? String(product.stock_qty) : "");
   const [description, setDescription] = useState(product.description || "");
   const [saving, setSaving] = useState(false);
-  const [localImage, setLocalImage] = useState(product.image_url || null);
-  const [uploadingImg, setUploadingImg] = useState(false);
 
   // Resync se trocar de produto
   useEffect(() => {
@@ -819,49 +821,17 @@ function BasicoForm({
     setPrice(String(product.price || ""));
     setQty(product.stock_qty != null ? String(product.stock_qty) : "");
     setDescription(product.description || "");
-    setLocalImage(product.image_url || null);
   }, [product.id]);
 
-  async function uploadImage() {
-    // Sem empresa o botão ficava mudo (o guard antigo caía no mesmo toast
-    // genérico de "só na web"). Estado que não deveria acontecer com a tela
-    // montada, mas silêncio total deixa a lojista clicando à toa.
-    if (!companyId) {
-      toast.error("Não identifiquei sua empresa — recarregue a página e tente de novo.");
-      return;
-    }
-    // Cross-platform (QA celular): web mantém <input type=file>, native abre
-    // a galeria via expo-image-picker — antes travava com toast pedindo
-    // versão web mesmo sendo o editor inline onde a lojista mais troca foto.
-    const picked = await pickImageBase64().catch((e: any) => {
-      const status = e?.status ? `[${e.status}] ` : "";
-      toast.error(`${status}${e?.data?.error || e?.message || "Não foi possível abrir a galeria."}`);
-      return null;
-    });
-    if (!picked) return;
-    setUploadingImg(true);
-    try {
-      const r = await uploadStudioMockup(companyId, {
-        content_base64: picked.base64,
-        content_type: picked.content_type,
-        kind: "product",
-      });
-      await request<any>(`/companies/${companyId}/products/${product.id}`, {
-        method: "PATCH",
-        body: { image_url: r.url },
-        retry: 0,
-        timeout: 12000,
-      });
-      setLocalImage(r.url);
-      onPatched({ image_url: r.url });
-      toast.success("Imagem carregada com sucesso");
-    } catch (e: any) {
-      const status = e?.status ? `[${e.status}] ` : "";
-      toast.error(`${status}${e?.data?.error || e?.message || "Falha ao carregar imagem"}`);
-    } finally {
-      setUploadingImg(false);
-    }
-  }
+  // Compat produto antigo: galeria vazia mas com image_url legado
+  // continua aparecendo com essa foto como capa. Não dispara nenhum PATCH
+  // só por causa disso — só afeta o que a UI mostra.
+  const effectiveGallery = useMemo(
+    () => (product.gallery_urls && product.gallery_urls.length > 0
+      ? product.gallery_urls
+      : product.image_url ? [product.image_url] : []),
+    [product.gallery_urls, product.image_url],
+  );
 
   async function save() {
     const trimmed = name.trim();
@@ -906,42 +876,13 @@ function BasicoForm({
 
   return (
     <View style={{ gap: 14 }}>
-      {/* Foto do produto */}
-      <View style={s.field}>
-        <Text style={s.fieldLabel}>Foto do produto</Text>
-        <View style={s.imgUploadRow}>
-          <View style={s.imgThumbWrap}>
-            {localImage ? (
-              Platform.OS === "web" ? (
-                // eslint-disable-next-line jsx-a11y/alt-text
-                <img src={localImage} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover" }} />
-              ) : (
-                <Image source={{ uri: localImage }} style={s.imgThumb} />
-              )
-            ) : (
-              <View style={[s.imgThumb, s.imgThumbEmpty]}>
-                <Icon name="image" size={22} color={t.ink4} />
-              </View>
-            )}
-          </View>
-          <Pressable
-            onPress={uploadImage}
-            disabled={uploadingImg || saving}
-            style={[s.btnSec, (uploadingImg || saving) && { opacity: 0.5 }]}
-          >
-            {uploadingImg ? (
-              <ActivityIndicator size="small" color={t.primary} />
-            ) : (
-              <>
-                <Icon name="upload" size={13} color={t.primary} />
-                <Text style={s.btnSecTxt}>
-                  {localImage ? "Trocar foto" : "Enviar foto"}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      </View>
+      {/* Galeria de fotos do produto (até 5, índice 0 = capa) */}
+      <ProductGalleryEditor
+        productId={product.id}
+        companyId={companyId}
+        galleryUrls={effectiveGallery}
+        onChanged={(gallery) => onPatched({ gallery_urls: gallery, image_url: gallery[0] || null })}
+      />
 
       <View style={s.field}>
         <Text style={s.fieldLabel}>Nome</Text>
@@ -1257,17 +1198,5 @@ function buildStyles(t: StudioPalette) {
     visRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
     visHint: { fontSize: 11, color: t.ink3, lineHeight: 15 },
     eyeBtn: { padding: 6, borderRadius: 8 },
-
-    // Upload de imagem
-    imgUploadRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-    imgThumbWrap: { width: 72, height: 72 },
-    imgThumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: t.bgSoft },
-    imgThumbEmpty: {
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1.5,
-      borderColor: t.ink5,
-      borderStyle: "dashed" as any,
-    },
   });
 }
