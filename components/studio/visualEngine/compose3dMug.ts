@@ -20,10 +20,15 @@
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { loadThree } from "./threeLoader";
-import { readMugGeometry, heartPath } from "./mugGeometry";
+import {
+  readMugGeometry, heartPath, readMugMaterials, applyCustomerColor,
+  readMugAccessories,
+} from "./mugGeometry";
 
 export type Mug3DOptions = {
-  garmentColor?: string;  // cor da louça
+  garmentColor?: string;  // cor ESCOLHIDA pelo cliente (incide onde o modelo mandar)
+  bodyColor?: string;     // cor do corpo do modelo — fundo da textura (S11)
+  bodyTopBand?: { color: string; height: number } | null;
   artColor?: string;      // cor do texto/emblema
   font?: string;
   areaId?: string;        // 'panel' | 'wrap'
@@ -69,8 +74,17 @@ async function paintTexture(
   const ctx = texCv.getContext("2d");
   if (!ctx) return;
   const W = texCv.width, H = texCv.height;
-  ctx.fillStyle = o.garmentColor;
+  // S11 — o fundo da textura e a cor do CORPO do modelo, nao a escolha do
+  // cliente. Numa caneca de alca colorida o corpo e branco e so a alca
+  // segue a cor escolhida; pintar tudo apagava o produto.
+  ctx.fillStyle = o.bodyColor || o.garmentColor;
   ctx.fillRect(0, 0, W, H);
+  // Faixa esmaltada no topo (S11). v cresce pra cima na UV e o canvas pra
+  // baixo, entao o topo da caneca e y=0 aqui.
+  if (o.bodyTopBand && o.bodyTopBand.height > 0) {
+    ctx.fillStyle = o.bodyTopBand.color;
+    ctx.fillRect(0, 0, W, Math.round(H * o.bodyTopBand.height));
+  }
 
   const area = pickArea(spec, o.areaId);
   if (!area || !area.uv) return;
@@ -158,10 +172,42 @@ export async function createMugViewer(
   const d1 = new THREE.DirectionalLight(0xffffff, 0.65); d1.position.set(3, 5, 4); scene.add(d1);
   const d2 = new THREE.DirectionalLight(0xffffff, 0.25); d2.position.set(-4, 2, -2); scene.add(d2);
 
+  // S11 — cor e material vem do MODELO; a escolha do cliente incide so na
+  // parte que o template declara em `customer_color_target`.
+  let M = applyCustomerColor(readMugMaterials(spec), o.garmentColor);
+  const acess = readMugAccessories(spec);
+  // A PRIMEIRA pintura tambem precisa do fundo e da faixa certos: sem isto
+  // o mockup nascia com a cor escolhida no corpo e so acertava no primeiro
+  // update.
+  o.bodyColor = M.body.color;
+  o.bodyTopBand = M.body.topBand ?? null;
+  // A PRIMEIRA pintura tambem precisa do fundo certo: sem isto o mockup
+  // nascia com a cor escolhida no corpo e so acertava no primeiro update.
+  o.bodyColor = M.body.color;
+
   const texture = new THREE.CanvasTexture(texCv);
-  const bodyMat   = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.3, metalness: 0 });
-  const solidMat  = new THREE.MeshStandardMaterial({ color: o.garmentColor, roughness: 0.3, metalness: 0 });
-  const innerMat  = new THREE.MeshStandardMaterial({ color: 0x8a8578, roughness: 0.6, side: THREE.BackSide });
+  const bodyMat = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: M.body.roughness,
+    metalness: M.body.metalness,
+    transparent: M.body.opacity < 1,
+    opacity: M.body.opacity,
+  });
+  const solidMat = new THREE.MeshStandardMaterial({
+    color: M.accent.color,
+    roughness: M.accent.roughness,
+    metalness: M.accent.metalness,
+    transparent: M.accent.opacity < 1,
+    opacity: M.accent.opacity,
+  });
+  const innerMat = new THREE.MeshStandardMaterial({
+    color: M.interior.color,
+    roughness: M.interior.roughness,
+    metalness: M.interior.metalness,
+    transparent: M.interior.opacity < 1,
+    opacity: M.interior.opacity,
+    side: THREE.BackSide,
+  });
 
   // S3 — a forma vem do `spec`, com os numeros de antes como default.
   // Template sem bloco de geometria renderiza exatamente como renderizava
@@ -182,7 +228,10 @@ export async function createMugViewer(
     new THREE.CylinderGeometry(G.inner.topRadius, G.inner.bottomRadius, G.inner.height, 64, 1, true),
     innerMat
   ));
-  const innerBottomMat = new THREE.MeshStandardMaterial({ color: 0x8a8578, roughness: 0.6 });
+  const innerBottomMat = new THREE.MeshStandardMaterial({
+    color: M.interior.color, roughness: M.interior.roughness,
+    transparent: M.interior.opacity < 1, opacity: M.interior.opacity,
+  });
   const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(G.inner.bottomRadius, 64), innerBottomMat);
   innerBottom.rotation.x = -Math.PI / 2;
   innerBottom.position.y = -meiaAltura + (G.body.height - G.inner.height) + 0.09;
@@ -220,6 +269,34 @@ export async function createMugViewer(
     // no plano XY para ser vista de frente.
     group.add(handle);
   }
+  // S11 — acessorios do modelo. A colher da CANECA COM COLHER e o pires
+  // da xicara sao parte do que se compra: sem eles o mockup mostra outro
+  // produto.
+  if (acess.spoon) {
+    const cabo = new THREE.Mesh(
+      new THREE.CylinderGeometry(G.handle.tube * 0.22, G.handle.tube * 0.22, G.body.height * 0.82, 12),
+      solidMat
+    );
+    cabo.position.set(G.handle.offsetX * 0.55, G.body.height * 0.22, G.body.topRadius * 0.72);
+    cabo.rotation.z = 0.20;
+    group.add(cabo);
+    const concha = new THREE.Mesh(
+      new THREE.SphereGeometry(G.handle.tube * 0.62, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      solidMat
+    );
+    concha.position.set(G.handle.offsetX * 0.68, -G.body.height * 0.20, G.body.topRadius * 0.72);
+    concha.rotation.x = Math.PI;
+    group.add(concha);
+  }
+  if (acess.saucer) {
+    const pires = new THREE.Mesh(
+      new THREE.CylinderGeometry(G.body.topRadius * 1.95, G.body.topRadius * 1.72, G.body.height * 0.08, 48),
+      solidMat
+    );
+    pires.position.y = -G.body.height / 2 - G.body.height * 0.05;
+    group.add(pires);
+  }
+
   group.rotation.y = Math.PI;
   group.rotation.x = 0.06;
   scene.add(group);
@@ -254,7 +331,12 @@ export async function createMugViewer(
 
   async function update(newValues: Record<string, any>, newOpts?: Mug3DOptions) {
     o = { ...o, ...(newOpts || {}) };
-    solidMat.color.set(o.garmentColor);
+    M = applyCustomerColor(readMugMaterials(spec), o.garmentColor);
+    solidMat.color.set(M.accent.color);
+    innerMat.color.set(M.interior.color);
+    innerBottomMat.color.set(M.interior.color);
+    o.bodyColor = M.body.color;
+    o.bodyTopBand = M.body.topBand ?? null;
     await paintTexture(texCv, spec, newValues, o);
     texture.needsUpdate = true;
     render();

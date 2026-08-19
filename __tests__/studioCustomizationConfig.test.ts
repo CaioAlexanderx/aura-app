@@ -101,7 +101,10 @@ describe("config vazio ganha o padrão do tipo", () => {
   it("imagem sem config recebe formatos, tamanho e dpi", () => {
     const cfg = normalizeCustomizationConfig(configDaSheid());
     const img = cfg.fields.find((f) => f.id === "image")!;
-    expect(img.config.formats).toContain("png");
+    // MIME, nao extensao: FORMATS_PRESET e ["image/png", ...] e o proprio
+    // FieldImage documenta que MIME e a forma esperada (ele tolera
+    // extensao so por causa de config antigo). O teste e que ficou velho.
+    expect(img.config.formats).toContain("image/png");
     expect(img.config.max_mb).toBeGreaterThan(0);
     expect(img.config.min_dpi).toBeGreaterThan(0);
   });
