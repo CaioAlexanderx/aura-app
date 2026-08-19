@@ -20,6 +20,7 @@
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { loadThree } from "./threeLoader";
+import { readMugGeometry, heartPath } from "./mugGeometry";
 
 export type Mug3DOptions = {
   garmentColor?: string;  // cor da louça
@@ -162,18 +163,58 @@ export async function createMugViewer(
   const solidMat  = new THREE.MeshStandardMaterial({ color: o.garmentColor, roughness: 0.3, metalness: 0 });
   const innerMat  = new THREE.MeshStandardMaterial({ color: 0x8a8578, roughness: 0.6, side: THREE.BackSide });
 
+  // S3 — a forma vem do `spec`, com os numeros de antes como default.
+  // Template sem bloco de geometria renderiza exatamente como renderizava
+  // (ver mugGeometry.ts).
+  const G = readMugGeometry(spec);
+  const meiaAltura = G.body.height / 2;
+
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 2.3, 64, 1, true), bodyMat));
-  const bottom = new THREE.Mesh(new THREE.CircleGeometry(0.94, 64), solidMat);
-  bottom.rotation.x = Math.PI / 2; bottom.position.y = -1.15; group.add(bottom);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.975, 0.028, 12, 64), solidMat);
-  rim.rotation.x = Math.PI / 2; rim.position.y = 1.15; group.add(rim);
-  group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.96, 0.9, 2.24, 64, 1, true), innerMat));
+  group.add(new THREE.Mesh(
+    new THREE.CylinderGeometry(G.body.topRadius, G.body.bottomRadius, G.body.height, 64, 1, true),
+    bodyMat
+  ));
+  const bottom = new THREE.Mesh(new THREE.CircleGeometry(G.body.bottomRadius, 64), solidMat);
+  bottom.rotation.x = Math.PI / 2; bottom.position.y = -meiaAltura; group.add(bottom);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(G.rim.radius, G.rim.tube, 12, 64), solidMat);
+  rim.rotation.x = Math.PI / 2; rim.position.y = meiaAltura; group.add(rim);
+  group.add(new THREE.Mesh(
+    new THREE.CylinderGeometry(G.inner.topRadius, G.inner.bottomRadius, G.inner.height, 64, 1, true),
+    innerMat
+  ));
   const innerBottomMat = new THREE.MeshStandardMaterial({ color: 0x8a8578, roughness: 0.6 });
-  const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(0.9, 64), innerBottomMat);
-  innerBottom.rotation.x = -Math.PI / 2; innerBottom.position.y = -1.0; group.add(innerBottom);
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.11, 20, 48), solidMat);
-  handle.position.set(1.02, 0, 0); group.add(handle);
+  const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(G.inner.bottomRadius, 64), innerBottomMat);
+  innerBottom.rotation.x = -Math.PI / 2;
+  innerBottom.position.y = -meiaAltura + (G.body.height - G.inner.height) + 0.09;
+  group.add(innerBottom);
+
+  // Alca: anel (padrao), coracao ou nenhuma. A forma e o que se vende na
+  // "CANECA ALCA CORACAO" — renderiza-la como anel apaga o produto.
+  if (G.handle.shape !== "none") {
+    const handleGeo = G.handle.shape === "heart"
+      ? (() => {
+          const shape = new THREE.Shape();
+          for (const cmd of heartPath(G.handle.radius)) {
+            if (cmd.op === "moveTo") shape.moveTo(cmd.x, cmd.y);
+            else shape.bezierCurveTo(cmd.c1x, cmd.c1y, cmd.c2x, cmd.c2y, cmd.x, cmd.y);
+          }
+          const geo = new THREE.ExtrudeGeometry(shape, {
+            depth: G.handle.tube * 1.6,
+            bevelEnabled: true,
+            bevelThickness: G.handle.tube * 0.5,
+            bevelSize: G.handle.tube * 0.5,
+            bevelSegments: 6,
+            curveSegments: 24,
+          });
+          geo.center();
+          return geo;
+        })()
+      : new THREE.TorusGeometry(G.handle.radius, G.handle.tube, 20, 48);
+    const handle = new THREE.Mesh(handleGeo, solidMat);
+    handle.position.set(G.handle.offsetX, G.handle.offsetY, 0);
+    if (G.handle.shape === "heart") handle.rotation.y = Math.PI / 2;
+    group.add(handle);
+  }
   group.rotation.y = Math.PI;
   group.rotation.x = 0.06;
   scene.add(group);
