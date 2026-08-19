@@ -114,6 +114,70 @@ function effectiveBackSelected(
   return explicit === true;
 }
 
+// ── S0 (18/08/2026) — grupo de origem da arte ────────────────
+// `image` e `template` preenchem o MESMO slot de arte: compose3dMug e
+// compose2d leem `values.image || values.template`. A lojista pode marcar
+// "Obrigatorio" nos dois no painel de personalizacao, e o resultado era
+// uma condicao impossivel — foi o que travou a compra em sheid-mania,
+// loja publicada (ver docs/F1_CONTEUDO_STUDIO.md no aura-backend, S0).
+//
+// Regra: se ao menos um campo do grupo for required, basta UM preenchido.
+// Com uma unica origem no config, o comportamento e identico ao anterior.
+//
+// ESPELHO OBRIGATORIO de validateCustomizationValues em
+// src/routes/studioStorefront.js (aura-backend). Se um lado mudar sem o
+// outro, o item entra no carrinho e o pedido leva 400 no fechamento.
+const ART_SOURCE_TYPES = new Set(["image", "template"]);
+
+function isFilled(v: any): boolean {
+  return !(v == null || (typeof v === "string" && !v.trim()));
+}
+
+function fieldSideOf(f: { side?: string } | any): "front" | "back" {
+  return (f as any)?.side === "back" ? "back" : "front";
+}
+
+/**
+ * Mensagem de erro do primeiro campo obrigatorio nao satisfeito, ou null.
+ * Pura de proposito: e o que os testes exercitam, e o que precisa bater
+ * com validateCustomizationValues do backend.
+ */
+export function validateRequiredFields(
+  cfg: StudioStoreProduct["customization_config"] | null | undefined,
+  values: Record<string, any>,
+  backActive: boolean
+): string | null {
+  if (!cfg?.fields) return null;
+  const aplicaveis = cfg.fields.filter(
+    (f) => fieldSideOf(f) !== "back" || backActive
+  );
+
+  // "Crie minha arte pra mim": o cliente contratou a criacao e nao tem
+  // arte pra enviar — dispensa o grupo de origem da arte.
+  const arteContratada = aplicaveis.some(
+    (f) =>
+      (f.config as any)?.is_art_service === true && values[f.id] === "designer"
+  );
+
+  for (const side of ["front", "back"] as const) {
+    const grupo = aplicaveis.filter(
+      (f) => ART_SOURCE_TYPES.has(f.type) && fieldSideOf(f) === side
+    );
+    if (!grupo.some((f) => f.required)) continue;
+    if (arteContratada) continue;
+    if (grupo.some((f) => isFilled(values[f.id]))) continue;
+    const opcoes = grupo.map((f) => `"${f.label}"`).join(" ou ");
+    return `Envie sua arte em ${opcoes}`;
+  }
+
+  for (const f of aplicaveis) {
+    if (!f.required) continue;
+    if (ART_SOURCE_TYPES.has(f.type)) continue; // ja coberto pelo grupo
+    if (!isFilled(values[f.id])) return `Preencha "${f.label}"`;
+  }
+  return null;
+}
+
 function backDelta(
   cfg: StudioStoreProduct["customization_config"] | null | undefined,
   explicit: boolean | undefined
@@ -276,17 +340,10 @@ export function useStorefront(slug: string) {
     if (!activeProduct) return;
     const cfg = activeProduct.customization_config;
     const backActive = effectiveBackSelected(cfg, editingAddBack);
-    if (cfg?.fields) {
-      for (const f of cfg.fields) {
-        if (!f.required) continue;
-        const fieldSide = (f as any).side === "back" ? "back" : "front";
-        if (fieldSide === "back" && !backActive) continue;
-        const v = editingValues[f.id];
-        if (v == null || (typeof v === "string" && !v.trim())) {
-          setError(`Preencha "${f.label}"`);
-          return;
-        }
-      }
+    const faltou = validateRequiredFields(cfg, editingValues, backActive);
+    if (faltou) {
+      setError(faltou);
+      return;
     }
     setError(null);
     let valuesToCommit = editingValues;
