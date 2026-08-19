@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Switch } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Switch, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -44,19 +44,6 @@ function formatBRL(value: number) {
   } catch {
     return `R$ ${value.toFixed(2)}`;
   }
-}
-
-const FIELD_TYPE_LABELS: Record<string, string> = {
-  text: "Texto",
-  image: "Imagem",
-  template: "Template",
-  color: "Cor",
-  option: "Opção",
-};
-
-function fieldTypeLabel(t?: string) {
-  if (!t) return "Campo";
-  return FIELD_TYPE_LABELS[t] || t;
 }
 
 export function TabStudioConfigurador() {
@@ -123,7 +110,12 @@ export function TabStudioConfigurador() {
   );
 
   const goEdit = useCallback(() => {
-    router.push("/studio/produtos");
+    router.push("/studio/estoque");
+  }, [router]);
+
+  // Deep-link direto pro produto expandido no catálogo (?action=edit-product)
+  const goEditProduct = useCallback((pid: string) => {
+    router.push(`/studio/estoque?action=edit-product&id=${pid}` as any);
   }, [router]);
 
   if (loading) {
@@ -178,12 +170,26 @@ export function TabStudioConfigurador() {
           const pos = print.position || null;
           const hidden = p.studio_storefront_visible === false;
 
+          // Meta compacta: campos + área numa linha só (era 2 seções de chips)
+          const metaParts: string[] = [];
+          metaParts.push(fields.length ? `${fields.length} ${fields.length === 1 ? "campo" : "campos"}` : "Sem campos");
+          if (w && h) metaParts.push(`área ${w}×${h} cm${pos ? ` · ${pos}` : ""}`);
+
           return (
             <View key={p.id} style={[styles.card, hidden && styles.cardHidden]}>
               <View style={styles.cardHead}>
-                <View style={{ flex: 1 }}>
+                {/* Foto: identificação visual do produto (pedido do lojista) */}
+                {p.image_url ? (
+                  <Image source={{ uri: p.image_url }} style={styles.cardThumb} />
+                ) : (
+                  <View style={[styles.cardThumb, styles.cardThumbEmpty]}>
+                    <Icon name="image" size={20} color={t.ink4} />
+                  </View>
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.cardTitle} numberOfLines={2}>{p.name}</Text>
                   <Text style={styles.cardPrice}>{formatBRL(Number(p.price) || 0)}</Text>
+                  <Text style={styles.cardMeta} numberOfLines={1}>{metaParts.join(" · ")}</Text>
                   {hidden ? (
                     <View style={styles.hiddenChip}>
                       <Icon name="eye_off" size={10} color={t.ink3} />
@@ -191,63 +197,6 @@ export function TabStudioConfigurador() {
                     </View>
                   ) : null}
                 </View>
-                <View style={styles.headRight}>
-                  <View style={styles.badge}>
-                    <Icon name="sparkles" size={12} color={t.primary} />
-                    <Text style={styles.badgeText}>Personalizável</Text>
-                  </View>
-                  <Pressable
-                    onPress={() => toggleStorefrontVisible(p.id, hidden)}
-                    hitSlop={8}
-                    style={styles.eyeBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={hidden ? "Mostrar na Loja Virtual" : "Ocultar da Loja Virtual"}
-                  >
-                    <Icon name={hidden ? "eye_off" : "eye"} size={18} color={hidden ? t.ink4 : t.primary} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Área de impressão</Text>
-                {w && h ? (
-                  <View style={styles.printRow}>
-                    <View style={styles.printChip}>
-                      <Icon name="resize" size={12} color={t.primary} />
-                      <Text style={styles.printChipText}>{w} × {h} cm</Text>
-                    </View>
-                    {pos ? (
-                      <View style={styles.printChip}>
-                        <Icon name="location" size={12} color={t.primary} />
-                        <Text style={styles.printChipText}>{pos}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : (
-                  <Text style={styles.muted}>Não configurada</Text>
-                )}
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>
-                  Campos {fields.length ? `(${fields.length})` : ""}
-                </Text>
-                {fields.length ? (
-                  <View style={styles.chipsWrap}>
-                    {fields.slice(0, 6).map((f, idx) => (
-                      <View key={idx} style={styles.chip}>
-                        <Text style={styles.chipText}>{fieldTypeLabel(f?.type)}</Text>
-                      </View>
-                    ))}
-                    {fields.length > 6 ? (
-                      <View style={[styles.chip, styles.chipMore]}>
-                        <Text style={styles.chipText}>+{fields.length - 6}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : (
-                  <Text style={styles.muted}>Nenhum campo configurado</Text>
-                )}
               </View>
 
               <View style={styles.visRow}>
@@ -268,11 +217,11 @@ export function TabStudioConfigurador() {
               </View>
 
               <Pressable
-                onPress={goEdit}
+                onPress={() => goEditProduct(p.id)}
                 style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
               >
                 <Icon name="create" size={16} color="#fff" />
-                <Text style={styles.editBtnText}>Editar configuração</Text>
+                <Text style={styles.editBtnText}>Editar produto</Text>
               </Pressable>
             </View>
           );
@@ -362,6 +311,24 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+  },
+  cardThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: t.bgSoft,
+  },
+  cardThumbEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: t.ink5,
+    borderStyle: "dashed",
+  },
+  cardMeta: {
+    fontSize: 12,
+    color: t.ink3,
+    marginTop: 4,
   },
   cardTitle: {
     fontSize: 15,

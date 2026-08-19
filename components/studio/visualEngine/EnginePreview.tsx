@@ -48,6 +48,12 @@ type TemplateResp = {
 };
 const templateCache = new Map<string, Promise<TemplateResp>>();
 
+// Invalidação externa: o seletor de mockup do catálogo chama isto após
+// PUT /products/:pid/visual-template pra forçar refetch no próximo mount.
+export function invalidateProductTemplate(cid: string, pid: string) {
+  templateCache.delete(cid + "/" + pid);
+}
+
 function fetchProductTemplate(cid: string, pid: string): Promise<TemplateResp> {
   const key = cid + "/" + pid;
   let p = templateCache.get(key);

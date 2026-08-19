@@ -56,7 +56,9 @@ import {
   type CustomizationFieldType,
   type Template,
 } from "@/services/studioApi";
-import { EnginePreview } from "@/components/studio/visualEngine/EnginePreview";
+import { EnginePreview, invalidateProductTemplate } from "@/components/studio/visualEngine/EnginePreview";
+import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
+import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { request } from "@/services/api";
@@ -97,6 +99,26 @@ const POSITIONS: Array<{ value: "left" | "center" | "right"; label: string }> = 
   { value: "center", label: "Centro"   },
   { value: "right",  label: "Direita"  },
 ];
+
+// Presets de cor de 1 toque no editor visual de paleta (19/08/2026)
+const COLOR_PRESETS = [
+  "#FFFFFF", "#000000", "#EF4444", "#F97316", "#FACC15",
+  "#22C55E", "#3B82F6", "#8B5CF6", "#EC4899", "#94A3B8",
+];
+
+// Gera value a partir do label da opção ("Azul Marinho" → azul-marinho)
+function slugifyOption(label: string): string {
+  return label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function isValidHex(v: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(v.trim());
+}
 
 // ────────────────────────────────────────────────────────────
 // Sanitizer
@@ -187,6 +209,15 @@ export function StudioPersonalizacaoPanel({
   const [suggestions, setSuggestions] = useState<Array<{ template_id: string; reason: string; score: number }>>([]);
   const [suggestChecked, setSuggestChecked] = useState<Record<string, boolean>>({});
 
+  // ── Mockup do produto (motor visual 2D/3D — 19/08/2026) ──
+  // visualKey: template vinculado (null = sem mockup, preview cai no
+  // SVG). visualTemplates: catálogo publicado da Aura. visualEpoch
+  // força remount do EnginePreview após trocar (cache já invalidado).
+  const [visualKey, setVisualKey] = useState<string | null>(null);
+  const [visualTemplates, setVisualTemplates] = useState<VisualTemplate[]>([]);
+  const [savingVisual, setSavingVisual] = useState(false);
+  const [visualEpoch, setVisualEpoch] = useState(0);
+
   // ── Guia de medidas ────────────────────────────────────
   const [guideUploading, setGuideUploading] = useState(false);
   const [guideError, setGuideError] = useState<string | null>(null);
@@ -272,6 +303,51 @@ export function StudioPersonalizacaoPanel({
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [companyId, productId]);
+
+  // ── Load do mockup: vínculo do produto + catálogo publicado ──
+  // Não bloqueia o painel: falha aqui só esconde o seletor.
+  useEffect(() => {
+    let mounted = true;
+    studioVisualApi.getProductVisualTemplate(companyId, productId)
+      .then((r) => { if (mounted) setVisualKey(r.visual_template_key || null); })
+      .catch((e: any) => {
+        console.error("[StudioPersonalizacao] visual-template load error", {
+          status: e?.status, code: e?.code, message: e?.message,
+        });
+      });
+    studioVisualApi.listVisualTemplates(companyId)
+      .then((r) => { if (mounted) setVisualTemplates(r.templates || []); })
+      .catch((e: any) => {
+        console.error("[StudioPersonalizacao] visual-templates list error", {
+          status: e?.status, code: e?.code, message: e?.message,
+        });
+      });
+    return () => { mounted = false; };
+  }, [companyId, productId]);
+
+  // ── Troca de mockup — salva na hora (padrão do toggle de loja) ──
+  async function selectVisualTemplate(key: string | null) {
+    if (key === visualKey || savingVisual) return;
+    const prev = visualKey;
+    setSavingVisual(true);
+    setVisualKey(key);
+    try {
+      await studioVisualApi.setProductVisualTemplate(companyId, productId, key);
+      invalidateProductTemplate(companyId, productId);
+      setVisualEpoch((e) => e + 1);
+      toast.success(key ? "Mockup vinculado ao produto" : "Mockup removido");
+      onSaved?.(config);
+    } catch (e: any) {
+      setVisualKey(prev);
+      console.error("[StudioPersonalizacao] set visual-template error", {
+        status: e?.status, code: e?.code, message: e?.message, data: e?.data,
+      });
+      const status = e?.status ? `[${e.status}] ` : "";
+      toast.error(`${status}${e?.data?.error || e?.message || "Erro ao vincular mockup"}`);
+    } finally {
+      setSavingVisual(false);
+    }
+  }
 
   // ── previewValues — gera valores de exemplo ────────────
   const previewValues = useMemo(() => {
@@ -649,6 +725,7 @@ export function StudioPersonalizacaoPanel({
         <Text style={s.eyebrow}>PREVIEW AO VIVO</Text>
         <View style={s.previewBox}>
           <EnginePreview
+            key={`${visualEpoch}-${visualKey || "none"}`}
             config={config}
             values={previewValues}
             size={isWide ? 320 : 280}
@@ -674,101 +751,74 @@ export function StudioPersonalizacaoPanel({
           </Pressable>
         ) : null}
       </View>
+
+      {/* Mockup do produto — 3D (canecas) ou foto 2D. Salva na hora. */}
+      {visualTemplates.length > 0 ? (
+        <View style={s.mockupCard}>
+          <Text style={s.eyebrow}>MOCKUP DO PRODUTO</Text>
+          <Text style={s.helpTxt}>
+            Como o cliente vê o produto na loja: escolha um modelo 3D ou foto. O preview acima muda na hora.
+          </Text>
+          <View style={s.mockupGrid}>
+            <Pressable
+              onPress={() => selectVisualTemplate(null)}
+              disabled={savingVisual}
+              style={[s.mockupItem, visualKey === null && s.mockupItemActive]}
+            >
+              <View style={s.mockupThumbEmpty}>
+                <Icon name="x" size={16} color={t.ink4} />
+              </View>
+              <Text style={[s.mockupName, visualKey === null && s.mockupNameActive]} numberOfLines={2}>
+                Sem mockup
+              </Text>
+            </Pressable>
+            {visualTemplates.map((vt) => {
+              const active = visualKey === vt.key;
+              return (
+                <Pressable
+                  key={vt.key}
+                  onPress={() => selectVisualTemplate(vt.key)}
+                  disabled={savingVisual}
+                  style={[s.mockupItem, active && s.mockupItemActive]}
+                >
+                  <View style={s.mockupThumbWrap}>
+                    <VisualTemplateThumb kind={vt.kind} size={88} />
+                    <View style={[s.mockupKindBadge, { backgroundColor: vt.kind === "model3d" ? t.accent : t.primary }]}>
+                      <Text style={s.mockupKindBadgeTxt}>{vt.kind === "model3d" ? "3D" : "2D"}</Text>
+                    </View>
+                  </View>
+                  <Text style={[s.mockupName, active && s.mockupNameActive]} numberOfLines={2}>
+                    {vt.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
   const formBlock = (
     <View style={[s.formCol, isWide && s.formColWide]}>
-      {/* Toggle */}
+      {/* Área de impressão — Frente e Verso num card só (19/08/2026:
+          eram 3 cards — toggle+sumário, frente, verso — virou 1) */}
       <View style={s.card}>
-        <View style={s.toggleRow}>
+        <Text style={s.eyebrow}>ÁREA DE IMPRESSÃO</Text>
+
+        <PrintAreaRow
+          t={t}
+          s={s}
+          title="Frente"
+          area={config.print_area}
+          onPatch={(p) => patchPrintArea(p as any)}
+        />
+
+        {/* Verso: switch inline no mesmo card */}
+        <View style={[s.toggleRow, s.backToggleRow]}>
           <View style={{ flex: 1 }}>
-            <Text style={s.cardHeader}>Este produto aceita personalização</Text>
-            <Text style={s.helpTxt}>Desligue pra ocultar campos no checkout.</Text>
-          </View>
-          <Switch
-            value={isPersonalizable}
-            onValueChange={(v) => togglePersonalizable(v)}
-            disabled={togglePending}
-            trackColor={{ false: t.ink5, true: t.primary }}
-            thumbColor="#fff"
-          />
-        </View>
-
-        {/* Sumário Frente/Verso */}
-        <View style={s.summaryRow}>
-          <View style={s.summaryPill}>
-            <Icon name="square" size={11} color={t.primary} />
-            <Text style={s.summaryPillTxt}>Frente: {frontFieldsCount} {frontFieldsCount === 1 ? "campo" : "campos"}</Text>
-          </View>
-          {hasBack ? (
-            <View style={[s.summaryPill, s.summaryPillBack]}>
-              <Icon name="square" size={11} color={t.accent} />
-              <Text style={[s.summaryPillTxt, { color: t.accent }]}>Verso: {backFieldsCount} {backFieldsCount === 1 ? "campo" : "campos"}</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Print area — Frente */}
-      <View style={s.card}>
-        <Text style={s.eyebrow}>ÁREA DE IMPRESSÃO · FRENTE</Text>
-        <Text style={s.cardHeader}>Dimensões da arte</Text>
-
-        <View style={s.inlineRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.fieldLabel}>Largura (cm)</Text>
-            <TextInput
-              value={String(config.print_area.width_cm)}
-              onChangeText={(txt) => {
-                const n = Number(txt.replace(",", "."));
-                patchPrintArea({ width_cm: Number.isFinite(n) && n > 0 ? n : 0 });
-              }}
-              keyboardType="decimal-pad"
-              style={s.input}
-              placeholder="10"
-              placeholderTextColor={t.ink4}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.fieldLabel}>Altura (cm)</Text>
-            <TextInput
-              value={String(config.print_area.height_cm)}
-              onChangeText={(txt) => {
-                const n = Number(txt.replace(",", "."));
-                patchPrintArea({ height_cm: Number.isFinite(n) && n > 0 ? n : 0 });
-              }}
-              keyboardType="decimal-pad"
-              style={s.input}
-              placeholder="10"
-              placeholderTextColor={t.ink4}
-            />
-          </View>
-        </View>
-
-        <Text style={[s.fieldLabel, { marginTop: 10 }]}>Posição</Text>
-        <View style={s.chipRow}>
-          {POSITIONS.map((p) => {
-            const active = config.print_area.position === p.value;
-            return (
-              <Pressable
-                key={p.value}
-                onPress={() => patchPrintArea({ position: p.value })}
-                style={[s.chip, active && s.chipActive]}
-              >
-                <Text style={[s.chipTxt, active && s.chipTxtActive]}>{p.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Verso — toggle + bloco */}
-      <View style={s.card}>
-        <View style={s.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardHeader}>Tem verso?</Text>
-            <Text style={s.helpTxt}>Habilite para configurar a área de impressão no verso da peça.</Text>
+            <Text style={s.rowTitle}>Tem verso?</Text>
+            <Text style={s.helpTxt}>Habilite pra imprimir também no verso da peça.</Text>
           </View>
           <Switch
             value={hasBack}
@@ -779,87 +829,44 @@ export function StudioPersonalizacaoPanel({
         </View>
 
         {hasBack && backPrintArea ? (
-          <View style={{ marginTop: 10, gap: 8 }}>
-            <Text style={s.eyebrow}>ÁREA DE IMPRESSÃO · VERSO</Text>
+          <View style={{ gap: 10 }}>
+            <PrintAreaRow
+              t={t}
+              s={s}
+              title="Verso"
+              area={backPrintArea}
+              onPatch={(p) => patchBackPrintArea(p)}
+            />
 
-            <View style={s.inlineRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>Largura (cm)</Text>
-                <TextInput
-                  value={String(backPrintArea.width_cm)}
-                  onChangeText={(txt) => {
-                    const n = Number(txt.replace(",", "."));
-                    patchBackPrintArea({ width_cm: Number.isFinite(n) && n > 0 ? n : 0 });
-                  }}
-                  keyboardType="decimal-pad"
-                  style={s.input}
-                  placeholder="10"
-                  placeholderTextColor={t.ink4}
+            {/* Cobrança pelo verso — inline compacto */}
+            <View style={s.backChargeRow}>
+              <View style={s.toggleRow}>
+                <Text style={[s.rowTitle, { flex: 1 }]}>Cobrar pelo verso?</Text>
+                <Switch
+                  value={backChargeEnabled}
+                  onValueChange={(v) => toggleBackCharge(v)}
+                  trackColor={{ false: t.ink5, true: t.accent }}
+                  thumbColor="#fff"
                 />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>Altura (cm)</Text>
-                <TextInput
-                  value={String(backPrintArea.height_cm)}
-                  onChangeText={(txt) => {
-                    const n = Number(txt.replace(",", "."));
-                    patchBackPrintArea({ height_cm: Number.isFinite(n) && n > 0 ? n : 0 });
-                  }}
-                  keyboardType="decimal-pad"
-                  style={s.input}
-                  placeholder="10"
-                  placeholderTextColor={t.ink4}
-                />
-              </View>
+              {backChargeEnabled ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={s.fieldLabel}>Valor extra (R$)</Text>
+                  <TextInput
+                    value={typeof backPriceDelta === "number" ? String(backPriceDelta) : ""}
+                    onChangeText={(txt) => {
+                      const n = Number(txt.replace(",", "."));
+                      patchBackPriceDelta(Number.isFinite(n) && n >= 0 ? n : 0);
+                    }}
+                    keyboardType="decimal-pad"
+                    style={[s.input, s.inputSm]}
+                    placeholder="0,00"
+                    placeholderTextColor={t.ink4}
+                  />
+                  <Text style={[s.helpTxt, { flex: 1 }]}>Somado ao preço quando o cliente marcar verso.</Text>
+                </View>
+              ) : null}
             </View>
-
-            <Text style={[s.fieldLabel, { marginTop: 6 }]}>Posição</Text>
-            <View style={s.chipRow}>
-              {POSITIONS.map((p) => {
-                const active = backPrintArea.position === p.value;
-                return (
-                  <Pressable
-                    key={p.value}
-                    onPress={() => patchBackPrintArea({ position: p.value })}
-                    style={[s.chip, active && s.chipActive]}
-                  >
-                    <Text style={[s.chipTxt, active && s.chipTxtActive]}>{p.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Cobrança pelo verso */}
-            <View style={[s.toggleRow, { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.ink5 }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardHeader}>Cobrar pelo verso?</Text>
-                <Text style={s.helpTxt}>Adicionado ao preço final quando o cliente marcar verso.</Text>
-              </View>
-              <Switch
-                value={backChargeEnabled}
-                onValueChange={(v) => toggleBackCharge(v)}
-                trackColor={{ false: t.ink5, true: t.accent }}
-                thumbColor="#fff"
-              />
-            </View>
-
-            {backChargeEnabled ? (
-              <View style={{ marginTop: 6 }}>
-                <Text style={s.fieldLabel}>Valor extra (R$)</Text>
-                <TextInput
-                  value={typeof backPriceDelta === "number" ? String(backPriceDelta) : ""}
-                  onChangeText={(txt) => {
-                    const n = Number(txt.replace(",", "."));
-                    patchBackPriceDelta(Number.isFinite(n) && n >= 0 ? n : 0);
-                  }}
-                  keyboardType="decimal-pad"
-                  style={s.input}
-                  placeholder="0,00"
-                  placeholderTextColor={t.ink4}
-                />
-                <Text style={s.helpTxt}>Adicionado ao preço final quando o cliente marcar verso.</Text>
-              </View>
-            ) : null}
           </View>
         ) : null}
       </View>
@@ -1082,19 +1089,16 @@ export function StudioPersonalizacaoPanel({
         )}
       </View>
 
-      {/* Ações secundárias */}
-      <View style={s.card}>
-        <Text style={s.eyebrow}>FERRAMENTAS</Text>
-        <View style={s.toolsRow}>
-          <Pressable onPress={fetchSuggestions} style={s.toolBtn}>
-            <Icon name="sparkles" size={14} color={t.accent} />
-            <Text style={s.toolBtnTxt}>Sugestões IA de templates</Text>
-          </Pressable>
-          <Pressable onPress={() => setShowWaPreview(true)} style={s.toolBtn}>
-            <Icon name="share-2" size={14} color={t.primary} />
-            <Text style={s.toolBtnTxt}>Preview WhatsApp</Text>
-          </Pressable>
-        </View>
+      {/* Ações secundárias — linha discreta, sem card */}
+      <View style={s.toolsRow}>
+        <Pressable onPress={fetchSuggestions} style={s.toolBtn}>
+          <Icon name="sparkles" size={14} color={t.accent} />
+          <Text style={s.toolBtnTxt}>Sugestões IA</Text>
+        </Pressable>
+        <Pressable onPress={() => setShowWaPreview(true)} style={s.toolBtn}>
+          <Icon name="share-2" size={14} color={t.primary} />
+          <Text style={s.toolBtnTxt}>Preview WhatsApp</Text>
+        </Pressable>
       </View>
 
       {/* Save footer */}
@@ -1120,6 +1124,18 @@ export function StudioPersonalizacaoPanel({
           )}
         </Pressable>
       </View>
+
+      {/* Desativar — discreto no rodapé (era um card inteiro no topo) */}
+      <Pressable
+        onPress={() => togglePersonalizable(false)}
+        disabled={togglePending}
+        style={s.disableRow}
+      >
+        <Icon name="eye_off" size={13} color={t.ink3} />
+        <Text style={s.disableRowTxt}>
+          {togglePending ? "Aguarde..." : "Desativar personalização deste produto"}
+        </Text>
+      </Pressable>
     </View>
   );
 
@@ -1229,67 +1245,288 @@ export function StudioPersonalizacaoPanel({
 }
 
 // ────────────────────────────────────────────────────────────
-// Serialização dos campos de texto livre
+// Editores visuais de paleta e opções (19/08/2026)
 //
-// Choices e paleta são editadas como uma linha de texto. O price_delta
-// é o terceiro pedaço, opcional — sem ele não havia como cobrar por
-// tamanho ou por cor, e `computeChoicesDelta` (que já existe nos dois
-// lados) ficava sem dado para somar.
+// Substituem a edição por texto "hex:preço, hex" / "label:value:preço".
+// O price_delta continua existindo — vira um input de R$ por linha —
+// e a forma gravada é idêntica: `colors` (o que a vitrine desenha) +
+// `choices` (de onde sai o price_delta, casado pelo hex/value).
 // ────────────────────────────────────────────────────────────
 type Choice = { label: string; value: string; price_delta?: number };
 
-function choicesParaTexto(choices: Choice[] | undefined): string {
-  return (choices || [])
-    .map((c) => {
-      const base = `${c.label}:${c.value}`;
-      return c.price_delta ? `${base}:${c.price_delta}` : base;
-    })
-    .join(", ");
+// ── PrintAreaRow — L × A + posição numa linha só (Frente/Verso) ──
+function PrintAreaRow({
+  t, s, title, area, onPatch,
+}: {
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+  title: string;
+  area: { width_cm: number; height_cm: number; position: "left" | "center" | "right" };
+  onPatch: (p: Partial<{ width_cm: number; height_cm: number; position: "left" | "center" | "right" }>) => void;
+}) {
+  return (
+    <View style={s.paRow}>
+      <Text style={s.paTitle}>{title}</Text>
+      <View style={s.paControls}>
+        <View style={s.paDim}>
+          <TextInput
+            value={String(area.width_cm)}
+            onChangeText={(txt) => {
+              const n = Number(txt.replace(",", "."));
+              onPatch({ width_cm: Number.isFinite(n) && n > 0 ? n : 0 });
+            }}
+            keyboardType="decimal-pad"
+            style={[s.input, s.inputSm]}
+            placeholder="10"
+            placeholderTextColor={t.ink4}
+          />
+          <Text style={s.paX}>×</Text>
+          <TextInput
+            value={String(area.height_cm)}
+            onChangeText={(txt) => {
+              const n = Number(txt.replace(",", "."));
+              onPatch({ height_cm: Number.isFinite(n) && n > 0 ? n : 0 });
+            }}
+            keyboardType="decimal-pad"
+            style={[s.input, s.inputSm]}
+            placeholder="10"
+            placeholderTextColor={t.ink4}
+          />
+          <Text style={s.paUnit}>cm</Text>
+        </View>
+        <View style={s.chipRow}>
+          {POSITIONS.map((p) => {
+            const active = area.position === p.value;
+            return (
+              <Pressable
+                key={p.value}
+                onPress={() => onPatch({ position: p.value })}
+                style={[s.chip, active && s.chipActive]}
+              >
+                <Text style={[s.chipTxt, active && s.chipTxtActive]}>{p.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
 }
 
-function textoParaChoices(txt: string): Choice[] {
-  return txt
-    .split(",")
-    .map((par) => {
-      const partes = par.split(":").map((x) => x.trim());
-      if (partes.length < 2 || !partes[0] || !partes[1]) return null;
-      const delta = partes.length > 2 ? parseArtPrice(partes[2]) : 0;
-      const c: Choice = { label: partes[0], value: partes[1] };
-      if (delta) c.price_delta = delta;
-      return c;
-    })
-    .filter(Boolean) as Choice[];
-}
+// ── ColorPaletteEditor — swatches + preço por cor ────────────
+function ColorPaletteEditor({
+  t, s, config, onPatchConfig,
+}: {
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+  config: any;
+  onPatchConfig: (p: Record<string, any>) => void;
+}) {
+  const [customHex, setCustomHex] = useState("#");
+  const colors: string[] = (config?.colors as string[] | undefined) || [];
+  const choices: Choice[] = (config?.choices as Choice[] | undefined) || [];
+  const normalized = colors.map((c) => c.toUpperCase());
 
-/**
- * A cor é dois campos no config: `colors` (o que a vitrine desenha) e
- * `choices` (de onde sai o price_delta, casado pelo hex). FieldColor
- * procura a choice cujo `value` é o hex — então os dois têm que sair
- * do mesmo texto, ou o preço não aparece.
- */
-function corParaTexto(config: any): string {
-  const cores: string[] = config?.colors || [];
-  const choices: Choice[] = config?.choices || [];
-  return cores
-    .map((c) => {
-      const ch = choices.find((x) => x.value === c);
-      return ch?.price_delta ? `${c}:${ch.price_delta}` : c;
-    })
-    .join(", ");
-}
-
-function textoParaCor(txt: string): { colors: string[]; choices: Choice[] } {
-  const colors: string[] = [];
-  const choices: Choice[] = [];
-  for (const par of txt.split(",")) {
-    const partes = par.split(":").map((x) => x.trim());
-    const hex = partes[0];
-    if (!hex) continue;
-    colors.push(hex);
-    const delta = partes.length > 1 ? parseArtPrice(partes[1]) : 0;
-    if (delta) choices.push({ label: hex, value: hex, price_delta: delta });
+  function commit(nextColors: string[], nextChoices: Choice[]) {
+    // choices só carrega quem tem preço — mesma forma de textoParaCor
+    onPatchConfig({
+      colors: nextColors,
+      choices: nextChoices.filter((c) => (c.price_delta || 0) > 0),
+    });
   }
-  return { colors, choices };
+  function addColor(hex: string) {
+    const up = hex.toUpperCase();
+    if (!isValidHex(up) || normalized.includes(up)) return;
+    commit([...colors, up], choices);
+  }
+  function removeColor(hex: string) {
+    commit(
+      colors.filter((c) => c.toUpperCase() !== hex.toUpperCase()),
+      choices.filter((c) => c.value.toUpperCase() !== hex.toUpperCase()),
+    );
+  }
+  function setColorPrice(hex: string, raw: string) {
+    const delta = parseArtPrice(raw);
+    const rest = choices.filter((c) => c.value !== hex);
+    commit(colors, delta > 0 ? [...rest, { label: hex, value: hex, price_delta: delta }] : rest);
+  }
+  function priceOf(hex: string): string {
+    const d = choices.find((c) => c.value === hex)?.price_delta;
+    return d ? String(d) : "";
+  }
+  function submitCustom() {
+    const v = customHex.trim().toUpperCase();
+    if (!isValidHex(v)) { toast.error("Cor inválida — use o formato #RRGGBB"); return; }
+    addColor(v);
+    setCustomHex("#");
+  }
+
+  const availablePresets = COLOR_PRESETS.filter((p) => !normalized.includes(p));
+
+  return (
+    <View style={{ marginTop: 8, gap: 8 }}>
+      <Text style={s.fieldLabel}>
+        Paleta ({colors.length} {colors.length === 1 ? "cor" : "cores"}) — R$ cobra a mais por cor
+      </Text>
+      {colors.length === 0 ? (
+        <Text style={s.helpTxt}>Nenhuma cor. Adicione abaixo.</Text>
+      ) : (
+        <View style={{ gap: 6 }}>
+          {colors.map((c) => (
+            <View key={c} style={s.colorRow}>
+              <View style={[s.swatch, { backgroundColor: c }]} />
+              <Text style={s.colorHex}>{c.toUpperCase()}</Text>
+              <View style={s.colorPriceWrap}>
+                <Text style={s.colorPricePrefix}>+R$</Text>
+                <TextInput
+                  value={priceOf(c)}
+                  onChangeText={(txt) => setColorPrice(c, txt)}
+                  keyboardType="decimal-pad"
+                  style={s.colorPriceInput}
+                  placeholder="0"
+                  placeholderTextColor={t.ink4}
+                />
+              </View>
+              <Pressable onPress={() => removeColor(c)} hitSlop={6} style={s.iconBtn}>
+                <Icon name="x" size={12} color={t.ink3} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Text style={s.fieldLabel}>Adicionar</Text>
+      <View style={s.swatchRow}>
+        {availablePresets.map((p) => (
+          <Pressable key={p} onPress={() => addColor(p)} style={s.swatchWrap}>
+            <View style={[s.swatch, s.swatchPreset, { backgroundColor: p }]} />
+          </Pressable>
+        ))}
+        {Platform.OS === "web" ? (
+          // Color picker nativo do browser — 1 clique pra cor exata
+          // @ts-ignore — input DOM no web
+          <input
+            type="color"
+            value={isValidHex(customHex) ? customHex : "#888888"}
+            onChange={(e: any) => setCustomHex(String(e.target.value || "").toUpperCase())}
+            style={{
+              width: 30, height: 30, padding: 0, border: `1.5px dashed ${t.ink4}`,
+              borderRadius: 8, background: "transparent", cursor: "pointer",
+            } as any}
+            title="Escolher cor exata"
+          />
+        ) : (
+          <TextInput
+            value={customHex}
+            onChangeText={setCustomHex}
+            style={[s.input, s.inputSm, { minWidth: 90 }]}
+            placeholder="#RRGGBB"
+            placeholderTextColor={t.ink4}
+            autoCapitalize="characters"
+          />
+        )}
+        <Pressable
+          onPress={submitCustom}
+          style={[s.smallBtn, !isValidHex(customHex) && { opacity: 0.5 }]}
+          disabled={!isValidHex(customHex)}
+        >
+          <Icon name="plus" size={12} color={t.primary} />
+          <Text style={s.smallBtnTxt}>Adicionar</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ── OptionChoicesEditor — linhas com preço + adicionar por rótulo ──
+function OptionChoicesEditor({
+  t, s, choices, onChange,
+}: {
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+  choices: Choice[];
+  onChange: (choices: Choice[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function addChoice() {
+    const label = draft.trim();
+    if (!label) return;
+    if (choices.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+      toast.error("Essa opção já existe");
+      return;
+    }
+    let value = slugifyOption(label) || `op-${choices.length + 1}`;
+    if (choices.some((c) => c.value === value)) {
+      let i = 2;
+      while (choices.some((c) => c.value === `${value}-${i}`)) i++;
+      value = `${value}-${i}`;
+    }
+    onChange([...choices, { label, value }]);
+    setDraft("");
+  }
+  function removeChoice(value: string) {
+    onChange(choices.filter((c) => c.value !== value));
+  }
+  function setPrice(value: string, raw: string) {
+    const delta = parseArtPrice(raw);
+    onChange(choices.map((c) => {
+      if (c.value !== value) return c;
+      const { price_delta, ...rest } = c;
+      return delta > 0 ? { ...rest, price_delta: delta } : rest;
+    }));
+  }
+
+  return (
+    <View style={{ marginTop: 8, gap: 8 }}>
+      <Text style={s.fieldLabel}>Opções ({choices.length}) — R$ cobra a mais na opção</Text>
+      {choices.length === 0 ? (
+        <Text style={s.helpTxt}>Nenhuma opção. Adicione abaixo (ex: P, M, G).</Text>
+      ) : (
+        <View style={{ gap: 6 }}>
+          {choices.map((c) => (
+            <View key={c.value} style={s.colorRow}>
+              <Text style={[s.colorHex, { flex: 1 }]} numberOfLines={1}>{c.label}</Text>
+              <View style={s.colorPriceWrap}>
+                <Text style={s.colorPricePrefix}>+R$</Text>
+                <TextInput
+                  value={c.price_delta ? String(c.price_delta) : ""}
+                  onChangeText={(txt) => setPrice(c.value, txt)}
+                  keyboardType="decimal-pad"
+                  style={s.colorPriceInput}
+                  placeholder="0"
+                  placeholderTextColor={t.ink4}
+                />
+              </View>
+              <Pressable onPress={() => removeChoice(c.value)} hitSlop={6} style={s.iconBtn}>
+                <Icon name="x" size={12} color={t.ink3} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={addChoice}
+          style={[s.input, s.inputSm, { flex: 1, width: undefined, textAlign: "left" as any }]}
+          placeholder="Nova opção (ex: Azul marinho)"
+          placeholderTextColor={t.ink4}
+          returnKeyType="done"
+          blurOnSubmit={false}
+        />
+        <Pressable
+          onPress={addChoice}
+          style={[s.smallBtn, !draft.trim() && { opacity: 0.5 }]}
+          disabled={!draft.trim()}
+        >
+          <Icon name="plus" size={12} color={t.primary} />
+          <Text style={s.smallBtnTxt}>Adicionar</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1313,7 +1550,6 @@ function FieldRow({
 }) {
   const meta = FIELD_TYPE_META[field.type];
   const currentSide: FieldSide = (field.side ?? "front") as FieldSide;
-  const backDisabled = !hasBack;
   return (
     <View style={s.fieldCard}>
       <View style={s.fieldHead}>
@@ -1344,57 +1580,49 @@ function FieldRow({
       </View>
 
       <View style={s.fieldBody}>
-        {/* Side picker — Frente / Verso */}
-        <View style={s.sideRow}>
-          <Text style={s.sideLabel}>Lado:</Text>
-          <Pressable
-            onPress={() => onSetSide("front")}
-            style={[s.sideChip, currentSide === "front" && s.sideChipActive]}
-          >
-            <Icon name="square" size={11} color={currentSide === "front" ? t.primary : t.ink3} />
-            <Text style={[s.sideChipTxt, currentSide === "front" && s.sideChipTxtActive]}>Frente</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => onSetSide("back")}
-            disabled={backDisabled}
-            // @ts-ignore — title (tooltip) é válido em RN Web
-            title={backDisabled ? "Habilite verso no topo" : undefined}
-            style={[
-              s.sideChip,
-              currentSide === "back" && s.sideChipActiveBack,
-              backDisabled && s.sideChipDisabled,
-            ]}
-          >
-            <Icon name="square" size={11} color={currentSide === "back" ? t.accent : t.ink3} />
-            <Text style={[
-              s.sideChipTxt,
-              currentSide === "back" && { color: t.accent },
-              backDisabled && { color: t.ink4 },
-            ]}>Verso</Text>
-          </Pressable>
+        <View style={s.fieldInlineRow}>
+          {/* Origem da arte não tem checkbox próprio: a pergunta é do
+              grupo e vive no fim da lista. Ver o S0 da F1. */}
+          {isArtSourceType(field.type) ? (
+            <Text style={s.helpTxt}>
+              Obrigatoriedade em "Origem da arte", no fim da lista — vale para
+              enviar arquivo e escolher da galeria ao mesmo tempo.
+            </Text>
+          ) : (
+            <Pressable
+              onPress={() => onPatch({ required: !field.required })}
+              style={s.requiredRow}
+            >
+              <View style={[s.checkbox, field.required && s.checkboxOn]}>
+                {field.required && <Icon name="check" size={11} color="#fff" />}
+              </View>
+              <Text style={s.requiredTxt}>Obrigatório</Text>
+            </Pressable>
+          )}
+
+          {/* Side picker — só aparece se o produto tem verso (19/08/2026:
+              chip Verso desabilitado em todo campo era só ruído) */}
+          {hasBack ? (
+            <View style={s.sideRow}>
+              <Text style={s.sideLabel}>Lado:</Text>
+              <Pressable
+                onPress={() => onSetSide("front")}
+                style={[s.sideChip, currentSide === "front" && s.sideChipActive]}
+              >
+                <Text style={[s.sideChipTxt, currentSide === "front" && s.sideChipTxtActive]}>Frente</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onSetSide("back")}
+                style={[s.sideChip, currentSide === "back" && s.sideChipActiveBack]}
+              >
+                <Text style={[s.sideChipTxt, currentSide === "back" && { color: t.accent }]}>Verso</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
-        {/* Origem da arte não tem checkbox próprio: a pergunta é do
-            grupo e vive no fim da lista. Ver o S0 da F1. */}
-        {isArtSourceType(field.type) ? (
-          <Text style={s.helpTxt}>
-            Obrigatoriedade em "Origem da arte", no fim da lista — vale para
-            enviar arquivo e escolher da galeria ao mesmo tempo.
-          </Text>
-        ) : (
-          <Pressable
-            onPress={() => onPatch({ required: !field.required })}
-            style={s.requiredRow}
-          >
-            <View style={[s.checkbox, field.required && s.checkboxOn]}>
-              {field.required && <Icon name="check" size={11} color="#fff" />}
-            </View>
-            <Text style={s.requiredTxt}>Obrigatório</Text>
-          </Pressable>
-        )}
-
         {field.type === "text" && (
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={s.fieldLabel}>Max caracteres</Text>
             <TextInput
               value={String((field.config?.max_chars as number) || "")}
@@ -1403,7 +1631,7 @@ function FieldRow({
                 onPatchConfig({ max_chars: Number.isFinite(n) && n > 0 ? n : undefined });
               }}
               keyboardType="number-pad"
-              style={s.input}
+              style={[s.input, s.inputSm]}
               placeholder="30"
               placeholderTextColor={t.ink4}
             />
@@ -1411,41 +1639,21 @@ function FieldRow({
         )}
 
         {field.type === "color" && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={s.fieldLabel}>Paleta (hex, vírgula — hex:preço cobra a mais)</Text>
-            <TextInput
-              value={corParaTexto(field.config)}
-              onChangeText={(txt) => onPatchConfig(textoParaCor(txt))}
-              style={s.input}
-              placeholder="#FFFFFF, #000000, #EF4444:5"
-              placeholderTextColor={t.ink4}
-              autoCapitalize="characters"
-            />
-            {/* Swatches: a paleta é o que a vitrine mostra ao cliente, e
-                ver a cor errada aqui é mais rápido do que ler o hex. */}
-            <View style={s.swatchRow}>
-              {((field.config?.colors as string[] | undefined) || []).map((c) => (
-                <View key={c} style={[s.swatch, { backgroundColor: c }]} />
-              ))}
-            </View>
-          </View>
+          <ColorPaletteEditor
+            t={t}
+            s={s}
+            config={field.config}
+            onPatchConfig={onPatchConfig}
+          />
         )}
 
-        {field.type === "option" && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={s.fieldLabel}>Opções (label:value:preço, vírgula)</Text>
-            <TextInput
-              value={choicesParaTexto(field.config?.choices as any)}
-              onChangeText={(txt) => onPatchConfig({ choices: textoParaChoices(txt) })}
-              style={s.input}
-              placeholder="P:p, M:m, G:g:3"
-              placeholderTextColor={t.ink4}
-            />
-            <Text style={s.helpTxt}>
-              O terceiro pedaço é opcional e entra no preço do pedido — "G:g:3"
-              cobra R$ 3 a mais no tamanho G.
-            </Text>
-          </View>
+        {field.type === "option" && !isArtServiceField(field) && (
+          <OptionChoicesEditor
+            t={t}
+            s={s}
+            choices={(field.config?.choices as Choice[] | undefined) || []}
+            onChange={(choices) => onPatchConfig({ choices })}
+          />
         )}
       </View>
     </View>
@@ -1464,7 +1672,7 @@ function buildStyles(t: StudioPalette) {
 
     split: { flex: 1, flexDirection: "row", gap: 20 },
 
-    previewCol: {},
+    previewCol: { gap: 12 },
     previewColWide: { width: 360, position: "sticky" as any, top: 0, alignSelf: "flex-start" as any },
     previewColStack: { marginBottom: 16 },
 
@@ -1688,11 +1896,170 @@ function buildStyles(t: StudioPalette) {
       gap: 4,
     },
 
-    swatchRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 8 },
+    swatchRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" },
     swatch: {
-      width: 20, height: 20, borderRadius: 10,
-      borderWidth: 1, borderColor: t.ink5,
+      width: 30, height: 30, borderRadius: 8,
+      borderWidth: 1.5, borderColor: t.ink5,
     },
+    swatchWrap: { position: "relative" },
+    swatchPreset: {
+      opacity: 0.9,
+      borderStyle: "dashed" as any,
+    },
+
+    // Linhas do editor visual de cor/opção (swatch + preço + remover)
+    colorRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 8,
+      backgroundColor: t.bgSoft,
+      borderWidth: 1,
+      borderColor: t.ink5,
+    },
+    colorHex: { fontSize: 12, fontWeight: "700", color: t.ink, minWidth: 76 },
+    colorPriceWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      marginLeft: "auto" as any,
+    },
+    colorPricePrefix: { fontSize: 11, fontWeight: "700", color: t.ink3 },
+    colorPriceInput: {
+      width: 54,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      backgroundColor: t.paperCardElev,
+      fontSize: 12,
+      fontWeight: "700",
+      color: t.ink,
+      textAlign: "right" as any,
+    },
+
+    // Área de impressão — linha compacta (Frente/Verso no mesmo card)
+    paRow: { gap: 8 },
+    paTitle: { fontSize: 13, fontWeight: "800", color: t.ink },
+    paControls: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      flexWrap: "wrap",
+    },
+    paDim: { flexDirection: "row", alignItems: "center", gap: 6 },
+    paX: { fontSize: 13, color: t.ink3, fontWeight: "700" },
+    paUnit: { fontSize: 12, color: t.ink3, fontWeight: "700" },
+    rowTitle: { fontSize: 14, fontWeight: "800", color: t.ink },
+    backToggleRow: {
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: t.ink5,
+    },
+    backChargeRow: {
+      gap: 8,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: t.bgSoft,
+    },
+    inputSm: {
+      paddingVertical: 7,
+      paddingHorizontal: 10,
+      fontSize: 13,
+      width: 64,
+      textAlign: "center" as any,
+    },
+    fieldInlineRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 16,
+      flexWrap: "wrap",
+    },
+
+    // Desativar personalização — rodapé discreto
+    disableRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    disableRowTxt: {
+      fontSize: 12,
+      color: t.ink3,
+      fontWeight: "600",
+      textDecorationLine: "underline",
+    },
+
+    // Seletor de mockup (motor visual 2D/3D)
+    mockupCard: {
+      backgroundColor: t.paperCard,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      padding: 14,
+      gap: 8,
+    },
+    mockupGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 4,
+    },
+    mockupItem: {
+      width: 100,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: t.ink5,
+      backgroundColor: t.bgSoft,
+      padding: 6,
+      gap: 6,
+      alignItems: "center",
+    },
+    mockupItemActive: {
+      borderColor: t.primary,
+      backgroundColor: t.primarySoft,
+    },
+    mockupThumbWrap: {
+      width: 88,
+      height: 67,
+      borderRadius: 8,
+      overflow: "hidden",
+      backgroundColor: t.bgSoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    mockupThumbEmpty: {
+      width: 88,
+      height: 67,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: t.ink5,
+      borderStyle: "dashed" as any,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    mockupKindBadge: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    mockupKindBadgeTxt: { color: "#fff", fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
+    mockupName: {
+      fontSize: 10.5,
+      color: t.ink2,
+      fontWeight: "700",
+      textAlign: "center",
+      lineHeight: 13,
+    },
+    mockupNameActive: { color: t.primary },
 
     guidePreview: {
       flexDirection: "row",
