@@ -139,15 +139,25 @@ export default function StudioEstoque() {
   // terminar, guardamos o id aqui e aplicamos após products ser populado.
   const pendingExpandIdRef = useRef<string | null>(null);
 
+  // Dois defeitos aqui, os dois achados no QA de uso (19/08/2026):
+  //   1. deps [] — numa carga fria da página o efeito rodava antes de
+  //      useLocalSearchParams entregar os params, e nada acontecia.
+  //   2. router.replace no mesmo efeito que abre a tela — a navegação
+  //      levava junto o estado recém-setado (wizard, expandido).
+  // Resultado: TODOS os deep-links do catálogo estavam mortos. Agora o
+  // efeito depende dos params e quem consome é uma ref, sem navegar.
+  const deepLinkDoneRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!params.action) return;
+    const chave = `${params.action}:${params.id || ""}`;
+    if (deepLinkDoneRef.current === chave) return;
+
     if (params.action === "novo-produto") {
+      deepLinkDoneRef.current = chave;
       setWizardOpen(true);
-      // Consome o param para não reabrir em re-renders
-      router.replace("/studio/estoque" as any);
     } else if (params.action === "edit-product" && params.id) {
+      deepLinkDoneRef.current = chave;
       const targetId = params.id;
-      // Consome o param imediatamente para não reabrir em re-renders
-      router.replace("/studio/estoque" as any);
       // Se produtos já carregados: expande direto (mesma ação de clicar na lista)
       // Se ainda carregando: salva na ref para aplicar após load()
       setProducts((current) => {
@@ -161,8 +171,7 @@ export default function StudioEstoque() {
         return current; // sem mutação
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params.action, params.id]);
 
   // ── Aplica expand pendente após products carregar ─────────────────────────
   // Quando edit-product chega e produtos ainda estavam vazios no mount,
