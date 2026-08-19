@@ -342,6 +342,65 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
         </Pressable>
       ) : null}
 
+      {/* F0: as tres portas da organizacao do catalogo, num bloco so.
+          Ate aqui /catalogo/organizar e /catalogo/migracao existiam mas
+          so eram alcancaveis digitando a URL -- funcionalidade que o
+          lojista nao encontra e funcionalidade que nao existe.
+
+          Ficam na Vitrine pela mesma razao do aviso acima: e a aba onde
+          o lojista pensa "o que meu cliente ve", e categoria e o que
+          organiza essa navegacao. Nao vao no estoque.tsx de proposito --
+          e o arquivo de maior risco de regressao da fase, e ja foi
+          tocado duas vezes (D1 e D2). */}
+      <View style={cs.card}>
+        <Text style={{ color: Colors.ink, fontWeight: "700", fontSize: 13 }}>
+          Organizacao do catalogo
+        </Text>
+        <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
+          A navegacao por categoria da loja sai daqui.
+        </Text>
+
+        <Pressable
+          onPress={() => router.push("/catalogo/organizar")}
+          style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border, marginTop: 10 }}
+          accessibilityRole="button"
+        >
+          <Text style={{ color: Colors.ink, fontSize: 13, fontWeight: "600" }}>
+            Organizar catalogo
+          </Text>
+          <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
+            Criar, renomear e mover categorias. Ate tres niveis.
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push("/catalogo/migracao")}
+          style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border }}
+          accessibilityRole="button"
+        >
+          <Text style={{ color: Colors.ink, fontSize: 13, fontWeight: "600" }}>
+            Assistente de migracao
+          </Text>
+          <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
+            Converter as categorias antigas, escritas como texto, para a arvore.
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push("/catalogo/sem-categoria")}
+          style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border }}
+          accessibilityRole="button"
+        >
+          <Text style={{ color: Colors.ink, fontSize: 13, fontWeight: "600" }}>
+            Produtos sem categoria
+            {semCategoria > 0 ? ` (${semCategoria})` : ""}
+          </Text>
+          <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
+            Categorizar varios de uma vez.
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Toggles globais */}
       <View style={cs.card}>
         <View style={cs.switchRow}>
