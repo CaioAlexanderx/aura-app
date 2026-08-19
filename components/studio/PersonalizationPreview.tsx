@@ -30,7 +30,10 @@
 // ============================================================
 import { View, Text, Platform } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
-import type { CustomizationConfig, CustomizationField } from "@/services/studioApi";
+import type { CustomizationConfig, CustomizationField, CustomizationFieldSide } from "@/services/studioApi";
+// sideOf é função pura (sem hook/context) — seguro no storefront, que
+// renderiza este componente sem o StudioThemeProvider.
+import { sideOf } from "@/components/studio/customizationConfig";
 
 /**
  * Subconjunto de tokens que o preview realmente consome. Tipos `string`
@@ -52,6 +55,12 @@ type Props = {
   size?: number;               // px do quadrado SVG
   productName?: string;
   showLabel?: boolean;
+  /**
+   * Lado desenhado. Default "front" — antes o preview SEMPRE mostrava a
+   * frente, então quem configurava verso ou meio o fazia às cegas.
+   * Cada lado tem a sua própria área de impressão e os seus campos.
+   */
+  side?: CustomizationFieldSide;
 };
 
 function escapeXml(s: string): string {
@@ -64,8 +73,15 @@ function escapeXml(s: string): string {
   });
 }
 
-function findField(fields: CustomizationField[], type: string): CustomizationField | undefined {
-  return fields.find((f) => f.type === type);
+function findField(
+  fields: CustomizationField[],
+  type: string,
+  side: CustomizationFieldSide = "front"
+): CustomizationField | undefined {
+  // O campo tem que ser DO LADO desenhado: um produto com `text` na
+  // frente e `text_back` no verso mostraria o texto da frente nos dois
+  // se a busca ignorasse o lado.
+  return fields.find((f) => f.type === type && sideOf(f) === side);
 }
 
 /**
@@ -79,6 +95,7 @@ export function PersonalizationPreviewBase({
   size = 280,
   productName,
   showLabel = true,
+  side = "front",
   t,
 }: Props & { t: PreviewPalette }) {
   // Estado vazio: sem config, mostra placeholder neutro
@@ -99,7 +116,15 @@ export function PersonalizationPreviewBase({
     );
   }
 
-  const printArea = config.print_area || { width_cm: 10, height_cm: 10, position: "center" as const };
+  // Área do lado desenhado. Verso e meio caem na área da frente quando o
+  // produto não tem a sua própria — é o que já acontecia quando o lado
+  // nem existia, e evita preview vazio por config pela metade.
+  const cfgAny: any = config;
+  const areaDoLado =
+    side === "back"   ? cfgAny.back_print_area :
+    side === "middle" ? cfgAny.middle_print_area :
+    config.print_area;
+  const printArea = areaDoLado || config.print_area || { width_cm: 10, height_cm: 10, position: "center" as const };
   const fields = config.fields || [];
 
   // Resolução das áreas no viewBox 0-100
@@ -113,10 +138,12 @@ export function PersonalizationPreviewBase({
   if (printArea.position === "right") areaX = 82 - areaW;
 
   // Fields conhecidos
-  const colorField    = findField(fields, "color");
-  const textField     = findField(fields, "text");
-  const imageField    = findField(fields, "image");
-  const templateField = findField(fields, "template");
+  // A COR é do produto inteiro (a peça é de uma cor só), então segue
+  // vindo da frente; o resto é por lado.
+  const colorField    = findField(fields, "color", "front") || findField(fields, "color", side);
+  const textField     = findField(fields, "text", side);
+  const imageField    = findField(fields, "image", side);
+  const templateField = findField(fields, "template", side);
 
   const bgColor    = (colorField && values[colorField.id]) || "#FFFFFF";
   const textValue  = (textField  && String(values[textField.id]  || "")) || "";

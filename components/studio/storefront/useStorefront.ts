@@ -25,7 +25,10 @@
 //   sf.setEditingQty   -- (n: number) => void
 //   sf.editingAddBack  -- boolean  (cliente optou pelo verso)
 //   sf.setEditingAddBack -- (b: boolean) => void
-//   sf.configuringUnitPrice -- numero calculado (base + choices + verso)
+//   sf.editingAddMiddle  -- boolean  (cliente optou pelo meio -- faixa
+//                           central/wrap 360 de caneca e copo)
+//   sf.setEditingAddMiddle -- (b: boolean) => void
+//   sf.configuringUnitPrice -- numero calculado (base + choices + verso + meio)
 //   sf.openConfigure(product) -- abre o configurador pra um produto
 //   sf.editCartLine(line)     -- reabre o configurador pra editar linha
 //   sf.commitConfigure()      -- valida + commita no carrinho + volta pra "list"
@@ -73,6 +76,7 @@
 //   // Internos (prefixo _ -- nao usar fora dos sub-componentes de display)
 //   sf._editingLineId   -- string | null  (para saber se e edicao ou novo)
 //   sf._effectiveBackSelected(cfg, explicit) -- boolean
+//   sf._effectiveMiddleSelected(cfg, explicit) -- boolean
 //   sf._lineUnitPrice(line) -- number
 //   sf._lineTotal(line)     -- number
 // ============================================================
@@ -84,7 +88,7 @@ import type {
   DeliveryType, ShippingQuote,
 } from "./types";
 import { normalizePlate, maskPlate } from "./courierPlate";
-import { isArtSourceType } from "@/components/studio/customizationConfig";
+import { isArtSourceType, sideOf } from "@/components/studio/customizationConfig";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
@@ -127,6 +131,19 @@ function effectiveBackSelected(
   return explicit === true;
 }
 
+// Mesma regra do verso, para o meio (faixa central / wrap 360 de caneca
+// e copo). ESPELHO OBRIGATORIO de middleIsActive em src/routes/
+// studioStorefront.js (aura-backend) -- se um lado mudar sem o outro, o
+// item entra no carrinho e o pedido leva 400 no fechamento.
+function effectiveMiddleSelected(
+  cfg: StudioStoreProduct["customization_config"] | null | undefined,
+  explicit: boolean | undefined
+): boolean {
+  if (!cfg || cfg.has_middle !== true) return false;
+  if (cfg.middle_charge_enabled !== true) return true;
+  return explicit === true;
+}
+
 // ── S0 (18/08/2026) — grupo de origem da arte ────────────────
 // `image` e `template` preenchem o MESMO slot de arte: compose3dMug e
 // compose2d leem `values.image || values.template`. A lojista pode marcar
@@ -145,13 +162,14 @@ function effectiveBackSelected(
 // components/studio/customizationConfig.ts, que e o modulo que decide a
 // forma do config. Eram tres copias da mesma regra (aqui, no editor e
 // no backend); agora sao duas, e a que sobra e a de outro repositorio.
+//
+// 19/08/2026 (S — meio): fieldSideOf local virou um ternario front/back
+// e o meio (wrap 360/faixa central) ficaria de fora da validacao. Em vez
+// de estender o ternario aqui de novo, delega pro sideOf ja exportado de
+// customizationConfig.ts — a mesma fonte que decide a forma do campo.
 
 function isFilled(v: any): boolean {
   return !(v == null || (typeof v === "string" && !v.trim()));
-}
-
-function fieldSideOf(f: { side?: string } | any): "front" | "back" {
-  return (f as any)?.side === "back" ? "back" : "front";
 }
 
 /**
@@ -162,12 +180,16 @@ function fieldSideOf(f: { side?: string } | any): "front" | "back" {
 export function validateRequiredFields(
   cfg: StudioStoreProduct["customization_config"] | null | undefined,
   values: Record<string, any>,
-  backActive: boolean
+  backActive: boolean,
+  middleActive: boolean = false
 ): string | null {
   if (!cfg?.fields) return null;
-  const aplicaveis = cfg.fields.filter(
-    (f) => fieldSideOf(f) !== "back" || backActive
-  );
+  const ladoAtivo = (lado: "front" | "back" | "middle"): boolean => {
+    if (lado === "back") return backActive;
+    if (lado === "middle") return middleActive;
+    return true;
+  };
+  const aplicaveis = cfg.fields.filter((f) => ladoAtivo(sideOf(f)));
 
   // "Crie minha arte pra mim": o cliente contratou a criacao e nao tem
   // arte pra enviar — dispensa o grupo de origem da arte.
@@ -176,9 +198,9 @@ export function validateRequiredFields(
       (f.config as any)?.is_art_service === true && values[f.id] === "designer"
   );
 
-  for (const side of ["front", "back"] as const) {
+  for (const side of ["front", "back", "middle"] as const) {
     const grupo = aplicaveis.filter(
-      (f) => isArtSourceType(f.type) && fieldSideOf(f) === side
+      (f) => isArtSourceType(f.type) && sideOf(f) === side
     );
     if (!grupo.some((f) => f.required)) continue;
     if (arteContratada) continue;
@@ -206,6 +228,19 @@ function backDelta(
   return isFinite(d) ? d : 0;
 }
 
+// Mesmo contrato de backDelta, para o meio. ESPELHO de computeMiddleDelta
+// em src/routes/studioStorefront.js (aura-backend).
+function middleDelta(
+  cfg: StudioStoreProduct["customization_config"] | null | undefined,
+  explicit: boolean | undefined
+): number {
+  if (!cfg || cfg.has_middle !== true) return 0;
+  if (cfg.middle_charge_enabled !== true) return 0;
+  if (explicit !== true) return 0;
+  const d = Number(cfg.middle_price_delta);
+  return isFinite(d) ? d : 0;
+}
+
 // S6 — a faixa de quantidade incide sobre o preco de tabela; os deltas de
 // personalizacao somam DEPOIS. E a mesma ordem do backend: se os dois
 // lados discordassem, o cliente veria um total e pagaria outro.
@@ -213,7 +248,12 @@ function lineUnitPrice(line: CartLine): number {
   return (
     basePriceForQty(Number(line.product.price), line.product.qty_tiers, line.qty) +
     choicesDelta(line.product.customization_config, line.values) +
-    backDelta(line.product.customization_config, line.hasBackSelected)
+    backDelta(line.product.customization_config, line.hasBackSelected) +
+    // CartLine nao tem um campo dedicado tipo hasBackSelected pro meio
+    // (contrato congelado em ./types) — a bandeira explicita viaja dentro
+    // de `values.has_middle_selected`, escrita em commitConfigure. Mesmo
+    // padrao que categoryGrouping.ts ja usa pra has_back_selected.
+    middleDelta(line.product.customization_config, line.values?.has_middle_selected)
   );
 }
 
@@ -236,6 +276,7 @@ export function useStorefront(slug: string) {
   const [editingQty, setEditingQty] = useState(1);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editingAddBack, setEditingAddBack] = useState<boolean>(false);
+  const [editingAddMiddle, setEditingAddMiddle] = useState<boolean>(false);
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -386,9 +427,10 @@ export function useStorefront(slug: string) {
     return (
       basePriceForQty(Number(activeProduct.price), activeProduct.qty_tiers, editingQty) +
       choicesDelta(activeProduct.customization_config, editingValues) +
-      backDelta(activeProduct.customization_config, editingAddBack)
+      backDelta(activeProduct.customization_config, editingAddBack) +
+      middleDelta(activeProduct.customization_config, editingAddMiddle)
     );
-  }, [activeProduct, editingValues, editingAddBack, editingQty]);
+  }, [activeProduct, editingValues, editingAddBack, editingAddMiddle, editingQty]);
 
   function goTo(s: Stage) {
     setStage(s);
@@ -414,6 +456,7 @@ export function useStorefront(slug: string) {
     setEditingValues(initial);
     setEditingQty(1);
     setEditingAddBack(false);
+    setEditingAddMiddle(false);
     setStage("configure");
   }
 
@@ -427,6 +470,9 @@ export function useStorefront(slug: string) {
     setEditingValues(line.values);
     setEditingQty(line.qty);
     setEditingAddBack(line.hasBackSelected === true);
+    // Ver nota em lineUnitPrice: a bandeira do meio vive dentro de
+    // `values`, nao num campo dedicado da CartLine.
+    setEditingAddMiddle(line.values?.has_middle_selected === true);
     setStage("configure");
   }
 
@@ -452,6 +498,11 @@ export function useStorefront(slug: string) {
     setActiveProduct(product);
     setEditingValues(levados);
     setEditingAddBack(levados.has_back_selected === true);
+    // Mesma bandeira do verso (categoryGrouping.transportarValores so
+    // carrega has_back_selected hoje — o meio segue a mesma condicao
+    // aqui por simetria; se um dia o transporte ganhar has_middle_selected
+    // la, este lado ja esta pronto pra receber).
+    setEditingAddMiddle(levados.has_middle_selected === true);
     setError(null);
   }
 
@@ -459,17 +510,29 @@ export function useStorefront(slug: string) {
     if (!activeProduct) return;
     const cfg = activeProduct.customization_config;
     const backActive = effectiveBackSelected(cfg, editingAddBack);
-    const faltou = validateRequiredFields(cfg, editingValues, backActive);
+    const middleActive = effectiveMiddleSelected(cfg, editingAddMiddle);
+    const faltou = validateRequiredFields(cfg, editingValues, backActive, middleActive);
     if (faltou) {
       setError(faltou);
       return;
     }
     setError(null);
-    let valuesToCommit = editingValues;
+    // has_middle_selected nao e campo, e bandeira -- guardamos ela dentro
+    // do proprio `values` (ver nota em lineUnitPrice) pra sobreviver ate
+    // o carrinho/checkout, ja que CartLine nao tem um slot dedicado tipo
+    // hasBackSelected pro meio.
+    let valuesToCommit: Record<string, any> = { ...editingValues, has_middle_selected: editingAddMiddle };
     if (cfg?.has_back === true && !backActive && cfg.fields) {
-      const cleaned: Record<string, any> = { ...editingValues };
+      const cleaned: Record<string, any> = { ...valuesToCommit };
       for (const f of cfg.fields) {
-        if ((f as any).side === "back") delete cleaned[f.id];
+        if (sideOf(f) === "back") delete cleaned[f.id];
+      }
+      valuesToCommit = cleaned;
+    }
+    if (cfg?.has_middle === true && !middleActive && cfg.fields) {
+      const cleaned: Record<string, any> = { ...valuesToCommit };
+      for (const f of cfg.fields) {
+        if (sideOf(f) === "middle") delete cleaned[f.id];
       }
       valuesToCommit = cleaned;
     }
@@ -494,6 +557,7 @@ export function useStorefront(slug: string) {
     setActiveProduct(null);
     setEditingLineId(null);
     setEditingAddBack(false);
+    setEditingAddMiddle(false);
     setStage("list");
   }
 
@@ -599,12 +663,27 @@ export function useStorefront(slug: string) {
             l.product.customization_config,
             l.hasBackSelected
           );
+          // Bandeira do meio guardada em values (ver commitConfigure) —
+          // recalculamos a atividade efetiva aqui pelo mesmo motivo do
+          // verso: o que importa e o contrato atual do produto, nao so a
+          // escolha bruta do cliente.
+          const middleActive = effectiveMiddleSelected(
+            l.product.customization_config,
+            l.values?.has_middle_selected
+          );
           let valuesOut: Record<string, any> = l.values;
           const cfg = l.product.customization_config;
           if (cfg?.has_back === true && !backActive && cfg.fields) {
             const cleaned: Record<string, any> = { ...l.values };
             for (const f of cfg.fields) {
-              if ((f as any).side === "back") delete cleaned[f.id];
+              if (sideOf(f) === "back") delete cleaned[f.id];
+            }
+            valuesOut = cleaned;
+          }
+          if (cfg?.has_middle === true && !middleActive && cfg.fields) {
+            const cleaned: Record<string, any> = { ...valuesOut };
+            for (const f of cfg.fields) {
+              if (sideOf(f) === "middle") delete cleaned[f.id];
             }
             valuesOut = cleaned;
           }
@@ -614,6 +693,11 @@ export function useStorefront(slug: string) {
             customization: {
               ...valuesOut,
               has_back_selected: backActive,
+              // ESPELHO OBRIGATORIO do has_back_selected acima: o backend
+              // (middleIsActive em studioStorefront.js) confia neste
+              // valor pra cobrar middle_price_delta. Divergir aqui e o
+              // pedido levar 400 no fechamento (mesmo risco do verso).
+              has_middle_selected: middleActive,
             },
           };
         }),
@@ -668,6 +752,7 @@ export function useStorefront(slug: string) {
     editingValues, setFieldValue,
     editingQty, setEditingQty,
     editingAddBack, setEditingAddBack,
+    editingAddMiddle, setEditingAddMiddle,
     configuringUnitPrice,
     openConfigure, editCartLine, commitConfigure,
     activeSiblings, switchModel,
@@ -700,6 +785,7 @@ export function useStorefront(slug: string) {
     // Internos (prefixo _ -- sub-componentes de display apenas)
     _editingLineId: editingLineId,
     _effectiveBackSelected: effectiveBackSelected,
+    _effectiveMiddleSelected: effectiveMiddleSelected,
     _lineUnitPrice: lineUnitPrice,
     _lineTotal: lineTotal,
   };

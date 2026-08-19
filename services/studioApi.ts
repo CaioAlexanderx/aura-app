@@ -23,7 +23,9 @@ export type StudioHealth = {
 
 // ─── F1 Customization ──────────────────────────────────────────────────────────
 export type CustomizationFieldType = "text" | "image" | "template" | "color" | "option";
-export type CustomizationFieldSide = "front" | "back";
+// "middle" (19/08/2026): faixa central / wrap 360 — o caso de caneca e
+// copo, onde a arte da a volta e nao e nem frente nem verso.
+export type CustomizationFieldSide = "front" | "back" | "middle";
 export type CustomizationField = {
   id: string; type: CustomizationFieldType; label: string; required: boolean;
   side?: CustomizationFieldSide;
@@ -39,8 +41,13 @@ export type CustomizationConfig = {
   fields: CustomizationField[];
   has_back?: boolean;
   back_print_area?: { width_cm: number; height_cm: number; position?: "center" | "left" | "right" };
+  // Meio: espelha o verso em tudo (area propria + cobranca opcional).
+  has_middle?: boolean;
+  middle_print_area?: { width_cm: number; height_cm: number; position?: "center" | "left" | "right" };
   back_charge_enabled?: boolean;
   back_price_delta?: number;
+  middle_charge_enabled?: boolean;
+  middle_price_delta?: number;
 };
 export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;

@@ -16,6 +16,17 @@ function effectiveBackSelected(
   return explicit === true;
 }
 
+// Mesma regra para a faixa central / wrap 360 (caneca, copo). A escolha
+// explicita mora em values.has_middle_selected — a CartLine nao tem campo
+// proprio, ao contrario do verso.
+function effectiveMiddleSelected(
+  cfg: any, explicit: boolean | undefined
+): boolean {
+  if (!cfg || cfg.has_middle !== true) return false;
+  if (cfg.middle_charge_enabled !== true) return true;
+  return explicit === true;
+}
+
 /** Barra flutuante no stage="list" quando há itens no carrinho */
 export function CartBar({
   sf, accent,
@@ -77,6 +88,10 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
           l.product.customization_config,
           l.hasBackSelected
         );
+        const middleActive = effectiveMiddleSelected(
+          l.product.customization_config,
+          (l as any).values?.has_middle_selected
+        );
         return (
           <View
             key={l.lineId}
@@ -113,6 +128,17 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
                 (Number(l.product.customization_config?.back_price_delta) || 0) === 0 &&
                 l.product.customization_config?.has_back === true && (
                   <Text style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com verso personalizado</Text>
+                )}
+              {middleActive &&
+                (Number(l.product.customization_config?.middle_price_delta) || 0) > 0 && (
+                  <Text style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
+                    + meio (R$ {Number(l.product.customization_config?.middle_price_delta || 0).toFixed(2)})
+                  </Text>
+                )}
+              {middleActive &&
+                (Number(l.product.customization_config?.middle_price_delta) || 0) === 0 &&
+                l.product.customization_config?.has_middle === true && (
+                  <Text style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com meio personalizado</Text>
                 )}
             </View>
             <View style={{ gap: 6 }}>

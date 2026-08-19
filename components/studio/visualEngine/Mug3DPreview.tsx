@@ -22,15 +22,30 @@ type Props = {
   garmentColor?: string;
   artColor?: string;
   accentColor?: string;      // cor dos chips (padrão navy storefront)
+  /**
+   * Lado escolhido fora daqui (editor do Studio). "middle" = wrap 360,
+   * que é o nome que a lojista vê; front/back caem no painel. Sem isso o
+   * seletor Frente/Verso/Meio do painel não mexia no 3D e a lojista via
+   * dois seletores dessincronizados na mesma tela.
+   */
+  side?: "front" | "back" | "middle";
 };
 
 export function Mug3DPreview({
   spec, values, size = 320,
-  garmentColor = "#F5F2EA", artColor = "#D85A30", accentColor = "#1E3A8A",
+  garmentColor = "#F5F2EA", artColor = "#D85A30", accentColor = "#1E3A8A", side,
 }: Props) {
   const canvasRef = useRef<any>(null);
   const handleRef = useRef<Mug3DHandle | null>(null);
   const [areaId, setAreaId] = useState<string>(spec.areas?.[0]?.id || "panel");
+
+  // O lado vindo de fora manda no viewer: "middle" é o wrap 360. Só
+  // aplica se a spec realmente tiver a área, senão mantém a atual.
+  useEffect(() => {
+    if (!side) return;
+    const alvo = side === "middle" ? "wrap" : "panel";
+    if ((spec.areas || []).some((a) => a.id === alvo)) setAreaId(alvo);
+  }, [side, spec]);
   const [err, setErr] = useState<string | null>(null);
   const areas = spec.areas || [];
 

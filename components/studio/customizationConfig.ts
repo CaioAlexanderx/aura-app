@@ -99,8 +99,9 @@ export function hasFixedId(f: { id?: string; config?: any } | null | undefined):
 // ── Ids ────────────────────────────────────────────────────
 /**
  * O id de um campo é `<tipo>` para o primeiro daquele tipo na frente,
- * `<tipo>_back` no verso, e sufixo numérico do segundo em diante:
- * `text`, `text_2`, `image`, `image_back`, `color_back_2`.
+ * `<tipo>_back` no verso, `<tipo>_middle` no meio, e sufixo numérico do
+ * segundo em diante: `text`, `text_2`, `image`, `image_back`,
+ * `color_back_2`, `image_middle`.
  *
  * A regra existe para que o primeiro campo de texto de qualquer produto
  * se chame `text` — é o que o motor visual procura.
@@ -110,12 +111,13 @@ export function canonicalFieldId(
   side: CustomizationFieldSide,
   ordinal: number
 ): string {
-  const base = side === "back" ? `${type}_back` : type;
+  const base = side === "front" ? type : `${type}_${side}`;
   return ordinal === 0 ? base : `${base}_${ordinal + 1}`;
 }
 
 export function sideOf(f: { side?: string } | null | undefined): CustomizationFieldSide {
-  return (f as any)?.side === "back" ? "back" : "front";
+  const s = (f as any)?.side;
+  return s === "back" || s === "middle" ? s : "front";
 }
 
 /**
@@ -254,7 +256,7 @@ export function withDefaultConfig(field: CustomizationField): CustomizationField
  * sabia que não era isso.
  */
 export function applyRequiredRules(fields: CustomizationField[]): CustomizationField[] {
-  const grupoObrigatorio: Record<string, boolean> = { front: false, back: false };
+  const grupoObrigatorio: Record<string, boolean> = { front: false, back: false, middle: false };
   for (const f of fields) {
     if (isArtSourceType(f.type) && f.required && !hasFixedId(f)) {
       grupoObrigatorio[sideOf(f)] = true;
@@ -301,6 +303,7 @@ export function normalizeCustomizationConfig(
 ): CustomizationConfig {
   const origem: any = cfg && typeof cfg === "object" ? cfg : {};
   const hasBack = origem.has_back === true;
+  const hasMiddle = origem.has_middle === true;
 
   const tiposValidos: CustomizationFieldType[] = ["text", "image", "template", "color", "option"];
   let fields: CustomizationField[] = (Array.isArray(origem.fields) ? origem.fields : [])
@@ -311,10 +314,12 @@ export function normalizeCustomizationConfig(
       label: typeof f.label === "string" && f.label.trim() ? f.label : defaultFieldLabel(f.type),
       required: f.required === true,
       config: f.config && typeof f.config === "object" ? f.config : {},
-      // Verso desligado rebaixa todo campo para a frente — o backend
-      // recusa side='back' sem has_back (studio.js) e a validação da
-      // vitrine pula esses campos.
-      side: (f.side === "back" && hasBack ? "back" : "front") as CustomizationFieldSide,
+      // Lado desligado rebaixa o campo para a frente — o backend recusa
+      // side='back' sem has_back e side='middle' sem has_middle
+      // (studio.js), e a validação da vitrine pula esses campos.
+      side: ((f.side === "back" && hasBack) || (f.side === "middle" && hasMiddle)
+        ? f.side
+        : "front") as CustomizationFieldSide,
     }));
 
   fields = canonicalizeIds(fields).fields;
@@ -343,6 +348,25 @@ export function normalizeCustomizationConfig(
     delete out.back_print_area;
     delete out.back_charge_enabled;
     delete out.back_price_delta;
+  }
+
+  // Meio (faixa central / wrap 360): mesmo tratamento do verso.
+  if (hasMiddle) {
+    out.has_middle = true;
+    out.middle_print_area = normalizePrintArea(origem.middle_print_area);
+    if (origem.middle_charge_enabled === true) {
+      const d = Number(origem.middle_price_delta);
+      out.middle_charge_enabled = true;
+      out.middle_price_delta = Number.isFinite(d) && d >= 0 ? d : 0;
+    } else {
+      delete out.middle_charge_enabled;
+      delete out.middle_price_delta;
+    }
+  } else {
+    delete out.has_middle;
+    delete out.middle_print_area;
+    delete out.middle_charge_enabled;
+    delete out.middle_price_delta;
   }
 
   return out as CustomizationConfig;
