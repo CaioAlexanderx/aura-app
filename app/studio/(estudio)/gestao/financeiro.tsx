@@ -42,6 +42,13 @@
 //     (fora do escopo desta tela — FinanceiroScreen é arquivo compartilhado)
 //     reintroduziria esse bug sempre que o tema Studio e o tema Varejo
 //     divergirem (são dois stores de tema independentes).
+//
+//   - item 17 (parte 2): FinanceiroScreen agora aceita `embedded` — passamos
+//     `embedded` aqui pra suprimir o kicker "FINANCEIRO ·" duplicado da
+//     FinanceiroTopbar interna (ela ficava logo abaixo do título
+//     "Financeiro do estúdio" deste wrapper, repetindo a palavra
+//     "Financeiro"). Ver comentário em app/(tabs)/financeiro.tsx e em
+//     components/screens/financeiro/v2/FinanceiroTopbar.tsx.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -61,7 +68,7 @@ export default function StudioGestaoFinanceiro() {
       </View>
 
       <View style={{ flex: 1 }}>
-        <FinanceiroScreen />
+        <FinanceiroScreen embedded />
       </View>
     </View>
   );

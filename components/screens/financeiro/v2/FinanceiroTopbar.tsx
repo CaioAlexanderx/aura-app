@@ -6,6 +6,13 @@
 //   - Botões Exportar e Novo lançamento (escondidos em consolidated p/ mutations)
 //
 // Substitui o ScreenHeader + periodBar legado em app/(tabs)/financeiro.tsx.
+//
+// 19/08/2026 (QA — dedup de header): prop `embedded?: boolean` (default
+// false, varejo não muda) esconde só o kicker "FINANCEIRO ·" quando a
+// Topbar é renderizada dentro do wrapper do Studio (que já mostra um
+// título "Financeiro do estúdio" — o kicker duplicava a palavra). O nome
+// da empresa/badge "Consolidado" continua visível: é informação útil
+// (qual empresa está sendo vista), não um título redundante.
 
 import { View, Text, Pressable, StyleSheet, Platform, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -27,6 +34,8 @@ type Props = {
   // Acoes — em consolidated, "Novo lancamento" some (precisa empresa especifica)
   onExport?: () => void;
   onNew?: () => void;
+  // Dedup de header quando embutida no Studio (ver comentario no topo do arquivo)
+  embedded?: boolean;
 };
 
 // Subset reduzido pra o Topbar (a Topbar nao mostra todos os 7 — UI muito carregada).
@@ -37,7 +46,7 @@ var TOPBAR_PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "month", label: "Mes" },
 ];
 
-export function FinanceiroTopbar({ companyName, consolidated, companyCount, period, onPeriodChange, onExport, onNew }: Props) {
+export function FinanceiroTopbar({ companyName, consolidated, companyCount, period, onPeriodChange, onExport, onNew, embedded }: Props) {
   // Periodo "custom" botao traz o periodo customizado (ex.: data inicio/fim).
   // Por enquanto custom abre seletor inline na tela — Topbar so registra clique.
   var isCustomActive = period === "custom" || period === "year" || period === "prev_year" || period === "all";
@@ -47,8 +56,12 @@ export function FinanceiroTopbar({ companyName, consolidated, companyCount, peri
     <View style={[s.bar, { borderBottomColor: Colors.border }]}>
       {/* Esquerda: identidade */}
       <View style={s.left}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>FINANCEIRO</Text>
-        <Text style={[s.dot, { color: Colors.ink3 }]}>·</Text>
+        {!embedded && (
+          <>
+            <Text style={[s.kicker, { color: Colors.ink3 }]}>FINANCEIRO</Text>
+            <Text style={[s.dot, { color: Colors.ink3 }]}>·</Text>
+          </>
+        )}
         {consolidated ? (
           <View style={[s.consolidatedPill, { backgroundColor: Colors.violetD, borderColor: Colors.border2 }]}>
             <Icon name="globe" size={11} color={Colors.violet3} />

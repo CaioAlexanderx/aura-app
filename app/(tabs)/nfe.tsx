@@ -25,7 +25,15 @@ const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : fals
 // pra aba "Emitir NFC-e". Backend mantém idempotência só pra autorizada/processando.
 // Jun/2026: "Visualizar" gera a 2ª via térmica (danfe-termica) quando autorizada;
 // "Reemitir" passa a cobrir qualquer status de falha (rejeitada/erro/falha).
-function NfeScreenInner() {
+//
+// 19/08/2026 (QA — dedup de header): prop `embedded?: boolean` (default
+// false, varejo não muda) suprime o <PageHeader> interno quando a tela é
+// embutida em app/studio/(estudio)/gestao/nfe.tsx, que já renderiza seu
+// próprio título "Notas fiscais do estúdio" + subtítulo. Sem isso, o Studio
+// mostrava título+subtítulo do wrapper E título+subtítulo do PageHeader —
+// 2 blocos redundantes. O botão de refresh continua visível (é funcional,
+// não decorativo).
+function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const [tab, setTab] = useState(0);
@@ -174,10 +182,12 @@ function NfeScreenInner() {
 
   return (
     <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
-      <View style={s.headerRow}>
-        <View style={{ flex: 1 }}>
-          <PageHeader title="Notas fiscais" subtitle="NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal" />
-        </View>
+      <View style={[s.headerRow, embedded && s.headerRowEmbedded]}>
+        {!embedded && (
+          <View style={{ flex: 1 }}>
+            <PageHeader title="Notas fiscais" subtitle="NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal" />
+          </View>
+        )}
         <Pressable
           onPress={handleManualRefresh}
           disabled={isFetching}
@@ -352,10 +362,10 @@ function NfeScreenInner() {
   );
 }
 
-export default function NfeScreen() {
+export default function NfeScreen({ embedded }: { embedded?: boolean } = {}) {
   return (
     <RequireCompanyScope context="nfe" actionLabel="emitir nota fiscal">
-      <NfeScreenInner />
+      <NfeScreenInner embedded={embedded} />
     </RequireCompanyScope>
   );
 }
@@ -364,6 +374,9 @@ const s = StyleSheet.create({
   scr: { flex: 1 },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  // Quando embutida (Studio), o título some e só sobra o botão de refresh —
+  // alinha ele à direita como já era visualmente antes.
+  headerRowEmbedded: { justifyContent: "flex-end" },
   refreshBtn: {
     width: 38, height: 38, borderRadius: 10,
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,

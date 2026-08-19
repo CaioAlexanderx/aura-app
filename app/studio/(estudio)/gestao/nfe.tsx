@@ -18,9 +18,11 @@
 //     o eyebrow+title+subtitle do wrapper E o contextBanner abaixo, eram
 //     3 blocos de texto antes do conteúdo. O contextBanner só repetia o
 //     que o subtitle já dizia ("NFC-e sai automática"), então foi
-//     removido — sobra 1 bloco no wrapper. Dedup completo (também tirar o
-//     PageHeader interno do NfeScreen) precisa de mudança no arquivo
-//     compartilhado app/(tabs)/nfe.tsx — reportado à parte.
+//     removido — sobra 1 bloco no wrapper.
+//   - item 17 (parte 2, concluído): NfeScreen agora aceita `embedded`
+//     (default false, varejo não muda). Passamos `embedded` aqui pra
+//     suprimir o <PageHeader> interno (que duplicava título+subtítulo com
+//     este wrapper). Ver comentário em app/(tabs)/nfe.tsx.
 //   - item 20: `StudioColors.accent` (estático) trocado por
 //     `useStudioTokens().accent`. Colors.bg/bg3/border/ink* continuam
 //     ligados ao tema do varejo de propósito — é a mesma fonte de cor que
@@ -45,7 +47,7 @@ export default function StudioGestaoNfe() {
         </Text>
       </View>
       <View style={{ flex: 1 }}>
-        <NfeScreen />
+        <NfeScreen embedded />
       </View>
     </View>
   );
