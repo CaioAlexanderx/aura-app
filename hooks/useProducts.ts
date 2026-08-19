@@ -125,11 +125,24 @@ export function useProducts() {
     onError: () => toast.error("Erro ao excluir produto"),
   });
 
-  function addProduct(product: Product) {
+  // D1 (F0): passa a DEVOLVER o produto criado. O cadastro precisa do id
+  // real para vincular a categoria escolhida no picker -- vinculo so
+  // existe depois que a linha existe.
+  //
+  // mutate -> mutateAsync com try/catch: mutateAsync LANCA em erro, e sem
+  // o catch um cadastro que falha viraria unhandled rejection. O
+  // onError da mutation ja mostra o toast, entao o catch e silencioso de
+  // proposito -- o comportamento visivel para quem nao usa o retorno
+  // continua identico ao de antes.
+  async function addProduct(product: Product): Promise<any | null> {
     // FIX(9): mensagem clara para conta de funcionario sem empresa associada
-    if (!companyId) { toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador."); return; }
-    if (isDemo) return;
-    addMutation.mutate(buildBody(product));
+    if (!companyId) { toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador."); return null; }
+    if (isDemo) return null;
+    try {
+      return await addMutation.mutateAsync(buildBody(product));
+    } catch (_) {
+      return null;
+    }
   }
 
   function updateProduct(product: Product) {

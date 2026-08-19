@@ -12,6 +12,10 @@ import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { useProductCategories } from "@/hooks/useProductCategories";
+// D1 (F0): o cadastro passa a usar a ARVORE, no lugar da lista de chips
+// de texto. O picker e o mesmo componente do B3, ja testado.
+import { CategoryTreePicker, type CategorySelection } from "@/components/catalog/CategoryTreePicker";
+import { useCategories } from "@/hooks/useCategories";
 import type { Product } from "./types";
 import { UNITS } from "./types";
 
@@ -125,6 +129,18 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [code, setCode]         = useState(editProduct?.code || "");
   const [barcode, setBarcode]   = useState(editProduct?.barcode || "");
   const [category, setCategory] = useState(editProduct?.category || mergedCategoryList[0] || "");
+  // D1: selecao na arvore. `category` (texto) CONTINUA sendo enviado no
+  // corpo do POST/PATCH -- e o que a rota de produto grava hoje, e o
+  // trigger de dual-write o sobrescreve assim que o vinculo existe.
+  // Remover o texto agora quebraria o cadastro em base sem a arvore.
+  const [selecao, setSelecao] = useState<CategorySelection>({
+    primaryCategoryId: null, alsoInIds: [],
+  });
+  const { byId: categoriaPorId, tree: arvoreCategorias } = useCategories();
+  // Base sem arvore ainda: o fallback de chips continua no ar. Zero
+  // categorias na arvore e o estado REAL da maioria das empresas hoje --
+  // medido em 18/08: 55 categorias em 3 empresas, e a Davi com nenhuma.
+  const temArvore = arvoreCategorias.length > 0;
   // Fix 7: inicializa com máscara de moeda
   const [price, setPrice]       = useState(editProduct ? amountToMask(editProduct.price) : "");
   const [cost, setCost]         = useState(editProduct ? amountToMask(editProduct.cost) : "");
@@ -238,7 +254,14 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       toast.error("NCM deve ter 8 digitos numericos (ou ficar vazio)");
       return;
     }
-    const finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : category;
+    // Se o lojista escolheu na arvore, o NOME do no vira o texto legado --
+    // assim o produto nasce coerente nos dois modelos, e o vinculo e
+    // gravado logo depois pelo estoque.tsx (precisa do id, que so existe
+    // apos o create).
+    const noEscolhido = selecao.primaryCategoryId ? categoriaPorId[selecao.primaryCategoryId] : null;
+    const finalCategory = noEscolhido
+      ? noEscolhido.name
+      : (showNewCat && newCategory.trim() ? newCategory.trim() : category);
     const parsedPrice = parseInt(unmaskNumber(price) || "0") / 100;
     const parsedCost  = parseInt(unmaskNumber(cost)  || "0") / 100;
     onSave({
@@ -252,7 +275,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       unit, brand: editProduct?.brand || "",
       notes: notes.trim(), color: color || "", size: size.trim(),
       ncm: ncm || "",
-    });
+      // D1: consumido por handleSaveProduct em estoque.tsx.
+      categorySelection: selecao.primaryCategoryId ? selecao : undefined,
+    } as any);
   }
 
   // ===== NCM badge state (cor + label) =====
@@ -390,6 +415,24 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       </FormField>
 
       <FormField label="Categoria">
+        {/* D1 (F0): a arvore e o caminho principal. Em modo EDICAO o
+            picker recebe o productId e grava o vinculo sozinho; em modo
+            CRIACAO ele so seleciona, e o vinculo e gravado apos o create
+            (o id ainda nao existe). Ver handleSaveProduct em estoque.tsx.
+
+            A lista de chips abaixo SOBREVIVE como fallback: enquanto a
+            empresa nao tiver arvore (as migrations 257-260 sao recentes e
+            a maioria das bases ainda esta em texto), o cadastro nao pode
+            ficar sem campo de categoria. Some sozinha quando a arvore
+            existir. */}
+        <CategoryTreePicker
+          value={selecao}
+          onChange={setSelecao}
+          productId={editProduct?.id}
+        />
+
+        {temArvore ? null : (
+        <>
         <View style={s.categoryRow}>
           {showCategoryArrows && (
             <Pressable
@@ -442,7 +485,13 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           )}
         </View>
         {showNewCat && <TextInput style={[s.input, { marginTop: 6 }]} value={newCategory} onChangeText={setNewCategory} placeholder="Nome da nova categoria" placeholderTextColor={Colors.ink3} autoFocus />}
-        <Text style={s.categoryHint}>Gerencie suas categorias pelo botao &quot;Categorias&quot; na tela de Estoque.</Text>
+        </>
+        )}
+        <Text style={s.categoryHint}>
+          {temArvore
+            ? "Organize a arvore em Catalogo > Organizar catalogo."
+            : "Gerencie suas categorias pelo botao \"Categorias\" na tela de Estoque."}
+        </Text>
       </FormField>
 
       <View style={s.divider} />

@@ -4,6 +4,8 @@ import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
+import { useCategories } from "@/hooks/useCategories";
+import { expandirComDescendentes } from "@/utils/categoryFilter";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
@@ -247,6 +249,9 @@ const agg = StyleSheet.create({
 export default function EstoqueScreen() {
   useEstoquePremiumStyles();
   const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
+  // D1 (F0): vinculo de categoria do produto recem-criado.
+  // D2 (F0): `flattened` alimenta o filtro hierarquico.
+  const { assignProductCategories, flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
@@ -345,9 +350,9 @@ export default function EstoqueScreen() {
   // Wide usa o multi-select. Narrow usa o single-chip antigo.
   // Vazio = "Todos".
   const effectiveCats = useMemo<string[]>(() => {
-    if (isWebWide) return catsMulti;
-    return catFilter === "Todos" ? [] : [catFilter];
-  }, [isWebWide, catsMulti, catFilter]);
+    const escolhidas = isWebWide ? catsMulti : (catFilter === "Todos" ? [] : [catFilter]);
+    return expandirComDescendentes(escolhidas, categoriasFlat);
+  }, [isWebWide, catsMulti, catFilter, categoriasFlat]);
 
   // 07/05/2026: paridade com PDV via utils/productSearch — fix bug Davi.
   // Antes a busca falhava em três cenários reportados:
@@ -393,9 +398,37 @@ export default function EstoqueScreen() {
     setEditProduct(null);
   }
 
-  function handleSaveProduct(product: Product) {
-    if (editProduct) { updateProduct(product); setEditProduct(null); }
-    else addProduct(product);
+  // D1 (F0): alem de salvar, grava o VINCULO de categoria escolhido na
+  // arvore. Em EDICAO o proprio CategoryTreePicker ja gravou (ele recebe
+  // o productId e chama assignProductCategories sozinho); aqui tratamos
+  // o caso de CRIACAO, onde o id so passa a existir depois do create.
+  //
+  // O vinculo e o que faz o produto entrar no modelo novo. Sem ele, o
+  // produto nasce so com o texto legado e precisaria de uma passada do
+  // wizard depois -- exatamente o que a fase existe para evitar.
+  async function handleSaveProduct(product: Product) {
+    const selecao = (product as any).categorySelection as
+      | { primaryCategoryId: string | null; alsoInIds: string[] }
+      | undefined;
+
+    if (editProduct) {
+      updateProduct(product);
+      setEditProduct(null);
+    } else {
+      const criado = await addProduct(product);
+      if (criado?.id && selecao?.primaryCategoryId) {
+        // Falhar aqui nao pode desfazer o cadastro: o produto ja existe e
+        // o texto legado ja esta gravado. O vinculo vira pendencia do
+        // wizard, que e o mesmo destino do que a importacao nao resolve.
+        try {
+          await assignProductCategories(criado.id, {
+            primary_category_id: selecao.primaryCategoryId,
+            also_in: selecao.alsoInIds,
+          });
+        } catch (_) { /* silencioso: ver comentario acima */ }
+      }
+    }
+
     setShowAddForm(false);
     setShowServiceForm(false);
     setTimeout(() => refetchDupGroups(), 500);

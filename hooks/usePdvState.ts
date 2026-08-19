@@ -37,6 +37,8 @@ import { useCart, PAYMENTS } from "@/hooks/useCart";
 import { useCustomers } from "@/hooks/useCustomers";
 import { usePdvSettings, validateSaleAgainstSettings } from "@/hooks/usePdvSettings";
 import { usePagination } from "@/hooks/usePagination";
+import { useCategories } from "@/hooks/useCategories";
+import { expandirComDescendentes } from "@/utils/categoryFilter";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
@@ -85,6 +87,8 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 export function usePdvState() {
   const { company, isDemo } = useAuthStore();
   const { products } = useProducts();
+  // D2 (F0): arvore para expandir o filtro de categoria na subarvore.
+  const { flattened: categoriasFlat } = useCategories();
   const { customers } = useCustomers();
   const { settings: pdvSettings } = usePdvSettings();
 
@@ -218,17 +222,27 @@ export function usePdvState() {
     return idx;
   }, [products]);
 
+  // D2 (F0): filtro de categoria hierarquico. Escolher "Feminino" no PDV
+  // tem que trazer o que esta em "Feminino > Calcados > Botas" -- senao a
+  // arvore piora a vida de quem esta no caixa com o cliente na frente.
+  // Igualdade exata vira pertencimento a subarvore; base sem arvore cai
+  // no comportamento antigo. Ver utils/categoryFilter.ts.
+  const catsAceitas = useMemo(
+    () => (cat === "all" ? [] : expandirComDescendentes([cat], categoriasFlat)),
+    [cat, categoriasFlat]
+  );
+
   const filtered = useMemo(() => {
     const normQuery = normalizeText(query);
     return products.filter(p => {
       const haystack = productIndex.get((p as any).id) ?? buildProductHaystack(p);
       return (
         matchesQuery(haystack, normQuery) &&
-        (cat === "all" || p.category === cat) &&
+        (catsAceitas.length === 0 || catsAceitas.includes(p.category)) &&
         (showOutOfStock || isProductInStock(p))
       );
     });
-  }, [products, productIndex, query, cat, showOutOfStock]);
+  }, [products, productIndex, query, catsAceitas, showOutOfStock]);
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } =
     usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
