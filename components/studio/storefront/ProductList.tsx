@@ -8,6 +8,7 @@ import { T } from "./types";
 import { LivePreview } from "./LivePreview";
 import { CartBar } from "./Cart";
 import { PoweredByAura } from "./ui/PoweredByAura";
+import { precoMinimo, imagemDoGrupo } from "./categoryGrouping";
 
 export function ProductList({ sf }: { sf: StorefrontState }) {
   if (!sf.store) return null;
@@ -92,7 +93,82 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             </Text>
           </View>
         ) : (
-          store.products.map((p) => (
+          // S1 — a vitrine itera ENTRADAS, não produtos: categoria com 2+
+          // modelos vira um cartão só. As 9 canecas da Sheid deixam de
+          // ocupar 9 linhas quase idênticas.
+          sf.vitrine.map((entry) => {
+            if (entry.kind === "category") {
+              const { category, products } = entry;
+              const capa = imagemDoGrupo(products);
+              return (
+                <Pressable
+                  key={"cat-" + category.id}
+                  onPress={() => sf.openConfigure(products[0], products)}
+                  style={[
+                    {
+                      backgroundColor: T.card, borderRadius: 12, padding: 12,
+                      paddingLeft: 14,
+                      borderWidth: 1, borderColor: T.border,
+                      borderLeftWidth: 3, borderLeftColor: accent,
+                      flexDirection: "row", gap: 12, alignItems: "center",
+                      position: "relative",
+                    },
+                    Platform.OS === "web"
+                      ? ({ boxShadow: "0 4px 12px -4px rgba(30,58,138,0.15)" } as any)
+                      : ({ elevation: 3 } as any),
+                  ]}
+                >
+                  {capa ? (
+                    <Image
+                      source={{ uri: capa }}
+                      style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: T.bg }}
+                      resizeMode="cover"
+                      accessibilityLabel={category.name}
+                    />
+                  ) : (
+                    <LivePreview
+                      config={products[0].customization_config}
+                      values={{}}
+                      size={72}
+                      productName={category.name}
+                      showLabel={false}
+                    />
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{category.name}</Text>
+                    <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                      {products.length} modelos para escolher
+                    </Text>
+                    <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
+                      A partir de R$ {precoMinimo(products).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      alignSelf: "center", paddingHorizontal: 10, paddingVertical: 6,
+                      borderRadius: 999, backgroundColor: accent,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>Personalizar →</Text>
+                  </View>
+                  <View
+                    style={{
+                      position: "absolute", top: 6, right: 6,
+                      backgroundColor: T.accent,
+                      paddingHorizontal: 6, paddingVertical: 2,
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }}>
+                      {products.length} MODELOS
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            }
+
+            const p = entry.product;
+            return (
             <Pressable
               key={p.id}
               onPress={() => sf.openConfigure(p)}
@@ -157,8 +233,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   PERSONALIZÁVEL
                 </Text>
               </View>
-            </Pressable>
-          ))
+              </Pressable>
+            );
+          })
         )}
       </ScrollView>
 

@@ -76,6 +76,9 @@ import { maskPhone } from "@/utils/masks";
 import type {
   StorePayload, StudioStoreProduct, CartLine, Stage, SentOrder,
 } from "./types";
+import {
+  agruparVitrine, transportarValores, type VitrineEntry,
+} from "./categoryGrouping";
 
 const API_BASE =
   (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
@@ -209,6 +212,9 @@ export function useStorefront(slug: string) {
 
   const [stage, setStage] = useState<Stage>("list");
   const [activeProduct, setActiveProduct] = useState<StudioStoreProduct | null>(null);
+  // S1 — os outros modelos da mesma categoria. Vazio quando o produto foi
+  // aberto sozinho (sem categoria, ou categoria com um item so).
+  const [activeSiblings, setActiveSiblings] = useState<StudioStoreProduct[]>([]);
   const [editingValues, setEditingValues] = useState<Record<string, any>>({});
   const [editingQty, setEditingQty] = useState(1);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -292,6 +298,15 @@ export function useStorefront(slug: string) {
     [cart]
   );
 
+  // S1 — a vitrine deixa de ser uma lista de SKUs. Categoria com 2+
+  // modelos vira uma entrada só; o resto continua produto a produto.
+  // Sem árvore no payload (base pré-migração da F0) o resultado é
+  // idêntico à lista de antes.
+  const vitrine: VitrineEntry[] = useMemo(
+    () => (store ? agruparVitrine(store.products, store.categories || []) : []),
+    [store]
+  );
+
   const configuringUnitPrice = useMemo(() => {
     if (!activeProduct) return 0;
     return (
@@ -309,8 +324,9 @@ export function useStorefront(slug: string) {
     setEditingValues((prev) => ({ ...prev, [fieldId]: value }));
   }
 
-  function openConfigure(product: StudioStoreProduct) {
+  function openConfigure(product: StudioStoreProduct, siblings: StudioStoreProduct[] = []) {
     setActiveProduct(product);
+    setActiveSiblings(siblings.length > 1 ? siblings : []);
     setEditingLineId(null);
     const initial: Record<string, any> = {};
     const cfg = product.customization_config;
@@ -329,11 +345,40 @@ export function useStorefront(slug: string) {
 
   function editCartLine(line: CartLine) {
     setActiveProduct(line.product);
+    // Editando uma linha do carrinho, o seletor de modelo some: trocar o
+    // modelo aqui viraria outro produto na mesma linha, e o cliente
+    // esperaria ter adicionado um item novo.
+    setActiveSiblings([]);
     setEditingLineId(line.lineId);
     setEditingValues(line.values);
     setEditingQty(line.qty);
     setEditingAddBack(line.hasBackSelected === true);
     setStage("configure");
+  }
+
+  // S1 — troca de modelo dentro da categoria, sem sair do configurador.
+  // O que o cliente ja preencheu vai junto: transportarValores casa os
+  // campos por TIPO, porque os ids nao sao estaveis entre produtos.
+  function switchModel(product: StudioStoreProduct) {
+    if (!activeProduct || product.id === activeProduct.id) return;
+    const levados = transportarValores(
+      activeProduct.customization_config,
+      product.customization_config,
+      editingValues
+    );
+    // Cor padrao do modelo novo quando a antiga nao teve para onde ir.
+    const cfg = product.customization_config;
+    if (cfg?.fields) {
+      for (const f of cfg.fields) {
+        if (f.type === "color" && levados[f.id] === undefined && f.config.colors?.length) {
+          levados[f.id] = f.config.colors[0];
+        }
+      }
+    }
+    setActiveProduct(product);
+    setEditingValues(levados);
+    setEditingAddBack(levados.has_back_selected === true);
+    setError(null);
   }
 
   function commitConfigure() {
@@ -520,6 +565,8 @@ export function useStorefront(slug: string) {
     editingAddBack, setEditingAddBack,
     configuringUnitPrice,
     openConfigure, editCartLine, commitConfigure,
+    activeSiblings, switchModel,
+    vitrine,
     // Upload
     uploadImage, uploadingFieldId, uploadError,
     clearUploadError: () => setUploadError(null),

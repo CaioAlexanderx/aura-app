@@ -215,6 +215,48 @@ export function ProductConfigurator({
           />
         </View>
 
+        {/* S1 — seletor de modelo. Só aparece quando o produto foi aberto
+            por uma categoria com 2+ modelos; produto solto não ganha uma
+            fileira vazia. Trocar de modelo preserva o que já foi
+            preenchido (ver transportarValores em categoryGrouping.ts). */}
+        {sf.activeSiblings.length > 1 ? (
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+              Modelo
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+              {sf.activeSiblings.map((m) => {
+                const sel = m.id === activeProduct.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => sf.switchModel(m)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sel }}
+                    accessibilityLabel={m.name}
+                    style={{
+                      minWidth: 104, padding: 8, borderRadius: 10,
+                      backgroundColor: sel ? T.primary + "12" : T.card,
+                      borderWidth: sel ? 2 : 1,
+                      borderColor: sel ? T.primary : T.border,
+                    }}
+                  >
+                    <Text
+                      numberOfLines={2}
+                      style={{ fontSize: 11, fontWeight: sel ? "800" : "600", color: sel ? T.primary : T.ink }}
+                    >
+                      {m.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: sel ? T.primary : T.ink3, fontWeight: "700", marginTop: 4 }}>
+                      R$ {Number(m.price).toFixed(2)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {/* Fields: flat quando sem verso, agrupados quando com verso */}
         {!shouldRenderBack ? (
           <>{allFields.map(renderField)}</>
