@@ -92,8 +92,9 @@ function initials(name: string): string {
 }
 
 /**
- * Atraso por DATA (fonte: backend /balances → overdue/next_due_date).
- * (1) campo overdue explícito; (2) next_due_date < hoje (tz-safe); (3) false.
+ * Atraso pela regra ÚNICA do backend (services/credit/overdue.js):
+ * data + carência + tolerância de resíduo, sem parcela retroativa.
+ * (1) campo overdue explícito; (2) fallback next_due_date < hoje; (3) false.
  */
 function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_due_date?: string | null }): boolean {
   if (typeof cust.overdue === "boolean") return cust.overdue;
@@ -102,6 +103,16 @@ function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_d
     return dueDateStr < todaySP();
   }
   return false;
+}
+
+/**
+ * Data-base do aging. next_due_date é só "o próximo a vencer" — quem manda no
+ * atraso é oldest_overdue_date (a mais antiga que a regra REALMENTE conta).
+ * Sem ele, um cliente em atraso de 60 dias que já tem a próxima parcela do mês
+ * seguinte caía em "Em dia" no mapa de risco.
+ */
+function overdueRefDate(cust: CreditBalanceItem & { oldest_overdue_date?: string | null; next_due_date?: string | null }): string | null {
+  return cust.oldest_overdue_date ?? cust.next_due_date ?? null;
 }
 
 const AGING_LABELS: Record<string, string> = {
@@ -367,13 +378,13 @@ export default function CrediarioScreen() {
       if (filterSel === "atraso") return isCustomerOverdue(c as any);
       // faixa de aging: "a_vencer" = em dia; demais por dias de atraso
       if (filterSel === "a_vencer") return !isCustomerOverdue(c as any);
-      return isCustomerOverdue(c as any) && agingBucket(daysLate((c as any).next_due_date)) === filterSel;
+      return isCustomerOverdue(c as any) && agingBucket(daysLate(overdueRefDate(c as any))) === filterSel;
     })
     .sort((a, b) => {
       if (sortOrder === "az") return a.name.localeCompare(b.name, "pt-BR");
       // padrão: maior atraso primeiro, depois saldo desc
-      const la = daysLate((a as any).next_due_date);
-      const lb = daysLate((b as any).next_due_date);
+      const la = daysLate(overdueRefDate(a as any));
+      const lb = daysLate(overdueRefDate(b as any));
       if (la !== lb) return lb - la;
       return Number(b.balance) - Number(a.balance);
     });
@@ -631,7 +642,10 @@ export default function CrediarioScreen() {
           ) : (
             carteira.map((cust) => {
               const overdue = isCustomerOverdue(cust as any);
-              const dl = daysLate((cust as any).next_due_date);
+              // dl só faz sentido quando o backend classificou como atraso:
+              // dentro da carência o cliente é "Em dia" e não deve exibir "1 dias".
+              const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
+              const toReview = (cust as any).to_review_count || 0;
               return (
                 <Pressable
                   key={cust.id}
@@ -682,6 +696,12 @@ export default function CrediarioScreen() {
                       ) : overdue ? (
                         <View style={[s.latePill, { backgroundColor: Colors.amber + "1f", borderColor: Colors.amber + "55" }]}>
                           <Text style={[s.latePillText, { color: Colors.amber }]}>Em atraso</Text>
+                        </View>
+                      ) : toReview > 0 ? (
+                        /* Parcela retroativa: carnê histórico cadastrado depois do
+                           vencimento. Não é inadimplência — é conferência. */
+                        <View style={[s.latePill, { backgroundColor: Colors.amber + "14", borderColor: Colors.amber + "33" }]}>
+                          <Text style={[s.latePillText, { color: Colors.amber }]}>{toReview} a conferir</Text>
                         </View>
                       ) : (
                         <Text style={s.lateTextOk}>—</Text>

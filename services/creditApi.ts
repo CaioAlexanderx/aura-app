@@ -35,6 +35,13 @@ export type CreditBalanceItem = {
   // Opcionais — respostas antigas podem não trazer.
   overdue?: boolean;
   next_due_date?: string | null;
+  /** Vencimento mais antigo que REALMENTE conta como atraso (já com carência
+   *  e sem parcelas retroativas). Base correta do aging — o next_due_date é só
+   *  "o próximo a vencer". */
+  oldest_overdue_date?: string | null;
+  /** Parcelas vencidas cadastradas DEPOIS do próprio vencimento (carnê
+   *  histórico digitalizado). Não é inadimplência: é "a conferir". */
+  to_review_count?: number;
 };
 export type CreditTransaction = {
   id: string; sale_id: string | null; type: "debit" | "payment" | "refund";
@@ -52,6 +59,8 @@ export type CreditAccount = {
   open_count: number;
   next_due_date: string | null;
   overdue: boolean;
+  /** Parcelas retroativas vencidas neste carnê (a conferir, não é atraso). */
+  to_review_count?: number;
   period_unit: "day" | "week" | "month";
   period_count: number;
 };
@@ -154,6 +163,16 @@ export type CreditInstallment = {
   customer_name?: string; customer_phone?: string;
   // Fase 1 FE: account_id pode vir undefined em respostas antigas — tratar como null
   account_id?: string | null;
+  // ── Regra única de atraso (backend services/credit/overdue.js) ──
+  /** ÚNICA fonte de verdade de atraso desta parcela. NÃO use `status` para
+   *  isso: ele só é sincronizado quando alguém abre o dashboard e fica
+   *  congelado no meio tempo (relato Valen/livia aline, 18/08/2026 — ficha
+   *  dizia "Em atraso" com o carnê "Em dia"). Undefined = backend antigo. */
+  is_overdue?: boolean;
+  /** Parcela retroativa vencida: cadastrada depois do próprio vencimento. */
+  needs_review?: boolean;
+  /** Dias de atraso reais (sem carência), só para exibição. */
+  days_late?: number;
   // ── Fase 2: encargos calculados pelo backend (undefined = capability OFF) ──
   /** Total de encargos (multa + mora) sobre esta parcela. Undefined quando capability OFF. */
   charges_total?: number;
@@ -169,6 +188,8 @@ export type CreditDashboard = {
   kpis: {
     total_open_count: number; total_open_amount: number;
     overdue_count: number; overdue_amount: number;
+    /** Parcelas retroativas vencidas (a conferir) — não entram no atraso. */
+    to_review_count?: number; to_review_amount?: number;
     critical_count: number; critical_amount: number;
     defaulting_customers: number;
     paid_this_month_count: number; paid_this_month_amount: number;
