@@ -14,7 +14,7 @@
 // ============================================================
 import { useMemo, useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput,
+  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput, Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -49,6 +49,11 @@ export default function StudioMarketplaceAdmin() {
   const [handlingDays, setHandlingDays] = useState<number>(7);
   const [handlingDraft, setHandlingDraft] = useState<string>("7");
   const [savingHandling, setSavingHandling] = useState(false);
+  // QA fix (achado #5): o GET de settings fazia .catch(() => {}) — em falha,
+  // a tela mostrava "7 dias" como se fosse o prazo real configurado, e
+  // salvar em cima disso sobrescrevia o valor verdadeiro sem o lojista
+  // saber. Guarda o erro e BLOQUEIA o salvar até recarregar.
+  const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
 
   // Produtos personalizáveis
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -60,16 +65,27 @@ export default function StudioMarketplaceAdmin() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [preview, setPreview] = useState<MarketplaceListingPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // QA fix (achado #21): payload técnico colapsado por padrão.
+  const [payloadOpen, setPayloadOpen] = useState(false);
 
   // Carrega settings + lista de produtos personalizáveis
-  useEffect(() => {
+  const loadSettings = useCallback(() => {
     if (!cid) return;
+    setSettingsLoadError(null);
     studioApi.getSettings(cid).then((res) => {
       const days = (res.settings && (res.settings as any).marketplace_handling_days) || 7;
       setHandlingDays(days);
       setHandlingDraft(String(days));
-    }).catch(() => {});
+    }).catch((e: any) => {
+      setSettingsLoadError(e?.message || "Não consegui carregar o prazo de produção atual");
+      toast.error("Não consegui carregar o prazo atual — o que está na tela pode não ser o valor real. Salvar foi bloqueado.");
+    });
+  }, [cid]);
 
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  useEffect(() => {
+    if (!cid) return;
     setLoadingProducts(true);
     request<{ products: PersonalizableProduct[] }>("/companies/" + cid + "/studio/products", { method: "GET" })
       .then((data) => {
@@ -102,6 +118,10 @@ export default function StudioMarketplaceAdmin() {
 
   async function saveHandlingDays() {
     if (!cid) return;
+    if (settingsLoadError) {
+      toast.error("Não dá pra salvar sem antes recarregar o prazo atual — tente de novo.");
+      return;
+    }
     const n = parseInt(handlingDraft, 10);
     if (!Number.isFinite(n) || n < 1 || n > 60) {
       toast.error("Informe um número de 1 a 60 dias");
@@ -149,6 +169,18 @@ export default function StudioMarketplaceAdmin() {
           Quantos dias úteis você precisa pra coletar a personalização do cliente, fazer a arte, produzir e despachar.
           Esse valor é enviado pro ML (sale_terms.MANUFACTURING_TIME) e pra Shopee (pre_order.days_to_ship).
         </Text>
+        {settingsLoadError && (
+          <View style={s.errorBanner}>
+            <Icon name="alert-circle" size={16} color={t.dangerInk} />
+            <Text style={s.errorBannerTxt}>
+              Não consegui carregar o prazo atual — o valor abaixo pode não ser o real. Salvar foi bloqueado.
+            </Text>
+            <Pressable onPress={loadSettings} style={s.errorBannerBtn}>
+              <Icon name="refresh-cw" size={12} color="#fff" />
+              <Text style={s.errorBannerBtnTxt}>Tentar de novo</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={s.handlingRow}>
           <View style={s.handlingInputWrap}>
             <TextInput
@@ -162,11 +194,11 @@ export default function StudioMarketplaceAdmin() {
           </View>
           <Pressable
             onPress={saveHandlingDays}
-            disabled={savingHandling || handlingDraft === String(handlingDays)}
+            disabled={savingHandling || handlingDraft === String(handlingDays) || !!settingsLoadError}
             style={[
               s.saveBtn,
               {
-                opacity: savingHandling || handlingDraft === String(handlingDays) ? 0.4 : 1,
+                opacity: savingHandling || handlingDraft === String(handlingDays) || settingsLoadError ? 0.4 : 1,
               },
             ]}
           >
@@ -216,7 +248,10 @@ export default function StudioMarketplaceAdmin() {
               Nenhum produto personalizável cadastrado. Marque "É personalizável" em produtos do Studio antes.
             </Text>
             <Pressable
-              onPress={() => router.push("/studio/produtos" as any)}
+              // QA fix (achado #2): /studio/produtos é só um redirect pra
+              // /studio/estoque (duplo salto, cai no catálogo genérico sem
+              // contexto). Aponta direto pro destino final.
+              onPress={() => router.push("/studio/estoque" as any)}
               style={[s.emptyBtnMini, { backgroundColor: t.primary }]}
             >
               <Text style={s.emptyBtnMiniTxt}>Ir pra Produtos</Text>
@@ -233,10 +268,23 @@ export default function StudioMarketplaceAdmin() {
                   selectedProductId === p.id && { backgroundColor: t.primarySoft, borderColor: t.primary },
                 ]}
               >
-                <Text style={[s.productChipTxt, selectedProductId === p.id && { color: t.primary, fontWeight: "800" }]}>
-                  {p.name}
-                </Text>
-                <Text style={s.productChipPrice}>R$ {p.price.toFixed(2)}</Text>
+                {/* QA fix (achado #14): chip só mostrava nome + preço — com
+                    vários produtos de nome parecido (ex: 12 canecas) o
+                    lojista não identificava qual estava prevendo. image_url
+                    já vem carregado, só faltava exibir a thumb. */}
+                <View style={s.productChipThumb}>
+                  {p.image_url ? (
+                    <Image source={{ uri: p.image_url }} style={s.productChipThumbImg} />
+                  ) : (
+                    <Icon name="image" size={16} color={t.ink4} />
+                  )}
+                </View>
+                <View>
+                  <Text style={[s.productChipTxt, selectedProductId === p.id && { color: t.primary, fontWeight: "800" }]}>
+                    {p.name}
+                  </Text>
+                  <Text style={s.productChipPrice}>R$ {p.price.toFixed(2)}</Text>
+                </View>
               </Pressable>
             ))}
           </ScrollView>
@@ -251,7 +299,7 @@ export default function StudioMarketplaceAdmin() {
               </View>
             ) : previewError ? (
               <View style={s.errorBox}>
-                <Icon name="alert-circle" size={20} color="#991B1B" />
+                <Icon name="alert-circle" size={20} color={t.dangerInk} />
                 <Text style={s.errorTxt}>{previewError}</Text>
               </View>
             ) : preview ? (
@@ -295,18 +343,23 @@ export default function StudioMarketplaceAdmin() {
                   <Icon name="info" size={11} color={t.ink3} /> {preview.note}
                 </Text>
 
-                {/* Payload técnico */}
+                {/* QA fix (achado #21): o bloco (até 360px) ficava sempre
+                    aberto na tela do lojista — o Pressable devia
+                    colapsar/expandir mas o callback estava vazio. */}
                 <Pressable
-                  onPress={() => {/* poderia expandir/collapse — por ora sempre exibe */}}
+                  onPress={() => setPayloadOpen((v) => !v)}
                   style={s.payloadHead}
                 >
-                  <Text style={s.payloadHeadTxt}>Payload técnico (JSON)</Text>
+                  <Icon name={payloadOpen ? "chevron-down" : "chevron-right"} size={13} color={t.ink3} />
+                  <Text style={s.payloadHeadTxt}>Detalhes técnicos (payload JSON)</Text>
                 </Pressable>
-                <View style={s.codeBlock}>
-                  <Text style={s.code} selectable>
-                    {JSON.stringify(preview.payload, null, 2)}
-                  </Text>
-                </View>
+                {payloadOpen && (
+                  <View style={s.codeBlock}>
+                    <Text style={s.code} selectable>
+                      {JSON.stringify(preview.payload, null, 2)}
+                    </Text>
+                  </View>
+                )}
               </>
             ) : null}
           </View>
@@ -384,6 +437,19 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10,
   },
   saveBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
+
+  // Erro de carregamento do prazo (achado #5)
+  errorBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: t.dangerSoft, borderRadius: 10,
+    padding: 12, marginTop: 4,
+  },
+  errorBannerTxt: { flex: 1, fontSize: 12, color: t.dangerInk, lineHeight: 16 },
+  errorBannerBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: t.dangerInk, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8,
+  },
+  errorBannerBtnTxt: { color: "#fff", fontSize: 11.5, fontWeight: "700" },
   handlingHint: { fontSize: 11.5, color: t.ink3, marginTop: 6 },
 
   tabs: { flexDirection: "row", gap: 8, marginTop: 8 },
@@ -396,10 +462,17 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   label: { fontSize: 11.5, color: t.ink3, fontWeight: "700", textTransform: "uppercase", marginTop: 12, letterSpacing: 0.5 },
 
   productChip: {
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
     backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
-    minWidth: 140,
+    minWidth: 170,
   },
+  productChipThumb: {
+    width: 40, height: 40, borderRadius: 8,
+    backgroundColor: t.bg, alignItems: "center", justifyContent: "center",
+    overflow: "hidden", flexShrink: 0,
+  },
+  productChipThumbImg: { width: "100%", height: "100%" },
   productChipTxt: { fontSize: 12.5, color: t.ink, fontWeight: "700" },
   productChipPrice: { fontSize: 11, color: t.ink3, marginTop: 2 },
 
@@ -433,7 +506,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   note: { fontSize: 11, color: t.ink3, fontStyle: "italic" },
 
-  payloadHead: { paddingVertical: 6 },
+  payloadHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
   payloadHeadTxt: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   codeBlock: {
     backgroundColor: "#0F172A", borderRadius: 10, padding: 14,
@@ -448,9 +521,9 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   errorBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#FEE2E2", padding: 12, borderRadius: 10,
+    backgroundColor: t.dangerSoft, padding: 12, borderRadius: 10,
   },
-  errorTxt: { color: "#991B1B", fontSize: 12, fontWeight: "600", flex: 1 },
+  errorTxt: { color: t.dangerInk, fontSize: 12, fontWeight: "600", flex: 1 },
 
   statusCard: { gap: 8, marginTop: 4 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 10 },

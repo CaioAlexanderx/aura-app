@@ -152,7 +152,9 @@ export default function StudioConfiguracoes() {
   const hasTeamCapacity = plan !== "essencial";
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    // QA fix (achado #18): sem company.id o loading ficava true pra sempre
+    // (return antecipado sem setLoading(false)) — spinner infinito.
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
     try {
       const h = await studioApi.health(company.id);
@@ -213,6 +215,12 @@ export default function StudioConfiguracoes() {
       // P1: sempre salva o toggle (pode ser true ou false)
       studioPatch.require_deposit_for_production = requireDeposit;
 
+      // QA fix (achado #19): o catch abaixo fazia `return` direto, pulando
+      // o load() final — a tela ficava com valores que não estavam
+      // salvos no servidor. Agora só marca a falha parcial e segue pro
+      // load() no fim, que é chamado SEMPRE (inclusive nos caminhos de
+      // erro parcial), pra tela nunca mostrar algo que não foi persistido.
+      let studioPatchSaved = true;
       if (Object.keys(studioPatch).length > 0) {
         try {
           await studioApi.saveSettings(company.id, studioPatch);
@@ -220,12 +228,14 @@ export default function StudioConfiguracoes() {
           console.warn("[StudioConfig] saveSettings falhou:", ssErr?.message);
           const detail = ssErr?.data?.error || ssErr?.message || "erro desconhecido";
           toast.error("Toggles salvos, mas SLA/WhatsApp falharam: " + detail);
-          return;
+          studioPatchSaved = false;
         }
       }
 
-      if (pdvSaved) {
+      if (pdvSaved && studioPatchSaved) {
         toast.success("Configurações salvas!");
+      } else if (pdvSaved && !studioPatchSaved) {
+        // toast específico já disparado acima
       } else {
         toast.error("Prazo/WhatsApp salvos, mas a aprovação de arte não foi — recarregue e tente de novo.");
       }
@@ -317,6 +327,37 @@ export default function StudioConfiguracoes() {
         </View>
       </View>
 
+      {/* QA fix (achado #3): /studio/configuracoes/precificacao não era
+          linkada de lugar nenhum (Motor de Precificação inteiro invisível
+          pro lojista) e /studio/configuracoes/marketplace só era alcançável
+          de dentro de uma tela de pedidos. Adiciona os dois acessos aqui. */}
+      <View style={s.card}>
+        <Text style={s.cardTitle}>Vendas</Text>
+        <Text style={s.cardSub}>Regras de preço automático e anúncios em marketplaces.</Text>
+
+        <Pressable style={s.linkRow} onPress={() => router.push("/studio/configuracoes/precificacao" as any)}>
+          <View style={[s.linkIconWrap, { backgroundColor: t.primaryGhost }]}>
+            <Icon name="dollar-sign" size={16} color={t.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.linkTitle}>Motor de Precificação</Text>
+            <Text style={s.linkSub}>Custo de arte, mão de obra, margem e faixas de tiragem por produto.</Text>
+          </View>
+          <Icon name="chevron-right" size={16} color={t.ink4} />
+        </Pressable>
+
+        <Pressable style={s.linkRow} onPress={() => router.push("/studio/configuracoes/marketplace" as any)}>
+          <View style={[s.linkIconWrap, { backgroundColor: t.accentGhost }]}>
+            <Icon name="external-link" size={16} color={t.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.linkTitle}>Anúncios em Marketplaces</Text>
+            <Text style={s.linkSub}>Prazo de produção e preview do anúncio Studio-aware pra ML/Shopee.</Text>
+          </View>
+          <Icon name="chevron-right" size={16} color={t.ink4} />
+        </Pressable>
+      </View>
+
       {/* Aprovação de arte */}
       <View style={s.card}>
         <Text style={s.cardTitle}>Aprovação de arte</Text>
@@ -405,6 +446,17 @@ function buildStyles(t: ReturnType<typeof useStudioTokens>) {
     toggleRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, gap: 16, borderTopWidth: 1, borderTopColor: t.ink5 },
     toggleLabel: { fontSize: 14, fontWeight: "700", color: t.ink },
     toggleSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    linkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: t.ink5,
+    },
+    linkIconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+    linkTitle: { fontSize: 13.5, fontWeight: "700", color: t.ink },
+    linkSub: { fontSize: 11.5, color: t.ink3, marginTop: 2, lineHeight: 15 },
     modeRow: { gap: 8 },
     modeCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: t.paperCardElev, borderRadius: 12, borderWidth: 1.5, borderColor: t.ink5 },
     modeCardSel: { backgroundColor: t.primary, borderColor: t.primary },

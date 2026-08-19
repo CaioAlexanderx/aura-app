@@ -33,17 +33,26 @@ import {
   type StudioPricingTier,
 } from "@/services/studioApi";
 import { request } from "@/services/api";
+import { confirmAlert } from "@/utils/webAlert";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 // ─── Tipos locais ──────────────────────────────────────────
 type Product = { id: string; name: string; price: number };
 
+// QA fix (achado #15): antes existiam DOIS campos de preço (Multiplicador
+// e Preço fixo/un) lado a lado, com a regra "use um OU outro" só em texto
+// de ajuda — sem validação. Isso permitia preencher os dois por engano e
+// o motor aplicar um comportamento não óbvio. Agora é um toggle explícito:
+// só o campo do modo escolhido aparece.
+type TierMode = "multiplier" | "fixed";
+
 type TierDraft = {
   min_qty: string;
   max_qty: string;
   unit_multiplier: string;
   unit_price: string;
+  mode: TierMode;
 };
 
 type ProductRuleDraft = {
@@ -59,7 +68,7 @@ type ProductRuleDraft = {
 
 // ─── Helpers ───────────────────────────────────────────────
 function emptyTier(): TierDraft {
-  return { min_qty: "", max_qty: "", unit_multiplier: "", unit_price: "" };
+  return { min_qty: "", max_qty: "", unit_multiplier: "", unit_price: "", mode: "multiplier" };
 }
 
 function ruleToDraft(rule: StudioPricingRule): Omit<ProductRuleDraft, "product" | "saving" | "preview_price"> {
@@ -69,6 +78,9 @@ function ruleToDraft(rule: StudioPricingRule): Omit<ProductRuleDraft, "product" 
         max_qty:         t.max_qty != null ? String(t.max_qty) : "",
         unit_multiplier: t.unit_multiplier != null ? String(t.unit_multiplier) : "",
         unit_price:      t.unit_price      != null ? String(t.unit_price)      : "",
+        // Regra já salva com preço fixo → toggle abre em "fixed"; senão
+        // (ou nenhum dos dois) abre em "multiplier" (default histórico).
+        mode:            t.unit_price != null ? "fixed" : "multiplier",
       }))
     : [];
   return {
@@ -88,10 +100,45 @@ function tiersFromDraft(tiers: TierDraft[]): StudioPricingTier[] {
         min_qty: parseInt(t.min_qty, 10) || 0,
         max_qty: t.max_qty.trim() !== "" ? parseInt(t.max_qty, 10) : null,
       };
-      if (t.unit_multiplier.trim() !== "") tier.unit_multiplier = parseFloat(t.unit_multiplier) || 1;
-      if (t.unit_price.trim()      !== "") tier.unit_price      = parseFloat(t.unit_price)      || 0;
+      // Só manda o campo do modo selecionado — nunca os dois (achado #15).
+      if (t.mode === "fixed") {
+        tier.unit_price = parseFloat(t.unit_price) || 0;
+      } else {
+        tier.unit_multiplier = t.unit_multiplier.trim() !== "" ? parseFloat(t.unit_multiplier) || 1 : 1;
+      }
       return tier;
     });
+}
+
+// QA fix (achado #15): nada impedia faixas sobrepostas (ex: 1-50 e
+// 10-100) — o motor aplica a primeira que bater, gerando preço errado no
+// orçamento do cliente sem nenhum aviso. Valida ordem e sobreposição antes
+// de salvar.
+function validateTiers(tiers: TierDraft[]): string | null {
+  const filled = tiers.filter((t) => t.min_qty.trim() !== "");
+  if (filled.length === 0) return null;
+
+  const parsed = filled.map((t) => ({
+    min: parseInt(t.min_qty, 10) || 0,
+    max: t.max_qty.trim() !== "" ? parseInt(t.max_qty, 10) : null,
+  }));
+
+  for (const r of parsed) {
+    if (r.max != null && r.max < r.min) {
+      return `Faixa inválida: "Até" (${r.max}) não pode ser menor que "De" (${r.min}).`;
+    }
+  }
+
+  const sorted = [...parsed].sort((a, b) => a.min - b.min);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const cur = sorted[i];
+    const next = sorted[i + 1];
+    const curEnd = cur.max ?? Infinity;
+    if (next.min <= curEnd) {
+      return `Faixas sobrepostas: ${cur.min}–${cur.max ?? "∞"} e ${next.min}–${next.max ?? "∞"} se cruzam. Ajuste os limites pra não sobrar dúvida sobre qual faixa vale.`;
+    }
+  }
+  return null;
 }
 
 // ─── Componente: editor de faixas de tiragem ───────────────
@@ -111,6 +158,11 @@ function TiersEditor({
     onChange(next);
   }
 
+  function setMode(idx: number, mode: TierMode) {
+    const next = tiers.map((t, i) => (i === idx ? { ...t, mode } : t));
+    onChange(next);
+  }
+
   function add() {
     onChange([...tiers, emptyTier()]);
   }
@@ -119,12 +171,14 @@ function TiersEditor({
     onChange(tiers.filter((_, i) => i !== idx));
   }
 
+  // QA fix (achado #15): valida sobreposição/ordem em tempo real.
+  const validationError = validateTiers(tiers);
+
   return (
     <View style={ts.tiersWrap}>
       <Text style={ts.tiersTitle}>Faixas de Tiragem</Text>
       <Text style={ts.tiersHint}>
-        Preencha Min Qty (obrigatório). Deixe Max Qty em branco para "sem limite".
-        Use Multiplicador OU Preço fixo/un — não ambos.
+        Preencha "De" (obrigatório). Deixe "Até" em branco para "sem limite".
       </Text>
 
       {tiers.length === 0 && (
@@ -133,51 +187,81 @@ function TiersEditor({
 
       {tiers.map((tier, idx) => (
         <View key={idx} style={ts.tierRow}>
-          <View style={ts.tierCell}>
-            <Text style={ts.tierLabel}>Min Qty</Text>
-            <TextInput
-              style={ts.tierInput}
-              keyboardType="number-pad"
-              placeholder="1"
-              value={tier.min_qty}
-              onChangeText={(v) => update(idx, "min_qty", v)}
-            />
+          <View style={ts.tierRowTop}>
+            <View style={ts.tierCell}>
+              <Text style={ts.tierLabel}>De (qtd)</Text>
+              <TextInput
+                style={ts.tierInput}
+                keyboardType="number-pad"
+                placeholder="1"
+                value={tier.min_qty}
+                onChangeText={(v) => update(idx, "min_qty", v)}
+              />
+            </View>
+            <View style={ts.tierCell}>
+              <Text style={ts.tierLabel}>Até (qtd)</Text>
+              <TextInput
+                style={ts.tierInput}
+                keyboardType="number-pad"
+                placeholder="∞"
+                value={tier.max_qty}
+                onChangeText={(v) => update(idx, "max_qty", v)}
+              />
+            </View>
+            <Pressable onPress={() => remove(idx)} style={ts.tierRemoveBtn}>
+              <Icon name="x" size={14} color={t.dangerInk} />
+            </Pressable>
           </View>
-          <View style={ts.tierCell}>
-            <Text style={ts.tierLabel}>Max Qty</Text>
-            <TextInput
-              style={ts.tierInput}
-              keyboardType="number-pad"
-              placeholder="∞"
-              value={tier.max_qty}
-              onChangeText={(v) => update(idx, "max_qty", v)}
-            />
+
+          {/* Toggle explícito — QA fix #15: antes eram dois campos junto
+              com um aviso em texto pra "usar um OU outro". */}
+          <View style={ts.tierModeRow}>
+            <Pressable
+              onPress={() => setMode(idx, "multiplier")}
+              style={[ts.tierModeChip, tier.mode === "multiplier" && ts.tierModeChipSel]}
+            >
+              <Text style={[ts.tierModeChipTxt, tier.mode === "multiplier" && ts.tierModeChipTxtSel]}>Multiplicador</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode(idx, "fixed")}
+              style={[ts.tierModeChip, tier.mode === "fixed" && ts.tierModeChipSel]}
+            >
+              <Text style={[ts.tierModeChipTxt, tier.mode === "fixed" && ts.tierModeChipTxtSel]}>Preço fechado</Text>
+            </Pressable>
           </View>
-          <View style={ts.tierCell}>
-            <Text style={ts.tierLabel}>Multiplicador</Text>
-            <TextInput
-              style={ts.tierInput}
-              keyboardType="decimal-pad"
-              placeholder="ex: 0.85"
-              value={tier.unit_multiplier}
-              onChangeText={(v) => update(idx, "unit_multiplier", v)}
-            />
-          </View>
-          <View style={ts.tierCell}>
-            <Text style={ts.tierLabel}>Preço fixo/un</Text>
-            <TextInput
-              style={ts.tierInput}
-              keyboardType="decimal-pad"
-              placeholder="ex: 39.90"
-              value={tier.unit_price}
-              onChangeText={(v) => update(idx, "unit_price", v)}
-            />
-          </View>
-          <Pressable onPress={() => remove(idx)} style={ts.tierRemoveBtn}>
-            <Icon name="x" size={14} color={t.dangerInk} />
-          </Pressable>
+
+          {tier.mode === "multiplier" ? (
+            <View style={ts.tierCell}>
+              <Text style={ts.tierLabel}>Multiplicador sobre o custo base</Text>
+              <TextInput
+                style={ts.tierInput}
+                keyboardType="decimal-pad"
+                placeholder="ex: 0.85 (15% mais barato)"
+                value={tier.unit_multiplier}
+                onChangeText={(v) => update(idx, "unit_multiplier", v)}
+              />
+            </View>
+          ) : (
+            <View style={ts.tierCell}>
+              <Text style={ts.tierLabel}>Preço fechado por unidade (R$)</Text>
+              <TextInput
+                style={ts.tierInput}
+                keyboardType="decimal-pad"
+                placeholder="ex: 39,90"
+                value={tier.unit_price}
+                onChangeText={(v) => update(idx, "unit_price", v)}
+              />
+            </View>
+          )}
         </View>
       ))}
+
+      {validationError && (
+        <View style={ts.tierErrorBox}>
+          <Icon name="alert-circle" size={13} color={t.dangerInk} />
+          <Text style={ts.tierErrorTxt}>{validationError}</Text>
+        </View>
+      )}
 
       <Pressable onPress={add} style={ts.tiersAddBtn}>
         <Icon name="plus" size={13} color={t.primary} />
@@ -299,15 +383,19 @@ export default function StudioPrecificacao() {
           );
           (products || []).forEach((p) => { productsMap[p.id] = p; });
         } catch {
-          // Fallback: usa id como nome
+          // QA fix (achado #16): fallback usava o UUID cru como "nome" —
+          // o card da regra mostrava algo como "3f9a1c2e-..." em vez de
+          // um texto legível.
           prodRules.forEach((r) => {
-            if (r.product_id) productsMap[r.product_id] = { id: r.product_id, name: r.product_id, price: 0 };
+            if (r.product_id) productsMap[r.product_id] = { id: r.product_id, name: "Produto indisponível", price: 0 };
           });
         }
       }
 
       const drafts: ProductRuleDraft[] = prodRules.map((r) => ({
-        product:      productsMap[r.product_id!] ?? { id: r.product_id!, name: r.product_id!, price: 0 },
+        // QA fix (achado #16): mesma cobertura pro caso em que a API
+        // devolveu a lista mas SEM esse id específico (produto excluído).
+        product:      productsMap[r.product_id!] ?? { id: r.product_id!, name: "Produto indisponível", price: 0 },
         ...ruleToDraft(r),
         saving:       false,
         preview_price: null,
@@ -348,6 +436,16 @@ export default function StudioPrecificacao() {
   async function saveProductRule(idx: number) {
     if (!cid) return;
     const draft = productRules[idx];
+
+    // QA fix (achado #15): bloqueia o save se as faixas estiverem
+    // sobrepostas/fora de ordem — evita salvar uma regra que dá preço
+    // errado (ambíguo) no orçamento do cliente.
+    const tiersError = validateTiers(draft.tiers);
+    if (tiersError) {
+      toast.error(tiersError);
+      return;
+    }
+
     setProductRules((prev) =>
       prev.map((d, i) => (i === idx ? { ...d, saving: true } : d))
     );
@@ -428,8 +526,38 @@ export default function StudioPrecificacao() {
     setSearchResults([]);
   }
 
+  // QA fix (achado #4): este botão só tirava o card da tela (filter no
+  // estado local) — a regra continuava no banco e seguia sendo aplicada
+  // nos orçamentos seguintes. Agora exclui de verdade via
+  // DELETE /pricing/rules/:productId (soft-delete no backend), com
+  // confirmação porque afeta o preço das próximas propostas.
+  //
+  // 404 = a regra nunca chegou a ser salva (card recém-adicionado que o
+  // lojista desistiu de preencher): tirar da tela é exatamente o
+  // resultado esperado, então não é erro.
   function removeProductRule(idx: number) {
-    setProductRules((prev) => prev.filter((_, i) => i !== idx));
+    const draft = productRules[idx];
+    if (!draft) return;
+
+    confirmAlert(
+      "Excluir regra de preço",
+      `A regra de "${draft.product.name}" deixa de valer e os próximos orçamentos voltam a usar a regra global.`,
+      "Excluir",
+      async () => {
+        try {
+          await studioApi.deletePricingRule(cid, draft.product.id);
+          toast.success("Regra excluída");
+        } catch (e: any) {
+          if (e?.status !== 404) {
+            const status = e?.status ? `[${e.status}] ` : "";
+            toast.error(`${status}${e?.data?.error || e?.message || "Erro ao excluir regra"}`);
+            return;
+          }
+        }
+        setProductRules((prev) => prev.filter((_, i) => i !== idx));
+      },
+      { destructive: true }
+    );
   }
 
   function updateProductField(
@@ -560,7 +688,12 @@ export default function StudioPrecificacao() {
 
         {/* Busca de produto */}
         <View style={s.searchWrap}>
-          <Icon name="search" size={14} color={t.ink3} style={{ position: "absolute", left: 12, zIndex: 1 }} />
+          {/* Bonus fix (mesma classe do achado #22): o componente Icon só
+              aceita name/size/color — um style={{position:"absolute"}}
+              direto nele é descartado. Envolve num View pra posicionar. */}
+          <View style={{ position: "absolute", left: 12, zIndex: 1 }}>
+            <Icon name="search" size={14} color={t.ink3} />
+          </View>
           <TextInput
             style={s.searchInput}
             placeholder="Buscar produto para adicionar regra..."
@@ -607,7 +740,7 @@ export default function StudioPrecificacao() {
                 )}
               </View>
               <Pressable onPress={() => removeProductRule(idx)} style={s.removeBtn}>
-                <Icon name="trash-2" size={13} color={t.dangerInk} />
+                <Icon name="trash-2" size={13} color={t.danger} />
               </Pressable>
             </View>
 
@@ -892,16 +1025,41 @@ const buildTiersStyles = (t: any) => StyleSheet.create({
   tiersEmpty: { fontSize: 12, color: t.ink4, fontStyle: "italic" },
 
   tierRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
     gap: 8,
-    flexWrap: "wrap",
     backgroundColor: t.bgSoft,
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
     borderColor: t.ink5,
   },
+  tierRowTop: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  // Toggle explícito Multiplicador vs Preço fechado (achado #15)
+  tierModeRow: { flexDirection: "row", gap: 6 },
+  tierModeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: t.paperCardElev,
+    borderWidth: 1,
+    borderColor: t.ink5,
+  },
+  tierModeChipSel: { backgroundColor: t.primary, borderColor: t.primary },
+  tierModeChipTxt: { fontSize: 11, fontWeight: "700", color: t.ink2 },
+  tierModeChipTxtSel: { color: "#fff" },
+  tierErrorBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: t.dangerSoft,
+    borderRadius: 8,
+    padding: 10,
+  },
+  tierErrorTxt: { flex: 1, fontSize: 11.5, color: t.dangerInk, lineHeight: 15 },
   tierCell: { flex: 1, minWidth: 90 },
   tierLabel: {
     fontSize: 10,

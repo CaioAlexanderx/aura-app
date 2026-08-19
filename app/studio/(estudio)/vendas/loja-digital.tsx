@@ -41,8 +41,9 @@
 //     cor sólida central no native. Props start/end removidas (usa "direction"
 //     CSS-style: "to bottom right", "to right", "135deg", etc).
 // ============================================================
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioColors, StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -84,10 +85,46 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
 //         · [6,7]=Entrega/Pedidos
 const TAB_GROUP_DIVIDERS = new Set<number>([1, 5]);
 
+const TAB_KEYS = new Set<string>(TABS.map((tDef) => tDef.key));
+
+// Converte hex (#RRGGBB) do StudioPalette pra rgba com alpha — usado só pro
+// fade-edge das tabs, que precisa acompanhar o bg do tema (achado #20:
+// antes era rgba(232,233,240,...) fixo, o bg CLARO, e ficava duas barras
+// cinza-claras cobrindo as tabs no dark mode).
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 export default function StudioVendasLojaDigital() {
-  const [tab, setTab] = useState<TabKey>("site");
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
+  const router = useRouter();
+  // QA fix (achado #12): as 8 tabs só existiam em estado local — F5 sempre
+  // voltava pra "Meu Site" e não dava pra favoritar/compartilhar link
+  // direto pra uma tab específica. Sincroniza com ?tab= na URL.
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const initialTab: TabKey = (typeof params.tab === "string" && TAB_KEYS.has(params.tab))
+    ? (params.tab as TabKey)
+    : "site";
+  const [tab, setTabState] = useState<TabKey>(initialTab);
+
+  function setTab(next: TabKey) {
+    setTabState(next);
+    router.setParams({ tab: next } as any);
+  }
+
+  // Se o usuário navegar via link externo trocando só o ?tab= (voltar/avançar
+  // do navegador, link de suporte), mantém o estado local em sincronia.
+  useEffect(() => {
+    if (typeof params.tab === "string" && TAB_KEYS.has(params.tab) && params.tab !== tab) {
+      setTabState(params.tab as TabKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.tab]);
   const {
     config, isLoading,
     saveConfig, isSaving,
@@ -181,13 +218,13 @@ export default function StudioVendasLojaDigital() {
           {!IS_WIDE && (
             <>
               <StudioGradient
-                colors={["rgba(232,233,240,1)", "rgba(232,233,240,0)"]}
+                colors={[hexToRgba(t.bg, 1), hexToRgba(t.bg, 0)]}
                 direction="to right"
                 style={s.fadeLeft}
                 pointerEvents="none"
               />
               <StudioGradient
-                colors={["rgba(232,233,240,0)", "rgba(232,233,240,1)"]}
+                colors={[hexToRgba(t.bg, 0), hexToRgba(t.bg, 1)]}
                 direction="to right"
                 style={s.fadeRight}
                 pointerEvents="none"
