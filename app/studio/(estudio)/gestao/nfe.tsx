@@ -10,30 +10,39 @@
 // por default), e o wrapper Studio usava t.bgSoft/t.paperCardElev
 // (claros) → barra clara em cima + card dark embaixo, sem
 // continuidade. Migrado wrapper+header pra Colors do varejo
-// (bg/bg3/border/ink3) pra herdar o tema do conteúdo. Mantemos
-// StudioColors.accent só no eyebrow magenta pra preservar identidade.
+// (bg/bg3/border/ink3) pra herdar o tema do conteúdo.
+//
+// 19/08/2026 (QA):
+//   - item 17: NfeScreen (compartilhado, fora do escopo desta tela) já
+//     renderiza seu próprio <PageHeader title="Notas fiscais" .../> — com
+//     o eyebrow+title+subtitle do wrapper E o contextBanner abaixo, eram
+//     3 blocos de texto antes do conteúdo. O contextBanner só repetia o
+//     que o subtitle já dizia ("NFC-e sai automática"), então foi
+//     removido — sobra 1 bloco no wrapper. Dedup completo (também tirar o
+//     PageHeader interno do NfeScreen) precisa de mudança no arquivo
+//     compartilhado app/(tabs)/nfe.tsx — reportado à parte.
+//   - item 20: `StudioColors.accent` (estático) trocado por
+//     `useStudioTokens().accent`. Colors.bg/bg3/border/ink* continuam
+//     ligados ao tema do varejo de propósito — é a mesma fonte de cor que
+//     o NfeScreen embutido usa; migrar só o wrapper pra useStudioTokens()
+//     reintroduziria a barra clara/card escuro (tema Studio e tema Varejo
+//     são stores independentes, podem divergir).
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
-import { Icon } from "@/components/Icon";
 import { Colors } from "@/constants/colors";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import NfeScreen from "@/app/(tabs)/nfe";
 
 export default function StudioGestaoNfe() {
+  const t = useStudioTokens();
   return (
     <View style={[s.root, { backgroundColor: Colors.bg }]}>
       <View style={s.headerWrap}>
-        <Text style={s.eyebrow}>GESTÃO · NF-E / NFC-E</Text>
+        <Text style={[s.eyebrow, { color: t.accent }]}>GESTÃO · NF-E / NFC-E</Text>
         <Text style={s.title}>Notas fiscais do estúdio</Text>
         <Text style={s.subtitle}>
           NFC-e nas vendas Studio é emitida automaticamente. Acima também você emite NF-e modelo 55 sob demanda.
         </Text>
-        <View style={s.contextBanner}>
-          <Icon name="info" size={12} color={StudioColors.accent} />
-          <Text style={s.contextBannerTxt}>
-            NFC-e Studio sai automaticamente em cada venda — você só vê o histórico aqui.
-          </Text>
-        </View>
       </View>
       <View style={{ flex: 1 }}>
         <NfeScreen />
@@ -57,7 +66,6 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -73,24 +81,5 @@ const s = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 720,
     marginBottom: 4,
-  },
-  contextBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: Colors.bg2,
-    borderWidth: 1,
-    borderColor: StudioColors.accent + "55",
-    alignSelf: "flex-start",
-    maxWidth: 720,
-  },
-  contextBannerTxt: {
-    fontSize: 12,
-    color: Colors.ink2,
-    fontWeight: "600",
-    flexShrink: 1,
   },
 });

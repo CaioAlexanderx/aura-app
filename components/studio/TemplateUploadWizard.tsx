@@ -1,19 +1,29 @@
 // ============================================================
-// AURA STUDIO · Wizard: Subir template à galeria (Fase 2)
+// AURA STUDIO · TemplateUploadWizard — subir template à galeria
 //
-// Usa <StudioWorkflow> canônico — auto-save de draft.
-// 4 passos:
-//   1. Imagem (upload OU URL externa)
-//   2. Nome + descrição + categoria
-//   3. Tags
-//   4. Salvar
+// 19/08/2026 (QA item 7) — Enxugamento: era um wizard de 4 passos
+// (Imagem → Nome/categoria → Tags → Salvar) pra subir UMA imagem. O
+// passo Tags era declaradamente opcional ("pode pular") e o passo 4 era
+// só um resumo estático. Colapsado pra 1 tela só: imagem + nome +
+// categoria + tags inline, com a prévia da imagem servindo de resumo.
+// Mesma classe de corte do StudioNewProductWizard (catálogo, já
+// enxugado de 4→1 nesta mesma sessão de QA).
 //
-// 25/05 — item #10: upload integrado via /studio/upload-mockup (R2).
+// Renderizado dentro do <Modal> que o caller (app/studio/galeria.tsx)
+// já controla — este componente não abre o próprio Modal, só preenche
+// o conteúdo (props: categories, onClose, onSaved — mantidas iguais
+// pra não quebrar o caller).
+//
+// Rascunho: auto-save em localStorage (mesma chave que o antigo
+// StudioWorkflow usava, "studio_workflow_draft__template-upload", pra
+// não deixar rascunhos pré-existentes órfãos). QA item 22: fechar no X
+// agora LIMPA o rascunho — antes ficava fantasma e o próximo template
+// abria preenchido com a arte abandonada.
 // ============================================================
-import { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, Image, Platform, ActivityIndicator } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet, Image, Platform, ActivityIndicator, ScrollView } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { StudioWorkflow } from "@/components/studio/StudioWorkflow";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type TemplateCategory } from "@/services/studioApi";
@@ -45,19 +55,67 @@ const DEFAULT_DRAFT: Draft = {
   newTag: "",
 };
 
+const MAX_TAGS = 10;
+
+// ─── Rascunho (localStorage, web-only) ─────────────────────────
+// Mesma chave que o StudioWorkflow (removido) usava — evita órfãos.
+const DRAFT_KEY = "studio_workflow_draft__template-upload";
+
+function loadDraft(): Partial<Draft> | null {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch { /* quota / privacy mode → ignora */ }
+  return null;
+}
+function persistDraft(d: Draft): void {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    }
+  } catch { /* ignora */ }
+}
+function clearDraft(): void {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(DRAFT_KEY);
+    }
+  } catch { /* ignora */ }
+}
+
 export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
+  const router = useRouter();
   const { company } = useAuthStore();
-  const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const upd = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
 
-  const canAdvance =
-    step === 1 ? /^https?:\/\//.test(draft.image_url.trim()) :
-    step === 2 ? draft.name.trim().length > 1 :
-    true;
+  // Restaura rascunho no mount
+  useEffect(() => {
+    const restored = loadDraft();
+    if (restored) setDraft((d) => ({ ...d, ...restored }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save a cada mudança
+  useEffect(() => {
+    persistDraft(draft);
+  }, [draft]);
+
+  const hasValidImage = /^https?:\/\//.test(draft.image_url.trim());
+  const canSave = hasValidImage && draft.name.trim().length > 1 && !saving;
+
+  function handleClose() {
+    // QA item 22: antes o X não limpava o draft — próximo template abria
+    // preenchido com a arte abandonada.
+    clearDraft();
+    onClose();
+  }
 
   async function pickAndUpload() {
     if (!company?.id) return;
@@ -84,8 +142,9 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
     }
   }
 
-  async function handleConcluir() {
-    if (!company?.id) return;
+  async function handleSave() {
+    if (!company?.id || !canSave) return;
+    setSaving(true);
     try {
       await studioApi.createTemplate(company.id, {
         image_url: draft.image_url.trim(),
@@ -95,45 +154,77 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
         tags: draft.tags,
       });
       toast.success("✨ Template salvo na galeria!");
+      clearDraft();
       onSaved();
     } catch (e: any) {
       toast.error(e?.message || "Erro ao salvar template");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function addTag() {
-    const t = draft.newTag.trim().toLowerCase();
-    if (!t || draft.tags.includes(t) || draft.tags.length >= 10) return;
-    upd({ tags: [...draft.tags, t], newTag: "" });
+  // QA item 21: colar "rosa, vintage, infantil" no Enter virava UMA tag só.
+  // Agora faz split por vírgula/espaço, e tag duplicada ou além do limite
+  // de 10 avisa por toast em vez de sumir silenciosamente.
+  function addTagsFromText(raw: string) {
+    const candidates = raw
+      .split(/[,\n]+/)
+      .flatMap((chunk) => chunk.split(/\s+/))
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (candidates.length === 0) {
+      upd({ newTag: "" });
+      return;
+    }
+
+    const next = [...draft.tags];
+    let dupCount = 0;
+    let limitHit = false;
+
+    for (const c of candidates) {
+      if (next.length >= MAX_TAGS) { limitHit = true; break; }
+      if (next.includes(c)) { dupCount++; continue; }
+      next.push(c);
+    }
+
+    upd({ tags: next, newTag: "" });
+
+    if (limitHit) {
+      toast.warning(`Máximo de ${MAX_TAGS} tags por template — o restante não foi adicionado.`);
+    } else if (dupCount > 0) {
+      toast.warning(dupCount === 1 ? "Essa tag já tinha sido adicionada." : `${dupCount} tags já estavam na lista.`);
+    }
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={s.closeRow}>
-        <Pressable onPress={onClose} style={s.closeBtn}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
+      <View style={s.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.eyebrow}>GALERIA · NOVO TEMPLATE</Text>
+          <Text style={s.title}>Subir template</Text>
+        </View>
+        <Pressable onPress={handleClose} style={s.closeBtn}>
           <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
 
-      <StudioWorkflow
-        title="Subir template à galeria"
-        steps={["Imagem", "Nome e categoria", "Tags", "Salvar"]}
-        current={step}
-        onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
-        onNext={step < 4 ? () => setStep((x) => x + 1) : undefined}
-        onConcluir={step === 4 ? handleConcluir : undefined}
-        primaryDisabled={!canAdvance}
-        draftKey="template-upload"
-        draft={draft}
-        onDraftRestored={(d: any) => setDraft({ ...DEFAULT_DRAFT, ...d })}
-      >
-        {step === 1 && (
-          <View style={s.block}>
-            <Text style={s.q}>Qual a imagem desse template?</Text>
-            <Text style={s.help}>
-              Suba do seu dispositivo ou cole uma URL pública (PNG/JPG/WebP até 15 MB).
-            </Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+        {/* Imagem — upload OU URL, prévia serve de resumo */}
+        <Text style={s.label}>Imagem</Text>
+        <Text style={s.help}>
+          Suba do seu dispositivo ou cole uma URL pública (PNG/JPG/WebP até 15 MB).
+        </Text>
 
+        <View style={s.imageRow}>
+          {hasValidImage ? (
+            <Image source={{ uri: draft.image_url.trim() }} style={s.previewImg} />
+          ) : (
+            <View style={s.previewPlaceholder}>
+              <Icon name="image" size={22} color={t.ink4} />
+            </View>
+          )}
+          <View style={{ flex: 1, gap: 8 }}>
             <Pressable onPress={pickAndUpload} disabled={uploading} style={[s.uploadBtn, uploading && { opacity: 0.6 }]}>
               {uploading ? <ActivityIndicator color="#fff" /> : (
                 <>
@@ -142,153 +233,143 @@ export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
                 </>
               )}
             </Pressable>
-
-            <View style={s.divider}>
-              <View style={s.dividerLine} />
-              <Text style={s.dividerTxt}>ou cole uma URL</Text>
-              <View style={s.dividerLine} />
-            </View>
-
             <TextInput
               style={s.input}
-              placeholder="https://..."
+              placeholder="ou cole uma URL https://..."
+              placeholderTextColor={t.ink4}
               value={draft.image_url}
               onChangeText={(v) => upd({ image_url: v })}
               autoCapitalize="none"
               autoCorrect={false}
             />
-            {/^https?:\/\//.test(draft.image_url.trim()) && (
-              <View style={s.preview}>
-                <Image source={{ uri: draft.image_url.trim() }} style={s.previewImg} />
-                <Text style={s.previewCap}>Prévia</Text>
-              </View>
-            )}
           </View>
-        )}
+        </View>
 
-        {step === 2 && (
-          <View style={s.block}>
-            <Text style={s.q}>Como esse template se chama?</Text>
-            <Text style={s.help}>Nome curto e descritivo — o cliente vai ver.</Text>
-            <Text style={s.label}>Nome</Text>
-            <TextInput
-              style={s.input}
-              placeholder="Ex: Mãe coruja"
-              value={draft.name}
-              onChangeText={(v) => upd({ name: v })}
-              maxLength={60}
-            />
-            <Text style={[s.label, { marginTop: 14 }]}>Descrição (opcional)</Text>
-            <TextInput
-              style={[s.input, { minHeight: 72 }]}
-              placeholder="Detalhes pro lojista lembrar da arte"
-              value={draft.description}
-              onChangeText={(v) => upd({ description: v })}
-              multiline
-              maxLength={200}
-            />
+        {/* Nome */}
+        <Text style={[s.label, { marginTop: 18 }]}>Nome</Text>
+        <TextInput
+          style={s.input}
+          placeholder="Ex: Mãe coruja"
+          placeholderTextColor={t.ink4}
+          value={draft.name}
+          onChangeText={(v) => upd({ name: v })}
+          maxLength={60}
+        />
 
-            <Text style={[s.label, { marginTop: 16 }]}>Categoria</Text>
-            <View style={s.catList}>
+        {/* Descrição */}
+        <Text style={[s.label, { marginTop: 14 }]}>Descrição (opcional)</Text>
+        <TextInput
+          style={[s.input, { minHeight: 60 }]}
+          placeholder="Detalhes pro lojista lembrar da arte"
+          placeholderTextColor={t.ink4}
+          value={draft.description}
+          onChangeText={(v) => upd({ description: v })}
+          multiline
+          maxLength={200}
+        />
+
+        {/* Categoria */}
+        <Text style={[s.label, { marginTop: 14 }]}>Categoria</Text>
+        <View style={s.catList}>
+          <Pressable
+            style={[s.catItem, draft.category_id === null && s.catItemSel]}
+            onPress={() => upd({ category_id: null })}
+          >
+            <Text style={[s.catItemTxt, draft.category_id === null && s.catItemTxtSel]}>Sem categoria</Text>
+          </Pressable>
+          {categories.map((c) => (
+            <Pressable
+              key={c.id}
+              style={[s.catItem, draft.category_id === c.id && s.catItemSel]}
+              onPress={() => upd({ category_id: c.id })}
+            >
+              {c.icon && <Icon name={c.icon as any} size={12} color={draft.category_id === c.id ? "#fff" : t.ink3} />}
+              <Text style={[s.catItemTxt, draft.category_id === c.id && s.catItemTxtSel]}>{c.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Tags — inline, opcional */}
+        <Text style={[s.label, { marginTop: 14 }]}>
+          Tags <Text style={s.labelHint}>(opcional, até {MAX_TAGS} — ajuda na busca depois)</Text>
+        </Text>
+        <View style={s.tagInputRow}>
+          <TextInput
+            style={[s.input, { flex: 1 }]}
+            placeholder="Ex: rosa, vintage, infantil"
+            placeholderTextColor={t.ink4}
+            value={draft.newTag}
+            onChangeText={(v) => upd({ newTag: v })}
+            onSubmitEditing={() => addTagsFromText(draft.newTag)}
+            returnKeyType="done"
+            autoCapitalize="none"
+          />
+          <Pressable style={s.tagAddBtn} onPress={() => addTagsFromText(draft.newTag)}>
+            <Icon name="plus" size={14} color="#fff" />
+          </Pressable>
+        </View>
+        {draft.tags.length > 0 && (
+          <View style={s.tagsList}>
+            {draft.tags.map((tag) => (
               <Pressable
-                style={[s.catItem, draft.category_id === null && s.catItemSel]}
-                onPress={() => upd({ category_id: null })}
+                key={tag}
+                style={s.tagChip}
+                onPress={() => upd({ tags: draft.tags.filter((x) => x !== tag) })}
               >
-                <Text style={[s.catItemTxt, draft.category_id === null && s.catItemTxtSel]}>Sem categoria</Text>
+                <Text style={s.tagChipTxt}>#{tag}</Text>
+                <Icon name="x" size={10} color={t.ink3} />
               </Pressable>
-              {categories.map((c) => (
-                <Pressable
-                  key={c.id}
-                  style={[s.catItem, draft.category_id === c.id && s.catItemSel]}
-                  onPress={() => upd({ category_id: c.id })}
-                >
-                  {c.icon && <Icon name={c.icon as any} size={12} color={draft.category_id === c.id ? "#fff" : t.ink3} />}
-                  <Text style={[s.catItemTxt, draft.category_id === c.id && s.catItemTxtSel]}>{c.name}</Text>
-                </Pressable>
-              ))}
-            </View>
+            ))}
           </View>
         )}
 
-        {step === 3 && (
-          <View style={s.block}>
-            <Text style={s.q}>Adicione tags pra ajudar na busca</Text>
-            <Text style={s.help}>
-              Tags facilitam encontrar o template depois (ex: rosa, vintage, infantil). Até 10 tags.
-            </Text>
-            <View style={s.tagInputRow}>
-              <TextInput
-                style={[s.input, { flex: 1 }]}
-                placeholder="Ex: rosa"
-                value={draft.newTag}
-                onChangeText={(v) => upd({ newTag: v })}
-                onSubmitEditing={addTag}
-                returnKeyType="done"
-                autoCapitalize="none"
-              />
-              <Pressable style={s.tagAddBtn} onPress={addTag}>
-                <Icon name="plus" size={14} color="#fff" />
-              </Pressable>
-            </View>
-            {draft.tags.length > 0 && (
-              <View style={s.tagsList}>
-                {draft.tags.map((tag) => (
-                  <Pressable
-                    key={tag}
-                    style={s.tagChip}
-                    onPress={() => upd({ tags: draft.tags.filter((x) => x !== tag) })}
-                  >
-                    <Text style={s.tagChipTxt}>#{tag}</Text>
-                    <Icon name="x" size={10} color={t.ink3} />
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            {draft.tags.length === 0 && (
-              <Text style={s.subHelp}>Pode pular este passo se quiser — tags são opcionais.</Text>
-            )}
-          </View>
-        )}
+        {/* QA item 25: antes mandava pra "Estúdio › Produtos" (rota morta,
+            só redirect) e era texto sem CTA. Aponta pro catálogo de verdade
+            e é clicável. */}
+        <Pressable onPress={() => router.push("/studio/estoque" as any)} style={s.hintLink}>
+          <Text style={s.hintLinkTxt}>
+            Depois de salvar, vincule a produtos específicos em{" "}
+            <Text style={s.hintLinkStrong}>Estúdio › Catálogo</Text>, ou deixe global pra aparecer em todos os
+            personalizáveis.
+          </Text>
+        </Pressable>
+      </ScrollView>
 
-        {step === 4 && (
-          <View style={s.block}>
-            <Text style={s.q}>Confira antes de salvar</Text>
-            <View style={s.summary}>
-              {draft.image_url && <Image source={{ uri: draft.image_url }} style={s.summaryImg} />}
-              <View style={{ flex: 1 }}>
-                <Text style={s.summaryName}>{draft.name}</Text>
-                {draft.description && <Text style={s.summaryDesc}>{draft.description}</Text>}
-                {draft.category_id && (
-                  <Text style={s.summaryMeta}>
-                    Categoria: {categories.find((c) => c.id === draft.category_id)?.name}
-                  </Text>
-                )}
-                <Text style={s.summaryMeta}>
-                  {draft.tags.length} tag{draft.tags.length === 1 ? "" : "s"}
-                  {draft.tags.length > 0 && ": " + draft.tags.map((tag) => "#" + tag).join(" ")}
-                </Text>
-              </View>
-            </View>
-            <Text style={[s.help, { marginTop: 16 }]}>
-              Depois de salvar, vincule a produtos específicos em Estúdio › Produtos, ou deixe global pra
-              aparecer em todos os personalizáveis.
-            </Text>
-          </View>
-        )}
-      </StudioWorkflow>
+      <View style={s.footer}>
+        <Pressable onPress={handleClose} style={s.btnSec}>
+          <Text style={s.btnSecTxt}>Cancelar</Text>
+        </Pressable>
+        <Pressable onPress={handleSave} disabled={!canSave} style={[s.btnPri, !canSave && { opacity: 0.45 }]}>
+          {saving ? <ActivityIndicator size="small" color="#fff" /> : (
+            <>
+              <Icon name="check" size={14} color="#fff" />
+              <Text style={s.btnPriTxt}>Salvar template</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const buildStyles = (t: StudioPalette) => StyleSheet.create({
-  closeRow: { flexDirection: "row", justifyContent: "flex-end", padding: 12, backgroundColor: t.bg },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCardElev },
+  header: {
+    flexDirection: "row", alignItems: "flex-start",
+    paddingHorizontal: 24, paddingTop: 22, paddingBottom: 14,
+    borderBottomWidth: 1, borderBottomColor: t.ink5,
+    gap: 12,
+  },
+  eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+  title: { fontSize: 22, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center",
+    backgroundColor: t.paperCardElev,
+  },
 
-  block: { maxWidth: 540 },
-  q: { fontSize: 17, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
-  help: { fontSize: 13, color: t.ink3, marginTop: 4, marginBottom: 16, lineHeight: 19 },
-  subHelp: { fontSize: 12, color: t.ink3, marginTop: 10 },
+  body: { padding: 24, paddingBottom: 40, maxWidth: 560, width: "100%", alignSelf: "center" },
   label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  labelHint: { fontWeight: "500", textTransform: "none", letterSpacing: 0, color: t.ink3, fontSize: 11 },
+  help: { fontSize: 13, color: t.ink3, marginBottom: 12, lineHeight: 18 },
   input: {
     backgroundColor: t.paperCardElev,
     borderWidth: 1.5, borderColor: t.ink5,
@@ -296,19 +377,19 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     fontSize: 14, color: t.ink,
   },
 
+  imageRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
+  previewImg: { width: 88, height: 88, borderRadius: 14, backgroundColor: t.paperCardElev },
+  previewPlaceholder: {
+    width: 88, height: 88, borderRadius: 14, backgroundColor: t.paperCardElev,
+    alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: t.ink5,
+  },
+
   uploadBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     backgroundColor: t.primary,
-    paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+    paddingVertical: 11, borderRadius: 10,
   },
-  uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 8 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: t.ink5 },
-  dividerTxt: { fontSize: 11, color: t.ink3, fontWeight: "600" },
-
-  preview: { marginTop: 14, alignItems: "center" },
-  previewImg: { width: 180, height: 180, borderRadius: 14, backgroundColor: t.paperCardElev },
-  previewCap: { fontSize: 11, color: t.ink3, marginTop: 6 },
+  uploadBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 13.5 },
 
   catList: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   catItem: {
@@ -328,13 +409,35 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     backgroundColor: t.accentSoft,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
-  tagChipTxt: { fontSize: 12, color: "#9D174D", fontWeight: "700" },
+  tagChipTxt: { fontSize: 12, color: t.accentInk ?? t.accent, fontWeight: "700" },
 
-  summary: { flexDirection: "row", gap: 14, padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
-  summaryImg: { width: 100, height: 100, borderRadius: 10 },
-  summaryName: { fontSize: 16, fontWeight: "800", color: t.ink },
-  summaryDesc: { fontSize: 12.5, color: t.ink3, marginTop: 4 },
-  summaryMeta: { fontSize: 11.5, color: t.ink3, marginTop: 4 },
+  hintLink: {
+    marginTop: 20, padding: 12, borderRadius: 10,
+    backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5,
+  },
+  hintLinkTxt: { fontSize: 12, color: t.ink3, lineHeight: 17 },
+  hintLinkStrong: { color: t.primary, fontWeight: "700" },
+
+  footer: {
+    flexDirection: "row", justifyContent: "flex-end", alignItems: "center",
+    paddingHorizontal: 24, paddingVertical: 14,
+    borderTopWidth: 1, borderTopColor: t.ink5,
+    backgroundColor: t.paperCardElev,
+    gap: 12,
+  },
+  btnPri: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: t.primary,
+    paddingVertical: 12, paddingHorizontal: 22, borderRadius: 12,
+    minWidth: 160, justifyContent: "center",
+  },
+  btnPriTxt: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  btnSec: {
+    paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12,
+    borderWidth: 1.5, borderColor: t.ink5,
+    backgroundColor: t.paperCardElev,
+  },
+  btnSecTxt: { color: t.ink2, fontSize: 13, fontWeight: "600" },
 });
 
 export default TemplateUploadWizard;

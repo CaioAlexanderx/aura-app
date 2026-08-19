@@ -76,7 +76,9 @@ export default function StudioOrcamentosScreen() {
   const [filterStatus, setFilterStatus] = useState<StudioQuoteStatus | "">("");
 
   const load = useCallback(async () => {
-    if (!companyId) return;
+    // QA item 12: early return sem setLoading(false) podia travar o
+    // skeleton se companyId nunca resolvesse.
+    if (!companyId) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -271,6 +273,9 @@ function makeStyles(t: StudioPalette) {
     cardBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     cardTotal:  { fontSize: 17, fontWeight: "800", color: t.primary },
     cardDate:   { fontSize: 12, color: t.ink3 },
-    cardArrow:  { position: "absolute", right: 14, top: "50%" as any },
+    // QA item 24: faltava a translateY(-50%) — chevron ficava visivelmente
+    // abaixo do centro. marginTop negativo (metade do size=16 do ícone)
+    // resolve sem depender de transform percentual (instável em RN).
+    cardArrow:  { position: "absolute", right: 14, top: "50%" as any, marginTop: -8 },
   });
 }

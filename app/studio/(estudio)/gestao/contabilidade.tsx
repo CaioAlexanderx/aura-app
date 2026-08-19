@@ -10,26 +10,31 @@
 // (dark navy por default), e o wrapper Studio usava t.bgSoft/
 // t.paperCardElev (claros) → barra clara em cima + card dark embaixo,
 // sem continuidade. Migrado wrapper+header pra Colors do varejo
-// (bg/bg3/border/ink3) pra herdar o tema do conteúdo. Mantemos
-// StudioColors.accent só no eyebrow magenta pra preservar identidade.
+// (bg/bg3/border/ink3) pra herdar o tema do conteúdo.
+//
+// 19/08/2026 (QA item 20): `StudioColors.accent` (estático) trocado por
+// `useStudioTokens().accent`. Colors.bg/bg3/border/ink* continuam ligados
+// ao tema do varejo de propósito — mesma fonte de cor que o
+// ContabilidadeScreen embutido usa; ver mesmo racional em gestao/nfe.tsx.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
 import { Colors } from "@/constants/colors";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import ContabilidadeScreen from "@/app/(tabs)/contabilidade";
 
 export default function StudioGestaoContabilidade() {
+  const t = useStudioTokens();
   return (
     <View style={s.wrapper}>
       <View style={s.header}>
-        <Text style={s.eyebrow}>GESTÃO · CONTABILIDADE</Text>
+        <Text style={[s.eyebrow, { color: t.accent }]}>GESTÃO · CONTABILIDADE</Text>
         <Text style={s.title}>Contabilidade do estúdio</Text>
         <Text style={s.subtitle}>
           Obrigações fiscais, DRE e relatórios mensais. Operações Studio entram automaticamente nos números.
         </Text>
-        <View style={s.contextBanner}>
-          <Icon name="info" size={12} color={StudioColors.accent} />
+        <View style={[s.contextBanner, { borderColor: t.accent + "55" }]}>
+          <Icon name="info" size={12} color={t.accent} />
           <Text style={s.contextBannerTxt}>
             Vendas personalizadas aparecem nos relatórios mensais como categoria "Studio".
           </Text>
@@ -58,7 +63,6 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -84,7 +88,6 @@ const s = StyleSheet.create({
     backgroundColor: Colors.bg2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: StudioColors.accent + "55",
     alignSelf: "flex-start",
     maxWidth: 720,
   },

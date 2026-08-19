@@ -20,7 +20,7 @@ import Animated, {
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
-import { studioApi } from "@/services/studioApi";
+import { studioApi, type StudioInput } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
 
 type Unit = "un" | "g" | "kg" | "ml" | "L" | "folha" | "cm" | "m";
@@ -38,8 +38,14 @@ type CreatedInsumo = {
 type Props = {
   visible: boolean;
   companyId: string;
+  /**
+   * QA item 5: unificação — o mesmo modal agora cobre criar E editar.
+   * Passe o insumo a editar aqui; null/undefined = modo criação.
+   */
+  editing?: StudioInput | null;
   onClose: () => void;
   onCreated?: (insumo: CreatedInsumo) => void;
+  onUpdated?: (insumo: StudioInput) => void;
 };
 
 function parseDecimal(v: string): number {
@@ -61,8 +67,10 @@ function maskPhone(v: string): string {
 export default function NovoInsumoModal({
   visible,
   companyId,
+  editing,
   onClose,
   onCreated,
+  onUpdated,
 }: Props) {
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
@@ -95,24 +103,36 @@ export default function NovoInsumoModal({
         duration: 200,
         easing: Easing.out(Easing.cubic),
       });
+      // Modo edição: prefill com os dados do insumo. Modo criação: form em branco.
+      if (editing) {
+        setName(editing.name || "");
+        setUnit(((editing.unit as Unit) || "un"));
+        setUnitCost(editing.unit_cost != null ? String(editing.unit_cost).replace(".", ",") : "");
+        setStockQty(editing.stock_qty != null ? String(editing.stock_qty).replace(".", ",") : "");
+        setStockMin(editing.stock_min != null ? String(editing.stock_min).replace(".", ",") : "");
+        setSupplierName(editing.supplier_name || "");
+        setSupplierPhone(editing.supplier_phone ? maskPhone(editing.supplier_phone) : "");
+        setNotes(editing.notes || "");
+        setShowMore(!!(editing.supplier_name || editing.supplier_phone || editing.notes));
+      } else {
+        setName("");
+        setUnit("un");
+        setUnitCost("");
+        setStockQty("");
+        setStockMin("");
+        setSupplierName("");
+        setSupplierPhone("");
+        setNotes("");
+        setShowMore(false);
+      }
       const t1 = setTimeout(() => nameInputRef.current?.focus(), 120);
       return () => clearTimeout(t1);
     } else {
       opacity.value = 0;
       scale.value = 0.95;
-      // reset form on close
-      setName("");
-      setUnit("un");
-      setUnitCost("");
-      setStockQty("");
-      setStockMin("");
-      setSupplierName("");
-      setSupplierPhone("");
-      setNotes("");
-      setShowMore(false);
       setSubmitting(false);
     }
-  }, [visible, opacity, scale]);
+  }, [visible, editing, opacity, scale]);
 
   // ESC closes (web)
   useEffect(() => {
@@ -162,21 +182,29 @@ export default function NovoInsumoModal({
         supplier_phone: supplierPhone.replace(/\D/g, "") || null,
         notes: notes.trim() || null,
       };
-      console.log("[NovoInsumoModal] creating input", {
-        companyId,
-        name: payload.name,
-        unit: payload.unit,
-      });
-      const r = await studioApi.createInput(companyId, payload);
-      console.log("[NovoInsumoModal] created", r);
-      toast.success("Insumo cadastrado!");
-      onCreated?.({
-        id: r.id,
-        name: r.name,
-        unit: r.unit,
-        unit_cost: Number(r.unit_cost) || 0,
-        stock_qty: Number(r.stock_qty) || 0,
-      });
+      if (editing) {
+        console.log("[NovoInsumoModal] updating input", { companyId, id: editing.id });
+        const r = await studioApi.updateInput(companyId, editing.id, payload);
+        console.log("[NovoInsumoModal] updated", r);
+        toast.success("Insumo atualizado!");
+        onUpdated?.(r);
+      } else {
+        console.log("[NovoInsumoModal] creating input", {
+          companyId,
+          name: payload.name,
+          unit: payload.unit,
+        });
+        const r = await studioApi.createInput(companyId, payload);
+        console.log("[NovoInsumoModal] created", r);
+        toast.success("Insumo cadastrado!");
+        onCreated?.({
+          id: r.id,
+          name: r.name,
+          unit: r.unit,
+          unit_cost: Number(r.unit_cost) || 0,
+          stock_qty: Number(r.stock_qty) || 0,
+        });
+      }
       onClose();
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status ?? "?";
@@ -185,8 +213,8 @@ export default function NovoInsumoModal({
         err?.response?.data?.message ||
         err?.data?.error ||
         err?.message ||
-        "Falha ao cadastrar insumo";
-      console.error("[NovoInsumoModal] create failed", {
+        (editing ? "Falha ao atualizar insumo" : "Falha ao cadastrar insumo");
+      console.error("[NovoInsumoModal] save failed", {
         status,
         msg,
       });
@@ -219,11 +247,12 @@ export default function NovoInsumoModal({
             direction="135deg"
             style={styles.header}
           >
-            <Text style={styles.eyebrow}>ESTOQUE · CADASTRO RÁPIDO</Text>
-            <Text style={styles.title}>Novo insumo</Text>
+            <Text style={styles.eyebrow}>{editing ? "ESTOQUE · EDIÇÃO" : "ESTOQUE · CADASTRO RÁPIDO"}</Text>
+            <Text style={styles.title}>{editing ? "Editar insumo" : "Novo insumo"}</Text>
             <Text style={styles.subtitle}>
-              Cadastre o item de matéria-prima e ele já entra na ficha do
-              produto
+              {editing
+                ? "Atualize os dados do insumo — fichas técnicas que usam esse item recalculam o custo automaticamente."
+                : "Cadastre o item de matéria-prima e ele já entra na ficha do produto"}
             </Text>
           </StudioGradient>
 
@@ -396,7 +425,7 @@ export default function NovoInsumoModal({
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.btnPrimaryText}>Criar e adicionar</Text>
+                <Text style={styles.btnPrimaryText}>{editing ? "Salvar alterações" : "Criar e adicionar"}</Text>
               )}
             </Pressable>
           </View>

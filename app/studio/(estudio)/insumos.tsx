@@ -9,14 +9,17 @@
 //                       canônico (StudioFichaTecnicaPanel) vive.
 //                       Nenhum caminho de escrita de ficha existe aqui.
 //
-// Deep-link: ?action=novo-insumo → abre NovoInsumoModal automaticamente
-// no mount (param consumido via router.replace para não reabrir em
-// re-renders).
+// Deep-link: ?action=novo-insumo → abre NovoInsumoModal (depende de
+// params.action, não só do mount — re-dispara em qualquer navegação com
+// esse query param, param consumido via router.replace).
+//
+// Cadastro/edição: form inline eliminado (19/08/2026 QA) — CTA do header,
+// empty state, linha da lista (editar) e deep-link do onboarding todos
+// abrem o mesmo NovoInsumoModal (que agora também cobre edição).
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -25,14 +28,13 @@ import { type StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput, type CompositionSummary } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { confirmAlert } from "@/utils/webAlert";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import NovoInsumoModal from "@/components/studio/NovoInsumoModal";
-
-const UNITS = ["un", "g", "kg", "ml", "L", "folha", "cm", "m"];
 
 // ─── Semáforo de margem ───────────────────────────────────────────────────────
 function marginColor(pct: number | null): string {
@@ -55,30 +57,27 @@ export default function StudioInsumos() {
   // ── Tab ───────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"insumos" | "fichas">("insumos");
 
-  // ── Deep-link: ?action=novo-insumo abre modal no mount ────────────────────
+  // ── Deep-link: ?action=novo-insumo abre modal ──────────────────────────────
+  // QA item 9: antes o useEffect tinha deps [] (só no mount) — se a tela já
+  // estivesse montada, clicar "Cadastrar insumo" no checklist não abria nada.
+  // Agora depende de params.action e consome o param via router.replace,
+  // então volta a disparar em toda navegação com esse query param.
   const params = useLocalSearchParams<{ action?: string }>();
-  const [novoInsumoOpen, setNovoInsumoOpen] = useState(false);
-
-  useEffect(() => {
-    if (params.action === "novo-insumo") {
-      setNovoInsumoOpen(true);
-      // Consome o param para não reabrir em re-renders
-      router.replace("/studio/insumos" as any);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ABA INSUMOS — estado e lógica (ORIGINAL, sem alteração)
+  // ABA INSUMOS — estado e lógica
   // ═══════════════════════════════════════════════════════════════════════════
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<StudioInput[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<StudioInput | null>(null);
-  const [form, setForm] = useState<Partial<StudioInput>>({});
+  // QA item 5: unificado — o form inline foi eliminado. openNew/openEdit
+  // controlam o mesmo NovoInsumoModal usado pelo deep-link do onboarding.
+  const [insumoModalOpen, setInsumoModalOpen] = useState(false);
+  const [editingInsumo, setEditingInsumo] = useState<StudioInput | null>(null);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    // QA item 12: early return sem setLoading(false) podia travar o skeleton
+    // se company?.id nunca resolvesse.
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
     try {
       const r = await studioApi.listInputs(company.id);
@@ -90,50 +89,45 @@ export default function StudioInsumos() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (params.action === "novo-insumo") {
+      setEditingInsumo(null);
+      setInsumoModalOpen(true);
+      // Consome o param para não reabrir em re-renders/voltas de navegação
+      router.replace("/studio/insumos" as any);
+    }
+  }, [params.action, router]);
+
   const lowStock = inputs.filter((i) => i.is_low_stock);
 
   function openNew() {
-    setEditing(null);
-    setForm({ name: "", unit: "un", unit_cost: 0, stock_qty: 0, stock_min: undefined });
-    setShowForm(true);
+    setEditingInsumo(null);
+    setInsumoModalOpen(true);
   }
 
   function openEdit(i: StudioInput) {
-    setEditing(i);
-    setForm({
-      name: i.name, unit: i.unit, unit_cost: i.unit_cost,
-      stock_qty: i.stock_qty, stock_min: i.stock_min,
-      supplier_name: i.supplier_name, supplier_phone: i.supplier_phone, notes: i.notes,
-    });
-    setShowForm(true);
+    setEditingInsumo(i);
+    setInsumoModalOpen(true);
   }
 
-  async function save() {
+  // QA item 4: exclusão sem confirmação — um toque errado apagava o insumo
+  // (o ícone de lixeira fica a 14px do bloco de quantidade dentro da linha
+  // clicável) e podia invalidar fichas técnicas/custo de produtos.
+  function remove(i: StudioInput) {
     if (!company?.id) return;
-    if (!form.name || !String(form.name).trim()) {
-      toast.error("Nome do insumo é obrigatório");
-      return;
-    }
-    try {
-      if (editing) {
-        await studioApi.updateInput(company.id, editing.id, form);
-        toast.success("Insumo atualizado");
-      } else {
-        await studioApi.createInput(company.id, form);
-        toast.success("✨ Insumo cadastrado!");
-      }
-      setShowForm(false); setEditing(null);
-      load();
-    } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
-  }
-
-  async function remove(i: StudioInput) {
-    if (!company?.id) return;
-    try {
-      await studioApi.deleteInput(company.id, i.id);
-      toast.success("Insumo removido");
-      load();
-    } catch (e: any) { toast.error(e?.message || "Erro"); }
+    confirmAlert(
+      "Remover insumo?",
+      `"${i.name}" será removido. Fichas técnicas que usam esse insumo perdem essa referência de custo.`,
+      "Remover",
+      async () => {
+        try {
+          await studioApi.deleteInput(company.id!, i.id);
+          toast.success("Insumo removido");
+          load();
+        } catch (e: any) { toast.error(e?.message || "Erro ao remover insumo"); }
+      },
+      { destructive: true }
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -143,16 +137,22 @@ export default function StudioInsumos() {
   const [fichasLoading, setFichasLoading] = useState(false);
   const [compositions, setCompositions] = useState<CompositionSummary[]>([]);
   const [fichasLoaded, setFichasLoaded] = useState(false);
+  // QA item 10: erro no fetch virava empty state mentiroso ("Nenhuma ficha
+  // técnica" pra quem tem 40) — agora tem estado de erro dedicado.
+  const [fichasError, setFichasError] = useState<string | null>(null);
 
   const loadFichas = useCallback(async () => {
     if (!company?.id) return;
     setFichasLoading(true);
+    setFichasError(null);
     try {
       const compRes = await studioApi.listCompositionsSummary(company.id);
       setCompositions(compRes.compositions || []);
       setFichasLoaded(true);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar fichas");
+      const msg = e?.message || "Erro ao carregar fichas técnicas";
+      setFichasError(msg);
+      toast.error(msg);
     } finally { setFichasLoading(false); }
   }, [company?.id]);
 
@@ -257,109 +257,6 @@ export default function StudioInsumos() {
             />
           )}
 
-          {/* Form novo/editar insumo */}
-          {showForm && (
-            <View style={s.formCard}>
-              <View style={s.formHead}>
-                <Text style={s.formTitle}>{editing ? "Editar insumo" : "Novo insumo"}</Text>
-                <Pressable onPress={() => { setShowForm(false); setEditing(null); }}>
-                  <Icon name="x" size={18} color={t.ink3} />
-                </Pressable>
-              </View>
-              <View style={s.formGrid}>
-                <View style={{ flex: 2, minWidth: 200 }}>
-                  <Text style={s.label}>Nome *</Text>
-                  <TextInput
-                    style={s.input}
-                    placeholder="Ex: Caneca branca cerâmica"
-                    value={form.name || ""}
-                    onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 100 }}>
-                  <Text style={s.label}>Unidade</Text>
-                  <View style={s.unitRow}>
-                    {UNITS.map((u) => (
-                      <Pressable
-                        key={u}
-                        style={[s.unitChip, form.unit === u && s.unitChipSel]}
-                        onPress={() => setForm((f) => ({ ...f, unit: u }))}
-                      >
-                        <Text style={[s.unitChipTxt, form.unit === u && s.unitChipTxtSel]}>{u}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <View style={s.formGrid}>
-                <View style={{ flex: 1, minWidth: 130 }}>
-                  <Text style={s.label}>Custo unit. (R$)</Text>
-                  <TextInput
-                    style={s.input}
-                    keyboardType="decimal-pad"
-                    value={String(form.unit_cost ?? "")}
-                    onChangeText={(v) => setForm((f) => ({ ...f, unit_cost: parseFloat(v.replace(",", ".")) || 0 }))}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 130 }}>
-                  <Text style={s.label}>Estoque atual</Text>
-                  <TextInput
-                    style={s.input}
-                    keyboardType="decimal-pad"
-                    value={String(form.stock_qty ?? "")}
-                    onChangeText={(v) => setForm((f) => ({ ...f, stock_qty: parseFloat(v.replace(",", ".")) || 0 }))}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 130 }}>
-                  <Text style={s.label}>Mínimo (alerta)</Text>
-                  <TextInput
-                    style={s.input}
-                    keyboardType="decimal-pad"
-                    placeholder="opcional"
-                    value={form.stock_min != null ? String(form.stock_min) : ""}
-                    onChangeText={(v) => {
-                      const n = parseFloat(v.replace(",", "."));
-                      setForm((f) => ({ ...f, stock_min: isNaN(n) ? undefined : n }));
-                    }}
-                  />
-                </View>
-              </View>
-
-              <View style={s.formGrid}>
-                <View style={{ flex: 1, minWidth: 200 }}>
-                  <Text style={s.label}>Fornecedor (opcional)</Text>
-                  <TextInput
-                    style={s.input}
-                    placeholder="Nome do fornecedor"
-                    value={form.supplier_name || ""}
-                    onChangeText={(v) => setForm((f) => ({ ...f, supplier_name: v }))}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 180 }}>
-                  <Text style={s.label}>Telefone</Text>
-                  <TextInput
-                    style={s.input}
-                    placeholder="(00) 00000-0000"
-                    value={form.supplier_phone || ""}
-                    onChangeText={(v) => setForm((f) => ({ ...f, supplier_phone: v }))}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-
-              <View style={s.formActions}>
-                <Pressable style={s.btnSec} onPress={() => { setShowForm(false); setEditing(null); }}>
-                  <Text style={s.btnSecTxt}>Cancelar</Text>
-                </Pressable>
-                <Pressable style={s.btnPri} onPress={save}>
-                  <Icon name="check" size={14} color="#fff" />
-                  <Text style={s.btnPriTxt}>{editing ? "Salvar alterações" : "Cadastrar"}</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
           {/* Loading */}
           {loading && <StudioLoading variant="skeleton-list" rows={5} />}
 
@@ -403,7 +300,15 @@ export default function StudioInsumos() {
                       <Text style={s.itemMin}>min {Number(i.stock_min).toFixed(0)}</Text>
                     )}
                   </View>
-                  <Pressable onPress={() => remove(i)} style={s.delBtn} hitSlop={10}>
+                  {/* QA item 4: separado do bloco de quantidade (borda + padding
+                      próprios) pra reduzir toque acidental; exclusão agora sempre
+                      passa por confirmAlert (destructive) antes de chamar a API. */}
+                  <Pressable
+                    onPress={(e: any) => { e?.stopPropagation?.(); remove(i); }}
+                    style={s.delBtn}
+                    hitSlop={10}
+                    accessibilityLabel={`Remover ${i.name}`}
+                  >
                     <Icon name="trash" size={14} color={t.ink4} />
                   </Pressable>
                 </Pressable>
@@ -430,8 +335,20 @@ export default function StudioInsumos() {
           {/* Loading */}
           {fichasLoading && <StudioLoading variant="skeleton-list" rows={4} />}
 
+          {/* QA item 10: erro dedicado — antes caía no empty state genérico
+              ("Nenhuma ficha técnica" pra quem tem 40, se a request falhasse). */}
+          {!fichasLoading && fichasError && (
+            <StudioEmpty
+              icon="alert-circle"
+              title="Não foi possível carregar as fichas técnicas"
+              desc={fichasError}
+              tone="warning"
+              primaryCta={{ label: "Tentar novamente", onPress: () => loadFichas() }}
+            />
+          )}
+
           {/* Lista vazia */}
-          {!fichasLoading && compositions.length === 0 && (
+          {!fichasLoading && !fichasError && compositions.length === 0 && (
             <StudioEmpty
               icon="clipboard-list"
               title="Nenhuma ficha técnica"
@@ -444,7 +361,7 @@ export default function StudioInsumos() {
           )}
 
           {/* Lista de fichas — somente-leitura */}
-          {!fichasLoading && compositions.length > 0 && (
+          {!fichasLoading && !fichasError && compositions.length > 0 && (
             <>
               {/* Cabeçalho da lista */}
               <View style={s.listHeader}>
@@ -495,14 +412,23 @@ export default function StudioInsumos() {
       )}
       </ScrollView>
 
-      {/* Modal novo insumo (acessível via aba Insumos + deep-link) */}
+      {/* Modal novo/editar insumo — acessível via CTA, linha da lista (editar),
+          deep-link do onboarding (novo) e checklist ("Cadastrar insumo"). */}
       <NovoInsumoModal
-        visible={novoInsumoOpen}
+        visible={insumoModalOpen}
         companyId={company?.id || ""}
-        onClose={() => setNovoInsumoOpen(false)}
-        onCreated={(insumo) => {
-          setInputs((prev) => [insumo as unknown as StudioInput, ...prev]);
-          setNovoInsumoOpen(false);
+        editing={editingInsumo}
+        onClose={() => setInsumoModalOpen(false)}
+        onCreated={() => {
+          // QA item 16: prepend otimista com objeto incompleto (sem stock_min,
+          // supplier_name, is_low_stock) fazia o item recém-criado aparecer sem
+          // alerta de estoque mínimo nem fornecedor. Recarrega a lista completa.
+          load();
+          setInsumoModalOpen(false);
+        }}
+        onUpdated={() => {
+          load();
+          setInsumoModalOpen(false);
         }}
       />
     </StudioScreen>
@@ -530,10 +456,6 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   // ─── Buttons ─────────────────────────────────────────────────────────────
   ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
   ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-  btnPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 22, borderRadius: 10 },
-  btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
-  btnSec: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: "#fff" },
-  btnSecTxt: { color: t.ink2, fontWeight: "600", fontSize: 13 },
 
   // ─── Alert card ──────────────────────────────────────────────────────────
   alertCard: {
@@ -548,23 +470,6 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   alertRowName: { fontSize: 13, fontWeight: "700", color: t.ink },
   alertRowQty: { fontSize: 12.5, color: t.ink2 },
 
-  // ─── Form card ───────────────────────────────────────────────────────────
-  formCard: {
-    backgroundColor: t.paperCardElev, borderRadius: 18, padding: 22, marginBottom: 18,
-    borderWidth: 1, borderColor: t.primarySoft,
-  },
-  formHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  formTitle: { fontSize: 17, fontWeight: "800", color: t.ink },
-  formGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 12 },
-  label: { fontSize: 11, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13.5, color: t.ink },
-  unitRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  unitChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
-  unitChipSel: { backgroundColor: t.primary, borderColor: t.primary },
-  unitChipTxt: { fontSize: 11.5, fontWeight: "700", color: t.ink3 },
-  unitChipTxtSel: { color: "#fff" },
-  formActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 10 },
-
   // ─── Lista insumos ────────────────────────────────────────────────────────
   list: { gap: 8 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
@@ -578,7 +483,12 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   itemQtyBlock: { alignItems: "flex-end" },
   itemQty: { fontSize: 14, fontWeight: "800", color: t.ink, letterSpacing: -0.2 },
   itemMin: { fontSize: 11, color: t.ink4, marginTop: 1 },
-  delBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  // QA item 4: lixeira separada do bloco de quantidade com borda + margem
+  // própria (antes ficava a 14px, colada, dentro da mesma linha clicável).
+  delBtn: {
+    width: 34, height: 34, alignItems: "center", justifyContent: "center",
+    marginLeft: 4, borderLeftWidth: 1, borderLeftColor: t.ink5, paddingLeft: 10,
+  },
 
   // ─── Fichas: hint somente-leitura ────────────────────────────────────────
   fichasHint: {
