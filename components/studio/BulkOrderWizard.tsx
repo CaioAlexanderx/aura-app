@@ -111,12 +111,14 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
     return () => clearTimeout(timer);
   }, [company?.id, names.length, draft.unit_price]);
 
+  const deadlineValid = !draft.delivery_deadline || /^\d{4}-\d{2}-\d{2}$/.test(draft.delivery_deadline);
+
   // 2 passos (FIX bug #10 QA): 1) evento+produto+pessoas 2) preço+prazo.
+  // A data entra no gate: a borda vermelha sozinha era cosmética e deixava
+  // criar o evento com data pela metade (ex: "2026-12").
   const canAdvance =
     step === 1 ? draft.event_name.trim().length > 1 && !!draft.product_id && names.length > 0 :
-    parseFloat(draft.unit_price) > 0;
-
-  const deadlineValid = !draft.delivery_deadline || /^\d{4}-\d{2}-\d{2}$/.test(draft.delivery_deadline);
+    parseFloat(draft.unit_price) > 0 && deadlineValid;
 
   async function handleConcluir() {
     if (!company?.id) return;

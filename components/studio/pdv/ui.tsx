@@ -148,20 +148,31 @@ export function StationPill({ t, label }: { t: StudioPalette; label: string }) {
 // ─── Thumb de linha (card de produto / carrinho / checkout) ─────────
 // Fonte única do "o que mostrar no lugar da foto": card, carrinho e
 // checkout divergiam (um mostrava preview genérico, outro só a inicial)
-// porque cada um reimplementava a própria lógica. Ordem de prioridade:
-//   1) foto real do produto (image_url)
-//   2) preview de personalização (só p/ produto personalizável sem foto)
-//   3) inicial do nome (fallback final, produto comum sem foto)
+// porque cada um reimplementava a própria lógica.
+//
+// `prefer` existe porque as duas telas querem coisas diferentes:
+//   - "photo" (catálogo): a lojista está PROCURANDO o produto, e a foto
+//     real é o que identifica.
+//   - "customization" (carrinho/checkout): o produto já foi escolhido; o
+//     que importa conferir com o cliente é a ARTE daquela linha — mostrar
+//     a foto genérica aqui esconde justamente o que foi personalizado.
+// Fallback final nos dois casos: inicial do nome.
 export function LineThumb({
-  t, product, values, size, radius,
+  t, product, values, size, radius, prefer = "photo",
 }: {
   t: StudioPalette;
   product: StudioProduct;
   values?: Record<string, any>;
   size: number;
   radius?: number;
+  prefer?: "photo" | "customization";
 }) {
   const r = radius ?? (size >= 80 ? 12 : 10);
+  if (prefer === "customization" && product.is_personalizable && product.customization_config) {
+    return (
+      <PersonalizationPreview config={product.customization_config} values={values || {}} size={size} showLabel={false} />
+    );
+  }
   if (product.image_url) {
     return (
       <Image

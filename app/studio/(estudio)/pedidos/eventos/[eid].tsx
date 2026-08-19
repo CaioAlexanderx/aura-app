@@ -10,6 +10,7 @@
 //   POST /studio/bulk-events/:eid/convert
 // ============================================================
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View, Text, Pressable, ActivityIndicator, StyleSheet,
 } from "react-native";
@@ -63,7 +64,8 @@ export default function EventoDetalhe() {
     }
   }, [company?.id, eid]);
 
-  useEffect(() => { load(); }, [load]);
+  // Recarrega ao ganhar foco: agir noutra tela e voltar mostrava dado stale.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleConvert = async () => {
     if (!company?.id || !eid || converting) return;

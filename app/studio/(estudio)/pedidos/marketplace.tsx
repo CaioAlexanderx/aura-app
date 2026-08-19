@@ -12,6 +12,7 @@
 // de entrada dedicada com agregados/SLA.
 // ============================================================
 import { useMemo, useEffect, useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput,
 } from "react-native";
@@ -77,7 +78,9 @@ export default function MarketplaceOrdersHub() {
   const [savingTracking, setSavingTracking] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!cid) return;
+    // Sem empresa não há o que buscar — mas soltar o loading é obrigatório,
+    // senão o skeleton gira pra sempre (mesmo bug corrigido nas telas irmãs).
+    if (!cid) { setLoading(false); return; }
     setLoading(true);
     try {
       const [ordersRes, statsRes] = await Promise.all([
@@ -100,7 +103,8 @@ export default function MarketplaceOrdersHub() {
     } finally { setLoading(false); }
   }, [cid, filter, platformFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  // Recarrega ao ganhar foco: agir noutra tela e voltar mostrava dado stale.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function saveTracking(orderId: string) {
     if (!cid) return;

@@ -2,7 +2,9 @@
 // AURA STUDIO · Wizard de solicitar aprovação de arte (Fase 5)
 //
 // 3ª aplicação do <StudioWorkflow> canônico.
-// 3 passos: Mockup (upload OU URL) → Mensagem → Abrir WhatsApp.
+// 2 passos (19/08/2026 QA): Mockup (upload OU URL) → Mensagem + envio.
+// O antigo passo 3 só exibia "Link gerado!" — o link já saía pronto no
+// fim do passo 2, então era um clique a mais em toda aprovação.
 //
 // 25/05 — item #10 da análise UX/UI: upload integrado.
 // Lojista clica "Subir do dispositivo", arquivo vai pro R2, URL volta

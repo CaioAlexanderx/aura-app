@@ -26,7 +26,7 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type Template, type TemplateCategory } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import { TemplateUploadWizard } from "@/components/studio/TemplateUploadWizard";
+import { TemplateUploadWizard, clearTemplateUploadDraft } from "@/components/studio/TemplateUploadWizard";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
@@ -296,7 +296,13 @@ export default function StudioGaleria() {
       )}
 
       {/* Wizard subir template */}
-      <Modal visible={wizardOpen} animationType="slide" onRequestClose={() => setWizardOpen(false)}>
+      <Modal
+        visible={wizardOpen}
+        animationType="slide"
+        // Voltar físico do Android também descarta o rascunho — senão o
+        // próximo "Subir template" abre com a arte abandonada.
+        onRequestClose={() => { clearTemplateUploadDraft(); setWizardOpen(false); }}
+      >
         <TemplateUploadWizard
           categories={categories}
           onClose={() => setWizardOpen(false)}

@@ -441,6 +441,16 @@ export default function StudioProducao() {
   // "Aguardando arte" e destaca por alguns segundos. router.replace() tira o
   // param da URL pra não reaplicar em todo re-render (ex: depois de mover
   // um card, o componente re-renderiza e reaplicaria o scroll de novo).
+  //
+  // O timer do destaque mora numa ref, NÃO no cleanup do efeito: o próprio
+  // router.replace() muda `params.intent`, o que re-dispara este efeito e
+  // rodaria o cleanup — matando o timer antes dos 2.6s e deixando a coluna
+  // destacada pra sempre. A ref sobrevive à re-execução; o unmount limpa.
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+  }, []);
+
   useEffect(() => {
     if (params?.intent !== "approval" || loading) return;
     const idx = COLUMNS.findIndex((c) => c.key === "pending_art");
@@ -450,8 +460,8 @@ export default function StudioProducao() {
     }
     setHighlightCol("pending_art");
     router.replace("/studio/producao" as any);
-    const timer = setTimeout(() => setHighlightCol(null), 2600);
-    return () => clearTimeout(timer);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightCol(null), 2600);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.intent, loading]);
 

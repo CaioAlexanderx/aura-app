@@ -35,7 +35,9 @@ export default function NovoEvento() {
   // Mesmo endpoint/filtro usado em pedidos.tsx (openBulkWizard) — produtos
   // personalizáveis pra listar no passo 1 do wizard.
   const loadProducts = useCallback(async () => {
-    if (!company?.id) return;
+    // Solta o loading no early return, senão o wizard fica preso no skeleton
+    // quando a empresa não resolve.
+    if (!company?.id) { setLoadingProducts(false); return; }
     setLoadingProducts(true);
     try {
       const r = await request<any>(

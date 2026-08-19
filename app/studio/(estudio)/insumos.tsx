@@ -19,7 +19,7 @@
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, StyleSheet, Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -381,9 +381,17 @@ export default function StudioInsumos() {
                     accessibilityRole="button"
                     accessibilityLabel={`Editar ficha de ${c.product_name} no Catálogo`}
                   >
-                    <View style={[s.itemDot, { backgroundColor: t.primarySoft }]}>
-                      <Icon name="clipboard-list" size={14} color={t.primary} />
-                    </View>
+                    {/* Foto do produto (GET /compositions/summary): a lista
+                        identificava a ficha só pelo nome, e "caneca branca
+                        fosca" vs "caneca branca brilho" são a mesma linha
+                        pro olho de quem está com pressa. */}
+                    {c.image_url ? (
+                      <Image source={{ uri: c.image_url }} resizeMode="cover" style={s.fichaThumb} />
+                    ) : (
+                      <View style={[s.itemDot, { backgroundColor: t.primarySoft }]}>
+                        <Icon name="clipboard-list" size={14} color={t.primary} />
+                      </View>
+                    )}
                     <View style={{ flex: 2, minWidth: 0 }}>
                       <Text style={s.itemName} numberOfLines={1}>{c.product_name}</Text>
                       <Text style={s.itemMeta}>
@@ -475,6 +483,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   itemRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, backgroundColor: t.paperCard, borderRadius: 14, borderWidth: 1, borderColor: t.ink5 },
   itemRowLow: { borderColor: t.danger, backgroundColor: t.dangerSoft },
   itemDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.primarySoft, alignItems: "center", justifyContent: "center" },
+  fichaThumb: { width: 36, height: 36, borderRadius: 9, backgroundColor: t.bgSoft },
   itemNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   itemName: { fontSize: 14, fontWeight: "700", color: t.ink, flexShrink: 1 },
   lowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, backgroundColor: t.danger },

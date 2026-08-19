@@ -245,6 +245,11 @@ export default function StudioConfiguracoes() {
       const status = e?.status ? `[${e.status}] ` : "";
       const detail = e?.data?.error || e?.message || "Erro ao salvar";
       toast.error(status + detail);
+      // Recarrega também quando a falha vem do pdvSettingsApi (este catch
+      // genérico): sem isto a tela segue exibindo o que o lojista digitou
+      // sem nada garantir que foi persistido — o mesmo sintoma que o fix
+      // do erro parcial acima eliminou.
+      load();
     } finally {
       setSaving(false);
     }

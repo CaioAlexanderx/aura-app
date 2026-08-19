@@ -72,7 +72,7 @@ function CartItem({
   return (
     <View style={{ padding: 10, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, backgroundColor: t.paperCardElev }}>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <LineThumb t={t} product={p} values={line.values} size={46} />
+        <LineThumb t={t} product={p} values={line.values} size={46} prefer="customization" />
 
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* nome + remover */}

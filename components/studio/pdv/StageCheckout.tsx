@@ -84,7 +84,7 @@ function ItemRow({
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
-      <LineThumb t={t} product={l.product} values={l.values} size={40} />
+      <LineThumb t={t} product={l.product} values={l.values} size={40} prefer="customization" />
 
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 13, color: t.ink, fontWeight: "700" }} numberOfLines={1}>{l.product.name}</Text>

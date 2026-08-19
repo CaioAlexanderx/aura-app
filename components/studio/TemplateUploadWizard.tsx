@@ -85,6 +85,17 @@ function clearDraft(): void {
   } catch { /* ignora */ }
 }
 
+/**
+ * Descarta o rascunho de fora do wizard.
+ *
+ * O X interno passa por handleClose(), mas quem fecha o Modal por outro
+ * caminho (voltar físico do Android → onRequestClose no componente pai)
+ * não passava, e o rascunho abandonado reaparecia no próximo template.
+ */
+export function clearTemplateUploadDraft(): void {
+  clearDraft();
+}
+
 export function TemplateUploadWizard({ categories, onClose, onSaved }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);

@@ -426,7 +426,13 @@ export default function StudioOrderDetail() {
           { destructive: true }
         );
       } else {
-        console.warn('[advance production]', e);
+        // Sem toast, o botão "Avançar" simplesmente não fazia nada visível
+        // quando o backend recusava por outro motivo.
+        console.error('[advance production]', {
+          status: e?.status, code: e?.code, message: e?.message, data: e?.data,
+        });
+        const status = e?.status ? `[${e.status}] ` : '';
+        notify('Não foi possível avançar o pedido', `${status}${e?.data?.error || e?.message || ''}`.trim());
       }
     } finally {
       setActing(false);
