@@ -87,6 +87,7 @@ import { normalizePlate, maskPlate } from "./courierPlate";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
+import { basePriceForQty } from "./qtyTiers";
 
 const API_BASE =
   (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
@@ -200,9 +201,12 @@ function backDelta(
   return isFinite(d) ? d : 0;
 }
 
+// S6 — a faixa de quantidade incide sobre o preco de tabela; os deltas de
+// personalizacao somam DEPOIS. E a mesma ordem do backend: se os dois
+// lados discordassem, o cliente veria um total e pagaria outro.
 function lineUnitPrice(line: CartLine): number {
   return (
-    Number(line.product.price) +
+    basePriceForQty(Number(line.product.price), line.product.qty_tiers, line.qty) +
     choicesDelta(line.product.customization_config, line.values) +
     backDelta(line.product.customization_config, line.hasBackSelected)
   );
@@ -375,11 +379,11 @@ export function useStorefront(slug: string) {
   const configuringUnitPrice = useMemo(() => {
     if (!activeProduct) return 0;
     return (
-      Number(activeProduct.price) +
+      basePriceForQty(Number(activeProduct.price), activeProduct.qty_tiers, editingQty) +
       choicesDelta(activeProduct.customization_config, editingValues) +
       backDelta(activeProduct.customization_config, editingAddBack)
     );
-  }, [activeProduct, editingValues, editingAddBack]);
+  }, [activeProduct, editingValues, editingAddBack, editingQty]);
 
   function goTo(s: Stage) {
     setStage(s);

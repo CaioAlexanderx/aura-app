@@ -5,9 +5,11 @@
 // ============================================================
 import type { CustomizationConfig, CustomizationField } from "@/services/studioApi";
 import type { StoreCategory } from "./categoryGrouping";
+import type { QtyTier } from "./qtyTiers";
 
 export type { CustomizationConfig, CustomizationField };
 export type { StoreCategory };
+export type { QtyTier };
 
 export type StudioStoreProduct = {
   id: string;
@@ -21,6 +23,9 @@ export type StudioStoreProduct = {
   category_id?: string | null;
   category_slug?: string | null;
   category_path?: string | null;
+  // S6 — escada de desconto por quantidade, JA calculada pelo backend
+  // (preco unitario e percentual por faixa). [] quando nao ha faixa.
+  qty_tiers?: QtyTier[];
   stock_qty: number;
   customization_config: CustomizationConfig | null;
   templates: Array<{
