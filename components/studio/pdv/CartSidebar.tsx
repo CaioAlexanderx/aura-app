@@ -11,10 +11,9 @@
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
-import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import type { CartLine } from "./types";
 import { PAY_METHODS } from "./types";
-import { SumRow, money } from "./ui";
+import { SumRow, LineThumb, money } from "./ui";
 import { Ic } from "./icons";
 import { lineSalePrice, lineListPrice, lineDiscount } from "./checkoutMath";
 
@@ -73,13 +72,7 @@ function CartItem({
   return (
     <View style={{ padding: 10, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, backgroundColor: t.paperCardElev }}>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        {custom ? (
-          <PersonalizationPreview config={p.customization_config} values={line.values} size={46} showLabel={false} />
-        ) : (
-          <View style={{ width: 46, height: 46, borderRadius: 10, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: t.ink3 }}>{(p.name || "?").charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
+        <LineThumb t={t} product={p} values={line.values} size={46} />
 
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* nome + remover */}
@@ -92,10 +85,16 @@ function CartItem({
 
           <KindChip t={t} kind={line.kind} />
 
-          {line.kind === "personalizado" && (
+          {/* Produto personalizável adicionado por quick-add (kind='quick') também
+              precisa de um caminho pra virar personalizado — onEdit reabre o
+              StageConfigure na MESMA linha (addCustom com editLineId), nunca
+              cria linha nova. */}
+          {custom && (
             <Pressable onPress={() => onEdit(line)} style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, ...webPointer() }}>
               <Ic name="edit" size={11} color={t.accentInk} />
-              <Text style={{ fontSize: 10.5, color: t.accentInk, fontWeight: "700" }}>Editar arte</Text>
+              <Text style={{ fontSize: 10.5, color: t.accentInk, fontWeight: "700" }}>
+                {line.kind === "personalizado" ? "Editar arte" : "Personalizar"}
+              </Text>
             </Pressable>
           )}
 
@@ -227,7 +226,7 @@ export function CartSidebar({
           </Pressable>
           <Pressable onPress={onCheckout} disabled={!has}
             style={{ flex: 1.4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, borderRadius: 10, backgroundColor: has ? t.primary : t.ink5, opacity: has ? 1 : 0.6, ...(Platform.OS === "web" ? ({ cursor: has ? "pointer" : "not-allowed" } as any) : {}) }}>
-            <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>Finalizar venda</Text>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>Fechar venda</Text>
             <Ic name="arrow_right" size={16} color="#fff" />
           </Pressable>
         </View>

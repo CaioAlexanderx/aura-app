@@ -93,6 +93,10 @@ export function useStudioCheckout(cid: string | undefined) {
   const [couponInput, setCouponInput] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
   const [couponValidating, setCouponValidating] = useState(false);
+  // Erro do cupom É PRÓPRIO — não usa o `error` geral do finalizeSale, que
+  // só aparece lá embaixo do scroll no StageCheckout. Separado, dá pra
+  // mostrar inline ao lado do campo (achado de UX/QA).
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   // ── Split de pagamento ──
   const [splitMode, setSplitMode] = useState(false);
@@ -123,6 +127,7 @@ export function useStudioCheckout(cid: string | undefined) {
   const clearCoupon = useCallback(() => {
     setCouponApplied(null);
     setCouponInput("");
+    setCouponError(null);
   }, []);
 
   /** Valida o cupom digitado contra o Financeiro (subtotal atual). */
@@ -131,17 +136,17 @@ export function useStudioCheckout(cid: string | undefined) {
       const code = (couponInput || "").trim();
       if (!cid || !code) return;
       setCouponValidating(true);
-      setError(null);
+      setCouponError(null);
       try {
         const res = await couponsApi.validate(cid, code, subtotal);
         if (res.valid && res.code) {
           setCouponApplied({ code: res.code, discount: res.discount_amount || 0 });
           setCouponInput("");
         } else {
-          setError(res.error || "Cupom inválido");
+          setCouponError(res.error || "Cupom inválido");
         }
       } catch (e: any) {
-        setError(e?.message || "Erro ao validar cupom");
+        setCouponError(e?.message || "Erro ao validar cupom");
       } finally {
         setCouponValidating(false);
       }
@@ -388,6 +393,7 @@ export function useStudioCheckout(cid: string | undefined) {
     setDiscountType("%");
     setCouponInput("");
     setCouponApplied(null);
+    setCouponError(null);
     setSplitMode(false);
     setSplitPayments([]);
     setPay("pix");
@@ -406,7 +412,7 @@ export function useStudioCheckout(cid: string | undefined) {
     // desconto
     discountType, setDiscountType, discountValue, setDiscountValue, clearDiscount,
     // cupom
-    couponInput, setCouponInput, couponApplied, couponValidating, validateCoupon, clearCoupon,
+    couponInput, setCouponInput, couponApplied, couponValidating, couponError, validateCoupon, clearCoupon,
     // split
     splitMode, splitPayments, toggleSplit, addSplit, updateSplit, removeSplit,
     // prazo prometido (K1)

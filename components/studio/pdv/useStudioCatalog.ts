@@ -4,7 +4,7 @@
 // dia, filtro por categoria/busca, categorias derivadas, leitor de
 // código de barras (DD-8) e cache de templates pro configurador.
 // ============================================================
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
@@ -30,7 +30,10 @@ export function useStudioCatalog(
   const [templatesById, setTemplatesById] = useState<Record<string, Array<{ id: string; name: string; image_url: string; thumb_url: string | null }>>>({});
 
   const reload = useCallback(() => {
-    if (!cid) return;
+    // Sem empresa selecionada não tem o que buscar — mas o loading tinha
+    // ficado `true` pra sempre aqui (spinner eterno) porque este early
+    // return nunca soltava o loading.
+    if (!cid) { setLoading(false); return; }
     setLoading(true);
     request<{ products: any[] }>(
       "/companies/" + cid + "/studio/products?include_non_personalizable=true&limit=500",
@@ -58,13 +61,21 @@ export function useStudioCatalog(
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Stats do dia — best-effort (padrão defensivo armadilha_schema_pre_migration)
-  useEffect(() => {
+  // Stats do dia — best-effort (padrão defensivo armadilha_schema_pre_migration).
+  // Extraído pra useCallback: além do useEffect (cid muda), o orquestrador
+  // (index.tsx) precisa re-chamar isso depois de fechar uma venda — senão
+  // os KPIs ficam congelados no valor de quando a página abriu.
+  // aliveRef: o loadStats agora também é chamado sob demanda (após a venda),
+  // então o cancelamento não pode viver no cleanup do efeito — mora aqui e
+  // vale pra qualquer chamada em voo quando a tela desmonta.
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
+
+  const loadStats = useCallback(() => {
     if (!cid) return;
-    let cancelled = false;
     request<any>("/companies/" + cid + "/studio/dashboard/today", { method: "GET" })
       .then((r) => {
-        if (cancelled || !r) return;
+        if (!r || !aliveRef.current) return;
         setStats({
           pedidos_hoje: Number(r?.pedidos_hoje || r?.orders_today || 0),
           faturamento_hoje: Number(r?.faturamento_hoje || r?.revenue_today || 0),
@@ -73,8 +84,9 @@ export function useStudioCatalog(
         });
       })
       .catch(() => {});
-    return () => { cancelled = true; };
   }, [cid]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
 
   const categories = useMemo(() => {
     const seen = new Map<string, number>();
@@ -141,6 +153,6 @@ export function useStudioCatalog(
   return {
     products, loading, error, setError, stats,
     query, setQuery, cat, setCat, categories, filtered,
-    scanStatus, reload, templatesById, loadTemplates,
+    scanStatus, reload, reloadStats: loadStats, templatesById, loadTemplates,
   };
 }

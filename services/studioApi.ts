@@ -84,6 +84,8 @@ export type CompositionResponse = {
 export type CompositionSummary = {
   composition_id: string; product_id: string; product_name: string; product_price: number;
   total_cost: number; margin_pct: number | null; item_count: number;
+  /** 19/08/2026 (QA) — foto do produto na aba Fichas Técnicas */
+  image_url?: string | null;
 };
 
 // ─── F4 KDS Orders ──────────────────────────────────────────────────────────────────
@@ -286,6 +288,8 @@ export type PainelSeriePoint = {
 export type PainelTopProduto = {
   product_id: string | null;
   name: string;
+  /** 19/08/2026 (QA) — thumb no Top 5 (nome truncado não identificava nada) */
+  image_url?: string | null;
   revenue: number;
   qty: number;
 };
@@ -801,6 +805,10 @@ export const studioApi = {
     request<{ rules: StudioPricingRule[] }>(base(cid) + "/pricing/rules", { method: "GET", retry: 1, timeout: 8000 }),
   savePricingRule: (cid: string, productId: string | "global", rule: Partial<StudioPricingRule>) =>
     request<StudioPricingRule>(base(cid) + "/pricing/rules/" + productId, { method: "PUT", body: rule, retry: 0, timeout: 8000 }),
+  // 19/08/2026 (QA) — a UI de excluir regra só apagava do estado local:
+  // o card sumia e a regra seguia sendo aplicada nos orçamentos.
+  deletePricingRule: (cid: string, productId: string | "global") =>
+    request<{ deleted: true; product_id: string | null }>(base(cid) + "/pricing/rules/" + productId, { method: "DELETE", retry: 0, timeout: 8000 }),
   calculateQuoteLine: (cid: string, body: { product_id?: string | null; quantity: number; urgency?: boolean; overrides?: Partial<{ unit_price: number; unit_cost: number }> }) =>
     request<PricingBreakdown>(base(cid) + "/pricing/quote-line", { method: "POST", body, retry: 0, timeout: 8000 }),
 

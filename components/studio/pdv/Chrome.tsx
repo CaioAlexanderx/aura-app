@@ -7,50 +7,42 @@ import { KpiCard, StationPill, money } from "./ui";
 import { Ic } from "./icons";
 import type { DayStats } from "./types";
 
-const HERO_GRAD = "linear-gradient(115deg, #1E3A8A 0%, #4338CA 45%, #DB2777 100%)";
 const MAX = 1280;
 
+// Gradiente do Hero derivado dos tokens (navy → magenta). O design aprovado
+// tinha um terceiro stop (indigo #4338CA) sem token equivalente em
+// StudioPalette — simplificado pra 2 stops (t.primary → t.accent) em vez de
+// inventar um token novo. Ver relatório do agente pra decisão de adicionar
+// um token de indigo dedicado, se a paridade visual exata for necessária.
+function heroGradient(t: StudioPalette): string {
+  return `linear-gradient(115deg, ${t.primary} 0%, ${t.accent} 100%)`;
+}
+
 export function Hero({
-  t, operatorName, dateLabel, timeLabel, stats, hasStats, xPad,
+  t, operatorName, dateLabel, timeLabel, xPad,
 }: {
-  t: StudioPalette; operatorName: string; dateLabel: string; timeLabel: string;
-  stats: DayStats; hasStats: boolean; xPad: number;
+  t: StudioPalette; operatorName: string; dateLabel: string; timeLabel: string; xPad: number;
 }) {
   return (
     <View
       style={[
         { paddingHorizontal: xPad, paddingTop: 22, paddingBottom: 22, backgroundColor: t.primary },
-        Platform.OS === "web" ? ({ background: HERO_GRAD } as any) : {},
+        Platform.OS === "web" ? ({ background: heroGradient(t) } as any) : {},
       ]}
     >
-      <View style={{ maxWidth: MAX, alignSelf: "center", width: "100%", flexDirection: "row", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-        <View style={{ flex: 1, minWidth: 200 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#34D399" }} />
-            <Text style={{ fontSize: 10, fontWeight: "800", letterSpacing: 1.1, color: "rgba(255,255,255,0.85)", textTransform: "uppercase" }}>
-              Caixa · estação aberta
-            </Text>
-          </View>
-          <Text style={{ fontSize: 28, fontWeight: "800", color: "#fff", marginTop: 5, lineHeight: 32 }}>
-            Caixa do estúdio
-          </Text>
-          <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", marginTop: 4, textTransform: "capitalize" }}>
-            {dateLabel}
-          </Text>
-          <StationPill label={`${operatorName} · ${timeLabel}`} />
-        </View>
-        {hasStats && (
-          <View style={{ flexDirection: "row", gap: 24, alignItems: "flex-start" }}>
-            <View>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: "600" }}>Faturamento hoje</Text>
-              <Text style={{ fontSize: 24, color: "#fff", fontWeight: "800" }}>R$ {money(stats.faturamento_hoje)}</Text>
-            </View>
-            <View>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: "600" }}>Pedidos hoje</Text>
-              <Text style={{ fontSize: 24, color: "#fff", fontWeight: "800" }}>{stats.pedidos_hoje}</Text>
-            </View>
-          </View>
-        )}
+      {/* Enxuto: título + operador/hora. Os números (faturamento/pedidos)
+          viviam duplicados aqui E na KpiStrip logo abaixo, empurrando o
+          catálogo pra baixo da dobra — agora só existem na KpiStrip.
+          O pill "estação aberta" também saiu: prometia controle de sessão
+          de caixa (abrir/fechar caixa) que o PDV não tem. */}
+      <View style={{ maxWidth: MAX, alignSelf: "center", width: "100%" }}>
+        <Text style={{ fontSize: 28, fontWeight: "800", color: "#fff", lineHeight: 32 }}>
+          Caixa do estúdio
+        </Text>
+        <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", marginTop: 4, textTransform: "capitalize" }}>
+          {dateLabel}
+        </Text>
+        <StationPill t={t} label={`${operatorName} · ${timeLabel}`} />
       </View>
     </View>
   );

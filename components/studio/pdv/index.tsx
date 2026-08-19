@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
   AccessibilityInfo,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -74,6 +75,7 @@ export default function StudioCaixaPage() {
   const reducedMotion = useReduceMotion();
   const auth = useAuthStore();
   const t = useStudioTokens();
+  const router = useRouter();
   const cid = (auth.company as any)?.id as string | undefined;
   const company = auth.company as any;
   const operatorName =
@@ -161,15 +163,17 @@ export default function StudioCaixaPage() {
     if (configure) catalog.loadTemplates(configure.product.id);
   }, [configure?.product.id]);
 
+  // Erro do catálogo era setado no hook mas nunca lido aqui — a tela ficava
+  // com o grid vazio, indistinguível de "sem produtos". Toast avisa na hora;
+  // o bloco de erro (com "Tentar de novo") fica renderizado abaixo.
+  useEffect(() => {
+    if (catalog.error) toast.error(catalog.error);
+  }, [catalog.error]);
+
   const payLabel = useMemo(
     () => (checkout.splitMode ? "Dividido" : PAY_METHODS.find((m) => m.id === checkout.pay)?.label || "—"),
     [checkout.pay, checkout.splitMode],
   );
-  const hasStats =
-    catalog.stats.pedidos_hoje > 0 ||
-    catalog.stats.faturamento_hoje > 0 ||
-    catalog.stats.aguardando_arte > 0 ||
-    catalog.stats.em_producao > 0;
   const dateLabel = now.toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "2-digit",
@@ -208,11 +212,16 @@ export default function StudioCaixaPage() {
     if (ok) {
       cart.clear();
       setStage("done");
+      // KPIs (faturamento/pedidos hoje) só eram buscados quando `cid`
+      // mudava — depois de fechar uma venda ficavam congelados no valor
+      // de quando a página abriu.
+      catalog.reloadStats();
     }
   }
   function onNewSale() {
     checkout.reset();
     setStage("list");
+    catalog.reloadStats();
   }
 
   // ── loading ──
@@ -228,6 +237,30 @@ export default function StudioCaixaPage() {
         }}
       >
         <StudioLoading variant="spinner" />
+      </View>
+    );
+  }
+
+  // ── sem empresa selecionada — estado explícito, não spinner eterno nem
+  //    "nenhum produto encontrado" (que sugeriria catálogo vazio) ──
+  if (!cid) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: t.bg,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          gap: 6,
+        }}
+      >
+        <Text style={{ fontSize: 15, color: t.ink, fontWeight: "800", textAlign: "center" }}>
+          Nenhuma empresa selecionada
+        </Text>
+        <Text style={{ fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 320 }}>
+          Escolha uma empresa pra abrir o caixa do estúdio.
+        </Text>
       </View>
     );
   }
@@ -267,6 +300,7 @@ export default function StudioCaixaPage() {
         setCouponInput={checkout.setCouponInput}
         couponApplied={checkout.couponApplied}
         couponValidating={checkout.couponValidating}
+        couponError={checkout.couponError}
         onApplyCoupon={() => checkout.validateCoupon(cart.subtotal)}
         onClearCoupon={checkout.clearCoupon}
         splitMode={checkout.splitMode}
@@ -305,6 +339,8 @@ export default function StudioCaixaPage() {
   const Catalog = (
     <View style={{ paddingHorizontal: xPad, paddingTop: 14, paddingBottom: 40 }}>
       <View style={{ maxWidth: 1280, alignSelf: "center", width: "100%" }}>
+        {/* Legenda fixa "Personalizável/Comum" removida (DD-11): o card já
+            carrega o próprio badge — repetir a legenda aqui era ruído. */}
         <View
           style={{
             flexDirection: "row",
@@ -318,34 +354,6 @@ export default function StudioCaixaPage() {
           <Text style={{ fontSize: 16, color: t.ink, fontWeight: "800" }}>
             Catálogo
           </Text>
-          <View style={{ flexDirection: "row", gap: 14 }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
-            >
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  backgroundColor: t.accent,
-                }}
-              />
-              <Text style={{ fontSize: 11, color: t.ink3 }}>Personalizável</Text>
-            </View>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
-            >
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  backgroundColor: t.ink5,
-                }}
-              />
-              <Text style={{ fontSize: 11, color: t.ink3 }}>Comum</Text>
-            </View>
-          </View>
         </View>
 
         <ScrollView
@@ -366,16 +374,79 @@ export default function StudioCaixaPage() {
           ))}
         </ScrollView>
 
-        {catalog.filtered.length === 0 ? (
-          <Text
-            style={{
-              textAlign: "center",
-              color: t.ink3,
-              paddingVertical: 40,
-            }}
-          >
-            Nenhum produto encontrado.
-          </Text>
+        {catalog.error ? (
+          // Erro do fetch — distinto do empty state: aqui a lojista precisa
+          // tentar de novo, não cadastrar produto nem limpar busca.
+          <View style={{ alignItems: "center", gap: 10, paddingVertical: 40 }}>
+            <Text style={{ fontSize: 14, color: t.ink, fontWeight: "800", textAlign: "center" }}>
+              Não foi possível carregar o catálogo
+            </Text>
+            <Text style={{ fontSize: 12.5, color: t.ink3, textAlign: "center", maxWidth: 340 }}>
+              {catalog.error}
+            </Text>
+            <Pressable
+              onPress={catalog.reload}
+              style={{
+                marginTop: 4,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: t.primary,
+                ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Tentar de novo</Text>
+            </Pressable>
+          </View>
+        ) : catalog.products.length === 0 ? (
+          // Catálogo vazio de verdade (nenhum produto cadastrado) — a saída
+          // é cadastrar, não "limpar busca" (não há filtro ativo pra limpar).
+          <View style={{ alignItems: "center", gap: 10, paddingVertical: 40 }}>
+            <Text style={{ fontSize: 14, color: t.ink, fontWeight: "800", textAlign: "center" }}>
+              Nenhum produto cadastrado ainda
+            </Text>
+            <Text style={{ fontSize: 12.5, color: t.ink3, textAlign: "center", maxWidth: 340 }}>
+              Cadastre produtos no Estoque pra começar a vender por aqui.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/studio/estoque")}
+              style={{
+                marginTop: 4,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: t.primary,
+                ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Cadastrar produto</Text>
+            </Pressable>
+          </View>
+        ) : catalog.filtered.length === 0 ? (
+          // Tem produto no catálogo, mas a busca/filtro não bateu com nada —
+          // a saída aqui é limpar o filtro, não ir cadastrar de novo.
+          <View style={{ alignItems: "center", gap: 10, paddingVertical: 40 }}>
+            <Text style={{ fontSize: 14, color: t.ink, fontWeight: "800", textAlign: "center" }}>
+              Nenhum produto encontrado
+            </Text>
+            <Text style={{ fontSize: 12.5, color: t.ink3, textAlign: "center", maxWidth: 340 }}>
+              Nada bateu com a busca ou o filtro de categoria atual.
+            </Text>
+            <Pressable
+              onPress={() => { catalog.setQuery(""); catalog.setCat("all"); }}
+              style={{
+                marginTop: 4,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 10,
+                borderWidth: 1.5,
+                borderColor: t.primary,
+                ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+              }}
+            >
+              <Text style={{ color: t.primary, fontSize: 13, fontWeight: "800" }}>Limpar busca</Text>
+            </Pressable>
+          </View>
         ) : (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
             {catalog.filtered.map((p) => (
@@ -407,8 +478,6 @@ export default function StudioCaixaPage() {
         operatorName={operatorName}
         dateLabel={dateLabel}
         timeLabel={timeLabel}
-        stats={catalog.stats}
-        hasStats={hasStats}
         xPad={xPad}
       />
       <KpiStrip t={t} stats={catalog.stats} xPad={xPad} />
