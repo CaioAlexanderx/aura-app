@@ -664,8 +664,10 @@ export function StudioPersonalizacaoPanel({
       }
       if (cfgAnyLocal.back_charge_enabled) {
         const bpd = Number(cfgAnyLocal.back_price_delta);
-        if (!Number.isFinite(bpd) || bpd < 0) {
-          toast.error("Valor de cobrança inválido");
+        // > 0, não >= 0: o backend recusa delta 0 com cobrança ligada.
+        // Aceitar aqui só adiava o erro pra um 400 depois do Salvar.
+        if (!Number.isFinite(bpd) || bpd <= 0) {
+          toast.error("Informe quanto cobrar pelo verso (maior que zero)");
           return;
         }
       }
@@ -680,8 +682,8 @@ export function StudioPersonalizacaoPanel({
       }
       if (cfgAnyLocal.middle_charge_enabled) {
         const mpd = Number(cfgAnyLocal.middle_price_delta);
-        if (!Number.isFinite(mpd) || mpd < 0) {
-          toast.error("Valor de cobrança inválido");
+        if (!Number.isFinite(mpd) || mpd <= 0) {
+          toast.error("Informe quanto cobrar pelo meio (maior que zero)");
           return;
         }
       }

@@ -130,7 +130,7 @@ export function EnginePreview(props: Props) {
       );
     }
     if (template.kind === "model3d" && template.spec) {
-      return <Mug3DPreview spec={template.spec} values={values} size={size ?? 280} />;
+      return <Mug3DPreview spec={template.spec} values={values} size={size ?? 280} side={props.side} />;
     }
   }
 
