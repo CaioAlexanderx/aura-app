@@ -80,7 +80,10 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       {/* Grade de produtos */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: sf.cart.length > 0 ? 150 : 60 }}
+        contentContainerStyle={{
+          padding: 14, gap: 10, paddingBottom: sf.cart.length > 0 ? 150 : 60,
+          width: "100%", maxWidth: 980, alignSelf: "center",
+        }}
       >
         {store.products.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
