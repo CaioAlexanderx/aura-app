@@ -2,27 +2,23 @@
 // AURA STUDIO · Estoque (tela master nativa — refactor inline 26/05/2026)
 //
 // PIVOT 26/05/2026 — Feedback do cliente: "Produtos e Estoque tinham que
-// conversar e ser a mesma coisa, na mesma tela". O drawer lateral 540px
-// com 4 tabs (Básico/Personalização/Ficha/Templates) ainda dava sensação
-// de "tela secundária separada".
+// conversar e ser a mesma coisa, na mesma tela". Click numa linha de
+// produto expande INLINE (mesma página) toda a configuração.
 //
-// Solução: REMOVER o drawer/modal lateral. Click numa linha de produto
-// expande INLINE (mesma página, scroll-down) toda a configuração em
-// seções accordion:
+// 19/08/2026 — Enxugamento (análise de UI): os 4 accordions
+// (abre/fecha empilhado) viraram TABS fixas dentro da expansão:
 //
-//   ▾ DADOS BÁSICOS       (expandida por default)
-//   ▸ PERSONALIZAÇÃO      (StudioPersonalizacaoPanel embeddado)
-//   ▸ FICHA TÉCNICA       (StudioFichaTecnicaPanel embeddado)
-//   ▸ TEMPLATES VINCULADOS (StudioTemplatesPanel embeddado)
+//   [ Dados ] [ Personalização ] [ Ficha técnica ] [ Templates ]
 //
-// Cada seção: header com icon ▾/▸ + título + chip indicador
-// (OK / Incompleto / Vazio). Após salvar, mostra check verde.
+// - 1 clique pra trocar de seção, nada de abre/fecha nem scroll longo.
+// - Dot de status colorido em cada tab (ok/parcial/vazio).
+// - ProductQualityScore removido (pedido do lojista: só atrapalhava).
+// - "Novo produto" virou modal de 1 passo; ao criar, o produto já
+//   abre expandido inline pra continuar a configuração nas tabs.
 //
 // Lista master continua igual no topo (quando nenhum produto está
 // expandido). Botão "Voltar pra lista" no topo da expansão retorna
 // pro grid.
-//
-// "Novo produto" abre StudioNewProductWizard (Sprint 4) — sem mudança.
 //
 // Deep-links:
 //   ?action=novo-produto      → abre wizard automaticamente no mount
@@ -55,7 +51,6 @@ import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
-import { ProductQualityScore, calculateProductScore } from "@/components/studio/ProductQualityScore";
 import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
 import { isCanonicalConfig } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "@/services/studioApi";
@@ -475,8 +470,11 @@ export default function StudioEstoque() {
         visible={wizardOpen}
         companyId={cid}
         onClose={() => setWizardOpen(false)}
-        onCreated={() => {
+        onCreated={(p) => {
           setWizardOpen(false);
+          // Produto novo já abre expandido inline: o lojista segue
+          // configurando personalização/ficha/templates nas tabs.
+          pendingExpandIdRef.current = p.id;
           load();
         }}
       />
@@ -583,7 +581,6 @@ function ProductRow({
             color={product.studio_storefront_visible === false ? t.ink4 : t.primary}
           />
         </Pressable>
-        <ProductQualityScore product={product as any} badgeOnly />
         <Icon name="chevron-right" size={16} color={t.ink3} />
       </View>
     </Pressable>
@@ -592,7 +589,7 @@ function ProductRow({
 
 // ───────────────────────────────────────────────────────────
 // ProductExpanded — produto expandido inline (mesma tela)
-// Sticky header + 4 seções accordion
+// Sticky header + tabs (Dados · Personalização · Ficha · Templates)
 // ───────────────────────────────────────────────────────────
 function ProductExpanded({
   product, companyId, slug, t, s,
@@ -608,20 +605,10 @@ function ProductExpanded({
   onSubpanelChanged: () => void;
   onToggleVisible: (next: boolean) => void;
 }) {
-  // Seções: estado de expansão + status (ok/partial/empty)
-  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
-    basico: true,
-    personalizacao: false,
-    ficha: false,
-    templates: false,
-  });
-  const [savedFlash, setSavedFlash] = useState<Partial<Record<SectionKey, boolean>>>({});
+  // Tab ativa (era accordion abre/fecha — enxugamento 19/08/2026)
+  const [activeTab, setActiveTab] = useState<SectionKey>("basico");
 
-  const toggle = (key: SectionKey) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // Status de cada seção
+  // Status de cada seção (vira dot colorido na tab)
   const basicoStatus: SectionStatus = useMemo(() => {
     const hasName = (product.name || "").trim().length >= 2;
     const hasPrice = (product.price || 0) > 0;
@@ -634,10 +621,8 @@ function ProductExpanded({
   }, [product.name, product.price, product.description, product.image_url]);
 
   // 19/08/2026: lia `cfg.zones`, chave que nenhum editor jamais gravou —
-  // todo produto personalizável aparecia como "Incompleto", inclusive os
-  // bem configurados. O que existe de verdade é `fields`, e o chip agora
-  // diz o que a lojista precisa saber: se a config já está canônica
-  // (ids estáveis, config por tipo) ou se ainda é a forma antiga.
+  // todo produto personalizável aparecia como "Incompleto". O que existe
+  // de verdade é `fields`, e o dot diz se a config já está canônica.
   const personalizacaoStatus: SectionStatus = useMemo(() => {
     if (!product.is_personalizable) return "empty";
     const cfg = product.customization_config as CustomizationConfig | null | undefined;
@@ -652,18 +637,22 @@ function ProductExpanded({
     return "empty";
   }, [product.template_count]);
 
-  // Ficha técnica: não temos o campo no row, então sinalizamos como "abrir pra ver"
-  const fichaStatus: SectionStatus = "partial";
-
-  const score = useMemo(() => calculateProductScore(product as any), [product]);
   const personalizableChip = product.is_personalizable;
   const templateChipQty = product.template_count || 0;
 
-  const flashSaved = (key: SectionKey) => {
-    setSavedFlash((prev) => ({ ...prev, [key]: true }));
-    setTimeout(() => {
-      setSavedFlash((prev) => ({ ...prev, [key]: false }));
-    }, 2500);
+  // Tabs: ficha técnica não tem status derivável do row → sem dot
+  const tabs: Array<{ key: SectionKey; label: string; status: SectionStatus | null }> = [
+    { key: "basico",         label: "Dados",          status: basicoStatus },
+    { key: "personalizacao", label: "Personalização", status: personalizacaoStatus },
+    { key: "ficha",          label: "Ficha técnica",  status: null },
+    { key: "templates",      label: "Templates",      status: templatesStatus },
+  ];
+
+  const statusDotColor = (status: SectionStatus | null): string | null => {
+    if (status === "ok") return t.success || "#059669";
+    if (status === "partial") return t.warning || "#b45309";
+    if (status === "empty") return t.ink4;
+    return null;
   };
 
   return (
@@ -735,142 +724,70 @@ function ProductExpanded({
         </View>
       </View>
 
-      {/* Qualidade do cadastro — checklist acionável do que falta melhorar */}
-      <ProductQualityScore product={product as any} />
+      {/* Tab bar — 1 clique por seção, sem abre/fecha */}
+      <View style={s.tabBar}>
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key;
+          const dot = statusDotColor(tab.status);
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              style={[s.tabBtn, active && s.tabBtnActive]}
+            >
+              {dot ? <View style={[s.tabDot, { backgroundColor: dot }]} /> : null}
+              <Text style={[s.tabBtnTxt, active && s.tabBtnTxtActive]}>{tab.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      {/* Seção 1 — Dados básicos */}
-      <SectionCard
-        title="Dados basicos"
-        icon="edit"
-        status={basicoStatus}
-        open={openSections.basico}
-        savedFlash={!!savedFlash.basico}
-        onToggle={() => toggle("basico")}
-        t={t}
-        s={s}
-      >
-        <BasicoForm
-          product={product}
-          companyId={companyId}
-          t={t}
-          s={s}
-          onToggleVisible={onToggleVisible}
-          onPatched={(patch) => {
-            onProductPatched(patch);
-            flashSaved("basico");
-          }}
-        />
-      </SectionCard>
-
-      {/* Seção 2 — Personalização */}
-      <SectionCard
-        title="Personalizacao"
-        icon="sparkles"
-        status={personalizacaoStatus}
-        open={openSections.personalizacao}
-        savedFlash={!!savedFlash.personalizacao}
-        onToggle={() => toggle("personalizacao")}
-        t={t}
-        s={s}
-      >
-        <StudioPersonalizacaoPanel
-          productId={product.id}
-          companyId={companyId}
-          productName={product.name}
-          productPrice={product.price}
-          slug={slug}
-          onSaved={() => { onSubpanelChanged(); flashSaved("personalizacao"); }}
-        />
-      </SectionCard>
-
-      {/* Seção 3 — Ficha técnica */}
-      <SectionCard
-        title="Ficha tecnica"
-        icon="clipboard"
-        status={fichaStatus}
-        open={openSections.ficha}
-        savedFlash={!!savedFlash.ficha}
-        onToggle={() => toggle("ficha")}
-        t={t}
-        s={s}
-      >
-        <StudioFichaTecnicaPanel
-          productId={product.id}
-          companyId={companyId}
-          productName={product.name}
-          productPrice={product.price}
-          onSaved={() => { onSubpanelChanged(); flashSaved("ficha"); }}
-        />
-      </SectionCard>
-
-      {/* Seção 4 — Templates vinculados */}
-      <SectionCard
-        title="Templates vinculados"
-        icon="image"
-        status={templatesStatus}
-        open={openSections.templates}
-        savedFlash={!!savedFlash.templates}
-        onToggle={() => toggle("templates")}
-        t={t}
-        s={s}
-      >
-        <StudioTemplatesPanel
-          productId={product.id}
-          companyId={companyId}
-          productName={product.name}
-          onChanged={() => { onSubpanelChanged(); flashSaved("templates"); }}
-        />
-      </SectionCard>
-    </View>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
-// SectionCard — card accordion reusável
-// ───────────────────────────────────────────────────────────
-function SectionCard({
-  title, icon, status, open, savedFlash, onToggle, children, t, s,
-}: {
-  title: string;
-  icon: string;
-  status: SectionStatus;
-  open: boolean;
-  savedFlash: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  t: StudioPalette;
-  s: ReturnType<typeof buildStyles>;
-}) {
-  const statusMeta = useMemo(() => {
-    if (savedFlash) {
-      return { label: "Salvo agora", bg: t.successSoft || "#d1fae5", fg: t.success || "#059669", icon: "check" };
-    }
-    switch (status) {
-      case "ok":      return { label: "Completo",   bg: t.successSoft || "#d1fae5", fg: t.success || "#059669", icon: "check" };
-      case "partial": return { label: "Incompleto", bg: t.warningSoft || "#fef3c7", fg: t.warning || "#b45309", icon: "alert-triangle" };
-      case "empty":
-      default:        return { label: "Vazio",      bg: t.bgSoft,                   fg: t.ink3,                 icon: "circle" };
-    }
-  }, [status, savedFlash, t]);
-
-  return (
-    <View style={s.sectionCard}>
-      <Pressable onPress={onToggle} style={s.sectionHeader}>
-        <View style={s.sectionHeaderLeft}>
-          <View style={s.sectionIconWrap}>
-            <Icon name={icon as any} size={14} color={t.primary} />
+      {/* Conteúdo da tab ativa */}
+      <View style={s.tabContent}>
+        {activeTab === "basico" && (
+          <View style={s.tabContentPad}>
+            <BasicoForm
+              product={product}
+              companyId={companyId}
+              t={t}
+              s={s}
+              onToggleVisible={onToggleVisible}
+              onPatched={(patch) => onProductPatched(patch)}
+            />
           </View>
-          <Text style={s.sectionTitle}>{title}</Text>
-        </View>
-        <View style={s.sectionHeaderRight}>
-          <View style={[s.statusChip, { backgroundColor: statusMeta.bg }]}>
-            <Icon name={statusMeta.icon as any} size={10} color={statusMeta.fg} />
-            <Text style={[s.statusChipTxt, { color: statusMeta.fg }]}>{statusMeta.label}</Text>
-          </View>
-          <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={t.ink2} />
-        </View>
-      </Pressable>
-      {open && <View style={s.sectionBody}>{children}</View>}
+        )}
+
+        {activeTab === "personalizacao" && (
+          <StudioPersonalizacaoPanel
+            productId={product.id}
+            companyId={companyId}
+            productName={product.name}
+            productPrice={product.price}
+            slug={slug}
+            onSaved={() => onSubpanelChanged()}
+          />
+        )}
+
+        {activeTab === "ficha" && (
+          <StudioFichaTecnicaPanel
+            productId={product.id}
+            companyId={companyId}
+            productName={product.name}
+            productPrice={product.price}
+            customizationConfig={product.customization_config}
+            onSaved={() => onSubpanelChanged()}
+          />
+        )}
+
+        {activeTab === "templates" && (
+          <StudioTemplatesPanel
+            productId={product.id}
+            companyId={companyId}
+            productName={product.name}
+            onChanged={() => onSubpanelChanged()}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -1267,56 +1184,46 @@ function buildStyles(t: StudioPalette) {
     expandedQty: { fontSize: 13, color: t.ink3, fontWeight: "600" },
     expandedChipsRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 2 },
 
-    // Section card (accordion)
-    sectionCard: {
+    // Tabs da expansão (era accordion)
+    tabBar: {
+      flexDirection: "row",
+      gap: 6,
+      flexWrap: "wrap",
+      backgroundColor: t.paperCard,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.ink5,
+      padding: 5,
+    },
+    tabBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 9,
+      flexGrow: 1,
+      justifyContent: "center",
+    },
+    tabBtnActive: {
+      backgroundColor: t.primarySoft,
+    },
+    tabBtnTxt: { fontSize: 13, color: t.ink2, fontWeight: "700" },
+    tabBtnTxtActive: { color: t.primary, fontWeight: "800" },
+    tabDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+    },
+    tabContent: {
       backgroundColor: t.paperCard,
       borderRadius: 14,
       borderWidth: 1,
       borderColor: t.ink5,
       overflow: "hidden",
     },
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      gap: 12,
-    },
-    sectionHeaderLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      flex: 1,
-      minWidth: 0,
-    },
-    sectionIconWrap: {
-      width: 32, height: 32, borderRadius: 8,
-      backgroundColor: t.primarySoft,
-      alignItems: "center", justifyContent: "center",
-    },
-    sectionTitle: { fontSize: 15, color: t.ink, fontWeight: "800", letterSpacing: -0.1 },
-    sectionHeaderRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    statusChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 999,
-    },
-    statusChipTxt: { fontSize: 10, fontWeight: "800", letterSpacing: 0.2 },
-    sectionBody: {
-      paddingHorizontal: 16,
-      paddingBottom: 16,
-      paddingTop: 4,
-      borderTopWidth: 1,
-      borderTopColor: t.ink5,
-      backgroundColor: t.bg,
+    tabContentPad: {
+      padding: 16,
     },
 
     // Form

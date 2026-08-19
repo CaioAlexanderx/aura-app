@@ -1,36 +1,22 @@
 // ============================================================
-// AURA STUDIO - StudioNewProductWizard (Sprint 4)
+// AURA STUDIO - StudioNewProductWizard
 //
-// Wizard 4 passos pra cadastro unificado de produto personalizado:
-//   1. Basico (obrigatorio) — nome, descricao, preco, estoque, sku,
-//      categoria, foto. Submit POST /companies/:cid/products.
-//   2. Personalizacao (opcional) — embed StudioPersonalizacaoPanel.
-//   3. Ficha tecnica (opcional)  — embed StudioFichaTecnicaPanel.
-//   4. Templates (opcional)      — embed StudioTemplatesPanel.
+// 19/08/2026 — Enxugamento do catálogo (análise de UI):
+// O wizard de 4 passos (Básico → Personalização → Ficha → Templates,
+// cada um com interstitial "Sim/Não") virou UM passo só: o Básico.
+// Motivo: os passos 2-4 embedavam os mesmos painéis que já existem
+// no editor inline do estoque — o lojista respondia perguntas e
+// navegava steps pra chegar no mesmo lugar. Agora:
+//   1. Preenche nome + preço (únicos obrigatórios) e cria.
+//   2. onCreated(product) → o estoque expande o produto inline,
+//      onde Personalização/Ficha/Templates estão a 1 clique (tabs).
 //
 // Convencoes:
 //   - useStudioTokens() pro theme (light/dark via StudioThemeMode)
 //   - buildStyles(t) memoizado
 //   - toast em "@/components/Toast"
 //   - request() direto de "@/services/api" pra criar produto
-//   - StudioLoading no submit (variant spinner)
 //   - StudioGradient no header (primary -> accent 135deg)
-//
-// 26/05/2026 — Code review fixes:
-//   - Imports estáticos dos panels (require dinâmico podia falhar
-//     em Metro/web bundle production)
-//   - Steps 2-4 passam productName/productPrice (e slug em
-//     personalização) pros panels embedados
-//   - panelWrap simplificado pra remover double-padding (panel
-//     filho já tem container próprio com padding)
-//
-// 05/06/2026 (#4) — Category selector wired to studioApi:
-//   - Categorias carregadas via studioApi.listProductCategories
-//   - "+ Nova categoria" usa studioApi.createProductCategory
-//   - Payload envia `category` (texto = nome) em vez de `category_id` (FK)
-//     conforme contrato: campo category no produto é TEXT
-//   - O que já existia: chips de seleção, input de nova categoria, UI completa
-//   - O que foi completado: wiring ao studioApi + payload correto
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -50,7 +36,6 @@ import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioGradient } from "@/components/studio/StudioGradient";
-import { StudioLoading } from "@/components/studio/StudioLoading";
 import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
@@ -59,10 +44,6 @@ import {
   pickFileWeb,
   uploadStudioMockup,
 } from "@/services/studioUploadApi";
-import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
-import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
-import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
-import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -77,15 +58,6 @@ type Props = {
 // Categoria: id para seleção local, name para enviar no payload (campo TEXT no produto)
 type Category = { id: string; name: string; color?: string | null };
 
-type CreatedProduct = {
-  id: string;
-  name: string;
-  price: number;
-};
-
-const TOTAL_STEPS = 4;
-const STEP_TITLES = ["Basico", "Personalizacao", "Ficha tecnica", "Templates"];
-
 // ───────────────────────────────────────────────────────────
 // Componente principal
 // ───────────────────────────────────────────────────────────
@@ -93,12 +65,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
   const { width: winWidth, height: winHeight } = useWindowDimensions();
-  const { config: dcConfig } = useDigitalChannel();
-  const dcSlug = dcConfig?.slug || null;
 
-  const [step, setStep] = useState(1);
-
-  // Step 1 — Basico
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -111,25 +78,15 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const [imageUrl, setImageUrl] = useState<string>("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Categorias
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
-  // Submit do step 1
   const [submitting, setSubmitting] = useState(false);
-  const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null);
 
-  // Steps 2/3/4 — toggles "Sim/Nao (pular)"
-  const [doPersonalizacao, setDoPersonalizacao] = useState<boolean | null>(null);
-  const [doFichaTecnica, setDoFichaTecnica] = useState<boolean | null>(null);
-  const [doTemplates, setDoTemplates] = useState<boolean | null>(null);
-
-  // ── Reset state quando modal abre/fecha ─────────────────
+  // ── Reset state quando modal fecha ──────────────────────
   useEffect(() => {
     if (!visible) {
-      // Reset apos fechar pra nao manter rascunho na proxima abertura
       const timer = setTimeout(() => {
-        setStep(1);
         setName("");
         setDescription("");
         setPrice("");
@@ -139,17 +96,13 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
         setNewCategoryName("");
         setShowNewCategoryInput(false);
         setImageUrl("");
-        setCreatedProduct(null);
-        setDoPersonalizacao(null);
-        setDoFichaTecnica(null);
-        setDoTemplates(null);
       }, 300);
       return () => clearTimeout(timer);
     }
     return undefined;
   }, [visible]);
 
-  // ── Carrega categorias via studioApi (#4) ───────────────
+  // ── Carrega categorias via studioApi ────────────────────
   useEffect(() => {
     if (!visible || !companyId) return;
     let cancelled = false;
@@ -176,11 +129,11 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     };
   }, [visible, companyId]);
 
-  // ── Validacao step 1 ────────────────────────────────────
+  // ── Validacao ───────────────────────────────────────────
   const nameValid = name.trim().length >= 2;
   const priceNum = parseFloat(price.replace(",", "."));
   const priceValid = !isNaN(priceNum) && priceNum > 0;
-  const canSubmitStep1 = nameValid && priceValid && !submitting;
+  const canSubmit = nameValid && priceValid && !submitting;
 
   // ── Upload de imagem (web) ──────────────────────────────
   async function handlePickImage() {
@@ -208,7 +161,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     }
   }
 
-  // ── Cria categoria nova via studioApi (#4) ──────────────
+  // ── Cria categoria nova via studioApi ───────────────────
   async function handleCreateCategory() {
     const trimmed = newCategoryName.trim();
     if (trimmed.length < 2) {
@@ -226,7 +179,6 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
         throw new Error("Backend nao retornou id da categoria");
       }
       setCategories((prev) => [...prev, newCat]);
-      // Seleciona a nova categoria pelo nome (campo TEXT)
       setCategoryName(trimmed);
       setNewCategoryName("");
       setShowNewCategoryInput(false);
@@ -237,11 +189,10 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     }
   }
 
-  // ── Submit step 1: cria produto ─────────────────────────
+  // ── Submit: cria produto e entrega pro editor inline ────
   // (#4): envia `category` como texto (nome), não `category_id` (FK)
-  // O campo de categoria no produto é TEXT no backend.
-  async function submitStep1(advanceAfter: boolean) {
-    if (!canSubmitStep1) return;
+  async function submitCreate() {
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
       const body: Record<string, any> = {
@@ -252,7 +203,6 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       const stockNum = parseInt(stockQty.replace(/\D/g, ""), 10);
       if (!isNaN(stockNum)) body.stock_qty = stockNum;
       if (sku.trim()) body.sku = sku.trim();
-      // Envia o nome da categoria como texto (não FK) — contrato do backend
       if (categoryName) body.category = categoryName;
       if (imageUrl) body.image_url = imageUrl;
 
@@ -267,21 +217,9 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       if (!productId) {
         throw new Error("Backend nao retornou id do produto");
       }
-      const created: CreatedProduct = {
-        id: productId,
-        name: name.trim(),
-        price: priceNum,
-      };
-      setCreatedProduct(created);
       toast.success("Produto criado!");
-
-      if (advanceAfter) {
-        setStep(2);
-      } else {
-        // Salvar e fechar — so com basico
-        onCreated?.(created);
-        onClose();
-      }
+      onCreated?.({ id: productId, name: name.trim(), price: priceNum });
+      onClose();
     } catch (e: any) {
       console.error("[StudioNewProductWizard] Falha criar produto", e);
       toast.error(e?.message || "Erro ao criar produto");
@@ -290,34 +228,10 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     }
   }
 
-  // ── Finalizar wizard ────────────────────────────────────
-  function finalize() {
-    if (createdProduct) {
-      onCreated?.(createdProduct);
-    }
-    onClose();
-  }
-
-  // ── Navegacao steps 2-4 ─────────────────────────────────
-  function goNext() {
-    if (step < TOTAL_STEPS) setStep((s) => s + 1);
-    else finalize();
-  }
-  function goBack() {
-    if (step > 1) setStep((s) => s - 1);
-  }
-  function skipStep() {
-    if (step === 2) setDoPersonalizacao(false);
-    if (step === 3) setDoFichaTecnica(false);
-    if (step === 4) setDoTemplates(false);
-    goNext();
-  }
-
-  // ── Tamanho do modal: full em mobile, 900px max em desktop
+  // ── Tamanho do modal: full em mobile, 720px max em desktop
   const isCompact = winWidth < 720;
-  const modalWidth = isCompact ? winWidth : Math.min(900, winWidth - 48);
+  const modalWidth = isCompact ? winWidth : Math.min(720, winWidth - 48);
   const modalMaxHeight = isCompact ? winHeight : winHeight - 48;
-  const progressPct = (step / TOTAL_STEPS) * 100;
 
   return (
     <Modal
@@ -338,30 +252,24 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
             },
           ]}
         >
-          {/* Header sticky com gradient */}
+          {/* Header com gradient */}
           <StudioGradient
             colors={[t.primary, t.accent]}
             direction="135deg"
             style={styles.header}
           >
             <View style={styles.headerRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeTxt}>
-                  {step}/{TOTAL_STEPS}
-                </Text>
-              </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.headerEyebrow}>Novo produto</Text>
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                  {STEP_TITLES[step - 1] || ""}
+                <Text style={styles.headerEyebrow}>Catalogo Studio</Text>
+                <Text style={styles.headerTitle} numberOfLines={1}>Novo produto</Text>
+                <Text style={styles.headerSub}>
+                  So nome e preco sao obrigatorios. Personalizacao, ficha tecnica e templates
+                  ficam a 1 clique depois de criar.
                 </Text>
               </View>
               <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={8}>
                 <Icon name="x" size={18} color="#fff" />
               </Pressable>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
             </View>
           </StudioGradient>
 
@@ -371,443 +279,188 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
           >
-            {submitting && step === 1 ? (
-              <View style={styles.loadingWrap}>
-                <StudioLoading variant="spinner" label="Criando produto..." />
+            <View style={{ gap: 14 }}>
+              {/* Nome */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Nome do produto *</Text>
+                <TextInput
+                  style={[styles.input, !nameValid && name.length > 0 && styles.inputError]}
+                  placeholder="Ex: Camiseta personalizada"
+                  placeholderTextColor={t.ink4}
+                  value={name}
+                  onChangeText={setName}
+                  autoFocus
+                />
+                {name.length > 0 && !nameValid && (
+                  <Text style={styles.errorTxt}>Pelo menos 2 caracteres</Text>
+                )}
               </View>
-            ) : (
-              <>
-                {step === 1 && (
-                  <Step1Basico
-                    t={t}
-                    styles={styles}
-                    name={name}
-                    setName={setName}
-                    description={description}
-                    setDescription={setDescription}
-                    price={price}
-                    setPrice={setPrice}
-                    stockQty={stockQty}
-                    setStockQty={setStockQty}
-                    sku={sku}
-                    setSku={setSku}
-                    categories={categories}
-                    loadingCategories={loadingCategories}
-                    categoryName={categoryName}
-                    setCategoryName={setCategoryName}
-                    showNewCategoryInput={showNewCategoryInput}
-                    setShowNewCategoryInput={setShowNewCategoryInput}
-                    newCategoryName={newCategoryName}
-                    setNewCategoryName={setNewCategoryName}
-                    onCreateCategory={handleCreateCategory}
-                    imageUrl={imageUrl}
-                    setImageUrl={setImageUrl}
-                    onPickImage={handlePickImage}
-                    uploadingImage={uploadingImage}
-                    nameValid={nameValid}
-                    priceValid={priceValid}
-                  />
-                )}
 
-                {step === 2 && (
-                  <StepEmbed
-                    t={t}
-                    styles={styles}
-                    question="Este produto aceita personalizacao?"
-                    explanation="Defina opcoes que o cliente escolhe na hora do pedido (cor, nome, frase, foto, etc)."
-                    yes={doPersonalizacao === true}
-                    no={doPersonalizacao === false}
-                    onYes={() => setDoPersonalizacao(true)}
-                    onNo={() => setDoPersonalizacao(false)}
-                    renderPanel={() => createdProduct ? (
-                      <StudioPersonalizacaoPanel
-                        productId={createdProduct.id}
-                        companyId={companyId}
-                        productName={createdProduct.name}
-                        productPrice={createdProduct.price}
-                        slug={dcSlug}
-                      />
-                    ) : null}
+              {/* Preco + Estoque */}
+              <View style={styles.row2}>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>Preco (R$) *</Text>
+                  <TextInput
+                    style={[styles.input, !priceValid && price.length > 0 && styles.inputError]}
+                    placeholder="0,00"
+                    placeholderTextColor={t.ink4}
+                    value={price}
+                    onChangeText={(v) => setPrice(v.replace(/[^0-9.,]/g, ""))}
+                    keyboardType="decimal-pad"
                   />
-                )}
+                  {price.length > 0 && !priceValid && (
+                    <Text style={styles.errorTxt}>Preco precisa ser maior que zero</Text>
+                  )}
+                </View>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>Estoque inicial</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="0"
+                    placeholderTextColor={t.ink4}
+                    value={stockQty}
+                    onChangeText={(v) => setStockQty(v.replace(/\D/g, ""))}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
 
-                {step === 3 && (
-                  <StepEmbed
-                    t={t}
-                    styles={styles}
-                    question="Quer cadastrar a ficha tecnica agora?"
-                    explanation="A ficha tecnica calcula sua margem automaticamente a partir dos insumos."
-                    yes={doFichaTecnica === true}
-                    no={doFichaTecnica === false}
-                    onYes={() => setDoFichaTecnica(true)}
-                    onNo={() => setDoFichaTecnica(false)}
-                    renderPanel={() => createdProduct ? (
-                      <StudioFichaTecnicaPanel
-                        productId={createdProduct.id}
-                        companyId={companyId}
-                        productName={createdProduct.name}
-                        productPrice={createdProduct.price}
-                      />
-                    ) : null}
-                  />
-                )}
+              {/* Descricao */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Descricao</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
+                  placeholder="Detalhes que ajudam o cliente a decidir"
+                  placeholderTextColor={t.ink4}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                />
+              </View>
 
-                {step === 4 && (
-                  <StepEmbed
-                    t={t}
-                    styles={styles}
-                    question="Vincular templates de arte agora?"
-                    explanation="Templates ajudam a montar o mockup mais rapido no pedido."
-                    yes={doTemplates === true}
-                    no={doTemplates === false}
-                    onYes={() => setDoTemplates(true)}
-                    onNo={() => setDoTemplates(false)}
-                    renderPanel={() => createdProduct ? (
-                      <StudioTemplatesPanel
-                        productId={createdProduct.id}
-                        companyId={companyId}
-                        productName={createdProduct.name}
-                      />
-                    ) : null}
-                  />
+              {/* Categoria — chips por nome (campo TEXT, não FK) */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Categoria</Text>
+                {loadingCategories ? (
+                  <ActivityIndicator color={t.primary} style={{ alignSelf: "flex-start" }} />
+                ) : (
+                  <View style={styles.catWrap}>
+                    {categories.map((c) => {
+                      const sel = c.name === categoryName;
+                      return (
+                        <Pressable
+                          key={c.id}
+                          style={[styles.catChip, sel && styles.catChipSel]}
+                          onPress={() => setCategoryName(sel ? "" : c.name)}
+                        >
+                          {c.color ? (
+                            <View style={[styles.catDot, { backgroundColor: c.color }]} />
+                          ) : null}
+                          <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{c.name}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    <Pressable
+                      style={styles.catChipAdd}
+                      onPress={() => setShowNewCategoryInput(!showNewCategoryInput)}
+                    >
+                      <Icon name="plus" size={12} color={t.primary} />
+                      <Text style={styles.catChipAddTxt}>Nova categoria</Text>
+                    </Pressable>
+                  </View>
                 )}
-              </>
-            )}
+                {showNewCategoryInput && (
+                  <View style={[styles.row2, { marginTop: 8 }]}>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      placeholder="Nome da nova categoria"
+                      placeholderTextColor={t.ink4}
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                      autoFocus
+                    />
+                    <Pressable style={styles.btnInlineCreate} onPress={handleCreateCategory}>
+                      <Text style={styles.btnInlineCreateTxt}>Criar</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+
+              {/* SKU */}
+              <View style={styles.field}>
+                <Text style={styles.label}>SKU (opcional, gerado se vazio)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: CAM-PERS-001"
+                  placeholderTextColor={t.ink4}
+                  value={sku}
+                  onChangeText={setSku}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              {/* Foto */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Foto do produto</Text>
+                <View style={styles.row2}>
+                  <Pressable
+                    style={[styles.uploadBtn, uploadingImage && { opacity: 0.6 }]}
+                    onPress={handlePickImage}
+                    disabled={uploadingImage}
+                  >
+                    {uploadingImage ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Icon name="upload" size={14} color="#fff" />
+                        <Text style={styles.uploadBtnTxt}>Subir do dispositivo</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+                <Text style={styles.hint}>Ou cole uma URL publica abaixo</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://..."
+                  placeholderTextColor={t.ink4}
+                  value={imageUrl}
+                  onChangeText={setImageUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {!!imageUrl && /^https?:\/\//.test(imageUrl.trim()) && (
+                  <View style={styles.imgPreview}>
+                    <Image source={{ uri: imageUrl.trim() }} style={styles.imgPreviewImg} />
+                    <Text style={styles.imgPreviewCap}>Previa da foto</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </ScrollView>
 
           {/* Footer sticky */}
           <View style={styles.footer}>
-            {step === 1 ? (
-              <>
-                <Pressable
-                  style={[styles.btnSec, !canSubmitStep1 && styles.btnDisabled]}
-                  onPress={() => submitStep1(false)}
-                  disabled={!canSubmitStep1}
-                >
-                  <Text style={styles.btnSecTxt}>Salvar e fechar</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.btnPri, !canSubmitStep1 && styles.btnDisabled]}
-                  onPress={() => submitStep1(true)}
-                  disabled={!canSubmitStep1}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.btnPriTxt}>Proximo {">"}</Text>
-                  )}
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Pressable style={styles.btnSec} onPress={goBack}>
-                  <Text style={styles.btnSecTxt}>{"<"} Voltar</Text>
-                </Pressable>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable style={styles.btnGhost} onPress={skipStep}>
-                    <Text style={styles.btnGhostTxt}>Pular</Text>
-                  </Pressable>
-                  <Pressable style={styles.btnPri} onPress={goNext}>
-                    <Text style={styles.btnPriTxt}>
-                      {step === TOTAL_STEPS ? "Finalizar" : "Proximo >"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
+            <Pressable style={styles.btnSec} onPress={onClose} disabled={submitting}>
+              <Text style={styles.btnSecTxt}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.btnPri, !canSubmit && styles.btnDisabled]}
+              onPress={submitCreate}
+              disabled={!canSubmit}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="check" size={14} color="#fff" />
+                  <Text style={styles.btnPriTxt}>Criar produto</Text>
+                </>
+              )}
+            </Pressable>
           </View>
         </View>
       </View>
     </Modal>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
-// Step 1 — Basico (componente filho pra manter o pai limpo)
-// (#4): categoryName (texto) substitui categoryId (FK)
-// ───────────────────────────────────────────────────────────
-function Step1Basico(props: {
-  t: StudioPalette;
-  styles: ReturnType<typeof buildStyles>;
-  name: string;
-  setName: (v: string) => void;
-  description: string;
-  setDescription: (v: string) => void;
-  price: string;
-  setPrice: (v: string) => void;
-  stockQty: string;
-  setStockQty: (v: string) => void;
-  sku: string;
-  setSku: (v: string) => void;
-  categories: Category[];
-  loadingCategories: boolean;
-  categoryName: string;
-  setCategoryName: (v: string) => void;
-  showNewCategoryInput: boolean;
-  setShowNewCategoryInput: (v: boolean) => void;
-  newCategoryName: string;
-  setNewCategoryName: (v: string) => void;
-  onCreateCategory: () => void;
-  imageUrl: string;
-  setImageUrl: (v: string) => void;
-  onPickImage: () => void;
-  uploadingImage: boolean;
-  nameValid: boolean;
-  priceValid: boolean;
-}) {
-  const {
-    t,
-    styles,
-    name,
-    setName,
-    description,
-    setDescription,
-    price,
-    setPrice,
-    stockQty,
-    setStockQty,
-    sku,
-    setSku,
-    categories,
-    loadingCategories,
-    categoryName,
-    setCategoryName,
-    showNewCategoryInput,
-    setShowNewCategoryInput,
-    newCategoryName,
-    setNewCategoryName,
-    onCreateCategory,
-    imageUrl,
-    setImageUrl,
-    onPickImage,
-    uploadingImage,
-    nameValid,
-    priceValid,
-  } = props;
-
-  return (
-    <View style={{ gap: 14 }}>
-      <Text style={styles.sectionQuestion}>Comece pelo basico</Text>
-      <Text style={styles.sectionHelp}>
-        Voce pode pular as proximas etapas e voltar depois. So o nome e o preco sao obrigatorios.
-      </Text>
-
-      {/* Nome */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Nome do produto *</Text>
-        <TextInput
-          style={[styles.input, !nameValid && name.length > 0 && styles.inputError]}
-          placeholder="Ex: Camiseta personalizada"
-          placeholderTextColor={t.ink4}
-          value={name}
-          onChangeText={setName}
-          autoFocus
-        />
-        {name.length > 0 && !nameValid && (
-          <Text style={styles.errorTxt}>Pelo menos 2 caracteres</Text>
-        )}
-      </View>
-
-      {/* Descricao */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Descricao</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
-          placeholder="Detalhes que ajudam o cliente a decidir"
-          placeholderTextColor={t.ink4}
-          value={description}
-          onChangeText={setDescription}
-          multiline
-        />
-      </View>
-
-      {/* Preco + Estoque */}
-      <View style={styles.row2}>
-        <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Preco (R$) *</Text>
-          <TextInput
-            style={[styles.input, !priceValid && price.length > 0 && styles.inputError]}
-            placeholder="0,00"
-            placeholderTextColor={t.ink4}
-            value={price}
-            onChangeText={(v) => setPrice(v.replace(/[^0-9.,]/g, ""))}
-            keyboardType="decimal-pad"
-          />
-          {price.length > 0 && !priceValid && (
-            <Text style={styles.errorTxt}>Preco precisa ser maior que zero</Text>
-          )}
-        </View>
-        <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Estoque inicial</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0"
-            placeholderTextColor={t.ink4}
-            value={stockQty}
-            onChangeText={(v) => setStockQty(v.replace(/\D/g, ""))}
-            keyboardType="number-pad"
-          />
-        </View>
-      </View>
-
-      {/* SKU */}
-      <View style={styles.field}>
-        <Text style={styles.label}>SKU (opcional, gerado se vazio)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: CAM-PERS-001"
-          placeholderTextColor={t.ink4}
-          value={sku}
-          onChangeText={setSku}
-          autoCapitalize="characters"
-        />
-      </View>
-
-      {/* Categoria — chips por nome (campo TEXT, não FK) */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Categoria</Text>
-        {loadingCategories ? (
-          <ActivityIndicator color={t.primary} style={{ alignSelf: "flex-start" }} />
-        ) : (
-          <View style={styles.catWrap}>
-            {categories.map((c) => {
-              const sel = c.name === categoryName;
-              return (
-                <Pressable
-                  key={c.id}
-                  style={[styles.catChip, sel && styles.catChipSel]}
-                  onPress={() => setCategoryName(sel ? "" : c.name)}
-                >
-                  {c.color ? (
-                    <View style={[styles.catDot, { backgroundColor: c.color }]} />
-                  ) : null}
-                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{c.name}</Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              style={styles.catChipAdd}
-              onPress={() => setShowNewCategoryInput(!showNewCategoryInput)}
-            >
-              <Icon name="plus" size={12} color={t.primary} />
-              <Text style={styles.catChipAddTxt}>Nova categoria</Text>
-            </Pressable>
-          </View>
-        )}
-        {showNewCategoryInput && (
-          <View style={[styles.row2, { marginTop: 8 }]}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="Nome da nova categoria"
-              placeholderTextColor={t.ink4}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              autoFocus
-            />
-            <Pressable style={styles.btnInlineCreate} onPress={onCreateCategory}>
-              <Text style={styles.btnInlineCreateTxt}>Criar</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-
-      {/* Foto */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Foto do produto</Text>
-        <View style={styles.row2}>
-          <Pressable
-            style={[styles.uploadBtn, uploadingImage && { opacity: 0.6 }]}
-            onPress={onPickImage}
-            disabled={uploadingImage}
-          >
-            {uploadingImage ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Icon name="upload" size={14} color="#fff" />
-                <Text style={styles.uploadBtnTxt}>Subir do dispositivo</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-        <Text style={styles.hint}>Ou cole uma URL publica abaixo</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="https://..."
-          placeholderTextColor={t.ink4}
-          value={imageUrl}
-          onChangeText={setImageUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {!!imageUrl && /^https?:\/\//.test(imageUrl.trim()) && (
-          <View style={styles.imgPreview}>
-            <Image source={{ uri: imageUrl.trim() }} style={styles.imgPreviewImg} />
-            <Text style={styles.imgPreviewCap}>Prevvia da foto</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ───────────────────────────────────────────────────────────
-// Steps 2/3/4 — embed wrapper com pergunta Sim/Nao
-// renderPanel é callback: só renderiza quando createdProduct existe
-// e o pai já sabe quais props passar (productName, productPrice, slug).
-// ───────────────────────────────────────────────────────────
-function StepEmbed(props: {
-  t: StudioPalette;
-  styles: ReturnType<typeof buildStyles>;
-  question: string;
-  explanation: string;
-  yes: boolean;
-  no: boolean;
-  onYes: () => void;
-  onNo: () => void;
-  renderPanel: () => React.ReactNode;
-}) {
-  const { styles, question, explanation, yes, onYes, onNo, renderPanel } = props;
-  const panelNode = yes ? renderPanel() : null;
-
-  // Se Sim e tem panel real, renderiza panel
-  if (yes && panelNode) {
-    return (
-      <View style={{ gap: 12 }}>
-        <Text style={styles.sectionQuestion}>{question}</Text>
-        <Text style={styles.sectionHelp}>{explanation}</Text>
-        <View style={styles.panelWrap}>
-          {panelNode}
-        </View>
-        <Pressable style={styles.linkBtn} onPress={onNo}>
-          <Text style={styles.linkBtnTxt}>Mudei de ideia, pular esta etapa</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // Estado inicial: 2 cards Sim/Nao
-  return (
-    <View style={{ gap: 16 }}>
-      <Text style={styles.sectionQuestion}>{question}</Text>
-      <Text style={styles.sectionHelp}>{explanation}</Text>
-      <View style={styles.choiceRow}>
-        <Pressable style={[styles.choiceCard, styles.choiceYes]} onPress={onYes}>
-          <View style={styles.choiceIconYes}>
-            <Icon name="check" size={20} color="#fff" />
-          </View>
-          <Text style={styles.choiceTitle}>Sim, cadastrar agora</Text>
-          <Text style={styles.choiceSub}>Continua aqui no wizard</Text>
-        </Pressable>
-        <Pressable style={[styles.choiceCard, styles.choiceNo]} onPress={onNo}>
-          <View style={styles.choiceIconNo}>
-            <Icon name="x" size={20} color={props.t.ink2} />
-          </View>
-          <Text style={styles.choiceTitle}>Nao, pular</Text>
-          <Text style={styles.choiceSub}>Voce pode fazer depois</Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -826,38 +479,21 @@ function buildStyles(t: StudioPalette) {
     modal: {
       backgroundColor: t.bg,
       overflow: "hidden",
-      // sombra forte pra destacar do backdrop
       ...(Platform.OS === "web"
         ? ({ boxShadow: "0 20px 60px rgba(0,0,0,0.4)" } as any)
         : { elevation: 20 }),
     },
 
-    // ── Header sticky ──────────────────────────────────────
+    // ── Header ─────────────────────────────────────────────
     header: {
       paddingTop: 18,
-      paddingBottom: 14,
+      paddingBottom: 16,
       paddingHorizontal: 20,
     },
     headerRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 12,
-    },
-    stepBadge: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1.5,
-      borderColor: "rgba(255,255,255,0.4)",
-    },
-    stepBadgeTxt: {
-      color: "#fff",
-      fontWeight: "800",
-      fontSize: 13,
-      letterSpacing: 0.4,
     },
     headerEyebrow: {
       color: "rgba(255,255,255,0.85)",
@@ -873,6 +509,12 @@ function buildStyles(t: StudioPalette) {
       marginTop: 2,
       letterSpacing: -0.3,
     },
+    headerSub: {
+      color: "rgba(255,255,255,0.85)",
+      fontSize: 12,
+      marginTop: 6,
+      lineHeight: 17,
+    },
     closeBtn: {
       width: 36,
       height: 36,
@@ -881,36 +523,10 @@ function buildStyles(t: StudioPalette) {
       alignItems: "center",
       justifyContent: "center",
     },
-    progressBar: {
-      marginTop: 14,
-      height: 5,
-      backgroundColor: "rgba(255,255,255,0.18)",
-      borderRadius: 999,
-      overflow: "hidden",
-    },
-    progressFill: {
-      height: "100%",
-      backgroundColor: "#fff",
-      borderRadius: 999,
-    },
 
     // ── Body ───────────────────────────────────────────────
     body: { flex: 1 },
     bodyContent: { padding: 22, paddingBottom: 12 },
-    loadingWrap: { paddingVertical: 40 },
-
-    // ── Step section ──────────────────────────────────────
-    sectionQuestion: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: t.ink,
-      letterSpacing: -0.3,
-    },
-    sectionHelp: {
-      fontSize: 13,
-      color: t.ink3,
-      lineHeight: 19,
-    },
 
     // ── Form fields ───────────────────────────────────────
     field: { gap: 6 },
@@ -1015,56 +631,6 @@ function buildStyles(t: StudioPalette) {
     },
     imgPreviewCap: { fontSize: 11, color: t.ink3, marginTop: 4 },
 
-    // ── Choice cards (Sim/Nao) ────────────────────────────
-    choiceRow: { flexDirection: "row", gap: 14, marginTop: 6 },
-    choiceCard: {
-      flex: 1,
-      padding: 18,
-      borderRadius: 16,
-      borderWidth: 2,
-      alignItems: "center",
-      gap: 10,
-      minHeight: 140,
-      justifyContent: "center",
-    },
-    choiceYes: {
-      borderColor: t.primary,
-      backgroundColor: t.primaryGhost,
-    },
-    choiceNo: {
-      borderColor: t.ink5,
-      backgroundColor: t.paperCard,
-    },
-    choiceIconYes: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: t.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    choiceIconNo: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: t.bgSoft,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    choiceTitle: { fontSize: 14, fontWeight: "800", color: t.ink, textAlign: "center" },
-    choiceSub: { fontSize: 12, color: t.ink3, textAlign: "center" },
-
-    // ── Painel embed wrapper ──────────────────────────────
-    // 26/05: removido padding/border/bg pra evitar triple-padding
-    // (ScrollView 22 + panelWrap 14 + container interno 20 = 56px).
-    // Os panels já têm container próprio com visual definitivo.
-    panelWrap: {
-      marginTop: 8,
-      marginBottom: 16,
-    },
-    linkBtn: { alignSelf: "flex-start", paddingVertical: 6 },
-    linkBtnTxt: { color: t.primary, fontSize: 12.5, fontWeight: "700", textDecorationLine: "underline" },
-
     // ── Footer sticky ──────────────────────────────────────
     footer: {
       flexDirection: "row",
@@ -1085,7 +651,7 @@ function buildStyles(t: StudioPalette) {
       paddingVertical: 12,
       paddingHorizontal: 22,
       borderRadius: 12,
-      minWidth: 140,
+      minWidth: 150,
       justifyContent: "center",
     },
     btnPriTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
@@ -1098,13 +664,6 @@ function buildStyles(t: StudioPalette) {
       backgroundColor: t.paperCardElev,
     },
     btnSecTxt: { color: t.ink2, fontSize: 13, fontWeight: "700" },
-    btnGhost: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 12,
-      backgroundColor: "transparent",
-    },
-    btnGhostTxt: { color: t.ink3, fontSize: 13, fontWeight: "600" },
     btnDisabled: { opacity: 0.45 },
   });
 }

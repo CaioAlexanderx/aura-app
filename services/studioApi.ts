@@ -60,6 +60,8 @@ export type Template = {
   image_url: string; thumb_url: string | null;
   tags: string[]; is_active: boolean; use_count: number;
   created_at: string; specifically_linked?: boolean;
+  /** Produtos vinculados diretamente (GET /gallery/templates, 19/08/2026) */
+  linked_products?: Array<{ id: string; name: string; image_url: string | null }>;
 };
 
 // ─── F3 Inputs + Compositions ───────────────────────────────────────────────────────

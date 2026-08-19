@@ -16,9 +16,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, Image, Modal,
+  TextInput, Image, Modal, ActivityIndicator,
 } from "react-native";
 import { Icon } from "@/components/Icon";
+import { request } from "@/services/api";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -42,6 +43,14 @@ export default function StudioGaleria() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+
+  // ── Vincular arte a produtos (19/08/2026) ────────────────
+  // linkTarget: template sendo vinculado; products carregados 1x sob demanda.
+  const [linkTarget, setLinkTarget] = useState<Template | null>(null);
+  const [linkProducts, setLinkProducts] = useState<Array<{ id: string; name: string; image_url: string | null }>>([]);
+  const [linkProductsLoading, setLinkProductsLoading] = useState(false);
+  const [linkChecked, setLinkChecked] = useState<Record<string, boolean>>({});
+  const [linkSaving, setLinkSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
@@ -83,6 +92,58 @@ export default function StudioGaleria() {
       toast.success("Template removido");
       load();
     } catch (e: any) { toast.error(e?.message || "Erro"); }
+  }
+
+  // ── Vincular a produtos ─────────────────────────────────
+  async function openLinkModal(tpl: Template) {
+    setLinkTarget(tpl);
+    const checked: Record<string, boolean> = {};
+    (tpl.linked_products || []).forEach((p) => { checked[p.id] = true; });
+    setLinkChecked(checked);
+    if (linkProducts.length === 0 && company?.id) {
+      setLinkProductsLoading(true);
+      try {
+        const r: any = await request(
+          `/companies/${company.id}/studio/products?include_non_personalizable=true&limit=500`,
+          { method: "GET", retry: 1, timeout: 15000 },
+        );
+        const list = Array.isArray(r) ? r : (r?.products || r?.items || []);
+        setLinkProducts(list.map((p: any) => ({
+          id: String(p.id),
+          name: String(p.name || ""),
+          image_url: p.image_url || null,
+        })));
+      } catch (e: any) {
+        toast.error(e?.message || "Erro ao carregar produtos");
+        setLinkTarget(null);
+      } finally {
+        setLinkProductsLoading(false);
+      }
+    }
+  }
+
+  async function saveLinks() {
+    if (!company?.id || !linkTarget) return;
+    const before = new Set((linkTarget.linked_products || []).map((p) => p.id));
+    const after = new Set(Object.keys(linkChecked).filter((id) => linkChecked[id]));
+    const toAdd = [...after].filter((id) => !before.has(id));
+    const toRemove = [...before].filter((id) => !after.has(id));
+    if (!toAdd.length && !toRemove.length) { setLinkTarget(null); return; }
+    setLinkSaving(true);
+    let fail = 0;
+    for (const pid of toAdd) {
+      try { await studioApi.linkTemplate(company.id, pid, linkTarget.id); }
+      catch (e) { fail++; console.error("[Galeria.link]", { pid, e }); }
+    }
+    for (const pid of toRemove) {
+      try { await studioApi.unlinkTemplate(company.id, pid, linkTarget.id); }
+      catch (e) { fail++; console.error("[Galeria.unlink]", { pid, e }); }
+    }
+    setLinkSaving(false);
+    setLinkTarget(null);
+    if (fail > 0) toast.error(`${fail} vínculo(s) falharam — tente de novo`);
+    else toast.success("Vínculos atualizados");
+    load();
   }
 
   return (
@@ -206,6 +267,22 @@ export default function StudioGaleria() {
                     ))}
                   </View>
                 )}
+                {/* Produtos vinculados — 1 clique pra gerenciar */}
+                <Pressable onPress={() => openLinkModal(tpl)} style={s.tplLinkRow}>
+                  <Icon name="link" size={12} color={(tpl.linked_products || []).length > 0 ? t.primary : t.ink3} />
+                  <Text
+                    style={[
+                      s.tplLinkTxt,
+                      (tpl.linked_products || []).length > 0 && { color: t.primary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {(tpl.linked_products || []).length > 0
+                      ? `${tpl.linked_products!.length} produto${tpl.linked_products!.length > 1 ? "s" : ""}`
+                      : "Vincular a produto"}
+                  </Text>
+                </Pressable>
+
                 <View style={s.tplFoot}>
                   <Text style={s.tplUse}>{tpl.use_count}× usado</Text>
                   <Pressable onPress={() => deleteTemplate(tpl)} style={s.tplDel}>
@@ -225,6 +302,89 @@ export default function StudioGaleria() {
           onClose={() => setWizardOpen(false)}
           onSaved={() => { setWizardOpen(false); load(); }}
         />
+      </Modal>
+
+      {/* Vincular arte a produtos */}
+      <Modal
+        visible={!!linkTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!linkSaving) setLinkTarget(null); }}
+      >
+        <View style={s.linkOverlay}>
+          <View style={s.linkCard}>
+            <View style={s.linkHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.linkTitle}>Vincular a produtos</Text>
+                <Text style={s.linkSub} numberOfLines={1}>{linkTarget?.name}</Text>
+              </View>
+              <Pressable
+                onPress={() => { if (!linkSaving) setLinkTarget(null); }}
+                hitSlop={8}
+                style={s.linkClose}
+              >
+                <Icon name="x" size={18} color={t.ink3} />
+              </Pressable>
+            </View>
+            <Text style={s.linkHint}>
+              A arte aparece em destaque nos produtos marcados. Sem vínculo, ela continua disponível pra loja toda.
+            </Text>
+
+            {linkProductsLoading ? (
+              <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                <ActivityIndicator color={t.primary} />
+              </View>
+            ) : linkProducts.length === 0 ? (
+              <Text style={s.linkEmpty}>Nenhum produto no catálogo ainda.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }}>
+                {linkProducts.map((p) => {
+                  const checked = !!linkChecked[p.id];
+                  return (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => setLinkChecked((prev) => ({ ...prev, [p.id]: !checked }))}
+                      style={[s.linkRow, checked && s.linkRowActive]}
+                    >
+                      {p.image_url ? (
+                        <Image source={{ uri: p.image_url }} style={s.linkThumb} />
+                      ) : (
+                        <View style={[s.linkThumb, s.linkThumbEmpty]}>
+                          <Icon name="image" size={16} color={t.ink4} />
+                        </View>
+                      )}
+                      <Text style={s.linkRowName} numberOfLines={2}>{p.name}</Text>
+                      <View style={[s.linkCheckbox, checked && s.linkCheckboxOn]}>
+                        {checked && <Icon name="check" size={12} color="#fff" />}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={s.linkActions}>
+              <Pressable
+                onPress={() => setLinkTarget(null)}
+                disabled={linkSaving}
+                style={s.linkCancelBtn}
+              >
+                <Text style={s.linkCancelTxt}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={saveLinks}
+                disabled={linkSaving || linkProductsLoading}
+                style={[s.linkSaveBtn, (linkSaving || linkProductsLoading) && { opacity: 0.5 }]}
+              >
+                {linkSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={s.linkSaveTxt}>Salvar vínculos</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </StudioScreen>
   );
@@ -298,5 +458,56 @@ function buildStyles(t: StudioPalette) {
     tplFoot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: t.ink5 },
     tplUse: { fontSize: 11, color: t.ink3, fontWeight: "600" },
     tplDel: { width: 24, height: 24, borderRadius: 12, backgroundColor: t.accentSoft, alignItems: "center", justifyContent: "center" },
+
+    // Vincular a produtos
+    tplLinkRow: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      marginTop: 8, paddingVertical: 5, paddingHorizontal: 8,
+      borderRadius: 8, backgroundColor: t.bgSoft,
+      alignSelf: "flex-start",
+    },
+    tplLinkTxt: { fontSize: 11, color: t.ink3, fontWeight: "700" },
+
+    linkOverlay: {
+      flex: 1, backgroundColor: "rgba(15,23,42,0.55)",
+      alignItems: "center", justifyContent: "center", padding: 20,
+    },
+    linkCard: {
+      width: "100%", maxWidth: 440,
+      backgroundColor: t.paperCardElev,
+      borderRadius: 16, padding: 16, gap: 10,
+    },
+    linkHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+    linkTitle: { fontSize: 16, fontWeight: "800", color: t.ink },
+    linkSub: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    linkClose: { padding: 4 },
+    linkHint: { fontSize: 12, color: t.ink3, lineHeight: 17 },
+    linkEmpty: { fontSize: 12, color: t.ink3, fontStyle: "italic", textAlign: "center", padding: 20 },
+    linkRow: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      padding: 8, borderRadius: 10, marginVertical: 3,
+      borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.bgSoft,
+    },
+    linkRowActive: { borderColor: t.primary, backgroundColor: t.primaryGhost },
+    linkThumb: { width: 40, height: 40, borderRadius: 8, backgroundColor: t.bg },
+    linkThumbEmpty: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: t.ink5 },
+    linkRowName: { flex: 1, fontSize: 13, fontWeight: "700", color: t.ink },
+    linkCheckbox: {
+      width: 20, height: 20, borderRadius: 5,
+      borderWidth: 1.5, borderColor: t.ink4,
+      alignItems: "center", justifyContent: "center",
+    },
+    linkCheckboxOn: { backgroundColor: t.primary, borderColor: t.primary },
+    linkActions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", marginTop: 4 },
+    linkCancelBtn: {
+      paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+      borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCard,
+    },
+    linkCancelTxt: { color: t.ink2, fontSize: 13, fontWeight: "700" },
+    linkSaveBtn: {
+      paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10,
+      backgroundColor: t.primary, minWidth: 130, alignItems: "center",
+    },
+    linkSaveTxt: { color: "#fff", fontSize: 13, fontWeight: "800" },
   });
 }
