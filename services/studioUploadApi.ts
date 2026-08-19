@@ -1,10 +1,18 @@
 /**
  * Helper Studio Upload — chama POST /companies/:cid/studio/upload-mockup
  * Item #10 da análise UX/UI: upload integrado em vez de URL externa.
+ *
+ * 19/08/2026 — pickImageBase64(): ver comentário completo mais abaixo.
+ * Resumo: fluxo cross-platform pra escolher uma foto (web + native), já
+ * que antes só o caminho web (pickFileWeb/fileToBase64Web) existia e
+ * todo caller mostrava um toast "só disponível na versão web" no app —
+ * inutilizando o upload justamente no cenário mais comum (lojista com a
+ * foto no celular).
  */
+import { Platform } from 'react-native';
 import { request } from './api';
 
-export type StudioUploadKind = 'mockup' | 'template' | 'approval';
+export type StudioUploadKind = 'mockup' | 'template' | 'approval' | 'product' | 'customization';
 
 export type StudioUploadResult = {
   ok: boolean;
@@ -90,4 +98,83 @@ export function pickFileWeb(accept = 'image/*,application/pdf'): Promise<File | 
     document.body.appendChild(input);
     input.click();
   });
+}
+
+/**
+ * Resultado padronizado de uma escolha de imagem, igual nos dois branches
+ * (web e native) — os callers não precisam saber em que plataforma estão,
+ * só chamam `uploadStudioMockup(cid, { content_base64: r.base64, content_type: r.content_type, ... })`.
+ */
+export type PickedImage = {
+  base64: string;
+  content_type: string;
+  size_mb?: number;
+  /** uri local pra preview imediato (antes do upload terminar). No web
+   * fica undefined — quem chamar já tem a própria URL final após o upload. */
+  uri?: string;
+};
+
+/**
+ * Escolhe UMA imagem da galeria/dispositivo, já em base64, funcionando
+ * tanto no web quanto no app nativo (Android/iOS).
+ *
+ * - web: reusa pickFileWeb + fileToBase64Web (comportamento 100% igual ao
+ *   que já existia — nenhuma mudança pra quem já usava só o caminho web).
+ * - native: usa expo-image-picker (launchImageLibraryAsync com base64:true
+ *   e qualidade comprimida ~0.8, igual ao padrão já usado em
+ *   components/verticals/odonto/AddClinicalImageModal.tsx). Import
+ *   dinâmico dentro do branch native — evita puxar o módulo no bundle web
+ *   de configurações que não o incluem; o branch web nem chega a executar
+ *   esse import.
+ *
+ * Cancelamento do usuário (fechou o seletor sem escolher) retorna `null`
+ * silenciosamente — igual ao pickFileWeb. Permissão negada lança Error
+ * com mensagem em pt-BR explicando como liberar; quem chama deve capturar
+ * e mostrar via toast.error(...).
+ *
+ * @param webAccept accept do <input type=file> no web (ignorado no native,
+ *   onde o seletor de imagens da galeria só lida com imagens mesmo).
+ */
+export async function pickImageBase64(webAccept = 'image/*'): Promise<PickedImage | null> {
+  if (Platform.OS === 'web') {
+    const file = await pickFileWeb(webAccept);
+    if (!file) return null;
+    const { base64, content_type, size_mb } = await fileToBase64Web(file);
+    return { base64, content_type, size_mb };
+  }
+
+  const ImagePicker = await import('expo-image-picker');
+
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) {
+    throw new Error(
+      perm.canAskAgain === false
+        ? 'Permissão de galeria negada. Vá em Ajustes do celular > Aura > Fotos e libere o acesso pra enviar imagens.'
+        : 'Precisamos de acesso às suas fotos pra enviar a imagem. Tente de novo e permita o acesso quando o celular perguntar.'
+    );
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    quality: 0.8,
+    base64: true,
+    allowsEditing: false,
+  });
+
+  if (result.canceled || !result.assets?.length) return null;
+
+  const asset = result.assets[0];
+  if (!asset.base64) {
+    throw new Error('Não foi possível ler essa imagem. Tente outra foto.');
+  }
+  if (asset.fileSize && asset.fileSize > 15 * 1024 * 1024) {
+    throw new Error('Imagem acima de 15 MB — tente outra foto ou comprima antes de enviar.');
+  }
+
+  return {
+    base64: asset.base64,
+    content_type: asset.mimeType || 'image/jpeg',
+    size_mb: asset.fileSize ? +(asset.fileSize / (1024 * 1024)).toFixed(2) : undefined,
+    uri: asset.uri,
+  };
 }

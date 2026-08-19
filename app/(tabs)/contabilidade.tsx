@@ -16,7 +16,11 @@ import { AgentBanner } from "@/components/AgentBanner";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-export default function ContabilidadeScreen() {
+// 19/08/2026 (QA — dedup de header): prop `embedded?: boolean` (default
+// false, varejo não muda) suprime o <Text style={pageTitle}>Contabilidade</Text>
+// quando a tela é embutida em app/studio/(estudio)/gestao/contabilidade.tsx,
+// que já renderiza seu próprio título "Contabilidade do estúdio" + subtítulo.
+export default function ContabilidadeScreen({ embedded }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState(0);
   const [guideCode, setGuideCode] = useState<string | null>(null);
   const scrollRef = useRef<any>(null);
@@ -42,7 +46,7 @@ export default function ContabilidadeScreen() {
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <Text style={s.pageTitle}>Contabilidade</Text>
+      {!embedded && <Text style={s.pageTitle}>Contabilidade</Text>}
 
       <AgentBanner context="contabil" />
 

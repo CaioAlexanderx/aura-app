@@ -20,7 +20,7 @@
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput,
+  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, TextInput, Image,
   Platform,
 } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -35,6 +35,7 @@ import {
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 type Props = {
   order: MarketplaceOrderStudio;
@@ -63,13 +64,16 @@ const PLATFORM_LABEL: Record<string, string> = {
 // Movido pro top-level, recebendo `s`/`t` por prop em vez de closure.
 // ============================================================
 function CollectFieldEditor({
-  field, value, onChange, s, t,
+  field, value, onChange, s, t, uploading, onUpload,
 }: {
   field: CustomizationField;
   value: any;
   onChange: (v: any) => void;
   s: ReturnType<typeof buildStyles>;
   t: StudioPalette;
+  /** Upload cross-platform (só usado pelos fields type="image"/"template"). */
+  uploading?: boolean;
+  onUpload?: () => void;
 }) {
   if (field.type === "text") {
     const maxChars = field.config.max_chars || 30;
@@ -142,21 +146,49 @@ function CollectFieldEditor({
   }
 
   if (field.type === "image" || field.type === "template") {
+    // Cross-platform (QA celular): antes só existia o input de URL colada —
+    // a lojista precisava mandar a imagem pra si mesma primeiro pra ter um
+    // link. Agora o upload direto do dispositivo é o caminho principal;
+    // colar URL (foto que o cliente já mandou por link) continua como
+    // alternativa.
+    const url = String(value || "").trim();
+    const hasUrl = /^https?:\/\//.test(url);
     return (
       <View>
         <Text style={s.fieldLabel}>
           {field.label} {field.required && <Text style={{ color: t.danger }}>*</Text>}
         </Text>
         <Text style={s.fieldHelp}>
-          Cole o link da imagem que o cliente enviou (WhatsApp, e-mail, etc).
+          Suba a foto que o cliente enviou (WhatsApp, e-mail, etc) ou cole o link direto.
         </Text>
-        <TextInput
-          value={String(value || "")}
-          onChangeText={onChange}
-          placeholder="https://..."
-          placeholderTextColor={t.ink4}
-          style={s.input}
-        />
+        <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+          {hasUrl && <Image source={{ uri: url }} style={s.fieldImgPreview} />}
+          <View style={{ flex: 1, gap: 8 }}>
+            <Pressable
+              onPress={onUpload}
+              disabled={uploading}
+              style={[s.uploadFieldBtn, uploading && { opacity: 0.6 }]}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="upload" size={13} color="#fff" />
+                  <Text style={s.uploadFieldBtnTxt}>{hasUrl ? "Trocar imagem" : "Enviar do dispositivo"}</Text>
+                </>
+              )}
+            </Pressable>
+            <TextInput
+              value={String(value || "")}
+              onChangeText={onChange}
+              placeholder="ou cole a URL https://..."
+              placeholderTextColor={t.ink4}
+              style={s.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
       </View>
     );
   }
@@ -185,6 +217,9 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cross-platform (QA celular): field id atualmente subindo imagem (só um
+  // por vez, mas guardamos o id pra desabilitar/mostrar spinner só nele).
+  const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
 
   // Carrega customization_config do produto ativo
   useEffect(() => {
@@ -225,6 +260,34 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
       ...prev,
       [productId]: { ...(prev[productId] || {}), [fieldId]: value },
     }));
+  }
+
+  // Cross-platform (QA celular): upload direto pros fields type="image"/
+  // "template" — antes só existia colar URL, obrigando a lojista a mandar
+  // a foto pra si mesma antes. web abre <input type=file>, native abre a
+  // galeria via expo-image-picker.
+  async function handleUploadImageField(productId: string, fieldId: string) {
+    if (!cid) return;
+    const picked = await pickImageBase64().catch((e: any) => {
+      toast.error(e?.message || "Não foi possível abrir a galeria.");
+      return null;
+    });
+    if (!picked) return;
+    setUploadingFieldId(fieldId);
+    try {
+      const r = await uploadStudioMockup(cid, {
+        content_base64: picked.base64,
+        content_type: picked.content_type,
+        kind: "customization",
+      });
+      setFieldValue(productId, fieldId, r.url);
+      toast.success("Imagem enviada!");
+    } catch (e: any) {
+      const status = e?.status ? `[${e.status}] ` : "";
+      toast.error(`${status}${e?.data?.error || e?.message || "Falha no upload"}`);
+    } finally {
+      setUploadingFieldId(null);
+    }
   }
 
   async function save() {
@@ -364,6 +427,8 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
                     onChange={(v) => setFieldValue(activeItem.product_id!, f.id, v)}
                     s={s}
                     t={t}
+                    uploading={uploadingFieldId === f.id}
+                    onUpload={() => handleUploadImageField(activeItem.product_id!, f.id)}
                   />
                 ))}
               </View>
@@ -463,6 +528,14 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     borderWidth: 1.5, borderColor: t.ink5,
   },
   charCount: { fontSize: 10.5, color: t.ink4, marginTop: 4 },
+
+  fieldImgPreview: { width: 64, height: 64, borderRadius: 10, backgroundColor: t.paperCardElev },
+  uploadFieldBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: t.primary,
+    paddingVertical: 10, borderRadius: 10,
+  },
+  uploadFieldBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12.5 },
 
   chip: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,

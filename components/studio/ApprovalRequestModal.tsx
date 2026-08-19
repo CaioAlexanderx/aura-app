@@ -31,7 +31,7 @@ import { studioVisualApi } from "@/services/studioVisualApi";
 import { gerarRenderDoPedido } from "@/components/studio/visualEngine/gerarRenderAprovacao";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import { fileToBase64Web, pickFileWeb, uploadStudioMockup } from "@/services/studioUploadApi";
+import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 type Props = {
   order: StudioOrder;
@@ -100,18 +100,19 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
 
   async function handlePickAndUpload() {
     if (!company?.id) return;
-    if (Platform.OS !== "web") {
-      toast.error("Upload do dispositivo disponível na versão web. Use URL pública por enquanto no app.");
-      return;
-    }
-    const file = await pickFileWeb("image/*,application/pdf");
-    if (!file) return;
+    // Cross-platform (QA celular): no web ainda aceita PDF também (accept
+    // custom); no native o seletor de galeria só lida com imagens mesmo
+    // (expo-image-picker), então PDF continua exclusivo do web por ora.
+    const picked = await pickImageBase64("image/*,application/pdf").catch((e: any) => {
+      toast.error(e?.message || "Não foi possível abrir a galeria.");
+      return null;
+    });
+    if (!picked) return;
     setUploading(true);
     try {
-      const { base64, content_type } = await fileToBase64Web(file);
       const r = await uploadStudioMockup(company.id, {
-        content_base64: base64,
-        content_type,
+        content_base64: picked.base64,
+        content_type: picked.content_type,
         kind: "approval",
       });
       setMockupUrlManual(r.url);

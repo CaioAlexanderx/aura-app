@@ -4,7 +4,6 @@
 //
 // 30/05/2026 (Camada 1 — Fase 0 Gate): tipos + stubs completos
 // 30/05/2026 (P1): updateProductionStatus ganha force?: boolean
-// 02/06/2026 (Onda 2 — Agente F): getOnboardingStatus (Agente B endpoint)
 // 05/06/2026 (#4): product category CRUD (listProductCategories, createProductCategory, updateProductCategory, deleteProductCategory)
 // ============================================================
 import { request } from "./api";
@@ -228,7 +227,6 @@ export type StudioSettings = {
   approval_wa_phone?: string;
   approval_template_message?: string;
   ncm_defaults?: Record<string, string>;
-  onboarding?: Record<string, boolean>;
   marketplace_handling_days?: number;
   max_revisions_included?: number;
   extra_revision_price?: number;
@@ -549,15 +547,6 @@ export type StudioPayment = {
   updated_at?: string;
 };
 
-// ─── Onda 2 — Onboarding Status (02/06/2026, Agente F) ────────────────
-// Entregue pelo Agente B: GET /companies/:id/studio/onboarding-status
-export type OnboardingStatus = {
-  temInsumo: boolean;
-  temFicha: boolean;
-  temProduto: boolean;
-  temVenda: boolean;
-};
-
 // ─── Product Categories (#4, 05/06/2026) ──────────────────────
 export type ProductCategory = {
   id: string;
@@ -612,12 +601,6 @@ export const studioApi = {
 
   getPainel: (cid: string, days = 7) =>
     request<PainelData>(base(cid) + "/painel?days=" + days, { method: "GET", retry: 1, timeout: 10000 }),
-
-  // ── Onda 2: Onboarding Status (Agente F, 02/06/2026) ──
-  // Endpoint entregue pelo Agente B.
-  // Defensivo: retry=1, timeout=5000. Status é derivado/sem efeito colateral.
-  getOnboardingStatus: (cid: string) =>
-    request<OnboardingStatus>(base(cid) + "/onboarding-status", { method: "GET", retry: 1, timeout: 5000 }),
 
   // ── Marketplaces S-1 ──
   getMarketplaceListingPreview: (cid: string, pid: string, platform: MarketplacePlatform = "mercado_livre") =>

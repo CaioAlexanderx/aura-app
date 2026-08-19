@@ -16,9 +16,17 @@
 // `useStudioTokens().accent`. Colors.bg/bg3/border/ink* continuam ligados
 // ao tema do varejo de propósito — mesma fonte de cor que o
 // ContabilidadeScreen embutido usa; ver mesmo racional em gestao/nfe.tsx.
+//
+// 19/08/2026 (QA item 17): ContabilidadeScreen renderizava seu próprio
+// <Text>Contabilidade</Text> logo abaixo do título "Contabilidade do
+// estúdio" deste wrapper — 2 blocos de texto redundantes. A tela agora
+// aceita `embedded` (default false, varejo não muda); passamos `embedded`
+// aqui pra suprimir esse título interno. Também removido o contextBanner
+// ("Vendas personalizadas aparecem nos relatórios...") que só repetia o
+// que o subtitle já diz — mesmo racional do banner removido em
+// gestao/financeiro.tsx e gestao/nfe.tsx.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
-import { Icon } from "@/components/Icon";
 import { Colors } from "@/constants/colors";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import ContabilidadeScreen from "@/app/(tabs)/contabilidade";
@@ -33,15 +41,9 @@ export default function StudioGestaoContabilidade() {
         <Text style={s.subtitle}>
           Obrigações fiscais, DRE e relatórios mensais. Operações Studio entram automaticamente nos números.
         </Text>
-        <View style={[s.contextBanner, { borderColor: t.accent + "55" }]}>
-          <Icon name="info" size={12} color={t.accent} />
-          <Text style={s.contextBannerTxt}>
-            Vendas personalizadas aparecem nos relatórios mensais como categoria "Studio".
-          </Text>
-        </View>
       </View>
       <View style={{ flex: 1 }}>
-        <ContabilidadeScreen />
+        <ContabilidadeScreen embedded />
       </View>
     </View>
   );
@@ -78,24 +80,5 @@ const s = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 720,
     marginBottom: 4,
-  },
-  contextBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.bg2,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-    maxWidth: 720,
-  },
-  contextBannerTxt: {
-    fontSize: 12,
-    color: Colors.ink2,
-    flexShrink: 1,
-    lineHeight: 16,
-    fontWeight: "600",
   },
 });

@@ -39,11 +39,7 @@ import { StudioGradient } from "@/components/studio/StudioGradient";
 import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
-import {
-  fileToBase64Web,
-  pickFileWeb,
-  uploadStudioMockup,
-} from "@/services/studioUploadApi";
+import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -135,20 +131,21 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const priceValid = !isNaN(priceNum) && priceNum > 0;
   const canSubmit = nameValid && priceValid && !submitting;
 
-  // ── Upload de imagem (web) ──────────────────────────────
+  // ── Upload de imagem (web + native) ─────────────────────
+  // Cross-platform (QA celular): antes só funcionava no web, e no app a
+  // lojista esbarrava num toast pedindo pra colar URL — justo no fluxo mais
+  // comum (foto tirada no próprio celular).
   async function handlePickImage() {
-    if (Platform.OS !== "web") {
-      toast.error("Upload do dispositivo so na versao web por enquanto. Cole uma URL publica.");
-      return;
-    }
-    const file = await pickFileWeb("image/*");
-    if (!file) return;
+    const picked = await pickImageBase64().catch((e: any) => {
+      toast.error(e?.message || "Não foi possível abrir a galeria.");
+      return null;
+    });
+    if (!picked) return;
     setUploadingImage(true);
     try {
-      const { base64, content_type } = await fileToBase64Web(file);
       const r = await uploadStudioMockup(companyId, {
-        content_base64: base64,
-        content_type,
+        content_base64: picked.base64,
+        content_type: picked.content_type,
         kind: "mockup",
       });
       setImageUrl(r.url);

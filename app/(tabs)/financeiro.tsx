@@ -152,7 +152,14 @@ const rcv = StyleSheet.create({
 });
 
 // ─── Tela principal ──────────────────────────────────────────
-export default function FinanceiroScreen() {
+// 19/08/2026 (QA — dedup de header): prop `embedded?: boolean` (default
+// false, varejo não muda) repassada ao FinanceiroTopbar pra suprimir só o
+// kicker "FINANCEIRO ·" quando a tela é embutida em
+// app/studio/(estudio)/gestao/financeiro.tsx (que já renderiza um título
+// "Financeiro do estúdio"). Não escondemos o Topbar inteiro: ele carrega o
+// seletor de período e os botões Exportar/Novo lançamento, que são
+// funcionais (não decorativos) e continuam necessários dentro do Studio.
+export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = {}) {
   var { width: vw } = useWindowDimensions();
   var layout = getLayoutForWidth(vw);
   var IS_WIDE = vw >= 768;
@@ -322,6 +329,7 @@ export default function FinanceiroScreen() {
           onPeriodChange={handlePeriodChange}
           onExport={function() { setShowExport(true); }}
           onNew={consolidatedView ? undefined : handleNewTransaction}
+          embedded={embedded}
         />
 
         {consolidatedView && (
