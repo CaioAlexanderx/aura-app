@@ -55,7 +55,7 @@ export function useStudioCatalog(
             // Colapsar pra 0 fazia o badge dizer "Sem estoque" em produto
             // perfeitamente vendável — o catálogo trata os dois casos como
             // coisas diferentes ("Estoque não informado" vs zerado).
-            stock_qty: p.stock_qty != null ? parseFloat(p.stock_qty) : null,
+            stock_qty: Number.isFinite(parseFloat(p.stock_qty)) ? parseFloat(p.stock_qty) : null,
             is_personalizable: !!p.is_personalizable,
             customization_config: p.customization_config,
             sku: p.sku || null,
