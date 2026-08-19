@@ -3,12 +3,21 @@
 // Agente H — Onda 1 (03/06/2026)
 //
 // Campo especial type='option' com config.is_art_service:true.
-// Duas choices:
-//   - 'none'     → Vou enviar minha arte (price_delta = 0)
-//   - 'designer' → Crie minha arte pra mim (price_delta = preço configurado)
 //
-// Ao escolher 'designer': exibe briefing (textarea + referência opcional).
-// Ao escolher 'none'    : briefing some, fluxo de upload normal continua.
+// S4 (19/08/2026) — TRES caminhos, nao dois. O do meio era o que faltava
+// e e o mais frequente: o cliente manda a arte e ela precisa ser ajustada
+// para caber no produto e para as cores de impressao. Isso acontece na
+// maioria dos pedidos e a lojista absorvia o custo em silencio.
+//   - 'none'     → arte pronta (price_delta = 0)
+//   - 'adjust'   → cliente envia e a lojista ajusta (price_delta)
+//   - 'designer' → a lojista cria do zero (price_delta maior)
+//
+// As opcoes sao renderizadas A PARTIR DO CONFIG, nao mais fixas no
+// componente: assim uma choice nova nao exige mexer aqui de novo, e uma
+// loja com o config antigo (so none/designer) segue funcionando.
+//
+// Briefing aparece nos dois caminhos pagos, com pedidos diferentes —
+// "descreva sua ideia" para criacao, "o que ajustar?" para ajuste.
 //
 // Gravação:
 //   values['art_service']       = 'none' | 'designer'   ← dispara computeChoicesDelta
@@ -21,13 +30,16 @@
 import { View, Text, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import type { CustomizationField } from "../types";
 import { T } from "../types";
+import {
+  ART_DESIGNER, priceLabel, choiceHint, briefingFor,
+} from "@/components/studio/artService";
 
 const ART_FIELD_ID     = "art_service";
 const BRIEF_FIELD_ID   = "art_service_brief";
 
 type Props = {
   field: CustomizationField;
-  /** values['art_service'] = 'none' | 'designer' | undefined */
+  /** values['art_service'] = 'none' | 'adjust' | 'designer' | undefined */
   value: string | undefined;
   /** Valor do briefing (controlado externamente via setFieldValue) */
   briefValue?: string;
@@ -47,22 +59,7 @@ export function FieldArtService({
   const choices: Array<{ value: string; label: string; price_delta?: number }> =
     field.config?.choices || [];
 
-  const noneChoice     = choices.find((c) => c.value === "none");
-  const designerChoice = choices.find((c) => c.value === "designer");
-
-  const isDesigner = value === "designer";
-  const isNone     = value === "none";
-
-  const priceDelta = typeof designerChoice?.price_delta === "number"
-    ? designerChoice.price_delta
-    : 0;
-
-  const priceLabel =
-    priceDelta > 0
-      ? `+R$ ${priceDelta.toFixed(2).replace(".", ",")}`
-      : priceDelta < 0
-      ? `-R$ ${Math.abs(priceDelta).toFixed(2).replace(".", ",")}`
-      : null;
+  const brief = briefingFor(value);
 
   return (
     <View style={styles.root}>
@@ -73,97 +70,74 @@ export function FieldArtService({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.fieldLabel}>{field.label}</Text>
-          <Text style={styles.fieldSub}>Como você quer enviar a arte?</Text>
+          <Text style={styles.fieldSub}>Como você quer resolver a arte?</Text>
         </View>
       </View>
 
-      {/* Opção A: Vou enviar minha arte */}
-      <Pressable
-        onPress={() => onChange("none")}
-        style={[styles.optionCard, isNone && styles.optionCardActive]}
-        accessibilityRole="radio"
-        accessibilityState={{ checked: isNone }}
-        accessibilityLabel="Vou enviar minha arte"
-      >
-        <View style={[styles.radio, isNone && styles.radioActive]}>
-          {isNone && <View style={styles.radioDot} />}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.optionTitle, isNone && styles.optionTitleActive]}>
-            Vou enviar minha arte
-          </Text>
-          <Text style={styles.optionSub}>
-            Você faz o upload do arquivo PNG, JPG ou PDF
-          </Text>
-        </View>
-        {/* Badge gratuito */}
-        <View style={styles.freeBadge}>
-          <Text style={styles.freeBadgeTxt}>Incluso</Text>
-        </View>
-      </Pressable>
+      {choices.map((c) => {
+        const sel = value === c.value;
+        const pago = typeof c.price_delta === "number" && c.price_delta > 0;
+        const etiqueta = priceLabel(c.price_delta);
+        const destaque = c.value === ART_DESIGNER;
+        return (
+          <Pressable
+            key={c.value}
+            onPress={() => onChange(c.value)}
+            style={[
+              styles.optionCard,
+              destaque && styles.designerCard,
+              sel && (destaque ? styles.designerCardActive : styles.optionCardActive),
+            ]}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            accessibilityLabel={c.label + (etiqueta ? ", " + etiqueta : ", incluso")}
+          >
+            <View style={[styles.radio, sel && (destaque ? styles.radioDesignerActive : styles.radioActive)]}>
+              {sel && <View style={[styles.radioDot, destaque && { backgroundColor: T.accent }]} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.optionTitle,
+                  sel && (destaque ? styles.designerTitleActive : styles.optionTitleActive),
+                ]}
+              >
+                {c.label}
+              </Text>
+              <Text style={styles.optionSub}>{choiceHint(c.value)}</Text>
+            </View>
+            {pago && etiqueta ? (
+              <View style={[styles.priceBadge, sel && styles.priceBadgeActive]}>
+                <Text style={[styles.priceBadgeTxt, sel && styles.priceBadgeTxtActive]}>{etiqueta}</Text>
+              </View>
+            ) : (
+              <View style={styles.freeBadge}>
+                <Text style={styles.freeBadgeTxt}>Incluso</Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
 
-      {/* Opção B: Crie minha arte */}
-      <Pressable
-        onPress={() => onChange("designer")}
-        style={[
-          styles.optionCard,
-          styles.designerCard,
-          isDesigner && styles.designerCardActive,
-        ]}
-        accessibilityRole="radio"
-        accessibilityState={{ checked: isDesigner }}
-        accessibilityLabel={`Crie minha arte pra mim${priceLabel ? ", " + priceLabel : ""}`}
-      >
-        <View style={[styles.radio, isDesigner && styles.radioDesignerActive]}>
-          {isDesigner && <View style={[styles.radioDot, { backgroundColor: T.accent }]} />}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.optionTitle, isDesigner && styles.designerTitleActive]}>
-            Crie minha arte pra mim
-          </Text>
-          <Text style={styles.optionSub}>
-            Nossa equipe cria a arte personalizada pra você
-          </Text>
-        </View>
-        {/* Badge de preço */}
-        {priceLabel && (
-          <View style={[styles.priceBadge, isDesigner && styles.priceBadgeActive]}>
-            <Text style={[styles.priceBadgeTxt, isDesigner && styles.priceBadgeTxtActive]}>
-              {priceLabel}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-
-      {/* Briefing — aparece apenas quando designer está selecionado */}
-      {isDesigner && (
+      {/* Briefing — nos dois caminhos pagos, com pedidos diferentes.
+          No ajuste ele é OPCIONAL: sem texto, a lojista ajusta tamanho e
+          cores, que é o padrão do serviço. */}
+      {brief && (
         <View style={styles.briefBlock}>
-          <Text style={styles.briefTitle}>Descreva sua ideia</Text>
-          <Text style={styles.briefHint}>
-            Quanto mais detalhes, melhor o resultado. Ex: cores, estilo, texto, referências.
-          </Text>
+          <Text style={styles.briefTitle}>{brief.title}</Text>
+          <Text style={styles.briefHint}>{brief.hint}</Text>
           <TextInput
             style={styles.briefInput}
             multiline
             numberOfLines={4}
-            placeholder="Ex: quero uma arte minimalista com meu nome em dourado, fundo preto, estilo moderno..."
+            placeholder={brief.placeholder}
             placeholderTextColor={T.ink4}
             value={briefValue}
             onChangeText={onBriefChange}
             maxLength={600}
-            accessibilityLabel="Descreva sua ideia para a arte"
+            accessibilityLabel={brief.title}
           />
-          <Text style={styles.charCount}>
-            {briefValue.length}/600
-          </Text>
-
-          {/* Referência opcional */}
-          <Text style={[styles.briefTitle, { marginTop: 14 }]}>Referência (opcional)</Text>
-          <Text style={styles.briefHint}>
-            Cole aqui um link de imagem ou descrição de referência visual.
-          </Text>
-          {/* O ref é armazenado junto ao brief como sufixo separado por \n---\n.
-              O lojista vê o texto completo no painel do pedido. */}
+          <Text style={styles.charCount}>{briefValue.length}/600</Text>
         </View>
       )}
     </View>
