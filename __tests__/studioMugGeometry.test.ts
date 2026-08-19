@@ -115,3 +115,29 @@ describe("heartPath", () => {
     expect(p.slice(1).every((c) => c.op === "bezierCurveTo")).toBe(true);
   });
 });
+
+// ── Orientação da alça ───────────────────────────────────────
+// Bug encontrado olhando a loja no ar: a alça de coração era criada com
+// `rotation.y = Math.PI / 2`, o que a deixava de PERFIL para a câmera —
+// um risco vertical em vez de uma alça.
+//
+// O motivo é geométrico: `THREE.Shape` + `ExtrudeGeometry` produz a face
+// no plano XY, extrudada em Z. É a MESMA orientação do `TorusGeometry`,
+// que também é XY. O corpo é um cilindro em Y e a câmera olha de +Z, então
+// a alça só aparece de frente se ficar em XY. Nenhuma das duas formas
+// pode ser girada.
+describe("heartPath — a curva nasce no plano XY", () => {
+  it("varia em X e em Y, que é o plano onde a alça precisa ficar", () => {
+    const p = heartPath(1) as any[];
+    const xs = p.flatMap((c) => [c.x, c.c1x, c.c2x]).filter((n) => n !== undefined);
+    const ys = p.flatMap((c) => [c.y, c.c1y, c.c2y]).filter((n) => n !== undefined);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0);
+  });
+
+  it("a ponta do coração fica embaixo — o bico aponta para a base da caneca", () => {
+    const p = heartPath(1) as any[];
+    const ys = p.flatMap((c) => [c.y, c.c1y, c.c2y]).filter((n) => n !== undefined);
+    expect((p[0] as any).y).toBe(Math.min(...ys));
+  });
+});

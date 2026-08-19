@@ -212,7 +212,12 @@ export async function createMugViewer(
       : new THREE.TorusGeometry(G.handle.radius, G.handle.tube, 20, 48);
     const handle = new THREE.Mesh(handleGeo, solidMat);
     handle.position.set(G.handle.offsetX, G.handle.offsetY, 0);
-    if (G.handle.shape === "heart") handle.rotation.y = Math.PI / 2;
+    // SEM rotacao. O coracao vem de um THREE.Shape no plano XY extrudado em
+    // Z — a MESMA orientacao do TorusGeometry, que tambem e XY. A versao
+    // original girava 90 graus em Y e deixava o coracao de PERFIL para a
+    // camera, virando um risco vertical em vez de uma alca. O corpo da
+    // caneca e um cilindro em Y e a camera olha de +Z: a alca tem que ficar
+    // no plano XY para ser vista de frente.
     group.add(handle);
   }
   group.rotation.y = Math.PI;
