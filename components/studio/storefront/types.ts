@@ -29,6 +29,24 @@ export type StudioStoreProduct = {
   }>;
 };
 
+// S8 — a terceira modalidade: o cliente contrata Uber/99 e informa quem
+// vai retirar. Mesmos valores que o backend grava em delivery_type.
+export type DeliveryType = "pickup" | "delivery" | "courier";
+
+// S2 — resposta de GET /studio/shipping-quote. `fee: null` com `error`
+// nao e falha: e "fora da area de entrega", e o cliente precisa ler isso.
+export type ShippingQuote = {
+  fee: number | null;
+  eta: string | null;
+  mode: string;
+  currency: string;
+  free_shipping?: boolean;
+  distance_km?: number;
+  tier_max_km?: number;
+  error?: string;
+  alert?: string;
+};
+
 export type StoreRevisions = {
   max_included: number;   // 0 = ilimitado
   extra_price: number;    // R$ cobrado por revisão extra

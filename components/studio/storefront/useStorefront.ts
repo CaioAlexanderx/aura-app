@@ -49,7 +49,13 @@
 //   sf.customerPhone    sf.setCustomerPhone
 //   sf.customerEmail    sf.setCustomerEmail
 //   sf.paymentMethod    sf.setPaymentMethod
-//   sf.deliveryType     sf.setDeliveryType
+//   sf.deliveryType     sf.setDeliveryType   -- pickup | delivery | courier
+//   sf.courierName      sf.setCourierName    -- S8, so em "courier"
+//   sf.courierPlate     sf.setCourierPlate   -- S8, mascarado ABC-1234
+//   sf.quoteShipping()  -- S2, cota o frete pelo CEP (acao explicita)
+//   sf.shippingQuote    sf.quotingShipping   sf.shippingError
+//   sf.shippingFee      -- frete cobrado (0 fora de "delivery")
+//   sf.cartTotal        -- cartSubtotal + shippingFee
 //   sf.addressStreet    sf.setAddressStreet
 //   sf.addressNumber    sf.setAddressNumber
 //   sf.addressNeigh     sf.setAddressNeigh
@@ -75,7 +81,9 @@ import { Platform } from "react-native";
 import { maskPhone } from "@/utils/masks";
 import type {
   StorePayload, StudioStoreProduct, CartLine, Stage, SentOrder,
+  DeliveryType, ShippingQuote,
 } from "./types";
+import { normalizePlate, maskPlate } from "./courierPlate";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
@@ -232,7 +240,17 @@ export function useStorefront(slug: string) {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card" | "on_delivery" | null>(null);
-  const [deliveryType, setDeliveryType] = useState<"pickup" | "delivery">("pickup");
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>("pickup");
+  // S8 — retirada por app: o cliente contrata Uber/99 e diz quem vai
+  // buscar. Sem nome e placa a lojista entrega para o primeiro motoboy
+  // que citar o numero do pedido.
+  const [courierName, setCourierName] = useState("");
+  const [courierPlate, setCourierPlate] = useState("");
+  // S2 — cotacao de frete por CEP. `quote` guarda a resposta inteira do
+  // servidor, nao so o valor: mode/eta/alert sao o que o cliente le.
+  const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null);
+  const [quotingShipping, setQuotingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
   const [addressStreet, setAddressStreet] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [addressNeigh, setAddressNeigh] = useState("");
@@ -302,6 +320,53 @@ export function useStorefront(slug: string) {
   // modelos vira uma entrada só; o resto continua produto a produto.
   // Sem árvore no payload (base pré-migração da F0) o resultado é
   // idêntico à lista de antes.
+  // S2 — frete cotado no servidor. O app NUNCA calcula o valor: manda o
+  // CEP e o subtotal, e usa o que voltar. O `expected_delivery_fee` no
+  // fechamento serve so pro servidor detectar cotacao velha (409).
+  //
+  // A cotacao e disparada por acao explicita (botao/blur), nao a cada
+  // tecla: sao 8 digitos e o servidor geocodifica o CEP.
+  async function quoteShipping() {
+    const cep = addressZip.replace(/\D/g, "");
+    if (cep.length !== 8) {
+      setShippingQuote(null);
+      setShippingError(cep.length === 0 ? null : "CEP incompleto");
+      return;
+    }
+    setQuotingShipping(true);
+    setShippingError(null);
+    try {
+      const url =
+        API_BASE + "/storefront/" + slug + "/studio/shipping-quote" +
+        "?cep=" + cep + "&subtotal=" + cartSubtotal;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Nao foi possivel calcular o frete");
+      setShippingQuote(data);
+      // fee null com error e "fora da area": nao e falha, e resposta.
+      setShippingError(data?.fee == null && data?.error ? data.error : null);
+    } catch (e: any) {
+      setShippingQuote(null);
+      setShippingError(e?.message || "Nao foi possivel calcular o frete");
+    } finally {
+      setQuotingShipping(false);
+    }
+  }
+
+  // Frete cobrado: so entrega tem. Retirada e retirada por app sao zero —
+  // no segundo caso quem paga o app e o cliente, direto.
+  const shippingFee = useMemo(() => {
+    if (deliveryType !== "delivery") return 0;
+    const f = shippingQuote?.fee;
+    return typeof f === "number" ? f : 0;
+  }, [deliveryType, shippingQuote]);
+
+  const cartTotal = useMemo(() => cartSubtotal + shippingFee, [cartSubtotal, shippingFee]);
+
+  // Trocar de modalidade ou mexer no carrinho invalida a cotacao: o valor
+  // depende do subtotal (frete gratis acima de X).
+  useEffect(() => { setShippingQuote(null); setShippingError(null); }, [deliveryType]);
+
   const vitrine: VitrineEntry[] = useMemo(
     () => (store ? agruparVitrine(store.products, store.categories || []) : []),
     [store]
@@ -488,6 +553,28 @@ export function useStorefront(slug: string) {
       setError("Informe o endereco de entrega");
       return;
     }
+    // Cotacao ja feita e o CEP esta fora da area: barrar aqui poupa o
+    // cliente de mandar o pedido para levar 400. Sem cotacao nenhuma o
+    // envio segue — o servidor e quem decide, e ele recalcula.
+    if (
+      deliveryType === "delivery" &&
+      shippingQuote &&
+      shippingQuote.fee == null &&
+      shippingQuote.error
+    ) {
+      setError(shippingQuote.error);
+      return;
+    }
+    if (deliveryType === "courier") {
+      if (!courierName.trim()) {
+        setError("Informe o nome de quem vai retirar o pedido");
+        return;
+      }
+      if (!normalizePlate(courierPlate)) {
+        setError("Placa invalida. Use o formato ABC1234 ou ABC1D23");
+        return;
+      }
+    }
     setSending(true);
     setError(null);
     try {
@@ -527,6 +614,15 @@ export function useStorefront(slug: string) {
         address_neighborhood: addressNeigh.trim() || null,
         address_city: addressCity.trim() || null,
         address_state: addressState.trim().toUpperCase() || null,
+        // S8 — normalizado aqui tambem, mas o servidor revalida.
+        courier_name: deliveryType === "courier" ? courierName.trim() : null,
+        courier_plate: deliveryType === "courier" ? normalizePlate(courierPlate) : null,
+        // S2 — o servidor recalcula o frete pelo CEP; isto e so a cotacao
+        // que o cliente VIU. Diferenca vira 409 em vez de cobranca errada.
+        expected_delivery_fee:
+          deliveryType === "delivery" && typeof shippingQuote?.fee === "number"
+            ? shippingQuote.fee
+            : undefined,
       };
       const res = await fetch(API_BASE + "/storefront/" + slug + "/studio/order", {
         method: "POST",
@@ -578,6 +674,10 @@ export function useStorefront(slug: string) {
     customerEmail, setCustomerEmail,
     paymentMethod, setPaymentMethod,
     deliveryType, setDeliveryType,
+    courierName, setCourierName,
+    courierPlate, setCourierPlate: (v: string) => setCourierPlate(maskPlate(v)),
+    shippingQuote, quotingShipping, shippingError, quoteShipping,
+    shippingFee, cartTotal,
     addressStreet, setAddressStreet,
     addressNumber, setAddressNumber,
     addressNeigh, setAddressNeigh,
