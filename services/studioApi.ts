@@ -115,6 +115,10 @@ export type StudioOrder = {
   source?: StudioOrderSource;
   digital_order_id?: string | null;
   pdv_sale_id?: string | null;
+  // 19/08/2026 (QA): id do pedido no marketplace — é DIFERENTE do `id`
+  // desta linha (que é da lista unificada e cobre digital/PDV também).
+  // Quem for casar com marketplace_orders precisa deste campo.
+  marketplace_order_id?: string | null;
   marketplace_platform?: "mercado_livre" | "shopee" | null;
   customization_collected_at?: string | null;
   // Camada 1: gate de produção por sinal

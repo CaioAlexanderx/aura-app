@@ -10,17 +10,23 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
-  Alert, Modal, TextInput,
+  Modal, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { confirmAlert, notify } from "@/utils/webAlert";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens, useStudioTheme, useStudioSemantic } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { useAuthStore } from "@/stores/auth";
-import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type StudioPayment, type StudioPaymentKind } from "@/services/studioApi";
+import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type StudioPayment, type StudioPaymentKind, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
+import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 
 const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   pending_art: "approved",
@@ -29,6 +35,84 @@ const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   ready: "delivered",
   delivered: null,
 };
+
+function isHexColor(v: any): boolean {
+  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v);
+}
+
+// FIX (bug #17 QA): "Vencimento" era um TextInput livre pra AAAA-MM-DD sem
+// máscara nem validação. Máscara simples (só dígitos, dash automático) +
+// atalhos relativos evitam formato errado.
+function maskDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  const y = digits.slice(0, 4);
+  const m = digits.slice(4, 6);
+  const d = digits.slice(6, 8);
+  return [y, m, d].filter(Boolean).join("-");
+}
+
+function addDaysISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// ── ItemCustomization ─────────────────────────────────────────────────────────────────────
+// FIX (bug #6 QA): personalização era exibida como JSON cru em fonte
+// monoespaçada. Agora renderiza PersonalizationPreview (mesmo componente
+// usado em CollectCustomizationModal) + lista rótulo/valor legível, com
+// swatch quando o valor é uma cor hex. JSON cru fica atrás de um toggle
+// "ver dados brutos".
+function ItemCustomization({
+  customization, config, t, s,
+}: {
+  customization: Record<string, any>;
+  config: CustomizationConfig | null | undefined;
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+  const fieldsById: Record<string, CustomizationField> = {};
+  for (const f of config?.fields || []) fieldsById[f.id] = f;
+  const entries = Object.entries(customization || {});
+
+  return (
+    <View style={s.custBox}>
+      <Text style={s.custTitle}>Personalização</Text>
+      {config ? (
+        <View style={{ alignItems: "center", marginVertical: 8 }}>
+          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} />
+        </View>
+      ) : null}
+      <View style={{ gap: 6, marginTop: 4 }}>
+        {entries.length === 0 ? (
+          <Text style={s.custRowValue}>—</Text>
+        ) : entries.map(([key, value]) => {
+          const field = fieldsById[key];
+          const label = field?.label || key;
+          const swatch = isHexColor(value);
+          return (
+            <View key={key} style={s.custRow}>
+              <Text style={s.custRowLabel}>{label}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                {swatch ? <View style={[s.custSwatch, { backgroundColor: value }]} /> : null}
+                <Text style={s.custRowValue} numberOfLines={2}>{String(value)}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <Pressable onPress={() => setShowRaw((v) => !v)} style={s.custRawToggle}>
+        <Icon name={showRaw ? "chevron-up" : "chevron-down"} size={12} color={t.ink3} />
+        <Text style={s.custRawToggleTxt}>{showRaw ? "Ocultar dados brutos" : "Ver dados brutos"}</Text>
+      </Pressable>
+      {showRaw ? <Text style={s.custBody}>{safeJson(customization)}</Text> : null}
+    </View>
+  );
+}
 
 // ── PaymentCard ───────────────────────────────────────────────────────────────────────────
 type PaymentCardProps = {
@@ -46,6 +130,10 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
   const ps = useMemo(() => buildPs(tk), [tk]);
   const [payments, setPayments] = useState<StudioPayment[]>([]);
   const [loadingPay, setLoadingPay] = useState(true);
+  // FIX (bug #13 QA): erro no fetch de pagamentos não dava toast nenhum —
+  // ficava um card silenciosamente "sem pagamentos". Agora avisa + oferece
+  // retry.
+  const [payError, setPayError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [markModal, setMarkModal] = useState(false);
   const [markTarget, setMarkTarget] = useState<StudioPayment | null>(null);
@@ -61,7 +149,13 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
     try {
       const res = await studioApi.listOrderPayments(companyId, orderId);
       setPayments(res.payments || []);
-    } catch { setPayments([]); }
+      setPayError(null);
+    } catch (e: any) {
+      setPayments([]);
+      const msg = e?.message || "Não foi possível carregar os pagamentos.";
+      setPayError(msg);
+      notify("Erro", msg);
+    }
     finally { setLoadingPay(false); }
   }, [companyId, orderId]);
 
@@ -80,7 +174,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
       setMarkTarget(null);
       await loadPayments();
       if (res.deposit_released) onDepositReleased();
-    } catch { Alert.alert("Erro", "Não foi possível confirmar o pagamento."); }
+    } catch { notify("Erro", "Não foi possível confirmar o pagamento."); }
     finally { setActing(false); }
   };
 
@@ -90,20 +184,20 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
       const res = await studioApi.createChargeLink(companyId, payment.id);
       setChargeInfo({ instructions: (res as any).instructions || "", pix_code: res.pix_code });
       setChargeModal(true);
-    } catch { Alert.alert("Erro", "Não foi possível gerar informações de cobrança."); }
+    } catch { notify("Erro", "Não foi possível gerar informações de cobrança."); }
     finally { setActing(false); }
   };
 
   const handleAddMarco = async () => {
     const amt = parseFloat(addAmount.replace(",", "."));
-    if (!amt || amt <= 0) { Alert.alert("Valor inválido", "Informe um valor maior que zero."); return; }
+    if (!amt || amt <= 0) { notify("Valor inválido", "Informe um valor maior que zero."); return; }
     setActing(true);
     try {
       await studioApi.createOrderPayment(companyId, orderId, { kind: addKind, amount: amt, due_at: addDueAt || null, method: undefined });
       setAddModal(false);
       setAddAmount(""); setAddDueAt(""); setAddKind("deposit");
       await loadPayments();
-    } catch { Alert.alert("Erro", "Não foi possível criar o marco de pagamento."); }
+    } catch { notify("Erro", "Não foi possível criar o marco de pagamento."); }
     finally { setActing(false); }
   };
 
@@ -127,7 +221,17 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
         )}
       </View>
 
-      {loadingPay ? <ActivityIndicator size="small" color={tk.primary} /> : (
+      {loadingPay ? <ActivityIndicator size="small" color={tk.primary} /> : payError ? (
+        // FIX (bug #13 QA): erro dedicado com retry em vez de "sumir" os
+        // pagamentos silenciosamente.
+        <View style={ps.payErrorBox}>
+          <Icon name="alert-circle" size={14} color={sem.danger.ink} />
+          <Text style={ps.payErrorTxt}>{payError}</Text>
+          <Pressable onPress={loadPayments} style={ps.payRetryBtn}>
+            <Text style={ps.payRetryTxt}>Tentar de novo</Text>
+          </Pressable>
+        </View>
+      ) : (
         <>
           {payments.map((p) => {
             const col = statusPillStyle(p.status);
@@ -199,7 +303,21 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
           <Text style={ps.inputLabel}>Valor (R$)</Text>
           <TextInput style={ps.input} keyboardType="decimal-pad" placeholder="0,00" value={addAmount} onChangeText={setAddAmount} />
           <Text style={ps.inputLabel}>Vencimento (opcional, AAAA-MM-DD)</Text>
-          <TextInput style={ps.input} placeholder="2026-06-30" value={addDueAt} onChangeText={setAddDueAt} />
+          <TextInput
+            style={ps.input}
+            placeholder="2026-06-30"
+            value={addDueAt}
+            onChangeText={(v) => setAddDueAt(maskDateInput(v))}
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+          <View style={ps.dateShortcuts}>
+            {[{ label: "Hoje", days: 0 }, { label: "+7d", days: 7 }, { label: "+15d", days: 15 }].map((sc) => (
+              <Pressable key={sc.label} style={ps.dateChip} onPress={() => setAddDueAt(addDaysISO(sc.days))}>
+                <Text style={ps.dateChipTxt}>{sc.label}</Text>
+              </Pressable>
+            ))}
+          </View>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
             <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
             <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary }]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
@@ -222,23 +340,67 @@ export default function StudioOrderDetail() {
 
   const [data, setData] = useState<StudioOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  // FIX (bug #13 QA): distingue "erro ao carregar" (com retry) de
+  // "pedido não encontrado" — antes os dois casos caíam no mesmo texto
+  // genérico e sem toast nenhum.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  // FIX (bug #6 QA): customization_config por product_id, pra renderizar
+  // PersonalizationPreview + rótulos legíveis em vez de JSON cru.
+  const [configByProduct, setConfigByProduct] = useState<Record<string, CustomizationConfig | null>>({});
 
   const load = useCallback(async () => {
-    if (!company?.id || !oid) return;
+    // FIX (bug #14 QA): return antes do setLoading(false) deixava o
+    // spinner girando pra sempre quando company ainda não tinha carregado.
+    if (!company?.id || !oid) { setLoading(false); return; }
     setLoading(true);
     try {
       const d = await studioApi.getOrder(company.id, oid);
       setData(d);
-    } catch (e) {
+      setLoadError(null);
+    } catch (e: any) {
       console.warn("[studio order detail]", e);
       setData(null);
+      const msg = e?.message || "Erro ao carregar pedido";
+      setLoadError(msg);
+      notify("Erro", msg);
     } finally {
       setLoading(false);
     }
   }, [company?.id, oid]);
 
-  useEffect(() => { load(); }, [load]);
+  // FIX (bug #15 QA): dados não recarregavam ao voltar pra essa tela —
+  // avançar status e voltar podia mostrar dado stale. useFocusEffect cobre
+  // mount inicial + toda vez que a tela ganha foco de novo.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Carrega customization_config de cada produto personalizado no pedido
+  // (mesmo endpoint usado em CollectCustomizationModal) pra dar nome/tipo
+  // aos campos crus de customization e alimentar o PersonalizationPreview.
+  useEffect(() => {
+    if (!company?.id || !data) return;
+    const cid = company.id;
+    const toFetch = (data.items || []).filter(
+      (it) => it.customization && it.product_id && !(it.product_id in configByProduct)
+    );
+    if (toFetch.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map((it) =>
+        studioApi.getCustomizationConfig(cid, it.product_id)
+          .then((res) => [it.product_id, res.config] as const)
+          .catch(() => [it.product_id, null] as const)
+      )
+    ).then((pairs) => {
+      if (cancelled) return;
+      setConfigByProduct((prev) => {
+        const next = { ...prev };
+        for (const [pid, cfg] of pairs) next[pid] = cfg;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [company?.id, data, configByProduct]);
 
   // P1: gate configurável — backend é a fonte da verdade.
   // Se require_deposit_for_production estiver ON e sinal pendente,
@@ -255,13 +417,13 @@ export default function StudioOrderDetail() {
       const is409 = (e?.status ?? e?.statusCode) === 409 || errCode === 'deposit_required';
       if (next === 'in_production' && is409) {
         const msg = e?.data?.message ?? 'Sinal não recebido. Iniciar produção mesmo assim?';
-        Alert.alert(
+        // FIX (bug #4 QA): Alert.alert é no-op no react-native-web.
+        confirmAlert(
           'Sinal não recebido',
           msg,
-          [
-            { text: 'Aguardar sinal', style: 'cancel' },
-            { text: 'Iniciar mesmo assim', style: 'destructive', onPress: () => doAdvance(next, true) },
-          ]
+          'Iniciar mesmo assim',
+          () => doAdvance(next, true),
+          { destructive: true }
         );
       } else {
         console.warn('[advance production]', e);
@@ -281,20 +443,30 @@ export default function StudioOrderDetail() {
     doAdvance(next);
   };
 
+  // FIX (bug #19 QA): loading/empty fora do padrão — migrados pra
+  // StudioScreen + StudioLoading/StudioEmpty (mesmo padrão do resto do app).
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tk.bg }}>
-        <ActivityIndicator color={tk.primary} />
-      </View>
+      <StudioScreen variant="reading">
+        <StudioLoading variant="skeleton-list" rows={5} />
+      </StudioScreen>
     );
   }
 
   if (!data) {
+    // FIX (bug #13 QA): erro de carregamento (com retry) é distinto de
+    // "pedido não existe" — antes os dois casos mostravam o mesmo texto.
     return (
-      <View style={{ flex: 1, padding: 24, backgroundColor: tk.bg }}>
-        <Text style={s.h1}>Pedido não encontrado</Text>
-        <Pressable onPress={() => router.back()} style={s.linkBtn}><Text style={s.linkBtnTxt}>Voltar</Text></Pressable>
-      </View>
+      <StudioScreen variant="reading">
+        <StudioEmpty
+          tone={loadError ? "warning" : "default"}
+          icon={loadError ? "alert-circle" : "search"}
+          title={loadError ? "Não deu pra carregar o pedido" : "Pedido não encontrado"}
+          desc={loadError || undefined}
+          primaryCta={loadError ? { label: "Tentar de novo", onPress: load } : undefined}
+          secondaryCta={{ label: "Voltar", onPress: () => router.back() }}
+        />
+      </StudioScreen>
     );
   }
 
@@ -314,17 +486,18 @@ export default function StudioOrderDetail() {
         ]}
       />
       <View style={s.container}>
-        <View style={s.headRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.h1}>{order.display_name || order.customer_name || "Pedido"}</Text>
-            <Text style={s.h1Sub}>
-              Criado em {new Date(order.created_at).toLocaleString("pt-BR")} · {order.item_count} item(ns) · R$ {Number(order.total_amount || 0).toFixed(2)}
-            </Text>
-          </View>
-          <View style={[s.statusPill, { backgroundColor: statusCol.bg }]}>
-            <Text style={[s.statusTxt, { color: statusCol.fg }]}>{labelStudioStatus(status)}</Text>
-          </View>
-        </View>
+        {/* FIX (bug #19 QA): <Text style={s.h1}> fora do padrão — migrado
+            pra StudioPageHeader (mesmo componente usado no resto do app). */}
+        <StudioPageHeader
+          eyebrow="PEDIDOS"
+          title={order.display_name || order.customer_name || "Pedido"}
+          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${order.item_count} item(ns) · R$ ${Number(order.total_amount || 0).toFixed(2)}`}
+          rightSlot={
+            <View style={[s.statusPill, { backgroundColor: statusCol.bg }]}>
+              <Text style={[s.statusTxt, { color: statusCol.fg }]}>{labelStudioStatus(status)}</Text>
+            </View>
+          }
+        />
 
         <View style={s.actionRow}>
           {next && (
@@ -366,10 +539,12 @@ export default function StudioOrderDetail() {
                 <Text style={s.itemTitle}>{it.product_name}</Text>
                 <Text style={s.itemSub}>{it.quantity} × R$ {Number(it.unit_price || 0).toFixed(2)}</Text>
                 {it.customization ? (
-                  <View style={s.custBox}>
-                    <Text style={s.custTitle}>Personalização</Text>
-                    <Text style={s.custBody}>{safeJson(it.customization)}</Text>
-                  </View>
+                  <ItemCustomization
+                    customization={it.customization}
+                    config={it.product_id ? configByProduct[it.product_id] : undefined}
+                    t={tk}
+                    s={s}
+                  />
                 ) : null}
               </View>
             </View>
@@ -418,9 +593,6 @@ function safeJson(v: any): string {
 function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
   container: { width: "100%" },
-  headRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
-  h1: { fontSize: 22, fontWeight: "800", color: t.ink },
-  h1Sub: { fontSize: 12, color: t.ink3, marginTop: 4 },
   statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   statusTxt: { fontWeight: "800", fontSize: 12 },
   actionRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 18 },
@@ -435,14 +607,18 @@ function buildStyles(t: StudioPalette) {
   custBox: { marginTop: 8, padding: 10, backgroundColor: t.bg, borderRadius: 10, borderWidth: 1, borderColor: t.ink5 },
   custTitle: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
   custBody: { fontSize: 11, color: t.ink2, marginTop: 4, fontFamily: "monospace" },
+  custRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, paddingVertical: 4 },
+  custRowLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
+  custRowValue: { fontSize: 12, color: t.ink, fontWeight: "600", textAlign: "right" },
+  custSwatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: t.ink5 },
+  custRawToggle: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8, alignSelf: "flex-start" },
+  custRawToggleTxt: { fontSize: 11, color: t.ink3, fontWeight: "700" },
   approvalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.ink5 },
   approvalDot: { width: 8, height: 8, borderRadius: 4 },
   approvalTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
   approvalSub: { color: t.ink3, fontSize: 11, marginTop: 2 },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   link: { color: t.primary, fontWeight: "600", fontSize: 12 },
-  linkBtn: { marginTop: 12, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: t.primary },
-  linkBtnTxt: { color: "#fff", fontWeight: "700" },
   });
 }
 
@@ -456,6 +632,10 @@ function buildPs(t: StudioPalette) {
   payLabel: { fontWeight: "700", color: t.ink, fontSize: 13 },
   payAmount: { color: t.ink2, fontSize: 13 },
   paySub: { color: t.ink3, fontSize: 11, marginTop: 2 },
+  payErrorBox: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  payErrorTxt: { color: t.ink2, fontSize: 12.5, flex: 1, minWidth: 140 },
+  payRetryBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: t.ink5 },
+  payRetryTxt: { color: t.ink2, fontSize: 12, fontWeight: "700" },
   actionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 },
@@ -468,6 +648,9 @@ function buildPs(t: StudioPalette) {
   pixCode: { fontSize: 15, fontWeight: "700", color: t.primary, marginTop: 4 },
   inputLabel: { fontSize: 11, fontWeight: "700", color: t.ink3, marginBottom: 4, marginTop: 10 },
   input: { borderWidth: 1, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: t.ink, backgroundColor: t.bg },
+  dateShortcuts: { flexDirection: "row", gap: 6, marginTop: 6 },
+  dateChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5 },
+  dateChipTxt: { fontSize: 11, color: t.ink2, fontWeight: "700" },
   kindPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: t.ink4, backgroundColor: t.paperCardElev },
   kindPillTxt: { fontWeight: "700", fontSize: 12, color: t.ink2 },
   });

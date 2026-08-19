@@ -29,20 +29,23 @@
 // O genérico <StudioProductionStatus> dentro do .map() fazia o Babel
 // interpretar o angle bracket como JSX e lançar SyntaxError.
 // ============================================================
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal, Alert, Image,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal, Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { confirmAlert } from "@/utils/webAlert";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens, useStudioSemantic } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import type { StudioSemanticPalette } from "@/constants/studio-semantic";
-import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
+import { studioApi, type StudioOrder, type StudioProductionStatus, type MarketplaceOrderStudio } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { CollectCustomizationModal } from "@/components/studio/CollectCustomizationModal";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
@@ -75,6 +78,11 @@ function buildColumns(sem: StudioSemanticPalette): Column[] {
     { key: "in_production", label: "Em produção",      icon: "clock",        color: sem.production.base, bg: sem.production.soft, nextLabel: "Marcar como pronto" },
     { key: "ready",         label: "Pronto",           icon: "package",      color: sem.ready.base,      bg: sem.ready.soft,      nextLabel: "Marcar como entregue" },
     { key: "delivered",     label: "Entregue",         icon: "check-circle", color: sem.delivered.base,  bg: sem.delivered.soft,  nextLabel: "" },
+    // FIX (bug #16 QA): pedidos cancelled não tinham NENHUMA coluna — o
+    // loop de agrupamento (byStatus) descartava silenciosamente porque só
+    // conhecia as chaves das colunas construídas aqui. Coluna própria dá
+    // visibilidade sem exigir ação (NEXT_STATUS[cancelled] já é null).
+    { key: "cancelled",     label: "Cancelados",       icon: "x-circle",     color: sem.danger.base,     bg: sem.danger.soft,     nextLabel: "" },
   ];
 }
 
@@ -88,10 +96,11 @@ const NEXT_STATUS: Record<StudioProductionStatus, StudioProductionStatus | null>
   cancelled:     null,
 };
 
+// FIX (bug #20 QA): "shopee" hardcoded hex fora dos tokens Studio.
 function buildPlatformLabels(t: StudioPalette): Record<string, { label: string; bg: string; fg: string }> {
   return {
     mercado_livre: { label: "Mercado Livre", bg: t.warningSoft, fg: t.warningInk },
-    shopee:        { label: "Shopee",        bg: "#FFEDD5",     fg: "#9A3412" },
+    shopee:        { label: "Shopee",        bg: t.dangerSoft,  fg: t.dangerInk },
   };
 }
 
@@ -145,7 +154,7 @@ function fmtDueShort(iso?: string | null) {
 // Separado para poder chamar useDraggableCardRef como hook (regra dos hooks:
 // não pode ser chamado dentro de .map() diretamente).
 function DraggableCard({
-  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, router,
+  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, onCollect, onCobrar, cobrandoId, router,
 }: {
   o: StudioOrder;
   col: Column;
@@ -156,6 +165,7 @@ function DraggableCard({
   PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
   onAdvance: (order: StudioOrder) => void;
   onApproval: (order: StudioOrder) => void;
+  onCollect: (order: StudioOrder) => void;
   onCobrar: (order: StudioOrder) => void;
   cobrandoId: string | null;
   router: ReturnType<typeof useRouter>;
@@ -218,7 +228,10 @@ function DraggableCard({
         {o.display_name || "Sem cadastro"}
       </Text>
       <Text style={s.cardMeta}>
-        {o.item_count} item{o.item_count === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
+        {/* FIX (bug #18 QA): "1 items" — item_count às vezes chega como string
+            do backend (COUNT() do Postgres), então "=== 1" (comparação
+            estrita) nunca batia e sempre caía no plural. Number() normaliza. */}
+        {o.item_count} item{Number(o.item_count) === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
       </Text>
       {platformMeta && (
         <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
@@ -267,7 +280,7 @@ function DraggableCard({
         {col.key === "awaiting_customization" && (
           <Pressable
             style={[s.btnApproval, { backgroundColor: t.accent }]}
-            onPress={(e) => { e.stopPropagation && e.stopPropagation(); router.push(`/studio/pedidos/${o.id}` as any); }}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); onCollect(o); }}
           >
             <Icon name="message-circle" size={12} color="#fff" />
             <Text style={s.btnApprovalTxt}>Coletar personalização</Text>
@@ -301,7 +314,7 @@ function DraggableCard({
 // O genérico é omitido na chamada (inferência de tipo) para evitar que o
 // Babel interprete o angle-bracket como JSX em contexto de expressão.
 function KanbanColumn({
-  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCobrar, cobrandoId, ehGargalo, router,
+  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCollect, onCobrar, cobrandoId, ehGargalo, highlighted, router,
 }: {
   col: Column;
   orders: StudioOrder[];
@@ -311,9 +324,11 @@ function KanbanColumn({
   PLATFORM_LABELS: Record<string, { label: string; bg: string; fg: string }>;
   onAdvance: (order: StudioOrder) => void;
   onApproval: (order: StudioOrder) => void;
+  onCollect: (order: StudioOrder) => void;
   onCobrar: (order: StudioOrder) => void;
   cobrandoId: string | null;
   ehGargalo: boolean;
+  highlighted?: boolean;
   router: ReturnType<typeof useRouter>;
 }) {
   // Hook chamado no top-level do componente — sem genérico explícito (inferido).
@@ -326,6 +341,8 @@ function KanbanColumn({
       style={[
         s.col,
         isHovered && { borderColor: col.color, borderWidth: 2, backgroundColor: col.bg },
+        // Bug #9 QA: deep-link ?intent=approval destaca a coluna alvo.
+        highlighted && { borderColor: col.color, borderWidth: 3 },
       ]}
     >
       <View style={[s.colHead, { backgroundColor: col.bg }]}>
@@ -362,6 +379,7 @@ function KanbanColumn({
             PLATFORM_LABELS={PLATFORM_LABELS}
             onAdvance={onAdvance}
             onApproval={onApproval}
+            onCollect={onCollect}
             onCobrar={onCobrar}
             cobrandoId={cobrandoId}
             router={router}
@@ -374,6 +392,7 @@ function KanbanColumn({
 
 export default function StudioProducao() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
   const sem = useStudioSemantic();
@@ -383,20 +402,89 @@ export default function StudioProducao() {
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<StudioOrder[]>([]);
+  // FIX (bug #13 QA): erro engolido virava empty state mentiroso ("Fila
+  // vazia" quando na verdade o fetch falhou). Estado dedicado + retry.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [approvalFor, setApprovalFor] = useState<StudioOrder | null>(null);
+  // FIX (bug #7 QA): coletar personalização direto no KDS em vez de navegar
+  // pro detalhe do pedido (que não tem editor de customization).
+  const [collectFor, setCollectFor] = useState<MarketplaceOrderStudio | null>(null);
+  const [collectingId, setCollectingId] = useState<string | null>(null);
+  // FIX (bug #9 QA): deep-link ?intent=approval — rola até e destaca a
+  // coluna "Aguardando arte" (pending_art).
+  const [highlightCol, setHighlightCol] = useState<StudioProductionStatus | null>(null);
+  const boardScrollRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    // FIX (bug #14 QA): return antes do setLoading(false) deixava o
+    // skeleton girando pra sempre quando company ainda não tinha carregado.
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
     try {
       const r = await studioApi.listOrders(company.id, { days: 60, limit: 300 });
       setOrders(r.orders || []);
+      setLoadError(null);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar pedidos");
+      const msg = e?.message || "Erro ao carregar pedidos";
+      toast.error(msg);
+      setLoadError(msg);
     } finally { setLoading(false); }
   }, [company?.id]);
 
-  useEffect(() => { load(); }, [load]);
+  // FIX (bug #15 QA): dados não recarregavam ao voltar pra tela (ex: avançar
+  // status no detalhe do pedido e voltar pro kanban mostrava o card na
+  // coluna antiga). useFocusEffect recarrega toda vez que a tela ganha foco
+  // — cobre tanto o mount inicial quanto voltar de outra rota.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // FIX (bug #9 QA): consome ?intent=approval — rola até a coluna
+  // "Aguardando arte" e destaca por alguns segundos. router.replace() tira o
+  // param da URL pra não reaplicar em todo re-render (ex: depois de mover
+  // um card, o componente re-renderiza e reaplicaria o scroll de novo).
+  useEffect(() => {
+    if (params?.intent !== "approval" || loading) return;
+    const idx = COLUMNS.findIndex((c) => c.key === "pending_art");
+    if (idx >= 0) {
+      const COL_WIDTH = 280, GAP = 14;
+      boardScrollRef.current?.scrollTo({ x: idx * (COL_WIDTH + GAP), animated: true });
+    }
+    setHighlightCol("pending_art");
+    router.replace("/studio/producao" as any);
+    const timer = setTimeout(() => setHighlightCol(null), 2600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.intent, loading]);
+
+  // FIX (bug #7 QA): abre o CollectCustomizationModal direto no KDS.
+  // O card do KDS só tem o StudioOrder (sem items/product_id), então busca
+  // o MarketplaceOrderStudio completo via listMarketplaceOrders.
+  //
+  // O casamento é por `marketplace_order_id`, NÃO pelo `id` do pedido: na
+  // lista unificada o `id` é da linha do pedido (que também cobre digital
+  // e PDV) e o id do marketplace vem numa coluna à parte — casar pelo `id`
+  // nunca acha nada e o botão morre em "não localizei o pedido".
+  const openCollect = useCallback(async (order: StudioOrder) => {
+    if (!company?.id || collectingId) return;
+    const mktId = order.marketplace_order_id;
+    if (!mktId) {
+      toast.error("Esse pedido não veio de marketplace — a personalização é coletada no próprio pedido.");
+      return;
+    }
+    setCollectingId(order.id);
+    try {
+      const r = await studioApi.listMarketplaceOrders(company.id, { pending_only: true, limit: 300 });
+      const found = (r.orders || []).find((o) => o.id === mktId);
+      if (found) {
+        setCollectFor(found);
+      } else {
+        toast.error("Não foi possível localizar os dados desse pedido pra coletar a personalização.");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao carregar pedido");
+    } finally {
+      setCollectingId(null);
+    }
+  }, [company?.id, collectingId]);
 
   // ── moveTo: lógica central de mover um pedido para qualquer status ────────
   // Preserva o tratamento de 409 deposit_required (P1 Camada 1).
@@ -428,18 +516,16 @@ export default function StudioProducao() {
         setOrders((prev) => prev.map((o) =>
           o.id === order.id ? { ...o, studio_production_status: cur } : o
         ));
-        Alert.alert(
+        // FIX (bug #4 QA): Alert.alert é no-op no react-native-web — o
+        // onPress do botão "Iniciar mesmo assim" nunca disparava. confirmAlert
+        // usa window.confirm no web e Alert.alert no nativo.
+        confirmAlert(
           "Sinal não recebido",
           e?.data?.message || e?.message ||
             "O sinal deste pedido ainda não foi confirmado. Deseja iniciar a produção mesmo assim?",
-          [
-            { text: "Cancelar", style: "cancel" },
-            {
-              text: "Iniciar mesmo assim",
-              style: "destructive",
-              onPress: () => moveTo(order, targetStatus, true),
-            },
-          ]
+          "Iniciar mesmo assim",
+          () => moveTo(order, targetStatus, true),
+          { destructive: true }
         );
         return;
       }
@@ -490,8 +576,9 @@ export default function StudioProducao() {
     if (byStatus[key]) byStatus[key].push(o);
   }
 
-  // #3: detecta "fila completamente vazia exceto delivered" — celebra
-  const activeCount = COLUMNS.filter((c) => c.key !== "delivered").reduce(
+  // #3: detecta "fila completamente vazia exceto delivered/cancelled" — celebra.
+  // Cancelled não conta como trabalho pendente nem impede a celebração.
+  const activeCount = COLUMNS.filter((c) => c.key !== "delivered" && c.key !== "cancelled").reduce(
     (sum, c) => sum + byStatus[c.key].length, 0
   );
   const allCaughtUp = !loading && orders.length > 0 && activeCount === 0;
@@ -499,7 +586,9 @@ export default function StudioProducao() {
   // K4: leitura do fluxo. Tudo derivado do que já está na tela — nenhum
   // campo novo, nenhuma configuração, nenhuma chamada extra.
   const semana = useMemo(() => resumoDaSemana(orders), [orders]);
-  const colunasAtivas = useMemo(() => COLUMNS.filter((c) => c.key !== "delivered").map((c) => c.key), [COLUMNS]);
+  // Cancelled fica fora da detecção de gargalo — pedido cancelado parado
+  // ali não é fila emperrando, é só o fim da linha.
+  const colunasAtivas = useMemo(() => COLUMNS.filter((c) => c.key !== "delivered" && c.key !== "cancelled").map((c) => c.key), [COLUMNS]);
   const gargalo = useMemo(() => colunaGargalo(byStatus, colunasAtivas), [byStatus, colunasAtivas]);
 
   return (
@@ -508,7 +597,10 @@ export default function StudioProducao() {
         <StudioPageHeader
           eyebrow="FLUXO DE PRODUÇÃO"
           title="Fila de produção"
-          subtitle="Arraste os cards (ou use os botoes) pra mover."
+          // FIX (bug #18 QA): drag-and-drop é web-only (useStudioKanbanDnD),
+          // então o copy não pode prometer "arraste" em mobile/nativo. Acento
+          // de "botões" corrigido de quebra.
+          subtitle={dnd.isWeb ? "Arraste os cards (ou use os botões) pra mover." : "Use os botões dos cards pra mover entre as etapas."}
           rightSlot={
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {/* K2: um botão, nada pra configurar antes. */}
@@ -557,6 +649,15 @@ export default function StudioProducao() {
 
       {loading && orders.length === 0 ? (
         <StudioLoading variant="skeleton-grid" rows={3} />
+      ) : loadError && orders.length === 0 ? (
+        // FIX (bug #13 QA): erro de carregamento é distinto de fila vazia.
+        <StudioEmpty
+          tone="warning"
+          icon="alert-circle"
+          title="Não deu pra carregar a fila"
+          desc={loadError}
+          primaryCta={{ label: "Tentar de novo", onPress: load }}
+        />
       ) : orders.length === 0 ? (
         // Empty state: fila vazia
         <StudioEmpty
@@ -575,7 +676,7 @@ export default function StudioProducao() {
           primaryCta={{ label: "Novo pedido", onPress: () => router.push("/studio/pedidos" as any) }}
         />
       ) : (
-        <ScrollView horizontal style={s.boardScroll} contentContainerStyle={s.board}>
+        <ScrollView ref={boardScrollRef} horizontal style={s.boardScroll} contentContainerStyle={s.board}>
           {COLUMNS.map((col) => (
             <KanbanColumn
               key={col.key}
@@ -587,9 +688,11 @@ export default function StudioProducao() {
               PLATFORM_LABELS={PLATFORM_LABELS}
               onAdvance={advance}
               onApproval={setApprovalFor}
+              onCollect={openCollect}
               onCobrar={onCobrar}
               cobrandoId={cobrandoId}
               ehGargalo={gargalo === col.key}
+              highlighted={highlightCol === col.key}
               router={router}
             />
           ))}
@@ -606,6 +709,20 @@ export default function StudioProducao() {
             order={approvalFor}
             onClose={() => setApprovalFor(null)}
             onSent={() => { setApprovalFor(null); load(); }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        visible={!!collectFor}
+        animationType="slide"
+        onRequestClose={() => setCollectFor(null)}
+      >
+        {collectFor && (
+          <CollectCustomizationModal
+            order={collectFor}
+            onClose={() => setCollectFor(null)}
+            onSaved={() => { setCollectFor(null); load(); }}
           />
         )}
       </Modal>

@@ -58,11 +58,12 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const [customerPhone, setCustomerPhone] = useState(order.customer_phone || "");
   const [customMessage, setCustomMessage] = useState("");
   const [created, setCreated] = useState<StudioApprovalCreated | null>(null);
+  const [sending, setSending] = useState(false);
+  const [linkCardOpen, setLinkCardOpen] = useState(false);
 
   const canAdvance =
     step === 1 ? /^https?:\/\//.test(mockupUrl.trim()) :
-    step === 2 ? customerPhone.replace(/\D/g, "").length >= 10 :
-    true;
+    customerPhone.replace(/\D/g, "").length >= 10;
 
   // F2: qualquer alteração manual do mockup desfaz o vínculo com o render
   function setMockupUrlManual(v: string) {
@@ -120,8 +121,27 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     }
   }
 
-  async function generateLink() {
-    if (!company?.id) return;
+  // FIX (bug #12 QA): antes, "gerar link" (passo 2) e "abrir WhatsApp"
+  // (passo 3, interstitial só com 1 botão) eram duas etapas — o link já
+  // sai pronto no fim do passo 2, então o passo 3 só existia pra mostrar
+  // ele. Agora gera e abre o WhatsApp na MESMA ação; o passo 2 continua a
+  // tela final, com o link/mensagem em card colapsável.
+  function openWhatsAppFor(c: StudioApprovalCreated) {
+    if (!c.wa_me_link) {
+      toast.error("Link wa.me não pôde ser gerado — telefone inválido");
+      return false;
+    }
+    if (Platform.OS === "web") {
+      window.open(c.wa_me_link, "_blank");
+    } else {
+      Linking.openURL(c.wa_me_link).catch(() => toast.error("Não foi possível abrir o WhatsApp"));
+    }
+    return true;
+  }
+
+  async function generateAndOpenWhatsApp() {
+    if (!company?.id || sending) return;
+    setSending(true);
     try {
       const body = {
         mockup_url: mockupUrl.trim(),
@@ -132,23 +152,23 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
       const r = renderId
         ? await studioVisualApi.requestApprovalWithRender(company.id, order.id, { ...body, render_id: renderId })
         : await studioApi.requestApproval(company.id, order.id, body);
-      setCreated(r as StudioApprovalCreated);
-      setStep(3);
+      const c = r as StudioApprovalCreated;
+      setCreated(c);
+      openWhatsAppFor(c);
+      // FIX (bug #12 QA, parte 2): abrir o WhatsApp não é "aprovação
+      // solicitada" — a loja ainda precisa apertar enviar por lá. O toast
+      // de sucesso só dispara quando ela confirma isso (botão abaixo).
+      toast.info("Mensagem pronta no WhatsApp que abriu. Confirme por lá e depois clique em \"Já enviei\".");
     } catch (e: any) {
       toast.error(e?.message || "Erro ao gerar link");
+    } finally {
+      setSending(false);
     }
   }
 
-  function openWhatsApp() {
-    if (!created?.wa_me_link) {
-      toast.error("Link wa.me não pôde ser gerado — telefone inválido");
-      return;
-    }
-    if (Platform.OS === "web") {
-      window.open(created.wa_me_link, "_blank");
-    } else {
-      Linking.openURL(created.wa_me_link).catch(() => toast.error("Não foi possível abrir o WhatsApp"));
-    }
+  // Confirmação explícita de que a lojista realmente apertou enviar no
+  // WhatsApp — só aqui declaramos "aprovação solicitada" de fato.
+  function confirmSent() {
     toast.success("✨ Aprovação solicitada! Aguarde resposta do cliente.");
     onSent();
   }
@@ -167,15 +187,14 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
 
       <StudioWorkflow
         title={`Solicitar aprovação — pedido #${order.id.slice(0, 8).toUpperCase()}`}
-        steps={["Mockup", "Mensagem", "Enviar WhatsApp"]}
+        steps={["Mockup", "Confirmar e enviar"]}
         current={step}
         onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
-        onNext={step === 1 ? () => setStep(2) : step === 2 ? generateLink : undefined}
-        onConcluir={step === 3 ? openWhatsApp : undefined}
-        primaryDisabled={!canAdvance}
+        onNext={step === 1 ? () => setStep(2) : undefined}
+        onConcluir={step === 2 ? (created ? confirmSent : generateAndOpenWhatsApp) : undefined}
+        primaryDisabled={!canAdvance || sending}
         primaryCta={
-          step === 3 ? "Abrir WhatsApp e enviar" :
-          step === 2 ? "Gerar link de aprovação" :
+          step === 2 ? (created ? "Já enviei — concluir" : sending ? "Gerando…" : "Gerar link e abrir WhatsApp") :
           "Continuar"
         }
         draftKey={`approval-${order.id}`}
@@ -292,31 +311,49 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
             <Text style={s.subHelp}>
               Padrão: "Oi [nome]! Sua arte do pedido ficou pronta 🎨 Dá uma olhada e me confirma se posso imprimir: [link]"
             </Text>
-          </View>
-        )}
 
-        {step === 3 && created && (
-          <View style={s.block}>
-            <View style={s.successCard}>
-              <Icon name="check-circle" size={28} color={t.mint} />
-              <Text style={s.successTitle}>Link gerado!</Text>
-              <Text style={s.successSub}>
-                Click no botão abaixo pra abrir o WhatsApp com a mensagem já pronta. Você só precisa clicar enviar.
-              </Text>
-              <View style={s.linkBox}>
-                <Text style={s.linkLabel}>LINK DO CLIENTE</Text>
-                <Text style={s.linkUrl} numberOfLines={1}>{created.approval_url}</Text>
+            {/* FIX (bug #12 QA): sem passo 3 interstitial — o link já sai
+                pronto e o WhatsApp já abre no clique de "Gerar link e abrir
+                WhatsApp" acima. Esta seção só aparece depois, na MESMA tela,
+                como confirmação colapsável (não afirma "solicitado" ainda —
+                isso só acontece quando a loja confirma "Já enviei" abaixo). */}
+            {created && (
+              <View style={s.successCard}>
+                <Icon name="check-circle" size={24} color={t.mint} />
+                <Text style={s.successTitle}>WhatsApp aberto</Text>
+                <Text style={s.successSub}>
+                  A mensagem já foi montada com o link — confira se abriu certo, aperte enviar por lá e depois volte aqui e clique em "Já enviei".
+                </Text>
+
+                <Pressable onPress={() => setLinkCardOpen((v) => !v)} style={s.linkToggle}>
+                  <Icon name={linkCardOpen ? "chevron-up" : "chevron-down"} size={12} color={t.ink3} />
+                  <Text style={s.linkToggleTxt}>{linkCardOpen ? "Ocultar link e mensagem" : "Ver link e mensagem"}</Text>
+                </Pressable>
+
+                {linkCardOpen && (
+                  <>
+                    <View style={s.linkBox}>
+                      <Text style={s.linkLabel}>LINK DO CLIENTE</Text>
+                      <Text style={s.linkUrl} numberOfLines={1}>{created.approval_url}</Text>
+                    </View>
+                    {created.message_text && (
+                      <View style={s.linkBox}>
+                        <Text style={s.linkLabel}>MENSAGEM</Text>
+                        <Text style={s.linkMsg} numberOfLines={6}>{created.message_text}</Text>
+                      </View>
+                    )}
+                    <Pressable onPress={() => openWhatsAppFor(created)} style={s.reopenWaBtn}>
+                      <Icon name="message-circle" size={13} color={t.primary} />
+                      <Text style={s.reopenWaTxt}>Abrir WhatsApp de novo</Text>
+                    </Pressable>
+                  </>
+                )}
+
+                <Text style={[s.subHelp, { marginTop: 12 }]}>
+                  ⏱ Link válido por 7 dias. Você pode enviar novo a qualquer momento.
+                </Text>
               </View>
-              {created.message_text && (
-                <View style={s.linkBox}>
-                  <Text style={s.linkLabel}>MENSAGEM</Text>
-                  <Text style={s.linkMsg} numberOfLines={6}>{created.message_text}</Text>
-                </View>
-              )}
-              <Text style={[s.subHelp, { marginTop: 12 }]}>
-                ⏱ Link válido por 7 dias. Você pode cancelar ou enviar novo a qualquer momento.
-              </Text>
-            </View>
+            )}
           </View>
         )}
       </StudioWorkflow>
@@ -367,7 +404,15 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   previewImg: { width: 200, height: 200, borderRadius: 14, backgroundColor: t.paperCardElev },
   previewCap: { fontSize: 11, color: t.ink3, marginTop: 6 },
 
-  successCard: { padding: 22, backgroundColor: t.paperCardElev, borderRadius: 16, borderWidth: 1, borderColor: t.mintSoft, alignItems: "center" },
+  successCard: { padding: 22, backgroundColor: t.paperCardElev, borderRadius: 16, borderWidth: 1, borderColor: t.mintSoft, alignItems: "center", marginTop: 16 },
+  linkToggle: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  linkToggleTxt: { fontSize: 11.5, color: t.ink3, fontWeight: "700" },
+  reopenWaBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
+    borderWidth: 1.5, borderColor: t.primary,
+  },
+  reopenWaTxt: { fontSize: 12, color: t.primary, fontWeight: "700" },
   successTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 8 },
   successSub: { fontSize: 13, color: t.ink3, textAlign: "center", marginTop: 4, marginBottom: 16 },
   linkBox: { width: "100%", backgroundColor: t.bgSoft, borderRadius: 10, padding: 12, marginTop: 8 },

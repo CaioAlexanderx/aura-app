@@ -1,12 +1,13 @@
 // ============================================================
 // AURA STUDIO · Wizard de pedido em massa pra evento (Fase 6)
 //
-// 4ª aplicação do <StudioWorkflow> canônico — 5 passos:
-//   1. Evento + Produto
-//   2. Lista de pessoas (CSV cola ou manual)
-//   3. Preço (mostra preview escalonado em tempo real)
-//   4. Prazo de entrega
-//   5. Confirmar
+// 4ª aplicação do <StudioWorkflow> canônico.
+//
+// FIX (bug #10 QA, 19/08/2026): eram 5 passos onde cabiam 2 — passo 3 era
+// um campo já preenchido pelo preço do produto, passo 4 tinha 2 campos
+// opcionais e passo 5 só relia o que já estava na tela. Reduzido a:
+//   1. Evento, produto e pessoas
+//   2. Preço e prazo (com resumo inline + "Criar evento")
 // ============================================================
 import { useEffect, useState, useMemo } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView } from "react-native";
@@ -48,6 +49,34 @@ const DEFAULT_DRAFT: Draft = {
   notes: "",
 };
 
+// Gera uma chave de rascunho nova a cada "sessão de criação" (mount inicial
+// + toda vez que um evento é criado com sucesso). Ver FIX bug #11 abaixo.
+function makeSessionKey(): string {
+  return "bulk-order-wizard-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+// FIX (bug #17 QA): máscara simples AAAA-MM-DD — só dígitos, dash automático.
+function maskDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  const y = digits.slice(0, 4);
+  const m = digits.slice(4, 6);
+  const d = digits.slice(6, 8);
+  return [y, m, d].filter(Boolean).join("-");
+}
+
+function fmtISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function addDaysISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return fmtISO(d);
+}
+
 export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -55,6 +84,13 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
   const [pricing, setPricing] = useState<BulkPricingPreview | null>(null);
+  // FIX (bug #11 QA): draftKey era uma string fixa ("bulk-order-wizard") —
+  // como o Modal que hospeda o wizard (pedidos.tsx) não desmonta o
+  // componente entre aberturas, o ESTADO REACT (não só o localStorage)
+  // sobrevivia: o 2º evento abria com os dados do 1º ainda no `draft`.
+  // Chave única por sessão de criação + reset explícito do form ao
+  // concluir com sucesso (abaixo) resolve os dois ângulos do bug.
+  const [sessionKey, setSessionKey] = useState(makeSessionKey);
   const upd = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
 
   // parser de nomes — uma linha por pessoa, vazias removidas
@@ -75,11 +111,12 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
     return () => clearTimeout(timer);
   }, [company?.id, names.length, draft.unit_price]);
 
+  // 2 passos (FIX bug #10 QA): 1) evento+produto+pessoas 2) preço+prazo.
   const canAdvance =
-    step === 1 ? draft.event_name.trim().length > 1 && !!draft.product_id :
-    step === 2 ? names.length > 0 :
-    step === 3 ? parseFloat(draft.unit_price) > 0 :
-    true;
+    step === 1 ? draft.event_name.trim().length > 1 && !!draft.product_id && names.length > 0 :
+    parseFloat(draft.unit_price) > 0;
+
+  const deadlineValid = !draft.delivery_deadline || /^\d{4}-\d{2}-\d{2}$/.test(draft.delivery_deadline);
 
   async function handleConcluir() {
     if (!company?.id) return;
@@ -96,6 +133,13 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
         items: names.map((n) => ({ recipient_name: n })),
       });
       toast.success(`✨ Evento criado com ${names.length} pessoas!`);
+      // Reseta o form + troca a chave de rascunho ANTES de notificar o pai:
+      // se o Modal reabrir esta mesma instância pra um novo evento, ela já
+      // nasce limpa (sem dados do evento recém-criado).
+      setDraft(DEFAULT_DRAFT);
+      setPricing(null);
+      setStep(1);
+      setSessionKey(makeSessionKey());
       onSaved();
     } catch (e: any) {
       toast.error(e?.message || "Erro ao criar evento");
@@ -127,13 +171,14 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
 
       <StudioWorkflow
         title="Novo pedido pra evento"
-        steps={["Evento + produto", "Lista de pessoas", "Preço", "Prazo", "Confirmar"]}
+        steps={["Evento, produto e pessoas", "Preço e prazo"]}
         current={step}
         onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
-        onNext={step < 5 ? () => setStep((x) => x + 1) : undefined}
-        onConcluir={step === 5 ? handleConcluir : undefined}
+        onNext={step < 2 ? () => setStep((x) => x + 1) : undefined}
+        onConcluir={step === 2 ? handleConcluir : undefined}
+        primaryCta={step === 2 ? "Criar evento" : undefined}
         primaryDisabled={!canAdvance}
-        draftKey="bulk-order-wizard"
+        draftKey={sessionKey}
         draft={draft}
         onDraftRestored={(d: any) => setDraft({ ...DEFAULT_DRAFT, ...d })}
       >
@@ -169,7 +214,7 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
             </View>
 
             <Text style={[s.label, { marginTop: 14 }]}>Produto *</Text>
-            <ScrollView style={{ maxHeight: 200 }}>
+            <ScrollView style={{ maxHeight: 160 }}>
               {products.map((p) => (
                 <Pressable
                   key={p.id}
@@ -193,20 +238,13 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
                 <Text style={s.help}>Sem produtos personalizáveis cadastrados. Cadastre em Estúdio › Produtos primeiro.</Text>
               )}
             </ScrollView>
-          </View>
-        )}
 
-        {step === 2 && (
-          <View style={s.block}>
-            <Text style={s.q}>Quem vai receber?</Text>
+            <Text style={[s.label, { marginTop: 14 }]}>Quem vai receber? *</Text>
             <Text style={s.help}>
               Cole a lista de nomes — um por linha. Cada nome vira uma unidade personalizada.
-              No futuro vamos aceitar planilha CSV direto.
             </Text>
-
-            <Text style={s.label}>Lista de pessoas</Text>
             <TextInput
-              style={[s.input, { minHeight: 200, fontFamily: "monospace", fontSize: 13 }]}
+              style={[s.input, { minHeight: 140, fontFamily: "monospace", fontSize: 13 }]}
               placeholder={"Marília\nJoão\nMaria\n..."}
               value={draft.names_raw}
               onChangeText={(v) => upd({ names_raw: v })}
@@ -219,14 +257,22 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
           </View>
         )}
 
-        {step === 3 && (
+        {step === 2 && (
           <View style={s.block}>
-            <Text style={s.q}>Quanto vai cobrar por unidade?</Text>
+            <Text style={s.q}>Preço e prazo</Text>
             <Text style={s.help}>
-              Conforme aumenta a quantidade, oferecemos desconto automático pra você passar pro cliente.
+              Confira o resumo do evento, ajuste o preço unitário e (se souber) o prazo de entrega.
             </Text>
 
-            <Text style={s.label}>Preço unitário (R$)</Text>
+            {/* Resumo inline — substitui o antigo passo 5 "Confirmar" */}
+            <View style={s.summary}>
+              <Row label="Evento" value={draft.event_name} />
+              {draft.customer_name && <Row label="Cliente" value={draft.customer_name + (draft.customer_phone ? " · " + draft.customer_phone : "")} />}
+              <Row label="Produto" value={draft.product_name} />
+              <Row label="Quantidade" value={`${names.length} pessoas`} />
+            </View>
+
+            <Text style={[s.label, { marginTop: 16 }]}>Preço unitário (R$)</Text>
             <TextInput
               style={s.input}
               keyboardType="decimal-pad"
@@ -268,24 +314,37 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
                 </View>
               </View>
             )}
-          </View>
-        )}
 
-        {step === 4 && (
-          <View style={s.block}>
-            <Text style={s.q}>Quando precisa entregar?</Text>
-            <Text style={s.help}>
-              Ajude a planejar a produção. Você pode mudar depois se precisar.
-            </Text>
-
-            <Text style={s.label}>Data de entrega</Text>
+            <Text style={[s.label, { marginTop: 16 }]}>Data de entrega (opcional)</Text>
             <TextInput
-              style={s.input}
+              style={[s.input, !deadlineValid && { borderColor: "#EF4444" }]}
               placeholder="AAAA-MM-DD"
               value={draft.delivery_deadline}
-              onChangeText={(v) => upd({ delivery_deadline: v })}
+              onChangeText={(v) => upd({ delivery_deadline: maskDateInput(v) })}
+              keyboardType="number-pad"
+              maxLength={10}
             />
-            <Text style={s.subHelp}>Formato: 2026-12-25</Text>
+            {/* FIX (bug #17 QA): atalhos de data — evita digitar formato errado */}
+            <View style={s.deadlineShortcuts}>
+              {[
+                { label: "Hoje", days: 0 },
+                { label: "+7d", days: 7 },
+                { label: "+15d", days: 15 },
+              ].map((sc) => (
+                <Pressable
+                  key={sc.label}
+                  style={s.deadlineChip}
+                  onPress={() => upd({ delivery_deadline: addDaysISO(sc.days) })}
+                >
+                  <Text style={s.deadlineChipTxt}>{sc.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {!deadlineValid ? (
+              <Text style={[s.subHelp, { color: "#EF4444" }]}>Formato inválido — use AAAA-MM-DD (ex: 2026-12-25).</Text>
+            ) : (
+              <Text style={s.subHelp}>Formato: 2026-12-25</Text>
+            )}
 
             <Text style={[s.label, { marginTop: 14 }]}>Observações (opcional)</Text>
             <TextInput
@@ -295,30 +354,9 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
               onChangeText={(v) => upd({ notes: v })}
               multiline
             />
-          </View>
-        )}
 
-        {step === 5 && (
-          <View style={s.block}>
-            <Text style={s.q}>Conferir e confirmar</Text>
-            <View style={s.summary}>
-              <Row label="Evento" value={draft.event_name} />
-              {draft.customer_name && <Row label="Cliente" value={draft.customer_name + (draft.customer_phone ? " · " + draft.customer_phone : "")} />}
-              <Row label="Produto" value={draft.product_name} />
-              <Row label="Quantidade" value={`${names.length} pessoas`} />
-              {pricing && (
-                <>
-                  <Row label="Preço unitário" value={`R$ ${parseFloat(draft.unit_price).toFixed(2)}`} />
-                  {pricing.discount_pct > 0 && (
-                    <Row label="Desconto" value={`${pricing.discount_pct}% (− R$ ${pricing.savings.toFixed(2)})`} highlight="green" />
-                  )}
-                  <Row label="Total" value={`R$ ${pricing.total_amount.toFixed(2)}`} highlight="primary" big />
-                </>
-              )}
-              {draft.delivery_deadline && <Row label="Entrega" value={draft.delivery_deadline} />}
-            </View>
             <Text style={[s.help, { marginTop: 14 }]}>
-              Ao confirmar, este evento entra no Hub e na linha de produção. Você poderá gerar mockups individuais e enviar pra aprovação do cliente.
+              Ao criar, este evento entra no Hub e na linha de produção. Você poderá gerar mockups individuais e enviar pra aprovação do cliente.
             </Text>
           </View>
         )}
@@ -347,6 +385,10 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   countBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: t.primarySoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginTop: 8 },
   countTxt: { color: t.primary, fontWeight: "800", fontSize: 12 },
+
+  deadlineShortcuts: { flexDirection: "row", gap: 6, marginTop: 8 },
+  deadlineChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5 },
+  deadlineChipTxt: { fontSize: 11.5, color: t.ink2, fontWeight: "700" },
 
   pricingCard: { marginTop: 16, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, borderRadius: 14, padding: 16 },
   pricingRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },

@@ -25,11 +25,12 @@
 // automaticamente via eyebrowForRoute(usePathname()) em
 // StudioPageHeader → resultado: "VENDAS · PEDIDOS".
 // ============================================================
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { Icon } from "@/components/Icon";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { StudioScreen } from "@/components/studio/StudioScreen";
@@ -96,6 +97,9 @@ export default function StudioPedidosHub() {
   const sev = severityTone(t);
   const s = useMemo(() => makeStyles(t), [t]);
   const [loading, setLoading] = useState(true);
+  // FIX (bug #13 QA): erro engolido virava "Nenhum pedido no período" —
+  // estado dedicado com retry, distinto do vazio de verdade.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [stats, setStats] = useState<HubStats | null>(null);
   const [feed, setFeed] = useState<FeedRow[]>([]);
   const [alerts, setAlerts] = useState<HubAlert[]>([]);
@@ -105,7 +109,9 @@ export default function StudioPedidosHub() {
   const { cobrar, cobrandoId } = useCobrarSaldo(company?.id);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    // FIX (bug #14 QA): return antes do setLoading(false) deixava o
+    // skeleton girando pra sempre quando company ainda não tinha carregado.
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
     try {
       // "A receber" tem fonte própria — ver comentário do type FeedRow.
@@ -137,12 +143,17 @@ export default function StudioPedidosHub() {
         studioBulkHubApi.hubAlerts(company.id),
       ]);
       setStats(st); setFeed(f.items || []); setAlerts(a.alerts || []);
+      setLoadError(null);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar Hub");
+      const msg = e?.message || "Erro ao carregar Hub";
+      toast.error(msg);
+      setLoadError(msg);
     } finally { setLoading(false); }
   }, [company?.id, tab]);
 
-  useEffect(() => { load(); }, [load]);
+  // FIX (bug #15 QA): dados não recarregavam ao voltar pra essa tela.
+  // useFocusEffect cobre mount inicial + toda vez que a tela ganha foco.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   // Carrega produtos personalizáveis pra wizard de evento.
   // FIX (25/05): usa request() do projeto em vez de fetch direto —
@@ -220,23 +231,44 @@ export default function StudioPedidosHub() {
         </View>
       )}
 
-      {/* Tabs */}
-      <View style={s.tabs}>
-        {(["all", "orders", "bulk", "receivable"] as const).map((tk) => (
-          <Pressable
-            key={tk}
-            style={[s.tab, tab === tk && s.tabActive]}
-            onPress={() => setTab(tk)}
-          >
-            <Text style={[s.tabTxt, tab === tk && s.tabTxtActive]}>
-              {TAB_LABEL[tk]}
-            </Text>
-          </Pressable>
-        ))}
+      {/* Tabs — FIX (bug #8 QA): "Marketplace" era rota órfã (nenhum
+          router.push levava lá). Chip de atalho junto das tabs existentes,
+          visualmente distinto (navega pra outra tela, não filtra o feed). */}
+      <View style={s.tabsRow}>
+        <View style={s.tabs}>
+          {(["all", "orders", "bulk", "receivable"] as const).map((tk) => (
+            <Pressable
+              key={tk}
+              style={[s.tab, tab === tk && s.tabActive]}
+              onPress={() => setTab(tk)}
+            >
+              <Text style={[s.tabTxt, tab === tk && s.tabTxtActive]}>
+                {TAB_LABEL[tk]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable
+          style={s.marketplaceChip}
+          onPress={() => router.push("/studio/pedidos/marketplace" as any)}
+        >
+          <Icon name="shopping-bag" size={13} color={t.accent} />
+          <Text style={s.marketplaceChipTxt}>Marketplace</Text>
+          <Icon name="chevron-right" size={12} color={t.accent} />
+        </Pressable>
       </View>
 
       {/* Feed */}
-      {feed.length === 0 && !loading ? (
+      {loadError && feed.length === 0 && !loading ? (
+        // FIX (bug #13 QA): erro de carregamento é distinto de "sem pedidos".
+        <StudioEmpty
+          tone="warning"
+          icon="alert-circle"
+          title="Não deu pra carregar o Hub"
+          desc={loadError}
+          primaryCta={{ label: "Tentar de novo", onPress: load }}
+        />
+      ) : feed.length === 0 && !loading ? (
         tab === "receivable" ? (
           <StudioEmpty
             icon="check-circle"
@@ -257,7 +289,12 @@ export default function StudioPedidosHub() {
             <Pressable
               key={item.kind + "-" + item.id}
               style={s.feedRow}
-              onPress={() => router.push(item.kind === "bulk" ? "/studio/pedidos" as any : "/studio/producao" as any)}
+              // FIX (bug #5 QA): pedido jogava em /studio/producao (genérico) e
+              // evento navegava pra ESSA MESMA tela (no-op). Deep-link direto
+              // pro detalhe de cada um.
+              onPress={() => router.push(
+                (item.kind === "bulk" ? `/studio/pedidos/eventos/${item.id}` : `/studio/pedidos/${item.id}`) as any
+              )}
             >
               <View style={[s.feedDot, item.kind === "bulk" ? { backgroundColor: t.accent } : { backgroundColor: t.primary }]}>
                 <Icon name={item.kind === "bulk" ? "users" : "shopping-bag"} size={14} color="#fff" />
@@ -384,11 +421,18 @@ function makeStyles(t: StudioPalette) {
     alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
     alertTitle: { fontSize: 13, fontWeight: "700" },
     alertSub: { fontSize: 11.5, marginTop: 2 },
-    tabs: { flexDirection: "row", gap: 6, marginBottom: 12 },
+    tabsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" },
+    tabs: { flexDirection: "row", gap: 6 },
     tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
     tabActive: { backgroundColor: t.primary, borderColor: t.primary },
     tabTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
     tabTxtActive: { color: "#fff" },
+    marketplaceChip: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+      backgroundColor: t.accentSoft, borderWidth: 1, borderColor: t.accent,
+    },
+    marketplaceChipTxt: { fontSize: 12.5, color: t.accent, fontWeight: "700" },
     feedList: { gap: 6 },
     feedRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5 },
     feedDot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
