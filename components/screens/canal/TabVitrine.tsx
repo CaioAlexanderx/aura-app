@@ -38,6 +38,11 @@ import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import { useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+// F0: a navegacao por categoria da loja depende de produto vinculado a
+// arvore. Produto sem categoria some da navegacao mesmo estando na
+// vitrine -- por isso o aviso vive AQUI, na aba que decide o que aparece.
+import { useRouter } from "expo-router";
+import { useUnclassifiedProducts } from "@/hooks/useUnclassifiedProducts";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
 const PAGE_SIZE = 60;
@@ -52,6 +57,9 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
   const accent = useAccent();
   const s = useMemo(() => buildStyles(accent), [accent]);
   const { company } = useAuthStore();
+  const router = useRouter();
+  // Só a contagem interessa aqui; a tela de lote faz o trabalho.
+  const { total: semCategoria } = useUnclassifiedProducts({ limit: 1 });
   const cid = company?.id;
 
   // Set local de IDs que aparecem na vitrine (= featured_product_ids).
@@ -311,6 +319,28 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           <Text style={s.kpiSub}>não aparecem na vitrine</Text>
         </View>
       </View>
+
+      {/* F0: produtos fora da navegacao por categoria.
+          Medido na Davi em 18/08: 1.183 de 1.434 produtos ativos sem
+          categoria por caminho nenhum. Eles aparecem na vitrine, mas
+          ninguem os encontra navegando -- e o lojista nao tem como saber
+          disso sem alguem contar para ele. So aparece quando ha o que
+          resolver. */}
+      {semCategoria > 0 ? (
+        <Pressable
+          onPress={() => router.push("/catalogo/sem-categoria")}
+          style={[cs.card, { borderColor: Colors.amber }]}
+          accessibilityRole="button"
+        >
+          <Text style={{ color: Colors.amber, fontWeight: "700", fontSize: 13 }}>
+            {semCategoria} produto(s) fora da navegacao por categoria
+          </Text>
+          <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
+            Eles aparecem na vitrine, mas nao sao encontrados quando o cliente navega por
+            categoria. Toque para categorizar em lote.
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Toggles globais */}
       <View style={cs.card}>
