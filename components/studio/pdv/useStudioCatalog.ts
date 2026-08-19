@@ -4,7 +4,7 @@
 // dia, filtro por categoria/busca, categorias derivadas, leitor de
 // código de barras (DD-8) e cache de templates pro configurador.
 // ============================================================
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
@@ -30,8 +30,15 @@ export function useStudioCatalog(
   const [templatesById, setTemplatesById] = useState<Record<string, Array<{ id: string; name: string; image_url: string; thumb_url: string | null }>>>({});
 
   const reload = useCallback(() => {
-    if (!cid) return;
+    // Sem empresa selecionada não tem o que buscar — mas o loading tinha
+    // ficado `true` pra sempre aqui (spinner eterno) porque este early
+    // return nunca soltava o loading.
+    if (!cid) { setLoading(false); return; }
     setLoading(true);
+    // Limpa o erro anterior: sem isto, um "Tentar de novo" bem-sucedido
+    // continuava escondendo o catálogo atrás da tela de erro pra sempre
+    // (o render prioriza `error` sobre a lista).
+    setError(null);
     request<{ products: any[] }>(
       "/companies/" + cid + "/studio/products?include_non_personalizable=true&limit=500",
       { method: "GET" }
@@ -44,7 +51,11 @@ export function useStudioCatalog(
             price: parseFloat(p.price),
             image_url: p.image_url || null,
             category: p.category || null,
-            stock_qty: parseFloat(p.stock_qty || 0),
+            // null = produto sem controle de estoque (feito sob encomenda).
+            // Colapsar pra 0 fazia o badge dizer "Sem estoque" em produto
+            // perfeitamente vendável — o catálogo trata os dois casos como
+            // coisas diferentes ("Estoque não informado" vs zerado).
+            stock_qty: Number.isFinite(parseFloat(p.stock_qty)) ? parseFloat(p.stock_qty) : null,
             is_personalizable: !!p.is_personalizable,
             customization_config: p.customization_config,
             sku: p.sku || null,
@@ -58,13 +69,26 @@ export function useStudioCatalog(
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Stats do dia — best-effort (padrão defensivo armadilha_schema_pre_migration)
+  // Stats do dia — best-effort (padrão defensivo armadilha_schema_pre_migration).
+  // Extraído pra useCallback: além do useEffect (cid muda), o orquestrador
+  // (index.tsx) precisa re-chamar isso depois de fechar uma venda — senão
+  // os KPIs ficam congelados no valor de quando a página abriu.
+  // aliveRef: o loadStats também é chamado sob demanda (após a venda), então
+  // o cancelamento não pode viver no cleanup do efeito — mora aqui e vale pra
+  // qualquer chamada em voo. Guarda o `cid` da vez, não só um booleano: numa
+  // troca rápida de empresa a resposta da anterior chegaria depois e
+  // sobrescreveria os KPIs da empresa atual.
+  const aliveRef = useRef<string | null>(cid ?? null);
   useEffect(() => {
+    aliveRef.current = cid ?? null;
+    return () => { aliveRef.current = null; };
+  }, [cid]);
+
+  const loadStats = useCallback(() => {
     if (!cid) return;
-    let cancelled = false;
     request<any>("/companies/" + cid + "/studio/dashboard/today", { method: "GET" })
       .then((r) => {
-        if (cancelled || !r) return;
+        if (!r || aliveRef.current !== cid) return;
         setStats({
           pedidos_hoje: Number(r?.pedidos_hoje || r?.orders_today || 0),
           faturamento_hoje: Number(r?.faturamento_hoje || r?.revenue_today || 0),
@@ -73,8 +97,9 @@ export function useStudioCatalog(
         });
       })
       .catch(() => {});
-    return () => { cancelled = true; };
   }, [cid]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
 
   const categories = useMemo(() => {
     const seen = new Map<string, number>();
@@ -141,6 +166,6 @@ export function useStudioCatalog(
   return {
     products, loading, error, setError, stats,
     query, setQuery, cat, setCat, categories, filtered,
-    scanStatus, reload, templatesById, loadTemplates,
+    scanStatus, reload, reloadStats: loadStats, templatesById, loadTemplates,
   };
 }

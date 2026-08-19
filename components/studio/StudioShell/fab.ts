@@ -28,7 +28,10 @@ export function resolveFab(pathname: string): FabConfig | null {
     return { label: "Novo orçamento", icon: "plus", accessibilityLabel: "Criar novo orçamento", action: "push", href: "/studio/gestao/orcamentos/novo" };
   }
   if (pathname === "/studio/pedidos" || pathname.startsWith("/studio/pedidos/")) {
-    return { label: "Novo pedido", icon: "plus", accessibilityLabel: "Criar novo pedido", action: "push", href: "/studio/pedidos/novo" };
+    // FIX (bug #3 QA): "/studio/pedidos/novo" não existe como rota — o Expo
+    // Router casa com [id].tsx (id="novo") e mostra "Pedido não encontrado".
+    // A única ação de "novo pedido" que existe de fato é o wizard de evento.
+    return { label: "Novo pedido pra evento", icon: "plus", accessibilityLabel: "Criar novo pedido pra evento", action: "push", href: "/studio/pedidos/novo-evento" };
   }
   if (pathname === "/studio" || pathname === "/studio/") {
     return { label: "Novo produto", icon: "plus", accessibilityLabel: "Ir para cadastro de produto", action: "push", href: "/studio/estoque" };

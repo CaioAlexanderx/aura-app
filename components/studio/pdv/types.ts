@@ -23,7 +23,8 @@ export type StudioProduct = {
   price: number;
   image_url: string | null;
   category: string | null;
-  stock_qty: number;
+  /** null = produto sem controle de estoque (sob encomenda) — não é zero. */
+  stock_qty: number | null;
   is_personalizable: boolean;
   customization_config: CustomizationConfig | null;
   sku?: string | null;        // usado pelo leitor de código (DD-8)

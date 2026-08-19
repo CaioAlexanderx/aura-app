@@ -140,8 +140,22 @@ export function StudioOnboarding({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // QA item 8: onComplete chegava recriado a cada render do chamador (Painel
+  // passava uma arrow function inline) → entrava nas deps de fetchStatus →
+  // entrava no useEffect abaixo → refetch em loop a cada render, o card
+  // ficava preso em "Verificando seu progresso..." pra sempre (confirmado em
+  // produção). Guardamos onComplete numa ref: fetchStatus só depende de cid,
+  // e sempre chama a versão mais recente de onComplete sem precisar dela nas
+  // deps. Isso protege mesmo que o chamador não tenha useCallback (Painel foi
+  // corrigido em paralelo, mas essa tela não deveria depender disso).
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
   const fetchStatus = useCallback(async () => {
-    if (!cid) return;
+    // QA item 12: early return sem setLoading(false) podia travar o
+    // skeleton se cid nunca resolvesse. cid nas deps garante refetch assim
+    // que a auth popular a empresa.
+    if (!cid) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -149,7 +163,7 @@ export function StudioOnboarding({
       setStatus(data);
       // Config completa (ou venda já existente) → painel sai do modo discreto
       const configDone = data.temInsumo && data.temFicha && data.temProduto;
-      if (configDone || data.temVenda) onComplete?.();
+      if (configDone || data.temVenda) onCompleteRef.current?.();
     } catch (err: any) {
       if (err?.name === "AbortError" || err?.code === 20) return; // fetch abortado — normal no desmonte
       setError("Não foi possível carregar o progresso.");
@@ -157,7 +171,7 @@ export function StudioOnboarding({
     } finally {
       setLoading(false);
     }
-  }, [cid, onComplete]);
+  }, [cid]);
 
   // Refetch no mount (nunca confia no JWT)
   useEffect(() => {

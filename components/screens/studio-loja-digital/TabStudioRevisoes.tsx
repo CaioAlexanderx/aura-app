@@ -13,11 +13,10 @@
 //
 // Memory: projeto_aura_studio_followup_25mai2026, plano_aura_studio_vertical_24mai2026
 // ============================================================
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   Pressable,
   TextInput,
@@ -43,28 +42,34 @@ export function TabStudioRevisoes() {
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!company?.id) return;
-    let cancelled = false;
+  // QA fix (achado #5): o GET fazia .catch(() => {}) — quando falhava, o
+  // form ficava com os defaults (3 revisões / R$ 0) como se fossem a
+  // config real, e "Salvar política" gravava esses defaults por cima da
+  // configuração verdadeira do lojista. Agora guarda o erro e BLOQUEIA
+  // o save até recarregar com sucesso.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
+    setLoadError(null);
     studioApi
       .getSettings(company.id)
       .then(({ settings }) => {
-        if (cancelled) return;
         setMaxRevisions(String(settings.max_revisions_included ?? 3));
         setExtraPrice(formatPriceInput(settings.extra_revision_price ?? 0));
         setPolicyText(settings.revision_policy_text ?? "");
       })
-      .catch(() => {
-        // silencioso — usuario ve defaults
+      .catch((e: any) => {
+        setLoadError(e?.message || "Não consegui carregar a política de revisões atual");
+        toast.error("Não consegui carregar a política atual — o que está na tela pode não ser o que está salvo. Salvar foi bloqueado.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [company?.id]);
+
+  useEffect(() => { load(); }, [load]);
 
   function formatPriceInput(value: number): string {
     if (!value || isNaN(value)) return "0";
@@ -73,6 +78,10 @@ export function TabStudioRevisoes() {
 
   async function save() {
     if (!company?.id) return;
+    if (loadError) {
+      toast.error("Não dá pra salvar sem antes recarregar a política atual — clique em \"Tentar de novo\".");
+      return;
+    }
 
     const parsedMax = parseInt(maxRevisions, 10);
     const parsedPrice = parseFloat(extraPrice.replace(",", ".")) || 0;
@@ -120,13 +129,10 @@ export function TabStudioRevisoes() {
   );
   const effectivePreview = policyText.trim() || previewFallback;
 
+  // Item #9: a tab não monta mais o próprio ScrollView — StudioScreen
+  // (usado por loja-digital.tsx) já é quem rola a tela toda.
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.scrollContent}>
       {/* ── Header ───────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerIconWrap}>
@@ -139,6 +145,23 @@ export function TabStudioRevisoes() {
           </Text>
         </View>
       </View>
+
+      {/* ── Erro de carregamento — bloqueia o save (achado #5) ── */}
+      {loadError && (
+        <View style={styles.errorCard}>
+          <Icon name="alert-circle" size={18} color={t.dangerInk} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.errorTitle}>Não consegui carregar a política atual</Text>
+            <Text style={styles.errorSub}>
+              O que está preenchido abaixo pode não ser o que está salvo. Salvar foi bloqueado até recarregar.
+            </Text>
+          </View>
+          <Pressable onPress={load} style={styles.errorRetryBtn}>
+            <Icon name="refresh-cw" size={13} color="#fff" />
+            <Text style={styles.errorRetryTxt}>Tentar de novo</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* ── Card 1: Quantas revisões grátis ──────────────────── */}
       <View style={styles.card}>
@@ -281,11 +304,11 @@ export function TabStudioRevisoes() {
       {/* ── CTA Salvar ───────────────────────────────────────── */}
       <Pressable
         onPress={save}
-        disabled={saving}
+        disabled={saving || !!loadError}
         style={({ pressed }) => [
           styles.saveBtn,
-          pressed && !saving && styles.saveBtnPressed,
-          saving && styles.saveBtnDisabled,
+          pressed && !saving && !loadError && styles.saveBtnPressed,
+          (saving || !!loadError) && styles.saveBtnDisabled,
         ]}
       >
         {saving ? (
@@ -296,13 +319,13 @@ export function TabStudioRevisoes() {
         ) : (
           <>
             <Icon name="save" size={16} color="#fff" />
-            <Text style={styles.saveBtnText}>Salvar política</Text>
+            <Text style={styles.saveBtnText}>{loadError ? "Recarregue pra salvar" : "Salvar política"}</Text>
           </>
         )}
       </Pressable>
 
       <View style={{ height: 32 }} />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -323,14 +346,33 @@ function buildDefaultPolicyText(maxRevisions: number, extraPrice: number): strin
 // Styles
 // ────────────────────────────────────────────────────────────
 const buildStyles = (t: StudioPalette) => StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: t.bg,
-  },
   scrollContent: {
     padding: 16,
     paddingBottom: 32,
   },
+
+  // ── Erro de carregamento (achado #5) ─────────────────────
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: t.dangerSoft,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  errorTitle: { fontSize: 13, fontWeight: "700", color: t.dangerInk },
+  errorSub: { fontSize: 11.5, color: t.dangerInk, marginTop: 2, lineHeight: 16 },
+  errorRetryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: t.dangerInk,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  errorRetryTxt: { color: "#fff", fontSize: 12, fontWeight: "700" },
 
   // ── Loading ─────────────────────────────────────────────
   loadingWrap: {

@@ -32,7 +32,7 @@
 import { useEffect, useState, useMemo, useCallback, ReactNode } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  Platform, AccessibilityInfo,
+  Platform, AccessibilityInfo, Image,
 } from "react-native";
 import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import Reanimated, {
@@ -176,10 +176,14 @@ export default function StudioPainel() {
   const [period, setPeriod] = useState<Period>("7d");
   const [painel, setPainel] = useState<PainelData | null>(null);
   const [painelLoading, setPainelLoading] = useState(true);
+  // QA item 11: falha de rede virava R$ 0,00 em Vendas/Ticket/Lucro + gráfico
+  // vazio, indistinguível de um dia ruim de verdade. Estado de erro dedicado.
+  const [painelError, setPainelError] = useState<string | null>(null);
 
   const fetchPainel = useCallback(async () => {
-    if (!cid) return;
+    if (!cid) { setPainelLoading(false); return; } // QA item 12: early return sem setLoading(false) travava o spinner
     setPainelLoading(true);
+    setPainelError(null);
     try {
       const data = await studioApi.getPainel(cid, periodToDays(period));
       setPainel(data);
@@ -187,8 +191,11 @@ export default function StudioPainel() {
       const status = err?.status || err?.response?.status;
       const msg = err?.response?.data?.error || err?.message || "Erro desconhecido";
       console.error("[StudioPainel] getPainel:", status, msg);
-      toast.error("Painel indisponivel (" + (status || "rede") + "). " + msg);
-      // UI degradada: tudo zero, mas tela nao quebra
+      const friendly = `[${status || "rede"}] ${msg}`;
+      toast.error("Painel indisponivel. " + friendly);
+      setPainelError(friendly);
+      // UI degradada: KPIs ficam em zero, mas o banner de erro acima deixa
+      // claro que não é "dia sem vendas" — é falha de carregamento.
       setPainel(EMPTY_PAINEL);
     } finally {
       setPainelLoading(false);
@@ -196,6 +203,12 @@ export default function StudioPainel() {
   }, [cid, period]);
 
   useEffect(() => { fetchPainel(); }, [fetchPainel]);
+
+  // QA item 8: onComplete recriado a cada render entrava nas deps de
+  // fetchStatus (StudioOnboarding), que entra no useEffect de lá → loop de
+  // refetch (GET /onboarding-status a cada render, checklist "piscando"
+  // Verificando seu progresso... eternamente). useCallback estabiliza a ref.
+  const handleOnboardingComplete = useCallback(() => setSetupComplete(true), []);
 
   // ─── Data shortcuts ───────────────────────────────────────
   const d = painel || EMPTY_PAINEL;
@@ -223,7 +236,7 @@ export default function StudioPainel() {
             Visível enquanto temVenda=false. Quando completo some.
             onComplete seta setupComplete=true → KPIs voltam ao normal. */}
         <StudioOnboarding
-          onComplete={() => setSetupComplete(true)}
+          onComplete={handleOnboardingComplete}
         />
 
         {/* ═══════ HEADER + Toggle periodo ═══════ */}
@@ -250,6 +263,19 @@ export default function StudioPainel() {
             })}
           </View>
         </View>
+
+        {/* ═══════ Erro de carregamento (QA item 11) ═══════
+            Distinto do "sem vendas no periodo": deixa claro que os zeros
+            abaixo são falha de rede, não um dia real sem vendas. */}
+        {!painelLoading && painelError && (
+          <View style={s.painelErrorBanner}>
+            <Icon name="alert-circle" size={16} color={t.dangerInk} />
+            <Text style={s.painelErrorTxt}>Não foi possível carregar o painel.</Text>
+            <Pressable style={s.painelRetryBtn} onPress={fetchPainel}>
+              <Text style={s.painelRetryTxt}>Tentar novamente</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ═══════ LOADING (full) ═══════ */}
         {painelLoading && !painel && (
@@ -364,11 +390,12 @@ function KpiCard({
   valueIsNegative?: boolean;
 }) {
   const s = useMemo(() => buildKpiStyles(t), [t]);
+  // QA item 19: eram hex fixos (só light) — migrado pra tokens dark-aware.
   const stripeColors: readonly string[] =
-    variant === "primary" ? ["#1E3A8A", "#3B82F6"] :
-    variant === "accent"  ? ["#EC4899", "#F472B6"] :
-    variant === "danger"  ? ["#DC2626", "#F87171"] :
-                            ["#10B981", "#34D399"];
+    variant === "primary" ? [t.primary, t.primary2] :
+    variant === "accent"  ? [t.accent, t.accent2] :
+    variant === "danger"  ? [t.danger, t.dangerInk] :
+                            [t.success, t.successInk];
 
   const split = format === "currency" ? splitBRL(value) : { main: String(Math.round(value)), decimals: "" };
 
@@ -564,9 +591,12 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
           preserveAspectRatio="none"
         >
           <Defs>
+            {/* QA item 19: gradiente/gridlines/tooltip eram hex fixos (só light) —
+                migrados pra tokens dark-aware (t.ink5 quase invisível em dark
+                riscava o gráfico com a gridline hardcoded antiga). */}
             <LinearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%"   stopColor="#EC4899" stopOpacity="0.25" />
-              <Stop offset="100%" stopColor="#EC4899" stopOpacity="0" />
+              <Stop offset="0%"   stopColor={t.accent} stopOpacity="0.25" />
+              <Stop offset="100%" stopColor={t.accent} stopOpacity="0" />
             </LinearGradient>
           </Defs>
 
@@ -581,7 +611,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
                 y1={y}
                 x2={W - padR}
                 y2={y}
-                stroke="#EEF0F5"
+                stroke={t.ink5}
                 strokeWidth={1}
                 strokeDasharray="3,3"
               />
@@ -595,7 +625,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
                 key={"y-" + i}
                 x={padL - 6}
                 y={y + 4}
-                fill="#94A3B8"
+                fill={t.ink4}
                 fontSize={10}
                 textAnchor="end"
               >
@@ -611,7 +641,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
           <AnimatedPath
             d={linePath}
             fill="none"
-            stroke="#EC4899"
+            stroke={t.accent}
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -628,8 +658,8 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
                 cx={pt.x}
                 cy={pt.y}
                 r={isToday ? 5 : 4}
-                fill={isToday ? "#EC4899" : "#FFFFFF"}
-                stroke={isToday ? "#FFFFFF" : "#EC4899"}
+                fill={isToday ? t.accent : t.paperCard}
+                stroke={isToday ? t.paperCard : t.accent}
                 strokeWidth={2}
               />
             );
@@ -644,12 +674,12 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
                 width={110}
                 height={24}
                 rx={6}
-                fill="#0F172A"
+                fill={t.ink}
               />
               <SvgText
                 x={Math.max(padL + 55, Math.min(W - padR - 55, todayPt.x))}
                 y={Math.max(16, todayPt.y - 16)}
-                fill="#FFFFFF"
+                fill={t.paperCardElev}
                 fontSize={11}
                 fontWeight="700"
                 textAnchor="middle"
@@ -672,7 +702,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
                 key={"x-" + i}
                 x={pt.x}
                 y={H - 8}
-                fill={isToday ? "#EC4899" : "#94A3B8"}
+                fill={isToday ? t.accent : t.ink4}
                 fontSize={10}
                 fontWeight={isToday ? "700" : "400"}
                 textAnchor="middle"
@@ -691,7 +721,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
 function TopProdutosList({
   data, t,
 }: {
-  data: { product_id: string | null; name: string; revenue: number; qty: number }[];
+  data: { product_id: string | null; name: string; image_url?: string | null; revenue: number; qty: number }[];
   t: StudioPalette;
 }) {
   if (!data || data.length === 0) {
@@ -711,9 +741,10 @@ function TopProdutosList({
         const rank = i + 1;
         const widthPct = (p.revenue / maxRev) * 100;
         // Rank colors: 1 navy, 2-3 accent, 4-5 ink4 com opacity reduzida
+        // QA item 19: migrado de hex fixo pra tokens dark-aware.
         const rankBg =
-          rank === 1 ? "#1E3A8A" :
-          rank <= 3 ? "#F472B6" : "#94A3B8";
+          rank === 1 ? t.primary :
+          rank <= 3 ? t.accent2 : t.ink4;
         const fillOpacity = rank <= 3 ? 1 : (rank === 4 ? 0.85 : 0.7);
 
         return (
@@ -725,10 +756,26 @@ function TopProdutosList({
             }}>
               <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{rank}</Text>
             </View>
+            {/* QA item 15: só o nome truncado em 110px ("Caneca personali…")
+                não identificava o produto. A foto vem do GET /studio/painel. */}
+            {p.image_url ? (
+              <Image
+                source={{ uri: p.image_url }}
+                resizeMode="cover"
+                style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: t.bgSoft }}
+              />
+            ) : (
+              <View style={{
+                width: 26, height: 26, borderRadius: 7, backgroundColor: t.bgSoft,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Icon name="image" size={12} color={t.ink4} />
+              </View>
+            )}
             <Text
               numberOfLines={1}
               style={{
-                width: 110,
+                width: 104,
                 fontSize: 12,
                 color: t.ink2,
                 fontWeight: "600",
@@ -744,7 +791,7 @@ function TopProdutosList({
               overflow: "hidden",
             }}>
               <StudioGradient
-                colors={["#1E3A8A", "#EC4899"]}
+                colors={[t.primary, t.accent]}
                 direction="90deg"
                 style={{
                   width: (widthPct + "%") as any,
@@ -1004,5 +1051,17 @@ function buildStyles(t: StudioPalette) {
     chartMeta: {
       fontSize: 11, color: t.ink4, fontWeight: "600",
     },
+
+    // ── Erro de carregamento do painel (QA item 11) ──
+    painelErrorBanner: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      backgroundColor: t.dangerSoft, borderRadius: 12,
+      padding: 14, marginBottom: 18,
+    },
+    painelErrorTxt: { flex: 1, fontSize: 13, fontWeight: "700", color: t.dangerInk },
+    painelRetryBtn: {
+      backgroundColor: t.danger, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8,
+    },
+    painelRetryTxt: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
   });
 }

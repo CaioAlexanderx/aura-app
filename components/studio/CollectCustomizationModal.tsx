@@ -55,6 +55,115 @@ const PLATFORM_LABEL: Record<string, string> = {
   shopee: "Shopee",
 };
 
+// ============================================================
+// CollectFieldEditor — FIX (bug #1 QA): estava declarado dentro do corpo
+// do componente pai. A cada tecla digitada, o componente pai re-renderiza,
+// recria esse tipo de função e o React remonta a subtree inteira (perde
+// identidade do componente) — o TextInput perdia o foco a cada letra.
+// Movido pro top-level, recebendo `s`/`t` por prop em vez de closure.
+// ============================================================
+function CollectFieldEditor({
+  field, value, onChange, s, t,
+}: {
+  field: CustomizationField;
+  value: any;
+  onChange: (v: any) => void;
+  s: ReturnType<typeof buildStyles>;
+  t: StudioPalette;
+}) {
+  if (field.type === "text") {
+    const maxChars = field.config.max_chars || 30;
+    return (
+      <View>
+        <Text style={s.fieldLabel}>
+          {field.label} {field.required && <Text style={{ color: t.danger }}>*</Text>}
+        </Text>
+        <TextInput
+          value={String(value || "")}
+          onChangeText={(txt) => onChange(txt.slice(0, maxChars))}
+          placeholder={`O que o cliente pediu? (max ${maxChars} chars)`}
+          placeholderTextColor={t.ink4}
+          maxLength={maxChars}
+          style={s.input}
+        />
+        <Text style={s.charCount}>{String(value || "").length}/{maxChars}</Text>
+      </View>
+    );
+  }
+
+  if (field.type === "color") {
+    const colors = field.config.colors || ["#FFFFFF", "#000000"];
+    return (
+      <View>
+        <Text style={s.fieldLabel}>
+          {field.label} {field.required && <Text style={{ color: t.danger }}>*</Text>}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {colors.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => onChange(c)}
+              style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: c,
+                borderWidth: value === c ? 3 : 1,
+                borderColor: value === c ? t.primary : t.ink5,
+              }}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  if (field.type === "option") {
+    const choices = field.config.choices || [];
+    return (
+      <View>
+        <Text style={s.fieldLabel}>
+          {field.label} {field.required && <Text style={{ color: t.danger }}>*</Text>}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+          {choices.map((c) => (
+            <Pressable
+              key={c.value}
+              onPress={() => onChange(c.value)}
+              style={[
+                s.chip,
+                value === c.value && { backgroundColor: t.primary, borderColor: t.primary },
+              ]}
+            >
+              <Text style={[s.chipTxt, value === c.value && { color: "#fff" }]}>{c.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  if (field.type === "image" || field.type === "template") {
+    return (
+      <View>
+        <Text style={s.fieldLabel}>
+          {field.label} {field.required && <Text style={{ color: t.danger }}>*</Text>}
+        </Text>
+        <Text style={s.fieldHelp}>
+          Cole o link da imagem que o cliente enviou (WhatsApp, e-mail, etc).
+        </Text>
+        <TextInput
+          value={String(value || "")}
+          onChangeText={onChange}
+          placeholder="https://..."
+          placeholderTextColor={t.ink4}
+          style={s.input}
+        />
+      </View>
+    );
+  }
+
+  return null;
+}
+
 export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -158,110 +267,6 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
   const platformLabel = PLATFORM_LABEL[order.platform] || order.platform;
   const hasMultipleItems = items.length > 1;
 
-  // ============================================================
-  // Field editor (versão simplificada — sem templates por enquanto;
-  // em S-2 o lojista preenche o que o cliente forneceu por outro canal)
-  // ============================================================
-  const CollectFieldEditor = ({
-    field, value, onChange,
-  }: {
-    field: CustomizationField;
-    value: any;
-    onChange: (v: any) => void;
-  }) => {
-    if (field.type === "text") {
-      const maxChars = field.config.max_chars || 30;
-      return (
-        <View>
-          <Text style={s.fieldLabel}>
-            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-          </Text>
-          <TextInput
-            value={String(value || "")}
-            onChangeText={(t) => onChange(t.slice(0, maxChars))}
-            placeholder={`O que o cliente pediu? (max ${maxChars} chars)`}
-            placeholderTextColor={t.ink4}
-            maxLength={maxChars}
-            style={s.input}
-          />
-          <Text style={s.charCount}>{String(value || "").length}/{maxChars}</Text>
-        </View>
-      );
-    }
-
-    if (field.type === "color") {
-      const colors = field.config.colors || ["#FFFFFF", "#000000"];
-      return (
-        <View>
-          <Text style={s.fieldLabel}>
-            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-          </Text>
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-            {colors.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => onChange(c)}
-                style={{
-                  width: 36, height: 36, borderRadius: 18,
-                  backgroundColor: c,
-                  borderWidth: value === c ? 3 : 1,
-                  borderColor: value === c ? t.primary : t.ink5,
-                }}
-              />
-            ))}
-          </View>
-        </View>
-      );
-    }
-
-    if (field.type === "option") {
-      const choices = field.config.choices || [];
-      return (
-        <View>
-          <Text style={s.fieldLabel}>
-            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-          </Text>
-          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-            {choices.map((c) => (
-              <Pressable
-                key={c.value}
-                onPress={() => onChange(c.value)}
-                style={[
-                  s.chip,
-                  value === c.value && { backgroundColor: t.primary, borderColor: t.primary },
-                ]}
-              >
-                <Text style={[s.chipTxt, value === c.value && { color: "#fff" }]}>{c.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      );
-    }
-
-    if (field.type === "image" || field.type === "template") {
-      return (
-        <View>
-          <Text style={s.fieldLabel}>
-            {field.label} {field.required && <Text style={{ color: "#EF4444" }}>*</Text>}
-          </Text>
-          <Text style={s.fieldHelp}>
-            Cole o link da imagem que o cliente enviou (WhatsApp, e-mail, etc).
-          </Text>
-          <TextInput
-            value={String(value || "")}
-            onChangeText={onChange}
-            placeholder="https://..."
-            placeholderTextColor={t.ink4}
-            style={s.input}
-          />
-        </View>
-      );
-    }
-
-    return null;
-  };
-
   return (
     <View style={s.modalRoot}>
       {/* Header */}
@@ -327,7 +332,7 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
             <ActivityIndicator color={t.primary} />
           ) : !activeConfig ? null : !activeConfig.is_personalizable || !activeConfig.config ? (
             <View style={s.warningBox}>
-              <Icon name="alert-circle" size={16} color="#92400E" />
+              <Icon name="alert-circle" size={16} color={t.warningInk} />
               <Text style={s.warningTxt}>
                 Produto "{activeConfig.name}" não tem customization_config configurado. Pule este item.
               </Text>
@@ -357,6 +362,8 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
                     field={f}
                     value={activeValues[f.id]}
                     onChange={(v) => setFieldValue(activeItem.product_id!, f.id, v)}
+                    s={s}
+                    t={t}
                   />
                 ))}
               </View>
@@ -367,7 +374,7 @@ export function CollectCustomizationModal({ order, onClose, onSaved }: Props) {
         {error && (
           <View style={{ marginHorizontal: 20 }}>
             <View style={s.errorBox}>
-              <Icon name="alert-circle" size={14} color="#991B1B" />
+              <Icon name="alert-circle" size={14} color={t.dangerInk} />
               <Text style={s.errorTxt}>{error}</Text>
             </View>
           </View>
@@ -444,9 +451,9 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   warningBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#FEF3C7", padding: 12, borderRadius: 10,
+    backgroundColor: t.warningSoft, padding: 12, borderRadius: 10,
   },
-  warningTxt: { color: "#92400E", fontSize: 12, fontWeight: "600", flex: 1 },
+  warningTxt: { color: t.warningInk, fontSize: 12, fontWeight: "600", flex: 1 },
 
   fieldLabel: { fontSize: 12, color: t.ink2, fontWeight: "700", marginBottom: 6 },
   fieldHelp: { fontSize: 11.5, color: t.ink3, marginBottom: 6, fontStyle: "italic" },
@@ -465,10 +472,10 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   errorBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#FEE2E2", padding: 12, borderRadius: 10,
+    backgroundColor: t.dangerSoft, padding: 12, borderRadius: 10,
     marginTop: 12,
   },
-  errorTxt: { color: "#991B1B", fontSize: 12, fontWeight: "600", flex: 1 },
+  errorTxt: { color: t.dangerInk, fontSize: 12, fontWeight: "600", flex: 1 },
 
   footer: {
     flexDirection: "row", gap: 10, padding: 16,

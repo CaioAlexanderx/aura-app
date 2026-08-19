@@ -27,17 +27,33 @@
 // Por que não retematizar o body: o Financeiro é 22KB + 7 sub-componentes
 // (TabVisaoGeral, TabLancamentos, etc) que somam ~100KB. Refatorar pra
 // tokens Studio é trabalho de outra sessão.
+//
+// 19/08/2026 (QA):
+//   - item 17: removido o rodapé fixo `residualHint` — não-dismissível,
+//     ocupava espaço permanente pra uma info de baixo valor.
+//   - item 20: `StudioColors.accent` (estático) trocado por
+//     `useStudioTokens().accent` no eyebrow — só esse valor era realmente
+//     "hardcoded fora do tema" aqui. Os demais (Colors.bg/bg3/border/ink*)
+//     continuam DELIBERADAMENTE ligados ao tema do varejo (não ao Studio):
+//     o body do FinanceiroScreen usa Colors do varejo, então o wrapper
+//     precisa herdar a mesma fonte de cor pra não voltar a ter barra clara
+//     em cima de card escuro (bug corrigido em 26/05/2026, ver comentário
+//     acima). Migrar o wrapper pra useStudioTokens() sem migrar o body
+//     (fora do escopo desta tela — FinanceiroScreen é arquivo compartilhado)
+//     reintroduziria esse bug sempre que o tema Studio e o tema Varejo
+//     divergirem (são dois stores de tema independentes).
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
-import { StudioColors } from "@/constants/studio-tokens";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import FinanceiroScreen from "@/app/(tabs)/financeiro";
 
 export default function StudioGestaoFinanceiro() {
+  const t = useStudioTokens();
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <View style={s.headerWrap}>
-        <Text style={s.eyebrow}>GESTÃO · FINANCEIRO</Text>
+        <Text style={[s.eyebrow, { color: t.accent }]}>GESTÃO · FINANCEIRO</Text>
         <Text style={s.title}>Financeiro do estúdio</Text>
         <Text style={s.subtitle}>
           Receita, despesas e margem do seu estúdio em um só lugar.
@@ -47,10 +63,6 @@ export default function StudioGestaoFinanceiro() {
       <View style={{ flex: 1 }}>
         <FinanceiroScreen />
       </View>
-
-      <Text style={s.residualHint}>
-        Você está em modo Studio · vendas personalizadas aparecem com badge
-      </Text>
     </View>
   );
 }
@@ -67,7 +79,6 @@ const s = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 11,
-    color: StudioColors.accent,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -83,14 +94,5 @@ const s = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 720,
     marginBottom: 4,
-  },
-  residualHint: {
-    fontSize: 11,
-    fontStyle: "italic",
-    textAlign: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    paddingTop: 2,
-    color: Colors.ink4,
   },
 });

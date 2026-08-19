@@ -1,11 +1,24 @@
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Linking } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, MarketplaceConnection, MarketplacePlatform } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { confirmAlert } from "@/utils/webAlert";
+
+// Converte um hex (#RRGGBB) do StudioPalette pra rgba com alpha — usado só
+// pro véu do overlay de "conectando", que precisa de translúcido sem lavar
+// os filhos (opacity na View inteira afetaria o painel dentro dela também).
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex; // já é rgba/outro formato (ex: tokens dark com rgba nativo)
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 type PlatformMeta = {
   key: MarketplacePlatform;
@@ -56,16 +69,19 @@ function tokenHealth(conn: MarketplaceConnection | null): TokenHealth {
   return "fresh";
 }
 
-function healthMeta(h: TokenHealth, mutedColor: string) {
-  if (h === "fresh") return { color: "#10B981", bg: "rgba(16,185,129,0.12)", label: "Token válido" };
-  if (h === "expiring") return { color: "#F59E0B", bg: "rgba(245,158,11,0.14)", label: "Token expira em breve" };
-  if (h === "expired") return { color: "#EF4444", bg: "rgba(239,68,68,0.14)", label: "Token expirado" };
-  return { color: mutedColor, bg: "rgba(148,163,184,0.14)", label: "Status desconhecido" };
+// QA fix (achado #20): cores de status vinham hardcoded (#10B981 etc),
+// quebrando o dark mode. Usa os tokens semânticos do StudioPalette.
+function healthMeta(h: TokenHealth, t: StudioPalette) {
+  if (h === "fresh") return { color: t.successInk, bg: t.successSoft, label: "Token válido" };
+  if (h === "expiring") return { color: t.warningInk, bg: t.warningSoft, label: "Token expira em breve" };
+  if (h === "expired") return { color: t.dangerInk, bg: t.dangerSoft, label: "Token expirado" };
+  return { color: t.ink3, bg: t.bgSoft, label: "Status desconhecido" };
 }
 
 export function TabStudioMarketplaces() {
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
+  const router = useRouter();
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<Record<MarketplacePlatform, MarketplaceConnection | null>>({
@@ -74,6 +90,13 @@ export function TabStudioMarketplaces() {
   });
   const [connectingPlatform, setConnectingPlatform] = useState<MarketplacePlatform | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  // QA fix (achado #6): erro do GET era engolido em console.warn — a tela
+  // mostrava "Não conectado" como se fosse verdade, e o lojista refazia o
+  // OAuth à toa achando que tinha desconectado. Agora guarda o erro e
+  // mostra um estado de retry em vez de fingir que carregou.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // QA fix (achado #18): sem company.id o loading ficava true pra sempre.
+  const [blocked, setBlocked] = useState(false);
 
   // refs pra controle do popup OAuth
   const popupRef = useRef<Window | null>(null);
@@ -81,8 +104,10 @@ export function TabStudioMarketplaces() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    if (!company?.id) { setLoading(false); setBlocked(true); return; }
+    setBlocked(false);
     setLoading(true);
+    setLoadError(null);
     try {
       const r = await studioApi.listMarketplaceConnections(company.id);
       setConnections({
@@ -90,7 +115,7 @@ export function TabStudioMarketplaces() {
         shopee: r?.by_platform?.shopee ?? null,
       });
     } catch (e: any) {
-      console.warn("[marketplaces/connections]", e?.message);
+      setLoadError(e?.message || "Erro ao carregar conexões");
     } finally {
       setLoading(false);
     }
@@ -191,8 +216,12 @@ export function TabStudioMarketplaces() {
           toast.error("Tempo esgotado aguardando autorização. Tente novamente.");
         }, 5 * 60 * 1000);
       } else {
-        toast.info("Abra a URL no navegador: " + r.auth_url);
+        // QA fix (achado #8): antes mostrava um toast com a URL longa
+        // sem link clicável — inutilizável no app nativo. Abre direto.
         setConnectingPlatform(null);
+        Linking.openURL(r.auth_url).catch(() => {
+          toast.error("Não consegui abrir o navegador. Tente novamente.");
+        });
       }
     } catch (e: any) {
       clearPopupWatchers();
@@ -206,14 +235,22 @@ export function TabStudioMarketplaces() {
     }
   }
 
-  async function revoke(platform: MarketplacePlatform) {
+  // QA fix (achado #7): a confirmação usava window.confirm direto, que só
+  // existe no web — no native a revogação acontecia no primeiro toque sem
+  // nenhuma confirmação. confirmAlert funciona nos dois.
+  function revoke(platform: MarketplacePlatform) {
     if (!company?.id) return;
-    if (
-      Platform.OS === "web" &&
-      typeof window !== "undefined" &&
-      !window.confirm(`Desconectar ${platformLabel(platform)}?`)
-    )
-      return;
+    confirmAlert(
+      `Desconectar ${platformLabel(platform)}?`,
+      "Os anúncios publicados continuam no ar, mas você vai precisar reconectar pra sincronizar pedidos e estoque de novo.",
+      "Desconectar",
+      () => doRevoke(platform),
+      { destructive: true }
+    );
+  }
+
+  async function doRevoke(platform: MarketplacePlatform) {
+    if (!company?.id) return;
     setBusyAction(`revoke:${platform}`);
     try {
       await studioApi.revokeMarketplaceConnection(company.id, platform);
@@ -249,8 +286,34 @@ export function TabStudioMarketplaces() {
     );
   }
 
+  if (blocked) {
+    return (
+      <View style={styles.loadingWrap}>
+        <Icon name="alert-circle" size={28} color={t.ink4} />
+        <Text style={styles.loadingText}>Não foi possível identificar sua empresa. Recarregue a página.</Text>
+      </View>
+    );
+  }
+
+  // QA fix (achado #6): antes de esconder o erro atrás de "Não conectado",
+  // mostra o problema de verdade e deixa o lojista tentar de novo.
+  if (loadError) {
+    return (
+      <View style={styles.loadingWrap}>
+        <Icon name="alert-circle" size={28} color={t.dangerInk} />
+        <Text style={styles.loadingText}>{loadError}</Text>
+        <Pressable style={styles.retryBtn} onPress={load}>
+          <Icon name="refresh-cw" size={14} color="#fff" />
+          <Text style={styles.retryBtnText}>Tentar de novo</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Item #9: a tab não monta mais o próprio ScrollView — StudioScreen
+  // (usado por loja-digital.tsx) já é quem rola a tela toda.
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Marketplaces conectados</Text>
         <Text style={styles.subtitle}>
@@ -264,7 +327,7 @@ export function TabStudioMarketplaces() {
           const isConnected = !!conn;
           const isConnecting = connectingPlatform === p.key;
           const health = tokenHealth(conn);
-          const hm = healthMeta(health, t.ink3);
+          const hm = healthMeta(health, t);
           const storeName = (conn as any)?.store_name || (conn as any)?.shop_name || (conn as any)?.account_name;
           const storeId = (conn as any)?.store_id || (conn as any)?.shop_id || (conn as any)?.external_id;
 
@@ -277,9 +340,9 @@ export function TabStudioMarketplaces() {
                 <View style={styles.cardHeaderText}>
                   <Text style={styles.platformName}>{p.label}</Text>
                   {isConnected ? (
-                    <View style={styles.connectedBadge}>
-                      <View style={styles.connectedDot} />
-                      <Text style={styles.connectedBadgeText}>Conectado</Text>
+                    <View style={[styles.connectedBadge, { backgroundColor: t.successSoft }]}>
+                      <View style={[styles.connectedDot, { backgroundColor: t.successInk }]} />
+                      <Text style={[styles.connectedBadgeText, { color: t.successInk }]}>Conectado</Text>
                     </View>
                   ) : (
                     <Text style={styles.disconnectedHint}>Não conectado</Text>
@@ -301,6 +364,15 @@ export function TabStudioMarketplaces() {
                     <View style={[styles.healthDot, { backgroundColor: hm.color }]} />
                     <Text style={[styles.healthText, { color: hm.color }]}>{hm.label}</Text>
                   </View>
+                  {/* QA fix (achado #13): não havia link entre a conexão OAuth
+                      e a tela de configuração de prazo/preview do anúncio. */}
+                  <Pressable
+                    onPress={() => router.push("/studio/configuracoes/marketplace" as any)}
+                    style={styles.configLink}
+                  >
+                    <Text style={styles.configLinkText}>Configurar anúncios</Text>
+                    <Icon name="arrow-right" size={12} color={t.primary} />
+                  </Pressable>
                 </View>
               )}
 
@@ -355,10 +427,10 @@ export function TabStudioMarketplaces() {
                       ]}
                     >
                       {busyAction === `revoke:${p.key}` ? (
-                        <ActivityIndicator size="small" color="#EF4444" />
+                        <ActivityIndicator size="small" color={t.dangerInk} />
                       ) : (
                         <>
-                          <Icon name="x-circle" size={14} color="#EF4444" />
+                          <Icon name="x-circle" size={14} color={t.dangerInk} />
                           <Text style={styles.dangerButtonText}>Desconectar</Text>
                         </>
                       )}
@@ -406,17 +478,13 @@ export function TabStudioMarketplaces() {
           </Text>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const buildStyles = (t: StudioPalette) => StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: t.bg,
-  },
-  content: {
-    padding: 24,
+    padding: 16,
     paddingBottom: 48,
   },
   loadingWrap: {
@@ -429,7 +497,27 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   loadingText: {
     color: t.ink3,
     fontSize: 14,
+    textAlign: "center",
   },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: t.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  retryBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  configLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  configLinkText: { fontSize: 12, color: t.primary, fontWeight: "700" },
   header: {
     marginBottom: 24,
   },
@@ -498,18 +586,18 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: "rgba(16,185,129,0.12)",
+    // backgroundColor vem inline (t.successSoft) — QA fix achado #20
   },
   connectedDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#10B981",
+    // backgroundColor vem inline (t.successInk) — QA fix achado #20
   },
   connectedBadgeText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#10B981",
+    // color vem inline (t.successInk) — QA fix achado #20
   },
   disconnectedHint: {
     fontSize: 12,
@@ -622,24 +710,28 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.4)",
-    backgroundColor: "rgba(239,68,68,0.08)",
+    borderColor: t.dangerInk,
+    backgroundColor: t.dangerSoft,
   },
   dangerButtonPressed: {
     opacity: 0.8,
   },
   dangerButtonText: {
-    color: "#EF4444",
+    color: t.dangerInk,
     fontSize: 12,
     fontWeight: "600",
   },
+  // QA fix (achado #20): véu branco fixo (rgba(255,255,255,0.6)) cobria o
+  // card mesmo no dark mode. paperCardElev é o token do card "elevado" —
+  // convertido pra rgba translúcido fica coerente nos dois temas (opacity
+  // na View inteira washa os filhos também, por isso usa alpha no hex).
   connectingOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: hexToRgba(t.paperCardElev, 0.88),
     alignItems: "center",
     justifyContent: "center",
     padding: 16,

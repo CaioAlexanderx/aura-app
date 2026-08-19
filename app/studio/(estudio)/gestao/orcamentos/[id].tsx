@@ -10,20 +10,45 @@
 //   - Campos: cliente (nome, phone), validade, sinal %
 //   - Lista de itens com subtotal por linha
 //   - Rodapé: subtotal, desconto, total
-//   - "Adicionar item" → modal busca produto ou texto livre
+//   - "Adicionar item" → modal busca produto ou item avulso
 //     Integração A→B: ao selecionar produto chama calculateQuoteLine
 //     (motor de precificação, Fase B). Fallback ao preço cadastrado.
 //   - "Enviar" → studioApi.sendQuote → exibe link + wa.me
 //   - "Converter em Pedido" (só accepted) → studioApi.convertQuote
+//
+// 19/08/2026 (QA UX pass):
+//   - Busca de produto usava fetch relativo sem auth (falhava sempre no
+//     nativo, sem auth na web) e engolia o erro em "Nenhum produto
+//     encontrado". Agora usa `request` de services/api (injeta token) e
+//     mostra toast no catch.
+//   - Alert.alert é no-op no react-native-web — validação de item avulso
+//     e confirmação de conversão em pedido nunca apareciam. Trocados por
+//     notify()/toast + banner inline com CTA "Ver pedido".
+//   - handleSend agora aguarda persist() antes de enviar, senão o link
+//     ia pro cliente com valores desatualizados.
+//   - Modal de item unificado (1 busca só, item avulso oferecido inline).
+//   - Thumbnails de produto na busca e na lista de itens.
+//   - Migrado para useStudioTokens + StudioScreen/StudioBreadcrumb/
+//     StudioLoading/StudioEmpty — antes era 100% hardcoded (ficava branco
+//     no dark mode).
 // ============================================================
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, ActivityIndicator, Modal, Alert, Linking,
+  TextInput, ActivityIndicator, Modal, Linking, Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuth } from "@/hooks/useAuth";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { request } from "@/services/api";
+import { toast } from "@/components/Toast";
+import { notify } from "@/utils/webAlert";
+import { StudioScreen } from "@/components/studio/StudioScreen";
+import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import {
   studioApi,
   type StudioQuote,
@@ -33,7 +58,22 @@ import {
   type PricingBreakdown,
 } from "@/services/studioApi";
 
+// Item de linha local: estende StudioQuoteItem com image_url — cosmético
+// só neste editor (thumbnail), não faz parte do tipo compartilhado nem
+// é persistido no backend.
+type LineItem = Omit<StudioQuoteItem, "id"> & { image_url?: string | null };
+
+// Resultado de busca de produto (subset do catálogo, endpoint /products?q=).
+type ProductSearchResult = {
+  id: string;
+  name: string;
+  price: number | string;
+  cost_price?: number | string | null;
+  image_url?: string | null;
+};
+
 // ─── Status pills ─────────────────────────────────────────────
+// Cores semânticas fixas — não dependem do theme (mesmo padrão de gestao/orcamentos.tsx).
 const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
   draft: "Rascunho", sent: "Enviado", accepted: "Aceito",
   rejected: "Recusado", expired: "Expirado", converted: "Convertido",
@@ -59,45 +99,83 @@ const pill = StyleSheet.create({
   txt:  { fontSize: 11, fontWeight: "700" },
 });
 
+// ─── Thumbnail de produto ───────────────────────────────────
+function ProductThumb({ uri, t, size = 36 }: { uri?: string | null; t: StudioPalette; size?: number }) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: 8, backgroundColor: t.bgSoft }}
+      />
+    );
+  }
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: 8,
+      backgroundColor: t.primarySoft, alignItems: "center", justifyContent: "center",
+    }}>
+      <Icon name="package" size={Math.round(size * 0.5)} color={t.primary} />
+    </View>
+  );
+}
+
 // ─── Modal de adicionar item ──────────────────────────────────
+// QA: era 2 abas ("Buscar produto" / "Item livre") obrigando decidir antes
+// de digitar. Unificado — 1 campo de busca só; sem resultado, a própria
+// lista oferece "Adicionar '<texto>' como item avulso". Item avulso também
+// fica disponível via link discreto pra quem já sabe o preço de cabeça.
 type ItemModalProps = {
   visible: boolean;
   companyId: string;
+  t: StudioPalette;
   onClose: () => void;
-  onAdd: (item: Omit<StudioQuoteItem, "id">) => void;
+  onAdd: (item: LineItem) => void;
 };
-function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
+function AddItemModal({ visible, companyId, t, onClose, onAdd }: ItemModalProps) {
+  const s = useMemo(() => buildModalStyles(t), [t]);
   const [query, setQuery]       = useState("");
-  const [results, setResults]   = useState<any[]>([]);
+  const [results, setResults]   = useState<ProductSearchResult[]>([]);
   const [searching, setSearch]  = useState(false);
   const [pricing, setPricing]   = useState(false); // A→B: calculando preço
+  const [freeOpen, setFreeOpen] = useState(false);
   const [desc, setDesc]         = useState("");
   const [qty, setQty]           = useState("1");
   const [price, setPrice]       = useState("");
-  const [mode, setMode]         = useState<"search" | "free">("search");
 
   useEffect(() => {
-    if (!visible) { setQuery(""); setResults([]); setDesc(""); setQty("1"); setPrice(""); setMode("search"); setPricing(false); }
+    if (!visible) {
+      setQuery(""); setResults([]); setDesc(""); setQty("1"); setPrice("");
+      setFreeOpen(false); setPricing(false);
+    }
   }, [visible]);
 
   async function doSearch(q: string) {
     if (!q.trim() || !companyId) return;
     setSearch(true);
     try {
-      const r = await fetch(`/api/v1/companies/${companyId}/products?q=${encodeURIComponent(q)}&limit=20`);
-      const data = await r.json();
-      setResults(data.products || []);
-    } catch { setResults([]); }
-    finally { setSearch(false); }
+      // QA item 1: era fetch("/api/v1/...") — URL relativa sem token. No app
+      // nativo não há origin (falha sempre); na web bate no próprio domínio
+      // sem Authorization. `request` injeta token + BASE_URL corretos.
+      const { products } = await request<{ products: ProductSearchResult[] }>(
+        `/companies/${companyId}/products?q=${encodeURIComponent(q)}&limit=20`,
+        { method: "GET" }
+      );
+      setResults(products || []);
+    } catch (e: any) {
+      setResults([]);
+      toast.error(`[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao buscar produtos"}`);
+    } finally {
+      setSearch(false);
+    }
   }
 
   // Integração A→B: ao selecionar produto, pede preço ao motor de precificação (Fase B).
   // Fallback gracioso: se motor retornar 501 (stub) ou não tiver regra, usa preço cadastrado.
-  async function selectProduct(p: any) {
+  async function selectProduct(p: ProductSearchResult) {
     setPricing(true);
-    let suggestedPrice = parseFloat(p.price) || 0;
+    let suggestedPrice = parseFloat(String(p.price)) || 0;
     let pricingMeta: PricingBreakdown["breakdown"] | null = null;
-    let unitCost: number | null = p.cost_price ? parseFloat(p.cost_price) : null;
+    let unitCost: number | null = p.cost_price ? parseFloat(String(p.cost_price)) : null;
 
     if (companyId) {
       try {
@@ -122,80 +200,104 @@ function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
       unit_price:   suggestedPrice,
       unit_cost:    unitCost,
       pricing_meta: pricingMeta ?? undefined,
+      image_url:    p.image_url ?? null,
     });
     setPricing(false);
     onClose();
   }
 
   function addFree() {
-    if (!desc.trim()) return Alert.alert("Descrição obrigatória");
+    if (!desc.trim()) {
+      // QA item 2: Alert.alert é no-op na web — essa validação nunca aparecia.
+      notify("Descrição obrigatória", "Informe o que está sendo cobrado nesse item.");
+      return;
+    }
     const q = Math.max(0.01, parseFloat(qty.replace(",", ".")) || 1);
     const p = Math.max(0, parseFloat(price.replace(",", ".")) || 0);
     onAdd({ product_id: null, description: desc.trim(), quantity: q, unit_price: p });
     onClose();
   }
 
+  function offerFreeFromQuery() {
+    setDesc(query.trim());
+    setFreeOpen(true);
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={m.bg}>
-        <View style={m.card}>
-          <View style={m.topRow}>
-            <Text style={m.title}>Adicionar item</Text>
-            <Pressable onPress={onClose}><Icon name="x" size={20} color="#64748B" /></Pressable>
+      <View style={s.bg}>
+        <View style={s.card}>
+          <View style={s.topRow}>
+            <Text style={s.title}>Adicionar item</Text>
+            <Pressable onPress={onClose}><Icon name="x" size={20} color={t.ink3} /></Pressable>
           </View>
 
-          {/* Tabs */}
-          <View style={m.tabs}>
-            <Pressable style={[m.tab, mode === "search" && m.tabActive]} onPress={() => setMode("search")}>
-              <Text style={[m.tabTxt, mode === "search" && m.tabTxtActive]}>Buscar produto</Text>
-            </Pressable>
-            <Pressable style={[m.tab, mode === "free" && m.tabActive]} onPress={() => setMode("free")}>
-              <Text style={[m.tabTxt, mode === "free" && m.tabTxtActive]}>Item livre</Text>
-            </Pressable>
+          <View style={s.searchRow}>
+            <Icon name="search" size={16} color={t.ink4} />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Nome do produto..."
+              placeholderTextColor={t.ink4}
+              value={query}
+              onChangeText={(v) => { setQuery(v); if (v.length >= 2) doSearch(v); else setResults([]); }}
+              autoFocus
+            />
+            {(searching || pricing) && <ActivityIndicator size="small" color={t.primary} />}
           </View>
+          {pricing && (
+            <Text style={s.pricingHint}>Consultando motor de precificação...</Text>
+          )}
 
-          {mode === "search" ? (
-            <View style={{ gap: 10 }}>
-              <View style={m.searchRow}>
-                <TextInput
-                  style={m.searchInput}
-                  placeholder="Nome do produto..."
-                  value={query}
-                  onChangeText={(v) => { setQuery(v); if (v.length >= 2) doSearch(v); }}
-                  autoFocus
-                />
-                {(searching || pricing) && <ActivityIndicator size="small" color="#1E3A8A" />}
-              </View>
-              {pricing && (
-                <Text style={m.pricingHint}>Consultando motor de precificação...</Text>
-              )}
-              <ScrollView style={{ maxHeight: 260 }}>
-                {results.map((p) => (
-                  <Pressable key={p.id} style={m.resultRow} onPress={() => selectProduct(p)} disabled={pricing}>
-                    <Text style={m.resultName}>{p.name}</Text>
-                    <Text style={m.resultPrice}>R$ {parseFloat(p.price || 0).toFixed(2)}</Text>
-                  </Pressable>
-                ))}
-                {!searching && query.length >= 2 && results.length === 0 && (
-                  <Text style={m.noResults}>Nenhum produto encontrado</Text>
-                )}
-              </ScrollView>
-            </View>
+          <ScrollView style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
+            {results.map((p) => (
+              <Pressable key={p.id} style={s.resultRow} onPress={() => selectProduct(p)} disabled={pricing}>
+                <ProductThumb uri={p.image_url} t={t} />
+                <Text style={s.resultName} numberOfLines={1}>{p.name}</Text>
+                <Text style={s.resultPrice}>R$ {parseFloat(String(p.price || 0)).toFixed(2)}</Text>
+              </Pressable>
+            ))}
+            {!searching && query.length >= 2 && results.length === 0 && (
+              <Pressable style={s.offerFreeRow} onPress={offerFreeFromQuery}>
+                <Icon name="plus" size={14} color={t.primary} />
+                <Text style={s.offerFreeTxt} numberOfLines={1}>
+                  Adicionar "{query.trim()}" como item avulso
+                </Text>
+              </Pressable>
+            )}
+          </ScrollView>
+
+          {!freeOpen ? (
+            <Pressable style={s.freeToggle} onPress={() => setFreeOpen(true)}>
+              <Text style={s.freeToggleTxt}>+ Item avulso (sem produto cadastrado)</Text>
+            </Pressable>
           ) : (
-            <View style={{ gap: 10 }}>
-              <TextInput style={m.input} placeholder="Descrição do item *" value={desc} onChangeText={setDesc} autoFocus />
-              <View style={m.row2}>
+            <View style={s.freeBox}>
+              <TextInput
+                style={s.input}
+                placeholder="Descrição do item *"
+                placeholderTextColor={t.ink4}
+                value={desc}
+                onChangeText={setDesc}
+              />
+              <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={m.label}>Qtd</Text>
-                  <TextInput style={m.input} value={qty} onChangeText={setQty} keyboardType="decimal-pad" />
+                  <Text style={s.label}>Qtd</Text>
+                  <TextInput style={s.input} value={qty} onChangeText={setQty} keyboardType="decimal-pad" />
                 </View>
                 <View style={{ flex: 2 }}>
-                  <Text style={m.label}>Preço unit. (R$)</Text>
-                  <TextInput style={m.input} value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0,00" />
+                  <Text style={s.label}>Preço unit. (R$)</Text>
+                  <TextInput
+                    style={s.input}
+                    value={price}
+                    onChangeText={setPrice}
+                    keyboardType="decimal-pad"
+                    placeholder="0,00"
+                    placeholderTextColor={t.ink4}
+                  />
                 </View>
               </View>
-              <Pressable style={m.addBtn} onPress={addFree}>
-                <Text style={m.addBtnTxt}>Adicionar item</Text>
+              <Pressable style={s.addBtn} onPress={addFree}>
+                <Text style={s.addBtnTxt}>Adicionar item avulso</Text>
               </Pressable>
             </View>
           )}
@@ -205,45 +307,57 @@ function AddItemModal({ visible, companyId, onClose, onAdd }: ItemModalProps) {
   );
 }
 
-const m = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
-  card: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "85%" },
-  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  title: { fontSize: 17, fontWeight: "800", color: "#0F172A" },
-  tabs: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10, backgroundColor: "#F1F5F9" },
-  tabActive: { backgroundColor: "#EFF6FF", borderWidth: 1.5, borderColor: "#1E3A8A" },
-  tabTxt: { fontSize: 13, fontWeight: "600", color: "#64748B" },
-  tabTxtActive: { color: "#1E3A8A" },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  searchInput: {
-    flex: 1, backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#CBD5E1",
-    borderRadius: 10, padding: 12, fontSize: 14, color: "#0F172A",
-  },
-  pricingHint: { fontSize: 12, color: "#1E3A8A", fontStyle: "italic", textAlign: "center" },
-  resultRow: {
-    flexDirection: "row", justifyContent: "space-between", paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: "#F1F5F9",
-  },
-  resultName: { fontSize: 14, color: "#0F172A", flex: 1 },
-  resultPrice: { fontSize: 14, fontWeight: "700", color: "#1E3A8A" },
-  noResults: { textAlign: "center", color: "#94A3B8", paddingVertical: 16 },
-  input: {
-    backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#CBD5E1",
-    borderRadius: 10, padding: 12, fontSize: 14, color: "#0F172A",
-  },
-  row2: { flexDirection: "row", gap: 10 },
-  label: { fontSize: 12, color: "#64748B", fontWeight: "600", marginBottom: 4 },
-  addBtn: { backgroundColor: "#1E3A8A", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
-  addBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-});
+function buildModalStyles(t: StudioPalette) {
+  return StyleSheet.create({
+    bg: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
+    card: { backgroundColor: t.paperCardElev, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "85%" },
+    topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+    title: { fontSize: 17, fontWeight: "800", color: t.ink },
+    searchRow: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5,
+      borderRadius: 10, paddingHorizontal: 12,
+    },
+    searchInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: t.ink },
+    pricingHint: { fontSize: 12, color: t.primary, fontStyle: "italic", textAlign: "center", marginTop: 8 },
+    resultRow: {
+      flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10,
+      borderBottomWidth: 1, borderBottomColor: t.ink5,
+    },
+    resultName: { fontSize: 14, color: t.ink, flex: 1 },
+    resultPrice: { fontSize: 14, fontWeight: "700", color: t.primary },
+    offerFreeRow: {
+      flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 14,
+      justifyContent: "center",
+    },
+    offerFreeTxt: { fontSize: 13, color: t.primary, fontWeight: "700", flexShrink: 1 },
+    freeToggle: { paddingVertical: 12, alignItems: "center" },
+    freeToggleTxt: { fontSize: 12.5, color: t.ink3, fontWeight: "600" },
+    freeBox: { gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: t.ink5, marginTop: 4 },
+    input: {
+      backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5,
+      borderRadius: 10, padding: 12, fontSize: 14, color: t.ink,
+    },
+    row2: { flexDirection: "row", gap: 10 },
+    label: { fontSize: 12, color: t.ink3, fontWeight: "600", marginBottom: 4 },
+    addBtn: { backgroundColor: t.primary, paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
+    addBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  });
+}
 
 // ─── Componente principal ────────────────────────────────────
 export default function OrcamentoEditorScreen() {
   const { id }      = useLocalSearchParams<{ id: string }>();
   const router      = useRouter();
   const { companyId } = useAuth();
+  const t = useStudioTokens();
+  const s = useMemo(() => buildStyles(t), [t]);
   const isNew = id === "novo";
+
+  const crumbs = [
+    { label: "Estúdio", href: "/studio" },
+    { label: "Orçamentos", href: "/studio/gestao/orcamentos" },
+  ];
 
   // Form fields
   const [customerName,  setCustomerName]  = useState("");
@@ -252,7 +366,7 @@ export default function OrcamentoEditorScreen() {
   const [depositPct,    setDepositPct]    = useState("");
   const [discount,      setDiscount]      = useState("0");
   const [notes,         setNotes]         = useState("");
-  const [items,         setItems]         = useState<Omit<StudioQuoteItem, "id">[]>([]);
+  const [items,         setItems]         = useState<LineItem[]>([]);
 
   // State
   const [quote,    setQuote]   = useState<StudioQuote | null>(null);
@@ -264,7 +378,12 @@ export default function OrcamentoEditorScreen() {
 
   // Carrega orçamento existente
   useEffect(() => {
-    if (isNew || !companyId) return;
+    if (isNew) { setLoading(false); return; }
+    // QA item 12: early return sem setLoading(false) podia deixar o spinner
+    // travado se companyId nunca chegasse a resolver. companyId nas deps
+    // garante que, assim que a auth popular, o effect roda de novo.
+    if (!companyId) { setLoading(false); return; }
+    setLoading(true);
     studioApi.getQuote(companyId, id!)
       .then(({ quote: q, items: its }) => {
         setQuote(q);
@@ -285,7 +404,11 @@ export default function OrcamentoEditorScreen() {
           sort_order:  it.sort_order,
         })));
       })
-      .catch((e: any) => setError(e?.message || "Erro ao carregar orçamento"))
+      .catch((e: any) => {
+        const msg = `[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao carregar orçamento"}`;
+        setError(msg);
+        toast.error(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, companyId, isNew]);
 
@@ -300,7 +423,7 @@ export default function OrcamentoEditorScreen() {
   const canSend  = quote?.status === "draft" || quote?.status === "sent";
 
   // ─── Salvar / Criar ─────────────────────────────────────────
-  async function save(): Promise<StudioQuote | null> {
+  async function persist(): Promise<StudioQuote | null> {
     if (!companyId) return null;
     setSaving(true);
     setError(null);
@@ -308,7 +431,16 @@ export default function OrcamentoEditorScreen() {
       const body = {
         customer_name:  customerName.trim() || undefined,
         customer_phone: customerPhone.trim() || undefined,
-        items: items.map((it, i) => ({ ...it, sort_order: i })),
+        items: items.map((it, i) => ({
+          product_id:   it.product_id,
+          description:  it.description,
+          quantity:     it.quantity,
+          unit_price:   it.unit_price,
+          unit_cost:    it.unit_cost,
+          pricing_meta: it.pricing_meta,
+          customization: it.customization,
+          sort_order:   i,
+        })),
         discount: disc,
         validity_days: Math.max(1, parseInt(validityDays) || 7),
         deposit_pct: depPct > 0 ? depPct : null,
@@ -319,16 +451,21 @@ export default function OrcamentoEditorScreen() {
       if (isNew) {
         const q = await studioApi.createQuote(companyId, { ...body, items: body.items as any });
         setQuote(q);
+        toast.success("Orçamento criado");
         // P2: rota canônica sob gestao/orcamentos/
         router.replace(`/studio/gestao/orcamentos/${q.id}` as any);
         return q;
       } else {
         const q = await studioApi.updateQuote(companyId, id!, body as any);
         setQuote(q);
+        // QA item 13: antes save() não dava nenhum feedback ao editar.
+        toast.success("Alterações salvas");
         return q;
       }
     } catch (e: any) {
-      setError(e?.message || "Erro ao salvar");
+      const msg = `[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao salvar"}`;
+      setError(msg);
+      toast.error(msg);
       return null;
     } finally {
       setSaving(false);
@@ -338,14 +475,20 @@ export default function OrcamentoEditorScreen() {
   // ─── Enviar ─────────────────────────────────────────────────
   async function handleSend() {
     if (!companyId || !quote) return;
+    // QA item 3: enviar sem salvar antes mandava valores desatualizados
+    // pro cliente (desconto/itens/validade alterados e não persistidos).
+    const saved = await persist();
+    if (!saved) return; // erro já mostrado por persist()
     setSaving(true);
     setError(null);
     try {
-      const data = await studioApi.sendQuote(companyId, quote.id);
+      const data = await studioApi.sendQuote(companyId, saved.id);
       setQuote(data);
       setSentData(data);
     } catch (e: any) {
-      setError(e?.message || "Erro ao enviar orçamento");
+      const msg = `[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao enviar orçamento"}`;
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -359,13 +502,14 @@ export default function OrcamentoEditorScreen() {
     try {
       const data = await studioApi.convertQuote(companyId, quote.id);
       setQuote(data.quote);
-      Alert.alert(
-        "Pedido criado!",
-        "O orçamento foi convertido em pedido Studio.",
-        [{ text: "Ver pedido", onPress: () => router.push(`/studio/pedidos/${data.order_id}` as any) }]
-      );
+      // QA item 2: Alert.alert com botão "Ver pedido" é no-op na web — o
+      // botão nunca aparecia. Toast de sucesso + banner inline com CTA
+      // clicável (quote.order_id já vem setado por data.quote).
+      toast.success("Pedido criado! Orçamento convertido em pedido Studio.");
     } catch (e: any) {
-      setError(e?.message || "Erro ao converter orçamento");
+      const msg = `[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao converter orçamento"}`;
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -374,25 +518,23 @@ export default function OrcamentoEditorScreen() {
   // ─── Render ──────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={s.center}>
-        <ActivityIndicator size="large" color="#1E3A8A" />
-      </View>
+      <StudioScreen variant="reading" scroll={false}>
+        <StudioBreadcrumb items={[...crumbs, { label: "Carregando..." }]} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <StudioLoading variant="spinner" label="Carregando orçamento..." />
+        </View>
+      </StudioScreen>
     );
   }
 
   // Pós-envio: exibe link
   if (sentData) {
     return (
-      <View style={s.root}>
-        <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
-            <Icon name="arrow-left" size={20} color="#0F172A" />
-          </Pressable>
-          <Text style={s.headerTitle}>Orçamento enviado</Text>
-        </View>
-        <ScrollView contentContainerStyle={s.sentContainer}>
+      <StudioScreen variant="reading" scroll={false}>
+        <StudioBreadcrumb items={[...crumbs, { label: "Orçamento enviado" }]} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
           <View style={s.sentCard}>
-            <Icon name="check-circle" size={48} color="#10B981" />
+            <Icon name="check-circle" size={48} color={t.success} />
             <Text style={s.sentTitle}>Link gerado!</Text>
             <Text style={s.sentUrl}>{(sentData as any).quote_url}</Text>
             <Pressable
@@ -415,28 +557,42 @@ export default function OrcamentoEditorScreen() {
               <Text style={s.backLinkTxt}>Voltar ao orçamento</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </View>
+        </View>
+      </StudioScreen>
     );
   }
 
   return (
-    <View style={s.root}>
-      {/* Header */}
-      <View style={s.header}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Icon name="arrow-left" size={20} color="#0F172A" />
-        </Pressable>
-        <Text style={s.headerTitle} numberOfLines={1}>
-          {isNew ? "Novo orçamento" : (customerName || "Orçamento")}
-        </Text>
-        {quote && <StatusPill status={quote.status} />}
-      </View>
+    <StudioScreen variant="reading">
+      <StudioBreadcrumb items={[...crumbs, { label: isNew ? "Novo orçamento" : (customerName || "Orçamento") }]} />
 
-      <ScrollView contentContainerStyle={s.form}>
+      <View style={s.container}>
+        {/* Header */}
+        <View style={s.headRow}>
+          <Text style={s.h1} numberOfLines={1}>
+            {isNew ? "Novo orçamento" : (customerName || "Orçamento")}
+          </Text>
+          {quote && <StatusPill status={quote.status} />}
+        </View>
+
         {error ? (
           <View style={s.errorBanner}>
+            <Icon name="alert-circle" size={16} color={t.dangerInk} />
             <Text style={s.errorTxt}>{error}</Text>
+          </View>
+        ) : null}
+
+        {quote?.status === "converted" && quote.order_id ? (
+          <View style={s.convertedBanner}>
+            <Icon name="check-circle" size={18} color={t.successInk} />
+            <Text style={s.convertedTxt}>Este orçamento virou pedido.</Text>
+            <Pressable
+              style={s.convertedBtn}
+              onPress={() => router.push(`/studio/pedidos/${quote.order_id}` as any)}
+            >
+              <Text style={s.convertedBtnTxt}>Ver pedido</Text>
+              <Icon name="arrow-right" size={14} color="#fff" />
+            </Pressable>
           </View>
         ) : null}
 
@@ -446,6 +602,7 @@ export default function OrcamentoEditorScreen() {
           <TextInput
             style={s.input}
             placeholder="Nome do cliente"
+            placeholderTextColor={t.ink4}
             value={customerName}
             onChangeText={setCustomerName}
             editable={isDraft}
@@ -453,6 +610,7 @@ export default function OrcamentoEditorScreen() {
           <TextInput
             style={s.input}
             placeholder="Telefone / WhatsApp"
+            placeholderTextColor={t.ink4}
             value={customerPhone}
             onChangeText={setCustomerPhone}
             keyboardType="phone-pad"
@@ -466,19 +624,23 @@ export default function OrcamentoEditorScreen() {
             <Text style={s.sectionLabel}>ITENS</Text>
             {isDraft && (
               <Pressable style={s.addItemBtn} onPress={() => setAddModal(true)}>
-                <Icon name="plus" size={14} color="#1E3A8A" />
+                <Icon name="plus" size={14} color={t.primary} />
                 <Text style={s.addItemTxt}>Adicionar item</Text>
               </Pressable>
             )}
           </View>
 
           {items.length === 0 ? (
-            <View style={s.emptyItems}>
-              <Text style={s.emptyItemsTxt}>Nenhum item adicionado</Text>
-            </View>
+            <StudioEmpty
+              icon="package"
+              title="Nenhum item adicionado"
+              desc={isDraft ? 'Toque em "Adicionar item" para montar o orçamento.' : undefined}
+              compact
+            />
           ) : (
             items.map((it, i) => (
               <View key={i} style={s.itemRow}>
+                <ProductThumb uri={it.image_url} t={t} size={34} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.itemName}>{it.description}</Text>
                   <Text style={s.itemDetail}>
@@ -494,7 +656,7 @@ export default function OrcamentoEditorScreen() {
                     style={s.removeBtn}
                     onPress={() => setItems((prev) => prev.filter((_, j) => j !== i))}
                   >
-                    <Icon name="trash-2" size={15} color="#DC2626" />
+                    <Icon name="trash-2" size={15} color={t.danger} />
                   </Pressable>
                 )}
               </View>
@@ -524,6 +686,7 @@ export default function OrcamentoEditorScreen() {
                 onChangeText={setDepositPct}
                 keyboardType="decimal-pad"
                 placeholder="0"
+                placeholderTextColor={t.ink4}
                 editable={isDraft}
               />
             </View>
@@ -536,6 +699,7 @@ export default function OrcamentoEditorScreen() {
             multiline
             editable={isDraft}
             placeholder="Detalhes, prazos, instruções..."
+            placeholderTextColor={t.ink4}
           />
         </View>
 
@@ -578,7 +742,7 @@ export default function OrcamentoEditorScreen() {
           {isDraft && (
             <Pressable
               style={[s.btnPrimary, saving && s.btnDisabled]}
-              onPress={save}
+              onPress={persist}
               disabled={saving}
             >
               {saving
@@ -611,127 +775,122 @@ export default function OrcamentoEditorScreen() {
             </Pressable>
           )}
         </View>
-      </ScrollView>
+      </View>
 
       <AddItemModal
         visible={addModal}
         companyId={companyId || ""}
+        t={t}
         onClose={() => setAddModal(false)}
         onAdd={(item) => setItems((prev) => [...prev, item])}
       />
-    </View>
+    </StudioScreen>
   );
 }
 
-const NAVY = "#1E3A8A";
-const MAGENTA = "#EC4899";
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
+    container: { padding: 16, gap: 14, paddingBottom: 60 },
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F8FAFC" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    headRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
+    h1: { flex: 1, fontSize: 22, fontWeight: "800", color: t.ink, letterSpacing: -0.3 },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  backBtn: { padding: 4 },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: "800", color: "#0F172A" },
+    errorBanner: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: t.dangerSoft, borderRadius: 10, padding: 12,
+    },
+    errorTxt: { flex: 1, color: t.dangerInk, fontSize: 13.5, fontWeight: "600" },
 
-  form: { padding: 16, gap: 14, paddingBottom: 60 },
+    convertedBanner: {
+      flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap",
+      backgroundColor: t.successSoft, borderRadius: 12, padding: 14,
+    },
+    convertedTxt: { flex: 1, minWidth: 160, fontSize: 13.5, fontWeight: "700", color: t.successInk },
+    convertedBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      backgroundColor: t.success, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10,
+    },
+    convertedBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
 
-  errorBanner: {
-    backgroundColor: "#FEE2E2", borderRadius: 10, padding: 12,
-  },
-  errorTxt: { color: "#991B1B", fontSize: 13.5, fontWeight: "600" },
+    section: { backgroundColor: t.paperCard, borderRadius: 14, padding: 16, gap: 10, borderWidth: 1, borderColor: t.ink5 },
+    sectionLabel: {
+      fontSize: 10, color: t.ink3, fontWeight: "800",
+      letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4,
+    },
+    sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    addItemBtn: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 10, paddingVertical: 6,
+      borderRadius: 8, backgroundColor: t.primarySoft,
+      borderWidth: 1, borderColor: t.primarySoft,
+    },
+    addItemTxt: { fontSize: 12.5, fontWeight: "700", color: t.primary },
 
-  section: { backgroundColor: "#fff", borderRadius: 14, padding: 16, gap: 10, borderWidth: 1, borderColor: "#E2E8F0" },
-  sectionLabel: {
-    fontSize: 10, color: "#64748B", fontWeight: "800",
-    letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4,
-  },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  addItemBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 8, backgroundColor: "#EFF6FF",
-    borderWidth: 1, borderColor: "#BFDBFE",
-  },
-  addItemTxt: { fontSize: 12.5, fontWeight: "700", color: NAVY },
+    input: {
+      backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5,
+      borderRadius: 10, padding: 12, fontSize: 14, color: t.ink,
+    },
+    inputLabel: { fontSize: 12, color: t.ink3, fontWeight: "600", marginBottom: 2 },
+    row2: { flexDirection: "row", gap: 10 },
 
-  input: {
-    backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#CBD5E1",
-    borderRadius: 10, padding: 12, fontSize: 14, color: "#0F172A",
-  },
-  inputLabel: { fontSize: 12, color: "#64748B", fontWeight: "600", marginBottom: 2 },
-  row2: { flexDirection: "row", gap: 10 },
+    itemRow: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5,
+    },
+    itemName: { fontSize: 14, fontWeight: "600", color: t.ink },
+    itemDetail: { fontSize: 12, color: t.ink3, marginTop: 2 },
+    itemTotal: { fontSize: 14, fontWeight: "700", color: t.primary },
+    removeBtn: { padding: 6 },
 
-  emptyItems: { alignItems: "center", paddingVertical: 20 },
-  emptyItemsTxt: { color: "#94A3B8", fontSize: 13 },
+    totalsCard: {
+      backgroundColor: t.paperCard, borderRadius: 14, padding: 16,
+      gap: 10, borderWidth: 1, borderColor: t.ink5,
+    },
+    totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    totalRowFinal: { paddingTop: 10, borderTopWidth: 1, borderTopColor: t.ink5, marginTop: 4 },
+    totalLabel: { fontSize: 13.5, color: t.ink3 },
+    totalVal: { fontSize: 13.5, color: t.ink, fontWeight: "600" },
+    totalLabelFinal: { fontSize: 15, fontWeight: "800", color: t.ink },
+    totalValFinal: { fontSize: 18, fontWeight: "800", color: t.primary },
+    discountInput: {
+      backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5,
+      borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+      fontSize: 14, color: t.ink, textAlign: "right", minWidth: 80,
+    },
 
-  itemRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9",
-  },
-  itemName: { fontSize: 14, fontWeight: "600", color: "#0F172A" },
-  itemDetail: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  itemTotal: { fontSize: 14, fontWeight: "700", color: NAVY },
-  removeBtn: { padding: 6 },
+    actionsSection: { gap: 10, paddingBottom: 20 },
+    btnPrimary: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.primary, paddingVertical: 16, borderRadius: 14,
+    },
+    btnSend: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.info, paddingVertical: 16, borderRadius: 14,
+    },
+    btnConvert: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.success, paddingVertical: 16, borderRadius: 14,
+    },
+    btnPrimaryTxt: { color: "#fff", fontSize: 15, fontWeight: "800" },
+    btnDisabled: { opacity: 0.5 },
 
-  totalsCard: {
-    backgroundColor: "#fff", borderRadius: 14, padding: 16,
-    gap: 10, borderWidth: 1, borderColor: "#E2E8F0",
-  },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  totalRowFinal: { paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 4 },
-  totalLabel: { fontSize: 13.5, color: "#64748B" },
-  totalVal: { fontSize: 13.5, color: "#0F172A", fontWeight: "600" },
-  totalLabelFinal: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
-  totalValFinal: { fontSize: 18, fontWeight: "800", color: NAVY },
-  discountInput: {
-    backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#CBD5E1",
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 14, color: "#0F172A", textAlign: "right", minWidth: 80,
-  },
-
-  actionsSection: { gap: 10, paddingBottom: 20 },
-  btnPrimary: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: NAVY, paddingVertical: 16, borderRadius: 14,
-  },
-  btnSend: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: "#0EA5E9", paddingVertical: 16, borderRadius: 14,
-  },
-  btnConvert: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: "#10B981", paddingVertical: 16, borderRadius: 14,
-  },
-  btnPrimaryTxt: { color: "#fff", fontSize: 15, fontWeight: "800" },
-  btnDisabled: { opacity: 0.5 },
-
-  // Sent state
-  sentContainer: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  sentCard: {
-    backgroundColor: "#fff", borderRadius: 18, padding: 28, alignItems: "center",
-    maxWidth: 440, width: "100%", gap: 12, borderWidth: 1, borderColor: "#D1FAE5",
-  },
-  sentTitle: { fontSize: 22, fontWeight: "800", color: "#0F172A" },
-  sentUrl: {
-    fontSize: 13, color: "#475569", textAlign: "center",
-    backgroundColor: "#F1F5F9", borderRadius: 8, padding: 10, width: "100%",
-  },
-  copyBtn: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: NAVY, paddingVertical: 12, paddingHorizontal: 24,
-    borderRadius: 12, width: "100%", justifyContent: "center",
-  },
-  copyBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-  backLink: { marginTop: 8 },
-  backLinkTxt: { fontSize: 13, color: "#64748B", textDecorationLine: "underline" },
-});
+    // Sent state
+    sentCard: {
+      backgroundColor: t.paperCardElev, borderRadius: 18, padding: 28, alignItems: "center",
+      maxWidth: 440, width: "100%", gap: 12, borderWidth: 1, borderColor: t.successSoft,
+    },
+    sentTitle: { fontSize: 22, fontWeight: "800", color: t.ink },
+    sentUrl: {
+      fontSize: 13, color: t.ink2, textAlign: "center",
+      backgroundColor: t.bgSoft, borderRadius: 8, padding: 10, width: "100%",
+    },
+    copyBtn: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: t.primary, paddingVertical: 12, paddingHorizontal: 24,
+      borderRadius: 12, width: "100%", justifyContent: "center",
+    },
+    copyBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+    backLink: { marginTop: 8 },
+    backLinkTxt: { fontSize: 13, color: t.ink3, textDecorationLine: "underline" },
+  });
+}

@@ -10,14 +10,18 @@
 //   POST /studio/bulk-events/:eid/convert
 // ============================================================
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet,
+  View, Text, Pressable, ActivityIndicator, StyleSheet,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens, useStudioTheme } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { studioBulkConvertApi, type StudioBulkEventItemRow } from "@/services/studioBulkConvertApi";
@@ -36,23 +40,32 @@ export default function EventoDetalhe() {
   const [items, setItems] = useState<StudioBulkEventItemRow[]>([]);
   const [stats, setStats] = useState<{ converted: number; total: number }>({ converted: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  // FIX (bug #13 QA): erro engolido virava "Nenhum item neste evento" —
+  // estado dedicado com retry, distinto do vazio de verdade.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
 
   const load = useCallback(async () => {
-    if (!company?.id || !eid) return;
+    // FIX (bug #14 QA): return antes do setLoading(false) deixava o
+    // spinner girando pra sempre quando company ainda não tinha carregado.
+    if (!company?.id || !eid) { setLoading(false); return; }
     setLoading(true);
     try {
       const r = await studioBulkConvertApi.listItems(company.id, eid);
       setItems(r.items || []);
       setStats({ converted: r.converted, total: r.total });
+      setLoadError(null);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao carregar evento");
+      const msg = e?.message || "Erro ao carregar evento";
+      toast.error(msg);
+      setLoadError(msg);
     } finally {
       setLoading(false);
     }
   }, [company?.id, eid]);
 
-  useEffect(() => { load(); }, [load]);
+  // Recarrega ao ganhar foco: agir noutra tela e voltar mostrava dado stale.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleConvert = async () => {
     if (!company?.id || !eid || converting) return;
@@ -80,35 +93,45 @@ export default function EventoDetalhe() {
         ]}
       />
       <View style={s.container}>
-        <View style={s.headRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.h1}>Detalhe do evento</Text>
-            <Text style={s.h1Sub}>
-              {stats.total} pessoa{stats.total === 1 ? "" : "s"} · {stats.converted} já em produção · {pendingCount} aguardando conversão
-            </Text>
-          </View>
-          {pendingCount > 0 && (
-            <Pressable
-              onPress={handleConvert}
-              disabled={converting}
-              style={[s.cta, { backgroundColor: t.accent, opacity: converting ? 0.6 : 1 }]}
-            >
-              {converting ? <ActivityIndicator color="#fff" /> : <Icon name="arrow-right" size={16} color="#fff" />}
-              <Text style={s.ctaTxt}>
-                {converting ? "Convertendo…" : `Converter ${pendingCount} em pedidos`}
-              </Text>
-            </Pressable>
-          )}
-        </View>
+        {/* FIX (bug #19 QA): <Text style={s.h1}> fora do padrão — migrado
+            pra StudioPageHeader. */}
+        <StudioPageHeader
+          eyebrow="PEDIDOS"
+          title="Detalhe do evento"
+          subtitle={`${stats.total} pessoa${stats.total === 1 ? "" : "s"} · ${stats.converted} já em produção · ${pendingCount} aguardando conversão`}
+          rightSlot={
+            pendingCount > 0 ? (
+              <Pressable
+                onPress={handleConvert}
+                disabled={converting}
+                style={[s.cta, { backgroundColor: t.accent, opacity: converting ? 0.6 : 1 }]}
+              >
+                {converting ? <ActivityIndicator color="#fff" /> : <Icon name="arrow-right" size={16} color="#fff" />}
+                <Text style={s.ctaTxt}>
+                  {converting ? "Convertendo…" : `Converter ${pendingCount} em pedidos`}
+                </Text>
+              </Pressable>
+            ) : undefined
+          }
+        />
 
         {loading ? (
-          <View style={{ paddingVertical: 40, alignItems: "center" }}>
-            <ActivityIndicator color={t.primary} />
-          </View>
+          <StudioLoading variant="skeleton-cards" rows={4} />
+        ) : loadError && items.length === 0 ? (
+          // FIX (bug #13 QA): erro de carregamento é distinto de "sem itens".
+          <StudioEmpty
+            tone="warning"
+            icon="alert-circle"
+            title="Não deu pra carregar o evento"
+            desc={loadError}
+            primaryCta={{ label: "Tentar de novo", onPress: load }}
+          />
         ) : items.length === 0 ? (
-          <View style={s.empty}>
-            <Text style={s.emptyTxt}>Nenhum item neste evento.</Text>
-          </View>
+          <StudioEmpty
+            icon="users"
+            title="Nenhum item neste evento"
+            desc="Esse evento ainda não tem pessoas cadastradas."
+          />
         ) : (
           <View style={s.grid}>
             {items.map((it) => {
@@ -175,13 +198,8 @@ function summarizeCustomization(c: any): string {
 function buildStyles(t: StudioPalette) {
   return StyleSheet.create({
   container: { width: "100%" },
-  headRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 18, flexWrap: "wrap" },
-  h1: { fontSize: 22, fontWeight: "800", color: t.ink },
-  h1Sub: { fontSize: 12.5, color: t.ink3, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
   ctaTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  empty: { padding: 40, alignItems: "center", backgroundColor: t.paperCard, borderRadius: 16 },
-  emptyTxt: { color: t.ink3 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: {
     width: 240, minWidth: 240,

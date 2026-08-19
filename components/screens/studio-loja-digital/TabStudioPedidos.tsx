@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -8,31 +8,34 @@ import { studioApi, StudioOrder, StudioProductionStatus } from "@/services/studi
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
-const STATUS_LABELS: Record<StudioProductionStatus, { label: string; color: string; bg: string }> = {
-  awaiting_customization: { label: "Aguardando personalização", color: "#EC4899", bg: "#FCE7F3" },
-  pending_art:            { label: "Aguardando arte",          color: "#F59E0B", bg: "#FEF3C7" },
-  approved:               { label: "Aprovado",                  color: "#3B82F6", bg: "#DBEAFE" },
-  in_production:          { label: "Em produção",               color: "#1E3A8A", bg: "#DBEAFE" },
-  ready:                  { label: "Pronto",                    color: "#10B981", bg: "#D1FAE5" },
-  delivered:              { label: "Entregue",                  color: "#64748B", bg: "#E2E8F0" },
-  cancelled:              { label: "Cancelado",                 color: "#94A3B8", bg: "#F1F5F9" },
-};
+// QA fix (achado #11): esta tab usava uma janela própria (30d/limit 100,
+// sem paginação) como fonte de dados, diferente do feed do hub
+// /studio/pedidos — os números batiam raramente. Em vez de manter duas
+// fontes de verdade, a tab virou um atalho: resumo (KPIs + últimos
+// pedidos) + CTA pro hub, que é a única tela com a lista completa/paginada.
 
-const SOURCE_LABELS: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  digital:     { label: "Loja Digital", icon: "globe",         color: "#1E3A8A", bg: "#DBEAFE" },
-  pdv:         { label: "PDV",          icon: "shopping-bag",  color: "#10B981", bg: "#D1FAE5" },
-  marketplace: { label: "Marketplace",  icon: "external-link", color: "#F59E0B", bg: "#FEF3C7" },
-};
+// QA fix (achado #20): labels de status/origem tinham cores pastel fixas
+// (#FCE7F3 etc) — quebravam no dark mode. Viram funções que recebem o
+// StudioPalette e usam os tokens semânticos (successSoft/warningSoft/...).
+function statusMeta(t: StudioPalette): Record<StudioProductionStatus, { label: string; color: string; bg: string }> {
+  return {
+    awaiting_customization: { label: "Aguardando personalização", color: t.accent,     bg: t.accentSoft },
+    pending_art:            { label: "Aguardando arte",           color: t.warningInk, bg: t.warningSoft },
+    approved:               { label: "Aprovado",                  color: t.infoInk,    bg: t.infoSoft },
+    in_production:          { label: "Em produção",                color: t.primary,    bg: t.primarySoft },
+    ready:                  { label: "Pronto",                     color: t.successInk, bg: t.successSoft },
+    delivered:              { label: "Entregue",                   color: t.ink3,       bg: t.bgSoft },
+    cancelled:              { label: "Cancelado",                  color: t.ink4,       bg: t.bgSoft },
+  };
+}
 
-const STATUS_ORDER: StudioProductionStatus[] = [
-  "awaiting_customization",
-  "pending_art",
-  "approved",
-  "in_production",
-  "ready",
-  "delivered",
-  "cancelled",
-];
+function sourceMeta(t: StudioPalette): Record<string, { label: string; icon: string; color: string; bg: string }> {
+  return {
+    digital:     { label: "Loja Digital", icon: "globe",         color: t.primary, bg: t.primarySoft },
+    pdv:         { label: "PDV",          icon: "shopping-bag",  color: t.successInk, bg: t.successSoft },
+    marketplace: { label: "Marketplace",  icon: "external-link", color: t.warningInk, bg: t.warningSoft },
+  };
+}
 
 function formatBRL(v: number | string | null | undefined): string {
   const n = typeof v === "string" ? parseFloat(v) : (v ?? 0);
@@ -54,18 +57,24 @@ function shortId(id: string | null | undefined): string {
   return "#" + id.slice(0, 8).toUpperCase();
 }
 
+const RECENT_COUNT = 5;
+
 export function TabStudioPedidos() {
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
+  const STATUS_META = useMemo(() => statusMeta(t), [t]);
+  const SOURCE_META = useMemo(() => sourceMeta(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<StudioOrder[]>([]);
-  const [filterSource, setFilterSource] = useState<"all" | "digital" | "pdv" | "marketplace">("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | StudioProductionStatus>("all");
+  // QA fix (achado #18): sem company.id o loading ficava true pra sempre
+  // (return antecipado sem setLoading(false)) — spinner infinito.
+  const [blocked, setBlocked] = useState(false);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    if (!company?.id) { setLoading(false); setBlocked(true); return; }
+    setBlocked(false);
     setLoading(true);
     try {
       const r = await studioApi.listOrders(company.id, { days: 30, limit: 100 });
@@ -78,14 +87,6 @@ export function TabStudioPedidos() {
   }, [company?.id]);
 
   useEffect(() => { load(); }, [load]);
-
-  const filtered = useMemo(() => {
-    return orders.filter(o => {
-      if (filterSource !== "all" && o.source !== filterSource) return false;
-      if (filterStatus !== "all" && o.studio_production_status !== filterStatus) return false;
-      return true;
-    });
-  }, [orders, filterSource, filterStatus]);
 
   const kpis = useMemo(() => {
     let pendingArt = 0;
@@ -103,8 +104,21 @@ export function TabStudioPedidos() {
     return { pendingArt, inProduction, ready, delivered };
   }, [orders]);
 
+  const recent = useMemo(() => {
+    return [...orders]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, RECENT_COUNT);
+  }, [orders]);
+
+  // Bug #1 (ALTA): navegava pra /studio/kds?focus=, rota do módulo food que
+  // não existe pro Studio — card clicava e não fazia nada. O hub de pedidos
+  // do Studio tem sua própria página de detalhe em /studio/pedidos/[id].
   function goToOrder(orderId: string) {
-    router.push(`/studio/kds?focus=${orderId}`);
+    router.push(`/studio/pedidos/${orderId}` as any);
+  }
+
+  function goToHub() {
+    router.push("/studio/pedidos" as any);
   }
 
   if (loading) {
@@ -116,44 +130,25 @@ export function TabStudioPedidos() {
     );
   }
 
-  const FilterChip = ({
-    label, active, onPress, icon, color,
-  }: {
-    label: string;
-    active: boolean;
-    onPress: () => void;
-    icon?: string;
-    color?: string;
-  }) => {
+  if (blocked) {
     return (
-      <Pressable
-        onPress={onPress}
-        style={[
-          styles.chip,
-          active && { backgroundColor: color || t.primary, borderColor: color || t.primary },
-        ]}
-      >
-        {icon && (
-          <Icon
-            name={icon as any}
-            size={12}
-            color={active ? "#fff" : "#64748B"}
-            style={{ marginRight: 6 }}
-          />
-        )}
-        <Text style={[styles.chipText, active && { color: "#fff", fontWeight: "600" }]}>{label}</Text>
-      </Pressable>
+      <View style={styles.loadingWrap}>
+        <Icon name="alert-circle" size={28} color={t.ink4} />
+        <Text style={styles.loadingText}>Não foi possível identificar sua empresa. Recarregue a página.</Text>
+      </View>
     );
-  };
+  }
 
+  // Item #9: a tab não monta mais o próprio ScrollView — StudioScreen
+  // (usado por loja-digital.tsx) já é quem rola a tela toda.
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Pedidos Studio</Text>
           <Text style={styles.subtitle}>
-            Últimos 30 dias. Lista unificada de Loja Digital, PDV e Marketplaces.
+            Resumo dos últimos 30 dias. A lista completa (com paginação e filtros) fica no hub de Pedidos.
           </Text>
         </View>
         <Pressable style={styles.refreshBtn} onPress={load}>
@@ -162,21 +157,19 @@ export function TabStudioPedidos() {
         </Pressable>
       </View>
 
-      <Text style={styles.totalLine}>{orders.length} pedido{orders.length === 1 ? "" : "s"} no período</Text>
-
       {/* KPIs strip */}
       <View style={styles.kpiRow}>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Aguardando arte</Text>
-          <Text style={[styles.kpiValue, { color: "#F59E0B" }]}>{kpis.pendingArt}</Text>
+          <Text style={[styles.kpiValue, { color: t.warningInk }]}>{kpis.pendingArt}</Text>
         </View>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Em produção</Text>
-          <Text style={[styles.kpiValue, { color: "#1E3A8A" }]}>{kpis.inProduction}</Text>
+          <Text style={[styles.kpiValue, { color: t.primary }]}>{kpis.inProduction}</Text>
         </View>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Prontos</Text>
-          <Text style={[styles.kpiValue, { color: "#10B981" }]}>{kpis.ready}</Text>
+          <Text style={[styles.kpiValue, { color: t.successInk }]}>{kpis.ready}</Text>
         </View>
         <View style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Entregues</Text>
@@ -184,51 +177,28 @@ export function TabStudioPedidos() {
         </View>
       </View>
 
-      {/* Filtros source */}
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterGroupLabel}>Origem</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          <FilterChip label="Todos" active={filterSource === "all"} onPress={() => setFilterSource("all")} />
-          <FilterChip label="Loja Digital" icon="globe" active={filterSource === "digital"} onPress={() => setFilterSource("digital")} />
-          <FilterChip label="PDV" icon="shopping-bag" active={filterSource === "pdv"} onPress={() => setFilterSource("pdv")} />
-          <FilterChip label="Marketplace" icon="external-link" active={filterSource === "marketplace"} onPress={() => setFilterSource("marketplace")} />
-        </ScrollView>
-      </View>
+      {/* CTA pro hub — atalho principal da tab (achado #11) */}
+      <Pressable style={styles.hubBtn} onPress={goToHub}>
+        <Icon name="clipboard" size={16} color="#fff" />
+        <Text style={styles.hubBtnText}>Ver todos os pedidos</Text>
+        <Icon name="arrow-right" size={14} color="#fff" />
+      </Pressable>
 
-      {/* Filtros status */}
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterGroupLabel}>Status</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          <FilterChip label="Todos" active={filterStatus === "all"} onPress={() => setFilterStatus("all")} />
-          {STATUS_ORDER.map(s => (
-            <FilterChip
-              key={s}
-              label={STATUS_LABELS[s].label}
-              active={filterStatus === s}
-              onPress={() => setFilterStatus(s)}
-              color={STATUS_LABELS[s].color}
-            />
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Lista de pedidos */}
-      {filtered.length === 0 ? (
+      {/* Últimos pedidos (preview, não é a lista completa) */}
+      <Text style={styles.sectionLabel}>Últimos pedidos</Text>
+      {recent.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Icon name="inbox" size={40} color="#94A3B8" />
-          <Text style={styles.emptyTitle}>Nenhum pedido encontrado</Text>
+          <Icon name="inbox" size={40} color={t.ink4} />
+          <Text style={styles.emptyTitle}>Nenhum pedido nos últimos 30 dias</Text>
           <Text style={styles.emptyDesc}>
-            {orders.length === 0
-              ? "Quando você receber pedidos Studio (Loja Digital, PDV ou Marketplace), eles aparecerão aqui."
-              : "Nenhum pedido bate com os filtros aplicados. Tente ajustar Origem ou Status."}
+            Quando você receber pedidos Studio (Loja Digital, PDV ou Marketplace), eles aparecerão aqui.
           </Text>
         </View>
       ) : (
         <View style={styles.list}>
-          {filtered.map(o => {
-            const src = SOURCE_LABELS[o.source] || SOURCE_LABELS.digital;
-            const st = STATUS_LABELS[o.studio_production_status] || STATUS_LABELS.pending_art;
-            const itemsCount = (o as any).items_count ?? (o as any).item_count ?? null;
+          {recent.map(o => {
+            const src = SOURCE_META[o.source || "digital"] || SOURCE_META.digital;
+            const st = STATUS_META[o.studio_production_status || "pending_art"] || STATUS_META.pending_art;
             return (
               <Pressable key={o.id} style={styles.orderCard} onPress={() => goToOrder(o.id)}>
                 <View style={styles.orderHeader}>
@@ -237,15 +207,15 @@ export function TabStudioPedidos() {
                   </View>
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.customerName} numberOfLines={1}>
-                      {o.customer_name || "Cliente sem nome"}
+                      {o.display_name || o.customer_name || "Cliente sem nome"}
                     </Text>
                     <Text style={styles.orderMeta}>
                       {src.label} · {shortId(o.id)}
-                      {itemsCount != null ? ` · ${itemsCount} item${itemsCount === 1 ? "" : "s"}` : ""}
+                      {o.item_count != null ? ` · ${o.item_count} item${o.item_count === 1 ? "" : "s"}` : ""}
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.totalValue}>{formatBRL(o.total)}</Text>
+                    <Text style={styles.totalValue}>{formatBRL(o.total_amount)}</Text>
                   </View>
                 </View>
 
@@ -260,17 +230,16 @@ export function TabStudioPedidos() {
           })}
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
 const buildStyles = (t: StudioPalette) => StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: t.bg },
-  scrollContent: { padding: 16, paddingBottom: 48 },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  loadingText: { marginTop: 12, color: t.ink3, fontSize: 14 },
+  container: { padding: 16, paddingBottom: 48 },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
+  loadingText: { marginTop: 4, color: t.ink3, fontSize: 14, textAlign: "center" },
 
-  headerRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16, gap: 12, flexWrap: "wrap" },
   title: { fontSize: 22, fontWeight: "700", color: t.ink },
   subtitle: { fontSize: 13, color: t.ink3, marginTop: 4, lineHeight: 18 },
   refreshBtn: {
@@ -285,9 +254,8 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     gap: 6,
   },
   refreshBtnText: { color: t.primary, fontSize: 13, fontWeight: "600" },
-  totalLine: { fontSize: 12, color: t.ink3, marginBottom: 16 },
 
-  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 20, flexWrap: "wrap" },
+  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 16, flexWrap: "wrap" },
   kpiCard: {
     flex: 1,
     minWidth: 130,
@@ -300,22 +268,21 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   kpiLabel: { fontSize: 12, color: t.ink3, marginBottom: 6 },
   kpiValue: { fontSize: 24, fontWeight: "700" },
 
-  filterGroup: { marginBottom: 12 },
-  filterGroupLabel: { fontSize: 12, color: t.ink3, fontWeight: "600", marginBottom: 6 },
-  chipRow: { gap: 8, paddingRight: 8 },
-  chip: {
+  hubBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: t.paperCardElev,
-    borderWidth: 1,
-    borderColor: t.ink5,
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: t.primary,
+    paddingVertical: 13,
+    borderRadius: 12,
+    marginBottom: 20,
   },
-  chipText: { fontSize: 12, color: t.ink2 },
+  hubBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
 
-  list: { gap: 10, marginTop: 8 },
+  sectionLabel: { fontSize: 12, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 },
+
+  list: { gap: 10 },
   orderCard: {
     backgroundColor: t.paperCardElev,
     borderRadius: 12,
@@ -352,7 +319,13 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 48,
     paddingHorizontal: 24,
+    backgroundColor: t.paperCardElev,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: t.ink5,
   },
   emptyTitle: { fontSize: 16, fontWeight: "600", color: t.ink, marginTop: 12 },
   emptyDesc: { fontSize: 13, color: t.ink3, textAlign: "center", marginTop: 6, lineHeight: 19 },
 });
+
+export default TabStudioPedidos;

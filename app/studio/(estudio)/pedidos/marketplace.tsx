@@ -12,8 +12,9 @@
 // de entrada dedicada com agregados/SLA.
 // ============================================================
 import { useMemo, useEffect, useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput,
+  View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -28,11 +29,19 @@ import { CollectCustomizationModal } from "@/components/studio/CollectCustomizat
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { StudioScreen } from "@/components/studio/StudioScreen";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
-const PLATFORM_META: Record<string, { label: string; bg: string; fg: string }> = {
-  mercado_livre: { label: "Mercado Livre", bg: "#FEF3C7", fg: "#92400E" },
-  shopee:        { label: "Shopee",        bg: "#FFEDD5", fg: "#9A3412" },
-};
+// FIX (bug #20 QA): cores hardcoded fora dos tokens Studio — migradas pros
+// tokens semânticos (warning/danger) que já existem e respeitam light/dark.
+function buildPlatformMeta(t: StudioPalette): Record<string, { label: string; bg: string; fg: string }> {
+  return {
+    mercado_livre: { label: "Mercado Livre", bg: t.warningSoft, fg: t.warningInk },
+    shopee:        { label: "Shopee",        bg: t.dangerSoft,  fg: t.dangerInk },
+  };
+}
 
 type Filter = "pending" | "collected" | "all";
 
@@ -52,6 +61,7 @@ type MarketplaceStats = {
 export default function MarketplaceOrdersHub() {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
+  const PLATFORM_META = useMemo(() => buildPlatformMeta(t), [t]);
   const router = useRouter();
   const { company } = useAuthStore();
   const cid = company?.id;
@@ -68,7 +78,9 @@ export default function MarketplaceOrdersHub() {
   const [savingTracking, setSavingTracking] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!cid) return;
+    // Sem empresa não há o que buscar — mas soltar o loading é obrigatório,
+    // senão o skeleton gira pra sempre (mesmo bug corrigido nas telas irmãs).
+    if (!cid) { setLoading(false); return; }
     setLoading(true);
     try {
       const [ordersRes, statsRes] = await Promise.all([
@@ -91,7 +103,8 @@ export default function MarketplaceOrdersHub() {
     } finally { setLoading(false); }
   }, [cid, filter, platformFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  // Recarrega ao ganhar foco: agir noutra tela e voltar mostrava dado stale.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function saveTracking(orderId: string) {
     if (!cid) return;
@@ -120,21 +133,22 @@ export default function MarketplaceOrdersHub() {
 
   const pendingCount = orders.filter((o) => !o.customization_collected_at).length;
 
+  // FIX (bug #19 QA): tela montava header/loading/empty à mão em vez de usar
+  // os componentes canônicos Studio — migrado pra StudioScreen +
+  // StudioPageHeader + StudioLoading/StudioEmpty, igual ao resto do app.
   return (
-    <View style={s.wrap}>
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>VENDAS · MARKETPLACES</Text>
-          <Text style={s.title}>Pedidos do Marketplace</Text>
-          <Text style={s.sub}>
-            Pedidos do ML/Shopee precisam ter personalização coletada antes de produzir, e depois código de rastreio confirmado.
-          </Text>
-        </View>
-        <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
-          <Icon name="refresh-cw" size={14} color={t.ink2} />
-          <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
-        </Pressable>
-      </View>
+    <StudioScreen variant="reading">
+      <StudioPageHeader
+        eyebrow="VENDAS · MARKETPLACES"
+        title="Pedidos do Marketplace"
+        subtitle="Pedidos do ML/Shopee precisam ter personalização coletada antes de produzir, e depois código de rastreio confirmado."
+        rightSlot={
+          <Pressable style={s.reloadBtn} onPress={load} disabled={loading}>
+            <Icon name="refresh-cw" size={14} color={t.ink2} />
+            <Text style={s.reloadTxt}>{loading ? "Atualizando…" : "Atualizar"}</Text>
+          </Pressable>
+        }
+      />
 
       {/* S-4: KPI strip */}
       {stats && (
@@ -149,9 +163,9 @@ export default function MarketplaceOrdersHub() {
             <Text style={s.kpiLabel}>Coletados hoje</Text>
             <Text style={s.kpiValue}>{stats.collected_today}</Text>
           </View>
-          <View style={[s.kpi, stats.overdue > 0 && { borderLeftColor: "#EF4444", borderLeftWidth: 4 }]}>
+          <View style={[s.kpi, stats.overdue > 0 && { borderLeftColor: t.danger, borderLeftWidth: 4 }]}>
             <Text style={s.kpiLabel}>Atrasados (&gt;24h)</Text>
-            <Text style={[s.kpiValue, stats.overdue > 0 && { color: "#991B1B" }]}>{stats.overdue}</Text>
+            <Text style={[s.kpiValue, stats.overdue > 0 && { color: t.dangerInk }]}>{stats.overdue}</Text>
           </View>
           <View style={s.kpi}>
             <Text style={s.kpiLabel}>GMV total</Text>
@@ -167,7 +181,7 @@ export default function MarketplaceOrdersHub() {
       {stats && stats.by_platform && stats.by_platform.length > 0 && (
         <View style={s.platformSplit}>
           {stats.by_platform.map((p) => {
-            const meta = PLATFORM_META[p.platform] || { label: p.platform, bg: "#F1F5F9", fg: "#64748B" };
+            const meta = PLATFORM_META[p.platform] || { label: p.platform, bg: t.bgSoft, fg: t.ink3 };
             return (
               <View key={p.platform} style={[s.platformChip, { backgroundColor: meta.bg }]}>
                 <Text style={[s.platformChipLabel, { color: meta.fg }]}>{meta.label}</Text>
@@ -230,36 +244,26 @@ export default function MarketplaceOrdersHub() {
 
       {/* Lista */}
       {loading && orders.length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={t.primary} />
-        </View>
+        <StudioLoading variant="skeleton-list" rows={5} />
       ) : orders.length === 0 ? (
-        <View style={s.emptyCard}>
-          <View style={s.celebrateEmoji}>
-            <Text style={{ fontSize: 36 }}>📦</Text>
-          </View>
-          <Text style={s.emptyTitle}>
-            {filter === "pending" ? "Nada pendente." : "Sem pedidos."}
-          </Text>
-          <Text style={s.emptySub}>
-            {filter === "pending"
+        <StudioEmpty
+          emoji="📦"
+          tone={filter === "pending" ? "celebration" : "default"}
+          title={filter === "pending" ? "Nada pendente." : "Sem pedidos."}
+          desc={
+            filter === "pending"
               ? "Quando um pedido chegar do ML/Shopee aqui pra coletar a personalização, ele aparece nesta lista."
-              : "Pedidos com personalização já coletada vão aparecer aqui quando você tiver."}
-          </Text>
-          <View style={s.emptyCtas}>
-            <Pressable
-              onPress={() => router.push("/studio/configuracoes/marketplace" as any)}
-              style={[s.emptyBtn, { backgroundColor: t.primary }]}
-            >
-              <Icon name="settings" size={14} color="#fff" />
-              <Text style={s.emptyBtnTxt}>Configurar anúncios</Text>
-            </Pressable>
-          </View>
-        </View>
+              : "Pedidos com personalização já coletada vão aparecer aqui quando você tiver."
+          }
+          primaryCta={{
+            label: "Configurar anúncios",
+            onPress: () => router.push("/studio/configuracoes/marketplace" as any),
+          }}
+        />
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={s.list}>
+        <View style={s.list}>
           {orders.map((o) => {
-            const platform = PLATFORM_META[o.platform] || { label: o.platform, bg: "#F1F5F9", fg: "#64748B" };
+            const platform = PLATFORM_META[o.platform] || { label: o.platform, bg: t.bgSoft, fg: t.ink3 };
             const pending = !o.customization_collected_at;
             const isShipped = !!((o as any).tracking_code) || o.status === "enviado" || o.status === "entregue";
             const hours = (Date.now() - new Date(o.created_at).getTime()) / 3600000;
@@ -368,7 +372,7 @@ export default function MarketplaceOrdersHub() {
               </View>
             );
           })}
-        </ScrollView>
+        </View>
       )}
 
       <Modal
@@ -384,19 +388,13 @@ export default function MarketplaceOrdersHub() {
           />
         )}
       </Modal>
-    </View>
+    </StudioScreen>
   );
 }
 
 const buildStyles = (t: StudioPalette) => StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: t.bg },
-  header: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 28, paddingTop: 24, paddingBottom: 12, gap: 16, flexWrap: "wrap",
-  },
-  eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-  title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
-  sub: { fontSize: 13, color: t.ink3, marginTop: 4, maxWidth: 620, lineHeight: 19 },
+  // FIX (bug #19 QA): header/wrap manuais removidos — StudioScreen +
+  // StudioPageHeader agora cuidam de fundo, largura e padding da tela.
   reloadBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
@@ -404,10 +402,11 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   },
   reloadTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
 
-  // S-4 KPI strip
+  // S-4 KPI strip — sem paddingHorizontal próprio: StudioScreen já
+  // acolchoa a tela inteira (evitava indentação dobrada com o header).
   kpiStrip: {
     flexDirection: "row", gap: 10, flexWrap: "wrap",
-    paddingHorizontal: 28, paddingBottom: 8,
+    paddingBottom: 8,
   },
   kpi: {
     flex: 1, minWidth: 140,
@@ -420,7 +419,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   kpiSub: { fontSize: 11, color: t.ink3 },
 
   platformSplit: {
-    flexDirection: "row", gap: 8, paddingHorizontal: 28, paddingBottom: 12, flexWrap: "wrap",
+    flexDirection: "row", gap: 8, paddingBottom: 12, flexWrap: "wrap",
   },
   platformChip: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
@@ -429,7 +428,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   platformChipLabel: { fontSize: 12, fontWeight: "800" },
   platformChipMeta: { fontSize: 11, marginTop: 2, opacity: 0.8 },
 
-  filterRow: { paddingHorizontal: 28, paddingBottom: 12, gap: 12, flexDirection: "row", flexWrap: "wrap" },
+  filterRow: { paddingBottom: 12, gap: 12, flexDirection: "row", flexWrap: "wrap" },
   filterGroup: { gap: 6 },
   filterLabel: { fontSize: 10.5, color: t.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   tabs: { flexDirection: "row", gap: 6 },
@@ -441,7 +440,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   tabTxt: { fontSize: 12, color: t.ink2, fontWeight: "700" },
   tabTxtActive: { color: t.primary },
 
-  list: { padding: 20, gap: 12, paddingBottom: 40 },
+  list: { gap: 12, paddingBottom: 40 },
   card: {
     backgroundColor: t.paperCardElev,
     borderRadius: 14, padding: 14, gap: 6,
@@ -452,7 +451,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   platformBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   platformBadgeTxt: { fontSize: 11, fontWeight: "800" },
   ageBadge: { fontSize: 11, color: t.ink3, fontWeight: "700" },
-  ageBadgeWarn: { color: "#991B1B" },
+  ageBadgeWarn: { color: t.dangerInk },
 
   cardOrderId: { fontSize: 11, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
   cardCustomer: { fontSize: 14, color: t.ink, fontWeight: "800" },
@@ -467,19 +466,19 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
 
   collectedBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#D1FAE5",
+    backgroundColor: t.successSoft,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
     alignSelf: "flex-start", marginTop: 6,
   },
-  collectedTxt: { fontSize: 10.5, color: "#065F46", fontWeight: "700" },
+  collectedTxt: { fontSize: 10.5, color: t.successInk, fontWeight: "700" },
 
   shippedBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: t.infoSoft,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
     alignSelf: "flex-start", marginTop: 6,
   },
-  shippedTxt: { fontSize: 10.5, color: "#1E40AF", fontWeight: "700" },
+  shippedTxt: { fontSize: 10.5, color: t.infoInk, fontWeight: "700" },
 
   trackingArea: {
     borderTopWidth: 1, borderTopColor: t.ink5,
@@ -510,23 +509,4 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     backgroundColor: t.bgSoft,
   },
 
-  emptyCard: {
-    flex: 1, alignItems: "center", justifyContent: "center",
-    padding: 40, gap: 10, margin: 28,
-    backgroundColor: t.paperCard, borderRadius: 18,
-    borderWidth: 1, borderColor: t.ink5,
-  },
-  celebrateEmoji: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: t.mintSoft,
-    alignItems: "center", justifyContent: "center",
-  },
-  emptyTitle: { fontSize: 18, fontWeight: "800", color: t.ink, marginTop: 6 },
-  emptySub: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 460, lineHeight: 19 },
-  emptyCtas: { flexDirection: "row", gap: 10, marginTop: 16 },
-  emptyBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
-  },
-  emptyBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
 });

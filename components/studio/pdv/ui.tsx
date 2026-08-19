@@ -2,8 +2,10 @@
 // AURA STUDIO · PDV — componentes atômicos (Fase 6)
 // Theme-aware via useStudioTokens. Espelham o mockup aprovado.
 // ============================================================
-import { View, Text, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, Image, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
+import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+import type { StudioProduct } from "./types";
 import { Ic } from "./icons";
 
 const money = (n: number) =>
@@ -128,7 +130,7 @@ export function SumRow({
 }
 
 // ─── Station pill (hero) ────────────────────────────────────
-export function StationPill({ label }: { label: string }) {
+export function StationPill({ t, label }: { t: StudioPalette; label: string }) {
   return (
     <View
       style={{
@@ -137,8 +139,59 @@ export function StationPill({ label }: { label: string }) {
         borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, marginTop: 10,
       }}
     >
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#34D399" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.success }} />
       <Text style={{ fontSize: 12, color: "#fff", fontWeight: "700" }}>{label}</Text>
+    </View>
+  );
+}
+
+// ─── Thumb de linha (card de produto / carrinho / checkout) ─────────
+// Fonte única do "o que mostrar no lugar da foto": card, carrinho e
+// checkout divergiam (um mostrava preview genérico, outro só a inicial)
+// porque cada um reimplementava a própria lógica.
+//
+// `prefer` existe porque as duas telas querem coisas diferentes:
+//   - "photo" (catálogo): a lojista está PROCURANDO o produto, e a foto
+//     real é o que identifica.
+//   - "customization" (carrinho/checkout): o produto já foi escolhido; o
+//     que importa conferir com o cliente é a ARTE daquela linha — mostrar
+//     a foto genérica aqui esconde justamente o que foi personalizado.
+// Fallback final nos dois casos: inicial do nome.
+export function LineThumb({
+  t, product, values, size, radius, prefer = "photo",
+}: {
+  t: StudioPalette;
+  product: StudioProduct;
+  values?: Record<string, any>;
+  size: number;
+  radius?: number;
+  prefer?: "photo" | "customization";
+}) {
+  const r = radius ?? (size >= 80 ? 12 : 10);
+  if (prefer === "customization" && product.is_personalizable && product.customization_config) {
+    return (
+      <PersonalizationPreview config={product.customization_config} values={values || {}} size={size} showLabel={false} />
+    );
+  }
+  if (product.image_url) {
+    return (
+      <Image
+        source={{ uri: product.image_url }}
+        resizeMode="cover"
+        style={{ width: size, height: size, borderRadius: r, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 }}
+      />
+    );
+  }
+  if (product.is_personalizable) {
+    return (
+      <PersonalizationPreview config={product.customization_config} values={values || {}} size={size} showLabel={false} />
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ fontSize: Math.round(size * 0.33), fontWeight: "800", color: t.ink3 }}>
+        {(product.name || "?").charAt(0).toUpperCase()}
+      </Text>
     </View>
   );
 }

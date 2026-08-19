@@ -13,10 +13,9 @@
 import { useRef } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
-import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import type { StudioProduct } from "./types";
 import type { FlyRect } from "./flyToCart";
-import { PersonalizableBadge, money } from "./ui";
+import { PersonalizableBadge, LineThumb, money } from "./ui";
 import { Ic } from "./icons";
 
 export function ProductCard({
@@ -104,35 +103,9 @@ export function ProductCard({
         )}
       </View>
 
-      {/* thumb */}
+      {/* thumb — foto real → preview de personalização → inicial (LineThumb) */}
       <View style={{ alignItems: "center", paddingVertical: 4 }}>
-        {custom ? (
-          <PersonalizationPreview
-            config={p.customization_config}
-            values={{}}
-            size={92}
-            showLabel={false}
-          />
-        ) : (
-          <View
-            style={{
-              width: 92,
-              height: 92,
-              borderRadius: 12,
-              backgroundColor: t.bgSoft,
-              borderWidth: 1,
-              borderColor: t.ink5,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{ fontSize: 30, fontWeight: "800", color: t.ink3 }}
-            >
-              {(p.name || "?").charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <LineThumb t={t} product={p} size={92} />
       </View>
 
       {/* nome + meta */}
@@ -156,6 +129,31 @@ export function ProductCard({
             ? "Cód " + String(p.barcode).slice(-6)
             : p.category || "—"}
         </Text>
+        {/* estoque — tom de alerta quando zerado/negativo, senão neutro */}
+        {typeof p.stock_qty === "number" && (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              marginTop: 2,
+              paddingHorizontal: 7,
+              paddingVertical: 2,
+              borderRadius: 999,
+              backgroundColor: p.stock_qty <= 0 ? t.warningSoft : t.bgSoft,
+              borderWidth: 1,
+              borderColor: p.stock_qty <= 0 ? t.warning : t.ink5,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 9.5,
+                fontWeight: "800",
+                color: p.stock_qty < 0 ? t.danger : p.stock_qty === 0 ? t.warning : t.ink3,
+              }}
+            >
+              {p.stock_qty <= 0 ? "Sem estoque" : `Estoque ${p.stock_qty}`}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* rodapé: preço + CTAs */}

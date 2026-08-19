@@ -11,9 +11,10 @@ import { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, Platform, TextInput } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
 import { maskPhone } from "@/utils/masks";
+import { toast } from "@/components/Toast";
 import type { CartLine, PaymentEntry } from "./types";
 import { PAY_METHODS } from "./types";
-import { FInput, money } from "./ui";
+import { FInput, LineThumb, money } from "./ui";
 import { DataBR } from "./DataBR";
 import { Ic } from "./icons";
 import {
@@ -83,9 +84,7 @@ function ItemRow({
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
-      <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: l.product.is_personalizable ? t.accentSoft : t.bgSoft, borderWidth: 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 15, fontWeight: "800", color: l.product.is_personalizable ? t.accentInk : t.ink3 }}>{(l.product.name || "?").charAt(0).toUpperCase()}</Text>
-      </View>
+      <LineThumb t={t} product={l.product} values={l.values} size={40} prefer="customization" />
 
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 13, color: t.ink, fontWeight: "700" }} numberOfLines={1}>{l.product.name}</Text>
@@ -204,7 +203,7 @@ export function StageCheckout({
   sending, error, onBack, onFinalize,
   onSetQty, onSetPrice, onRemoveLine,
   discountType, setDiscountType, discountValue, setDiscountValue, manualDiscount,
-  couponInput, setCouponInput, couponApplied, couponValidating, onApplyCoupon, onClearCoupon,
+  couponInput, setCouponInput, couponApplied, couponValidating, couponError, onApplyCoupon, onClearCoupon,
   splitMode, splitPayments, onToggleSplit, onAddSplit, onUpdateSplit, onRemoveSplit, splitRemaining, splitBalanced,
   signalMode, onToggleSignal, signalValue, setSignalValue, signalMethod, setSignalMethod, signalDueDate, setSignalDueDate,
   promisedDate, setPromisedDate,
@@ -217,7 +216,7 @@ export function StageCheckout({
   sending: boolean; error: string | null; onBack: () => void; onFinalize: () => void;
   onSetQty: (lineId: string, qty: number) => void; onSetPrice: (lineId: string, price: number) => void; onRemoveLine: (lineId: string) => void;
   discountType: "%" | "R$"; setDiscountType: (x: "%" | "R$") => void; discountValue: string; setDiscountValue: (s: string) => void; manualDiscount: number;
-  couponInput: string; setCouponInput: (s: string) => void; couponApplied: { code: string; discount: number } | null; couponValidating: boolean; onApplyCoupon: () => void; onClearCoupon: () => void;
+  couponInput: string; setCouponInput: (s: string) => void; couponApplied: { code: string; discount: number } | null; couponValidating: boolean; couponError: string | null; onApplyCoupon: () => void; onClearCoupon: () => void;
   splitMode: boolean; splitPayments: PaymentEntry[]; onToggleSplit: () => void; onAddSplit: () => void; onUpdateSplit: (idx: number, patch: Partial<PaymentEntry>) => void; onRemoveSplit: (idx: number) => void; splitRemaining: number; splitBalanced: boolean;
   signalMode: boolean; onToggleSignal: () => void;
   signalValue: string; setSignalValue: (s: string) => void;
@@ -239,6 +238,13 @@ export function StageCheckout({
 
   const blockFinalize =
     sending || cart.length === 0 || (splitMode && !splitBalanced) || signalIncomplete;
+
+  // Erro de cupom tinha um só destino: o bloco de erro geral, lá embaixo do
+  // scroll, longe do campo que a lojista acabou de tocar. Toast avisa na
+  // hora; o texto inline (perto do input) fica de registro.
+  useEffect(() => {
+    if (couponError) toast.error(couponError);
+  }, [couponError]);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -439,6 +445,10 @@ export function StageCheckout({
                 <Text style={{ fontSize: 13, fontWeight: "800", color: t.primary }}>{couponValidating ? "..." : "Aplicar"}</Text>
               </Pressable>
             </View>
+          )}
+          {/* erro inline, ao lado do campo — não só lá embaixo no fim do scroll */}
+          {couponError && !couponApplied && (
+            <Text style={{ fontSize: 11.5, color: t.danger, marginTop: 8, fontWeight: "700" }}>{couponError}</Text>
           )}
         </View>
 
