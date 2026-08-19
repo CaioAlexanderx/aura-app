@@ -33,6 +33,21 @@ import type { CustomizationConfig } from "./types";
 import { T } from "./types";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
 import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
+
+// S3 — a cor escolhida no campo `color` e a cor da LOUCA no mockup 3D.
+// Sem isto o motor caia no default bege e a escolha do cliente nao
+// aparecia no preview — o oposto do que o mockup existe para mostrar.
+// Nao ha campo de cor, ou nada escolhido: devolve undefined e o motor usa
+// o proprio default, como antes.
+function corDaLouca(
+  cfg: CustomizationConfig | null | undefined,
+  values: Record<string, any>
+): string | undefined {
+  const campo = cfg?.fields?.find((f) => f.type === "color");
+  if (!campo) return undefined;
+  const v = values?.[campo.id];
+  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v.trim()) ? v.trim() : undefined;
+}
 import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
@@ -179,6 +194,10 @@ export function LivePreview({
           values={safeValues}
           size={size}
           accentColor={T.primary}
+          // S3 — a cor da louca vinha do default do motor (#F5F2EA) e
+          // ninguem a alimentava: toda caneca renderizava bege, qualquer
+          // que fosse a cor escolhida. O parametro existia desde a F4.
+          garmentColor={corDaLouca(config, safeValues)}
         />
         {pdfField && <PdfNote size={size} />}
       </View>
