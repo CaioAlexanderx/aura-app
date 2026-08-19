@@ -141,3 +141,112 @@ describe("heartPath — a curva nasce no plano XY", () => {
     expect((p[0] as any).y).toBe(Math.min(...ys));
   });
 });
+
+// ============================================================
+// S11 — cor e material do MODELO, não da escolha do cliente
+//
+// Até aqui a cor vinha toda de `garmentColor`, que é a escolha do
+// CLIENTE, e pintava corpo, alça, borda e fundo de uma vez. Isso apaga o
+// produto: a ALÇA COLORIDA é branca com alça e interior coloridos (foto
+// da lojista), a CHOPP é vidro translúcido, a IMPERIAL é dourada
+// metálica inteira, e a VINTAGE é branca com faixa ocre no topo.
+// ============================================================
+import {
+  readMugMaterials, applyCustomerColor, readMugAccessories,
+  MUG_MATERIALS_PADRAO,
+} from "@/components/studio/visualEngine/mugGeometry";
+
+describe("readMugMaterials — compatibilidade primeiro", () => {
+  it("spec sem materiais devolve a louça de antes do S11", () => {
+    expect(readMugMaterials({ model: { kind: "procedural-mug" } })).toEqual(MUG_MATERIALS_PADRAO);
+    expect(readMugMaterials(null)).toEqual(MUG_MATERIALS_PADRAO);
+  });
+
+  // Caneca de uma cor só é o caso comum; repetir a cor em dois lugares
+  // convida a divergirem no cadastro.
+  it("accent herda do body quando não é declarado", () => {
+    const m = readMugMaterials({ model: { materials: { body: { color: "#FFFFFF" } } } });
+    expect(m.accent.color).toBe("#FFFFFF");
+  });
+
+  it("cor inválida cai no padrão em vez de quebrar a cena", () => {
+    const m = readMugMaterials({ model: { materials: { body: { color: "dourado" } } } });
+    expect(m.body.color).toBe(MUG_MATERIALS_PADRAO.body.color);
+  });
+
+  it("roughness/metalness fora de 0–1 caem no padrão", () => {
+    const m = readMugMaterials({ model: { materials: { body: { roughness: 7, metalness: -1 } } } });
+    expect(m.body.roughness).toBe(MUG_MATERIALS_PADRAO.body.roughness);
+    expect(m.body.metalness).toBe(MUG_MATERIALS_PADRAO.body.metalness);
+  });
+
+  it("vidro é opacidade menor que 1 — o que liga transparência no material", () => {
+    const m = readMugMaterials({ model: { materials: { body: { opacity: 0.35 } } } });
+    expect(m.body.opacity).toBe(0.35);
+  });
+});
+
+describe("faixa no topo — a assinatura da Vintage Fosca", () => {
+  it("lê cor e altura", () => {
+    const m = readMugMaterials({
+      model: { materials: { body: { top_band: { color: "#D9A441", height: 0.22 } } } },
+    });
+    expect(m.body.topBand).toEqual({ color: "#D9A441", height: 0.22 });
+  });
+
+  it("faixa sem cor, alta demais ou negativa é ignorada", () => {
+    const alta = readMugMaterials({ model: { materials: { body: { top_band: { color: "#000", height: 0.9 } } } } });
+    const semCor = readMugMaterials({ model: { materials: { body: { top_band: { height: 0.2 } } } } });
+    expect(alta.body.topBand).toBeNull();
+    expect(semCor.body.topBand).toBeNull();
+  });
+
+  it("sem faixa declarada é null, não undefined", () => {
+    expect(readMugMaterials({ model: { materials: { body: {} } } }).body.topBand).toBeNull();
+  });
+});
+
+describe("applyCustomerColor — onde a escolha do cliente incide", () => {
+  const branca = {
+    model: { materials: { body: { color: "#FFFFFF" }, customer_color_target: "accent" } },
+  };
+
+  // Foto da lojista: corpo branco, alça e interior coloridos.
+  it("alvo accent pinta alça e interior, e NÃO o corpo", () => {
+    const m = applyCustomerColor(readMugMaterials(branca), "#E11D48");
+    expect(m.accent.color).toBe("#E11D48");
+    expect(m.interior.color).toBe("#E11D48");
+    expect(m.body.color).toBe("#FFFFFF");
+  });
+
+  it("alvo body pinta o corpo e deixa a alça", () => {
+    const spec = { model: { materials: { body: { color: "#FFF" }, accent: { color: "#000" }, customer_color_target: "body" } } };
+    const m = applyCustomerColor(readMugMaterials(spec), "#E11D48");
+    expect(m.body.color).toBe("#E11D48");
+    expect(m.accent.color).toBe("#000");
+  });
+
+  // Modelo de cor fixa — Imperial dourada, Alça de coração Preta.
+  it("alvo none ignora a escolha", () => {
+    const spec = { model: { materials: { body: { color: "#D4AF37" }, customer_color_target: "none" } } };
+    const m = applyCustomerColor(readMugMaterials(spec), "#E11D48");
+    expect(m.body.color).toBe("#D4AF37");
+    expect(m.accent.color).toBe("#D4AF37");
+  });
+
+  it("sem escolha, ou escolha inválida, o modelo fica como cadastrado", () => {
+    const base = readMugMaterials(branca);
+    expect(applyCustomerColor(base, null).accent.color).toBe("#FFFFFF");
+    expect(applyCustomerColor(base, "azul").accent.color).toBe("#FFFFFF");
+  });
+});
+
+describe("acessórios", () => {
+  it("colher e pires só existem quando declarados", () => {
+    expect(readMugAccessories({ model: { accessories: { spoon: true } } }))
+      .toEqual({ spoon: true, saucer: false });
+    expect(readMugAccessories({ model: { accessories: { saucer: true } } }))
+      .toEqual({ spoon: false, saucer: true });
+    expect(readMugAccessories({})).toEqual({ spoon: false, saucer: false });
+  });
+});
