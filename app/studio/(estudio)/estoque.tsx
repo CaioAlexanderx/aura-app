@@ -57,6 +57,8 @@ import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { ProductQualityScore, calculateProductScore } from "@/components/studio/ProductQualityScore";
 import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
+import { isCanonicalConfig } from "@/components/studio/customizationConfig";
+import type { CustomizationConfig } from "@/services/studioApi";
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
 import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
@@ -631,11 +633,16 @@ function ProductExpanded({
     return "empty";
   }, [product.name, product.price, product.description, product.image_url]);
 
+  // 19/08/2026: lia `cfg.zones`, chave que nenhum editor jamais gravou —
+  // todo produto personalizável aparecia como "Incompleto", inclusive os
+  // bem configurados. O que existe de verdade é `fields`, e o chip agora
+  // diz o que a lojista precisa saber: se a config já está canônica
+  // (ids estáveis, config por tipo) ou se ainda é a forma antiga.
   const personalizacaoStatus: SectionStatus = useMemo(() => {
     if (!product.is_personalizable) return "empty";
-    const cfg = product.customization_config;
-    const hasZones = Array.isArray(cfg?.zones) && cfg.zones.length > 0;
-    return hasZones ? "ok" : "partial";
+    const cfg = product.customization_config as CustomizationConfig | null | undefined;
+    if (!Array.isArray(cfg?.fields) || cfg.fields.length === 0) return "empty";
+    return isCanonicalConfig(cfg) ? "ok" : "partial";
   }, [product.is_personalizable, product.customization_config]);
 
   const templatesStatus: SectionStatus = useMemo(() => {

@@ -84,6 +84,7 @@ import type {
   DeliveryType, ShippingQuote,
 } from "./types";
 import { normalizePlate, maskPlate } from "./courierPlate";
+import { isArtSourceType } from "@/components/studio/customizationConfig";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
@@ -138,7 +139,11 @@ function effectiveBackSelected(
 // ESPELHO OBRIGATORIO de validateCustomizationValues em
 // src/routes/studioStorefront.js (aura-backend). Se um lado mudar sem o
 // outro, o item entra no carrinho e o pedido leva 400 no fechamento.
-const ART_SOURCE_TYPES = new Set(["image", "template"]);
+//
+// 19/08/2026: a lista de tipos do grupo saiu daqui e passou a vir de
+// components/studio/customizationConfig.ts, que e o modulo que decide a
+// forma do config. Eram tres copias da mesma regra (aqui, no editor e
+// no backend); agora sao duas, e a que sobra e a de outro repositorio.
 
 function isFilled(v: any): boolean {
   return !(v == null || (typeof v === "string" && !v.trim()));
@@ -172,7 +177,7 @@ export function validateRequiredFields(
 
   for (const side of ["front", "back"] as const) {
     const grupo = aplicaveis.filter(
-      (f) => ART_SOURCE_TYPES.has(f.type) && fieldSideOf(f) === side
+      (f) => isArtSourceType(f.type) && fieldSideOf(f) === side
     );
     if (!grupo.some((f) => f.required)) continue;
     if (arteContratada) continue;
@@ -183,7 +188,7 @@ export function validateRequiredFields(
 
   for (const f of aplicaveis) {
     if (!f.required) continue;
-    if (ART_SOURCE_TYPES.has(f.type)) continue; // ja coberto pelo grupo
+    if (isArtSourceType(f.type)) continue; // ja coberto pelo grupo
     if (!isFilled(values[f.id])) return `Preencha "${f.label}"`;
   }
   return null;
