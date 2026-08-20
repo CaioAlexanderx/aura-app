@@ -28,7 +28,6 @@ import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator,
   TouchableOpacity,
   StyleSheet,
   ViewStyle,
@@ -41,6 +40,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, ShojiPalette, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { PixQRCode } from "@/components/karate/PixQRCode";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { karatePublicApi, PixPublicData } from "@/services/karatePublicApi";
 
 const C = KarateColors;
@@ -83,8 +83,27 @@ export default function PixPublicScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.wrap}>
       {loading ? (
-        <View style={{ paddingVertical: 60 }}>
-          <ActivityIndicator color={C.primary} />
+        <View style={styles.card}>
+          <View style={styles.redBar} />
+          <View style={styles.head}>
+            <Skeleton width={120} height={11} style={{ marginBottom: 6 }} />
+            <Skeleton width={160} height={13} style={{ marginBottom: 10 }} />
+            <Skeleton width={140} height={34} radius={KarateRadius.sm} />
+          </View>
+          <View style={styles.qrWrap}>
+            <Skeleton width={220} height={220} radius={KarateRadius.md} />
+          </View>
+          <View style={{ width: "100%", paddingHorizontal: 24, marginTop: 10 }}>
+            <Skeleton width={120} height={11} style={{ marginBottom: 8 }} />
+            <Skeleton width="100%" height={58} radius={KarateRadius.sm} />
+          </View>
+          <View style={{ alignSelf: "stretch", marginHorizontal: 24, marginTop: 16 }}>
+            <Skeleton width="100%" height={44} radius={KarateRadius.md} />
+          </View>
+          <View style={{ width: "100%", paddingHorizontal: 24, marginTop: 14, alignItems: "center", gap: 6 }}>
+            <Skeleton width="90%" height={11} />
+            <Skeleton width="70%" height={11} />
+          </View>
         </View>
       ) : notFound || !data ? (
         <View style={styles.card}>

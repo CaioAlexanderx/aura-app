@@ -26,7 +26,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -36,6 +36,7 @@ import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiAnnuity, SenseiAnnuityResponse } from "@/services/karateApi";
 import { copyToClipboard } from "@/utils/clipboard";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -121,8 +122,23 @@ function FpktAnnuityCard() {
       </View>
 
       {loading && (
-        <View style={styles.stateBox}>
-          <ActivityIndicator size="large" color={KarateColors.primary} />
+        <View style={{ gap: 12, marginTop: 4 }}>
+          {/* status card */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border }}>
+            <Skeleton width={40} height={40} radius={KarateRadius.pill} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <Skeleton width="70%" height={15} />
+              <Skeleton width="45%" height={12} />
+            </View>
+            <Skeleton width={70} height={20} />
+          </View>
+          {/* sub card */}
+          <View style={{ gap: 10, padding: 14, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border }}>
+            <Skeleton width={110} height={14} />
+            <Skeleton width="100%" height={12} />
+            <Skeleton width="80%" height={12} />
+            <Skeleton width="100%" height={44} radius={KarateRadius.md} style={{ marginTop: 4 }} />
+          </View>
         </View>
       )}
 

@@ -58,6 +58,7 @@ import { AptosList } from "@/components/karate/dojoFederativo/AptosList";
 import { PedidosList } from "@/components/karate/dojoFederativo/PedidosList";
 import { ResultadoLoteCard } from "@/components/karate/dojoFederativo/ResultadoLoteCard";
 import { mapDojoFederativoError } from "@/components/karate/dojoFederativo/helpers";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 // Card fixo no topo — distingue o certificado OFICIAL (esta tela) do
 // certificado do PRÓPRIO DOJÔ (emitido dentro do evento/exame). Mesmo em
@@ -247,7 +248,24 @@ export default function DojoCertificadosScreen() {
       )}
 
       {aptosLoading ? (
-        <View style={st.emptyCard}><ActivityIndicator color={KarateColors.primary} /></View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          {[0, 1, 2, 3].map((c) => (
+            <View
+              key={c}
+              style={{ flexBasis: 280, flexGrow: 1, maxWidth: 380, backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Skeleton width={20} height={20} radius={5} />
+                <View style={{ flex: 1, gap: 5 }}>
+                  <Skeleton width="70%" height={13} />
+                  <Skeleton width="45%" height={12} />
+                </View>
+              </View>
+              <Skeleton width="80%" height={11} />
+              <Skeleton width="60%" height={11} />
+            </View>
+          ))}
+        </View>
       ) : aptosError ? (
         <View style={st.emptyCard}>
           <Icon name="alert_circle" size={28} color={KarateColors.ink3} />

@@ -80,6 +80,7 @@ import { GraduacaoAlunoRow, GraduacaoRowState, emptyGraduacaoRow } from "@/compo
 import { quesitoDisplay, mapCertificateReason, mapBeltHistorySkipReason, mapGraduacaoError, fmtDataCurta } from "@/components/karate/dojoGraduacao/helpers";
 import { DojoExamCertificatesManager } from "@/components/karate/DojoExamCertificatesManager";
 import { useDojoSectionLabel } from "@/components/karate/DojoShell";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 const STATUS_VIEW: Record<string, { label: string; badge: "neutral" | "ok" | "danger" }> = {
   draft: { label: "Rascunho", badge: "neutral" },
@@ -370,7 +371,21 @@ export default function ExameGraduacaoScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}><ActivityIndicator size="large" color={P.red} /></View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.wrap}>
+        <Skeleton width={120} height={14} style={{ marginBottom: 16 }} />
+        {/* page head */}
+        <View style={{ gap: 8, marginBottom: 20 }}>
+          <Skeleton width={100} height={11} />
+          <Skeleton width="70%" height={26} />
+          <Skeleton width="55%" height={13} />
+        </View>
+        {/* note block */}
+        <Skeleton width="100%" height={60} radius={R.md} style={{ marginBottom: 16 }} />
+        {/* list rows */}
+        {[1, 2, 3, 4].map((k) => (
+          <Skeleton key={k} width="100%" height={64} radius={R.md} style={{ marginBottom: 12 }} />
+        ))}
+      </ScrollView>
     );
   }
   if (error || !exam) {

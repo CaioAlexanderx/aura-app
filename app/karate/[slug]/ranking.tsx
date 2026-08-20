@@ -9,13 +9,14 @@
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity,
+  View, Text, ScrollView, Image, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { karateCompetitionsApi, RankingRow, PublicSeasons } from "@/services/karateCompetitionsApi";
 
 const medalColor = ["#b8463a", "#9b9180", "#7a4e30"]; // ouro(vermelhão)/prata/bronze — Shoji
@@ -119,9 +120,17 @@ export default function PublicRankingScreen() {
 
         {/* Tabela */}
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={KarateColors.primary} />
-            <Text style={styles.loadingTxt}>Carregando ranking…</Text>
+          <View style={styles.table}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <View key={i} style={[styles.tr, i === 0 && styles.trTop]}>
+                <Skeleton width={30} height={30} radius={KarateRadius.pill} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Skeleton width="60%" height={14} />
+                  <Skeleton width="40%" height={11} />
+                </View>
+                <Skeleton width={34} height={22} />
+              </View>
+            ))}
           </View>
         ) : rows.length === 0 ? (
           <View style={styles.emptyBox}>

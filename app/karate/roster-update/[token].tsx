@@ -88,6 +88,7 @@ import {
   RequestPrefill,
 } from "@/components/karate/PractitionerRequestForm";
 import { confirmAlert } from "@/utils/webAlert";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -1543,7 +1544,24 @@ export default function RosterUpdatePortalScreen() {
   if (isLoading) {
     return (
       <View style={st.page}>
-        <View style={st.loaderBox}><ActivityIndicator color={P.primary} size="large" /></View>
+        <ScrollView contentContainerStyle={st.content}>
+          {/* header */}
+          <View style={[st.header, { alignItems: "center" }]}>
+            <Skeleton width={120} height={12} style={{ marginBottom: 10 }} />
+            <Skeleton width={200} height={26} style={{ marginBottom: 12 }} />
+            <Skeleton width="80%" height={13} />
+          </View>
+          {/* counts */}
+          <View style={{ alignItems: "center", marginBottom: 18 }}>
+            <Skeleton width={180} height={14} />
+          </View>
+          {/* progress bar */}
+          <Skeleton width="100%" height={10} radius={KarateRadius.pill} style={{ marginBottom: 20 }} />
+          {/* quick exits / cards */}
+          {[1, 2, 3].map((k) => (
+            <Skeleton key={k} width="100%" height={92} radius={KarateRadius.lg} style={{ marginBottom: 14 }} />
+          ))}
+        </ScrollView>
       </View>
     );
   }

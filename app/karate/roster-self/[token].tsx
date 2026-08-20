@@ -64,6 +64,7 @@ import {
 } from "@/services/karatePublicApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { maskCpf, maskPhone } from "@/utils/masks";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -447,10 +448,18 @@ export default function RosterSelfServiceScreen() {
 
         {step === "loadingRecord" && (
           <View style={st.card}>
-            <View style={{ alignItems: "center", paddingVertical: 8 }}>
-              <ActivityIndicator size="small" color={P.ink3} />
-              <Text style={[st.hint, { marginTop: 10, textAlign: "center" }]}>Carregando sua ficha...</Text>
-            </View>
+            <Skeleton width={110} height={16} style={{ marginBottom: 10 }} />
+            <Skeleton width="90%" height={13} style={{ marginBottom: 16 }} />
+            {/* readonly block */}
+            <Skeleton width="100%" height={72} radius={KarateRadius.md} style={{ marginBottom: 18 }} />
+            {/* section + inputs */}
+            <Skeleton width={90} height={13} style={{ marginBottom: 10 }} />
+            {[1, 2, 3].map((k) => (
+              <View key={k} style={{ marginBottom: 12 }}>
+                <Skeleton width={120} height={12} style={{ marginBottom: 6 }} />
+                <Skeleton width="100%" height={44} radius={KarateRadius.md} />
+              </View>
+            ))}
           </View>
         )}
 
