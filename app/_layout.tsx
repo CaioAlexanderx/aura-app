@@ -95,6 +95,7 @@ function AuthGuard() {
         segments[2] === "praticante" ||         // portal do praticante (OTP)
         segments[2] === "p" ||                  // perfil público reduzido
         segments[2] === "inscricao" ||          // inscrição pública
+        segments[2] === "campeonato" ||         // campeonato público (conferência + chaves)
         segments[2] === "ranking" ||              // ranking embed
         segments[2] === "consulta" ||          // consulta publica de praticante
         segments[2] === "meus-certificados" || // participante: meus certificados
@@ -163,6 +164,7 @@ function AuthGuard() {
       segments[2] === "praticante" ||
       segments[2] === "p" ||
       segments[2] === "inscricao" ||
+      segments[2] === "campeonato" ||
       segments[2] === "ranking" ||
       segments[2] === "consulta" ||
       segments[2] === "meus-certificados" ||
