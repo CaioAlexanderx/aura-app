@@ -39,18 +39,18 @@ export interface DojoBirthdayStudent {
   day: number;
 }
 
-/** Candidato a exame por ENGAJAMENTO (presenças nos últimos 90 dias). */
-export interface DojoExamCandidateStudent {
+/** Linha do ranking de assiduidade do MÊS (presenças no mês corrente). */
+export interface DojoRankingStudent {
   id: string;
   full_name: string;
   belt_label: string | null;
-  presences_90d: number;
+  presences_month: number;
 }
 
 export interface DojoDashboard {
   evasao: { count: number; students: DojoEvasaoStudent[] };
   birthdays: { count: number; students: DojoBirthdayStudent[] };
-  exam_candidates: { count: number; students: DojoExamCandidateStudent[] };
+  attendance_ranking: { count: number; students: DojoRankingStudent[] };
   /** true = migração de presença ainda não aplicada → tratar como listas vazias. */
   schema_pending: boolean;
 }
@@ -71,7 +71,7 @@ export function normalizeDojoDashboard(raw: any): DojoDashboard {
   return {
     evasao: block<DojoEvasaoStudent>(d.evasao),
     birthdays: block<DojoBirthdayStudent>(d.birthdays),
-    exam_candidates: block<DojoExamCandidateStudent>(d.exam_candidates),
+    attendance_ranking: block<DojoRankingStudent>(d.attendance_ranking),
     schema_pending: d.schema_pending === true,
   };
 }
