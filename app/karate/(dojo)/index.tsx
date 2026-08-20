@@ -228,10 +228,10 @@ export default function DojoPainel() {
   // Onda 4 — ferramentas do sensei: listas curtas (até 5) dos 3 blocos.
   const evasao = dashboard?.evasao ?? null;
   const birthdays = dashboard?.birthdays ?? null;
-  const examCandidates = dashboard?.exam_candidates ?? null;
+  const ranking = dashboard?.attendance_ranking ?? null;
   const evasaoList = (evasao?.students ?? []).slice(0, 5);
   const birthdaysList = (birthdays?.students ?? []).slice(0, 5);
-  const examList = (examCandidates?.students ?? []).slice(0, 5);
+  const rankingList = (ranking?.students ?? []).slice(0, 5);
 
   const go = (route: string) => router.push(route as any);
 
@@ -365,6 +365,9 @@ export default function DojoPainel() {
                       </View>
                     );
                   })}
+                  {evasao.count > evasaoList.length && (
+                    <Text style={styles.cardMore}>+{evasao.count - evasaoList.length} mais</Text>
+                  )}
                 </View>
               ) : (
                 <Text style={styles.cardEmpty}>Ninguém em evasão — ótimo!</Text>
@@ -397,6 +400,9 @@ export default function DojoPainel() {
                       <Text style={styles.reqStatus}>dia {s.day}</Text>
                     </View>
                   ))}
+                  {birthdays.count > birthdaysList.length && (
+                    <Text style={styles.cardMore}>+{birthdays.count - birthdaysList.length} mais</Text>
+                  )}
                 </View>
               ) : (
                 <Text style={styles.cardEmpty}>Nenhum aniversariante este mês.</Text>
@@ -404,34 +410,36 @@ export default function DojoPainel() {
             </View>
           )}
 
-          {/* ── Card: Candidatos a exame (Onda 4) — por engajamento, não elegibilidade ── */}
-          {examCandidates !== null && (
+          {/* ── Card: Ranking de assiduidade mensal (Onda 4) ── */}
+          {ranking !== null && (
             <View style={styles.card}>
               <View style={styles.cardHead}>
                 <Icon name="trophy" size={16} color={KarateColors.primary} />
-                <Text style={styles.cardTitle}>Candidatos a exame</Text>
+                <Text style={styles.cardTitle}>Ranking de assiduidade mensal</Text>
               </View>
               <View style={styles.bigRow}>
-                <Text style={styles.bigNum}>{examCandidates.count}</Text>
-                <Text style={styles.bigSub}>com bom engajamento</Text>
+                <Text style={styles.bigNum}>{ranking.count}</Text>
+                <Text style={styles.bigSub}>treinaram este mês</Text>
               </View>
-              {examList.length > 0 ? (
+              {rankingList.length > 0 ? (
                 <View style={{ gap: 6, marginTop: 4 }}>
-                  {examList.map((s) => (
+                  {rankingList.map((s, i) => (
                     <View key={s.id} style={styles.reqRow}>
                       <Text style={styles.reqNome} numberOfLines={1}>
-                        {s.full_name}{s.belt_label ? ` · ${s.belt_label}` : ""}
+                        {i + 1}º  {s.full_name}{s.belt_label ? ` · ${s.belt_label}` : ""}
                       </Text>
-                      <Text style={styles.reqStatus}>{s.presences_90d} pres. 90d</Text>
+                      <Text style={styles.reqStatus}>
+                        {s.presences_month} presença{s.presences_month === 1 ? "" : "s"}
+                      </Text>
                     </View>
                   ))}
+                  {ranking.count > rankingList.length && (
+                    <Text style={styles.cardMore}>+{ranking.count - rankingList.length} mais</Text>
+                  )}
                 </View>
               ) : (
-                <Text style={styles.cardEmpty}>Nenhum candidato em destaque agora.</Text>
+                <Text style={styles.cardEmpty}>Ninguém treinou este mês ainda.</Text>
               )}
-              <Text style={styles.cardNote}>
-                Sugestão por engajamento (presença nos últimos 90 dias), não elegibilidade formal para banca.
-              </Text>
             </View>
           )}
 
@@ -547,6 +555,7 @@ const styles = StyleSheet.create({
   cardBody: { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
   cardEmpty: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   cardNote: { fontSize: 11, color: KarateColors.ink3, lineHeight: 15, marginTop: 2, fontStyle: "italic" } as TextStyle,
+  cardMore: { fontSize: 11, fontWeight: "600", color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   cardErr: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
   cardErrLink: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
