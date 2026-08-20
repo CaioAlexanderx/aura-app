@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   head: { paddingHorizontal: 16, paddingTop: 16 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   tabs: { flexDirection: "row", gap: 6, marginTop: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border, flexWrap: "wrap" } as ViewStyle,
   tab: { paddingVertical: 9, paddingHorizontal: 14, borderTopLeftRadius: KarateRadius.sm, borderTopRightRadius: KarateRadius.sm, borderBottomWidth: 2, borderBottomColor: "transparent" } as ViewStyle,
   tabOn: { borderBottomColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
@@ -110,6 +110,6 @@ const styles = StyleSheet.create({
   tabTxt: { fontSize: 13, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   tabTxtOn: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
   badge: { backgroundColor: KarateColors.primary, borderRadius: 999, minWidth: 17, height: 17, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  badgeTxt: { fontSize: 10, fontWeight: "800", color: "#fdf8f2" } as TextStyle,
+  badgeTxt: { fontSize: 10, fontWeight: "600", color: "#fdf8f2" } as TextStyle,
   body: { flex: 1 } as ViewStyle,
 });

@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
 
@@ -426,21 +426,21 @@ const styles = StyleSheet.create({
     gap: 10,
   } as ViewStyle,
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
-  cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  cardTitle: { fontSize: 14, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   cardBody: { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
   cardEmpty: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   cardErr: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
   cardErrLink: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
   bigRow: { flexDirection: "row", alignItems: "baseline", gap: 8 } as ViewStyle,
-  bigNum: { fontSize: 28, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
+  bigNum: { fontSize: 28, fontWeight: "400", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   bigSub: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
 
   pyRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   pyLabel: { width: 84, fontSize: 11.5, color: KarateColors.ink2 } as TextStyle,
   pyTrack: { flex: 1, height: 12, borderRadius: 6, backgroundColor: KarateColors.bg2, overflow: "hidden" } as ViewStyle,
   pyBar: { height: 12, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)" } as ViewStyle,
-  pyNum: { width: 24, textAlign: "right", fontSize: 11.5, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
+  pyNum: { width: 24, textAlign: "right", fontSize: 11.5, fontWeight: "400", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
   annuityBox: {
     flexDirection: "row",
@@ -450,9 +450,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   } as ViewStyle,
-  annuityT: { fontSize: 13, fontWeight: "800" } as TextStyle,
+  annuityT: { fontSize: 13, fontWeight: "600" } as TextStyle,
   annuitySub: { fontSize: 11.5, color: KarateColors.ink2, marginTop: 2 } as TextStyle,
-  annuityValor: { fontSize: 15, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
+  annuityValor: { fontSize: 15, fontWeight: "400", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
   reqRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
   reqNome: { flex: 1, fontSize: 12.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,

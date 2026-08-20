@@ -54,6 +54,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
 });

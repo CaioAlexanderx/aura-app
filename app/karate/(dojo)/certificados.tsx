@@ -75,7 +75,7 @@ function DoisDocumentosCard({ onGoEventos }: { onGoEventos: () => void }) {
           <Text style={st.docsTitle}>Certificado oficial · Federação FPKT</Text>
           <Text style={st.docsBody}>
             É o que esta página acompanha: o dojô faz o exame de kyu, e os aprovados entram na fila abaixo para
-            o pedido do certificado <Text style={{ fontWeight: "800" }}>homologado pela federação</Text>.
+            o pedido do certificado <Text style={{ fontWeight: "600" }}>homologado pela federação</Text>.
           </Text>
         </View>
       </View>
@@ -87,7 +87,7 @@ function DoisDocumentosCard({ onGoEventos }: { onGoEventos: () => void }) {
         <View style={{ flex: 1 }}>
           <Text style={st.docsTitle}>Certificado do próprio dojô · não oficial</Text>
           <Text style={st.docsBody}>
-            O documento que você desenha e entrega na hora ao aluno agora se emite <Text style={{ fontWeight: "800" }}>dentro do exame de kyu</Text>,
+            O documento que você desenha e entrega na hora ao aluno agora se emite <Text style={{ fontWeight: "600" }}>dentro do exame de kyu</Text>,
             em "Meus eventos" — com editor de modelo e impressão em massa. Não substitui o certificado oficial acima.
           </Text>
           <TouchableOpacity style={st.docsLinkBtn} onPress={onGoEventos} accessibilityRole="button" accessibilityLabel="Ir para Meus eventos">
@@ -320,19 +320,19 @@ const st = StyleSheet.create({
 
   head: { marginBottom: 14 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
 
   docsCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, marginBottom: 18, gap: 12 } as ViewStyle,
   docsRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" } as ViewStyle,
   docsGlyph: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  docsTitle: { fontSize: 13, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  docsTitle: { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   docsBody: { fontSize: 12, color: KarateColors.ink3, marginTop: 3, lineHeight: 17 } as TextStyle,
   docsDivider: { height: 1, backgroundColor: KarateColors.border } as ViewStyle,
   docsLinkBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, alignSelf: "flex-start" } as ViewStyle,
   docsLinkTxt: { fontSize: 12.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
 
   sectionHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14, gap: 10 } as ViewStyle,
-  h2: { fontSize: 16, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  h2: { fontSize: 16, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   sh: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
 
   emptyCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, alignItems: "center", paddingVertical: 32, paddingHorizontal: 24, gap: 8, marginBottom: 12 } as ViewStyle,
