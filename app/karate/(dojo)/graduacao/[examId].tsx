@@ -579,7 +579,7 @@ export default function ExameGraduacaoScreen() {
                         <Text style={styles.resultBeltLine}>
                           {r.from_belt?.label || "Faixa anterior desconhecida"}
                           {"  →  "}
-                          <Text style={{ fontWeight: "800", color: P.ink }}>{r.to_belt?.label || r.to_belt_name || "—"}</Text>
+                          <Text style={{ fontWeight: "600", color: P.ink }}>{r.to_belt?.label || r.to_belt_name || "—"}</Text>
                         </Text>
                       </View>
                       <ShojiBadge status={r.result === "approved" ? "ok" : "danger"} label={r.result === "approved" ? "Aprovado" : "Reprovado"} />
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
 
   resultCard: { backgroundColor: P.glassHi, borderWidth: 1, borderColor: P.line2, borderRadius: R.lg, padding: 14, gap: 10 } as ViewStyle,
   resultHead: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } as ViewStyle,
-  resultName: { fontFamily: F.body, fontSize: 14.5, fontWeight: "800", color: P.ink } as TextStyle,
+  resultName: { fontFamily: F.body, fontSize: 14.5, fontWeight: "600", color: P.ink } as TextStyle,
   resultBeltLine: { fontFamily: F.body, fontSize: 12, color: C.ink2, marginTop: 3 } as TextStyle,
 
   quesitosSummary: { flexDirection: "row", flexWrap: "wrap", gap: 14 } as ViewStyle,

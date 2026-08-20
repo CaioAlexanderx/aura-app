@@ -56,7 +56,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateFonts, KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import {
@@ -492,13 +492,13 @@ const styles = StyleSheet.create({
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24, backgroundColor: KarateColors.bg } as ViewStyle,
 
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 480 } as TextStyle,
 
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 10 } as ViewStyle,
   heroRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 } as ViewStyle,
   heroIco: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#fff", borderWidth: 1, borderColor: KarateColors.primary, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  cardTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  cardTitle: { fontSize: 15, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12.5, color: KarateColors.ink3, marginTop: 3, lineHeight: 18 } as TextStyle,
 
   benefitRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 } as ViewStyle,

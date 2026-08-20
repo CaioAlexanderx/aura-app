@@ -51,7 +51,7 @@ import {
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateFonts, KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { FormField } from "@/components/karate/FormField";
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
-  title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
+  title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
   stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center" } as TextStyle,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   retryTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   cardHeadRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
-  cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  cardTitle: { fontSize: 14, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
   editBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft } as ViewStyle,
   editBtnTxt: { fontSize: 12.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
