@@ -8,7 +8,10 @@
 //
 // Regras invioláveis: papel opaco (nunca glass iOS) · vermelho cerimonial
 // · Shippori Mincho leve (nunca bold pesado) · sem emoji (só o selo 空)
-// · status SEMPRE icon+texto, nunca cor isolada (WCAG 1.4.1).
+// · status SEMPRE icon+texto, nunca cor isolada (WCAG 1.4.1)
+// · LIGHT-ONLY por decisão: a metáfora é papel de arroz opaco — não há dark
+//   mode e a vertical ignora prefers-color-scheme de propósito (sem
+//   useColorScheme). Se um dia houver dark, é redesenho, não inversão.
 //
 // Compatibilidade: mantém todos os nomes de export anteriores (valores
 // atualizados pro canônico); novos tokens (heading, type, shadows,

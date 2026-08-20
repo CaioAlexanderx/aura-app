@@ -35,7 +35,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import {
+import { KarateFonts,
   KarateColors, KarateRadius, KarateBelts, BeltKey, resolveBeltKey,
   beltRank, annuityStatusView,
 } from "@/constants/karateTheme";
@@ -419,14 +419,14 @@ const styles = StyleSheet.create({
   cardErrLink: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
   bigRow: { flexDirection: "row", alignItems: "baseline", gap: 8 } as ViewStyle,
-  bigNum: { fontSize: 28, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  bigNum: { fontSize: 28, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   bigSub: { fontSize: 12, color: KarateColors.ink3 } as TextStyle,
 
   pyRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   pyLabel: { width: 84, fontSize: 11.5, color: KarateColors.ink2 } as TextStyle,
   pyTrack: { flex: 1, height: 12, borderRadius: 6, backgroundColor: KarateColors.bg2, overflow: "hidden" } as ViewStyle,
   pyBar: { height: 12, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)" } as ViewStyle,
-  pyNum: { width: 24, textAlign: "right", fontSize: 11.5, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  pyNum: { width: 24, textAlign: "right", fontSize: 11.5, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
   annuityBox: {
     flexDirection: "row",
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   annuityT: { fontSize: 13, fontWeight: "800" } as TextStyle,
   annuitySub: { fontSize: 11.5, color: KarateColors.ink2, marginTop: 2 } as TextStyle,
-  annuityValor: { fontSize: 15, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  annuityValor: { fontSize: 15, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
   reqRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
   reqNome: { flex: 1, fontSize: 12.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,

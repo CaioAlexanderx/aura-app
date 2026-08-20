@@ -48,7 +48,7 @@
 // ============================================================
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateFonts, KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { MeusEventosTab } from "@/components/karate/dojoEventos/MeusEventosTab";
 import { EventosFederacaoTab } from "@/components/karate/dojoEventos/EventosFederacaoTab";
@@ -93,7 +93,7 @@ export default function DojoEventos() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   head: { paddingHorizontal: 16, paddingTop: 16 } as ViewStyle,
-  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   tabs: { flexDirection: "row", gap: 6, marginTop: 12, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
   tab: { paddingVertical: 9, paddingHorizontal: 14, borderTopLeftRadius: KarateRadius.sm, borderTopRightRadius: KarateRadius.sm, borderBottomWidth: 2, borderBottomColor: "transparent" } as ViewStyle,

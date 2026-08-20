@@ -31,7 +31,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius, annuityStatusView } from "@/constants/karateTheme";
+import { KarateFonts, KarateColors, KarateRadius, annuityStatusView } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiAnnuity, SenseiAnnuityResponse } from "@/services/karateApi";
@@ -264,7 +264,7 @@ export default function DojoAnuidade() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 16, gap: 16, paddingBottom: 40 } as ViewStyle,
-  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
 
@@ -295,12 +295,12 @@ const styles = StyleSheet.create({
   statusIco: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderWidth: 1, alignItems: "center", justifyContent: "center" } as ViewStyle,
   statusT: { fontSize: 15, fontWeight: "800" } as TextStyle,
   statusSub: { fontSize: 12.5, color: KarateColors.ink2, marginTop: 2 } as TextStyle,
-  valor: { fontSize: 18, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  valor: { fontSize: 18, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
   subCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 2, marginBottom: 8, lineHeight: 17 } as TextStyle,
   pixRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, padding: 12 } as ViewStyle,
-  pixLabel: { fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  pixLabel: { fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   pixVal: { fontSize: 14, color: KarateColors.ink, fontWeight: "600", marginTop: 3 } as TextStyle,
   copyBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 12 } as ViewStyle,
   copyTxt: { fontSize: 12, fontWeight: "700", color: KarateColors.primary } as TextStyle,
@@ -308,5 +308,5 @@ const styles = StyleSheet.create({
   histIco: { width: 28, height: 28, borderRadius: 14, backgroundColor: KarateColors.okSoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
   histAno: { fontSize: 13, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   histQuando: { fontSize: 11, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
-  histValor: { fontSize: 13, fontWeight: "800", color: KarateColors.ink, fontFamily: "monospace" } as TextStyle,
+  histValor: { fontSize: 13, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 });
