@@ -53,6 +53,9 @@ import { buildRosterHtml } from "@/components/karate/chaves/buildRosterHtml";
 import { buildRankingHtml, RankingRowLike } from "@/components/karate/chaves/buildRankingHtml";
 import { karateBracketsApi } from "@/services/karateBracketsApi";
 import { formatEventDateNumeric } from "@/utils/eventDate";
+import { DelegacoesTab } from "@/components/karate/competicoes/DelegacoesTab";
+import { SetupTab } from "@/components/karate/competicoes/SetupTab";
+import { karateCompetitionSetupApi, CompetitionDivision } from "@/services/karateCompetitionSetupApi";
 import { Card } from "@/components/karate/shoji";
 import { useCountUp } from "@/hooks/useCountUp";
 
@@ -100,7 +103,7 @@ const WIDE_BREAKPOINT = 820;
 
 // Seleção no rail: nível-competição ("overview"/"ranking") ou uma
 // categoria (guardamos o id da categoria).
-type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "category"; categoryId: string };
+type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "delegacoes" } | { kind: "setup" } | { kind: "category"; categoryId: string };
 // Aba local dentro do painel de uma categoria. "chaves" cobre tanto
 // Kumite ("Chaves & Resultados") quanto Kata ("Apuração Kata") — o
 // rótulo muda conforme a modalidade, mas a intenção (ver o
@@ -146,6 +149,10 @@ export default function TorneioDetalhe() {
   const [activeTab, setActiveTab] = useState<CategoryTab>("inscritos");
   const [printingRoster, setPrintingRoster] = useState(false);
 
+  // P0 Hub: divisões (migration 294) — carregadas junto do detalhe; a
+  // aba Configurar edita e recarrega via onChanged.
+  const [divisions, setDivisions] = useState<CompetitionDivision[]>([]);
+
   const load = useCallback(() => {
     if (!cid) return;
     setLoading(true);
@@ -154,6 +161,9 @@ export default function TorneioDetalhe() {
       .then(setComp)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
+    karateCompetitionSetupApi.listDivisions(federationId, cid)
+      .then(setDivisions)
+      .catch(() => setDivisions([]));
   }, [federationId, cid]);
   useEffect(() => { load(); }, [load]);
 
@@ -608,6 +618,21 @@ export default function TorneioDetalhe() {
               printing={printingRanking}
             />
           )}
+          {selection.kind === "delegacoes" && (
+            <DelegacoesTab federationId={federationId} competitionId={cid} />
+          )}
+          {selection.kind === "setup" && (
+            <SetupTab
+              federationId={federationId}
+              competitionId={cid}
+              divisions={divisions}
+              pricing={comp.pricing_config || {}}
+              rectificationDeadline={comp.rectification_deadline || null}
+              conferencePublishedAt={comp.conference_published_at || null}
+              bracketsPublishedAt={comp.brackets_published_at || null}
+              onChanged={load}
+            />
+          )}
           {selection.kind === "category" && selectedCategory && (
             <View>
               <View style={styles.catHeadRow}>
@@ -835,6 +860,20 @@ function CategoryRail({
         label="Ranking geral"
         active={isRanking}
         onPress={() => onSelect({ kind: "ranking" })}
+      />
+      <RailItem
+        isWide={isWide}
+        icon="receipt"
+        label="Delegações"
+        active={selection.kind === "delegacoes"}
+        onPress={() => onSelect({ kind: "delegacoes" })}
+      />
+      <RailItem
+        isWide={isWide}
+        icon="settings"
+        label="Configurar"
+        active={selection.kind === "setup"}
+        onPress={() => onSelect({ kind: "setup" })}
       />
       {categories.length > 0 && (isWide
         ? <Text style={styles.railSection}>Categorias · {categories.length}</Text>

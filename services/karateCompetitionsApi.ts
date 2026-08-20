@@ -49,6 +49,12 @@ export interface Category {
 
 export interface CompetitionDetail extends Competition {
   categories: Category[];
+  // P0 Hub (migration 294): precificação + ciclo operacional. Opcionais —
+  // backends anteriores ao detail estendido não os enviam.
+  pricing_config?: Record<string, any>;
+  conference_published_at?: string | null;
+  brackets_published_at?: string | null;
+  rectification_deadline?: string | null;
 }
 
 export interface CategoryFitCheck {
