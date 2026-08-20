@@ -44,6 +44,7 @@ import { useKarateDojo } from "@/contexts/KarateDojo";
 import { karateApi, SenseiPractitioner, SenseiAnnuityResponse } from "@/services/karateApi";
 import { karateDojoStudentsApi, DojoStudentsSummary } from "@/services/karateDojoStudentsApi";
 import { karateDojoBillingApi, DojoChargesSummary } from "@/services/karateDojoBillingApi";
+import { karateDojoDashboardApi, DojoDashboard } from "@/services/karateDojoDashboardApi";
 import { currentCompetence } from "@/components/karate/dojoMensalidades/helpers";
 import { karateDojoClassesApi } from "@/services/karateDojoClassesApi";
 import { todayISO, weekdayOfISO } from "@/components/karate/dojoTurmas/helpers";
@@ -61,6 +62,15 @@ function fmtDataLonga(iso: string | null | undefined): string | null {
   const mi = parseInt(mo, 10) - 1;
   if (mi < 0 || mi > 11) return String(iso);
   return `${parseInt(d, 10)} de ${MESES[mi]} de ${y}`;
+}
+
+// 'YYYY-MM-DD' → 'DD/MM/AAAA' (parse manual, tz-safe). null/inválido → null.
+function fmtDataCurta(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  return `${d}/${mo}/${y}`;
 }
 
 function fmtValor(v: number | null | undefined): string {
@@ -102,16 +112,22 @@ export default function DojoPainel() {
   // F4: presenças de hoje — calculado client-side a partir das turmas do
   // dia (sem endpoint agregado). null = falhou/indisponível — card some.
   const [presencasHoje, setPresencasHoje] = useState<{ present: number; total: number } | null>(null);
+  // Onda 4: dashboard agregado (evasão / aniversariantes / candidatos a exame).
+  // null = endpoint falhou/indisponível — os 3 cards somem (mesmo racional
+  // silencioso do F3a/F4). schema_pending vem tratado como listas vazias
+  // pela própria normalização do service.
+  const [dashboard, setDashboard] = useState<DojoDashboard | null>(null);
 
   const load = useCallback(async () => {
     if (!federationId) return;
     setLoading(true);
-    const [p, a, r, s, b] = await Promise.allSettled([
+    const [p, a, r, s, b, d] = await Promise.allSettled([
       karateApi.listSenseiPractitioners(federationId),
       karateApi.getSenseiAnnuity(federationId),
       karateApi.listPractitionerRequests(federationId),
       karateDojoStudentsApi.listStudents(federationId, { summary: true }),
       karateDojoBillingApi.listCharges(federationId, { competence: currentCompetence() }),
+      karateDojoDashboardApi.getDojoDashboard(federationId),
     ]);
     setPracs(p.status === "fulfilled" ? ((p.value as any)?.practitioners ?? []) : null);
     setAnnuity(a.status === "fulfilled" ? (a.value as SenseiAnnuityResponse) : null);
@@ -119,6 +135,7 @@ export default function DojoPainel() {
     setRequests(r.status === "fulfilled" ? normalizeRequests(r.value) : null);
     setOwnSummary(s.status === "fulfilled" ? ((s.value as any)?.summary ?? null) : null);
     setBillingSummary(b.status === "fulfilled" ? (b.value.summary ?? null) : null);
+    setDashboard(d.status === "fulfilled" ? d.value : null);
     setLoading(false);
   }, [federationId]);
 
@@ -207,6 +224,14 @@ export default function DojoPainel() {
   const recentes = [...reqs]
     .sort((a, b) => String(b?.created_at ?? "").localeCompare(String(a?.created_at ?? "")))
     .slice(0, 3);
+
+  // Onda 4 — ferramentas do sensei: listas curtas (até 5) dos 3 blocos.
+  const evasao = dashboard?.evasao ?? null;
+  const birthdays = dashboard?.birthdays ?? null;
+  const examCandidates = dashboard?.exam_candidates ?? null;
+  const evasaoList = (evasao?.students ?? []).slice(0, 5);
+  const birthdaysList = (birthdays?.students ?? []).slice(0, 5);
+  const examList = (examCandidates?.students ?? []).slice(0, 5);
 
   const go = (route: string) => router.push(route as any);
 
@@ -315,6 +340,98 @@ export default function DojoPainel() {
                 <Text style={styles.cardLinkTxt}>Ver turmas</Text>
                 <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
               </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Card: Evasão (Onda 4) — some se o dashboard falhar/indisponível ── */}
+          {evasao !== null && (
+            <View style={styles.card}>
+              <View style={styles.cardHead}>
+                <Icon name="alert_circle" size={16} color={KarateColors.primary} />
+                <Text style={styles.cardTitle}>Evasão · sem treinar há 30 dias</Text>
+              </View>
+              <View style={styles.bigRow}>
+                <Text style={styles.bigNum}>{evasao.count}</Text>
+                <Text style={styles.bigSub}>aluno{evasao.count === 1 ? "" : "s"} em risco</Text>
+              </View>
+              {evasaoList.length > 0 ? (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  {evasaoList.map((s) => {
+                    const dt = fmtDataCurta(s.last_attendance);
+                    return (
+                      <View key={s.id} style={styles.reqRow}>
+                        <Text style={styles.reqNome} numberOfLines={1}>{s.full_name}</Text>
+                        <Text style={styles.reqStatus}>{dt ? `última: ${dt}` : "nunca"}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.cardEmpty}>Ninguém em evasão — ótimo!</Text>
+              )}
+              {evasaoList.length > 0 && (
+                <TouchableOpacity style={styles.cardLinkBtn} onPress={() => go("/karate/(dojo)/alunos")} accessibilityRole="link">
+                  <Text style={styles.cardLinkTxt}>Ver alunos</Text>
+                  <Icon name="arrow-forward" size={13} color={KarateColors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* ── Card: Aniversariantes do mês (Onda 4) ── */}
+          {birthdays !== null && (
+            <View style={styles.card}>
+              <View style={styles.cardHead}>
+                <Icon name="calendar" size={16} color={KarateColors.primary} />
+                <Text style={styles.cardTitle}>Aniversariantes do mês</Text>
+              </View>
+              <View style={styles.bigRow}>
+                <Text style={styles.bigNum}>{birthdays.count}</Text>
+                <Text style={styles.bigSub}>neste mês</Text>
+              </View>
+              {birthdaysList.length > 0 ? (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  {birthdaysList.map((s) => (
+                    <View key={s.id} style={styles.reqRow}>
+                      <Text style={styles.reqNome} numberOfLines={1}>{s.full_name}</Text>
+                      <Text style={styles.reqStatus}>dia {s.day}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.cardEmpty}>Nenhum aniversariante este mês.</Text>
+              )}
+            </View>
+          )}
+
+          {/* ── Card: Candidatos a exame (Onda 4) — por engajamento, não elegibilidade ── */}
+          {examCandidates !== null && (
+            <View style={styles.card}>
+              <View style={styles.cardHead}>
+                <Icon name="trophy" size={16} color={KarateColors.primary} />
+                <Text style={styles.cardTitle}>Candidatos a exame</Text>
+              </View>
+              <View style={styles.bigRow}>
+                <Text style={styles.bigNum}>{examCandidates.count}</Text>
+                <Text style={styles.bigSub}>com bom engajamento</Text>
+              </View>
+              {examList.length > 0 ? (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  {examList.map((s) => (
+                    <View key={s.id} style={styles.reqRow}>
+                      <Text style={styles.reqNome} numberOfLines={1}>
+                        {s.full_name}{s.belt_label ? ` · ${s.belt_label}` : ""}
+                      </Text>
+                      <Text style={styles.reqStatus}>{s.presences_90d} pres. 90d</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.cardEmpty}>Nenhum candidato em destaque agora.</Text>
+              )}
+              <Text style={styles.cardNote}>
+                Sugestão por engajamento (presença nos últimos 90 dias), não elegibilidade formal para banca.
+              </Text>
             </View>
           )}
 
@@ -429,6 +546,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   cardBody: { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
   cardEmpty: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+  cardNote: { fontSize: 11, color: KarateColors.ink3, lineHeight: 15, marginTop: 2, fontStyle: "italic" } as TextStyle,
   cardErr: { fontSize: 12.5, color: KarateColors.ink3, lineHeight: 18 } as TextStyle,
   cardErrLink: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 
