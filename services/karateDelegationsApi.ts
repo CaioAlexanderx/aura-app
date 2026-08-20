@@ -1,0 +1,278 @@
+// ============================================================
+// AURA DOJÔ — P0 Hub de Campeonatos: DELEGAÇÃO (cliente)
+//
+// Base /federation/:id/dojo/competitions e /dojo/delegations
+// (Aura-backend, src/routes/karateDelegations.js — migration 294, JÁ
+// aplicada em produção). É o "carrinho Sympla" do dojô: seleciona
+// atletas/equipes, vê a cotação DRY-RUN (quote) com skips/avisos/cotas
+// ANTES de submeter, e paga UM PIX consolidado (ou envia comprovante —
+// modo manual, fila de conferência da federação).
+//
+// NÃO confundir com karateDojoFederativoApi.ts (inscrição avulsa em
+// evento/exame da federação) nem com karateDojoEventsApi.ts (eventos
+// PRÓPRIOS do dojô). Aqui é COMPETIÇÃO com pedido consolidado.
+//
+// Service próprio e pequeno — regra da casa (karateApi.ts não cresce).
+// Normalização defensiva: campo ausente vira null/0, nunca quebra a UI.
+// ============================================================
+import { request } from "@/services/api";
+
+// ── Tipos ───────────────────────────────────────────────────
+
+export interface DelegationDivision {
+  id: string;
+  name: string;
+  rules: {
+    max_individual_per_dojo_per_category?: number | null;
+    max_teams_per_dojo_per_category?: number | null;
+    notes?: string | null;
+  };
+}
+
+export interface OpenCompetition {
+  id: string;
+  name: string;
+  season: number | null;
+  /** 'YYYY-MM-DD' — data pura (formatar com utils/eventDate, tz-safe). */
+  event_date: string | null;
+  location: string | null;
+  fee_amount: number | null;
+  has_pricing: boolean;
+  rectification_deadline: string | null;
+  divisions: DelegationDivision[];
+}
+
+export interface EnrollmentCategory {
+  id: string;
+  name: string;
+  modality: "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite";
+  min_age: number | null;
+  max_age: number | null;
+  belt_min: string | null;
+  belt_max: string | null;
+  sex: "M" | "F" | "mixed";
+  weight_class: string | null;
+  max_entries: number | null;
+  fee_amount: number | null;
+  division_id: string | null;
+  group_label: string | null;
+  entry_count: number;
+}
+
+export interface QuoteLine {
+  kind: "athlete" | "entry" | "team";
+  ref: string;
+  label: string;
+  amount: number;
+  exempted: boolean;
+}
+
+export interface DelegationQuote {
+  mode: "per_athlete" | "per_entry" | "legacy";
+  lines: QuoteLine[];
+  exemptions: { earned: number; applied: number; officials_count: number };
+  subtotal: number;
+  discount: number;
+  total: number;
+}
+
+export interface DelegationSkip {
+  student_id?: string | null;
+  team?: string;
+  name?: string;
+  category_id?: string;
+  reason: string;
+  message: string;
+}
+
+export interface DelegationFitWarning {
+  student_id: string;
+  name: string;
+  category_id: string;
+  category_name: string;
+  warnings: string[];
+}
+
+export interface QuotaViolation {
+  category_id: string;
+  category_name: string | null;
+  limit: number;
+  existing: number;
+  adding: number;
+  over: number;
+  is_team: boolean;
+}
+
+export interface DelegationAthleteInput {
+  student_id: string;
+  category_ids: string[];
+}
+
+export interface DelegationTeamInput {
+  name: string;
+  sex: "M" | "F" | "mixed";
+  category_ids: string[];
+  titular_ids: string[];
+  reserve_ids: string[];
+}
+
+export interface DelegationBody {
+  athletes: DelegationAthleteInput[];
+  teams: DelegationTeamInput[];
+  officials_count: number;
+}
+
+export interface QuoteResponse {
+  quote: DelegationQuote;
+  skipped: DelegationSkip[];
+  warnings: DelegationFitWarning[];
+  quota_violations: QuotaViolation[];
+  athletes_count: number;
+  teams_count: number;
+}
+
+export type OrderStatus =
+  | "draft" | "submitted" | "awaiting_payment" | "awaiting_confirmation" | "paid" | "cancelled";
+export type PaymentMode = "aura_pay" | "pix_direct" | "manual";
+
+export interface DelegationPayment {
+  payment_intent_id?: string;
+  payload?: string;
+  qr_image?: string | null;
+  expires_at?: string | null;
+  provider?: string;
+  amount?: number;
+  error?: string;
+}
+
+export interface SubmitResponse {
+  order: {
+    id: string;
+    status: OrderStatus;
+    payment_mode: PaymentMode;
+    total_amount: number;
+    created_at: string;
+  };
+  quote: DelegationQuote;
+  enrolled: {
+    athletes: { student_id: string; name: string; category_id: string; entry_id: string }[];
+    teams: { team_key: string; team_id: string; name: string; category_ids: string[]; entry_ids: string[]; members: number }[];
+  };
+  skipped: DelegationSkip[];
+  warnings: DelegationFitWarning[];
+  payment: DelegationPayment | null;
+}
+
+export interface DelegationOrderSummary {
+  id: string;
+  competition_id: string;
+  competition_name: string;
+  event_date: string | null;
+  status: OrderStatus;
+  payment_mode: PaymentMode;
+  total_amount: number;
+  officials_count: number;
+  receipt_url: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+}
+
+export interface DelegationOrderEntry {
+  id: string;
+  category_id: string;
+  category_name: string;
+  status: string;
+  fee_paid: boolean;
+  student_id: string | null;
+  student_name: string | null;
+  team_id: string | null;
+  team_name: string | null;
+}
+
+export interface DelegationOrderDetail {
+  id: string;
+  competition: { id: string; name: string; event_date: string | null };
+  status: OrderStatus;
+  payment_mode: PaymentMode;
+  total_amount: number;
+  officials_count: number;
+  quote: DelegationQuote | Record<string, never>;
+  receipt_url: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  entries: DelegationOrderEntry[];
+}
+
+// ── Cliente ─────────────────────────────────────────────────
+
+const base = (fid: string) => `/federation/${fid}/dojo`;
+
+export const karateDelegationsApi = {
+  /** Vitrine: campeonatos 'open' da federação. { data, not_linked? } */
+  listOpenCompetitions: (fid: string): Promise<{ data: OpenCompetition[]; not_linked?: boolean; schema_pending?: boolean }> =>
+    request(`${base(fid)}/competitions`),
+
+  listCategories: (fid: string, competitionId: string): Promise<{ data: EnrollmentCategory[]; schema_pending?: boolean }> =>
+    request(`${base(fid)}/competitions/${competitionId}/categories`),
+
+  /** Cotação DRY-RUN — não grava nada. Usada a cada mudança do carrinho. */
+  quote: (fid: string, competitionId: string, body: DelegationBody): Promise<QuoteResponse> =>
+    request(`${base(fid)}/competitions/${competitionId}/delegation/quote`, { method: "POST", body }),
+
+  /** Submete a delegação. Mutação — NUNCA retry (risco de duplicar pedido). */
+  submit: (
+    fid: string,
+    competitionId: string,
+    body: DelegationBody & { payment_mode: Exclude<PaymentMode, "aura_pay"> }
+  ): Promise<SubmitResponse> =>
+    request(`${base(fid)}/competitions/${competitionId}/delegation`, { method: "POST", body, retry: 0, timeout: 30000 }),
+
+  listOrders: (fid: string): Promise<{ data: DelegationOrderSummary[]; schema_pending?: boolean }> =>
+    request(`${base(fid)}/delegations`),
+
+  getOrder: (fid: string, orderId: string): Promise<{ order: DelegationOrderDetail }> =>
+    request(`${base(fid)}/delegations/${orderId}`),
+
+  /** Comprovante (modo manual): PDF/JPEG/PNG/WebP até ~5MB, base64. */
+  uploadReceipt: (
+    fid: string,
+    orderId: string,
+    fileBase64: string,
+    contentType: string
+  ): Promise<{ order: { id: string; status: OrderStatus; receipt_url: string; receipt_uploaded_at: string } }> =>
+    request(`${base(fid)}/delegations/${orderId}/receipt`, {
+      method: "POST",
+      body: { file_base64: fileBase64, content_type: contentType },
+      retry: 0,
+      timeout: 30000,
+    }),
+};
+
+// ── Helpers de apresentação (compartilhados pelas telas) ────
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  draft: "Rascunho",
+  submitted: "Enviado",
+  awaiting_payment: "Aguardando pagamento",
+  awaiting_confirmation: "Em conferência",
+  paid: "Confirmado",
+  cancelled: "Cancelado",
+};
+
+export const MODALITY_LABEL: Record<EnrollmentCategory["modality"], string> = {
+  kata: "Kata",
+  kumite: "Kumite",
+  kihon_ippon: "Kihon Ippon",
+  team_kata: "Kata Equipe",
+  team_kumite: "Kumite Equipe",
+};
+
+export function isTeamModality(m: EnrollmentCategory["modality"]): boolean {
+  return m === "team_kata" || m === "team_kumite";
+}
+
+export function formatBRL(v: number | null | undefined): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return `R$ ${n.toFixed(2).replace(".", ",")}`;
+}

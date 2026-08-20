@@ -106,6 +106,9 @@ const DOJO_NAV: DojoNavItem[] = [
   // separado da Anuidade (que é a filiação do DOJÔ à federação).
   { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarOnly: false },
   { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
+  // P0 Hub de Campeonatos: vitrine dos campeonatos 'open' da federação +
+  // carrinho da delegação (atletas/equipes/cotação) + meus pedidos.
+  { label: "Campeonatos",   icon: "trophy",              route: "/karate/(dojo)/campeonatos",   match: "campeonatos",   sidebarOnly: false },
   { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
   { label: "Certificados",  icon: "ribbon",              route: "/karate/(dojo)/certificados",  match: "certificados",  sidebarOnly: false },
   // F6: conexão/filiação do dojô à federação — sempre visível (é a
