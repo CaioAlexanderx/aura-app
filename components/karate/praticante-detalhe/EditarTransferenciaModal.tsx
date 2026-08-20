@@ -5,8 +5,9 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
-import { karateApi, TransferRecord } from "@/services/karateApi";
+import { karateApi, TransferRecord, ExplainsCurrentDojoError } from "@/services/karateApi";
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
+import { confirmAsync } from "@/components/karate/ConfirmDialog";
 
 interface Props {
   transfer: TransferRecord | null;
@@ -41,14 +42,35 @@ export function EditarTransferenciaModal({
     if (!transfer) return;
     if (dateBad) { setErr("Data inválida. Use dd/mm/aaaa ou deixe em branco."); return; }
     setErr(null); setSaving(true);
+    const payload = {
+      reason: reason.trim() || undefined,
+      transferred_at: dateIso || undefined,
+    };
     try {
-      await karateApi.updateTransfer(federationId, practitionerId, transfer.id, {
-        reason: reason.trim() || undefined,
-        transferred_at: dateIso || undefined,
-      });
+      await karateApi.updateTransfer(federationId, practitionerId, transfer.id, payload);
       setSaving(false);
       onDone();
     } catch (e: any) {
+      // Guard do backend: é o registro que explica o dojô atual (editar a data
+      // pode reordenar o histórico). Confirma e reenvia com confirm:true.
+      if (e instanceof ExplainsCurrentDojoError) {
+        const ok = await confirmAsync({
+          title: "Confirmar edição?",
+          message: e.serverMessage,
+          confirmLabel: "Salvar mesmo assim",
+          destructive: true,
+        });
+        if (!ok) { setSaving(false); return; }
+        try {
+          await karateApi.updateTransfer(federationId, practitionerId, transfer.id, payload, { confirm: true });
+          setSaving(false);
+          onDone();
+        } catch (e2: any) {
+          setSaving(false);
+          setErr(e2?.message || "Não foi possível salvar a transferência.");
+        }
+        return;
+      }
       setSaving(false);
       setErr(e?.message || "Não foi possível salvar a transferência.");
     }

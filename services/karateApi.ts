@@ -49,6 +49,39 @@ async function withHasHistory<T>(p: Promise<T>): Promise<T> {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// EXPLAINS_CURRENT_DOJO — guard das correções de transferência
+//
+// O backend responde 409 { code:'EXPLAINS_CURRENT_DOJO', error } quando o
+// registro sendo anulado (VOID) ou editado (PATCH) é o que EXPLICA o
+// customers.dojo_id atual do praticante. Anular NÃO move o praticante de
+// volta; a UI deve confirmar explicitamente e reenviar com { confirm:true }
+// (vira ?confirm=true). Sinalizamos com um erro tipado para a tela poder
+// re-perguntar em vez de só exibir a mensagem.
+// ─────────────────────────────────────────────────────────────────
+export class ExplainsCurrentDojoError extends Error {
+  readonly status = 409;
+  readonly code = "EXPLAINS_CURRENT_DOJO";
+  constructor(public readonly serverMessage: string) {
+    super("EXPLAINS_CURRENT_DOJO");
+    this.name = "ExplainsCurrentDojoError";
+  }
+}
+
+/** Converte o 409 EXPLAINS_CURRENT_DOJO em ExplainsCurrentDojoError. */
+async function withExplainsGuard<T>(p: Promise<T>): Promise<T> {
+  try {
+    return await p;
+  } catch (e: any) {
+    if (e instanceof ApiError && e.status === 409 && e.data?.code === "EXPLAINS_CURRENT_DOJO") {
+      throw new ExplainsCurrentDojoError(
+        e.data.error || "Este registro explica o dojô atual do praticante."
+      );
+    }
+    throw e;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Tipos compartilhados
 // ─────────────────────────────────────────────────────────────────
 export type BeltSchema = "kyu" | "dan";
@@ -138,14 +171,21 @@ export interface GraduationInput {
   cbkt_number?: string | null;
 }
 
+// Espelha o GET /practitioners/:id/transfers do backend (origin_/destination_
+// e initiated_by_name). O backend já filtra voided_at IS NULL, então só chegam
+// transferências ATIVAS aqui.
 export interface TransferRecord {
   id: string;
-  from_dojo_id: string | null;
-  to_dojo_id: string;
-  from_dojo_name: string | null;
-  to_dojo_name: string;
-  transferred_at: string;
+  practitioner_id?: string;
+  origin_dojo_id: string | null;
+  destination_dojo_id: string;
+  origin_dojo_name: string | null;
+  destination_dojo_name: string | null;
   reason: string | null;
+  transferred_at: string;
+  initiated_by?: string | null;
+  initiated_by_name?: string | null;
+  created_at?: string;
 }
 
 export interface TransferInput {
@@ -2515,27 +2555,44 @@ export const karateApi = {
   ): Promise<TransferRecord> =>
     request(`/federation/${federationId}/practitioners/${practitionerId}/transfer`, { method: "POST", body }),
 
-  /** Edita uma transferência registrada (reason / transferred_at). */
+  /**
+   * Edita uma transferência registrada (reason / transferred_at). É AUDITADO
+   * no backend (before/after). Se o registro explica o dojô atual, o backend
+   * responde 409 EXPLAINS_CURRENT_DOJO → reenviar com { confirm:true }.
+   */
   updateTransfer: (
     federationId: string,
     practitionerId: string,
     transferId: string,
-    payload: Partial<Pick<TransferInput, "reason" | "transferred_at">>
+    payload: Partial<Pick<TransferInput, "reason" | "transferred_at">>,
+    opts?: { confirm?: boolean }
   ): Promise<TransferRecord> =>
-    request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}`, {
-      method: "PATCH",
-      body: payload,
-    }),
+    withExplainsGuard(
+      request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}${opts?.confirm ? "?confirm=true" : ""}`, {
+        method: "PATCH",
+        body: payload,
+      })
+    ),
 
-  /** Remove uma transferência registrada do praticante. */
-  deleteTransfer: (
+  /**
+   * Anula (VOID / soft-delete) uma transferência registrada. NÃO apaga a
+   * linha (o backend só marca voided_*) e NÃO reverte customers.dojo_id.
+   * Se o registro explica o dojô atual, o backend responde 409
+   * EXPLAINS_CURRENT_DOJO → reenviar com { confirm:true }. `reason` opcional
+   * vai para a trilha de auditoria.
+   */
+  voidTransfer: (
     federationId: string,
     practitionerId: string,
-    transferId: string
-  ): Promise<{ deleted: boolean }> =>
-    request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}`, {
-      method: "DELETE",
-    }),
+    transferId: string,
+    opts?: { confirm?: boolean; reason?: string }
+  ): Promise<{ voided: boolean; id: string; voided_at?: string | null }> =>
+    withExplainsGuard(
+      request(`/federation/${federationId}/practitioners/${practitionerId}/transfers/${transferId}${opts?.confirm ? "?confirm=true" : ""}`, {
+        method: "DELETE",
+        body: opts?.reason ? { reason: opts.reason } : undefined,
+      })
+    ),
 
   // ── Carteirinha ────────────────────────────────────────────────
   /** Revoga a carteirinha ativa do praticante. */
