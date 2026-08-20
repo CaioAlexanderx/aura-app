@@ -12,7 +12,7 @@
 // ============================================================
 import React from "react";
 import { View, Text } from "react-native";
-import {
+import { KarateFonts,
   KarateColors as C, ShojiPalette as P,
 } from "@/constants/karateTheme";
 import { StandingSummary } from "@/services/karateApi";
@@ -65,8 +65,8 @@ function StandingSection({
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
-        <Text style={{ fontFamily: "System", fontSize: 12, fontWeight: "700", color: C.ink2 }}>{title}</Text>
-        {meta ? <Text style={{ fontFamily: "System", fontSize: 11, color: C.ink3 }}>{meta}</Text> : null}
+        <Text style={{ fontFamily: KarateFonts.body, fontSize: 12, fontWeight: "700", color: C.ink2 }}>{title}</Text>
+        {meta ? <Text style={{ fontFamily: KarateFonts.body, fontSize: 11, color: C.ink3 }}>{meta}</Text> : null}
       </View>
       <SegmentedBar segments={segments} total={total} />
       <SegmentLegend segments={segments} total={total} unit={unit} />
@@ -108,7 +108,7 @@ export function StandingCard({
         <><Sk h={36} mb={8} /><Sk h={120} /></>
       ) : isEmpty ? (
         <View style={{ paddingVertical: 20, alignItems: "center" }}>
-          <Text style={{ fontFamily: "System", fontSize: 12, color: C.ink4 }}>Ainda não há dados de situação da rede.</Text>
+          <Text style={{ fontFamily: KarateFonts.body, fontSize: 12, color: C.ink4 }}>Ainda não há dados de situação da rede.</Text>
         </View>
       ) : (
         <FadeIn style={{ gap: 18 }}>

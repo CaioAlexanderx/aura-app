@@ -47,7 +47,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { KarateFonts, KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { toast } from "@/components/Toast";
@@ -301,7 +301,7 @@ const st = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48 } as ViewStyle,
 
   head: { marginBottom: 14 } as ViewStyle,
-  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: "monospace" } as TextStyle,
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.ink3, fontFamily: KarateFonts.mono } as TextStyle,
   title: { fontSize: 24, fontWeight: "800", color: KarateColors.ink, marginTop: 2 } as TextStyle,
 
   docsCard: { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, marginBottom: 18, gap: 12 } as ViewStyle,
