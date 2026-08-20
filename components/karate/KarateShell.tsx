@@ -85,6 +85,7 @@ import {
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { PageTransition } from "@/components/PageTransition";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { Motion, webTransition } from "@/constants/motion";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
@@ -528,7 +529,9 @@ export function KarateShell() {
         <View style={styles.content}>
           {/* Topbar oxblood: só o breadcrumb (caminho atual) */}
           <Topbar />
-          <Slot />
+          <PageTransition>
+            <Slot />
+          </PageTransition>
         </View>
       </View>
     );
@@ -545,7 +548,9 @@ export function KarateShell() {
         <NotificationBell />
       </View>
       <View style={styles.content}>
-        <Slot />
+        <PageTransition>
+          <Slot />
+        </PageTransition>
       </View>
       <BottomTabNav />
     </SafeAreaView>

@@ -76,6 +76,7 @@ import {
 } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { PageTransition } from "@/components/PageTransition";
 import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
@@ -422,7 +423,9 @@ export function DojoShell() {
           <View style={styles.content}>
             <Topbar />
             <TrialBanner />
-            <Slot />
+            <PageTransition>
+              <Slot />
+            </PageTransition>
           </View>
         </View>
       </DojoSectionLabelContext.Provider>
@@ -444,7 +447,9 @@ export function DojoShell() {
         </View>
         <TrialBanner />
         <View style={styles.content}>
-          <Slot />
+          <PageTransition>
+            <Slot />
+          </PageTransition>
         </View>
         <BottomTabNav />
       </SafeAreaView>

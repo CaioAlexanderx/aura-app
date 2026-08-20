@@ -12,6 +12,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { View, StyleSheet } from "react-native";
 import { Slot } from "expo-router";
+import { PageTransition } from "@/components/PageTransition";
 import { KarateColors } from "@/constants/karateTheme";
 
 interface DojoPortalContextValue {
@@ -42,7 +43,9 @@ export default function DojoPortalLayout() {
       }}
     >
       <View style={styles.root}>
-        <Slot />
+        <PageTransition>
+          <Slot />
+        </PageTransition>
       </View>
     </DojoPortalContext.Provider>
   );
