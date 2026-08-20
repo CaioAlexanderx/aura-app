@@ -147,10 +147,15 @@ export function LancarResultadosModal({
                 {/* Resultado do ajuste de matrícula (só faixa-preta) */}
                 {state.registration ? (
                   <View style={[styles.regNote, state.registration.action === "updated" ? styles.regNoteOk : styles.regNoteWarn]}>
-                    <Text style={[styles.regNoteTxt, { color: state.registration.action === "updated" ? KarateColors.ok : KarateColors.warn }]}>
+                    <Icon
+                      name={state.registration.action === "updated" ? "check" : "alert_circle"}
+                      size={14}
+                      color={state.registration.action === "updated" ? KarateColors.ok : KarateColors.warn}
+                    />
+                    <Text style={[styles.regNoteTxt, { flex: 1, color: state.registration.action === "updated" ? KarateColors.ok : KarateColors.warn }]}>
                       {state.registration.action === "updated"
-                        ? `✓ Matrícula atualizada: ${state.registration.from} → ${state.registration.to}`
-                        : `⚠ ${state.registration.message ?? "Revise a matrícula."}`}
+                        ? `Matrícula atualizada: ${state.registration.from} → ${state.registration.to}`
+                        : (state.registration.message ?? "Revise a matrícula.")}
                     </Text>
                   </View>
                 ) : null}
@@ -185,7 +190,7 @@ const styles = StyleSheet.create({
   candidateName: { fontSize: 14, fontWeight: "700", color: KarateColors.ink } as TextStyle,
   candidateMeta: { fontSize: 11, color: KarateColors.ink3 } as TextStyle,
   resultToggle: { flexDirection: "row", gap: 8 } as ViewStyle,
-  regNote: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1 } as ViewStyle,
+  regNote: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1 } as ViewStyle,
   regNoteOk: { backgroundColor: "rgba(74,122,72,0.10)", borderColor: KarateColors.ok } as ViewStyle,
   regNoteWarn: { backgroundColor: KarateColors.warnSoft, borderColor: KarateColors.warn } as ViewStyle,
   regNoteTxt: { fontSize: 12, fontWeight: "600" } as TextStyle,
