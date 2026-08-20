@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { Icon } from "@/components/Icon";
 import { FormField } from "@/components/karate/FormField";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { karateApi, PractitionerInput, Dojo } from "@/services/karateApi";
@@ -82,7 +83,9 @@ function DojoSelector({
         >
           {selectedName ?? "Selecionar dojô..."}
         </Text>
-        <Text style={selectorStyles.chevron}>{open ? "▲" : "▼"}</Text>
+        <View style={{ marginLeft: 8 }}>
+          <Icon name={open ? "chevron_up" : "chevron_down"} size={14} color={KarateColors.ink3} />
+        </View>
       </TouchableOpacity>
 
       {open && (

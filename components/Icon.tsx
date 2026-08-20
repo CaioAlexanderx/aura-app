@@ -1,4 +1,5 @@
-import { Platform, Text } from "react-native";
+import { Platform } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 const PATHS: Record<string, string> = {
   // Migrados de Feather (Studio ficha tecnica)
@@ -153,6 +154,12 @@ const PATHS: Record<string, string> = {
   dumbbell:       "M6 6h2v12H6z M16 6h2v12h-2z M3 9h3v6H3z M18 9h3v6h-3z M8 12h8",
   // Sparkles (estetica)
   sparkles:       "M12 2l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z M19 15l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z",
+  // Bandeira (Feather \"flag\") — usado em Competicoes
+  flag:           "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22v-7",
+  // Lista (Feather \"list\") — usado em criterios (empty state)
+  list:           "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
+  // Ferramenta (Feather \"tool\") — usado em praticante (config/manutencao)
+  tool:           "M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z",
 };
 
 // ── Aliases kebab-case → snake_case ────────────────────────────
@@ -349,6 +356,23 @@ const ALIASES: Record<string, string> = {
   // calendar-clear → calendar
   "calendar-clear":           "calendar",
   "calendar-clear-outline":   "calendar",
+  // ── Karate federacao (QA Onda 2) — variantes -outline que resolviam null
+  // e deixavam empty states / botoes com o circulo do icone vazio. Os glifos
+  // canonicos ja existiam (ou foram adicionados: flag/list/tool). ──────────
+  "sparkles-outline":         "sparkles",
+  "person-add":               "user_plus",
+  "person-add-outline":       "user_plus",
+  "create-outline":           "edit",
+  "qr-code-outline":          "qr_code",
+  "alert-circle-outline":     "alert_circle",
+  "arrow-back":               "arrow_left",
+  "arrow-back-outline":       "arrow_left",
+  "flag-outline":             "flag",
+  "list-outline":             "list",
+  "albums":                   "layers",
+  "albums-outline":           "layers",
+  "construct":                "tool",
+  "construct-outline":        "tool",
 };
 
 function resolveName(name: string): string {
@@ -402,38 +426,20 @@ export function Icon({ name, size = 20, color = "#a0a0b8" }: IconProps) {
     );
   }
 
-  // Native fallback — letras simples mas sem "?"
-  const fallback: Record<string, string> = {
-    dashboard: "P", wallet: "W", file_text: "N", calculator: "C", cart: "C",
-    package: "E", users: "U", dollar: "$", trending_up: "+", trending_down: "-",
-    receipt: "R", user_plus: "+", bag: "B", bar_chart: "B", clipboard: "D",
-    star: "*", settings: "S", logout: "X", check: "V", alert: "!", info: "i",
-    calendar: "C", payroll: "F", chevron_left: "<", chevron_right: ">",
-    chevron_up: "^", chevron_down: "v", moon: "D", sun: "S", message: "M",
-    headset: "H", brain: "I", globe: "G", lock: "L", unlock: "L", plus: "+",
-    minus: "-", x: "X", edit: "E", trash: "T", search: "Q", filter: "F",
-    download: "D", upload: "U", copy: "C", refresh: "R", repeat: "T", eye: "O", menu: "=",
-    grid: "#", clock: "T", tag: "#", barcode: "|||", qr_code: "[#]", camera: "O",
-    drag_handle: "=", eye_off: "O", shield: "U", power: "O", more_vertical: ":",
-    tooth: "D", scissors: "X", utensils: "Y", paw: "P", dumbbell: "H", sparkles: "*",
-    // Novos (25/05)
-    shopping_bag: "B", shopping_cart: "C", credit_card: "$",
-    message_circle: "M", alert_circle: "!", briefcase: "B", image: "I",
-    whatsapp: "W",
-    // Novos (fix/studio-icons)
-    arrow_right: ">", arrow_left: "<", external_link: "^", box: "B",
-    truck: "T", resize: "R", location: "P",
-    // Novos (fix/karate-shell) — glifos da shell de karate
-    bell: "N", activity: "~", building: "D", network: "C", ribbon: "M", trophy: "T",
-    // QA 19/08/2026 — novos ícones do Studio
-    check_circle: "V", x_circle: "X", zap: "Z", play_circle: ">",
-    rotate_ccw: "R", share_2: "S", circle: "O",
-  };
-
+  // Nativo (iOS/Android) — mesmo glifo SVG do web, via react-native-svg.
+  // Antes caia num mapa de LETRAS (dashboard→"P", trophy→"T"...), o que fazia
+  // toda a vertical de karate mostrar iniciais no lugar dos icones no app.
+  // O `d` traz varios subpaths (M...M...); um unico <Path> os renderiza todos.
   return (
-    <Text style={{ fontSize: size * 0.6, fontWeight: "700", color, textAlign: "center" }}>
-      {fallback[resolved] ?? ""}
-    </Text>
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d={path}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
