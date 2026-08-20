@@ -155,9 +155,9 @@ export function ChargesList({ charges, federationId, dojoName, onOpenPix, onOpen
                   accessibilityLabel="Cobrar vencida pelo WhatsApp"
                 >
                   {waBusy ? (
-                    <ActivityIndicator size="small" color="#25D366" />
+                    <ActivityIndicator size="small" color={KarateColors.whatsapp} />
                   ) : (
-                    <Icon name="whatsapp" size={15} color="#25D366" />
+                    <Icon name="whatsapp" size={15} color={KarateColors.whatsapp} />
                   )}
                 </TouchableOpacity>
               )}

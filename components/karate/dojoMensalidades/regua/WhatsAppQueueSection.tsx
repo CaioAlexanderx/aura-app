@@ -92,7 +92,7 @@ export function WhatsAppQueueSection({ refreshKey }: Props = {}) {
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <Icon name="whatsapp" size={16} color="#25D366" />
+        <Icon name="whatsapp" size={16} color={KarateColors.whatsapp} />
         <Text style={styles.cardTitle}>Enviar por WhatsApp</Text>
       </View>
       <Text style={styles.cardSub}>
@@ -149,10 +149,10 @@ export function WhatsAppQueueSection({ refreshKey }: Props = {}) {
                   accessibilityLabel={`Enviar WhatsApp para ${item.recipient_name || item.student_name}`}
                 >
                   {busy ? (
-                    <ActivityIndicator size="small" color="#25D366" />
+                    <ActivityIndicator size="small" color={KarateColors.whatsapp} />
                   ) : (
                     <>
-                      <Icon name="whatsapp" size={14} color="#25D366" />
+                      <Icon name="whatsapp" size={14} color={KarateColors.whatsapp} />
                       <Text style={styles.waBtnTxt}>{item.already_sent ? "Reenviar" : "Enviar"}</Text>
                     </>
                   )}

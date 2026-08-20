@@ -89,6 +89,10 @@ export const KarateColors = {
   primaryLine:    ShojiPalette.redLine,
   headRed:        ShojiPalette.headRed,
 
+  // Verde de marca do WhatsApp — só para afordâncias de "enviar por WhatsApp"
+  // (ícone/botão). Tokenizado para não repetir o hex cru pela vertical.
+  whatsapp:       "#25D366",
+
   // Backgrounds / superfícies
   bg:             ShojiPalette.paper,
   bg2:            ShojiPalette.paper2,

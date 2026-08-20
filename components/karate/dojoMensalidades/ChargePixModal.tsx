@@ -262,6 +262,6 @@ const s = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: KarateColors.border, backgroundColor: KarateColors.glassHi } as ViewStyle,
   btnGhost: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border2 } as ViewStyle,
   btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: KarateColors.ink } as TextStyle,
-  btnWa: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 20, borderRadius: KarateRadius.md, backgroundColor: "#25D366", minWidth: 180, justifyContent: "center" } as ViewStyle,
+  btnWa: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 20, borderRadius: KarateRadius.md, backgroundColor: KarateColors.whatsapp, minWidth: 180, justifyContent: "center" } as ViewStyle,
   btnWaTxt: { fontSize: 13.5, fontWeight: "700", color: "#fff" } as TextStyle,
 });
