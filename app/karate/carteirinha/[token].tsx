@@ -64,6 +64,7 @@ import {
 import type { MembershipCard } from "@/services/karateCardApi";
 import { buildSingleCardHtml, buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { DateInput, parseBrDate } from "@/components/inputs/DateInput";
 
 const IS_WEB = Platform.OS === "web";
@@ -269,9 +270,20 @@ export default function VirtualCardScreen() {
         </View>
 
         {step === "loading" && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={KarateColors.primary} />
-            <Text style={styles.loadingTxt}>Carregando…</Text>
+          <View style={{ paddingVertical: 20, gap: 16 }}>
+            {/* intro */}
+            <View style={{ gap: 10, alignItems: "center" }}>
+              <Skeleton width={180} height={13} />
+              <Skeleton width="80%" height={22} />
+            </View>
+            {/* card face */}
+            <Skeleton width="100%" height={220} radius={KarateRadius.lg} />
+            {/* face toggle + action */}
+            <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
+              <Skeleton width={110} height={36} radius={KarateRadius.pill} />
+              <Skeleton width={110} height={36} radius={KarateRadius.pill} />
+            </View>
+            <Skeleton width="100%" height={46} radius={KarateRadius.md} />
           </View>
         )}
 

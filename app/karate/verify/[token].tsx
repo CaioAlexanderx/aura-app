@@ -24,6 +24,7 @@ import { beltHex } from "@/constants/karateBelts";
 import { karateCardApi, CardVerification, VerifyStatus, MembershipCard } from "@/services/karateCardApi";
 import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
 import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 // ── helpers ──────────────────────────────────────────────
 // tz-safe date formatter (mesmo padrão de CarteirinhaPanel/CarteirinhaCard).
@@ -154,9 +155,33 @@ export default function VerifyCardScreen() {
 
         {/* stage */}
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={KarateColors.primary} />
-            <Text style={styles.loadingTxt}>Verificando registro…</Text>
+          <View style={styles.card}>
+            {/* status bar */}
+            <View style={[styles.statusBar, { backgroundColor: KarateColors.bg2 }]}>
+              <Skeleton width={44} height={44} radius={KarateRadius.pill} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Skeleton width={130} height={16} />
+                <Skeleton width={180} height={12} />
+              </View>
+            </View>
+            <View style={styles.body}>
+              {/* who */}
+              <View style={styles.who}>
+                <Skeleton width={54} height={54} radius={KarateRadius.pill} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Skeleton width="70%" height={18} />
+                  <Skeleton width={120} height={13} />
+                </View>
+              </View>
+              {/* belt swatch */}
+              <View style={styles.beltBlock}>
+                <Skeleton width="100%" height={18} radius={KarateRadius.sm} />
+              </View>
+              {/* kv lines */}
+              <View style={{ marginTop: 18, gap: 12 }}>
+                {[1, 2, 3].map((k) => <Skeleton key={k} width="100%" height={14} />)}
+              </View>
+            </View>
           </View>
         ) : data ? (
           <>

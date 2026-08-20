@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import {
   karateDojoPortalApi, DojoMe, DojoPractitioner, AnnuityStatus,
   AnnuityRow, PixIntent, DojoCertificate,
@@ -110,7 +111,19 @@ export default function DojoPortal() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator color={KarateColors.primary} style={{ marginTop: 48 }} />
+          <>
+            {[0, 1].map((c) => (
+              <View key={c} style={styles.card}>
+                <Skeleton width={120} height={18} style={{ marginBottom: 4 }} />
+                {[1, 2, 3, 4].map((r) => (
+                  <View key={r} style={{ flexDirection: "row", justifyContent: "space-between", gap: 16 }}>
+                    <Skeleton width={110} height={14} />
+                    <Skeleton width={90} height={14} />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </>
         ) : error ? (
           <View style={styles.card}><Text style={styles.errorText}>{error}</Text></View>
         ) : dojo ? (

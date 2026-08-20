@@ -64,6 +64,7 @@ import {
 } from "@/services/karateAffiliationApi";
 import { ApiError } from "@/services/api";
 import { toast } from "@/components/Toast";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { FederacaoEnviarAlunosSection } from "@/components/karate/dojoAlunos/FederacaoEnviarAlunosSection";
 
 // Formata ISO de data (pura 'YYYY-MM-DD' OU timestamptz completo) sem
@@ -232,9 +233,26 @@ export default function DojoConexao() {
 
   if (loading) {
     return (
-      <View style={styles.centerBox}>
-        <ActivityIndicator size="large" color={KarateColors.primary} />
-      </View>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <View style={{ gap: 8 }}>
+          <Skeleton width={90} height={11} />
+          <Skeleton width={220} height={24} />
+          <Skeleton width="90%" height={13} />
+          <Skeleton width="80%" height={13} />
+        </View>
+        <View style={styles.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Skeleton width={44} height={44} radius={KarateRadius.pill} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <Skeleton width="70%" height={15} />
+              <Skeleton width="45%" height={12} />
+            </View>
+          </View>
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="85%" height={12} />
+          <Skeleton width="100%" height={44} radius={KarateRadius.md} style={{ marginTop: 4 }} />
+        </View>
+      </ScrollView>
     );
   }
 

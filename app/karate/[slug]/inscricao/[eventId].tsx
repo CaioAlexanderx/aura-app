@@ -13,13 +13,14 @@
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
+  View, Text, TextInput, ScrollView, TouchableOpacity, Linking,
   StyleSheet, ViewStyle, TextStyle, Platform, Switch, Image, useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { PixQRCode } from "@/components/karate/PixQRCode";
@@ -340,7 +341,16 @@ export default function InscricaoScreen() {
 
         <View style={styles.body}>
           {loadingEvent ? (
-            <View style={{ paddingVertical: 40, alignItems: "center" }}><ActivityIndicator color={KarateColors.primary} /></View>
+            <View style={{ paddingVertical: 8 }}>
+              <Skeleton width={180} height={11} style={{ marginBottom: 10 }} />
+              <Skeleton width="70%" height={22} style={{ marginBottom: 8 }} />
+              <Skeleton width="90%" height={13} style={{ marginBottom: 20 }} />
+              <View style={{ gap: 10 }}>
+                {[1, 2, 3].map((k) => (
+                  <Skeleton key={k} width="100%" height={64} radius={KarateRadius.md} />
+                ))}
+              </View>
+            </View>
           ) : step === "categoria" ? (
             <>
               <Text style={styles.stepLabel}>ETAPA 2 DE 4 · CATEGORIA</Text>

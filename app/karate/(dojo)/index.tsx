@@ -30,7 +30,7 @@
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -48,6 +48,7 @@ import { currentCompetence } from "@/components/karate/dojoMensalidades/helpers"
 import { karateDojoClassesApi } from "@/services/karateDojoClassesApi";
 import { todayISO, weekdayOfISO } from "@/components/karate/dojoTurmas/helpers";
 import { agruparPiramidePorFaixa } from "@/components/karate/dojoAlunos/helpers";
+import { Skeleton } from "@/components/karate/Skeleton";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -218,8 +219,21 @@ export default function DojoPainel() {
       </View>
 
       {loading && (
-        <View style={styles.stateBox}>
-          <ActivityIndicator size="large" color={KarateColors.primary} />
+        <View style={styles.grid}>
+          {[0, 1, 2, 3].map((c) => (
+            <View key={c} style={styles.card}>
+              <View style={styles.cardHead}>
+                <Skeleton width={16} height={16} radius={KarateRadius.sm} />
+                <Skeleton width={100} height={14} />
+              </View>
+              <Skeleton width={80} height={30} />
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <Skeleton width="100%" height={12} />
+                <Skeleton width="90%" height={12} />
+                <Skeleton width="75%" height={12} />
+              </View>
+            </View>
+          ))}
         </View>
       )}
 

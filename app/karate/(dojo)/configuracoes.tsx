@@ -47,12 +47,13 @@
 // ============================================================
 import React, { useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { FormField } from "@/components/karate/FormField";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useKarateFederation } from "@/contexts/KarateFederation";
@@ -305,9 +306,19 @@ export default function DojoConfiguracoes() {
       </View>
 
       {loading && (
-        <View style={styles.stateBox}>
-          <ActivityIndicator size="large" color={KarateColors.primary} />
-        </View>
+        <>
+          {[0, 1].map((c) => (
+            <View key={c} style={styles.card}>
+              <Skeleton width={140} height={16} style={{ marginBottom: 14 }} />
+              {[1, 2, 3].map((r) => (
+                <View key={r} style={{ marginBottom: 12 }}>
+                  <Skeleton width={110} height={12} style={{ marginBottom: 6 }} />
+                  <Skeleton width="100%" height={40} radius={KarateRadius.sm} />
+                </View>
+              ))}
+            </View>
+          ))}
+        </>
       )}
 
       {!loading && error && (

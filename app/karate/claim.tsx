@@ -22,6 +22,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts, KarateRadius } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { karateDojoClaimApi, ClaimVerifyResult, ClaimError } from "@/services/karateDojoClaimApi";
 
 type Stage = "no-token" | "verifying" | "error" | "form" | "done";
@@ -114,8 +115,16 @@ export default function DojoClaimScreen() {
 
         {stage === "verifying" ? (
           <View style={styles.card}>
-            <ActivityIndicator color={KarateColors.primary} />
-            <Text style={styles.cardText}>Validando seu convite…</Text>
+            <Skeleton width={180} height={20} style={{ marginBottom: 14 }} />
+            <Skeleton width="100%" height={68} radius={KarateRadius.md} style={{ marginBottom: 14 }} />
+            <Skeleton width="90%" height={13} style={{ marginBottom: 18 }} />
+            {[1, 2, 3].map((k) => (
+              <View key={k} style={{ width: "100%", marginBottom: 12 }}>
+                <Skeleton width={120} height={12} style={{ marginBottom: 6 }} />
+                <Skeleton width="100%" height={44} radius={KarateRadius.md} />
+              </View>
+            ))}
+            <Skeleton width="100%" height={46} radius={KarateRadius.md} style={{ marginTop: 4 }} />
           </View>
         ) : stage === "no-token" ? (
           <View style={styles.card}>

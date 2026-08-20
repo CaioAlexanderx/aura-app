@@ -15,13 +15,14 @@
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, TextInput, ScrollView, TouchableOpacity,
   Switch, Linking, Platform, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { beltHex } from "@/constants/karateBelts";
 import { Badge } from "@/components/karate/Badge";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -298,7 +299,32 @@ export default function PortalPraticanteScreen() {
 
       <View style={styles.portal}>
         {loadingPortal || !portal ? (
-          <View style={{ paddingVertical: 60, alignItems: "center" }}><ActivityIndicator color={KarateColors.primary} /></View>
+          <View style={{ paddingVertical: 20 }}>
+            {/* greet */}
+            <View style={{ gap: 8, marginBottom: 20 }}>
+              <Skeleton width={160} height={11} />
+              <Skeleton width={200} height={26} />
+              <Skeleton width="80%" height={13} />
+            </View>
+            {/* embed card */}
+            <View style={{ gap: 14, padding: 16, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.glass, marginBottom: 20 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Skeleton width={48} height={48} radius={KarateRadius.pill} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Skeleton width="60%" height={16} />
+                  <Skeleton width="40%" height={12} />
+                </View>
+              </View>
+              <Skeleton width="100%" height={14} radius={KarateRadius.sm} />
+              <View style={{ flexDirection: "row", gap: 16 }}>
+                <View style={{ flex: 1, gap: 6 }}><Skeleton width="70%" height={11} /><Skeleton width="90%" height={14} /></View>
+                <View style={{ flex: 1, gap: 6 }}><Skeleton width="70%" height={11} /><Skeleton width="90%" height={14} /></View>
+              </View>
+            </View>
+            {/* section */}
+            <Skeleton width={140} height={16} style={{ marginBottom: 12 }} />
+            <Skeleton width="100%" height={120} radius={KarateRadius.lg} />
+          </View>
         ) : (
           <>
             <View style={styles.greet}>

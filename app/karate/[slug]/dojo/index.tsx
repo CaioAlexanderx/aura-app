@@ -11,13 +11,14 @@
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, ActivityIndicator,
+  View, Text, StyleSheet, SafeAreaView,
   ScrollView, ViewStyle, TextStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { KarateColors, KarateFonts } from "@/constants/karateTheme";
+import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
 import { FpktLogo } from "@/components/karate/FpktLogo";
+import { Skeleton } from "@/components/karate/Skeleton";
 import { karateDojoPortalApi } from "@/services/karateDojoPortalApi";
 import { useDojoPortal } from "./_layout";
 
@@ -58,8 +59,10 @@ export default function DojoPortalEntry() {
 
         {stage === "checking" ? (
           <View style={styles.card}>
-            <ActivityIndicator color={KarateColors.primary} />
-            <Text style={styles.cardText}>Validando seu link de acesso…</Text>
+            <Skeleton width={48} height={48} radius={KarateRadius.pill} />
+            <Skeleton width={200} height={18} />
+            <Skeleton width="90%" height={13} />
+            <Skeleton width="75%" height={13} />
           </View>
         ) : stage === "invalid" ? (
           <View style={styles.card}>
