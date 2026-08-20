@@ -8,7 +8,7 @@ import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateEmptyState as EmptyState } from "@/components/karate/EmptyState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { TransferirPraticanteModal } from "@/components/karate/TransferirPraticanteModal";
-import { karateApi, PractitionerDetail, TransferRecord } from "@/services/karateApi";
+import { karateApi, PractitionerDetail, TransferRecord, ExplainsCurrentDojoError } from "@/services/karateApi";
 import { canTransfer, webAlert } from "./helpers";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { EditarTransferenciaModal } from "./EditarTransferenciaModal";
@@ -48,13 +48,33 @@ export function TransferenciaTab({
   const allowed = canTransfer(karateRole);
 
   async function handleDelete(t: TransferRecord) {
-    if (!(await confirmAsync({ title: "Excluir registro?", message: "Excluir este registro? Isso NÃO move o praticante de volta.", confirmLabel: "Excluir", destructive: true }))) return;
+    if (!(await confirmAsync({ title: "Anular registro?", message: "Anular este registro do histórico? Isso NÃO move o praticante de volta.", confirmLabel: "Anular", destructive: true }))) return;
     setBusyId(t.id);
     try {
-      await karateApi.deleteTransfer(federationId, practitioner.id, t.id);
+      await karateApi.voidTransfer(federationId, practitioner.id, t.id);
       load();
     } catch (e: any) {
-      webAlert(e?.message || "Não foi possível excluir a transferência.");
+      // Guard do backend: é o registro que explica o dojô atual. Re-pergunta
+      // com o aviso do servidor e, se confirmado, reenvia com confirm:true.
+      if (e instanceof ExplainsCurrentDojoError) {
+        const ok = await confirmAsync({
+          title: "Confirmar anulação?",
+          message: e.serverMessage,
+          confirmLabel: "Anular mesmo assim",
+          destructive: true,
+        });
+        if (!ok) { setBusyId(null); return; }
+        try {
+          await karateApi.voidTransfer(federationId, practitioner.id, t.id, { confirm: true });
+          load();
+        } catch (e2: any) {
+          webAlert(e2?.message || "Não foi possível anular a transferência.");
+        } finally {
+          setBusyId(null);
+        }
+        return;
+      }
+      webAlert(e?.message || "Não foi possível anular a transferência.");
     } finally {
       setBusyId(null);
     }
@@ -112,7 +132,7 @@ export function TransferenciaTab({
                       onPress={() => handleDelete(t)}
                       disabled={busyId === t.id}
                       accessibilityRole="button"
-                      accessibilityLabel="Excluir transferência"
+                      accessibilityLabel="Anular transferência"
                     >
                       {busyId === t.id
                         ? <ActivityIndicator size="small" color={KarateColors.primary} />
