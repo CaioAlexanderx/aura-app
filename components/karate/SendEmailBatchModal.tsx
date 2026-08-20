@@ -148,7 +148,7 @@ export function SendEmailBatchModal({ visible, federationId, targets, noPendingC
                         </View>
                         {s.reason === "sem_email" && (
                           <TouchableOpacity style={st.waBtn} onPress={() => handleWhatsApp(s.installment_id)} accessibilityRole="button" accessibilityLabel={`Cobrar ${s.name} via WhatsApp`}>
-                            <Icon name="logo-whatsapp" size={13} color="#25D366" />
+                            <Icon name="logo-whatsapp" size={13} color={C.whatsapp} />
                             <Text style={st.waBtnText}>WhatsApp</Text>
                           </TouchableOpacity>
                         )}

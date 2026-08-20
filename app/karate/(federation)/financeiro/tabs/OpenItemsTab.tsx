@@ -403,7 +403,7 @@ function RowPreta({
           accessibilityRole="link"
           accessibilityLabel={`Abrir WhatsApp de ${item.full_name}`}
         >
-          <Icon name="whatsapp" size={14} color="#25D366" />
+          <Icon name="whatsapp" size={14} color={C.whatsapp} />
           <Text style={styles.waBtnLabel}>{fmtWhatsapp(item.whatsapp)}</Text>
         </TouchableOpacity>
       ) : (

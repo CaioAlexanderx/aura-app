@@ -514,7 +514,7 @@ const copyStyles = StyleSheet.create({
   btnTxt:   { color: "#fff", fontSize: 14, fontWeight: "700" } as TextStyle,
   waBox:    { gap: 10 } as ViewStyle,
   waTxt:    { fontSize: 13, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
-  waBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#25D366", borderRadius: KarateRadius.md, paddingVertical: 12 } as ViewStyle,
+  waBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: KarateColors.whatsapp, borderRadius: KarateRadius.md, paddingVertical: 12 } as ViewStyle,
   waBtnTxt: { color: "#fff", fontSize: 14, fontWeight: "700" } as TextStyle,
   link:     { color: KarateColors.primary, fontSize: 12.5, fontWeight: "600", marginTop: 2 } as TextStyle,
 });

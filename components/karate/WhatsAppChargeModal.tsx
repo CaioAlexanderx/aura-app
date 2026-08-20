@@ -111,7 +111,7 @@ export function WhatsAppChargeModal({ visible, onClose, federationId, target }: 
         <View style={s.card}>
           <View style={s.head}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Icon name="logo-whatsapp" size={18} color="#25D366" />
+              <Icon name="logo-whatsapp" size={18} color={P.whatsapp} />
               <Text style={s.title}>Cobrar via WhatsApp</Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10}><Icon name="close" size={20} color={P.ink3} /></TouchableOpacity>
@@ -176,7 +176,7 @@ const s = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "flex-end", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: P.border, backgroundColor: P.glassHi },
   btnGhost: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: P.border2 },
   btnGhostTxt: { fontSize: 13.5, fontWeight: "600", color: P.ink },
-  btnWa: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 20, borderRadius: KarateRadius.md, backgroundColor: "#25D366", minWidth: 180, justifyContent: "center" },
+  btnWa: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 20, borderRadius: KarateRadius.md, backgroundColor: P.whatsapp, minWidth: 180, justifyContent: "center" },
   btnWaTxt: { fontSize: 13.5, fontWeight: "700", color: "#fff" },
 });
 

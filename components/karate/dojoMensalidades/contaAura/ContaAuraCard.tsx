@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 } as ViewStyle,
   badgeTxt: { fontSize: 11, fontWeight: "700" } as TextStyle,
   cardSub: { fontSize: 12.5, color: KarateColors.ink2, marginTop: 6, lineHeight: 18 } as TextStyle,
-  waBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#25D366", borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 14, alignSelf: "flex-start", marginTop: 10 } as ViewStyle,
+  waBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: KarateColors.whatsapp, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 14, alignSelf: "flex-start", marginTop: 10 } as ViewStyle,
   waBtnTxt: { fontSize: 12.5, fontWeight: "700", color: "#fff" } as TextStyle,
   accountBox: { backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, padding: 10, gap: 4 } as ViewStyle,
   accountRow: { fontSize: 12.5, color: KarateColors.ink2 } as TextStyle,

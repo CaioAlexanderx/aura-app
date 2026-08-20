@@ -157,7 +157,7 @@ function DojoWhatsappNotice({ fullName, reason, whatsappPhone, rosterUrl, federa
         icon="logo-whatsapp"
         variant="accent"
         onPress={url ? () => openWhatsapp(url) : undefined}
-        style={[{ backgroundColor: "#25D366" }, !url && { opacity: 0.5 }]}
+        style={[{ backgroundColor: C.whatsapp }, !url && { opacity: 0.5 }]}
       />
       {!url && (
         <Body muted style={{ fontSize: 11.5, marginTop: 6 }}>Dojô sem telefone cadastrado.</Body>
