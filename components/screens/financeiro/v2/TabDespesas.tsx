@@ -11,7 +11,7 @@
 // 06/05/2026: parseDateLocal corrige timezone em dailyExpenseSeries (date-only
 // shiftando 1 dia em BRT) + tooltips no hover das barras e categorias.
 
-import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import type { DimensionValue } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -25,10 +25,12 @@ import { MonthlyEvolution } from "./Onda3Cards";
 // F5 (24/08/2026): cards secundarios agora abrem sob demanda.
 import { CollapsibleSection } from "../CollapsibleSection";
 
-var W = Dimensions.get("window").width;
-var NARROW = W < 480;
-var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
+
+// FIX M8 (QA pos-F7): os breakpoints liam Dimensions.get no escopo do modulo,
+// congelados no primeiro load — e NARROW ainda era consumido dentro de
+// StyleSheet.create, entao os KPI cards nunca reagiam a resize ou rotacao.
+// Agora saem de useWindowDimensions e o estilo dependente vai inline.
 
 // Tooltip nativo do browser via title= (RN-Web). No native ignora.
 function tip(text: string): any {
@@ -73,6 +75,9 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
 }
 
 export function TabDespesas({ transactions, summary, previousSummary, period, consolidated }: Props) {
+  var { width: vw } = useWindowDimensions();
+  var NARROW = vw < 480;
+  var IS_WIDE = vw > 768;
   var payable = summary.pendingExpenses || 0;
   var paid = summary.expenses;
   var marginPct = summary.income > 0 ? ((summary.income - summary.expenses) / summary.income) * 100 : 0;
@@ -107,9 +112,9 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
     <View>
       {/* === PRIMEIRA DOBRA === */}
       <View style={[s.kpiStrip, NARROW ? s.kpiStripNarrow : null]}>
-        <KpiCard label="Pago no período" value={fmtK(paid)} delta={expenseDelta} invert color={Colors.red} />
-        <KpiCard label="A pagar" value={fmtK(payable)} delta={null} color={Colors.amber} />
-        <KpiCard label="Sobra de cada real" value={marginPct.toFixed(0) + "%"} delta={null} color={marginPct >= 20 ? Colors.green : marginPct >= 10 ? Colors.amber : Colors.red} />
+        <KpiCard narrow={NARROW} label="Pago no período" value={fmtK(paid)} delta={expenseDelta} invert color={Colors.red} />
+        <KpiCard narrow={NARROW} label="A pagar" value={fmtK(payable)} delta={null} color={Colors.amber} />
+        <KpiCard narrow={NARROW} label="Sobra de cada real" value={marginPct.toFixed(0) + "%"} delta={null} color={marginPct >= 20 ? Colors.green : marginPct >= 10 ? Colors.amber : Colors.red} />
       </View>
 
       {/* Anomalia so aparece quando EXISTE anomalia — antes era um card
@@ -133,9 +138,14 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>A PAGAR</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>O que você deve</Text>
+        {/* Mesmo caso do TabReceitas: fallback nao pode ser spinner eterno. */}
         {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" /> : (
           <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando…</Text>
+            <Text style={[s.emptyText, { color: Colors.ink3 }]}>
+              {payable > 0
+                ? "Não conseguimos detalhar suas contas agora."
+                : "Você não tem contas em aberto neste período."}
+            </Text>
           </View>
         )}
       </View>
@@ -245,9 +255,9 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
         </View>
       </CollapsibleSection>
 
-      {/* Evolucao 12m fica so aqui: era um card identico em Receitas e Despesas.
-          A versao de Despesas mostra receita E despesa lado a lado, entao e a
-          que responde as duas perguntas. */}
+      {/* Evolucao 12m fica so aqui: era o MESMO card (mesmo componente, mesma
+          prop) renderizado em Receitas e Despesas. Esta versao responde as duas
+          perguntas de uma vez, entao e a que sobrevive. */}
       <CollapsibleSection
         id="despesas-evolucao"
         title="Últimos 12 meses"
@@ -313,10 +323,10 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
   );
 }
 
-function KpiCard({ label, value, delta, color, invert }: { label: string; value: string; delta: number | null; color: string; invert?: boolean }) {
+function KpiCard({ label, value, delta, color, invert, narrow }: { label: string; value: string; delta: number | null; color: string; invert?: boolean; narrow?: boolean }) {
   var deltaGood = invert ? (delta != null && delta < 0) : (delta != null && delta >= 0);
   return (
-    <View style={[k.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+    <View style={[k.card, narrow ? k.cardNarrow : k.cardWide, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
       <View style={[k.accent, { backgroundColor: color }]} />
       <Text style={[k.label, { color: Colors.ink3 }]}>{label}</Text>
       <Text style={[k.value, { color: Colors.ink }]} numberOfLines={1}>{value}</Text>
@@ -368,14 +378,14 @@ var s = StyleSheet.create({
 
 var k = StyleSheet.create({
   card: {
-    flex: NARROW ? undefined : 1,
-    minWidth: NARROW ? "47%" : 0,
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
     overflow: "hidden",
     position: "relative",
   },
+  cardWide: { flex: 1, minWidth: 0 },
+  cardNarrow: { minWidth: "47%" },
   accent: { position: "absolute", top: 0, left: 0, right: 0, height: 2, opacity: 0.85 },
   label: { fontSize: 9, letterSpacing: 0.6, fontWeight: "600", textTransform: "uppercase" },
   value: { fontSize: 20, fontWeight: "800", marginTop: 8, letterSpacing: -0.4 },

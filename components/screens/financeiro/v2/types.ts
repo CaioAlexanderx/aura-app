@@ -55,11 +55,6 @@ export type Anomaly = {
   diff_pct: number;
 };
 
-export type GaugeData = {
-  expense_pct: number;
-  zone: "saudavel" | "atencao" | "critico";
-};
-
 export type IncomeBreakdown = {
   top5: TopTransaction[];
   payment_methods: PaymentMethodSlice[];
@@ -74,7 +69,6 @@ export type ExpenseBreakdown = {
   payment_methods: PaymentMethodSlice[];
   timeline: TimelineBuckets;
   anomalies: Anomaly[];
-  gauge: GaugeData;
   total: number;
 };
 
@@ -181,6 +175,9 @@ export function buildNarrative(args: {
   runwayDays: number;
   growthPct: number;
   txCount: number;
+  // Sem isto nao da pra distinguir "sobrou 0%" de "nao entrou nada": a margem
+  // e forcada a 0 nos dois casos. Opcional pra nao quebrar quem ja chama.
+  hasIncome?: boolean;
 }): { headline: string; subline: string } {
   var sobra = Math.round(args.margem);
 
@@ -190,16 +187,34 @@ export function buildNarrative(args: {
       subline: "Lance suas receitas e despesas por algumas semanas — aí a Aura consegue te mostrar o que está funcionando.",
     };
   }
-  if (args.runwayDays > 0 && args.runwayDays < 30) {
+
+  // FIX (QA pos-F7): dois furos de ordem aqui.
+  //
+  // 1. O caso "so despesa" (receita zerada) escapava de tudo: computeClientSide
+  //    forca margem = 0 quando income === 0, entao o ramo `margem < 0` nunca
+  //    disparava justamente na situacao que ele descreve. Agora vem primeiro e
+  //    olha a receita direto.
+  // 2. `runwayDays > 0 && < 30` deixava passar runway ZERO — caixa no fim, o
+  //    cenario mais grave. O `> 0` so existia pra excluir o sentinela 999, que
+  //    o proprio `< 30` ja exclui.
+  if (args.hasIncome === false) {
     return {
-      headline: "Atenção: seu dinheiro em caixa dura menos de um mês.",
-      subline: "Cobre quem está atrasado e segure o que der pra segurar — as contas mais urgentes estão logo abaixo.",
+      headline: "Neste período saiu dinheiro e não entrou nada.",
+      subline: "Se você faturou e ainda não lançou, registre as entradas. Se não faturou mesmo, vale olhar as saídas na aba Despesas.",
     };
   }
   if (args.margem < 0) {
     return {
-      headline: "Você gastou mais do que entrou neste período.",
-      subline: "Vale olhar as maiores saídas na aba Despesas e ver o que dá pra cortar ou adiar.",
+      headline: "Você gastou mais do que entrou: " + Math.abs(sobra) + "% a mais.",
+      subline: "Veja as maiores saídas na aba Despesas e avalie o que dá pra cortar ou adiar pro mês que vem.",
+    };
+  }
+  if (args.runwayDays < 30) {
+    return {
+      headline: args.runwayDays <= 0
+        ? "Seu caixa chegou no limite."
+        : "Atenção: seu dinheiro em caixa dura menos de um mês.",
+      subline: "Cobre quem está atrasado e segure o que der pra segurar — as contas mais urgentes estão logo abaixo.",
     };
   }
   if (args.score < 60) {

@@ -41,6 +41,10 @@ function parseHex(hex: string): [number, number, number] | null {
 //   ratio/meta >= 1.10  -> 0     (acima da meta)
 export function goalHealth(expenseRatioPct: number, goalPct: number): number {
   if (!isFinite(expenseRatioPct) || !isFinite(goalPct) || goalPct <= 0) return 0.5;
+  // `expenseRatioPct <= 0` significa "nao gastou nada em relacao ao que
+  // entrou" — mas quem chama precisa garantir que HOUVE receita. Sem receita
+  // o ratio tambem e 0 e isso pintaria de verde um periodo so de prejuizo;
+  // por isso o ResumoHero so monta a barra quando summary.income > 0.
   if (expenseRatioPct <= 0) return 1;
   var r = expenseRatioPct / goalPct;
   if (r <= 0.7) return 1;

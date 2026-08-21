@@ -1,5 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { TransactionRow } from "./TransactionRow";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -18,6 +20,8 @@ import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 // Multi-CNPJ: precisa saber se esta em modo consolidado pra ajustar comportamento
 // dos cards v2 (legendas, hints "abra a empresa especifica", etc).
 import { useAuthStore } from "@/stores/auth";
+
+var isWeb = Platform.OS === "web";
 
 type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
 
@@ -73,22 +77,12 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
     period: period,
   });
 
-  // FIX 24/08/2026 (QA Financeiro A3): erro de rede precisa vir ANTES do
-  // empty state. Antes os dois caiam no mesmo caminho (lista vazia) e quem
-  // tinha anos de historico via "Lance sua primeira receita" quando o que
-  // houve foi uma falha de conexao.
-  if (isError && !isLoading && !isDemo) {
-    return (
-      <EmptyState
-        icon="alert"
-        iconColor={Colors.amber}
-        title="Não conseguimos carregar seus dados"
-        subtitle="Verifique sua conexão e tente de novo. Seus lançamentos continuam salvos."
-        actionLabel="Tentar de novo"
-        onAction={onRetry}
-      />
-    );
-  }
+  // O estado de erro vive na tela (app/(tabs)/financeiro.tsx), nao aqui: a
+  // query e a mesma pras quatro abas, entao duplicar o tratamento por aba foi
+  // justamente o que deixou 3 delas de fora no F0. Este guard so evita que o
+  // empty state de onboarding apareca caso o componente seja montado com erro
+  // por outro caminho.
+  if (isError && !isLoading && !isDemo) return null;
 
   if (transactions.length === 0 && !isLoading && !isDemo) {
     return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termômetro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lançamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
@@ -188,6 +182,33 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
           </View>
         </CollapsibleSection>
       )}
+
+      {/* F6 (24/08/2026): a Retirada deixou de ser aba e passa a ser alcançada
+          por aqui. Sem este card ela ficaria sem NENHUMA porta de entrada na
+          interface — só pra quem tivesse o link antigo salvo. Em consolidado
+          fica de fora: o cálculo usa o regime tributário de UMA empresa. */}
+      {!consolidatedView && !isDemo && (
+        <Pressable
+          onPress={function() { router.push("/financeiro/retirada" as any); }}
+          accessibilityRole="button"
+          accessibilityLabel="Simular quanto posso retirar este mês"
+          style={({ hovered }: any) => [
+            s.toolCard,
+            { backgroundColor: Colors.bg3, borderColor: Colors.border2 },
+            isWeb && hovered ? { borderColor: Colors.violet3 } : null,
+            isWeb ? ({ transition: "all 0.18s ease", cursor: "pointer" } as any) : null,
+          ]}
+        >
+          <View style={s.toolIcon}>
+            <Icon name="calculator" size={16} color={Colors.violet3} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.toolTitle}>Quanto posso retirar este mês?</Text>
+            <Text style={s.toolSub}>Simulação com seu regime tributário e o que precisa ficar em caixa</Text>
+          </View>
+          <Icon name="chevron_right" size={14} color={Colors.violet3} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -196,4 +217,16 @@ var s = StyleSheet.create({
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border },
   cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1, gap: 14 },
+  // Card-link da ferramenta de retirada (F6)
+  toolCard: {
+    flexDirection: "row", alignItems: "center", gap: 13,
+    borderRadius: 16, borderWidth: 1, borderStyle: "dashed",
+    paddingHorizontal: 18, paddingVertical: 16, marginTop: 4,
+  },
+  toolIcon: {
+    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD,
+    alignItems: "center", justifyContent: "center",
+  },
+  toolTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  toolSub: { fontSize: 11.5, marginTop: 2, lineHeight: 16, color: Colors.ink3 },
 });

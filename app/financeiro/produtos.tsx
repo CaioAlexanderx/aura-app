@@ -23,10 +23,16 @@ export default function ProdutosFinanceiroScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <View style={s.headerRow}>
         <Pressable
-          onPress={function() { router.back(); }}
+          onPress={function() {
+            // Alcancada por deep-link (router.replace, historico vazio), o
+            // back() e no-op silencioso e o usuario fica preso numa tela sem
+            // navegacao — estas rotas ficam fora do shell com a sidebar.
+            if (router.canGoBack()) router.back();
+            else router.replace("/financeiro" as any);
+          }}
           style={s.backBtn}
           accessibilityRole="button"
-          accessibilityLabel="Voltar"
+          accessibilityLabel="Voltar para o Financeiro"
           hitSlop={8}
         >
           <Icon name="chevron_left" size={14} color={Colors.violet3} />

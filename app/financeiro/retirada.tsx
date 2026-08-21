@@ -28,10 +28,16 @@ export default function RetiradaScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <View style={s.headerRow}>
         <Pressable
-          onPress={function() { router.back(); }}
+          onPress={function() {
+            // Alcancada por deep-link (router.replace, historico vazio), o
+            // back() e no-op silencioso e o usuario fica preso numa tela sem
+            // navegacao — estas rotas ficam fora do shell com a sidebar.
+            if (router.canGoBack()) router.back();
+            else router.replace("/financeiro" as any);
+          }}
           style={s.backBtn}
           accessibilityRole="button"
-          accessibilityLabel="Voltar"
+          accessibilityLabel="Voltar para o Financeiro"
           hitSlop={8}
         >
           <Icon name="chevron_left" size={14} color={Colors.violet3} />
@@ -56,6 +62,18 @@ export default function RetiradaScreen() {
           subtitle="Verifique sua conexão e tente de novo."
           actionLabel="Tentar de novo"
           onAction={refetch}
+        />
+      )}
+
+      {/* FIX (QA pos-F7): em demo, isLoading e isError sao ambos false e a
+          condicao !isDemo derrubava o unico bloco de conteudo — sobrava titulo
+          e subtitulo numa pagina em branco, sem explicacao. */}
+      {!isLoading && !isError && isDemo && (
+        <EmptyState
+          icon="calculator"
+          iconColor={Colors.violet3}
+          title="Simulação indisponível no modo demonstração"
+          subtitle="Entre com a sua conta para simular a retirada com os números reais do seu negócio."
         />
       )}
 

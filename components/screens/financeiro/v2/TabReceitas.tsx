@@ -7,10 +7,10 @@
 // Onda 3 vai adicionar: ranking profissionais (employees JOIN), evolucao 12m.
 // Multi-CNPJ aware: passa flag pros componentes mostrarem badges/dicas.
 //
-// 06/05/2026: AbcCurveCard adicionado depois de "Categorias de receita" —
-// curva ABC migrou do Estoque pra cá, calculada via useProductsRanking.
-// Wrapper recebe nativeID="abc-curve-card" pro deep-link `?focus=abc`
-// auto-rolar ate o card no web (document.getElementById).
+// 24/08/2026 (F4/F5): a curva ABC saiu daqui pra /financeiro/produtos (era uma
+// mini-tela de 610 linhas, com seletor de periodo proprio concorrendo com o
+// global) — restou o card-link no fim. Os cards secundarios passaram a abrir
+// sob demanda em CollapsibleSection.
 //
 // 06/05/2026: parseDateLocal corrige bug de timezone em dailyIncomeSeries
 // (due_date como '2026-05-06' virava 5/maio em BRT) + tooltips no hover
@@ -21,7 +21,7 @@
 // até o conteúdo do texto → flex:1 resolve 0px → height:"X%" fica 0px).
 // Solução: track com height explícita (118px); container sem height/alignItems.
 
-import { View, Text, StyleSheet, Platform, Dimensions, Pressable } from "react-native";
+import { View, Text, StyleSheet, Platform, Pressable, useWindowDimensions } from "react-native";
 import type { DimensionValue } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -31,15 +31,17 @@ import { fmt, fmtK, parseDateLocal } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
-// Onda 3: ranking + evolução mensal 12m
-import { ProfessionalsRanking, MonthlyEvolution } from "./Onda3Cards";
+// Onda 3: ranking de profissionais (a evolucao 12m vive so em Despesas)
+import { ProfessionalsRanking } from "./Onda3Cards";
 // F5 (24/08/2026): cards secundarios agora abrem sob demanda.
 import { CollapsibleSection } from "../CollapsibleSection";
 
-var W = Dimensions.get("window").width;
-var NARROW = W < 480;
-var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
+
+// FIX M8 (QA pos-F7): os breakpoints liam Dimensions.get no escopo do modulo,
+// congelados no primeiro load — e NARROW ainda era consumido dentro de
+// StyleSheet.create, entao os KPI cards nunca reagiam a resize ou rotacao.
+// Agora saem de useWindowDimensions e o estilo dependente vai inline.
 
 // Tooltip nativo do browser via title= (RN-Web). No native ignora.
 function tip(text: string): any {
@@ -85,6 +87,9 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
 }
 
 export function TabReceitas({ transactions, summary, previousSummary, period, consolidated }: Props) {
+  var { width: vw } = useWindowDimensions();
+  var NARROW = vw < 480;
+  var IS_WIDE = vw > 768;
   // FIX M3 (24/08/2026): o ticket medio dividia summary.income — que soma so
   // lancamentos CONFIRMADOS — pela contagem de todas as receitas, incluindo
   // pendentes. Com pendencia no periodo o ticket saia sistematicamente
@@ -125,18 +130,26 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
     <View>
       {/* === PRIMEIRA DOBRA === */}
       <View style={[s.kpiStrip, NARROW ? s.kpiStripNarrow : null]}>
-        <KpiCard label="Recebido no período" value={fmtK(collected)} delta={incomeDelta} color={Colors.green} />
-        <KpiCard label="A receber" value={fmtK(receivable)} delta={null} color={Colors.amber} />
-        <KpiCard label="Valor médio por venda" value={fmtK(avgTicket)} delta={null} color={Colors.violet3} />
+        <KpiCard narrow={NARROW} label="Recebido no período" value={fmtK(collected)} delta={incomeDelta} color={Colors.green} />
+        <KpiCard narrow={NARROW} label="A receber" value={fmtK(receivable)} delta={null} color={Colors.amber} />
+        <KpiCard narrow={NARROW} label="Valor médio por venda" value={fmtK(avgTicket)} delta={null} color={Colors.violet3} />
       </View>
 
       {/* Timeline promovida: e a parte acionavel da aba (cobranca). */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>A RECEBER</Text>
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Quem te deve</Text>
+        {/* FIX (QA pos-F7): o fallback era um "Carregando…" sem timeout. A
+            query de insights nao roda em demo e desiste depois de 1 retry num
+            403 — o texto ficava eterno. Como este card subiu pra primeira
+            dobra no F5, isso passou a ser a segunda coisa que o usuario ve. */}
         {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" /> : (
           <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando…</Text>
+            <Text style={[s.emptyText, { color: Colors.ink3 }]}>
+              {receivable > 0
+                ? "Não conseguimos detalhar quem te deve agora."
+                : "Ninguém está te devendo neste período."}
+            </Text>
           </View>
         )}
       </View>
@@ -218,11 +231,14 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
       </CollapsibleSection>
 
       {/* Analises que respondem perguntas mais raras — juntas num acordeao so,
-          em vez de tres cards permanentes no fim da aba. */}
+          em vez de tres cards permanentes no fim da aba.
+          A "Evolucao 12m" NAO fica aqui: era o mesmo componente com a mesma
+          prop renderizado tambem em Despesas. A versao de la mostra receita e
+          despesa lado a lado, entao responde as duas perguntas de uma vez. */}
       <CollapsibleSection
         id="receitas-avancado"
         title="Análises avançadas"
-        subtitle="Dias mais fortes, ranking da equipe e os últimos 12 meses"
+        subtitle="Seus dias mais fortes e o ranking da equipe"
       >
         <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
           <Text style={[s.kicker, { color: Colors.ink3 }]}>DIA DA SEMANA</Text>
@@ -236,12 +252,6 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
             {consolidated ? "Disponível ao selecionar uma empresa" : "Quem mais movimentou no período"}
           </Text>
           <ProfessionalsRanking items={insights.professional_ranking || []} consolidated={consolidated} />
-        </View>
-
-        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>ÚLTIMOS 12 MESES</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Receita ao longo do tempo</Text>
-          <MonthlyEvolution items={insights.monthly_evolution || []} />
         </View>
       </CollapsibleSection>
 
@@ -271,9 +281,9 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
   );
 }
 
-function KpiCard({ label, value, delta, color }: { label: string; value: string; delta: number | null; color: string }) {
+function KpiCard({ label, value, delta, color, narrow }: { label: string; value: string; delta: number | null; color: string; narrow?: boolean }) {
   return (
-    <View style={[k.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+    <View style={[k.card, narrow ? k.cardNarrow : k.cardWide, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
       <View style={[k.accent, { backgroundColor: color }]} />
       <Text style={[k.label, { color: Colors.ink3 }]}>{label}</Text>
       <Text style={[k.value, { color: Colors.ink }]} numberOfLines={1}>{value}</Text>
@@ -309,7 +319,6 @@ var s = StyleSheet.create({
   barTrack: { width: "100%", height: 118, borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
   barFill: { width: "100%", borderRadius: 4 },
   barLabel: { fontSize: 9 },
-  barFooter: { fontSize: 11, marginTop: 10 },
   catRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -336,14 +345,14 @@ var s = StyleSheet.create({
 
 var k = StyleSheet.create({
   card: {
-    flex: NARROW ? undefined : 1,
-    minWidth: NARROW ? "47%" : 0,
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
     overflow: "hidden",
     position: "relative",
   },
+  cardWide: { flex: 1, minWidth: 0 },
+  cardNarrow: { minWidth: "47%" },
   accent: { position: "absolute", top: 0, left: 0, right: 0, height: 2, opacity: 0.85 },
   label: { fontSize: 9, letterSpacing: 0.6, fontWeight: "600", textTransform: "uppercase" },
   value: { fontSize: 20, fontWeight: "800", marginTop: 8, letterSpacing: -0.4 },

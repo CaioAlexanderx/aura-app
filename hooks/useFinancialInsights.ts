@@ -194,6 +194,9 @@ function computeClientSide(args: Args): FinancialInsights {
     runwayDays: runwayDays,
     growthPct: growth,
     txCount: args.transactions.length,
+    // `margem` e forcada a 0 quando nao ha receita (linha acima), entao sem
+    // esta flag a narrativa nao distingue "sobrou 0%" de "nao entrou nada".
+    hasIncome: summary.income > 0,
   });
 
   var overdue = args.transactions.filter(isOverdue);

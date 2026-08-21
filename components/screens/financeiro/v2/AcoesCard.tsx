@@ -119,7 +119,9 @@ export function AcoesCard({ transactions, insights, consolidated, onGoToLancamen
     var anomalies = insights.expense_breakdown?.anomalies || [];
     var worst = anomalies.filter(function(a) { return a.diff_pct > 0; })
       .sort(function(a, b) { return b.diff_pct - a.diff_pct; })[0];
-    if (worst) {
+    // Sem destino nao vira acao: um item com CTA "Revisar" que nao navega e
+    // pior que nao listar (o contrato permite onGoToDespesas undefined).
+    if (worst && onGoToDespesas) {
       list.push({
         id: "anomalia",
         tone: "info",

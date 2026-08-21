@@ -109,3 +109,72 @@ describe("goalCaption", () => {
     expect(goalCaption(0, 70)).toBe("Sem despesas no período.");
   });
 });
+
+// ─── Cenários que o QA pós-F7 levantou ──────────────────────
+
+import { buildNarrative } from "@/components/screens/financeiro/v2/types";
+
+describe("buildNarrative — casos que escapavam da ordem dos ifs", () => {
+  var base = { score: 50, margem: 10, runwayDays: 90, growthPct: 0, txCount: 30, hasIncome: true };
+
+  it("reconhece o período só de despesa em vez de dizer que sobrou 0%", () => {
+    // computeClientSide força margem = 0 quando income === 0, então sem a flag
+    // hasIncome a frase caía em "sobrou pouco: 0%" — como se tivesse faturado.
+    var n = buildNarrative({ ...base, score: 10, margem: 0, runwayDays: 0, hasIncome: false });
+    expect(n.headline).toContain("não entrou nada");
+    expect(n.headline).not.toContain("0%");
+  });
+
+  it("alerta quando o caixa zerou (runway exatamente 0)", () => {
+    // O guard antigo era `runwayDays > 0 && < 30`, então runway 0 — o pior
+    // caso — escapava do alerta.
+    var n = buildNarrative({ ...base, runwayDays: 0 });
+    expect(n.headline).toContain("limite");
+  });
+
+  it("ainda alerta com caixa curto mas não zerado", () => {
+    expect(buildNarrative({ ...base, runwayDays: 12 }).headline).toContain("menos de um mês");
+  });
+
+  it("não chama de saudável quem gastou mais do que entrou", () => {
+    var n = buildNarrative({ ...base, score: 90, margem: -25, runwayDays: 200 });
+    expect(n.headline).toContain("gastou mais do que entrou");
+    expect(n.headline).toContain("25%");
+  });
+
+  it("nunca devolve NaN ou undefined na frase", () => {
+    var casos = [
+      { ...base, margem: NaN },
+      { ...base, runwayDays: 999 },
+      { ...base, txCount: 0 },
+      { ...base, score: 100, margem: 45, growthPct: 30 },
+    ];
+    casos.forEach(function (c) {
+      var n = buildNarrative(c);
+      expect(n.headline).toBeTruthy();
+      expect(n.subline).toBeTruthy();
+      expect(n.headline).not.toMatch(/NaN|undefined/);
+      expect(n.subline).not.toMatch(/NaN|undefined/);
+    });
+  });
+
+  it("toda frase é acentuada e termina em pontuação", () => {
+    var variantes = [
+      { ...base, txCount: 3 },
+      { ...base, hasIncome: false },
+      { ...base, margem: -10 },
+      { ...base, runwayDays: 5 },
+      { ...base, score: 40 },
+      { ...base, score: 70, runwayDays: 45 },
+      { ...base, score: 70, margem: 8 },
+      { ...base, score: 90, growthPct: 20 },
+      { ...base, score: 90 },
+    ];
+    variantes.forEach(function (v) {
+      var n = buildNarrative(v);
+      expect(n.headline).toMatch(/[.!?]$/);
+      // nenhuma variante pode ter escapado da revisão de acentuação
+      expect(n.headline + n.subline).not.toMatch(/\b(voce|nao|periodo|negocio|proximo)\b/);
+    });
+  });
+});

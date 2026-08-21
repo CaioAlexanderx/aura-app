@@ -193,15 +193,15 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       {/* F2 (24/08/2026): conciliação veio da Visão Geral pra cá. Conferir o
           extrato do banco é uma tarefa sobre a LISTA de lançamentos — na Visão
           Geral era mais um acordeão competindo com o resumo do mês. */}
-      {transactions.length > 0 && (
-        <CollapsibleSection
-          id="conciliacao"
-          title="Conferir com o extrato do banco"
-          subtitle="Veja quais lançamentos ainda não batem com o extrato"
-        >
-          <ReconciliationSection />
-        </CollapsibleSection>
-      )}
+      {/* Sem gate por transactions.length: quem tem zero lancamento e
+          justamente quem pode querer importar o extrato pra comecar. */}
+      <CollapsibleSection
+        id="conciliacao"
+        title="Conferir com o extrato do banco"
+        subtitle="Veja quais lançamentos ainda não batem com o extrato"
+      >
+        <ReconciliationSection />
+      </CollapsibleSection>
     </View>
   );
 }

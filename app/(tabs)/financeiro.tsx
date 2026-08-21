@@ -5,6 +5,7 @@ import { Colors } from "@/constants/colors";
 import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
 import { maskDateBR, brDateToISO } from "@/utils/mask";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
@@ -207,22 +208,38 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // F6 (24/08/2026): Retirada e Cupons deixaram de ser abas. Os deep-links
   // antigos continuam valendo e levam pras rotas novas — nada que ja circula
   // por ai (favorito do usuario, link colado no WhatsApp) quebra.
+  //
+  // FIX (QA pos-F7): so redireciona FORA do Studio. Esta tela e reusada por
+  // app/studio/(estudio)/gestao/financeiro.tsx com `embedded`, e os destinos
+  // vivem no shell do varejo: /cupons esta em (tabs), e o AuthGuard do
+  // app/_layout rebota usuario de Studio que entra em (tabs) de volta pra home
+  // do estudio — o cliente clicaria no link e seria expulso da tela sem ver o
+  // que pediu. Dentro do Studio o alias antigo cai na Visao Geral, que e um
+  // destino valido, em vez de tirar o usuario do shell.
   useEffect(function() {
-    if (paramTab === "retirada") { router.replace("/financeiro/retirada" as any); return; }
-    if (paramTab === "cupons") { router.replace("/cupons" as any); return; }
+    if (!embedded) {
+      if (paramTab === "retirada") { router.replace("/financeiro/retirada" as any); return; }
+      if (paramTab === "cupons") { router.replace("/cupons" as any); return; }
+    }
     if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
       setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
     }
-  }, [paramTab]);
+  }, [paramTab, embedded]);
 
   // F4 (24/08/2026): a curva ABC virou tela propria (/financeiro/produtos).
   // O deep-link antigo do Painel (?tab=receitas&focus=abc) continua valendo —
   // antes ele rolava ate um card no meio da aba Receitas; agora leva direto
   // pra tela dedicada. replace() pra "voltar" nao cair de novo no redirect.
+  // Mesma ressalva do Studio acima.
   useEffect(function() {
-    if (paramFocus !== "abc") return;
+    if (paramFocus !== "abc" || embedded) return;
     router.replace("/financeiro/produtos" as any);
-  }, [paramFocus]);
+  }, [paramFocus, embedded]);
+
+  // Enquanto o redirect nao acontece, nao renderiza a tela por baixo — evita
+  // flash de skeleton/abas antes de sair (e, no caso de retirada/cupons, de
+  // uma faixa de abas sem nenhuma ativa).
+  var redirecting = !embedded && (paramFocus === "abc" || paramTab === "retirada" || paramTab === "cupons");
 
   // FIX M5 (24/08/2026): a comparacao era com "outros" minusculo, mas
   // mapApiTransaction normaliza ausencia de categoria pra "Outros" e as
@@ -329,6 +346,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     width: "100%" as const,
   };
 
+  // Redirect em andamento: nao pinta a tela por baixo (evita flash).
+  if (redirecting) return <View style={{ flex: 1 }} />;
+
   return (
     <View style={{ flex: 1 }}>
       <WebPortal active={showModal}>
@@ -428,10 +448,29 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             Lancamentos, que e onde o usuario ve as categorias erradas. */}
         {!isDemo && transactions.length > 0 && activeTab === TAB_INDEX.lancamentos && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
         {/* B9: skeleton nao pode coexistir com a aba montada — antes os dois
-            renderizavam no primeiro load (heroes zerados sob o skeleton). */}
-        {isLoading && activeTab !== TAB_INDEX.cupons && <ListSkeleton rows={4} showCards />}
+            renderizavam no primeiro load (heroes zerados sob o skeleton).
+            FIX (QA pos-F7): o guard valia so pra Visao Geral; nas outras tres
+            abas o skeleton seguia empilhado por cima dos KPIs zerados. */}
+        {isLoading && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === TAB_INDEX.visao && !isLoading && (
+        {/* FIX A3 (QA pos-F7): o estado de erro tinha sido ligado so na Visao
+            Geral. Nas outras abas a falha de rede continuava virando lista
+            vazia — e em Lancamentos isso mostrava "Lance sua primeira receita"
+            pra quem tem anos de historico, o bug exato que o F0 declarou
+            corrigido. Como o erro e da MESMA query pras quatro abas, o lugar
+            certo do estado e aqui, uma vez so. */}
+        {isError && !isLoading && !isDemo && (
+          <EmptyState
+            icon="alert"
+            iconColor={Colors.amber}
+            title="Não conseguimos carregar seus dados"
+            subtitle="Verifique sua conexão e tente de novo. Seus lançamentos continuam salvos."
+            actionLabel="Tentar de novo"
+            onAction={refetch}
+          />
+        )}
+
+        {activeTab === TAB_INDEX.visao && !isLoading && !isError && (
           <>
             <TabVisaoGeral
               transactions={transactions}
@@ -458,7 +497,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           </>
         )}
 
-        {activeTab === TAB_INDEX.receitas && (
+        {activeTab === TAB_INDEX.receitas && !isLoading && !isError && (
           <TabReceitas
             transactions={transactions}
             summary={summary}
@@ -467,7 +506,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             consolidated={!!consolidatedView}
           />
         )}
-        {activeTab === TAB_INDEX.despesas && (
+        {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (
           <TabDespesas
             transactions={transactions}
             summary={summary}
@@ -477,7 +516,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           />
         )}
 
-        {activeTab === TAB_INDEX.lancamentos && (
+        {activeTab === TAB_INDEX.lancamentos && !isLoading && !isError && (
           <TabLancamentos
             transactions={transactions}
             isLoading={isLoading}

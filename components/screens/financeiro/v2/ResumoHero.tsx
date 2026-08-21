@@ -336,7 +336,14 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
   var incomeCount = transactions.filter(function(t) { return t.type === "income" && t.status === "confirmed"; }).length;
   var expenseCount = transactions.filter(function(t) { return t.type === "expense" && t.status === "confirmed"; }).length;
 
-  var barColor = goalColor(expenseRatio, goalPct, { green: Colors.green, amber: Colors.amber, red: Colors.red });
+  // FIX (QA pos-F7): sem receita, expenseRatio e 0 e goalColor devolvia VERDE
+  // — a faixa de acento do card ficava verde num periodo que so teve despesa.
+  // Sem receita nao ha o que comparar com a meta: a cor passa a refletir o
+  // resultado bruto (sobrou/nao sobrou).
+  var hasIncome = summary.income > 0;
+  var barColor = hasIncome
+    ? goalColor(expenseRatio, goalPct, { green: Colors.green, amber: Colors.amber, red: Colors.red })
+    : summary.expenses > 0 ? Colors.red : Colors.violet;
   var positive = summary.balance >= 0;
 
   return (
@@ -354,6 +361,13 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
       <Text style={[h.phrase, NARROW ? h.phraseNarrow : null, { color: Colors.ink }]}>
         {insights.health.narrative.headline}
       </Text>
+      {/* A subline diz o que fazer com o fato acima. Estava sendo montada e
+          descartada desde o F3 — o hero so lia o headline. */}
+      {!!insights.health.narrative.subline && (
+        <Text style={[h.subphrase, { color: Colors.ink3 }]}>
+          {insights.health.narrative.subline}
+        </Text>
+      )}
 
       {/* entrou · saiu · sobrou */}
       <View style={NARROW ? h.gridNarrow : h.grid}>
@@ -404,8 +418,10 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
       {/* Grafico animado do periodo */}
       <DailyBars buckets={buckets} reduceMotion={reduceMotion} />
 
-      {/* Barra colorida pelo resultado + meta configuravel */}
-      {summary.income > 0 && (
+      {/* Barra colorida pelo resultado + meta configuravel. So faz sentido
+          com receita no periodo — a meta e "quanto do que ENTRA pode virar
+          despesa". */}
+      {hasIncome && (
         <GoalBar
           expenseRatio={expenseRatio}
           goalPct={goalPct}
@@ -460,6 +476,7 @@ var h = StyleSheet.create({
     maxWidth: 620,
   },
   phraseNarrow: { fontSize: 17, lineHeight: 23, marginBottom: 14 },
+  subphrase: { fontSize: 12.5, lineHeight: 18, marginTop: -12, marginBottom: 18, maxWidth: 620 },
 
   grid: { flexDirection: "row", gap: 18 },
   gridNarrow: { flexDirection: "column", gap: 12 },
