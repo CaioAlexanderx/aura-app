@@ -213,8 +213,8 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
   var rows = [
     { key: "atrasadas", label: "Atrasadas", b: buckets.atrasadas, c: Colors.red, urgentCopy: "vencidas" },
     { key: "esta_semana", label: "Esta semana", b: buckets.esta_semana, c: Colors.amber, urgentCopy: "vencem em 7 dias" },
-    { key: "este_mes", label: "Este mes", b: buckets.este_mes, c: Colors.violet3, urgentCopy: "vencem este mes" },
-    { key: "futuras", label: "Futuras", b: buckets.futuras, c: Colors.green, urgentCopy: "alem deste mes" },
+    { key: "este_mes", label: "Este mês", b: buckets.este_mes, c: Colors.violet3, urgentCopy: "vencem este mês" },
+    { key: "futuras", label: "Futuras", b: buckets.futuras, c: Colors.green, urgentCopy: "além deste mês" },
   ];
 
   return (

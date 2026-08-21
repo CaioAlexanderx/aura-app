@@ -129,34 +129,46 @@ function DailyBars({ buckets, reduceMotion }: { buckets: Bucket[]; reduceMotion:
 
   if (buckets.length < 2 || max <= 0) return null;
 
+  // FIX 24/08/2026 (QA no app rodando): com poucos dias de movimento o grafico
+  // ficava feio e ilegivel — 3 colunas em `flex: 1` viravam blocos de um terco
+  // da largura cada, e as barras do lado sem valor, presas no minHeight de 2px,
+  // viravam uma linha vermelha continua atravessando a tela, que parecia um
+  // eixo ou um erro de render. Agora as colunas tem largura maxima e a barra
+  // sem valor simplesmente nao existe.
+  var sparse = buckets.length < 8;
+
   return (
     <View style={g.wrap} accessibilityLabel="Gráfico de entradas e saídas por dia no período">
       <View style={g.chart}>
         {buckets.map(function(b) {
-          var inH = Math.max(2, (b.income / max) * 100);
-          var outH = Math.max(2, (b.expenses / max) * 100);
+          var inH = b.income > 0 ? Math.max(3, (b.income / max) * 100) : 0;
+          var outH = b.expenses > 0 ? Math.max(3, (b.expenses / max) * 100) : 0;
           return (
-            <View key={b.key} style={g.col}>
+            <View key={b.key} style={[g.col, sparse ? g.colSparse : null]}>
               <View style={g.pair}>
-                <Animated.View
-                  style={[
-                    g.bar,
-                    {
-                      backgroundColor: Colors.green,
-                      height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", inH + "%"] }),
-                    },
-                  ]}
-                />
-                <Animated.View
-                  style={[
-                    g.bar,
-                    {
-                      backgroundColor: Colors.red,
-                      opacity: 0.85,
-                      height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", outH + "%"] }),
-                    },
-                  ]}
-                />
+                {b.income > 0 && (
+                  <Animated.View
+                    style={[
+                      g.bar,
+                      {
+                        backgroundColor: Colors.green,
+                        height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", inH + "%"] }),
+                      },
+                    ]}
+                  />
+                )}
+                {b.expenses > 0 && (
+                  <Animated.View
+                    style={[
+                      g.bar,
+                      {
+                        backgroundColor: Colors.red,
+                        opacity: 0.85,
+                        height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", outH + "%"] }),
+                      },
+                    ]}
+                  />
+                )}
               </View>
             </View>
           );
@@ -496,6 +508,8 @@ var g = StyleSheet.create({
   wrap: { marginTop: 18 },
   chart: { flexDirection: "row", alignItems: "flex-end", gap: 4, height: 56 },
   col: { flex: 1, height: "100%", justifyContent: "flex-end" },
+  // Com poucos dias, limita a largura pra nao virar bloco gigante.
+  colSparse: { maxWidth: 54 },
   pair: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: "100%" },
   bar: { flex: 1, borderRadius: 2, minHeight: 2 },
   legendRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },

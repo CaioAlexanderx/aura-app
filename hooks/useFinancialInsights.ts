@@ -266,9 +266,10 @@ export function useFinancialInsights(args: Args): FinancialInsights {
   // Merge server > client
   return useMemo(function() {
     var server = serverQuery.data;
+    var pending = enabled && serverQuery.isPending;
     if (!server || !server.health || typeof server.health.score !== "number") {
       // Server nao retornou ainda ou erro — usa client puro
-      return clientSide;
+      return { ...clientSide, insights_pending: pending };
     }
     // Merge: campos do server sobrescrevem client; biggest_lever e narrative vem do server se existirem
     return {
@@ -294,6 +295,7 @@ export function useFinancialInsights(args: Args): FinancialInsights {
       // permanente, mesmo com o backend devolvendo os dados.
       monthly_evolution: (server as any).monthly_evolution,
       professional_ranking: (server as any).professional_ranking,
+      insights_pending: false,
     };
-  }, [clientSide, serverQuery.data]);
+  }, [clientSide, serverQuery.data, serverQuery.isPending, enabled]);
 }

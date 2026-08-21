@@ -31,9 +31,9 @@ type Props = {
 };
 
 var COMPARE_OPTIONS: { value: CompareWith; label: string; short: string }[] = [
-  { value: "previous_period", label: "Periodo anterior", short: "vs anterior" },
+  { value: "previous_period", label: "Período anterior", short: "vs anterior" },
   { value: "yoy", label: "Ano passado (YoY)", short: "vs ano passado" },
-  { value: "custom", label: "Periodo customizado", short: "vs custom" },
+  { value: "custom", label: "Período personalizado", short: "vs custom" },
 ];
 
 function fmtBRLCompact(v: number): string {
@@ -239,7 +239,7 @@ function KpiCard({
   // Linha resumo: "↓ −R$ 17,8k (−65,8%)" ou "—"
   var changeText: string;
   if (d.arrow === "flat" || dAbs.arrow === "flat") {
-    changeText = "Sem variacao";
+    changeText = "Sem variação";
   } else {
     changeText = dAbs.text + " (" + d.text + ")";
   }

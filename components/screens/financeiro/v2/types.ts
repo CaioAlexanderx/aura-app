@@ -136,6 +136,12 @@ export type FinancialInsights = {
   cashflow?: CashflowData;
   monthly_evolution?: MonthlyItem[];
   professional_ranking?: RankingItem[];
+  // 24/08/2026 (QA no app rodando): true enquanto a query de insights do
+  // server ainda esta em voo. O calculo client-side so enxerga o periodo
+  // selecionado, entao antes da resposta do server ele pode concluir que nao
+  // ha nada pendente quando ha — o AcoesCard usava isso pra afirmar "Nada
+  // precisa da sua atencao agora" e depois se corrigir sozinho na tela.
+  insights_pending?: boolean;
 };
 
 export const HEALTH_TARGETS = {
