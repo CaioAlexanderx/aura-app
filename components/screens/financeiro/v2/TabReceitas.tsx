@@ -60,10 +60,31 @@ type Props = {
   onSeeItems?: () => void;
 };
 
+// 24/08/2026: o backend grava o crediario em categorias proprias, com nome de
+// plano de contas — 'Crediario - Recebido', 'Crediario - Encargos',
+// 'Crediario - A Receber'. Sem traducao, o card "De onde vem seu dinheiro"
+// exibia isso cru pro usuario, sem acento e em tres fatias separadas.
+//
+// Para quem vende quase tudo no crediario, essa e a principal fonte de receita
+// do negocio: ela precisa aparecer com nome de gente e somada num lugar so.
+// Os encargos (juros e multa de atraso) ficam separados de proposito — e
+// receita de natureza diferente da venda.
+function prettyIncomeCategory(raw: string): string {
+  var c = (raw || "").trim();
+  if (/^crediario/i.test(c)) {
+    if (/encargo|juro|multa/i.test(c)) return "Crediário (juros e multa)";
+    return "Crediário";
+  }
+  return c || "Outros";
+}
+
 function groupIncomeByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
   var groups: Record<string, number> = {};
   txs.filter(function(t) { return t.type === "income" && t.status === "confirmed"; })
-    .forEach(function(t) { groups[t.category || "Outros"] = (groups[t.category || "Outros"] || 0) + t.amount; });
+    .forEach(function(t) {
+      var k = prettyIncomeCategory(t.category || "Outros");
+      groups[k] = (groups[k] || 0) + t.amount;
+    });
   var total = Object.values(groups).reduce(function(s, v) { return s + v; }, 0);
   var rows = Object.keys(groups).map(function(k) { return { label: k, value: groups[k], pct: total > 0 ? (groups[k] / total) * 100 : 0 }; });
   rows.sort(function(a, b) { return b.value - a.value; });

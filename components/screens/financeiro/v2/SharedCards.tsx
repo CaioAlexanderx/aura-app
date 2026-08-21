@@ -59,6 +59,14 @@ var METHOD_LABELS_PT: Record<string, string> = {
   cheque: "Cheque",
   installment: "Parcelado",
   parcelado: "Parcelado",
+  // 24/08/2026: faltavam. O PDV grava payment_method 'crediario' e
+  // 'crediario_credito' (credito de troca), e sem traducao o card "Como seus
+  // clientes pagam" exibia a chave crua do banco pro usuario final.
+  crediario: "Crediário",
+  credit_account: "Crediário",
+  store_credit: "Crediário",
+  fiado: "Crediário",
+  crediario_credito: "Crédito na loja",
   other: "Outros",
   others: "Outros",
   outros: "Outros",
