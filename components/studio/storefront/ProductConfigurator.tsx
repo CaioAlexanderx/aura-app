@@ -22,6 +22,7 @@ import { SizeGuideModal } from "./SizeGuideModal";
 // que ja aconteceu entre painel/backend/storefront (ver customizationConfig.ts).
 import { sideOf } from "@/components/studio/customizationConfig";
 
+import { tipografiaDaLoja } from "@/constants/fonts";
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
   backgroundColor: "#f3f4f6",
@@ -163,6 +164,10 @@ export function ProductConfigurator({
     [(sf.store as any)?.site?.primary_color],
   );
 
+  // A tipografia escolhida pela lojista parava na prateleira: o titulo do
+  // produto saia na fonte do sistema. Mesma fonte de verdade do ProductList.
+  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+
   const { width: larguraTela } = useWindowDimensions();
   const telaLarga = larguraTela >= 900;
   const LARGURA_MAX = 980;
@@ -211,7 +216,7 @@ export function ProductConfigurator({
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Text>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>{activeProduct.name}</Text>
+          <Text style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>{activeProduct.name}</Text>
           <View
             style={{
               alignSelf: "flex-start",

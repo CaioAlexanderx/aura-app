@@ -12,11 +12,13 @@ import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
 
+import { tipografiaDaLoja } from "@/constants/fonts";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   // A cor da loja tambem no botao que fecha a venda — era azul-marinho
   // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
   // arbitrario (ver fase 01).
   const tema = montarTema((sf.store as any)?.site?.primary_color);
+  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
 
   if (!sf.store) return null;
   const sendDisabled =
@@ -46,7 +48,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Finalizar</Text>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: T.ink }}>Seu pedido</Text>
+          <Text style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Text>
         </View>
       </View>
 
