@@ -17,6 +17,9 @@ export type StudioStoreProduct = {
   description: string | null;
   price: number;
   image_url: string | null;
+  /** Ate 5 fotos (migration 290); indice 0 e a capa. A API sempre mandou;
+   *  o tipo e a vitrine e que ignoravam. */
+  gallery_urls?: string[] | null;
   category: string | null;
   // S1 — vinculo primario da arvore da F0. null em catalogo pre-migracao
   // ou quando a categoria nao e visivel na vitrine (o backend ja filtra).

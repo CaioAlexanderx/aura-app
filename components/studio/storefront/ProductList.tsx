@@ -6,11 +6,11 @@ import { useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform, Image, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
-import { CapaProduto } from "./CapaProduto";
-import { resumo } from "./capaModel";
+import { ProductCard } from "./ProductCard";
+import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
 import { CartBar } from "./Cart";
 import { PoweredByAura } from "./ui/PoweredByAura";
-import { precoMinimo, imagemDoGrupo } from "./categoryGrouping";
+import { precoMinimo } from "./categoryGrouping";
 import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 
@@ -25,6 +25,15 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // desistia. Com 3 categorias isso passa; com as 28 da Finesse, não.
   const { width } = useWindowDimensions();
   const [ativa, setAtiva] = useState<ItemMenu | null>(null);
+
+  // ── Grade ─────────────────────────────────────────────────
+  // A foto e o que vende. Antes era miniatura de 72px numa lista de
+  // linhas — menor que o proprio botao. Agora ocupa a largura do cartao.
+  const GAP = 14;
+  const LARGURA_MAX = 980;
+  const colunas = width < 560 ? 2 : width < 900 ? 3 : 4;
+  const larguraUtil = Math.min(width, LARGURA_MAX) - 28; // padding do scroll
+  const larguraCartao = Math.floor((larguraUtil - GAP * (colunas - 1)) / colunas);
 
   const menu = useMemo(
     () => montarMenu(store.categories, store.products, cabemNaBarra(width)),
@@ -130,120 +139,40 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           // S1 — a vitrine itera ENTRADAS, não produtos: categoria com 2+
           // modelos vira um cartão só. As 9 canecas da Sheid deixam de
           // ocupar 9 linhas quase idênticas.
-          entradas.map((entry) => {
-            if (entry.kind === "category") {
-              const { category, products } = entry;
-              const capa = imagemDoGrupo(products);
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GAP }}>
+            {entradas.map((entry) => {
+              // Categoria com 2+ modelos vira UM cartao — as 9 canecas da
+              // Sheid nao ocupam 9 posicoes quase identicas na grade.
+              if (entry.kind === "category") {
+                const { category, products } = entry;
+                return (
+                  <ProductCard
+                    key={"cat-" + category.id}
+                    nome={category.name}
+                    preco={precoMinimo(products)}
+                    fotos={fotosDoGrupo(products)}
+                    selo={`${products.length} modelos para escolher`}
+                    largura={larguraCartao}
+                    corDaLoja={primary}
+                    onPress={() => sf.openConfigure(products[0], products)}
+                  />
+                );
+              }
+              const p = entry.product;
               return (
-                <Pressable
-                  key={"cat-" + category.id}
-                  onPress={() => sf.openConfigure(products[0], products)}
-                  style={[
-                    {
-                      backgroundColor: T.card, borderRadius: 12, padding: 12,
-                      paddingLeft: 14,
-                      borderWidth: 1, borderColor: T.border,
-                      borderLeftWidth: 3, borderLeftColor: accent,
-                      flexDirection: "row", gap: 12, alignItems: "center",
-                      position: "relative",
-                    },
-                    Platform.OS === "web"
-                      ? ({ boxShadow: "0 4px 12px -4px rgba(30,58,138,0.15)" } as any)
-                      : ({ elevation: 3 } as any),
-                  ]}
-                >
-                  <CapaProduto uri={capa} nome={category.name} tamanho={72} corDaLoja={primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{category.name}</Text>
-                    <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
-                      {products.length} modelos para escolher
-                    </Text>
-                    <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
-                      A partir de R$ {precoMinimo(products).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      alignSelf: "center", paddingHorizontal: 10, paddingVertical: 6,
-                      borderRadius: 999, backgroundColor: accent,
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>Personalizar →</Text>
-                  </View>
-                  <View
-                    style={{
-                      position: "absolute", top: 6, right: 6,
-                      backgroundColor: T.accent,
-                      paddingHorizontal: 6, paddingVertical: 2,
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }}>
-                      {products.length} MODELOS
-                    </Text>
-                  </View>
-                </Pressable>
+                <ProductCard
+                  key={p.id}
+                  nome={p.name}
+                  preco={Number(p.price)}
+                  fotos={fotosDoProduto((p as any).gallery_urls, p.image_url)}
+                  descricao={p.description}
+                  largura={larguraCartao}
+                  corDaLoja={primary}
+                  onPress={() => sf.openConfigure(p)}
+                />
               );
-            }
-
-            const p = entry.product;
-            return (
-            <Pressable
-              key={p.id}
-              onPress={() => sf.openConfigure(p)}
-              style={[
-                {
-                  backgroundColor: T.card, borderRadius: 12, padding: 12,
-                  paddingLeft: 14,
-                  borderWidth: 1, borderColor: T.border,
-                  borderLeftWidth: 3, borderLeftColor: T.primary,
-                  flexDirection: "row", gap: 12, alignItems: "center",
-                  position: "relative",
-                },
-                Platform.OS === "web"
-                  ? ({ boxShadow: "0 4px 12px -4px rgba(30,58,138,0.15)" } as any)
-                  : ({ elevation: 3 } as any),
-              ]}
-            >
-              <CapaProduto uri={p.image_url} nome={p.name} tamanho={72} corDaLoja={primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{p.name}</Text>
-                {/* Descrição colada de marketplace vinha com 400 caracteres e
-                    espremia o cartão. O corte agora acontece na palavra, não
-                    no meio dela; sem descrição, o bloco simplesmente não
-                    existe e o layout fecha sozinho. */}
-                {resumo(p.description, 110) ? (
-                  <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }} numberOfLines={2}>
-                    {resumo(p.description, 110)}
-                  </Text>
-                ) : null}
-                <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
-                  A partir de R$ {Number(p.price).toFixed(2)}
-                </Text>
-              </View>
-              <View
-                style={{
-                  alignSelf: "center", paddingHorizontal: 10, paddingVertical: 6,
-                  borderRadius: 999, backgroundColor: accent,
-                }}
-              >
-                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>Personalizar →</Text>
-              </View>
-              <View
-                style={{
-                  position: "absolute", top: 6, right: 6,
-                  backgroundColor: T.accent,
-                  paddingHorizontal: 6, paddingVertical: 2,
-                  borderRadius: 4,
-                }}
-              >
-                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }}>
-                  PERSONALIZÁVEL
-                </Text>
-              </View>
-              </Pressable>
-            );
-          })
+            })}
+          </View>
         )}
       </ScrollView>
 
