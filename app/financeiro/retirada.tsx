@@ -77,7 +77,7 @@ export default function RetiradaScreen() {
         />
       )}
 
-      {!isLoading && !isError && !isDemo && <TabRetirada transactions={transactions} />}
+      {!isLoading && !isError && !isDemo && <TabRetirada transactions={transactions} hideHeading />}
     </ScrollView>
   );
 }

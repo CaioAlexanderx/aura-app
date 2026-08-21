@@ -18,7 +18,7 @@
 // dentro de dowCol sem altura definida → resolvia 0px → barras invisíveis.
 // Solução: dowTrack recebe height:96 explícita; dowBars perde height+alignItems.
 
-import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Platform, Dimensions, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { fmt, fmtK } from "../types";
@@ -197,7 +197,13 @@ export function HBarList({ items, kind }: { items: PaymentMethodSlice[]; kind: "
 // ============================================================
 // Timeline — atrasadas / esta_semana / este_mes / futuras
 // ============================================================
-export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "receivable" | "payable" }) {
+export function Timeline({ buckets, kind, onSeeItems }: {
+  buckets: TimelineBuckets;
+  kind: "receivable" | "payable";
+  // Leva pra lista de lancamentos, onde estao os nomes. O card mostra prazos;
+  // quem quer saber DE QUEM precisa de um caminho, nao de um titulo que promete.
+  onSeeItems?: () => void;
+}) {
   var totalSum = buckets.atrasadas.total + buckets.esta_semana.total + buckets.este_mes.total + buckets.futuras.total;
 
   if (totalSum === 0) {
@@ -219,7 +225,11 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
 
   return (
     <View>
-      {/* Stack bar — visualiza proporcao */}
+      {/* Stack bar — visualiza proporcao ENTRE categorias. Com uma unica
+          categoria preenchida ela nao informa nada: vira uma faixa chapada de
+          ponta a ponta (no QA, uma barra vermelha gigante so porque todo o
+          valor estava em "Atrasadas"). Nesse caso a lista abaixo ja diz tudo. */}
+      {rows.filter(function(r) { return r.b.total > 0; }).length > 1 && (
       <View style={[s.timelineStack, { backgroundColor: Colors.bg4 }]}>
         {rows.filter(function(r) { return r.b.total > 0; }).map(function(r) {
           var w = (r.b.total / totalSum) * 100;
@@ -233,6 +243,7 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
           );
         })}
       </View>
+      )}
 
       {/* Lista de buckets */}
       <View style={{ marginTop: 14, gap: 10 }}>
@@ -250,6 +261,24 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
           );
         })}
       </View>
+
+      {onSeeItems && (
+        <Pressable
+          onPress={onSeeItems}
+          accessibilityRole="button"
+          accessibilityLabel={kind === "receivable" ? "Ver quem está devendo" : "Ver as contas a pagar"}
+          style={({ hovered }: any) => [
+            s.timelineCta,
+            isWeb && hovered ? { opacity: 0.75 } : null,
+            isWeb ? ({ transition: "opacity 0.15s ease", cursor: "pointer" } as any) : null,
+          ]}
+        >
+          <Text style={[s.timelineCtaText, { color: Colors.violet3 }]}>
+            {kind === "receivable" ? "Ver quem está devendo" : "Ver as contas"}
+          </Text>
+          <Icon name="chevron_right" size={11} color={Colors.violet3} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -355,6 +384,8 @@ var s = StyleSheet.create({
   timelineStack: { height: 18, borderRadius: 9, overflow: "hidden", flexDirection: "row" },
   timelineSegment: { height: "100%" },
   timelineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  timelineCta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 14, alignSelf: "flex-start" },
+  timelineCtaText: { fontSize: 12, fontWeight: "700" },
   // FIX 24/08/2026 (feedback do Caio): este bloco era `flex: 1` puro, entao
   // empurrava o valor pra borda do card. Num card de 1100px, ler "Atrasadas" e
   // achar "R$ 434,51" custava mais de mil pixels de travessia. Com teto, o

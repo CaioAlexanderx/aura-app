@@ -5,7 +5,14 @@ import { useAuthStore } from "@/stores/auth";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
 
-type Props = { transactions: Transaction[] };
+type Props = {
+  transactions: Transaction[];
+  // F6/QA (24/08/2026): quando renderizado dentro de /financeiro/retirada, a
+  // ROTA ja escreve "Quanto posso retirar este mes?" e o subtitulo. Sem isto,
+  // a tela abria com a mesma pergunta duas vezes seguidas, uma embaixo da
+  // outra, e dois subtitulos dizendo a mesma coisa.
+  hideHeading?: boolean;
+};
 type Regime = "mei" | "simples";
 var r2 = function(n: number) { return Math.round(n * 100) / 100; };
 
@@ -24,7 +31,7 @@ function getDetectedRegime(): string | null {
 // - quando ativo, mostra um campo R$ manual obrigatorio (sem default automatico)
 // - Fator R passa a refletir o valor real informado (nao um % artificial)
 // Sem toggle ou sem valor: pro-labore = 0, retirada como distribuicao de lucro.
-export function TabRetirada({ transactions }: Props) {
+export function TabRetirada({ transactions, hideHeading }: Props) {
   var { company } = useAuthStore();
   // FIX M4 (24/08/2026): filtrava so por type, sem status. A "receita bruta"
   // da simulacao incluia lancamentos PENDENTES — dinheiro que ainda nao entrou
@@ -67,8 +74,12 @@ export function TabRetirada({ transactions }: Props) {
   return (
     <View>
       <View style={s.header}>
-        <Text style={s.headerTitle}>Quanto você pode retirar?</Text>
-        <Text style={s.headerDesc}>Simulação com base no que entrou, no que saiu e no seu regime tributário.</Text>
+        {!hideHeading && (
+          <>
+            <Text style={s.headerTitle}>Quanto você pode retirar?</Text>
+            <Text style={s.headerDesc}>Simulação com base no que entrou, no que saiu e no seu regime tributário.</Text>
+          </>
+        )}
         <View style={s.regimeInfo}>
           <View style={s.regimeBadge}><Text style={s.regimeText}>{cfg.label}</Text></View>
           <Text style={s.regimeHint}>{regime === "mei" ? "DAS fixo de R$ 75,90 por mês. Sem obrigação de pró-labore." : "DAS de 6% sobre a receita."}</Text>

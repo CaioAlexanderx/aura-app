@@ -532,6 +532,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             previousSummary={previousSummary}
             period={period}
             consolidated={!!consolidatedView}
+            onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
           />
         )}
         {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (
@@ -541,6 +542,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             previousSummary={previousSummary}
             period={period}
             consolidated={!!consolidatedView}
+            onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
           />
         )}
 
