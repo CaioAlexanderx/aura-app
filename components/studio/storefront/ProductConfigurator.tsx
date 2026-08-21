@@ -270,6 +270,7 @@ export function ProductConfigurator({
             showLabel={false}
             slug={slug}
             productId={activeProduct.id}
+            fotoProduto={(activeProduct as any).image_url}
             allowSideToggle
           />
         </View>

@@ -34,6 +34,7 @@ import type { CustomizationConfig, CustomizationField, CustomizationFieldSide } 
 // sideOf é função pura (sem hook/context) — seguro no storefront, que
 // renderiza este componente sem o StudioThemeProvider.
 import { sideOf } from "@/components/studio/customizationConfig";
+import { artFontStack } from "@/constants/fonts";
 
 /**
  * Subconjunto de tokens que o preview realmente consome. Tipos `string`
@@ -61,7 +62,29 @@ type Props = {
    * Cada lado tem a sua própria área de impressão e os seus campos.
    */
   side?: CustomizationFieldSide;
+  /**
+   * Foto do produto. Sem ela o preview desenha um quadrado colorido
+   * generico — o cliente digita o nome e ve um retangulo tracejado, sem
+   * ideia da peca que esta comprando. Com ela, a arte aparece SOBRE o
+   * produto, que e o que a pessoa precisa julgar antes de pagar.
+   */
+  fotoProduto?: string | null;
 };
+
+/** Tinta legivel sobre uma cor — inline pra nao inverter a dependencia
+ *  entre este componente compartilhado e o tema da vitrine. */
+function inkSobre(hex: string): string {
+  const s = String(hex || "").replace("#", "");
+  const full = s.length === 3 ? s.split("").map((c) => c + c).join("") : s;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return "#0F172A";
+  const canal = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+  const lum = 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
+  return lum > 0.45 ? "#0F172A" : "#FFFFFF";
+}
 
 function escapeXml(s: string): string {
   return String(s).replace(/[<>&'"]/g, (c) => {
@@ -96,6 +119,7 @@ export function PersonalizationPreviewBase({
   productName,
   showLabel = true,
   side = "front",
+  fotoProduto,
   t,
 }: Props & { t: PreviewPalette }) {
   // Estado vazio: sem config, mostra placeholder neutro
@@ -157,6 +181,16 @@ export function PersonalizationPreviewBase({
   // Layer image preferida sobre template (ambos podem coexistir mas image vence)
   const overlayUrl = imageUrl || templateUrl;
 
+  // A fonte que o lojista configurou no campo — ate agora ela so servia
+  // de placeholder no input e a arte saia sempre no sans do sistema.
+  const fonteArte = artFontStack((textField as any)?.config?.fonts?.[0]);
+  // Idem a cor: a paleta configurada era ignorada e o texto saia sempre
+  // na tinta da UI.
+  const corArte = (textField as any)?.config?.colors?.[0] || t.ink;
+  // Sobre foto, o contraste e imprevisivel: um halo fino garante que o
+  // nome do cliente seja legivel em cima de qualquer estampa.
+  const haloArte = inkSobre(corArte) === "#FFFFFF" ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.75)";
+
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg-shade" x1="0" y1="0" x2="0" y2="1">
@@ -164,23 +198,28 @@ export function PersonalizationPreviewBase({
       <stop offset="100%" stop-color="${bgColor}" stop-opacity="0.85"/>
     </linearGradient>
   </defs>
-  <!-- Produto base -->
+  <!-- Produto base: a foto quando existe, o quadrado colorido como
+       ultimo recurso. A cor fica ATRAS da foto, entao PNG recortado
+       continua mostrando a cor escolhida pelo cliente. -->
   <rect x="12" y="12" width="76" height="76" rx="10"
         fill="url(#bg-shade)"
         stroke="${t.ink5}" stroke-width="0.6"/>
+  ${fotoProduto ? `<image href="${escapeXml(fotoProduto)}" x="13" y="13" width="74" height="74" preserveAspectRatio="xMidYMid meet" clip-path="inset(0 round 9)"/>` : ""}
   <!-- Sombra interna sutil pra dar volume -->
   <rect x="12" y="12" width="76" height="76" rx="10"
         fill="none"
         stroke="rgba(0,0,0,0.05)" stroke-width="0.4"/>
   <!-- Area de impressao (visualizacao) -->
   <rect x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}"
-        fill="rgba(30,58,138,0.04)"
-        stroke="${t.primary}" stroke-width="0.4"
+        fill="${fotoProduto ? "none" : "rgba(30,58,138,0.04)"}"
+        stroke="${t.primary}" stroke-width="${fotoProduto ? "0.25" : "0.4"}"
+        stroke-opacity="${fotoProduto ? "0.35" : "1"}"
         stroke-dasharray="1.5,0.8"/>
   ${overlayUrl ? `<image href="${escapeXml(overlayUrl)}" x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}" preserveAspectRatio="xMidYMid meet"/>` : ""}
-  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="${fontSize.toFixed(2)}" font-weight="800" fill="${t.ink}">${escapeXml(textValue)}</text>` : ""}
+  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * 0.14).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
+  <text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}
   ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${t.ink3}">${escapeXml(productName)}</text>` : ""}
-  ${!overlayUrl && !textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
+  ${!overlayUrl && !textValue && !fotoProduto ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
 </svg>`.trim();
 
   if (Platform.OS === "web") {
