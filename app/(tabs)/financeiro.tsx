@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, useRootNavigationState } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
 import { maskDateBR, brDateToISO } from "@/utils/mask";
@@ -205,6 +205,25 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
 
+  // FIX 24/08/2026 (QA no app rodando): os redirects abaixo chamavam
+  // router.replace direto no efeito. Em navegacao dentro do app isso funciona
+  // (o Root Layout ja montou), mas em COLD LOAD — link colado, favorito, o
+  // caso de uso que os deep-links existem pra atender — o expo-router lanca
+  // "Attempted to navigate before mounting the Root Layout component" e o
+  // ErrorBoundary derrubava o app inteiro em "Algo deu errado".
+  //
+  // Mesmo padrao ja usado em app/invite/[token].tsx: espera navState.key e
+  // adia o replace, com uma retentativa.
+  var navState = useRootNavigationState();
+  var navReady = navState?.key != null;
+
+  var safeReplace = useCallback(function(target: string) {
+    setTimeout(function() {
+      try { router.replace(target as any); }
+      catch { setTimeout(function() { try { router.replace(target as any); } catch {} }, 500); }
+    }, 100);
+  }, []);
+
   // F6 (24/08/2026): Retirada e Cupons deixaram de ser abas. Os deep-links
   // antigos continuam valendo e levam pras rotas novas — nada que ja circula
   // por ai (favorito do usuario, link colado no WhatsApp) quebra.
@@ -217,14 +236,14 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // que pediu. Dentro do Studio o alias antigo cai na Visao Geral, que e um
   // destino valido, em vez de tirar o usuario do shell.
   useEffect(function() {
-    if (!embedded) {
-      if (paramTab === "retirada") { router.replace("/financeiro/retirada" as any); return; }
-      if (paramTab === "cupons") { router.replace("/cupons" as any); return; }
+    if (!embedded && navReady) {
+      if (paramTab === "retirada") { safeReplace("/financeiro/retirada"); return; }
+      if (paramTab === "cupons") { safeReplace("/cupons"); return; }
     }
     if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
       setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
     }
-  }, [paramTab, embedded]);
+  }, [paramTab, embedded, navReady, safeReplace]);
 
   // F4 (24/08/2026): a curva ABC virou tela propria (/financeiro/produtos).
   // O deep-link antigo do Painel (?tab=receitas&focus=abc) continua valendo —
@@ -232,9 +251,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // pra tela dedicada. replace() pra "voltar" nao cair de novo no redirect.
   // Mesma ressalva do Studio acima.
   useEffect(function() {
-    if (paramFocus !== "abc" || embedded) return;
-    router.replace("/financeiro/produtos" as any);
-  }, [paramFocus, embedded]);
+    if (paramFocus !== "abc" || embedded || !navReady) return;
+    safeReplace("/financeiro/produtos");
+  }, [paramFocus, embedded, navReady, safeReplace]);
 
   // Enquanto o redirect nao acontece, nao renderiza a tela por baixo — evita
   // flash de skeleton/abas antes de sair (e, no caso de retirada/cupons, de
