@@ -1,16 +1,16 @@
-import { View, Text, Pressable, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
-import { SmartBalance } from "./SmartBalance";
-import { SparklineBar } from "./SparklineBar";
-import { PendingCards } from "./PendingCards";
-import { ReconciliationSection } from "./ReconciliationSection";
-import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
 import { CollapsibleSection } from "./CollapsibleSection";
 import type { Transaction, PeriodKey } from "./types";
-// v2: hero cards (redesign Onda 1)
-import { HealthScoreHero, RunwayCard, BiggestLever } from "./v2";
+// F3 (24/08/2026): hero unificado + lista de acoes, no lugar do quarteto
+// HealthScoreHero / BiggestLever / SmartBalance / RunwayCard.
+import { ResumoHero } from "./v2/ResumoHero";
+import { AcoesCard } from "./v2/AcoesCard";
+import { RunwayCard } from "./v2";
 // Onda 3: cashflow chart enriquecido (history + projection com banda confianca)
 import { CashflowChart } from "./v2/Onda3Cards";
 // Fase A (19/05/2026): comparativos visuais (mes-vs-anterior, YoY, custom).
@@ -21,8 +21,6 @@ import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 // dos cards v2 (legendas, hints "abra a empresa especifica", etc).
 import { useAuthStore } from "@/stores/auth";
 
-var W = Dimensions.get("window").width;
-var IS_WIDE = W > 768;
 var isWeb = Platform.OS === "web";
 
 type Summary = { income: number; expenses: number; balance: number; pendingIncome?: number; pendingExpenses?: number };
@@ -36,9 +34,12 @@ type Props = {
   customEnd?: string;
   isLoading: boolean;
   isDemo: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   onNewTransaction: () => void;
   onImport?: () => void;
   onGoToLancamentos: () => void;
+  onGoToDespesas?: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (tx: Transaction) => void;
 };
@@ -58,7 +59,7 @@ function periodToComparative(p: PeriodKey): ComparativePeriod | null {
   }
 }
 
-export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
+export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, isError, onRetry, onNewTransaction, onImport, onGoToLancamentos, onGoToDespesas, onDelete, onEdit }: Props) {
   // Multi-CNPJ: detecta modo consolidado pra ajustar UI dos cards v2.
   // Em consolidated, BiggestLever mostra "Soma de todas as empresas" + dica
   // pra abrir empresa especifica antes de cobrar.
@@ -76,92 +77,67 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
     period: period,
   });
 
-  if (transactions.length === 0 && !isLoading && !isDemo) {
-    return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
-  }
+  // O estado de erro vive na tela (app/(tabs)/financeiro.tsx), nao aqui: a
+  // query e a mesma pras quatro abas, entao duplicar o tratamento por aba foi
+  // justamente o que deixou 3 delas de fora no F0. Este guard so evita que o
+  // empty state de onboarding apareca caso o componente seja montado com erro
+  // por outro caminho.
+  if (isError && !isLoading && !isDemo) return null;
 
-  // Contadores rapidos pros subtitles dos accordions
-  var pendingCount = transactions.filter(function(t) { return t.status === "pending"; }).length;
+  if (transactions.length === 0 && !isLoading && !isDemo) {
+    return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termômetro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lançamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
+  }
 
   // Fase A: comparativo so renderiza quando o periodo eh comparavel.
   var compPeriod = periodToComparative(period);
 
   return (
     <View>
-      {/* === TOPO FIXO — visao imediata, sempre visivel === */}
-      {/* Health Score Hero — donut + drivers + frase narrativa parametrizada.
-          Substitui ranking arbitrario "78/100" com formula 0.35*margem + 0.35*runway
-          + 0.20*crescimento + 0.10*ticket (HEALTH_TARGETS/HEALTH_WEIGHTS). */}
-      <HealthScoreHero insights={insights} />
+      {/* === PRIMEIRA DOBRA — responde em 5 segundos ===
+          F3 (24/08/2026): antes esta dobra tinha HealthScoreHero (donut de score
+          + 4 drivers com meta/gap/barra cada), BiggestLever, SmartBalance e
+          RunwayCard — ~28 numeros e 4 sistemas de "saude" concorrentes, com a
+          resposta simples (entrou/saiu/sobrou) enterrada no 3o card.
 
-      {/* Biggest Lever — destaca acao com maior impacto no caixa.
-          Em consolidated mostra legenda "Soma de todas as empresas" + dica de abrir
-          empresa especifica. CTA continua valido (leva pra Lancamentos consolidado). */}
-      <BiggestLever insights={insights} onCta={onGoToLancamentos} consolidated={consolidatedView} />
+          Agora sao dois: o resumo com a frase de status, e a lista do que
+          precisa de acao. O score continua no hook alimentando a frase e a cor
+          da barra; runway e fluxo de caixa viraram um colapsado so, abaixo. */}
+      <ResumoHero
+        transactions={transactions}
+        summary={summary}
+        previousSummary={previousSummary}
+        insights={insights}
+        period={period}
+        consolidated={consolidatedView}
+      />
 
-      {/* SmartBalance + RunwayCard lado a lado em wide, stack em mobile. */}
-      {IS_WIDE ? (
-        <View style={s.heroGrid}>
-          <View style={{ flex: 1 }}>
-            <SmartBalance
-              income={summary.income}
-              expenses={summary.expenses}
-              balance={summary.balance}
-              pendingIncome={summary.pendingIncome}
-              pendingExpenses={summary.pendingExpenses}
-              txCount={transactions.length}
-              period={period}
-              customStart={customStart}
-              customEnd={customEnd}
-              previousSummary={previousSummary}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <RunwayCard insights={insights} />
-          </View>
-        </View>
-      ) : (
-        <>
-          <SmartBalance
-            income={summary.income}
-            expenses={summary.expenses}
-            balance={summary.balance}
-            pendingIncome={summary.pendingIncome}
-            pendingExpenses={summary.pendingExpenses}
-            txCount={transactions.length}
-            period={period}
-            customStart={customStart}
-            customEnd={customEnd}
-            previousSummary={previousSummary}
-          />
-          <RunwayCard insights={insights} />
-        </>
-      )}
-
-      <SparklineBar transactions={transactions} />
+      <AcoesCard
+        transactions={transactions}
+        insights={insights}
+        consolidated={consolidatedView}
+        onGoToLancamentos={onGoToLancamentos}
+        onGoToDespesas={onGoToDespesas}
+      />
 
       {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand ===
           REDESIGN 19/05/2026: removidas as secoes "Receitas - analise detalhada" e
           "Despesas - analise detalhada" daqui. Elas duplicavam quase 1:1 o conteudo
-          das abas Receitas/Despesas (IncomeDetail/ExpenseDetail = top categorias,
-          top 5, tendencia diaria, formas de pagamento). Quem quer detalhe clica
-          na aba dedicada. Visao Geral fica focada em "headline + saude" sem repetir
-          os mesmos KPIs com delta% em 3 lugares. */}
-      <CollapsibleSection
-        id="pendencias"
-        title="Pendências"
-        subtitle={pendingCount + " lancamento" + (pendingCount === 1 ? "" : "s") + " pendente" + (pendingCount === 1 ? "" : "s")}
-        defaultExpanded
-      >
-        <PendingCards transactions={transactions} />
-      </CollapsibleSection>
+          das abas Receitas/Despesas. Quem quer detalhe clica na aba dedicada.
 
+          F3: "Fluxo de caixa" e o RunwayCard viraram uma secao so — os dois
+          respondiam a mesma pergunta ("meu caixa aguenta ate quando?") com
+          vocabulario diferente. O subtitulo agora entrega a resposta sem abrir. */}
       <CollapsibleSection
-        id="fluxo-caixa"
-        title="Fluxo de caixa"
-        subtitle="Histórico 30d + projeção 30/60/90 com banda de confiança"
+        id="folego-caixa"
+        title="Seu caixa daqui pra frente"
+        subtitle={
+          insights.runway.days >= 999
+            ? "Sem despesas no período pra projetar"
+            : "No ritmo atual, seu dinheiro dura cerca de " + insights.runway.days + " dias"
+        }
       >
         <View style={[s.cashflowCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <RunwayCard insights={insights} />
           <CashflowChart data={insights.cashflow} consolidated={consolidatedView} />
         </View>
       </CollapsibleSection>
@@ -172,28 +148,20 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
       {compPeriod != null && (
         <CollapsibleSection
           id="comparativo"
-          title="Comparativo"
-          subtitle="Compare o periodo atual com mes anterior, ano passado ou periodo customizado"
+          title="Comparar com outro período"
+          subtitle="Veja como este período se compara ao anterior ou ao ano passado"
         >
           <ComparativeSection period={compPeriod} customStart={customStart} customEnd={customEnd} />
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection
-        id="analise-rapida"
-        title="Análise rápida"
-        subtitle="Insights automaticos sobre o periodo"
-      >
-        <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="conciliacao"
-        title="Conciliação bancária"
-        subtitle="Confronte extrato vs lançamentos"
-      >
-        <ReconciliationSection />
-      </CollapsibleSection>
+      {/* F2 (24/08/2026) — saíram daqui:
+          · "Análise rápida" (QuickInsights): repetia em prosa o que o hero e o
+            SmartBalance já mostram em número (margem, top categoria, volume).
+          · "Conciliação bancária": migrou pra aba Lançamentos, que é o contexto
+            natural de conferir extrato contra lançamento.
+          · SparklineBar: os últimos 7 dias já aparecem na "Tendência diária" das
+            abas Receitas e Despesas e no histórico do fluxo de caixa. */}
 
       {transactions.length > 0 && (
         <CollapsibleSection
@@ -214,13 +182,51 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
           </View>
         </CollapsibleSection>
       )}
+
+      {/* F6 (24/08/2026): a Retirada deixou de ser aba e passa a ser alcançada
+          por aqui. Sem este card ela ficaria sem NENHUMA porta de entrada na
+          interface — só pra quem tivesse o link antigo salvo. Em consolidado
+          fica de fora: o cálculo usa o regime tributário de UMA empresa. */}
+      {!consolidatedView && !isDemo && (
+        <Pressable
+          onPress={function() { router.push("/financeiro/retirada" as any); }}
+          accessibilityRole="button"
+          accessibilityLabel="Simular quanto posso retirar este mês"
+          style={({ hovered }: any) => [
+            s.toolCard,
+            { backgroundColor: Colors.bg3, borderColor: Colors.border2 },
+            isWeb && hovered ? { borderColor: Colors.violet3 } : null,
+            isWeb ? ({ transition: "all 0.18s ease", cursor: "pointer" } as any) : null,
+          ]}
+        >
+          <View style={s.toolIcon}>
+            <Icon name="calculator" size={16} color={Colors.violet3} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.toolTitle}>Quanto posso retirar este mês?</Text>
+            <Text style={s.toolSub}>Simulação com seu regime tributário e o que precisa ficar em caixa</Text>
+          </View>
+          <Icon name="chevron_right" size={14} color={Colors.violet3} />
+        </Pressable>
+      )}
     </View>
   );
 }
 
 var s = StyleSheet.create({
-  heroGrid: { flexDirection: "row", gap: 14, marginBottom: 0 },
   seeAll: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border },
-  cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1 },
+  cashflowCard: { borderRadius: 16, padding: 18, borderWidth: 1, gap: 14 },
+  // Card-link da ferramenta de retirada (F6)
+  toolCard: {
+    flexDirection: "row", alignItems: "center", gap: 13,
+    borderRadius: 16, borderWidth: 1, borderStyle: "dashed",
+    paddingHorizontal: 18, paddingVertical: 16, marginTop: 4,
+  },
+  toolIcon: {
+    width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.violetD,
+    alignItems: "center", justifyContent: "center",
+  },
+  toolTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  toolSub: { fontSize: 11.5, marginTop: 2, lineHeight: 16, color: Colors.ink3 },
 });

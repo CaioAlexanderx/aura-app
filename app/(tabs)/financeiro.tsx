@@ -2,15 +2,14 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors } from "@/constants/colors";
-import { useTransactionsApi } from "@/hooks/useTransactions";
+import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
+import { maskDateBR, brDateToISO } from "@/utils/mask";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
-import { TabResumo } from "@/components/screens/financeiro/TabResumo";
-import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
-import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
 import { TABS, TAB_INDEX } from "@/components/screens/financeiro/types";
@@ -37,8 +36,18 @@ var TAB_KEY_TO_INDEX: Record<string, number> = {
   receitas: TAB_INDEX.receitas,
   despesas: TAB_INDEX.despesas,
   lancamentos: TAB_INDEX.lancamentos,
+  // F6: nao sao mais abas, mas seguem aceitos como alias — o efeito de
+  // redirect abaixo manda pras rotas novas antes de qualquer render.
   retirada: TAB_INDEX.retirada,
   cupons: TAB_INDEX.cupons,
+};
+
+// Inverso, pra manter a URL em sincronia com a aba ativa (B4).
+var TAB_INDEX_TO_KEY: Record<number, string> = {
+  [TAB_INDEX.visao]: "visao",
+  [TAB_INDEX.receitas]: "receitas",
+  [TAB_INDEX.despesas]: "despesas",
+  [TAB_INDEX.lancamentos]: "lancamentos",
 };
 
 function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: number } {
@@ -49,20 +58,11 @@ function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: num
   return { maxWidth: 1600, padding: 36 };
 }
 
-function maskDate(v: string): string {
-  var d = v.replace(/\D/g, "").slice(0, 8);
-  if (d.length >= 5) return d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4);
-  if (d.length >= 3) return d.slice(0, 2) + "/" + d.slice(2);
-  return d;
-}
-
-function brToISO(br: string): string | null {
-  var parts = br.split("/");
-  if (parts.length !== 3 || parts[2].length !== 4) return null;
-  var d = parseInt(parts[0]); var m = parseInt(parts[1]); var y = parseInt(parts[2]);
-  if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2020) return null;
-  return y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-}
+// FIX 24/08/2026 (QA Financeiro C2/B7): maskDate/brToISO viviam copiados aqui,
+// em ComparativeSection e em ExportDreModal — as tres copias com o mesmo bug:
+// aceitavam datas inexistentes (31/04) e o ISO invalido virava "NaN-NaN-NaN"
+// na query string, esvaziando a tela sem feedback. Agora todo mundo usa o util
+// compartilhado, que valida o dia contra o mes de verdade.
 
 // ─── F3-3D: Card de A Receber do crediario ──────────────────
 // Consome GET /financial/receivables (Negocio+).
@@ -84,8 +84,10 @@ function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
     retry: false, // nao retentar em 403 (plano insuficiente)
   });
 
-  // Nao mostrar se: carregando, erro (403/plano), ou sem clientes em aberto
-  if (isLoading || !data || data.kpis.customers_open === 0) return null;
+  // Nao mostrar se: carregando, erro (403/plano), ou sem clientes em aberto.
+  // 24/08/2026 (QA): `data.kpis` sem optional chaining derrubava a Visao Geral
+  // inteira com TypeError se o backend respondesse 200 sem o bloco `kpis`.
+  if (isLoading || !data?.kpis || data.kpis.customers_open === 0) return null;
 
   const { kpis } = data;
   const fmtR = (n: number) =>
@@ -177,43 +179,76 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
-  var [showCustomPeriod, setShowCustomPeriod] = useState(false);
   var scrollRef = useRef<any>(null);
 
   var [customStartBR, setCustomStartBR] = useState("");
   var [customEndBR, setCustomEndBR] = useState("");
-  var customStart = brToISO(customStartBR) || undefined;
-  var customEnd = brToISO(customEndBR) || undefined;
+  var parsedStart = brDateToISO(customStartBR) || undefined;
+  var parsedEnd = brDateToISO(customEndBR) || undefined;
+
+  // FIX 24/08/2026 (QA Financeiro A2): nada validava a ordem das datas. Com
+  // "De 20/08 · Ate 01/01" o range saia invertido, a lista voltava vazia e o
+  // check verde aparecia mesmo assim (so testava que as duas datas parsearam).
+  // Agora o range so vale quando esta completo E em ordem — enquanto estiver
+  // invertido a tela segue no periodo anterior e o usuario ve o aviso abaixo.
+  var customRangeInverted = !!parsedStart && !!parsedEnd && parsedStart > parsedEnd;
+  var customRangeValid = !!parsedStart && !!parsedEnd && !customRangeInverted;
+  var customStart = customRangeValid ? parsedStart : undefined;
+  var customEnd = customRangeValid ? parsedEnd : undefined;
 
   var {
     transactions, summary, previousSummary, currentMonthExpenses,
-    dreData, withdrawalData, isLoading, isDemo,
+    isLoading, isDemo, isError, refetch,
     createTransaction, deleteTransaction,
     consolidatedView, consolidatedBreakdown,
-  } = useTransactionsApi(activeTab, period, customStart, customEnd);
+  } = useTransactionsApi(period, customStart, customEnd);
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
 
+  // F6 (24/08/2026): Retirada e Cupons deixaram de ser abas. Os deep-links
+  // antigos continuam valendo e levam pras rotas novas — nada que ja circula
+  // por ai (favorito do usuario, link colado no WhatsApp) quebra.
+  //
+  // FIX (QA pos-F7): so redireciona FORA do Studio. Esta tela e reusada por
+  // app/studio/(estudio)/gestao/financeiro.tsx com `embedded`, e os destinos
+  // vivem no shell do varejo: /cupons esta em (tabs), e o AuthGuard do
+  // app/_layout rebota usuario de Studio que entra em (tabs) de volta pra home
+  // do estudio — o cliente clicaria no link e seria expulso da tela sem ver o
+  // que pediu. Dentro do Studio o alias antigo cai na Visao Geral, que e um
+  // destino valido, em vez de tirar o usuario do shell.
   useEffect(function() {
+    if (!embedded) {
+      if (paramTab === "retirada") { router.replace("/financeiro/retirada" as any); return; }
+      if (paramTab === "cupons") { router.replace("/cupons" as any); return; }
+    }
     if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
       setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
     }
-  }, [paramTab]);
+  }, [paramTab, embedded]);
 
+  // F4 (24/08/2026): a curva ABC virou tela propria (/financeiro/produtos).
+  // O deep-link antigo do Painel (?tab=receitas&focus=abc) continua valendo —
+  // antes ele rolava ate um card no meio da aba Receitas; agora leva direto
+  // pra tela dedicada. replace() pra "voltar" nao cair de novo no redirect.
+  // Mesma ressalva do Studio acima.
   useEffect(function() {
-    if (paramFocus !== "abc") return;
-    if (activeTab !== TAB_INDEX.receitas) return;
-    if (typeof document === "undefined") return;
-    var timer = setTimeout(function () {
-      var el = document.getElementById("abc-curve-card");
-      if (el && typeof (el as any).scrollIntoView === "function") {
-        (el as any).scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 250);
-    return function () { clearTimeout(timer); };
-  }, [paramFocus, activeTab]);
+    if (paramFocus !== "abc" || embedded) return;
+    router.replace("/financeiro/produtos" as any);
+  }, [paramFocus, embedded]);
 
-  var uncategorized = transactions.filter(function(t: any) { return !t.category || t.category === "outros"; }).map(function(t: any) { return t.description; }).filter(Boolean);
+  // Enquanto o redirect nao acontece, nao renderiza a tela por baixo — evita
+  // flash de skeleton/abas antes de sair (e, no caso de retirada/cupons, de
+  // uma faixa de abas sem nenhuma ativa).
+  var redirecting = !embedded && (paramFocus === "abc" || paramTab === "retirada" || paramTab === "cupons");
+
+  // FIX M5 (24/08/2026): a comparacao era com "outros" minusculo, mas
+  // mapApiTransaction normaliza ausencia de categoria pra "Outros" e as
+  // categorias canonicas sao capitalizadas — nenhum lancamento default
+  // chegava a alimentar o "Categorizar com IA".
+  var uncategorized = transactions
+    .filter(function(t: any) { return !t.category || String(t.category).toLowerCase() === "outros"; })
+    .map(function(t: any) { return t.desc || t.description; })
+    .filter(Boolean);
 
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
 
@@ -235,26 +270,34 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     });
   }, [consolidatedBreakdown]);
 
-  function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+  // FIX B4 (24/08/2026): a URL nao acompanhava a aba ativa — dar refresh ou
+  // compartilhar o link devolvia a aba do parametro antigo, nao a que estava
+  // aberta. setParams mantem os dois em sincronia sem empilhar historico.
+  function handleTabSelect(i: number) {
+    setActiveTab(i);
+    var key = TAB_INDEX_TO_KEY[i];
+    if (key) router.setParams({ tab: key });
+    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+  }
 
+  // B3: showCustomPeriod era espelho exato de `period === "custom"` — a
+  // condicao `period === "custom" || showCustomPeriod` nunca divergia.
   function handlePeriodChange(p: PeriodKey) {
     setPeriod(p);
-    if (p === "custom") setShowCustomPeriod(true);
-    else setShowCustomPeriod(false);
   }
 
   // Exporta CSV dos lancamentos visiveis (usado na aba Lancamentos).
   function handleExport() {
-    if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
+    if (transactions.length === 0) { toast.error("Nenhum lançamento para exportar"); return; }
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), "aura_lancamentos_" + new Date().toISOString().slice(0, 10) + ".csv");
   }
 
   async function handleImport() {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para importar lancamentos");
+      toast.error("Escolha uma empresa no seletor para importar lançamentos");
       return;
     }
-    if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
+    if (!company?.id || !token) { toast.error("Sua sessão expirou. Entre novamente."); return; }
     try {
       setImporting(true);
       var rows = await pickFileAndParse();
@@ -265,8 +308,11 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
       });
       var data = await res.json();
       if (!res.ok) { toast.error(data.error || "Erro " + res.status); setImporting(false); return; }
-      qc.invalidateQueries({ queryKey: ["transactions", company.id] });
-      toast.success(data.saved > 0 ? data.saved + " lancamentos importados!" + (data.error_count > 0 ? " (" + data.error_count + " com erro)" : "") : "0 lancamentos validos");
+      // FIX 24/08/2026 (QA Financeiro A5): antes invalidava so ["transactions"],
+      // deixando Health Score, comparativo, banner do mes e Painel com numeros
+      // velhos depois de um import de centenas de lancamentos.
+      invalidateFinanceiroQueries(qc, company.id);
+      toast.success(data.saved > 0 ? data.saved + " lançamentos importados!" + (data.error_count > 0 ? " (" + data.error_count + " com erro)" : "") : "0 lançamentos válidos");
     } catch (err: any) { toast.error("Erro ao importar: " + (err?.message || "tente novamente")); } finally { setImporting(false); }
   }
 
@@ -276,17 +322,17 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
+  // FIX A7 (24/08/2026): havia aqui um guard de consolidado que era
+  // inalcancavel — `onEdit` ja chega undefined nesse modo, entao o toast nunca
+  // disparava — e que instruia "toque no badge da loja", sendo que o badge em
+  // TransactionRow e um View sem onPress. Instrucao falsa em codigo morto.
   function handleEdit(tx: Transaction) {
-    if (consolidatedView) {
-      toast.error("Selecione a empresa especifica para editar (toque no badge da loja)");
-      return;
-    }
     setEditTx(tx); setShowModal(true);
   }
 
   function handleNewTransaction() {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para criar lancamentos");
+      toast.error("Escolha uma empresa no seletor para criar lançamentos");
       return;
     }
     setEditTx(null); setShowModal(true);
@@ -299,6 +345,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     alignSelf: "center" as const,
     width: "100%" as const,
   };
+
+  // Redirect em andamento: nao pinta a tela por baixo (evita flash).
+  if (redirecting) return <View style={{ flex: 1 }} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -337,10 +386,10 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             <Icon name="globe" size={14} color="#a78bfa" />
             <View style={{ flex: 1 }}>
               <Text style={s.consolidatedTitle}>
-                Visao consolidada · {companyCount} empresa{companyCount !== 1 ? "s" : ""}
+                Visão consolidada · {companyCount} empresa{companyCount !== 1 ? "s" : ""}
               </Text>
               <Text style={s.consolidatedSub}>
-                Lancamentos somados de todas as empresas. Para criar/editar, selecione uma empresa especifica.
+                Somando os lançamentos de todas as empresas. Para criar ou editar, escolha uma empresa no seletor.
               </Text>
             </View>
           </View>
@@ -348,21 +397,26 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
-        {(period === "custom" || showCustomPeriod) && (
-          <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
-            <View style={s.customField}>
-              <Text style={s.customLabel}>De</Text>
-              <TextInput style={s.customInput} value={customStartBR} onChangeText={function(v) { setCustomStartBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
-            </View>
-            {!IS_NARROW && <Icon name="arrow_right" size={14} color={Colors.ink3} />}
-            <View style={s.customField}>
-              <Text style={s.customLabel}>Ate</Text>
-              <TextInput style={s.customInput} value={customEndBR} onChangeText={function(v) { setCustomEndBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
-            </View>
-            {customStart && customEnd && (
-              <View style={s.customOk}>
-                <Icon name="check" size={14} color={Colors.green} />
+        {period === "custom" && (
+          <View>
+            <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
+              <View style={s.customField}>
+                <Text style={s.customLabel}>De</Text>
+                <TextInput style={s.customInput} value={customStartBR} onChangeText={function(v) { setCustomStartBR(maskDateBR(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} accessibilityLabel="Data inicial do período" />
               </View>
+              {!IS_NARROW && <Icon name="arrow_right" size={14} color={Colors.ink3} />}
+              <View style={s.customField}>
+                <Text style={s.customLabel}>Até</Text>
+                <TextInput style={s.customInput} value={customEndBR} onChangeText={function(v) { setCustomEndBR(maskDateBR(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} accessibilityLabel="Data final do período" />
+              </View>
+              {customRangeValid && (
+                <View style={s.customOk}>
+                  <Icon name="check" size={14} color={Colors.green} />
+                </View>
+              )}
+            </View>
+            {customRangeInverted && (
+              <Text style={s.customWarn}>A data inicial precisa vir antes da data final.</Text>
             )}
           </View>
         )}
@@ -388,10 +442,35 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           })}
         </ScrollView>
 
-        {!isDemo && transactions.length > 0 && (activeTab === TAB_INDEX.visao || activeTab === TAB_INDEX.lancamentos) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
-        {isLoading && activeTab !== TAB_INDEX.cupons && <ListSkeleton rows={4} showCards />}
+        {/* F2 (24/08/2026): a FinanceiroToolbar (Exportar Vendas + Categorizar com
+            IA) saiu da Visao Geral. Ela competia com o "Exportar" da Topbar logo
+            acima e empurrava o resumo pra baixo. "Categorizar com IA" pertence a
+            Lancamentos, que e onde o usuario ve as categorias erradas. */}
+        {!isDemo && transactions.length > 0 && activeTab === TAB_INDEX.lancamentos && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {/* B9: skeleton nao pode coexistir com a aba montada — antes os dois
+            renderizavam no primeiro load (heroes zerados sob o skeleton).
+            FIX (QA pos-F7): o guard valia so pra Visao Geral; nas outras tres
+            abas o skeleton seguia empilhado por cima dos KPIs zerados. */}
+        {isLoading && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === TAB_INDEX.visao && (
+        {/* FIX A3 (QA pos-F7): o estado de erro tinha sido ligado so na Visao
+            Geral. Nas outras abas a falha de rede continuava virando lista
+            vazia — e em Lancamentos isso mostrava "Lance sua primeira receita"
+            pra quem tem anos de historico, o bug exato que o F0 declarou
+            corrigido. Como o erro e da MESMA query pras quatro abas, o lugar
+            certo do estado e aqui, uma vez so. */}
+        {isError && !isLoading && !isDemo && (
+          <EmptyState
+            icon="alert"
+            iconColor={Colors.amber}
+            title="Não conseguimos carregar seus dados"
+            subtitle="Verifique sua conexão e tente de novo. Seus lançamentos continuam salvos."
+            actionLabel="Tentar de novo"
+            onAction={refetch}
+          />
+        )}
+
+        {activeTab === TAB_INDEX.visao && !isLoading && !isError && (
           <>
             <TabVisaoGeral
               transactions={transactions}
@@ -402,20 +481,23 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
               customEnd={customEnd}
               isLoading={isLoading}
               isDemo={isDemo}
+              isError={isError}
+              onRetry={refetch}
               onNewTransaction={handleNewTransaction}
               onImport={!importing && !consolidatedView ? handleImport : undefined}
               onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+              onGoToDespesas={function() { handleTabSelect(TAB_INDEX.despesas); }}
               onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
               onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
             />
             {/* F3-3D (29/05/2026): A Receber crediario -- so em empresa individual, Negocio+ */}
-            {!consolidatedView && company?.id && (
+            {!consolidatedView && company?.id && !isError && (
               <CrediarioReceivablesCard companyId={company.id} />
             )}
           </>
         )}
 
-        {activeTab === TAB_INDEX.receitas && (
+        {activeTab === TAB_INDEX.receitas && !isLoading && !isError && (
           <TabReceitas
             transactions={transactions}
             summary={summary}
@@ -424,7 +506,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             consolidated={!!consolidatedView}
           />
         )}
-        {activeTab === TAB_INDEX.despesas && (
+        {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (
           <TabDespesas
             transactions={transactions}
             summary={summary}
@@ -434,40 +516,22 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           />
         )}
 
-        {activeTab === TAB_INDEX.lancamentos && (
+        {activeTab === TAB_INDEX.lancamentos && !isLoading && !isError && (
           <TabLancamentos
             transactions={transactions}
             isLoading={isLoading}
             importing={importing}
-            onNewTransaction={handleNewTransaction}
+            onNewTransaction={consolidatedView ? undefined : handleNewTransaction}
             onExport={handleExport}
-            onImport={handleImport}
+            onImport={consolidatedView ? undefined : handleImport}
             onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined}
             onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
           />
         )}
 
-        {activeTab === TAB_INDEX.retirada && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
-        {activeTab === TAB_INDEX.retirada && !consolidatedView && <TabRetirada transactions={transactions} />}
-        {activeTab === TAB_INDEX.cupons && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
-        {activeTab === TAB_INDEX.cupons && !consolidatedView && <TabCupons />}
-
-        <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
+        <ConfirmDialog visible={!!deleteTarget} title="Excluir lançamento?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
-    </View>
-  );
-}
-
-function ConsolidatedBlocked({ label, description }: { label: string; description: string }) {
-  return (
-    <View style={s.blocked}>
-      <View style={s.blockedIconWrap}>
-        <Icon name="lock" size={20} color="#a78bfa" />
-      </View>
-      <Text style={s.blockedTitle}>{label} indisponível em modo consolidado</Text>
-      <Text style={s.blockedDesc}>{description}</Text>
-      <Text style={s.blockedHint}>Use o seletor de empresa no menu lateral para escolher uma.</Text>
     </View>
   );
 }
@@ -479,6 +543,7 @@ var s = StyleSheet.create({
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
+  customWarn: { fontSize: 11.5, color: Colors.amber, fontWeight: "600", marginTop: -8, marginBottom: 16, marginLeft: 4 },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabNarrow: { paddingHorizontal: 8, paddingVertical: 7 },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
@@ -502,27 +567,4 @@ var s = StyleSheet.create({
   },
   consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
   consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
-  blocked: {
-    backgroundColor: Colors.bg3,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 24,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  blockedIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "rgba(124,58,237,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  blockedTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 6 },
-  blockedDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, textAlign: "center", marginBottom: 8, maxWidth: 420 },
-  blockedHint: { fontSize: 11, color: Colors.violet3, fontStyle: "italic" },
 });

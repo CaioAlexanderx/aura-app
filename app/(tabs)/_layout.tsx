@@ -44,7 +44,11 @@ const NAV: NavSection[] = [
   // Permite controlar visibilidade separadamente do Caixa (ex: Kaila/Vitoria).
   // /crediario (14/05/2026) — dashboard inadimplencia + regua de cobranca.
   // Modulo proprio "crediario" (negocio+); nao herda mais do pdv.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  // /cupons (24/08/2026 — F6): a rota ja existia mas nada linkava pra ela; a
+  // unica porta de entrada era uma aba dentro do Financeiro, que reimplementava
+  // o mesmo CRUD. Cupom e ferramenta de venda (aplicada no Caixa), nao dado
+  // financeiro — entra aqui, herdando a visibilidade do modulo pdv.
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},

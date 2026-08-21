@@ -26,8 +26,12 @@ function getDetectedRegime(): string | null {
 // Sem toggle ou sem valor: pro-labore = 0, retirada como distribuicao de lucro.
 export function TabRetirada({ transactions }: Props) {
   var { company } = useAuthStore();
-  var realIncome = useMemo(function() { return transactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
-  var realExpenses = useMemo(function() { return transactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
+  // FIX M4 (24/08/2026): filtrava so por type, sem status. A "receita bruta"
+  // da simulacao incluia lancamentos PENDENTES — dinheiro que ainda nao entrou
+  // — e a retirada "segura" podia sugerir tirar caixa que nao existe. Agora
+  // conta so o confirmado, igual ao summary das outras abas.
+  var realIncome = useMemo(function() { return transactions.filter(function(t) { return t.type === "income" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
+  var realExpenses = useMemo(function() { return transactions.filter(function(t) { return t.type === "expense" && t.status === "confirmed"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [transactions]);
 
   var detectedRegime = getDetectedRegime();
   var regime: Regime = (company as any)?.tax_regime === "mei" || (company as any)?.regime === "mei" || detectedRegime === "mei" ? "mei" : "simples";
@@ -63,27 +67,27 @@ export function TabRetirada({ transactions }: Props) {
   return (
     <View>
       <View style={s.header}>
-        <Text style={s.headerTitle}>Quanto voce pode retirar?</Text>
-        <Text style={s.headerDesc}>Simulacao baseada na sua receita, despesas e regime tributario.</Text>
+        <Text style={s.headerTitle}>Quanto você pode retirar?</Text>
+        <Text style={s.headerDesc}>Simulação com base no que entrou, no que saiu e no seu regime tributário.</Text>
         <View style={s.regimeInfo}>
           <View style={s.regimeBadge}><Text style={s.regimeText}>{cfg.label}</Text></View>
-          <Text style={s.regimeHint}>{regime === "mei" ? "DAS fixo R$ 75,90/mes. Sem obrigacao de pro-labore." : "DAS de 6% sobre receita."}</Text>
+          <Text style={s.regimeHint}>{regime === "mei" ? "DAS fixo de R$ 75,90 por mês. Sem obrigação de pró-labore." : "DAS de 6% sobre a receita."}</Text>
         </View>
         {regime === "simples" && (
           <View style={s.proLaboreToggle}>
             <View style={{ flex: 1 }}>
-              <Text style={s.proLaboreLabel}>Pro-labore no contrato social</Text>
-              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Informe o valor mensal abaixo. Fator R sera calculado em cima dele." : "Sem pro-labore — retirada como distribuicao de lucro"}</Text>
+              <Text style={s.proLaboreLabel}>Pró-labore no contrato social</Text>
+              <Text style={s.proLaboreHint}>{proLaboreEnabled ? "Informe o valor mensal abaixo — o Fator R é calculado em cima dele." : "Sem pró-labore — retirada como distribuição de lucro"}</Text>
             </View>
             <Switch value={proLaboreEnabled} onValueChange={setProLaboreEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
         )}
         {proLaboreEnabled && regime === "simples" && (
           <View style={s.proLaboreInputWrap}>
-            <Text style={s.proLaboreInputLabel}>Pro-labore mensal (R$)</Text>
+            <Text style={s.proLaboreInputLabel}>Pró-labore mensal (R$)</Text>
             <TextInput style={[s.proLaboreInput, proLaboreMissing && s.proLaboreInputMissing]} value={customProLabore} onChangeText={setCustomProLabore} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
             {proLaboreMissing ? (
-              <Text style={s.proLaboreInputHint}>Informe o valor mensal para calcular Fator R e INSS.</Text>
+              <Text style={s.proLaboreInputHint}>Informe o valor mensal para calcular o Fator R e o INSS.</Text>
             ) : proLabore > 0 ? (
               <Text style={s.proLaboreInputOk}>INSS estimado: {fmt(inss)} · Fator R: {fatorR}%</Text>
             ) : null}
@@ -92,8 +96,8 @@ export function TabRetirada({ transactions }: Props) {
       </View>
 
       <View style={s.inputRow}>
-        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Receita bruta</Text><TextInput style={s.input} value={customRevenue} onChangeText={setCustomRevenue} placeholder={realIncome > 0 ? fmt(realIncome) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realIncome > 0 && !customRevenue && <Text style={s.inputHint}>Valor dos lancamentos</Text>}</View>
-        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Despesas operacionais</Text><TextInput style={s.input} value={customExpenses} onChangeText={setCustomExpenses} placeholder={realExpenses > 0 ? fmt(realExpenses) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realExpenses > 0 && !customExpenses && <Text style={s.inputHint}>Valor dos lancamentos</Text>}</View>
+        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Receita bruta</Text><TextInput style={s.input} value={customRevenue} onChangeText={setCustomRevenue} placeholder={realIncome > 0 ? fmt(realIncome) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realIncome > 0 && !customRevenue && <Text style={s.inputHint}>Valor dos seus lançamentos</Text>}</View>
+        <View style={{ flex: 1 }}><Text style={s.inputLabel}>Despesas operacionais</Text><TextInput style={s.input} value={customExpenses} onChangeText={setCustomExpenses} placeholder={realExpenses > 0 ? fmt(realExpenses) : "0,00"} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />{realExpenses > 0 && !customExpenses && <Text style={s.inputHint}>Valor dos seus lançamentos</Text>}</View>
       </View>
 
       {hasData && (
@@ -102,19 +106,19 @@ export function TabRetirada({ transactions }: Props) {
             <View style={s.levelMain}><Text style={s.levelMainLabel}>RETIRADA SEGURA</Text><Text style={[s.levelMainValue, { color: seguraRetirada > 0 ? Colors.green : Colors.red }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelMainSub}>{regime === "mei" ? "sem comprometer o caixa" : proLaboreEnabled ? "sem pressionar caixa, mantendo enquadramento fiscal" : "sem comprometer o caixa"}</Text></View>
             <View style={s.levelsRow}>
               <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.green }]} /><Text style={s.levelLabel}>Ideal</Text><Text style={[s.levelValue, { color: Colors.green }]}>{fmt(idealRetirada)}</Text><Text style={s.levelHint}>conservador</Text></View>
-              <View style={[s.levelItem, s.levelItemBorder]}><View style={[s.levelDot, { backgroundColor: Colors.amber }]} /><Text style={s.levelLabel}>Segura</Text><Text style={[s.levelValue, { color: Colors.amber }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelHint}>equilibrio</Text></View>
-              <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.red }]} /><Text style={s.levelLabel}>Maxima</Text><Text style={[s.levelValue, { color: Colors.red }]}>{fmt(maxRetirada)}</Text><Text style={s.levelHint}>sem folga</Text></View>
+              <View style={[s.levelItem, s.levelItemBorder]}><View style={[s.levelDot, { backgroundColor: Colors.amber }]} /><Text style={s.levelLabel}>Segura</Text><Text style={[s.levelValue, { color: Colors.amber }]}>{fmt(seguraRetirada)}</Text><Text style={s.levelHint}>equilíbrio</Text></View>
+              <View style={s.levelItem}><View style={[s.levelDot, { backgroundColor: Colors.red }]} /><Text style={s.levelLabel}>Máxima</Text><Text style={[s.levelValue, { color: Colors.red }]}>{fmt(maxRetirada)}</Text><Text style={s.levelHint}>sem folga</Text></View>
             </View>
           </View>
 
-          <View style={s.impactCard}><Text style={s.impactTitle}>Se voce retirar o valor seguro:</Text>
+          <View style={s.impactCard}><Text style={s.impactTitle}>Se você retirar o valor seguro:</Text>
             <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
             <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
             {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(r2(proLabore + inss))}</Text></View>}
             <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
           </View>
 
-          <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? "Hoje voce pode retirar " + fmt(seguraRetirada) + " com seguranca. Acima de " + fmt(maxRetirada) + ", sua folga de caixa comeca a ficar apertada." : "Com o cenario atual, nao recomendamos retirada. Suas despesas e obrigacoes consomem toda a receita."}</Text></View>
+          <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? "Hoje você pode retirar " + fmt(seguraRetirada) + " com seguranca. Acima de " + fmt(maxRetirada) + ", sua folga de caixa comeca a ficar apertada." : "Com o cenário atual não dá pra retirar: suas despesas e obrigações consomem tudo que entra."}</Text></View>
 
           <View style={s.waterfall}><Text style={s.wfTitle}>Como calculamos</Text>
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negocio</Text></View>
@@ -122,7 +126,7 @@ export function TabRetirada({ transactions }: Props) {
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
             <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : "(-) DAS estimado (" + (cfg.dasRate*100).toFixed(0) + "%)"}  value={das} color={Colors.red} />
             <WRow label="= Lucro operacional" value={lucroOp} bold />
-            {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigacoes do socio</Text></View><WRow label={"(-) Pro-labore (Fator R " + fatorR + "%)"} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
+            {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View><View style={s.wfSection}><Text style={s.wfSectionLabel}>Obrigações do sócio</Text></View><WRow label={"(-) Pro-labore (Fator R " + fatorR + "%)"} value={proLabore} color={Colors.amber} /><WRow label="(-) INSS (11%)" value={inss} color={Colors.red} /></View>}
             <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado final</Text></View>
             <WRow label="Retirada segura (85%)" value={seguraRetirada} highlight color={Colors.green} />
           </View>
@@ -137,7 +141,7 @@ export function TabRetirada({ transactions }: Props) {
 
           {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"•"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"•"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"•"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
 
-          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Valores para referencia e apoio a decisao. Resultados baseados nos lancamentos registrados e no pro-labore informado.</Text></View>
+          <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>São estimativas para te ajudar a decidir, calculadas sobre os lançamentos registrados e o pró-labore informado. Não substituem seu contador.</Text></View>
         </View>
       )}
     </View>

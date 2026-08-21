@@ -488,8 +488,8 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
               </ScrollView>
             ) : (
               <View style={s.form}>
-                <Text style={s.label}>Lancamentos em lote</Text>
-                <Text style={s.hint}>Uma linha por lancamento: descricao;valor;categoria;data (opcional)</Text>
+                <Text style={s.label}>Lançamentos em lote</Text>
+                <Text style={s.hint}>Uma linha por lançamento: descrição;valor;categoria;data (opcional)</Text>
                 <TextInput style={[s.input, { minHeight: 120, textAlignVertical: "top" }]} value={batchText} onChangeText={setBatchText} placeholder={"Venda A;150,00;Vendas;10/04/2026\nAluguel;1200,00;Fixas"} placeholderTextColor={Colors.ink3} multiline numberOfLines={6} />
                 <Pressable onPress={handleSaveBatch} style={[s.saveBtn, { backgroundColor: isIncome ? Colors.green : Colors.red }]}><Text style={s.saveBtnText}>Lancar em lote</Text></Pressable>
               </View>
@@ -499,7 +499,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
         {isSale && !isEditing && (
           <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={s.form}>
-            <Text style={s.hint}>Registre uma venda que ja aconteceu. O estoque sera descontado e o lancamento criado na data informada.</Text>
+            <Text style={s.hint}>Registre uma venda que já aconteceu. O estoque é descontado e o lançamento entra na data informada.</Text>
             <View style={s.rowFields}>
               <View style={{ width: 130 }}><Text style={s.label}>Data da venda</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
               <View style={{ flex: 1 }}><Text style={s.label}>Pagamento</Text><View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>{PAYMENTS.map(function(p) { return <Pressable key={p.key} onPress={function() { setSalePayment(p.key); }} style={[s.catBtn, salePayment === p.key && s.catBtnActive]}><Text style={[s.catText, salePayment === p.key && s.catTextActive]}>{p.label}</Text></Pressable>; })}</View></View>

@@ -64,7 +64,7 @@ export function ReconciliationSection() {
           <Icon name="file_text" size={16} color={Colors.violet3} />
           <Text style={s.title}>Conciliacao bancaria</Text>
         </View>
-        <Text style={s.hint}>Importe seu extrato bancario (OFX ou CSV) para conciliar automaticamente com seus lancamentos.</Text>
+        <Text style={s.hint}>Envie o extrato do seu banco (OFX ou CSV) e a Aura confere sozinha contra seus lançamentos.</Text>
         {isWeb && (
           <Pressable onPress={handleImportOFX} disabled={uploading} style={[s.importBtn, uploading && { opacity: 0.6 }]}>
             {uploading ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="upload" size={14} color="#fff" />}

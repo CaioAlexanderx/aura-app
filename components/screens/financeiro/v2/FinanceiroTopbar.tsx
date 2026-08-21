@@ -31,7 +31,7 @@ type Props = {
   companyCount: number;
   period: PeriodKey;
   onPeriodChange: (p: PeriodKey) => void;
-  // Acoes — em consolidated, "Novo lancamento" some (precisa empresa especifica)
+  // Acoes — em consolidated, "Novo lançamento" some (precisa empresa especifica)
   onExport?: () => void;
   onNew?: () => void;
   // Dedup de header quando embutida no Studio (ver comentario no topo do arquivo)
@@ -39,7 +39,7 @@ type Props = {
 };
 
 // Subset reduzido pra o Topbar (a Topbar nao mostra todos os 7 — UI muito carregada).
-// Periodos avancados (year/prev_year/all) ficam acessiveis no botao "Periodo".
+// Periodos avancados (year/prev_year/all) ficam acessiveis no botao "Período".
 var TOPBAR_PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
@@ -50,7 +50,7 @@ export function FinanceiroTopbar({ companyName, consolidated, companyCount, peri
   // Periodo "custom" botao traz o periodo customizado (ex.: data inicio/fim).
   // Por enquanto custom abre seletor inline na tela — Topbar so registra clique.
   var isCustomActive = period === "custom" || period === "year" || period === "prev_year" || period === "all";
-  var customLabel = period === "year" ? "Ano" : period === "prev_year" ? "Ano ant." : period === "all" ? "Todos" : "Periodo";
+  var customLabel = period === "year" ? "Ano" : period === "prev_year" ? "Ano passado" : period === "all" ? "Todos" : "Período";
 
   return (
     <View style={[s.bar, { borderBottomColor: Colors.border }]}>
@@ -97,7 +97,7 @@ export function FinanceiroTopbar({ companyName, consolidated, companyCount, peri
               isWeb ? ({ transition: "all 0.2s ease", cursor: "pointer" } as any) : null,
             ]}>
               <Icon name="plus" size={13} color="#fff" />
-              <Text style={s.btnPrimaryText}>Novo lancamento</Text>
+              <Text style={s.btnPrimaryText}>Novo lançamento</Text>
             </Pressable>
           )}
         </View>

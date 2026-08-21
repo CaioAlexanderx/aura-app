@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { companiesApi, dashboardApi } from "@/services/api";
+import { companiesApi } from "@/services/api";
 import { meAggregatesApi } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import type { Transaction, DreData, WithdrawalData, PeriodKey } from "@/components/screens/financeiro/types";
-import { TAB_INDEX, getPeriodRange, getPreviousPeriodRange } from "@/components/screens/financeiro/types";
+import type { Transaction, PeriodKey } from "@/components/screens/financeiro/types";
+import { getPeriodRange, getPreviousPeriodRange } from "@/components/screens/financeiro/types";
 
 function mapApiTransaction(t: any): Transaction {
   return {
@@ -37,18 +37,36 @@ function mapApiTransaction(t: any): Transaction {
   } as Transaction;
 }
 
-function safePeriod(raw: any): string {
-  if (!raw) return new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  if (typeof raw === "string") return raw;
-  if (raw.from && raw.to) { try { return new Date(raw.from).toLocaleDateString("pt-BR") + " - " + new Date(raw.to).toLocaleDateString("pt-BR"); } catch { return "Periodo atual"; } }
-  return "Periodo atual";
-}
-
 function toISODate(d: Date): string {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-export function useTransactionsApi(activeTab?: number, period?: PeriodKey, customStart?: string, customEnd?: string) {
+// FIX 24/08/2026 (QA Financeiro A5): o conjunto de caches que precisa cair
+// depois de QUALQUER escrita de lancamento vivia copiado dentro de cada
+// mutation — e o import de CSV (app/(tabs)/financeiro.tsx) invalidava so
+// ["transactions"]. Depois de importar 200 lancamentos a lista atualizava mas
+// Health Score, comparativo "vs anterior", banner de despesas do mes e Painel
+// seguiam com numeros velhos por ate 2min (staleTime).
+//
+// Centralizado aqui pra que import, create e delete nunca mais divirjam.
+export function invalidateFinanceiroQueries(qc: ReturnType<typeof useQueryClient>, companyId?: string | null) {
+  qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+  qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
+  qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
+  qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
+  qc.invalidateQueries({ queryKey: ["dre", companyId] });
+  qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
+  // Consolidado nao leva companyId na key — invalida o prefixo inteiro.
+  qc.invalidateQueries({ queryKey: ["me-transactions"] });
+  qc.invalidateQueries({ queryKey: ["me-transactions-prev"] });
+  qc.invalidateQueries({ queryKey: ["me-current-month-expenses"] });
+  qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+}
+
+// F6/A6 (24/08/2026): o primeiro parametro era `activeTab`, e existia so pra
+// gatear as queries de dre/withdrawal que acabaram de sair (o resultado nunca
+// era consumido). Sem elas o hook nao tem nada que dependa da aba ativa.
+export function useTransactionsApi(period?: PeriodKey, customStart?: string, customEnd?: string) {
   // MULTICNPJ Onda 2.2: detecta consolidatedView e ramifica entre
   // /companies/:id/transactions (per-company) e /me/transactions (consolidated).
   // Mutations (create/delete) so funcionam em modo per-company — em consolidated
@@ -77,7 +95,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   }, []);
 
   // Query principal de transactions — ramifica entre per-company e consolidated
-  var { data: apiTx, isLoading: isLoadingTx } = useQuery({
+  var { data: apiTx, isLoading: isLoadingTx, isError: isErrorTx, refetch: refetchTx } = useQuery({
     queryKey: consolidatedView
       ? ["me-transactions", periodRange.start, periodRange.end]
       : ["transactions", companyId, periodRange.start, periodRange.end],
@@ -137,24 +155,15 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     retry: 1, staleTime: 60000,
   });
 
-  // V2 (04/05/2026): DRE agora vive dentro da aba Despesas (TAB_INDEX.despesas).
-  // Em consolidated o WaterFall e bloqueado — fetch nao roda.
-  // DRE e Withdrawal so em modo per-company por enquanto.
-  var { data: apiDre } = useQuery({
-    queryKey: ["dre", companyId],
-    queryFn: function() { return companiesApi.dre(companyId!); },
-    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === TAB_INDEX.despesas,
-    retry: 1,
-  });
-
-  // V2: Retirada agora e a aba 4 (era 3 antes do redesign). TAB_INDEX.retirada
-  // mantem isso semanticamente correto — nao depender de literal numerico.
-  var { data: apiWithdrawal } = useQuery({
-    queryKey: ["withdrawal", companyId],
-    queryFn: function() { return dashboardApi.summary(companyId!); },
-    enabled: !consolidatedView && !!companyId && !!token && !isDemo && activeTab === TAB_INDEX.retirada,
-    retry: 1,
-  });
+  // FIX A6 (24/08/2026): aqui viviam duas queries — ["dre"] e ["withdrawal"] —
+  // cujo resultado era desestruturado na tela e NUNCA passado a componente
+  // algum: TabDespesas calcula o DRE client-side a partir do summary e
+  // TabRetirada recalcula tudo a partir de transactions. Eram duas requisicoes
+  // de rede desperdicadas a cada visita nessas abas.
+  //
+  // As invalidations de ["dre"] em invalidateFinanceiroQueries ficam: o cache
+  // ainda pode ser populado por outra tela (ExportDreModal), e invalidar uma
+  // key inexistente e no-op.
 
   var transactions: Transaction[] = useMemo(function() {
     if (isDemo) return [];
@@ -195,18 +204,6 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     return { count: count, total: total };
   }, [apiCurrentMonth, period, transactions]);
 
-  var dreData: DreData | null = useMemo(function() {
-    var raw = apiDre;
-    if (!raw || (!raw.totalIncome && !raw.income && !raw.total_income)) return null;
-    return { period: safePeriod(raw.period), income: Array.isArray(raw.income) ? raw.income : [], expenses: Array.isArray(raw.expenses) ? raw.expenses : [], totalIncome: parseFloat(raw.totalIncome || raw.total_income) || 0, totalExpenses: parseFloat(raw.totalExpenses || raw.total_expenses) || 0, netProfit: parseFloat(raw.netProfit || raw.net_profit) || 0, marginPct: parseFloat(raw.marginPct || raw.margin_pct) || 0 };
-  }, [apiDre]);
-
-  var withdrawalData: WithdrawalData | null = useMemo(function() {
-    var w = apiWithdrawal;
-    if (!w || !w.grossRevenue) return null;
-    return w as WithdrawalData;
-  }, [apiWithdrawal]);
-
   // MULTICNPJ Onda 2.2: breakdown por empresa (apenas em consolidated)
   var consolidatedBreakdown = useMemo(function() {
     if (!consolidatedView) return null;
@@ -221,14 +218,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       return companiesApi.createTransaction(companyId!, body);
     },
     onSuccess: function() {
-      qc.invalidateQueries({ queryKey: ["transactions", companyId] });
-      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
-      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
-      qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["dre", companyId] });
-      // V2: invalida insights tambem (per-company e consolidated)
-      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+      invalidateFinanceiroQueries(qc, companyId);
       toast.success("Lancamento criado!");
     },
     onError: function(err: any) {
@@ -262,12 +252,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       toast.error(err?.message || "Erro ao excluir lancamento");
     },
     onSettled: function() {
-      qc.invalidateQueries({ queryKey: ["transactions", companyId] });
-      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
-      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
-      qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+      invalidateFinanceiroQueries(qc, companyId);
     },
   });
 
@@ -294,9 +279,13 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     summary: summary,
     previousSummary: previousSummary,
     currentMonthExpenses: currentMonthExpenses,
-    dreData: dreData,
-    withdrawalData: withdrawalData,
     isLoading: isLoadingTx && !isDemo,
+    // FIX 24/08/2026 (QA Financeiro A3): o erro da query era descartado aqui.
+    // transactions virava [] com isLoading false, e a Visao Geral renderizava o
+    // EmptyState de onboarding ("Lance sua primeira receita...") — ou seja, quem
+    // tinha 2 anos de dados e abria a tela sem rede via o convite de conta nova.
+    isError: isErrorTx && !isDemo,
+    refetch: refetchTx,
     isDemo: isDemo,
     createTransaction: createTransaction,
     deleteTransaction: deleteTransaction,

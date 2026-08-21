@@ -55,11 +55,6 @@ export type Anomaly = {
   diff_pct: number;
 };
 
-export type GaugeData = {
-  expense_pct: number;
-  zone: "saudavel" | "atencao" | "critico";
-};
-
 export type IncomeBreakdown = {
   top5: TopTransaction[];
   payment_methods: PaymentMethodSlice[];
@@ -74,7 +69,6 @@ export type ExpenseBreakdown = {
   payment_methods: PaymentMethodSlice[];
   timeline: TimelineBuckets;
   anomalies: Anomaly[];
-  gauge: GaugeData;
   total: number;
 };
 
@@ -166,52 +160,92 @@ export function scoreVsTarget(actual: number, target: number, clampMin = 0): num
   return Math.round((v / target) * 100);
 }
 
+// F7 (24/08/2026) — reescrita da narrativa.
+//
+// Esta frase e o texto mais visivel do Financeiro: e a primeira coisa que se
+// le no ResumoHero, no lugar do donut de score. Antes falava a lingua de um
+// CFO ("runway de caixa pede atencao", "indicadores dentro da meta", "maior
+// alavanca") pra um publico de MEI, salao e loja.
+//
+// Agora cada frase diz um FATO sobre o dinheiro do usuario, com o numero
+// dentro, e a subline diz o que fazer. Sem jargao, sem "indicadores".
 export function buildNarrative(args: {
   score: number;
   margem: number;
   runwayDays: number;
   growthPct: number;
   txCount: number;
+  // Sem isto nao da pra distinguir "sobrou 0%" de "nao entrou nada": a margem
+  // e forcada a 0 nos dois casos. Opcional pra nao quebrar quem ja chama.
+  hasIncome?: boolean;
 }): { headline: string; subline: string } {
+  var sobra = Math.round(args.margem);
+
   if (args.txCount < 10) {
     return {
-      headline: "Voce esta comecando — ainda faltam dados pra um diagnostico completo.",
-      subline: "Lance receitas e despesas por algumas semanas pra liberar a analise inteligente do seu negocio.",
+      headline: "Ainda é cedo pra um diagnóstico do seu negócio.",
+      subline: "Lance suas receitas e despesas por algumas semanas — aí a Aura consegue te mostrar o que está funcionando.",
     };
   }
-  if (args.runwayDays > 0 && args.runwayDays < 30) {
+
+  // FIX (QA pos-F7): dois furos de ordem aqui.
+  //
+  // 1. O caso "so despesa" (receita zerada) escapava de tudo: computeClientSide
+  //    forca margem = 0 quando income === 0, entao o ramo `margem < 0` nunca
+  //    disparava justamente na situacao que ele descreve. Agora vem primeiro e
+  //    olha a receita direto.
+  // 2. `runwayDays > 0 && < 30` deixava passar runway ZERO — caixa no fim, o
+  //    cenario mais grave. O `> 0` so existia pra excluir o sentinela 999, que
+  //    o proprio `< 30` ja exclui.
+  if (args.hasIncome === false) {
     return {
-      headline: "Atencao critica: seu caixa cobre menos de 30 dias.",
-      subline: "Priorize cobrar atrasados e revisar despesas pesadas — a maior alavanca esta logo abaixo.",
+      headline: "Neste período saiu dinheiro e não entrou nada.",
+      subline: "Se você faturou e ainda não lançou, registre as entradas. Se não faturou mesmo, vale olhar as saídas na aba Despesas.",
+    };
+  }
+  if (args.margem < 0) {
+    return {
+      headline: "Você gastou mais do que entrou: " + Math.abs(sobra) + "% a mais.",
+      subline: "Veja as maiores saídas na aba Despesas e avalie o que dá pra cortar ou adiar pro mês que vem.",
+    };
+  }
+  if (args.runwayDays < 30) {
+    return {
+      headline: args.runwayDays <= 0
+        ? "Seu caixa chegou no limite."
+        : "Atenção: seu dinheiro em caixa dura menos de um mês.",
+      subline: "Cobre quem está atrasado e segure o que der pra segurar — as contas mais urgentes estão logo abaixo.",
     };
   }
   if (args.score < 60) {
     return {
-      headline: "Seu negocio precisa de atencao em algumas frentes.",
-      subline: "Veja os indicadores abaixo. Pequenos ajustes de margem e cobranca podem virar o jogo rapido.",
+      headline: sobra > 0
+        ? "Sobrou pouco: " + sobra + "% de tudo que entrou."
+        : "Praticamente não sobrou nada neste período.",
+      subline: "Cobrar quem está atrasado e cortar um gasto grande já muda esse número no mês que vem.",
     };
   }
   if (args.score < 80 && args.runwayDays < 60) {
     return {
-      headline: "Voce esta saudavel, mas o runway de caixa pede atencao.",
-      subline: "Estender o caixa pra alem de 60 dias da folego pra investir sem aperto.",
+      headline: "Seu negócio vai bem, mas o caixa está curto.",
+      subline: "No ritmo atual seu dinheiro dura cerca de " + args.runwayDays + " dias. Passar de dois meses te dá folga pra investir sem aperto.",
     };
   }
   if (args.score < 80 && args.margem < 15) {
     return {
-      headline: "Volume bom, margem apertada.",
-      subline: "Sua receita esta saudavel mas a margem caiu — vale revisar precos ou cortar despesa variavel.",
+      headline: "Você vende bem, mas sobra pouco: " + sobra + "%.",
+      subline: "Quando entra muito e sobra pouco, o caminho costuma ser preço ou custo de produto — não volume.",
     };
   }
   if (args.growthPct > 5) {
     return {
-      headline: "Seu negocio esta saudavel, com tracao crescente.",
-      subline: "Margem em alta, caixa com folego e crescimento consistente — siga o ritmo.",
+      headline: "Seu negócio está saudável e crescendo — sobrou " + sobra + "% do que entrou.",
+      subline: "Entrou mais que no período anterior e a sobra se manteve. Continue no ritmo.",
     };
   }
   return {
-    headline: "Seu negocio esta saudavel e estavel.",
-    subline: "Indicadores dentro da meta. Veja abaixo a maior alavanca pra transformar saude em crescimento.",
+    headline: "Seu negócio está saudável — sobrou " + sobra + "% de tudo que entrou.",
+    subline: "As contas estão em dia e o caixa tem folga. Veja abaixo se algo precisa da sua atenção.",
   };
 }
 

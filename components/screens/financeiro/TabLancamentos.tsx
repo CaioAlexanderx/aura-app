@@ -4,6 +4,8 @@ import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { TransactionRow } from "./TransactionRow";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { ReconciliationSection } from "./ReconciliationSection";
 import { Icon } from "@/components/Icon";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
@@ -17,9 +19,13 @@ type Props = {
   transactions: Transaction[];
   isLoading: boolean;
   importing: boolean;
-  onNewTransaction: () => void;
+  // FIX A7 (24/08/2026): eram obrigatorios e a tela os passava sempre, mesmo
+  // em modo consolidado — onde criar/importar nao funciona. O botao aparecia,
+  // o usuario clicava e levava um toast de erro. Agora chegam undefined em
+  // consolidado e o botao simplesmente nao existe, igual a Topbar ja fazia.
+  onNewTransaction?: () => void;
   onExport: () => void;
-  onImport: () => void;
+  onImport?: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (tx: Transaction) => void;
 };
@@ -146,10 +152,10 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       )}
 
       {displayTransactions.length === 0 && !isLoading && (
-        <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle={search || catFilter ? "Nenhum resultado para os filtros aplicados." : "Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."}
-          actionLabel={search || catFilter ? "Limpar filtros" : "Novo lancamento"}
+        <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lançamento" subtitle={search || catFilter ? "Nenhum resultado para os filtros aplicados." : "Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."}
+          actionLabel={search || catFilter ? "Limpar filtros" : onNewTransaction ? "Novo lançamento" : undefined}
           onAction={search || catFilter ? function() { setSearch(""); setCatFilter(null); setTypeFilter("all"); } : onNewTransaction}
-          secondaryLabel={!search && !catFilter ? (importing ? "Importando..." : "Importar CSV") : undefined}
+          secondaryLabel={!search && !catFilter && onImport ? (importing ? "Importando..." : "Importar CSV") : undefined}
           onSecondary={!importing && !search && !catFilter ? onImport : undefined} />
       )}
 
@@ -180,9 +186,22 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       {/* Contador de itens visiveis */}
       {totalItems > 0 && (
         <Text style={s.counterText}>
-          Exibindo {Math.min(visibleCount, totalItems)} de {totalItems} lancamentos
+          Exibindo {Math.min(visibleCount, totalItems)} de {totalItems} lançamentos
         </Text>
       )}
+
+      {/* F2 (24/08/2026): conciliação veio da Visão Geral pra cá. Conferir o
+          extrato do banco é uma tarefa sobre a LISTA de lançamentos — na Visão
+          Geral era mais um acordeão competindo com o resumo do mês. */}
+      {/* Sem gate por transactions.length: quem tem zero lancamento e
+          justamente quem pode querer importar o extrato pra comecar. */}
+      <CollapsibleSection
+        id="conciliacao"
+        title="Conferir com o extrato do banco"
+        subtitle="Veja quais lançamentos ainda não batem com o extrato"
+      >
+        <ReconciliationSection />
+      </CollapsibleSection>
     </View>
   );
 }

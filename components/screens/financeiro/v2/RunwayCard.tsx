@@ -1,6 +1,6 @@
 // components/screens/financeiro/v2/RunwayCard.tsx
 //
-// Card de runway: dias ate esgotar caixa no ritmo atual.
+// Card de runway: dias de caixa caixa no ritmo atual.
 // Barra 0-90d com markers em 30/60/90. Cor varia com criticidade.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
@@ -28,15 +28,15 @@ export function RunwayCard({ insights }: Props) {
   var widthPct = r.days >= 999 ? 0 : Math.min(100, (r.days / maxScale) * 100);
 
   var subline =
-    r.days >= 999 ? "sem dados suficientes pra projetar" :
-    r.days < 30 ? "criticamente curto — priorize cobrar atrasados" :
-    r.days < 60 ? "dentro da zona de atencao — vale estender" :
-    "dentro da zona saudavel";
+    r.days >= 999 ? "ainda não dá pra projetar — faltam despesas no período" :
+    r.days < 30 ? "menos de um mês — comece cobrando quem está atrasado" :
+    r.days < 60 ? "pouco menos de dois meses — vale esticar esse prazo" :
+    "você tem folga pra planejar com calma";
 
   return (
     <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
       <View style={s.headerRow}>
-        <Text style={s.kicker}>RUNWAY DE CAIXA</Text>
+        <Text style={s.kicker}>FÔLEGO DE CAIXA</Text>
       </View>
 
       <View style={s.numberRow}>
@@ -45,7 +45,7 @@ export function RunwayCard({ insights }: Props) {
         </Text>
         <Text style={[s.unit, { color: Colors.ink2 }]}>dias</Text>
       </View>
-      <Text style={[s.helperItalic, { color: Colors.ink3 }]}>ate esgotar o caixa no ritmo atual</Text>
+      <Text style={[s.helperItalic, { color: Colors.ink3 }]}>é quanto seu dinheiro dura no ritmo atual</Text>
 
       <View style={s.barWrap}>
         <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
@@ -81,7 +81,7 @@ export function RunwayCard({ insights }: Props) {
 
       <View style={[s.footer, { borderTopColor: Colors.border }]}>
         <View style={s.footerCol}>
-          <Text style={s.footerLabel}>Caixa atual (estim.)</Text>
+          <Text style={s.footerLabel}>Dinheiro em caixa</Text>
           <Text style={[s.footerVal, { color: Colors.ink }]} numberOfLines={1}>
             {r.cash_balance > 0 ? fmt(r.cash_balance) : "—"}
           </Text>
