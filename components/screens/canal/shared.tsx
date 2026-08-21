@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAccent, varejoAccent, AccentTokens } from "@/contexts/AccentTheme";
+import { TIPOGRAFIAS } from "@/constants/fonts";
 
 export const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -23,11 +24,19 @@ export const PALETTE_PRESETS: Array<[string, string, string]> = [
 
 export const ACCENT_PRESETS = ["#c47a51", "#a78bfa", "#e8a14b", "#e8b5a0", "#c5a679", "#5a8a6f", "#d76b6b", "#2e4a8c"];
 
-export const FONT_OPTIONS: Array<{ value: string; label: string; hint: string }> = [
-  { value: "classic", label: "Instrument", hint: "Serif clássica, elegante" },
-  { value: "modern",  label: "Fraunces",   hint: "Serif moderna, com peso" },
-  { value: "humanist", label: "DM Sans",   hint: "Sans humanista, calorosa" },
-];
+// Uma fonte de verdade para os pares: a lista sai de TIPOGRAFIAS, que e
+// tambem o que a vitrine carrega e aplica. Antes esta lista era paralela
+// ao que o template da loja comum entendia, e nada garantia que as duas
+// concordassem.
+//
+// A ordem importa: e a ordem em que a lojista ve as opcoes, do mais
+// proximo da marca Aura ao mais distante.
+export const FONT_OPTIONS: Array<{ value: string; label: string; hint: string }> =
+  (["classic", "modern", "editorial", "humanist"] as const).map((k) => ({
+    value: k,
+    label: TIPOGRAFIAS[k].nome,
+    hint: TIPOGRAFIAS[k].hint,
+  }));
 
 export const CARD_STYLES: Array<{ value: string; label: string; hint: string }> = [
   { value: "editorial",   label: "Editorial", hint: "Foto + nome serif" },

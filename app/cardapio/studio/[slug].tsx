@@ -16,7 +16,7 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { STOREFRONT_FONTS_CSS } from "@/constants/fonts";
+import { cssDaVitrine } from "@/constants/fonts";
 import { ActivityIndicator, View, Text } from "react-native";
 import { useStorefront } from "@/components/studio/storefront/useStorefront";
 import { T } from "@/components/studio/storefront/types";
@@ -49,8 +49,15 @@ export default function StudioStorefrontPage() {
   // fontes de ARTE, que sao a letra estampada na peca — sem elas o
   // preview cai num fallback silencioso e a caneca "Pacifico" aparece em
   // Arial.
+  // Espera a loja carregar: o par tipografico e escolha DELA, entao o
+  // link so pode ser montado depois de saber qual e. Carregamos apenas o
+  // par escolhido — as quatro opcoes somam oito familias, e pagar banda
+  // por escolha que a lojista nao fez seria desperdicio.
+  const parEscolhido = (sf.store as any)?.site?.font_family;
+
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (!sf.store) return;
     if (document.getElementById("aura-storefront-fonts")) return;
     const pre1 = document.createElement("link");
     pre1.rel = "preconnect"; pre1.href = "https://fonts.googleapis.com";
@@ -59,11 +66,11 @@ export default function StudioStorefrontPage() {
     const link = document.createElement("link");
     link.id = "aura-storefront-fonts";
     link.rel = "stylesheet";
-    link.href = STOREFRONT_FONTS_CSS;
+    link.href = cssDaVitrine(parEscolhido);
     document.head.appendChild(pre1);
     document.head.appendChild(pre2);
     document.head.appendChild(link);
-  }, []);
+  }, [sf.store, parEscolhido]);
 
   if (sf.loading) {
     return <Center><ActivityIndicator color={T.primary} size="large" /></Center>;

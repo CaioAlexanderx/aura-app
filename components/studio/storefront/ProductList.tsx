@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
-import { Fonts } from "@/constants/fonts";
+import { Fonts, tipografiaDaLoja } from "@/constants/fonts";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
 import { casa } from "./buscaVitrine";
@@ -32,6 +32,10 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // ── Grade ─────────────────────────────────────────────────
   // A foto e o que vende. Antes era miniatura de 72px numa lista de
   // linhas — menor que o proprio botao. Agora ocupa a largura do cartao.
+  // Par tipografico da loja. A escolha ja existia no painel e so a loja
+  // comum consumia; aqui a vitrine Studio passa a respeitar.
+  const tipo = tipografiaDaLoja((store.site as any).font_family);
+
   const GAP = 14;
   const LARGURA_MAX = 980;
   const telaLarga = width >= 720;
@@ -127,7 +131,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
               que e voz de UI, nao de vitrine. */}
           <Text
             style={{
-              fontFamily: Fonts.heading,
+              fontFamily: tipo.display,
               color: "#fff",
               fontSize: telaLarga ? 52 : 36,
               lineHeight: telaLarga ? 56 : 40,
@@ -233,7 +237,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             // Busca ou filtro sem resultado: em vez de uma grade em branco,
             // diz o que aconteceu e devolve o caminho de volta.
             <View style={{ paddingVertical: 48, alignItems: "center", gap: 10 }}>
-              <Text style={{ fontFamily: Fonts.heading, fontSize: 20, color: T.ink, textAlign: "center" }}>
+              <Text style={{ fontFamily: tipo.display, fontSize: 20, color: T.ink, textAlign: "center" }}>
                 Nada encontrado por aqui
               </Text>
               <Text style={{ fontSize: 13, color: T.ink3, textAlign: "center", maxWidth: 320 }}>
@@ -268,6 +272,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                     selo={`${products.length} modelos para escolher`}
                     largura={larguraCartao}
                     corDaLoja={primary}
+                    fonteDisplay={tipo.display}
                     onPress={() => sf.openConfigure(products[0], products)}
                   />
                 );
@@ -282,6 +287,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   descricao={p.description}
                   largura={larguraCartao}
                   corDaLoja={primary}
+                  fonteDisplay={tipo.display}
                   onPress={() => sf.openConfigure(p)}
                 />
               );

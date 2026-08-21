@@ -53,9 +53,10 @@ type Props = {
   /** Lado do quadrado. */
   tamanho: number;
   corDaLoja?: string | null;
+  fonteDisplay?: string;
 };
 
-export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja }: Props) {
+export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay }: Props) {
   const [i, setI] = useState(0);
   const [hover, setHover] = useState(false);
   const cor = corDaLoja || AURA.violet;
@@ -63,12 +64,12 @@ export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja }: Props) {
 
   // Sem foto: a capa composta da fase 02 assume.
   if (total === 0) {
-    return <CapaProduto nome={nome} tamanho={tamanho} corDaLoja={cor} />;
+    return <CapaProduto nome={nome} tamanho={tamanho} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
   }
 
   // Uma foto: sem controle nenhum.
   if (total === 1) {
-    return <CapaProduto uri={fotos[0]} nome={nome} tamanho={tamanho} corDaLoja={cor} />;
+    return <CapaProduto uri={fotos[0]} nome={nome} tamanho={tamanho} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
   }
 
   const atual = Math.min(i, total - 1);
