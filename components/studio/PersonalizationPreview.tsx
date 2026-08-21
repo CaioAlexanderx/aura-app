@@ -205,8 +205,15 @@ export function PersonalizationPreviewBase({
   // da FOTO, nao de um campo). Entao o contorno vira parte do desenho —
   // grosso o bastante para ler como letra contornada, que e estilo comum
   // em estamparia, em vez de acidente.
-  const haloArte = inkSobre(corArte) === "#FFFFFF" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.92)";
-  const haloLargura = fotoProduto ? 0.26 : 0.14;
+  const haloArte = inkSobre(corArte) === "#FFFFFF" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)";
+  // Fino de proposito. O contorno grosso (0.26) foi muleta enquanto a cor
+  // da arte era imposta — a primeira da paleta, que numa peca escura dava
+  // escuro sobre escuro. Agora o cliente ESCOLHE a cor, e o traco volta a
+  // ser o que deve ser: uma borda que separa a letra do fundo.
+  //
+  // Grosso demais e pior que ausente: numa area de 6x4cm a fonte fica
+  // pequena, os tracos se encontram e a palavra vira uma mancha.
+  const haloLargura = 0.1;
 
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
