@@ -148,6 +148,45 @@ export function valuesForSide(
   return out;
 }
 
+/**
+ * Rotulo legivel de uma chave da personalizacao.
+ *
+ * O `customization` do pedido nao guarda so os campos: guarda tambem
+ * CHAVES LATERAIS que o cliente preencheu na vitrine — a cor da arte, o
+ * briefing, o opt-in de verso e meio. Na tela do pedido elas apareciam
+ * cruas (`text_cor`, `has_back_selected`), e quem le isso e a oficina,
+ * que precisa saber em que cor estampar e se tem verso.
+ *
+ * Campo normal continua usando o label que a lojista escreveu.
+ */
+export function rotuloDaChave(
+  chave: string,
+  camposPorId: Record<string, { label?: string } | undefined>,
+): string {
+  const campo = camposPorId[chave];
+  if (campo?.label) return campo.label;
+
+  if (chave === "art_service_brief") return "Briefing da arte";
+  if (chave === "has_back_selected") return "Personalizar o verso";
+  if (chave === "has_middle_selected") return "Personalizar o meio";
+
+  const mCor = chave.match(/^(.+)_cor$/);
+  if (mCor) {
+    const dono = camposPorId[mCor[1]]?.label;
+    return dono ? `Cor da arte — ${dono}` : "Cor da arte";
+  }
+
+  return chave;
+}
+
+/** Valor legivel: booleano vira Sim/Nao em vez de "true". */
+export function valorDaChave(valor: unknown): string {
+  if (valor === true) return "Sim";
+  if (valor === false) return "Não";
+  if (valor == null) return "—";
+  return String(valor);
+}
+
 export function sideOf(f: { side?: string } | null | undefined): CustomizationFieldSide {
   const s = (f as any)?.side;
   return s === "back" || s === "middle" ? s : "front";
