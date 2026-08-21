@@ -45,6 +45,8 @@ type Props = {
   previousSummary?: Summary | null;
   period: string;
   consolidated: boolean;
+  // Leva pra aba Lancamentos: e la que estao os nomes por tras dos prazos.
+  onSeeItems?: () => void;
 };
 
 function groupExpenseByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
@@ -74,7 +76,7 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
   });
 }
 
-export function TabDespesas({ transactions, summary, previousSummary, period, consolidated }: Props) {
+export function TabDespesas({ transactions, summary, previousSummary, period, consolidated, onSeeItems }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -147,9 +149,11 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
       {/* Timeline promovida: e a parte acionavel da aba. */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
         <Text style={[s.kicker, { color: Colors.ink3 }]}>A PAGAR</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>O que você deve</Text>
+        {/* Mesmo caso do "Quem te deve": sao baldes de prazo, nao a lista de
+            contas. O titulo passa a descrever o que esta na tela. */}
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Quando você vai pagar</Text>
         {/* Mesmo caso do TabReceitas: fallback nao pode ser spinner eterno. */}
-        {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" /> : (
+        {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" onSeeItems={onSeeItems} /> : (
           <View style={s.empty}>
             <Text style={[s.emptyText, { color: Colors.ink3 }]}>
               {payable > 0

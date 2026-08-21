@@ -56,6 +56,8 @@ type Props = {
   previousSummary?: Summary | null;
   period: string;
   consolidated: boolean;
+  // Leva pra aba Lancamentos: e la que estao os nomes por tras dos prazos.
+  onSeeItems?: () => void;
 };
 
 function groupIncomeByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
@@ -86,7 +88,7 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
   });
 }
 
-export function TabReceitas({ transactions, summary, previousSummary, period, consolidated }: Props) {
+export function TabReceitas({ transactions, summary, previousSummary, period, consolidated, onSeeItems }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -152,13 +154,22 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
 
       {/* Timeline promovida: e a parte acionavel da aba (cobranca). */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        {/* FIX 24/08/2026 (feedback do Caio): o titulo era "Quem te deve" mas o
+            card nao mostra ninguem — mostra baldes de prazo (atrasadas, esta
+            semana, futuras). Promessa que o conteudo nao cumpre.
+            Listar nomes de verdade depende do backend: o /financeiro/insights
+            devolve so os totais por balde, e a lista client-side e escopada ao
+            periodo — no proprio QA os 3 atrasados eram de 80 dias atras, fora
+            do mes, entao a lista sairia vazia ao lado de um total de R$ 434,51.
+            Ate o server expor os itens, o titulo diz o que a tela realmente
+            mostra, e o rodape leva pra onde os nomes estao. */}
         <Text style={[s.kicker, { color: Colors.ink3 }]}>A RECEBER</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Quem te deve</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Quando você vai receber</Text>
         {/* FIX (QA pos-F7): o fallback era um "Carregando…" sem timeout. A
             query de insights nao roda em demo e desiste depois de 1 retry num
             403 — o texto ficava eterno. Como este card subiu pra primeira
             dobra no F5, isso passou a ser a segunda coisa que o usuario ve. */}
-        {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" /> : (
+        {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" onSeeItems={onSeeItems} /> : (
           <View style={s.empty}>
             <Text style={[s.emptyText, { color: Colors.ink3 }]}>
               {receivable > 0
