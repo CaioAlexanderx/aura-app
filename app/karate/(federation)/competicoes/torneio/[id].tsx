@@ -55,6 +55,11 @@ import { karateBracketsApi } from "@/services/karateBracketsApi";
 import { formatEventDateNumeric } from "@/utils/eventDate";
 import { DelegacoesTab } from "@/components/karate/competicoes/DelegacoesTab";
 import { SetupTab } from "@/components/karate/competicoes/SetupTab";
+import { KotosTab } from "@/components/karate/competicoes/KotosTab";
+import { ArbitragemTab } from "@/components/karate/competicoes/ArbitragemTab";
+import { PhasePlanModal } from "@/components/karate/chaves/PhasePlanModal";
+import { printScoresheet } from "@/components/karate/chaves/buildScoresheetHtml";
+import { karateCompetitionP1Api, PhasePlan } from "@/services/karateCompetitionP1Api";
 import { karateCompetitionSetupApi, CompetitionDivision } from "@/services/karateCompetitionSetupApi";
 import { Card } from "@/components/karate/shoji";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -103,7 +108,7 @@ const WIDE_BREAKPOINT = 820;
 
 // Seleção no rail: nível-competição ("overview"/"ranking") ou uma
 // categoria (guardamos o id da categoria).
-type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "delegacoes" } | { kind: "setup" } | { kind: "category"; categoryId: string };
+type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "delegacoes" } | { kind: "kotos" } | { kind: "arbitragem" } | { kind: "setup" } | { kind: "category"; categoryId: string };
 // Aba local dentro do painel de uma categoria. "chaves" cobre tanto
 // Kumite ("Chaves & Resultados") quanto Kata ("Apuração Kata") — o
 // rótulo muda conforme a modalidade, mas a intenção (ver o
@@ -152,6 +157,10 @@ export default function TorneioDetalhe() {
   // P0 Hub: divisões (migration 294) — carregadas junto do detalhe; a
   // aba Configurar edita e recarrega via onChanged.
   const [divisions, setDivisions] = useState<CompetitionDivision[]>([]);
+  // P1: plano de fases da categoria selecionada + impressao da sumula.
+  const [phasePlanFor, setPhasePlanFor] = useState<Category | null>(null);
+  const [phasePlans, setPhasePlans] = useState<Record<string, PhasePlan>>({});
+  const [printingSheet, setPrintingSheet] = useState(false);
 
   const load = useCallback(() => {
     if (!cid) return;
@@ -166,6 +175,22 @@ export default function TorneioDetalhe() {
       .catch(() => setDivisions([]));
   }, [federationId, cid]);
   useEffect(() => { load(); }, [load]);
+
+  // P1: súmula imprimível — o payload vem pronto do backend (fases,
+  // decisão por luta, rodapé de regras, koto) e o HTML é montado aqui.
+  const handlePrintScoresheet = useCallback(async (categoryId: string) => {
+    setPrintingSheet(true);
+    try {
+      const sheet = await karateCompetitionP1Api.getScoresheet(federationId, cid, categoryId);
+      const ok = printScoresheet(sheet);
+      if (!ok) toast.error("Popup bloqueado — permita popups para app.getaura.com.br");
+      else toast.success("Súmula aberta para impressão");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar a súmula");
+    } finally {
+      setPrintingSheet(false);
+    }
+  }, [federationId, cid]);
 
   const loadEntries = useCallback(async (categoryId: string) => {
     setEntriesLoadingCat(categoryId);
@@ -621,6 +646,12 @@ export default function TorneioDetalhe() {
           {selection.kind === "delegacoes" && (
             <DelegacoesTab federationId={federationId} competitionId={cid} />
           )}
+          {selection.kind === "kotos" && (
+            <KotosTab federationId={federationId} competitionId={cid} />
+          )}
+          {selection.kind === "arbitragem" && (
+            <ArbitragemTab federationId={federationId} competitionId={cid} />
+          )}
           {selection.kind === "setup" && (
             <SetupTab
               federationId={federationId}
@@ -662,6 +693,24 @@ export default function TorneioDetalhe() {
                   hitSlop={8}
                 >
                   <Icon name="copy" size={15} color={KarateColors.ink2} />
+                </Pressable>
+                {/* P1: plano de fases (formato por rodada) e súmula imprimível. */}
+                <Pressable
+                  onPress={() => setPhasePlanFor(selectedCategory)}
+                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                  accessibilityLabel={`Plano de fases de ${selectedCategory.name}`}
+                  hitSlop={8}
+                >
+                  <Icon name="layers" size={15} color={KarateColors.ink2} />
+                </Pressable>
+                <Pressable
+                  onPress={() => handlePrintScoresheet(selectedCategory.id)}
+                  disabled={printingSheet}
+                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                  accessibilityLabel={`Imprimir súmula de ${selectedCategory.name}`}
+                  hitSlop={8}
+                >
+                  <Icon name="print" size={15} color={KarateColors.ink2} />
                 </Pressable>
               </View>
 
@@ -737,6 +786,20 @@ export default function TorneioDetalhe() {
             : prev);
         }}
       />
+
+      {phasePlanFor && (
+        <PhasePlanModal
+          visible={!!phasePlanFor}
+          onClose={() => setPhasePlanFor(null)}
+          federationId={federationId}
+          competitionId={cid}
+          categoryId={phasePlanFor.id}
+          categoryName={phasePlanFor.name}
+          modality={phasePlanFor.modality}
+          initialPlan={phasePlans[phasePlanFor.id] || {}}
+          onSaved={(plan) => setPhasePlans((p) => ({ ...p, [phasePlanFor.id]: plan }))}
+        />
+      )}
 
       <EditarTorneioInfoModal
         visible={showEditInfo}
@@ -867,6 +930,20 @@ function CategoryRail({
         label="Delegações"
         active={selection.kind === "delegacoes"}
         onPress={() => onSelect({ kind: "delegacoes" })}
+      />
+      <RailItem
+        isWide={isWide}
+        icon="grid"
+        label="Kotos"
+        active={selection.kind === "kotos"}
+        onPress={() => onSelect({ kind: "kotos" })}
+      />
+      <RailItem
+        isWide={isWide}
+        icon="users"
+        label="Arbitragem"
+        active={selection.kind === "arbitragem"}
+        onPress={() => onSelect({ kind: "arbitragem" })}
       />
       <RailItem
         isWide={isWide}
