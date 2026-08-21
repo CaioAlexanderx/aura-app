@@ -187,6 +187,32 @@ export function valorDaChave(valor: unknown): string {
   return String(valor);
 }
 
+/**
+ * Ha algo desenhavel na personalizacao? (arte enviada, template ou texto)
+ *
+ * Serve pra decidir a MINIATURA do carrinho. Sem foto e sem personalizacao,
+ * o preview desenhava a area de impressao vazia — o cliente via "6x4cm" no
+ * lugar da peca que acabou de comprar. E o mesmo problema que a capa
+ * composta resolveu na prateleira: informacao de producao ocupando o lugar
+ * do produto.
+ *
+ * Cor de fundo sozinha nao conta: um quadrado colorido de 56px nao diz
+ * qual produto e.
+ */
+export function temPersonalizacaoVisivel(
+  config: { fields?: Array<{ id?: string; type?: string }> } | null | undefined,
+  values: Record<string, any> | null | undefined,
+): boolean {
+  const campos = config?.fields || [];
+  const v = values || {};
+  return campos.some((f) => {
+    if (!f || !f.id) return false;
+    if (f.type === "text") return String(v[f.id] || "").trim().length > 0;
+    if (f.type === "image" || f.type === "template") return !!v[f.id];
+    return false;
+  });
+}
+
 export function sideOf(f: { side?: string } | null | undefined): CustomizationFieldSide {
   const s = (f as any)?.side;
   return s === "back" || s === "middle" ? s : "front";
