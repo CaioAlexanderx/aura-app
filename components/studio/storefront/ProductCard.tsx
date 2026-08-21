@@ -29,14 +29,26 @@ type Props = {
   corDaLoja?: string | null;
   /** Fonte de titulo do par escolhido pela lojista. */
   fonteDisplay?: string;
+  /**
+   * Estilo do cartao, escolhido pela lojista no painel.
+   *
+   * A coluna e o seletor ja existiam e so a loja comum obedecia; a
+   * vitrine Studio desenhava sempre do mesmo jeito.
+   */
+  estilo?: "editorial" | "minimal" | "image-heavy";
   onPress: () => void;
 };
 
 export function ProductCard({
-  nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay, onPress,
+  nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay,
+  estilo = "editorial", onPress,
 }: Props) {
   const cor = corDaLoja || AURA.violet;
-  const desc = resumo(descricao, 64);
+  // No minimal a descricao nao entra: o estilo existe pra caber mais
+  // produto na tela, e uma linha extra por cartao briga com isso.
+  const desc = estilo === "minimal" ? null : resumo(descricao, 64);
+  const compacto = estilo === "minimal";
+  const sobreposto = estilo === "image-heavy";
 
   return (
     <Pressable
@@ -50,8 +62,9 @@ export function ProductCard({
           borderRadius: 14,
           borderWidth: 1,
           borderColor: hovered ? wash(cor, 0.3) : T.border,
-          padding: 10,
-          gap: 10,
+          padding: sobreposto ? 0 : 10,
+          gap: sobreposto ? 0 : 10,
+          overflow: sobreposto ? "hidden" : "visible",
           // Movimento do design system: sobe e cresce de leve, numa curva
           // só. Nada de spring.
           transform: [{ translateY: hovered ? -2 : 0 }, { scale: pressed ? 0.985 : 1 }],
@@ -67,14 +80,34 @@ export function ProductCard({
           : ({ elevation: hovered ? 4 : 2 } as any),
       ]}
     >
-      <CarrosselFoto fotos={fotos} nome={nome} tamanho={largura - 20} corDaLoja={cor} fonteDisplay={fonteDisplay} />
+      <CarrosselFoto
+        fotos={fotos}
+        nome={nome}
+        tamanho={largura - (sobreposto ? 0 : 20)}
+        corDaLoja={cor}
+        fonteDisplay={fonteDisplay}
+      />
 
-      <View style={{ gap: 3, paddingHorizontal: 2, paddingBottom: 2 }}>
+      {/* No image-heavy a informacao deita SOBRE a foto, com um veu
+          escuro por baixo: sem ele, nome branco em foto de fundo claro
+          some — e foto de lojista e clara na maioria das vezes. */}
+      <View
+        style={[
+          { gap: 3, paddingHorizontal: 2, paddingBottom: 2 },
+          sobreposto && ({
+            position: "absolute", left: 0, right: 0, bottom: 0,
+            paddingHorizontal: 12, paddingVertical: 10, gap: 2,
+            ...(Platform.OS === "web"
+              ? ({ backgroundImage: "linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.35) 60%, transparent)" } as any)
+              : { backgroundColor: "rgba(0,0,0,0.55)" }),
+          } as any),
+        ]}
+      >
         {selo ? (
           <Text
             style={{
               fontSize: 10, fontWeight: "800", letterSpacing: 0.8,
-              textTransform: "uppercase", color: cor,
+              textTransform: "uppercase", color: sobreposto ? "rgba(255,255,255,0.85)" : cor,
             }}
           >
             {selo}
@@ -85,9 +118,9 @@ export function ProductCard({
           numberOfLines={2}
           style={{
             fontFamily: fonteDisplay || Fonts.heading,
-            fontSize: 16,
-            lineHeight: 20,
-            color: T.ink,
+            fontSize: compacto ? 13.5 : 16,
+            lineHeight: compacto ? 17 : 20,
+            color: sobreposto ? "#fff" : T.ink,
           }}
         >
           {nome}
@@ -101,7 +134,8 @@ export function ProductCard({
 
         <Text
           style={{
-            fontSize: 15, fontWeight: "800", color: cor, marginTop: 2,
+            fontSize: compacto ? 13 : 15, fontWeight: "800",
+            color: sobreposto ? "#fff" : cor, marginTop: 2,
             fontVariant: ["tabular-nums"],
           }}
         >

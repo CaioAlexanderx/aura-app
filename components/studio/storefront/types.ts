@@ -67,6 +67,8 @@ export type StorePayload = {
     primary_color: string; accent_color: string;
     /** Par tipografico escolhido pela lojista (ver TIPOGRAFIAS). */
     font_family?: string | null;
+    /** Estilo do cartao: editorial | minimal | image-heavy. */
+    card_style?: string | null;
     logo_url: string | null; cover_url?: string | null;
   };
   products: StudioStoreProduct[];

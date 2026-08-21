@@ -39,7 +39,13 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   const GAP = 14;
   const LARGURA_MAX = 980;
   const telaLarga = width >= 720;
-  const colunas = width < 560 ? 2 : width < 900 ? 3 : 4;
+  // O minimal existe pra caber mais produto na tela — entao ele ganha
+  // uma coluna a mais, senao seria so um cartao menor com o mesmo vazio
+  // em volta.
+  const estiloCartao = (((store.site as any).card_style || "editorial") as
+    "editorial" | "minimal" | "image-heavy");
+  const base = width < 560 ? 2 : width < 900 ? 3 : 4;
+  const colunas = estiloCartao === "minimal" ? base + 1 : base;
   const larguraUtil = Math.min(width, LARGURA_MAX) - 28; // padding do scroll
   const larguraCartao = Math.floor((larguraUtil - GAP * (colunas - 1)) / colunas);
 
@@ -273,6 +279,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                     largura={larguraCartao}
                     corDaLoja={primary}
                     fonteDisplay={tipo.display}
+                    estilo={estiloCartao}
                     onPress={() => sf.openConfigure(products[0], products)}
                   />
                 );
@@ -288,6 +295,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   largura={larguraCartao}
                   corDaLoja={primary}
                   fonteDisplay={tipo.display}
+                  estilo={estiloCartao}
                   onPress={() => sf.openConfigure(p)}
                 />
               );
