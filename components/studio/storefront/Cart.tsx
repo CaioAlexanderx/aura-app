@@ -38,8 +38,16 @@ export function CartBar({
   return (
     <Pressable
       onPress={() => sf.goTo("checkout")}
+      // A barra flutuante ficou de fora quando a vitrine ganhou coluna de
+      // desktop: num monitor de 1440px ela ia de ponta a ponta (left/right
+      // 12), com o "Ver carrinho" a mais de mil pixels do total. Agora
+      // acompanha a mesma coluna do resto da loja.
       style={{
+        // left+right esticam a barra; o maxWidth trava a largura e a margem
+        // automatica centra o que sobra. Nada de width:"100%" junto, que
+        // brigaria com os dois lados ancorados.
         position: "absolute", left: 12, right: 12, bottom: 40,
+        maxWidth: 980, marginHorizontal: "auto",
         backgroundColor: T.ink, borderRadius: 12,
         paddingVertical: 14, paddingHorizontal: 16,
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
