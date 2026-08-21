@@ -7,10 +7,14 @@ import { useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
+import { montarTema } from "./theme";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
 
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
+  // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
+  const tema = montarTema((sf.store as any)?.site?.primary_color);
+
   const [copied, setCopied] = useState(false);
   if (!sf.sentOrder || !sf.store) return null;
   const { sentOrder, store } = sf;
@@ -78,7 +82,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Pedido</Text>
         <Text style={{ fontSize: 18, color: T.ink, fontWeight: "800" }}>#{sentOrder.order_number}</Text>
         <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase", marginTop: 8 }}>Total</Text>
-        <Text style={{ fontSize: 26, color: T.primary, fontWeight: "800" }}>
+        <Text style={{ fontSize: 26, color: tema.marcaTexto, fontWeight: "800" }}>
           R$ {Number(sentOrder.total).toFixed(2)}
         </Text>
         <Text style={{ fontSize: 11, color: T.accent, fontWeight: "700", marginTop: 8 }}>
@@ -128,7 +132,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
             accessibilityRole="button"
             style={{
               flexDirection: "row", alignItems: "center", gap: 6,
-              backgroundColor: copied ? T.green : T.primary,
+              backgroundColor: copied ? T.green : tema.marcaFill,
               paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10,
             }}
           >
@@ -178,7 +182,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           </Text>
           {rev.max_included > 0 && (
             <Text style={{ fontSize: 12, color: T.ink2, lineHeight: 17 }}>
-              <Text style={{ fontWeight: "800", color: T.primary }}>{rev.max_included}</Text>
+              <Text style={{ fontWeight: "800", color: tema.marcaTexto }}>{rev.max_included}</Text>
               {" "}revis{rev.max_included === 1 ? "ão" : "ões"} grát{rev.max_included === 1 ? "is" : "is"} no mockup.
               {rev.extra_price > 0 && (
                 <>
@@ -199,7 +203,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
       <Pressable
         onPress={sf.resetToList}
         style={{
-          backgroundColor: T.primary, paddingHorizontal: 24, paddingVertical: 12,
+          backgroundColor: tema.marcaFill, paddingHorizontal: 24, paddingVertical: 12,
           borderRadius: 10, marginTop: 20,
         }}
       >
