@@ -109,6 +109,22 @@ export function cssDaVitrine(chave?: string | null): string {
     "&display=swap";
 }
 
+/**
+ * CSS com TODAS as tipografias — so pro painel.
+ *
+ * A vitrine carrega apenas o par escolhido; aqui e o contrario, porque e
+ * onde a lojista COMPARA os quatro. Sem isto o preview mostraria as
+ * quatro opcoes renderizadas na mesma fonte de fallback, que e pior do
+ * que nao ter preview: ela escolheria achando que viu.
+ */
+export function cssDeTodasTipografias(): string {
+  const familias = new Set<string>();
+  for (const par of Object.values(TIPOGRAFIAS)) par.familias.forEach((f) => familias.add(f));
+  return "https://fonts.googleapis.com/css2?" +
+    [...familias].map((f) => "family=" + f).join("&") +
+    "&display=swap";
+}
+
 // ── Fontes de ARTE (vitrine) ─────────────────────────────────
 // O lojista escolhe entre estas ao configurar um campo de texto
 // (FONTS_PRESET em customizationConfig). Elas não fazem parte da UI —

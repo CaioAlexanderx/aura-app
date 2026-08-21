@@ -16,11 +16,12 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import {
   IS_WIDE, COLOR_PRESETS, PALETTE_PRESETS, ACCENT_PRESETS,
-  FONT_OPTIONS, CARD_STYLES, BANNER_TONES, BANNER_TINTS,
+  CARD_STYLES, BANNER_TONES, BANNER_TINTS,
   SERVICE_ICONS, ServiceIconPreview,
   Field, ChipToggle, ToggleRow, SectionTitle, useChannelStyles,
 } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import { PreviewTipografia } from "./PreviewTipografia";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
@@ -41,6 +42,9 @@ type ServiceCard = {
 
 type Cfg = {
   primary_color?: string; accent_color?: string;
+  // Usados pelo preview de tipografia: e a loja DELA que aparece na
+  // amostra, nao um texto generico.
+  site_name?: string | null; logo_url?: string | null;
   dark_mode?: boolean; font_family?: string; card_style?: string;
   announcement_bar?: string;
   banners?: Banner[];
@@ -473,9 +477,20 @@ export function TabDesign({
 
       <SectionTitle title="Tipografia" />
       <View style={cs.card}>
-        <Text style={cs.fieldLabel}>Fonte dos títulos</Text>
-        <ChipToggle options={FONT_OPTIONS} value={font}
-          onChange={(v) => { setFont(v); scheduleSave({ font_family: v }); }} />
+        <Text style={cs.fieldLabel}>Como sua loja escreve</Text>
+        <Text style={[cs.fieldLabel, { fontWeight: "400", opacity: 0.75, marginTop: -2, marginBottom: 10 }]}>
+          Cada opção está mostrando a sua loja — sua cor, seu nome, seu logo.
+        </Text>
+        {/* Antes eram chips com o nome da fonte e uma dica. Nome de fonte
+            nao diz nada pra quem nao e designer, e "elegante" diz menos
+            ainda: a lojista escolhia no escuro. */}
+        <PreviewTipografia
+          valor={font}
+          onChange={(v) => { setFont(v); scheduleSave({ font_family: v }); }}
+          cor={primary}
+          nomeDaLoja={config.site_name}
+          logoUrl={config.logo_url}
+        />
 
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Estilo dos cards de produto</Text>
         <ChipToggle options={CARD_STYLES} value={cardStyle}
