@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Platform, Image, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
-import { LivePreview } from "./LivePreview";
+import { CapaProduto } from "./CapaProduto";
+import { resumo } from "./capaModel";
 import { CartBar } from "./Cart";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { precoMinimo, imagemDoGrupo } from "./categoryGrouping";
@@ -151,22 +152,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                       : ({ elevation: 3 } as any),
                   ]}
                 >
-                  {capa ? (
-                    <Image
-                      source={{ uri: capa }}
-                      style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: T.bg }}
-                      resizeMode="cover"
-                      accessibilityLabel={category.name}
-                    />
-                  ) : (
-                    <LivePreview
-                      config={products[0].customization_config}
-                      values={{}}
-                      size={72}
-                      productName={category.name}
-                      showLabel={false}
-                    />
-                  )}
+                  <CapaProduto uri={capa} nome={category.name} tamanho={72} corDaLoja={primary} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{category.name}</Text>
                     <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
@@ -219,27 +205,16 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   : ({ elevation: 3 } as any),
               ]}
             >
-              {p.image_url ? (
-                <Image
-                  source={{ uri: p.image_url }}
-                  style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: T.bg }}
-                  resizeMode="cover"
-                  accessibilityLabel={p.name}
-                />
-              ) : (
-                <LivePreview
-                  config={p.customization_config}
-                  values={{}}
-                  size={72}
-                  productName={p.name}
-                  showLabel={false}
-                />
-              )}
+              <CapaProduto uri={p.image_url} nome={p.name} tamanho={72} corDaLoja={primary} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{p.name}</Text>
-                {p.description ? (
+                {/* Descrição colada de marketplace vinha com 400 caracteres e
+                    espremia o cartão. O corte agora acontece na palavra, não
+                    no meio dela; sem descrição, o bloco simplesmente não
+                    existe e o layout fecha sozinho. */}
+                {resumo(p.description, 110) ? (
                   <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }} numberOfLines={2}>
-                    {p.description}
+                    {resumo(p.description, 110)}
                   </Text>
                 ) : null}
                 <Text style={{ fontSize: 14, color: primary, fontWeight: "800", marginTop: 4 }}>
