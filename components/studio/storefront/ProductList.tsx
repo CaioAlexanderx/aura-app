@@ -2,19 +2,47 @@
 // components/studio/storefront/ProductList.tsx
 // Stage="list": hero da loja + grid de produtos + CartBar.
 // ============================================================
-import { View, Text, Pressable, ScrollView, Platform, Image } from "react-native";
+import { useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, Platform, Image, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { LivePreview } from "./LivePreview";
 import { CartBar } from "./Cart";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { precoMinimo, imagemDoGrupo } from "./categoryGrouping";
+import { StoreNav } from "./StoreNav";
+import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 
 export function ProductList({ sf }: { sf: StorefrontState }) {
   if (!sf.store) return null;
   const { store } = sf;
   const accent = store.site.accent_color || T.accent;
   const primary = store.site.primary_color || T.primary;
+
+  // ── Navegação por categoria ───────────────────────────────
+  // A vitrine não tinha nenhuma: o cliente rolava a lista inteira ou
+  // desistia. Com 3 categorias isso passa; com as 28 da Finesse, não.
+  const { width } = useWindowDimensions();
+  const [ativa, setAtiva] = useState<ItemMenu | null>(null);
+
+  const menu = useMemo(
+    () => montarMenu(store.categories, store.products, cabemNaBarra(width)),
+    [store.categories, store.products, width],
+  );
+
+  // Filtra as ENTRADAS já agrupadas, não os produtos crus: assim o cartão
+  // "Canecas · 8 modelos" continua sendo um cartão só dentro do filtro.
+  const entradas = useMemo(() => {
+    if (!ativa) return sf.vitrine;
+    const ids = new Set<string>();
+    const empilhar = (i: ItemMenu) => { ids.add(i.id); i.filhas.forEach(empilhar); };
+    empilhar(ativa);
+    return sf.vitrine.filter((e) =>
+      e.kind === "category"
+        ? ids.has(e.category.id)
+        : !!(e.product as any).category_id && ids.has((e.product as any).category_id),
+    );
+  }, [sf.vitrine, ativa]);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -77,6 +105,8 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         </Text>
       </View>
 
+      <StoreNav menu={menu} ativa={ativa} onSelect={setAtiva} primary={primary} />
+
       {/* Grade de produtos */}
       <ScrollView
         style={{ flex: 1 }}
@@ -99,7 +129,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           // S1 — a vitrine itera ENTRADAS, não produtos: categoria com 2+
           // modelos vira um cartão só. As 9 canecas da Sheid deixam de
           // ocupar 9 linhas quase idênticas.
-          sf.vitrine.map((entry) => {
+          entradas.map((entry) => {
             if (entry.kind === "category") {
               const { category, products } = entry;
               const capa = imagemDoGrupo(products);
