@@ -19,9 +19,13 @@ type Props = {
   transactions: Transaction[];
   isLoading: boolean;
   importing: boolean;
-  onNewTransaction: () => void;
+  // FIX A7 (24/08/2026): eram obrigatorios e a tela os passava sempre, mesmo
+  // em modo consolidado — onde criar/importar nao funciona. O botao aparecia,
+  // o usuario clicava e levava um toast de erro. Agora chegam undefined em
+  // consolidado e o botao simplesmente nao existe, igual a Topbar ja fazia.
+  onNewTransaction?: () => void;
   onExport: () => void;
-  onImport: () => void;
+  onImport?: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (tx: Transaction) => void;
 };
@@ -148,10 +152,10 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       )}
 
       {displayTransactions.length === 0 && !isLoading && (
-        <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lancamento" subtitle={search || catFilter ? "Nenhum resultado para os filtros aplicados." : "Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."}
-          actionLabel={search || catFilter ? "Limpar filtros" : "Novo lancamento"}
+        <EmptyState icon="dollar" iconColor={Colors.green} title="Nenhum lançamento" subtitle={search || catFilter ? "Nenhum resultado para os filtros aplicados." : "Lance sua primeira receita ou despesa, ou importe de uma planilha CSV."}
+          actionLabel={search || catFilter ? "Limpar filtros" : onNewTransaction ? "Novo lançamento" : undefined}
           onAction={search || catFilter ? function() { setSearch(""); setCatFilter(null); setTypeFilter("all"); } : onNewTransaction}
-          secondaryLabel={!search && !catFilter ? (importing ? "Importando..." : "Importar CSV") : undefined}
+          secondaryLabel={!search && !catFilter && onImport ? (importing ? "Importando..." : "Importar CSV") : undefined}
           onSecondary={!importing && !search && !catFilter ? onImport : undefined} />
       )}
 

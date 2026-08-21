@@ -166,6 +166,15 @@ export function scoreVsTarget(actual: number, target: number, clampMin = 0): num
   return Math.round((v / target) * 100);
 }
 
+// F7 (24/08/2026) — reescrita da narrativa.
+//
+// Esta frase e o texto mais visivel do Financeiro: e a primeira coisa que se
+// le no ResumoHero, no lugar do donut de score. Antes falava a lingua de um
+// CFO ("runway de caixa pede atencao", "indicadores dentro da meta", "maior
+// alavanca") pra um publico de MEI, salao e loja.
+//
+// Agora cada frase diz um FATO sobre o dinheiro do usuario, com o numero
+// dentro, e a subline diz o que fazer. Sem jargao, sem "indicadores".
 export function buildNarrative(args: {
   score: number;
   margem: number;
@@ -173,45 +182,55 @@ export function buildNarrative(args: {
   growthPct: number;
   txCount: number;
 }): { headline: string; subline: string } {
+  var sobra = Math.round(args.margem);
+
   if (args.txCount < 10) {
     return {
-      headline: "Voce esta comecando — ainda faltam dados pra um diagnostico completo.",
-      subline: "Lance receitas e despesas por algumas semanas pra liberar a analise inteligente do seu negocio.",
+      headline: "Ainda é cedo pra um diagnóstico do seu negócio.",
+      subline: "Lance suas receitas e despesas por algumas semanas — aí a Aura consegue te mostrar o que está funcionando.",
     };
   }
   if (args.runwayDays > 0 && args.runwayDays < 30) {
     return {
-      headline: "Atencao critica: seu caixa cobre menos de 30 dias.",
-      subline: "Priorize cobrar atrasados e revisar despesas pesadas — a maior alavanca esta logo abaixo.",
+      headline: "Atenção: seu dinheiro em caixa dura menos de um mês.",
+      subline: "Cobre quem está atrasado e segure o que der pra segurar — as contas mais urgentes estão logo abaixo.",
+    };
+  }
+  if (args.margem < 0) {
+    return {
+      headline: "Você gastou mais do que entrou neste período.",
+      subline: "Vale olhar as maiores saídas na aba Despesas e ver o que dá pra cortar ou adiar.",
     };
   }
   if (args.score < 60) {
     return {
-      headline: "Seu negocio precisa de atencao em algumas frentes.",
-      subline: "Veja os indicadores abaixo. Pequenos ajustes de margem e cobranca podem virar o jogo rapido.",
+      headline: sobra > 0
+        ? "Sobrou pouco: " + sobra + "% de tudo que entrou."
+        : "Praticamente não sobrou nada neste período.",
+      subline: "Cobrar quem está atrasado e cortar um gasto grande já muda esse número no mês que vem.",
     };
   }
   if (args.score < 80 && args.runwayDays < 60) {
     return {
-      headline: "Voce esta saudavel, mas o runway de caixa pede atencao.",
-      subline: "Estender o caixa pra alem de 60 dias da folego pra investir sem aperto.",
+      headline: "Seu negócio vai bem, mas o caixa está curto.",
+      subline: "No ritmo atual seu dinheiro dura cerca de " + args.runwayDays + " dias. Passar de dois meses te dá folga pra investir sem aperto.",
     };
   }
   if (args.score < 80 && args.margem < 15) {
     return {
-      headline: "Volume bom, margem apertada.",
-      subline: "Sua receita esta saudavel mas a margem caiu — vale revisar precos ou cortar despesa variavel.",
+      headline: "Você vende bem, mas sobra pouco: " + sobra + "%.",
+      subline: "Quando entra muito e sobra pouco, o caminho costuma ser preço ou custo de produto — não volume.",
     };
   }
   if (args.growthPct > 5) {
     return {
-      headline: "Seu negocio esta saudavel, com tracao crescente.",
-      subline: "Margem em alta, caixa com folego e crescimento consistente — siga o ritmo.",
+      headline: "Seu negócio está saudável e crescendo — sobrou " + sobra + "% do que entrou.",
+      subline: "Entrou mais que no período anterior e a sobra se manteve. Continue no ritmo.",
     };
   }
   return {
-    headline: "Seu negocio esta saudavel e estavel.",
-    subline: "Indicadores dentro da meta. Veja abaixo a maior alavanca pra transformar saude em crescimento.",
+    headline: "Seu negócio está saudável — sobrou " + sobra + "% de tudo que entrou.",
+    subline: "As contas estão em dia e o caixa tem folga. Veja abaixo se algo precisa da sua atenção.",
   };
 }
 

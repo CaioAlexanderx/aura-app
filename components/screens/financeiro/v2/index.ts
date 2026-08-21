@@ -14,6 +14,6 @@ export { default as FinanceiroTopbar } from "./FinanceiroTopbar";
 export { default as TabReceitas } from "./TabReceitas";
 export { default as TabDespesas } from "./TabDespesas";
 // Onda 2: cards compartilhados
-export { Top5List, HBarList, Timeline, DowBars, Gauge, AnomalyAlerts } from "./SharedCards";
+export { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
 // Onda 3: cashflow + evolução + ranking
 export { CashflowChart, MonthlyEvolution, ProfessionalsRanking } from "./Onda3Cards";

@@ -9,8 +9,6 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
-import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
-import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
 import { TABS, TAB_INDEX } from "@/components/screens/financeiro/types";
@@ -37,8 +35,18 @@ var TAB_KEY_TO_INDEX: Record<string, number> = {
   receitas: TAB_INDEX.receitas,
   despesas: TAB_INDEX.despesas,
   lancamentos: TAB_INDEX.lancamentos,
+  // F6: nao sao mais abas, mas seguem aceitos como alias — o efeito de
+  // redirect abaixo manda pras rotas novas antes de qualquer render.
   retirada: TAB_INDEX.retirada,
   cupons: TAB_INDEX.cupons,
+};
+
+// Inverso, pra manter a URL em sincronia com a aba ativa (B4).
+var TAB_INDEX_TO_KEY: Record<number, string> = {
+  [TAB_INDEX.visao]: "visao",
+  [TAB_INDEX.receitas]: "receitas",
+  [TAB_INDEX.despesas]: "despesas",
+  [TAB_INDEX.lancamentos]: "lancamentos",
 };
 
 function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: number } {
@@ -170,7 +178,6 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
-  var [showCustomPeriod, setShowCustomPeriod] = useState(false);
   var scrollRef = useRef<any>(null);
 
   var [customStartBR, setCustomStartBR] = useState("");
@@ -190,33 +197,41 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
   var {
     transactions, summary, previousSummary, currentMonthExpenses,
-    dreData, withdrawalData, isLoading, isDemo, isError, refetch,
+    isLoading, isDemo, isError, refetch,
     createTransaction, deleteTransaction,
     consolidatedView, consolidatedBreakdown,
-  } = useTransactionsApi(activeTab, period, customStart, customEnd);
+  } = useTransactionsApi(period, customStart, customEnd);
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
 
+  // F6 (24/08/2026): Retirada e Cupons deixaram de ser abas. Os deep-links
+  // antigos continuam valendo e levam pras rotas novas — nada que ja circula
+  // por ai (favorito do usuario, link colado no WhatsApp) quebra.
   useEffect(function() {
+    if (paramTab === "retirada") { router.replace("/financeiro/retirada" as any); return; }
+    if (paramTab === "cupons") { router.replace("/cupons" as any); return; }
     if (paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined) {
       setActiveTab(TAB_KEY_TO_INDEX[paramTab]);
     }
   }, [paramTab]);
 
+  // F4 (24/08/2026): a curva ABC virou tela propria (/financeiro/produtos).
+  // O deep-link antigo do Painel (?tab=receitas&focus=abc) continua valendo —
+  // antes ele rolava ate um card no meio da aba Receitas; agora leva direto
+  // pra tela dedicada. replace() pra "voltar" nao cair de novo no redirect.
   useEffect(function() {
     if (paramFocus !== "abc") return;
-    if (activeTab !== TAB_INDEX.receitas) return;
-    if (typeof document === "undefined") return;
-    var timer = setTimeout(function () {
-      var el = document.getElementById("abc-curve-card");
-      if (el && typeof (el as any).scrollIntoView === "function") {
-        (el as any).scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 250);
-    return function () { clearTimeout(timer); };
-  }, [paramFocus, activeTab]);
+    router.replace("/financeiro/produtos" as any);
+  }, [paramFocus]);
 
-  var uncategorized = transactions.filter(function(t: any) { return !t.category || t.category === "outros"; }).map(function(t: any) { return t.description; }).filter(Boolean);
+  // FIX M5 (24/08/2026): a comparacao era com "outros" minusculo, mas
+  // mapApiTransaction normaliza ausencia de categoria pra "Outros" e as
+  // categorias canonicas sao capitalizadas — nenhum lancamento default
+  // chegava a alimentar o "Categorizar com IA".
+  var uncategorized = transactions
+    .filter(function(t: any) { return !t.category || String(t.category).toLowerCase() === "outros"; })
+    .map(function(t: any) { return t.desc || t.description; })
+    .filter(Boolean);
 
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
 
@@ -238,26 +253,34 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     });
   }, [consolidatedBreakdown]);
 
-  function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
+  // FIX B4 (24/08/2026): a URL nao acompanhava a aba ativa — dar refresh ou
+  // compartilhar o link devolvia a aba do parametro antigo, nao a que estava
+  // aberta. setParams mantem os dois em sincronia sem empilhar historico.
+  function handleTabSelect(i: number) {
+    setActiveTab(i);
+    var key = TAB_INDEX_TO_KEY[i];
+    if (key) router.setParams({ tab: key });
+    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+  }
 
+  // B3: showCustomPeriod era espelho exato de `period === "custom"` — a
+  // condicao `period === "custom" || showCustomPeriod` nunca divergia.
   function handlePeriodChange(p: PeriodKey) {
     setPeriod(p);
-    if (p === "custom") setShowCustomPeriod(true);
-    else setShowCustomPeriod(false);
   }
 
   // Exporta CSV dos lancamentos visiveis (usado na aba Lancamentos).
   function handleExport() {
-    if (transactions.length === 0) { toast.error("Nenhum lancamento para exportar"); return; }
+    if (transactions.length === 0) { toast.error("Nenhum lançamento para exportar"); return; }
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), "aura_lancamentos_" + new Date().toISOString().slice(0, 10) + ".csv");
   }
 
   async function handleImport() {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para importar lancamentos");
+      toast.error("Escolha uma empresa no seletor para importar lançamentos");
       return;
     }
-    if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
+    if (!company?.id || !token) { toast.error("Sua sessão expirou. Entre novamente."); return; }
     try {
       setImporting(true);
       var rows = await pickFileAndParse();
@@ -282,17 +305,17 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
   }
 
+  // FIX A7 (24/08/2026): havia aqui um guard de consolidado que era
+  // inalcancavel — `onEdit` ja chega undefined nesse modo, entao o toast nunca
+  // disparava — e que instruia "toque no badge da loja", sendo que o badge em
+  // TransactionRow e um View sem onPress. Instrucao falsa em codigo morto.
   function handleEdit(tx: Transaction) {
-    if (consolidatedView) {
-      toast.error("Selecione a empresa especifica para editar (toque no badge da loja)");
-      return;
-    }
     setEditTx(tx); setShowModal(true);
   }
 
   function handleNewTransaction() {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para criar lancamentos");
+      toast.error("Escolha uma empresa no seletor para criar lançamentos");
       return;
     }
     setEditTx(null); setShowModal(true);
@@ -343,10 +366,10 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             <Icon name="globe" size={14} color="#a78bfa" />
             <View style={{ flex: 1 }}>
               <Text style={s.consolidatedTitle}>
-                Visao consolidada · {companyCount} empresa{companyCount !== 1 ? "s" : ""}
+                Visão consolidada · {companyCount} empresa{companyCount !== 1 ? "s" : ""}
               </Text>
               <Text style={s.consolidatedSub}>
-                Lancamentos somados de todas as empresas. Para criar/editar, selecione uma empresa especifica.
+                Somando os lançamentos de todas as empresas. Para criar ou editar, escolha uma empresa no seletor.
               </Text>
             </View>
           </View>
@@ -354,7 +377,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
-        {(period === "custom" || showCustomPeriod) && (
+        {period === "custom" && (
           <View>
             <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
               <View style={s.customField}>
@@ -459,35 +482,17 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             transactions={transactions}
             isLoading={isLoading}
             importing={importing}
-            onNewTransaction={handleNewTransaction}
+            onNewTransaction={consolidatedView ? undefined : handleNewTransaction}
             onExport={handleExport}
-            onImport={handleImport}
+            onImport={consolidatedView ? undefined : handleImport}
             onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined}
             onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
           />
         )}
 
-        {activeTab === TAB_INDEX.retirada && consolidatedView && <ConsolidatedBlocked label="Retirada / Pro-labore" description="O calculo de retirada usa regime tributario e Fator R da empresa. Selecione uma empresa no switcher." />}
-        {activeTab === TAB_INDEX.retirada && !consolidatedView && <TabRetirada transactions={transactions} />}
-        {activeTab === TAB_INDEX.cupons && consolidatedView && <ConsolidatedBlocked label="Cupons" description="Cupons sao gerenciados por empresa. Selecione uma para ver e criar cupons." />}
-        {activeTab === TAB_INDEX.cupons && !consolidatedView && <TabCupons />}
-
-        <ConfirmDialog visible={!!deleteTarget} title="Excluir lancamento?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
+        <ConfirmDialog visible={!!deleteTarget} title="Excluir lançamento?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
-    </View>
-  );
-}
-
-function ConsolidatedBlocked({ label, description }: { label: string; description: string }) {
-  return (
-    <View style={s.blocked}>
-      <View style={s.blockedIconWrap}>
-        <Icon name="lock" size={20} color="#a78bfa" />
-      </View>
-      <Text style={s.blockedTitle}>{label} indisponível em modo consolidado</Text>
-      <Text style={s.blockedDesc}>{description}</Text>
-      <Text style={s.blockedHint}>Use o seletor de empresa no menu lateral para escolher uma.</Text>
     </View>
   );
 }
@@ -523,27 +528,4 @@ var s = StyleSheet.create({
   },
   consolidatedTitle: { fontSize: 12.5, fontWeight: "700", color: "#c4b5fd", letterSpacing: 0.2 },
   consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
-  blocked: {
-    backgroundColor: Colors.bg3,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 24,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  blockedIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "rgba(124,58,237,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(124,58,237,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  blockedTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 6 },
-  blockedDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, textAlign: "center", marginBottom: 8, maxWidth: 420 },
-  blockedHint: { fontSize: 11, color: Colors.violet3, fontStyle: "italic" },
 });

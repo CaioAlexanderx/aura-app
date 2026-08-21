@@ -21,8 +21,11 @@
 // até o conteúdo do texto → flex:1 resolve 0px → height:"X%" fica 0px).
 // Solução: track com height explícita (118px); container sem height/alignItems.
 
-import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Platform, Dimensions, Pressable } from "react-native";
+import type { DimensionValue } from "react-native";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import type { Transaction } from "../types";
 import { fmt, fmtK, parseDateLocal } from "../types";
 import { useMemo } from "react";
@@ -30,8 +33,8 @@ import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
 // Onda 3: ranking + evolução mensal 12m
 import { ProfessionalsRanking, MonthlyEvolution } from "./Onda3Cards";
-// 06/05: Curva ABC migrada do Estoque
-import { AbcCurveCard } from "./AbcCurveCard";
+// F5 (24/08/2026): cards secundarios agora abrem sob demanda.
+import { CollapsibleSection } from "../CollapsibleSection";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -82,10 +85,14 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
 }
 
 export function TabReceitas({ transactions, summary, previousSummary, period, consolidated }: Props) {
-  var incomeCount = useMemo(function() {
-    return transactions.filter(function(t) { return t.type === "income"; }).length;
+  // FIX M3 (24/08/2026): o ticket medio dividia summary.income — que soma so
+  // lancamentos CONFIRMADOS — pela contagem de todas as receitas, incluindo
+  // pendentes. Com pendencia no periodo o ticket saia sistematicamente
+  // subestimado. Numerador e denominador agora falam do mesmo conjunto.
+  var confirmedIncomeCount = useMemo(function() {
+    return transactions.filter(function(t) { return t.type === "income" && t.status === "confirmed"; }).length;
   }, [transactions]);
-  var avgTicket = incomeCount > 0 ? summary.income / incomeCount : 0;
+  var avgTicket = confirmedIncomeCount > 0 ? summary.income / confirmedIncomeCount : 0;
 
   var incomeDelta = previousSummary && previousSummary.income > 0
     ? ((summary.income - previousSummary.income) / previousSummary.income) * 100
@@ -110,131 +117,156 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
   var maxDaily = Math.max(1, ...daily.map(function(d) { return d.value; }));
   var avgDaily = daily.length > 0 ? daily.reduce(function(s, d) { return s + d.value; }, 0) / daily.length : 0;
 
+  // F5 (24/08/2026): a aba tinha 10 cards empilhados, todos abertos. Agora a
+  // primeira dobra responde "quanto entrou e quem me deve"; o resto abre sob
+  // demanda. O CollapsibleSection persiste aberto/fechado por id, entao quem
+  // usa um card toda semana o mantem aberto.
   return (
     <View>
-      {/* KPI Strip */}
+      {/* === PRIMEIRA DOBRA === */}
       <View style={[s.kpiStrip, NARROW ? s.kpiStripNarrow : null]}>
-        <KpiCard label="Total recebido" value={fmtK(collected)} delta={incomeDelta} color={Colors.green} />
+        <KpiCard label="Recebido no período" value={fmtK(collected)} delta={incomeDelta} color={Colors.green} />
         <KpiCard label="A receber" value={fmtK(receivable)} delta={null} color={Colors.amber} />
-        <KpiCard label="Ticket medio" value={fmtK(avgTicket)} delta={null} color={Colors.violet3} />
-        <KpiCard label="Lancamentos" value={String(incomeCount)} delta={null} color={Colors.violet3} />
+        <KpiCard label="Valor médio por venda" value={fmtK(avgTicket)} delta={null} color={Colors.violet3} />
       </View>
 
-      {/* Onda 2: Top 5 + Formas de recebimento (lado a lado em wide, stack em mobile) */}
-      <View style={IS_WIDE ? s.row2 : s.col}>
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>TOP 5 RECEBIMENTOS</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Os clientes que mais movimentaram</Text>
-          <Top5List items={ib?.top5 || []} kind="income" showCompanyBadge={consolidated} />
-        </View>
-
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE RECEBIMENTO</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Como o dinheiro entra</Text>
-          <HBarList items={ib?.payment_methods || []} kind="income" />
-        </View>
-      </View>
-
-      {/* Tendencia diaria */}
+      {/* Timeline promovida: e a parte acionavel da aba (cobranca). */}
       <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>TENDENCIA DIARIA</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Receita por dia</Text>
-        {daily.length === 0 ? (
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>A RECEBER</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>Quem te deve</Text>
+        {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" /> : (
           <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem receitas confirmadas no periodo</Text>
+            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando…</Text>
           </View>
-        ) : (
-          <View style={s.bars}>
-            {daily.map(function(d, i) {
-              var h = Math.max(2, (d.value / maxDaily) * 100);
-              var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
+        )}
+      </View>
+
+      {/* === ABAIXO DA DOBRA — abre sob demanda === */}
+      <CollapsibleSection
+        id="receitas-origem"
+        title="De onde vem seu dinheiro"
+        subtitle={categories.length > 0 ? categories[0].label + " lidera com " + categories[0].pct.toFixed(0) + "%" : "Categorias e principais clientes"}
+      >
+        <View style={IS_WIDE ? s.row2 : s.col}>
+          <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <Text style={[s.kicker, { color: Colors.ink3 }]}>MAIORES RECEBIMENTOS</Text>
+            <Text style={[s.cardTitle, { color: Colors.ink }]}>Quem mais movimentou</Text>
+            <Top5List items={ib?.top5 || []} kind="income" showCompanyBadge={consolidated} />
+          </View>
+
+          <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE RECEBIMENTO</Text>
+            <Text style={[s.cardTitle, { color: Colors.ink }]}>Como seus clientes pagam</Text>
+            <HBarList items={ib?.payment_methods || []} kind="income" />
+          </View>
+        </View>
+
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE RECEITA</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Onde a receita nasce</Text>
+          {categories.length === 0 ? (
+            <View style={s.empty}>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma categoria de receita no período</Text>
+            </View>
+          ) : (
+            categories.map(function(c, i) {
+              var color = topCategoryColor[i % topCategoryColor.length];
+              var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
               return (
-                <View key={i} {...tip(tipText)} style={s.barCol}>
-                  <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
-                    <View style={[s.barFill, { height: h + "%", backgroundColor: Colors.green }]} />
+                <View key={c.label} {...tip(tipText)} style={s.catRow}>
+                  <View style={[s.catDot, { backgroundColor: color }]} />
+                  <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
+                  <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
+                    <View style={[s.catBarFill, { width: (c.pct + "%") as DimensionValue, backgroundColor: color }]} />
                   </View>
-                  <Text style={[s.barLabel, { color: Colors.ink3 }]}>{d.day}</Text>
+                  <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
+                  <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>
                 </View>
               );
-            })}
-          </View>
-        )}
-        {avgDaily > 0 && (
-          <Text style={[s.barFooter, { color: Colors.ink3 }]}>
-            Media diaria: <Text style={{ color: Colors.green, fontWeight: "700" }}>{fmt(avgDaily)}</Text>
-          </Text>
-        )}
-      </View>
+            })
+          )}
+        </View>
+      </CollapsibleSection>
 
-      {/* Onda 2: Timeline a receber + dia da semana */}
-      <View style={IS_WIDE ? s.row2 : s.col}>
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>A RECEBER</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Timeline de recebiveis</Text>
-          {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" /> : (
+      <CollapsibleSection
+        id="receitas-tendencia"
+        title="Receita por dia"
+        subtitle={avgDaily > 0 ? "Média de " + fmt(avgDaily) + " por dia no período" : "Sem receita confirmada no período"}
+      >
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          {daily.length === 0 ? (
             <View style={s.empty}>
-              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando timeline…</Text>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem receitas confirmadas no período</Text>
+            </View>
+          ) : (
+            <View style={s.bars}>
+              {daily.map(function(d, i) {
+                var h = Math.max(2, (d.value / maxDaily) * 100);
+                var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
+                return (
+                  <View key={i} {...tip(tipText)} style={s.barCol}>
+                    <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
+                      <View style={[s.barFill, { height: (h + "%") as DimensionValue, backgroundColor: Colors.green }]} />
+                    </View>
+                    <Text style={[s.barLabel, { color: Colors.ink3 }]}>{d.day}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
+      </CollapsibleSection>
 
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+      {/* Analises que respondem perguntas mais raras — juntas num acordeao so,
+          em vez de tres cards permanentes no fim da aba. */}
+      <CollapsibleSection
+        id="receitas-avancado"
+        title="Análises avançadas"
+        subtitle="Dias mais fortes, ranking da equipe e os últimos 12 meses"
+      >
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
           <Text style={[s.kicker, { color: Colors.ink3 }]}>DIA DA SEMANA</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Faturamento por dia</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Seus dias mais fortes</Text>
           <DowBars items={ib?.dow || []} kind="income" />
         </View>
-      </View>
 
-      {/* Categorias de receita (cliente, sem dependencia de server) */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE RECEITA</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Onde a receita nasce</Text>
-        {categories.length === 0 ? (
-          <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma categoria de receita no periodo</Text>
-          </View>
-        ) : (
-          categories.map(function(c, i) {
-            var color = topCategoryColor[i % topCategoryColor.length];
-            var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
-            return (
-              <View key={c.label} {...tip(tipText)} style={s.catRow}>
-                <View style={[s.catDot, { backgroundColor: color }]} />
-                <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
-                <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
-                  <View style={[s.catBarFill, { width: c.pct + "%", backgroundColor: color }]} />
-                </View>
-                <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
-                <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>
-              </View>
-            );
-          })
-        )}
-      </View>
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>EQUIPE</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>
+            {consolidated ? "Disponível ao selecionar uma empresa" : "Quem mais movimentou no período"}
+          </Text>
+          <ProfessionalsRanking items={insights.professional_ranking || []} consolidated={consolidated} />
+        </View>
 
-      {/* Curva ABC dos produtos — calculada a partir de vendas reais.
-          Migrou do Estoque (era decorativa, sempre 'C') pra cá em 06/05.
-          nativeID pro deep-link `/financeiro?tab=receitas&focus=abc` poder
-          rolar até o card via document.getElementById no web. */}
-      <View nativeID="abc-curve-card" style={{ marginBottom: 14 }}>
-        <AbcCurveCard />
-      </View>
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>ÚLTIMOS 12 MESES</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Receita ao longo do tempo</Text>
+          <MonthlyEvolution items={insights.monthly_evolution || []} />
+        </View>
+      </CollapsibleSection>
 
-      {/* Onda 3: Ranking de profissionais — só per-company */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>RANKING DE PROFISSIONAIS</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>
-          {consolidated ? "Disponivel ao selecionar empresa" : "Quem mais movimentou no periodo"}
-        </Text>
-        <ProfessionalsRanking items={insights.professional_ranking || []} consolidated={consolidated} />
-      </View>
-
-      {/* Onda 3: Evolução mensal 12m */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>EVOLUCAO MENSAL · 12 MESES</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Receita ao longo do tempo</Text>
-        <MonthlyEvolution items={insights.monthly_evolution || []} />
-      </View>
+      {/* F4: a curva ABC virou tela propria. Aqui fica so a porta de entrada —
+          antes eram 610 linhas de mini-tela (com seletor de periodo proprio,
+          concorrendo com o global) empilhadas no meio da aba. */}
+      <Pressable
+        onPress={function() { router.push("/financeiro/produtos" as any); }}
+        accessibilityRole="button"
+        accessibilityLabel="Abrir análise de produtos que mais dão dinheiro"
+        style={({ hovered }: any) => [
+          s.linkCard,
+          { backgroundColor: Colors.bg3, borderColor: Colors.border2 },
+          isWeb && hovered ? { borderColor: Colors.violet3 } : null,
+          isWeb ? ({ transition: "all 0.18s ease", cursor: "pointer" } as any) : null,
+        ]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[s.linkTitle, { color: Colors.ink }]}>Produtos que mais dão dinheiro</Text>
+          <Text style={[s.linkSub, { color: Colors.ink3 }]}>
+            Veja quais produtos respondem pela maior parte do seu faturamento
+          </Text>
+        </View>
+        <Icon name="chevron_right" size={14} color={Colors.violet3} />
+      </Pressable>
     </View>
   );
 }
@@ -265,7 +297,6 @@ var s = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 14,
   },
-  roadmap: { borderStyle: "dashed" },
   kicker: { fontSize: 9.5, letterSpacing: 1.2, fontWeight: "600", textTransform: "uppercase" },
   cardTitle: { fontSize: 16, fontWeight: "700", marginTop: 4, marginBottom: 14, letterSpacing: -0.3 },
   empty: { paddingVertical: 32, alignItems: "center" },
@@ -293,7 +324,14 @@ var s = StyleSheet.create({
   catBarFill: { height: 6, borderRadius: 3 },
   catValue: { fontSize: 12, fontWeight: "700", minWidth: 56, textAlign: "right" },
   catPct: { fontSize: 11, minWidth: 38, textAlign: "right", fontWeight: "600" },
-  roadmapText: { fontSize: 12, lineHeight: 18, fontStyle: "italic" },
+  // F4: porta de entrada pra tela de produtos (ex-curva ABC)
+  linkCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderRadius: 16, borderWidth: 1, borderStyle: "dashed",
+    paddingHorizontal: 18, paddingVertical: 16, marginBottom: 14,
+  },
+  linkTitle: { fontSize: 14, fontWeight: "700" },
+  linkSub: { fontSize: 11.5, marginTop: 2, lineHeight: 16 },
 });
 
 var k = StyleSheet.create({

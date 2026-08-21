@@ -163,7 +163,7 @@ export function ComparativeSection({ period, customStart, customEnd }: Props) {
 
       {/* Empty / erro */}
       {!loading && !data && !customComparePending && (
-        <View style={s.placeholder}><Text style={s.placeholderText}>Sem dados pra comparar nesse periodo.</Text></View>
+        <View style={s.placeholder}><Text style={s.placeholderText}>Sem dados para comparar neste período.</Text></View>
       )}
 
       {/* Conteudo */}
@@ -505,7 +505,7 @@ function ComparativeChart({ current, previous }: { current: DailyPoint[]; previo
         </Svg>
       ) : (
         <View style={s.chartEmpty}>
-          <Text style={s.placeholderText}>Sem pontos no periodo.</Text>
+          <Text style={s.placeholderText}>Sem movimentação neste período.</Text>
         </View>
       )}
     </View>

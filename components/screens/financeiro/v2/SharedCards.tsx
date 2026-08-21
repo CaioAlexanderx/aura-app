@@ -2,7 +2,12 @@
 //
 // Cards compartilhados entre TabReceitas e TabDespesas (Onda 2).
 // Renderiza Top5List, HBarList (formas pagamento), Timeline (a receber/pagar),
-// DowBars (dia da semana), AnomalyAlerts (categorias acima da media), Gauge.
+// DowBars (dia da semana).
+//
+// F5 (24/08/2026): Gauge e AnomalyAlerts sairam. O Gauge repetia pela terceira
+// vez o mesmo dado (a barra de gasto do ResumoHero e a margem do KPI strip ja
+// dizem quanto da receita vira despesa); as anomalias viraram banner condicional
+// na aba Despesas e linha no card "Para fazer agora".
 //
 // Multi-CNPJ: Top5List exibe badge da loja (company_name) quando disponivel.
 //
@@ -22,8 +27,6 @@ import type {
   PaymentMethodSlice,
   TimelineBuckets,
   DowItem,
-  Anomaly,
-  GaugeData,
 } from "./types";
 
 var W = Dimensions.get("window").width;
@@ -93,7 +96,7 @@ export function Top5List({
     return (
       <View style={s.empty}>
         <Text style={[s.emptyText, { color: Colors.ink3 }]}>
-          {kind === "income" ? "Sem receitas confirmadas no periodo" : "Sem despesas confirmadas no periodo"}
+          {kind === "income" ? "Sem receitas confirmadas no período" : "Sem despesas confirmadas no período"}
         </Text>
       </View>
     );
@@ -152,7 +155,7 @@ export function HBarList({ items, kind }: { items: PaymentMethodSlice[]; kind: "
   if (items.length === 0) {
     return (
       <View style={s.empty}>
-        <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma forma de pagamento registrada no periodo</Text>
+        <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma forma de pagamento registrada no período</Text>
       </View>
     );
   }
@@ -236,11 +239,11 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
         {rows.map(function(r) {
           if (r.b.count === 0 && r.b.total === 0) return null;
           return (
-            <View key={r.key} {...tip(r.label + ": " + r.b.count + " " + (r.b.count === 1 ? "lancamento" : "lancamentos") + " · " + fmt(r.b.total))} style={s.timelineRow}>
+            <View key={r.key} {...tip(r.label + ": " + r.b.count + " " + (r.b.count === 1 ? "lançamento" : "lançamentos") + " · " + fmt(r.b.total))} style={s.timelineRow}>
               <View style={[s.timelineDot, { backgroundColor: r.c }]} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.timelineLabel, { color: Colors.ink }]}>{r.label}</Text>
-                <Text style={[s.timelineSub, { color: Colors.ink3 }]}>{r.b.count} {r.b.count === 1 ? "lancamento" : "lancamentos"} · {r.urgentCopy}</Text>
+                <Text style={[s.timelineSub, { color: Colors.ink3 }]}>{r.b.count} {r.b.count === 1 ? "lançamento" : "lançamentos"} · {r.urgentCopy}</Text>
               </View>
               <Text style={[s.timelineValue, { color: r.c }]}>{fmtK(r.b.total)}</Text>
             </View>
@@ -297,115 +300,6 @@ export function DowBars({ items, kind }: { items: DowItem[]; kind: "income" | "e
           Pico: <Text style={{ color: color, fontWeight: "700" }}>{items[peakIdx].label}</Text>
         </Text>
       )}
-    </View>
-  );
-}
-
-// ============================================================
-// Gauge — % despesas/receita (zona saudavel/atencao/critico)
-// ============================================================
-export function Gauge({ data, benchmark }: { data: GaugeData; benchmark?: number }) {
-  var pct = Math.max(0, Math.min(100, data.expense_pct));
-  var zoneColor = data.zone === "saudavel" ? Colors.green : data.zone === "atencao" ? Colors.amber : Colors.red;
-  var zoneLabel = data.zone === "saudavel" ? "Saudavel" : data.zone === "atencao" ? "Atencao" : "Critico";
-
-  // Barra horizontal com 3 zonas: 0-60 verde, 60-80 amber, 80-100 red.
-  // Cursor (linha vertical) marca o ponto atual.
-  return (
-    <View style={{ paddingVertical: 4 }}>
-      <View style={s.gaugeHeader}>
-        <Text style={[s.gaugeNum, { color: zoneColor }]}>{pct}%</Text>
-        <View style={[s.gaugeBadge, { backgroundColor: zoneColor + "20", borderColor: zoneColor + "55" }]}>
-          <Text style={[s.gaugeZoneText, { color: zoneColor }]}>{zoneLabel}</Text>
-        </View>
-      </View>
-
-      <View style={s.gaugeTrack}>
-        <View {...tip("Saudável: até 60%")} style={[s.gaugeZone, { flex: 60, backgroundColor: Colors.green, opacity: 0.35 }]} />
-        <View {...tip("Atenção: 60% – 80%")} style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.amber, opacity: 0.35 }]} />
-        <View {...tip("Crítico: acima de 80%")} style={[s.gaugeZone, { flex: 20, backgroundColor: Colors.red, opacity: 0.35 }]} />
-        {/* Cursor */}
-        <View
-          {...tip("Atual: " + pct + "%")}
-          style={[
-            s.gaugeCursor,
-            { left: pct + "%", backgroundColor: Colors.ink },
-          ]}
-        />
-        {benchmark != null && (
-          <View
-            {...tip("Benchmark setorial: " + benchmark + "%")}
-            style={[
-              s.gaugeBench,
-              { left: benchmark + "%", borderLeftColor: Colors.violet3 },
-            ]}
-          />
-        )}
-      </View>
-
-      <View style={s.gaugeLegend}>
-        <Text style={[s.gaugeLegendText, { color: Colors.ink3 }]}>0%</Text>
-        <Text style={[s.gaugeLegendText, { color: Colors.ink3 }]}>60%</Text>
-        <Text style={[s.gaugeLegendText, { color: Colors.ink3 }]}>80%</Text>
-        <Text style={[s.gaugeLegendText, { color: Colors.ink3 }]}>100%</Text>
-      </View>
-
-      {benchmark != null && (
-        <Text style={[s.gaugeBenchText, { color: Colors.violet3 }]}>
-          Benchmark setorial: {benchmark}%
-        </Text>
-      )}
-    </View>
-  );
-}
-
-// ============================================================
-// AnomalyAlerts — categorias de despesa acima da media
-// ============================================================
-export function AnomalyAlerts({ items }: { items: Anomaly[] }) {
-  if (items.length === 0) {
-    return (
-      <View style={[s.empty, { paddingVertical: 16 }]}>
-        <View style={[s.anomalyEmptyIcon, { backgroundColor: Colors.greenD }]}>
-          <Icon name="check" size={16} color={Colors.green} />
-        </View>
-        <Text style={[s.emptyText, { color: Colors.ink3, marginTop: 8 }]}>
-          Nenhuma categoria com gasto incomum
-        </Text>
-        <Text style={[s.emptyText, { color: Colors.ink3, fontSize: 11, marginTop: 2 }]}>
-          (precisa de pelo menos 3 meses de historico)
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ gap: 10 }}>
-      {items.map(function(a) {
-        var tipText = a.category + ": atual " + fmt(a.current) + " · média 3m " + fmt(a.avg_3m) + " · diferença +" + a.diff_pct.toFixed(1) + "%";
-        return (
-          <View key={a.category} {...tip(tipText)} style={[s.anomalyCard, { backgroundColor: Colors.amberD, borderColor: Colors.amber + "55" }]}>
-            <View style={s.anomalyHead}>
-              <Text style={[s.anomalyCategory, { color: Colors.ink }]} numberOfLines={1}>{a.category}</Text>
-              <View style={[s.anomalyPill, { backgroundColor: Colors.amber + "30" }]}>
-                <Icon name="alert" size={10} color={Colors.amber} />
-                <Text style={[s.anomalyPillText, { color: Colors.amber }]}>+{a.diff_pct.toFixed(1).replace(".", ",")}%</Text>
-              </View>
-            </View>
-            <View style={s.anomalyMeta}>
-              <Text style={[s.anomalyMetaText, { color: Colors.ink3 }]}>
-                Atual: <Text style={{ color: Colors.ink, fontWeight: "700" }}>{fmt(a.current)}</Text>
-              </Text>
-              <Text style={[s.anomalyMetaText, { color: Colors.ink3 }]}>
-                Media 3m: <Text style={{ color: Colors.ink2 }}>{fmt(a.avg_3m)}</Text>
-              </Text>
-              <Text style={[s.anomalyMetaText, { color: Colors.amber, fontWeight: "700" }]}>
-                +{fmt(a.current - a.avg_3m)}
-              </Text>
-            </View>
-          </View>
-        );
-      })}
     </View>
   );
 }
@@ -475,30 +369,4 @@ var s = StyleSheet.create({
   dowFill: { width: "100%", borderRadius: 4 },
   dowLabel: { fontSize: 11 },
   dowFooter: { fontSize: 11, marginTop: 10, alignSelf: "center" },
-
-  // Gauge
-  gaugeHeader: { flexDirection: "row", alignItems: "baseline", gap: 12, marginBottom: 12 },
-  gaugeNum: { fontSize: 36, fontWeight: "800", letterSpacing: -0.8 },
-  gaugeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
-  gaugeZoneText: { fontSize: 11, fontWeight: "700" },
-  gaugeTrack: { flexDirection: "row", height: 12, borderRadius: 6, overflow: "hidden", position: "relative" },
-  gaugeZone: { height: "100%" },
-  gaugeCursor: { position: "absolute", top: -3, bottom: -3, width: 2, marginLeft: -1 },
-  gaugeBench: { position: "absolute", top: -2, bottom: -2, borderLeftWidth: 2, borderStyle: "dashed" },
-  gaugeLegend: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
-  gaugeLegendText: { fontSize: 10 },
-  gaugeBenchText: { fontSize: 11, marginTop: 8, fontStyle: "italic" },
-
-  // Anomaly
-  anomalyEmptyIcon: {
-    width: 40, height: 40, borderRadius: 10,
-    alignItems: "center", justifyContent: "center",
-  },
-  anomalyCard: { borderRadius: 10, padding: 12, borderWidth: 1 },
-  anomalyHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  anomalyCategory: { fontSize: 13, fontWeight: "700", flex: 1, minWidth: 0 },
-  anomalyPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  anomalyPillText: { fontSize: 11, fontWeight: "800" },
-  anomalyMeta: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
-  anomalyMetaText: { fontSize: 11 },
 });

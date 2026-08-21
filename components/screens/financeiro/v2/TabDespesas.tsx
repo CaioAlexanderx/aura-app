@@ -19,9 +19,11 @@ import type { Transaction } from "../types";
 import { fmt, fmtK, parseDateLocal } from "../types";
 import { useMemo } from "react";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
-import { Top5List, HBarList, Timeline, Gauge, AnomalyAlerts } from "./SharedCards";
+import { Top5List, HBarList, Timeline } from "./SharedCards";
 // Onda 3: evolução mensal 12m
 import { MonthlyEvolution } from "./Onda3Cards";
+// F5 (24/08/2026): cards secundarios agora abrem sob demanda.
+import { CollapsibleSection } from "../CollapsibleSection";
 
 var W = Dimensions.get("window").width;
 var NARROW = W < 480;
@@ -71,9 +73,6 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
 }
 
 export function TabDespesas({ transactions, summary, previousSummary, period, consolidated }: Props) {
-  var expenseCount = useMemo(function() {
-    return transactions.filter(function(t) { return t.type === "expense"; }).length;
-  }, [transactions]);
   var payable = summary.pendingExpenses || 0;
   var paid = summary.expenses;
   var marginPct = summary.income > 0 ? ((summary.income - summary.expenses) / summary.income) * 100 : 0;
@@ -98,155 +97,166 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
   var maxDaily = Math.max(1, ...daily.map(function(d) { return d.value; }));
   var avgDaily = daily.length > 0 ? daily.reduce(function(s, d) { return s + d.value; }, 0) / daily.length : 0;
 
+  // F5 (24/08/2026): eram 10 cards empilhados. Primeira dobra agora responde
+  // "quanto saiu e o que eu devo"; o resto abre sob demanda.
+  var worstAnomaly = (eb?.anomalies || [])
+    .filter(function(a) { return a.diff_pct > 0; })
+    .sort(function(a, b) { return b.diff_pct - a.diff_pct; })[0];
+
   return (
     <View>
-      {/* KPI Strip */}
+      {/* === PRIMEIRA DOBRA === */}
       <View style={[s.kpiStrip, NARROW ? s.kpiStripNarrow : null]}>
-        <KpiCard label="Total pago" value={fmtK(paid)} delta={expenseDelta} invert color={Colors.red} />
+        <KpiCard label="Pago no período" value={fmtK(paid)} delta={expenseDelta} invert color={Colors.red} />
         <KpiCard label="A pagar" value={fmtK(payable)} delta={null} color={Colors.amber} />
-        <KpiCard label="Margem liquida" value={marginPct.toFixed(1).replace(".", ",") + "%"} delta={null} color={marginPct >= 20 ? Colors.green : marginPct >= 10 ? Colors.amber : Colors.red} />
-        <KpiCard label="Lancamentos" value={String(expenseCount)} delta={null} color={Colors.violet3} />
+        <KpiCard label="Sobra de cada real" value={marginPct.toFixed(0) + "%"} delta={null} color={marginPct >= 20 ? Colors.green : marginPct >= 10 ? Colors.amber : Colors.red} />
       </View>
 
-      {/* DRE Waterfall — bloqueado em consolidado */}
-      {consolidated ? (
-        <View style={[s.card, s.lockedCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <View style={[s.lockIconWrap, { backgroundColor: Colors.violetD, borderColor: Colors.border2 }]}>
-            <Icon name="lock" size={20} color={Colors.violet3} />
+      {/* Anomalia so aparece quando EXISTE anomalia — antes era um card
+          permanente ("Alertas de anomalia") vazio na maior parte do tempo,
+          e quando tinha algo ficava enterrado no fim da aba. */}
+      {worstAnomaly && (
+        <View style={[s.card, s.anomalyBanner, { backgroundColor: Colors.amberD, borderColor: Colors.border }]}>
+          <Icon name="alert" size={17} color={Colors.amber} />
+          <View style={{ flex: 1 }}>
+            <Text style={[s.anomalyTitle, { color: Colors.ink }]}>
+              Gasto fora do normal: {worstAnomaly.category}
+            </Text>
+            <Text style={[s.anomalySub, { color: Colors.ink3 }]}>
+              {fmt(worstAnomaly.current)} neste período — {Math.round(worstAnomaly.diff_pct)}% acima da sua média dos últimos meses.
+            </Text>
           </View>
-          <Text style={[s.lockedTitle, { color: Colors.ink }]}>DRE Waterfall indisponivel em modo consolidado</Text>
-          <Text style={[s.lockedDesc, { color: Colors.ink3 }]}>
-            O DRE precisa do contexto fiscal de uma empresa especifica (regime tributario, Fator R, etc).
-            Selecione uma empresa no seletor pra visualizar o waterfall.
-          </Text>
-        </View>
-      ) : (
-        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>DRE SIMPLIFICADO · WATERFALL</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Da receita ao resultado liquido</Text>
-          <DreWaterfall income={summary.income} categories={categories} netResult={summary.income - summary.expenses} marginPct={marginPct} />
         </View>
       )}
 
-      {/* Onda 2: Top 5 + Formas de pagamento (lado a lado em wide) */}
-      <View style={IS_WIDE ? s.row2 : s.col}>
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>TOP 5 DESPESAS</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Os pagamentos mais pesados</Text>
-          <Top5List items={eb?.top5 || []} kind="expense" showCompanyBadge={consolidated} />
-        </View>
-
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE PAGAMENTO</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Como o dinheiro saiu</Text>
-          <HBarList items={eb?.payment_methods || []} kind="expense" />
-        </View>
+      {/* Timeline promovida: e a parte acionavel da aba. */}
+      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <Text style={[s.kicker, { color: Colors.ink3 }]}>A PAGAR</Text>
+        <Text style={[s.cardTitle, { color: Colors.ink }]}>O que você deve</Text>
+        {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" /> : (
+          <View style={s.empty}>
+            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando…</Text>
+          </View>
+        )}
       </View>
 
-      {/* Tendencia diaria */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>TENDENCIA DIARIA</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Despesa por dia</Text>
-        {daily.length === 0 ? (
-          <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem despesas confirmadas no periodo</Text>
+      {/* === ABAIXO DA DOBRA === */}
+      <CollapsibleSection
+        id="despesas-dre"
+        title="Do que entrou ao que sobrou"
+        subtitle={
+          consolidated
+            ? "Selecione uma empresa para ver"
+            : summary.income > 0
+              ? fmtK(summary.income) + " entraram, sobraram " + fmtK(summary.income - summary.expenses)
+              : "Sem receita no período pra calcular"
+        }
+      >
+        {consolidated ? (
+          <View style={[s.card, s.lockedCard, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <View style={[s.lockIconWrap, { backgroundColor: Colors.violetD, borderColor: Colors.border2 }]}>
+              <Icon name="lock" size={20} color={Colors.violet3} />
+            </View>
+            <Text style={[s.lockedTitle, { color: Colors.ink }]}>Indisponível somando várias empresas</Text>
+            <Text style={[s.lockedDesc, { color: Colors.ink3 }]}>
+              Este cálculo usa o regime tributário de cada empresa, que muda de uma pra outra.
+              Escolha uma empresa no seletor para ver.
+            </Text>
           </View>
         ) : (
-          <View style={s.bars}>
-            {daily.map(function(d, i) {
-              var h = Math.max(2, (d.value / maxDaily) * 100);
-              var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
+          <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <DreWaterfall income={summary.income} categories={categories} netResult={summary.income - summary.expenses} marginPct={marginPct} />
+          </View>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="despesas-onde"
+        title="Onde seu dinheiro é gasto"
+        subtitle={categories.length > 0 ? categories[0].label + " lidera com " + categories[0].pct.toFixed(0) + "%" : "Categorias, maiores gastos e formas de pagamento"}
+      >
+        <View style={IS_WIDE ? s.row2 : s.col}>
+          <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <Text style={[s.kicker, { color: Colors.ink3 }]}>MAIORES GASTOS</Text>
+            <Text style={[s.cardTitle, { color: Colors.ink }]}>Os pagamentos mais pesados</Text>
+            <Top5List items={eb?.top5 || []} kind="expense" showCompanyBadge={consolidated} />
+          </View>
+
+          <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+            <Text style={[s.kicker, { color: Colors.ink3 }]}>FORMAS DE PAGAMENTO</Text>
+            <Text style={[s.cardTitle, { color: Colors.ink }]}>Como o dinheiro saiu</Text>
+            <HBarList items={eb?.payment_methods || []} kind="expense" />
+          </View>
+        </View>
+
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE DESPESA</Text>
+          <Text style={[s.cardTitle, { color: Colors.ink }]}>Pra onde o dinheiro foi</Text>
+          {categories.length === 0 ? (
+            <View style={s.empty}>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma categoria de despesa no período</Text>
+            </View>
+          ) : (
+            categories.map(function(c, i) {
+              var color = catColors[i % catColors.length];
+              var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
               return (
-                <View key={i} {...tip(tipText)} style={s.barCol}>
-                  <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
-                    <View style={[s.barFill, { height: h + "%", backgroundColor: Colors.red }]} />
+                <View key={c.label} {...tip(tipText)} style={s.catRow}>
+                  <View style={[s.catDot, { backgroundColor: color }]} />
+                  <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
+                  <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
+                    <View style={[s.catBarFill, { width: (c.pct + "%") as DimensionValue, backgroundColor: color }]} />
                   </View>
-                  <Text style={[s.barLabel, { color: Colors.ink3 }]}>{d.day}</Text>
+                  <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
+                  <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>
                 </View>
               );
-            })}
-          </View>
-        )}
-        {avgDaily > 0 && (
-          <Text style={[s.barFooter, { color: Colors.ink3 }]}>
-            Media diaria: <Text style={{ color: Colors.red, fontWeight: "700" }}>{fmt(avgDaily)}</Text>
-          </Text>
-        )}
-      </View>
+            })
+          )}
+        </View>
+      </CollapsibleSection>
 
-      {/* Onda 2: Timeline a pagar + Gauge despesa/receita */}
-      <View style={IS_WIDE ? s.row2 : s.col}>
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>A PAGAR</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Timeline de pagamentos</Text>
-          {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" /> : (
+      <CollapsibleSection
+        id="despesas-tendencia"
+        title="Despesa por dia"
+        subtitle={avgDaily > 0 ? "Média de " + fmt(avgDaily) + " por dia no período" : "Sem despesa confirmada no período"}
+      >
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          {daily.length === 0 ? (
             <View style={s.empty}>
-              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando timeline…</Text>
+              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem despesas confirmadas no período</Text>
+            </View>
+          ) : (
+            <View style={s.bars}>
+              {daily.map(function(d, i) {
+                var h = Math.max(2, (d.value / maxDaily) * 100);
+                var tipText = "Dia " + String(d.day).padStart(2, "0") + ": " + fmt(d.value);
+                return (
+                  <View key={i} {...tip(tipText)} style={s.barCol}>
+                    <View style={[s.barTrack, { backgroundColor: Colors.bg4 }]}>
+                      <View style={[s.barFill, { height: (h + "%") as DimensionValue, backgroundColor: Colors.red }]} />
+                    </View>
+                    <Text style={[s.barLabel, { color: Colors.ink3 }]}>{d.day}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
+      </CollapsibleSection>
 
-        <View style={[s.card, IS_WIDE ? { flex: 1 } : null, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-          <Text style={[s.kicker, { color: Colors.ink3 }]}>DESPESAS / RECEITA</Text>
-          <Text style={[s.cardTitle, { color: Colors.ink }]}>Quanto da receita vira despesa</Text>
-          {eb?.gauge ? <Gauge data={eb.gauge} benchmark={62} /> : (
-            <View style={s.empty}>
-              <Text style={[s.emptyText, { color: Colors.ink3 }]}>Carregando gauge…</Text>
-            </View>
-          )}
+      {/* Evolucao 12m fica so aqui: era um card identico em Receitas e Despesas.
+          A versao de Despesas mostra receita E despesa lado a lado, entao e a
+          que responde as duas perguntas. */}
+      <CollapsibleSection
+        id="despesas-evolucao"
+        title="Últimos 12 meses"
+        subtitle="Como receita e despesa evoluíram ao longo do tempo"
+      >
+        <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+          <MonthlyEvolution items={insights.monthly_evolution || []} />
         </View>
-      </View>
-
-      {/* Categorias de despesa (cliente) */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>CATEGORIAS DE DESPESA</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Pra onde o dinheiro foi</Text>
-        {categories.length === 0 ? (
-          <View style={s.empty}>
-            <Text style={[s.emptyText, { color: Colors.ink3 }]}>Nenhuma categoria de despesa no periodo</Text>
-          </View>
-        ) : (
-          categories.map(function(c, i) {
-            var color = catColors[i % catColors.length];
-            var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
-            return (
-              <View key={c.label} {...tip(tipText)} style={s.catRow}>
-                <View style={[s.catDot, { backgroundColor: color }]} />
-                <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
-                <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
-                  <View style={[s.catBarFill, { width: c.pct + "%", backgroundColor: color }]} />
-                </View>
-                <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
-                <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>
-              </View>
-            );
-          })
-        )}
-      </View>
-
-      {/* Onda 2: Anomalias */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>ALERTAS DE ANOMALIA</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Categorias com gasto incomum vs media de 3 meses</Text>
-        <AnomalyAlerts items={eb?.anomalies || []} />
-      </View>
-
-      {/* Onda 3: Evolução mensal 12m */}
-      <View style={[s.card, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
-        <Text style={[s.kicker, { color: Colors.ink3 }]}>EVOLUCAO MENSAL · 12 MESES</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Despesa vs receita ao longo do tempo</Text>
-        <MonthlyEvolution items={insights.monthly_evolution || []} />
-      </View>
-
-      {/* Roadmap card — Onda 4 */}
-      <View style={[s.card, s.roadmap, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
-        <Text style={[s.kicker, { color: Colors.violet3 }]}>EM CONSTRUCAO · ONDA 4</Text>
-        <Text style={[s.cardTitle, { color: Colors.ink }]}>Mais analise chegando</Text>
-        <Text style={[s.roadmapText, { color: Colors.ink2 }]}>
-          Fixo x variavel 6m chega na proxima onda — depende de categorizacao "fixo/variavel"
-          que vamos adicionar nas categorias de despesa.
-        </Text>
-      </View>
+      </CollapsibleSection>
     </View>
   );
 }
@@ -287,8 +297,8 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
           </View>
         );
       })}
-      <View {...tip("Resultado liquido: " + (netResult >= 0 ? "+" : "") + fmt(netResult) + " · margem " + marginPct.toFixed(1) + "%")} style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
-        <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Resultado liquido</Text>
+      <View {...tip("Sobrou: " + (netResult >= 0 ? "+" : "") + fmt(netResult) + " · margem " + marginPct.toFixed(1) + "%")} style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
+        <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Sobrou pra você</Text>
         <View style={dre.track}>
           <View style={[dre.bar, { width: (Math.max(2, (Math.abs(netResult) / max) * 100) + "%") as DimensionValue, backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
         </View>
@@ -333,10 +343,13 @@ var s = StyleSheet.create({
   },
   lockedTitle: { fontSize: 14, fontWeight: "700", textAlign: "center", marginBottom: 6 },
   lockedDesc: { fontSize: 12, textAlign: "center", lineHeight: 17, maxWidth: 420 },
-  roadmap: { borderStyle: "dashed" },
   kicker: { fontSize: 9.5, letterSpacing: 1.2, fontWeight: "600", textTransform: "uppercase" },
   cardTitle: { fontSize: 16, fontWeight: "700", marginTop: 4, marginBottom: 14, letterSpacing: -0.3 },
   empty: { paddingVertical: 32, alignItems: "center" },
+  // F5: banner de anomalia (so renderiza quando ha anomalia de verdade)
+  anomalyBanner: { flexDirection: "row", alignItems: "center", gap: 12 },
+  anomalyTitle: { fontSize: 13.5, fontWeight: "700" },
+  anomalySub: { fontSize: 11.5, marginTop: 2, lineHeight: 16 },
   emptyText: { fontSize: 12, fontStyle: "italic" },
   bars: { flexDirection: "row", height: 140, gap: 3, alignItems: "flex-end" },
   barCol: { flex: 1, alignItems: "center", gap: 4 },
@@ -351,7 +364,6 @@ var s = StyleSheet.create({
   catBarFill: { height: 6, borderRadius: 3 },
   catValue: { fontSize: 12, fontWeight: "700", minWidth: 56, textAlign: "right" },
   catPct: { fontSize: 11, minWidth: 38, textAlign: "right", fontWeight: "600" },
-  roadmapText: { fontSize: 12, lineHeight: 18, fontStyle: "italic" },
 });
 
 var k = StyleSheet.create({

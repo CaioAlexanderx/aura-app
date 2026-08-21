@@ -236,7 +236,7 @@ export function ProfessionalsRanking({ items, consolidated }: { items: RankingIt
       <View style={[s.rankBlocked, { backgroundColor: Colors.violetD, borderColor: Colors.border2 }]}>
         <Icon name="lock" size={18} color={Colors.violet3} />
         <View style={{ flex: 1 }}>
-          <Text style={[s.rankBlockedTitle, { color: Colors.ink }]}>Disponivel por empresa</Text>
+          <Text style={[s.rankBlockedTitle, { color: Colors.ink }]}>Disponível por empresa</Text>
           <Text style={[s.rankBlockedSub, { color: Colors.ink3 }]}>
             Ranking de profissionais usa a tabela de funcionarios de cada empresa. Selecione uma empresa especifica pra ver.
           </Text>

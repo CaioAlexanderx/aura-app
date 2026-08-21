@@ -56,18 +56,30 @@ export var PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "custom", label: "Periodo" },
 ];
 
-// V2 redesign (04/05/2026): TABS expandido pra 6 abas.
-// Receitas e Despesas sao novas; DRE Waterfall (que era TabResumo) virou parte
-// da aba Despesas. Retirada e Cupons preservadas como abas extras.
-// Indices semanticos pra useTransactionsApi nao depender da posicao crua.
-export var TABS = ["Visao Geral", "Receitas", "Despesas", "Lancamentos", "Retirada", "Cupons"];
+// F6 (24/08/2026): 6 abas -> 4.
+//
+// "Cupons" saiu: e ferramenta de venda (aplicada no Caixa), nao dado
+// financeiro — e reimplementava um CRUD que ja existia em /cupons, rota que
+// estava orfa na navegacao. Agora vive na secao Vendas do menu.
+//
+// "Retirada" saiu: e uma calculadora que se abre quando vai fazer a retirada
+// do mes, nao um painel que se acompanha. Virou /financeiro/retirada, linkada
+// por um card no fim da Visao Geral.
+//
+// Os indices de retirada/cupons continuam definidos porque `TAB_KEY_TO_INDEX`
+// os aceita como alias de deep-link (?tab=retirada, ?tab=cupons) e redireciona
+// pras rotas novas. Ficam FORA da faixa de TABS de proposito: qualquer
+// `activeTab` com esses valores nao casa com nenhuma aba renderizada, entao um
+// redirect que falhe aparece como tela vazia em vez de aba errada silenciosa.
+export var TABS = ["Visão Geral", "Receitas", "Despesas", "Lançamentos"];
 export var TAB_INDEX = {
   visao: 0,
   receitas: 1,
   despesas: 2,
   lancamentos: 3,
-  retirada: 4,
-  cupons: 5,
+  // fora da faixa de TABS — so servem de alias pros deep-links antigos
+  retirada: 90,
+  cupons: 91,
 } as const;
 
 export var INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];

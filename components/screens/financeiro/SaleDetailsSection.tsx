@@ -127,7 +127,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
           <View style={s.fieldIcon}><Icon name="users" size={12} color={Colors.ink3} /></View>
           <View style={{ flex: 1 }}>
             <Text style={s.fieldLabel}>Cliente</Text>
-            <Text style={s.fieldValuePlaceholder}>Nao identificado</Text>
+            <Text style={s.fieldValuePlaceholder}>Não identificado</Text>
           </View>
         </View>
       )}
@@ -140,7 +140,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
           {currentSellerName ? (
             <Text style={s.fieldValue} numberOfLines={1}>{currentSellerName}</Text>
           ) : (
-            <Text style={s.fieldValuePlaceholder}>Nao informada</Text>
+            <Text style={s.fieldValuePlaceholder}>Não informada</Text>
           )}
         </View>
         <Pressable
