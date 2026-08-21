@@ -7,6 +7,9 @@ import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { LivePreview } from "./LivePreview";
 
+import { CapaProduto } from "./CapaProduto";
+import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
+import { tipografiaDaLoja } from "@/constants/fonts";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
   cfg: any, explicit: boolean | undefined
@@ -78,6 +81,7 @@ export function CartBar({
 
 /** Lista de itens no checkout */
 export function CartItemList({ sf }: { sf: StorefrontState }) {
+  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
   const editChip: any = {
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
     backgroundColor: T.primary,
@@ -114,15 +118,30 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
             {/* Sem a foto, este preview desenhava a AREA DE IMPRESSAO — o
                 cliente via "6x4cm" no lugar da peca que acabou de
                 escolher. Mesmo bug que o configurador tinha; aqui faltou
-                passar a foto junto. */}
-            <LivePreview
-              config={l.product.customization_config}
-              values={l.values}
-              size={56}
-              productName={l.product.name}
-              showLabel={false}
-              fotoProduto={(l.product as any).image_url}
-            />
+                passar a foto junto.
+
+                E quando nao ha foto NEM personalizacao — gravacao opcional
+                que o cliente deixou em branco — o preview so tem a area
+                vazia pra mostrar. Ai a capa composta assume, como na
+                prateleira. */}
+            {(l.product as any).image_url ||
+            temPersonalizacaoVisivel(l.product.customization_config as any, l.values) ? (
+              <LivePreview
+                config={l.product.customization_config}
+                values={l.values}
+                size={56}
+                productName={l.product.name}
+                showLabel={false}
+                fotoProduto={(l.product as any).image_url}
+              />
+            ) : (
+              <CapaProduto
+                nome={l.product.name}
+                tamanho={56}
+                corDaLoja={(sf.store as any)?.site?.primary_color}
+                fonteDisplay={tipo.display}
+              />
+            )}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
               <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
