@@ -269,7 +269,9 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
     <View style={dre.wrap}>
       <View {...tip("Receita bruta: " + fmt(income))} style={dre.row}>
         <Text style={[dre.label, { color: Colors.ink }]}>Receita bruta</Text>
-        <View style={[dre.bar, { width: "100%", backgroundColor: Colors.green }]} />
+        <View style={dre.track}>
+          <View style={[dre.bar, { width: "100%", backgroundColor: Colors.green }]} />
+        </View>
         <Text style={[dre.value, { color: Colors.green }]}>+{fmtK(income)}</Text>
       </View>
       {categories.map(function(c) {
@@ -277,14 +279,18 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
         return (
           <View key={c.label} {...tip(c.label + ": −" + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)")} style={dre.row}>
             <Text style={[dre.label, { color: Colors.ink2 }]} numberOfLines={1}>− {c.label}</Text>
-            <View style={[dre.bar, { width: w + "%", backgroundColor: Colors.red, opacity: 0.85 }]} />
+            <View style={dre.track}>
+              <View style={[dre.bar, { width: w + "%", backgroundColor: Colors.red, opacity: 0.85 }]} />
+            </View>
             <Text style={[dre.value, { color: Colors.red }]}>−{fmtK(c.value)}</Text>
           </View>
         );
       })}
       <View {...tip("Resultado liquido: " + (netResult >= 0 ? "+" : "") + fmt(netResult) + " · margem " + marginPct.toFixed(1) + "%")} style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
         <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Resultado liquido</Text>
-        <View style={[dre.bar, { width: Math.max(2, (Math.abs(netResult) / max) * 100) + "%", backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
+        <View style={dre.track}>
+          <View style={[dre.bar, { width: Math.max(2, (Math.abs(netResult) / max) * 100) + "%", backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
+        </View>
         <Text style={[dre.value, { color: netResult >= 0 ? Colors.violet3 : Colors.red, fontWeight: "800" }]}>
           {netResult >= 0 ? "+" : ""}{fmtK(netResult)}
         </Text>
@@ -368,7 +374,13 @@ var dre = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
   totalRow: { borderTopWidth: 1, marginTop: 6, paddingTop: 12 },
   label: { fontSize: 12, width: 130, flexShrink: 0 },
-  bar: { height: 14, borderRadius: 4, flex: 1 },
+  // FIX 24/08/2026 (QA Financeiro A4): a barra tinha `flex: 1` junto do
+  // `width: N%` inline. No Yoga, flexBasis:0 + flexGrow:1 vencem width no eixo
+  // principal — TODAS as barras esticavam ate preencher a linha e o waterfall
+  // nao comunicava proporcao nenhuma. Agora quem ocupa a linha e o track;
+  // a barra vive dentro dele e o % passa a valer.
+  track: { flex: 1, height: 14 },
+  bar: { height: 14, borderRadius: 4 },
   value: { fontSize: 12, fontWeight: "700", minWidth: 80, textAlign: "right" },
   margin: { fontSize: 12, marginTop: 6, alignSelf: "flex-end" },
 });

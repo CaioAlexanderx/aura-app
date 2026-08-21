@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import type { Transaction } from "@/components/screens/financeiro/types";
+import { parseDateLocal } from "@/components/screens/financeiro/types";
 import {
   HEALTH_TARGETS,
   HEALTH_WEIGHTS,
@@ -66,29 +67,33 @@ function fmtBRL(v: number): string {
   return "R$ " + Math.round(v).toLocaleString("pt-BR");
 }
 
+// FIX 24/08/2026 (QA Financeiro M2): usava `new Date(due)`, que interpreta
+// date-only ("2026-08-21") e o timestamp UTC de meia-noite que o backend manda
+// ("2026-08-21T00:00:00.000Z") como UTC — 21h do dia ANTERIOR em Sao Paulo.
+// Resultado: vencimento de HOJE entrava como atrasado e inflava a maior
+// alavanca ("Cobrar R$ X em atraso"). parseDateLocal ja existia em
+// financeiro/types.ts justamente pra isso.
 function isOverdue(t: Transaction): boolean {
   if (t.status !== "pending") return false;
   if (t.type !== "income") return false;
   var due = (t as any).due_date;
   if (!due) return false;
-  try {
-    var d = new Date(due);
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return d < today;
-  } catch { return false; }
+  var d = parseDateLocal(due);
+  if (isNaN(d.getTime())) return false;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
 }
 
 function daysOverdue(t: Transaction): number {
   var due = (t as any).due_date;
   if (!due) return 0;
-  try {
-    var d = new Date(due);
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    var diff = today.getTime() - d.getTime();
-    return Math.max(0, Math.floor(diff / 86400000));
-  } catch { return 0; }
+  var d = parseDateLocal(due);
+  if (isNaN(d.getTime())) return 0;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var diff = today.getTime() - d.getTime();
+  return Math.max(0, Math.floor(diff / 86400000));
 }
 
 // Calculo client-side (fallback enquanto server nao responde)
@@ -279,6 +284,13 @@ export function useFinancialInsights(args: Args): FinancialInsights {
       cashflow: (server as any).cashflow,
       income_breakdown: (server as any).income_breakdown,
       expense_breakdown: (server as any).expense_breakdown,
+      // FIX 24/08/2026 (QA Financeiro C1): estes dois campos da Onda 3 nao eram
+      // copiados do server aqui — e nao ha calculo client-side pra eles. Os cards
+      // "Evolucao Mensal · 12 meses" (Receitas e Despesas) e "Ranking de
+      // Profissionais" liam sempre `undefined` e renderizavam empty state
+      // permanente, mesmo com o backend devolvendo os dados.
+      monthly_evolution: (server as any).monthly_evolution,
+      professional_ranking: (server as any).professional_ranking,
     };
   }, [clientSide, serverQuery.data]);
 }

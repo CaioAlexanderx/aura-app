@@ -2,10 +2,7 @@ import { View, Text, Pressable, StyleSheet, Platform, Dimensions } from "react-n
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import { SmartBalance } from "./SmartBalance";
-import { SparklineBar } from "./SparklineBar";
 import { PendingCards } from "./PendingCards";
-import { ReconciliationSection } from "./ReconciliationSection";
-import { QuickInsights } from "./QuickInsights";
 import { TransactionRow } from "./TransactionRow";
 import { CollapsibleSection } from "./CollapsibleSection";
 import type { Transaction, PeriodKey } from "./types";
@@ -36,6 +33,8 @@ type Props = {
   customEnd?: string;
   isLoading: boolean;
   isDemo: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   onNewTransaction: () => void;
   onImport?: () => void;
   onGoToLancamentos: () => void;
@@ -58,7 +57,7 @@ function periodToComparative(p: PeriodKey): ComparativePeriod | null {
   }
 }
 
-export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
+export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, isError, onRetry, onNewTransaction, onImport, onGoToLancamentos, onDelete, onEdit }: Props) {
   // Multi-CNPJ: detecta modo consolidado pra ajustar UI dos cards v2.
   // Em consolidated, BiggestLever mostra "Soma de todas as empresas" + dica
   // pra abrir empresa especifica antes de cobrar.
@@ -76,8 +75,25 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
     period: period,
   });
 
+  // FIX 24/08/2026 (QA Financeiro A3): erro de rede precisa vir ANTES do
+  // empty state. Antes os dois caiam no mesmo caminho (lista vazia) e quem
+  // tinha anos de historico via "Lance sua primeira receita" quando o que
+  // houve foi uma falha de conexao.
+  if (isError && !isLoading && !isDemo) {
+    return (
+      <EmptyState
+        icon="alert"
+        iconColor={Colors.amber}
+        title="Não conseguimos carregar seus dados"
+        subtitle="Verifique sua conexão e tente de novo. Seus lançamentos continuam salvos."
+        actionLabel="Tentar de novo"
+        onAction={onRetry}
+      />
+    );
+  }
+
   if (transactions.length === 0 && !isLoading && !isDemo) {
-    return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termometro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lancamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
+    return <EmptyState icon="dollar" iconColor={Colors.green} title="Seu termômetro financeiro" subtitle="Lance sua primeira receita ou despesa para ativar o painel inteligente." actionLabel="Novo lançamento" onAction={onNewTransaction} secondaryLabel="Importar de planilha" onSecondary={onImport} />;
   }
 
   // Contadores rapidos pros subtitles dos accordions
@@ -138,8 +154,6 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         </>
       )}
 
-      <SparklineBar transactions={transactions} />
-
       {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand ===
           REDESIGN 19/05/2026: removidas as secoes "Receitas - analise detalhada" e
           "Despesas - analise detalhada" daqui. Elas duplicavam quase 1:1 o conteudo
@@ -179,21 +193,13 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection
-        id="analise-rapida"
-        title="Análise rápida"
-        subtitle="Insights automaticos sobre o periodo"
-      >
-        <QuickInsights transactions={transactions} income={summary.income} expenses={summary.expenses} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="conciliacao"
-        title="Conciliação bancária"
-        subtitle="Confronte extrato vs lançamentos"
-      >
-        <ReconciliationSection />
-      </CollapsibleSection>
+      {/* F2 (24/08/2026) — saíram daqui:
+          · "Análise rápida" (QuickInsights): repetia em prosa o que o hero e o
+            SmartBalance já mostram em número (margem, top categoria, volume).
+          · "Conciliação bancária": migrou pra aba Lançamentos, que é o contexto
+            natural de conferir extrato contra lançamento.
+          · SparklineBar: os últimos 7 dias já aparecem na "Tendência diária" das
+            abas Receitas e Despesas e no histórico do fluxo de caixa. */}
 
       {transactions.length > 0 && (
         <CollapsibleSection

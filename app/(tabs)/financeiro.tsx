@@ -2,13 +2,13 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors } from "@/constants/colors";
-import { useTransactionsApi } from "@/hooks/useTransactions";
+import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
+import { maskDateBR, brDateToISO } from "@/utils/mask";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
-import { TabResumo } from "@/components/screens/financeiro/TabResumo";
 import { TabRetirada } from "@/components/screens/financeiro/TabRetirada";
 import { TabCupons } from "@/components/screens/financeiro/TabCupons";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
@@ -49,20 +49,11 @@ function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: num
   return { maxWidth: 1600, padding: 36 };
 }
 
-function maskDate(v: string): string {
-  var d = v.replace(/\D/g, "").slice(0, 8);
-  if (d.length >= 5) return d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4);
-  if (d.length >= 3) return d.slice(0, 2) + "/" + d.slice(2);
-  return d;
-}
-
-function brToISO(br: string): string | null {
-  var parts = br.split("/");
-  if (parts.length !== 3 || parts[2].length !== 4) return null;
-  var d = parseInt(parts[0]); var m = parseInt(parts[1]); var y = parseInt(parts[2]);
-  if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2020) return null;
-  return y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-}
+// FIX 24/08/2026 (QA Financeiro C2/B7): maskDate/brToISO viviam copiados aqui,
+// em ComparativeSection e em ExportDreModal — as tres copias com o mesmo bug:
+// aceitavam datas inexistentes (31/04) e o ISO invalido virava "NaN-NaN-NaN"
+// na query string, esvaziando a tela sem feedback. Agora todo mundo usa o util
+// compartilhado, que valida o dia contra o mes de verdade.
 
 // ─── F3-3D: Card de A Receber do crediario ──────────────────
 // Consome GET /financial/receivables (Negocio+).
@@ -84,8 +75,10 @@ function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
     retry: false, // nao retentar em 403 (plano insuficiente)
   });
 
-  // Nao mostrar se: carregando, erro (403/plano), ou sem clientes em aberto
-  if (isLoading || !data || data.kpis.customers_open === 0) return null;
+  // Nao mostrar se: carregando, erro (403/plano), ou sem clientes em aberto.
+  // 24/08/2026 (QA): `data.kpis` sem optional chaining derrubava a Visao Geral
+  // inteira com TypeError se o backend respondesse 200 sem o bloco `kpis`.
+  if (isLoading || !data?.kpis || data.kpis.customers_open === 0) return null;
 
   const { kpis } = data;
   const fmtR = (n: number) =>
@@ -182,12 +175,22 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
   var [customStartBR, setCustomStartBR] = useState("");
   var [customEndBR, setCustomEndBR] = useState("");
-  var customStart = brToISO(customStartBR) || undefined;
-  var customEnd = brToISO(customEndBR) || undefined;
+  var parsedStart = brDateToISO(customStartBR) || undefined;
+  var parsedEnd = brDateToISO(customEndBR) || undefined;
+
+  // FIX 24/08/2026 (QA Financeiro A2): nada validava a ordem das datas. Com
+  // "De 20/08 · Ate 01/01" o range saia invertido, a lista voltava vazia e o
+  // check verde aparecia mesmo assim (so testava que as duas datas parsearam).
+  // Agora o range so vale quando esta completo E em ordem — enquanto estiver
+  // invertido a tela segue no periodo anterior e o usuario ve o aviso abaixo.
+  var customRangeInverted = !!parsedStart && !!parsedEnd && parsedStart > parsedEnd;
+  var customRangeValid = !!parsedStart && !!parsedEnd && !customRangeInverted;
+  var customStart = customRangeValid ? parsedStart : undefined;
+  var customEnd = customRangeValid ? parsedEnd : undefined;
 
   var {
     transactions, summary, previousSummary, currentMonthExpenses,
-    dreData, withdrawalData, isLoading, isDemo,
+    dreData, withdrawalData, isLoading, isDemo, isError, refetch,
     createTransaction, deleteTransaction,
     consolidatedView, consolidatedBreakdown,
   } = useTransactionsApi(activeTab, period, customStart, customEnd);
@@ -265,8 +268,11 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
       });
       var data = await res.json();
       if (!res.ok) { toast.error(data.error || "Erro " + res.status); setImporting(false); return; }
-      qc.invalidateQueries({ queryKey: ["transactions", company.id] });
-      toast.success(data.saved > 0 ? data.saved + " lancamentos importados!" + (data.error_count > 0 ? " (" + data.error_count + " com erro)" : "") : "0 lancamentos validos");
+      // FIX 24/08/2026 (QA Financeiro A5): antes invalidava so ["transactions"],
+      // deixando Health Score, comparativo, banner do mes e Painel com numeros
+      // velhos depois de um import de centenas de lancamentos.
+      invalidateFinanceiroQueries(qc, company.id);
+      toast.success(data.saved > 0 ? data.saved + " lançamentos importados!" + (data.error_count > 0 ? " (" + data.error_count + " com erro)" : "") : "0 lançamentos válidos");
     } catch (err: any) { toast.error("Erro ao importar: " + (err?.message || "tente novamente")); } finally { setImporting(false); }
   }
 
@@ -349,20 +355,25 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
         {(period === "custom" || showCustomPeriod) && (
-          <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
-            <View style={s.customField}>
-              <Text style={s.customLabel}>De</Text>
-              <TextInput style={s.customInput} value={customStartBR} onChangeText={function(v) { setCustomStartBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
-            </View>
-            {!IS_NARROW && <Icon name="arrow_right" size={14} color={Colors.ink3} />}
-            <View style={s.customField}>
-              <Text style={s.customLabel}>Ate</Text>
-              <TextInput style={s.customInput} value={customEndBR} onChangeText={function(v) { setCustomEndBR(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
-            </View>
-            {customStart && customEnd && (
-              <View style={s.customOk}>
-                <Icon name="check" size={14} color={Colors.green} />
+          <View>
+            <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
+              <View style={s.customField}>
+                <Text style={s.customLabel}>De</Text>
+                <TextInput style={s.customInput} value={customStartBR} onChangeText={function(v) { setCustomStartBR(maskDateBR(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} accessibilityLabel="Data inicial do período" />
               </View>
+              {!IS_NARROW && <Icon name="arrow_right" size={14} color={Colors.ink3} />}
+              <View style={s.customField}>
+                <Text style={s.customLabel}>Até</Text>
+                <TextInput style={s.customInput} value={customEndBR} onChangeText={function(v) { setCustomEndBR(maskDateBR(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} accessibilityLabel="Data final do período" />
+              </View>
+              {customRangeValid && (
+                <View style={s.customOk}>
+                  <Icon name="check" size={14} color={Colors.green} />
+                </View>
+              )}
+            </View>
+            {customRangeInverted && (
+              <Text style={s.customWarn}>A data inicial precisa vir antes da data final.</Text>
             )}
           </View>
         )}
@@ -388,10 +399,16 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           })}
         </ScrollView>
 
-        {!isDemo && transactions.length > 0 && (activeTab === TAB_INDEX.visao || activeTab === TAB_INDEX.lancamentos) && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {/* F2 (24/08/2026): a FinanceiroToolbar (Exportar Vendas + Categorizar com
+            IA) saiu da Visao Geral. Ela competia com o "Exportar" da Topbar logo
+            acima e empurrava o resumo pra baixo. "Categorizar com IA" pertence a
+            Lancamentos, que e onde o usuario ve as categorias erradas. */}
+        {!isDemo && transactions.length > 0 && activeTab === TAB_INDEX.lancamentos && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {/* B9: skeleton nao pode coexistir com a aba montada — antes os dois
+            renderizavam no primeiro load (heroes zerados sob o skeleton). */}
         {isLoading && activeTab !== TAB_INDEX.cupons && <ListSkeleton rows={4} showCards />}
 
-        {activeTab === TAB_INDEX.visao && (
+        {activeTab === TAB_INDEX.visao && !isLoading && (
           <>
             <TabVisaoGeral
               transactions={transactions}
@@ -402,6 +419,8 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
               customEnd={customEnd}
               isLoading={isLoading}
               isDemo={isDemo}
+              isError={isError}
+              onRetry={refetch}
               onNewTransaction={handleNewTransaction}
               onImport={!importing && !consolidatedView ? handleImport : undefined}
               onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
@@ -409,7 +428,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
               onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
             />
             {/* F3-3D (29/05/2026): A Receber crediario -- so em empresa individual, Negocio+ */}
-            {!consolidatedView && company?.id && (
+            {!consolidatedView && company?.id && !isError && (
               <CrediarioReceivablesCard companyId={company.id} />
             )}
           </>
@@ -479,6 +498,7 @@ var s = StyleSheet.create({
   customLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 },
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
+  customWarn: { fontSize: 11.5, color: Colors.amber, fontWeight: "600", marginTop: -8, marginBottom: 16, marginLeft: 4 },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   tabNarrow: { paddingHorizontal: 8, paddingVertical: 7 },
   tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },

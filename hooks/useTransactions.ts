@@ -48,6 +48,28 @@ function toISODate(d: Date): string {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// FIX 24/08/2026 (QA Financeiro A5): o conjunto de caches que precisa cair
+// depois de QUALQUER escrita de lancamento vivia copiado dentro de cada
+// mutation — e o import de CSV (app/(tabs)/financeiro.tsx) invalidava so
+// ["transactions"]. Depois de importar 200 lancamentos a lista atualizava mas
+// Health Score, comparativo "vs anterior", banner de despesas do mes e Painel
+// seguiam com numeros velhos por ate 2min (staleTime).
+//
+// Centralizado aqui pra que import, create e delete nunca mais divirjam.
+export function invalidateFinanceiroQueries(qc: ReturnType<typeof useQueryClient>, companyId?: string | null) {
+  qc.invalidateQueries({ queryKey: ["transactions", companyId] });
+  qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
+  qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
+  qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
+  qc.invalidateQueries({ queryKey: ["dre", companyId] });
+  qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
+  // Consolidado nao leva companyId na key — invalida o prefixo inteiro.
+  qc.invalidateQueries({ queryKey: ["me-transactions"] });
+  qc.invalidateQueries({ queryKey: ["me-transactions-prev"] });
+  qc.invalidateQueries({ queryKey: ["me-current-month-expenses"] });
+  qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+}
+
 export function useTransactionsApi(activeTab?: number, period?: PeriodKey, customStart?: string, customEnd?: string) {
   // MULTICNPJ Onda 2.2: detecta consolidatedView e ramifica entre
   // /companies/:id/transactions (per-company) e /me/transactions (consolidated).
@@ -77,7 +99,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
   }, []);
 
   // Query principal de transactions — ramifica entre per-company e consolidated
-  var { data: apiTx, isLoading: isLoadingTx } = useQuery({
+  var { data: apiTx, isLoading: isLoadingTx, isError: isErrorTx, refetch: refetchTx } = useQuery({
     queryKey: consolidatedView
       ? ["me-transactions", periodRange.start, periodRange.end]
       : ["transactions", companyId, periodRange.start, periodRange.end],
@@ -221,14 +243,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       return companiesApi.createTransaction(companyId!, body);
     },
     onSuccess: function() {
-      qc.invalidateQueries({ queryKey: ["transactions", companyId] });
-      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
-      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
-      qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["dre", companyId] });
-      // V2: invalida insights tambem (per-company e consolidated)
-      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+      invalidateFinanceiroQueries(qc, companyId);
       toast.success("Lancamento criado!");
     },
     onError: function(err: any) {
@@ -262,12 +277,7 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
       toast.error(err?.message || "Erro ao excluir lancamento");
     },
     onSettled: function() {
-      qc.invalidateQueries({ queryKey: ["transactions", companyId] });
-      qc.invalidateQueries({ queryKey: ["transactions-prev", companyId] });
-      qc.invalidateQueries({ queryKey: ["current-month-expenses", companyId] });
-      qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
-      qc.invalidateQueries({ queryKey: ["financeiro-insights-me"] });
+      invalidateFinanceiroQueries(qc, companyId);
     },
   });
 
@@ -297,6 +307,12 @@ export function useTransactionsApi(activeTab?: number, period?: PeriodKey, custo
     dreData: dreData,
     withdrawalData: withdrawalData,
     isLoading: isLoadingTx && !isDemo,
+    // FIX 24/08/2026 (QA Financeiro A3): o erro da query era descartado aqui.
+    // transactions virava [] com isLoading false, e a Visao Geral renderizava o
+    // EmptyState de onboarding ("Lance sua primeira receita...") — ou seja, quem
+    // tinha 2 anos de dados e abria a tela sem rede via o convite de conta nova.
+    isError: isErrorTx && !isDemo,
+    refetch: refetchTx,
     isDemo: isDemo,
     createTransaction: createTransaction,
     deleteTransaction: deleteTransaction,

@@ -30,13 +30,25 @@ export function maskDateBR(value: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-// Converte DD/MM/AAAA em YYYY-MM-DD (ISO date) ou null se invalido
+// Quantos dias tem o mes (1-12) no ano dado. Fevereiro respeita bissexto.
+export function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+// Converte DD/MM/AAAA em YYYY-MM-DD (ISO date) ou null se invalido.
+//
+// FIX 24/08/2026: a checagem `day <= 31` aceitava datas que nao existem no
+// calendario — 31/04/2026, 30/02/2026. Quem consumia o ISO resultante
+// ("2026-04-31") recebia Invalid Date do `new Date(...)`, e no Financeiro isso
+// virava "NaN-NaN-NaN" na query string do backend: a tela esvaziava sem
+// nenhum feedback pro usuario. Agora o dia e validado contra o mes de verdade.
 export function brDateToISO(value: string): string | null {
   const m = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!m) return null;
   const [, dd, mm, yyyy] = m;
   const day = parseInt(dd), month = parseInt(mm), year = parseInt(yyyy);
-  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return null;
+  if (month < 1 || month > 12 || day < 1 || year < 1900 || year > 2100) return null;
+  if (day > daysInMonth(year, month)) return null;
   return `${yyyy}-${mm}-${dd}`;
 }
 

@@ -4,6 +4,8 @@ import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { TransactionRow } from "./TransactionRow";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { ReconciliationSection } from "./ReconciliationSection";
 import { Icon } from "@/components/Icon";
 import type { Transaction } from "./types";
 import { fmt } from "./types";
@@ -180,8 +182,21 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       {/* Contador de itens visiveis */}
       {totalItems > 0 && (
         <Text style={s.counterText}>
-          Exibindo {Math.min(visibleCount, totalItems)} de {totalItems} lancamentos
+          Exibindo {Math.min(visibleCount, totalItems)} de {totalItems} lançamentos
         </Text>
+      )}
+
+      {/* F2 (24/08/2026): conciliação veio da Visão Geral pra cá. Conferir o
+          extrato do banco é uma tarefa sobre a LISTA de lançamentos — na Visão
+          Geral era mais um acordeão competindo com o resumo do mês. */}
+      {transactions.length > 0 && (
+        <CollapsibleSection
+          id="conciliacao"
+          title="Conferir com o extrato do banco"
+          subtitle="Veja quais lançamentos ainda não batem com o extrato"
+        >
+          <ReconciliationSection />
+        </CollapsibleSection>
       )}
     </View>
   );
