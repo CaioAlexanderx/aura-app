@@ -11,9 +11,11 @@ import { montarTema } from "./theme";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
 
+import { tipografiaDaLoja } from "@/constants/fonts";
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
   // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
   const tema = montarTema((sf.store as any)?.site?.primary_color);
+  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
 
   const [copied, setCopied] = useState(false);
   if (!sf.sentOrder || !sf.store) return null;
@@ -61,7 +63,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         </Text>
       </View>
 
-      <Text style={{ fontSize: 22, fontWeight: "800", color: T.ink, marginTop: 10 }}>
+      <Text style={{ fontFamily: tipo.display, fontSize: 24, lineHeight: 29, color: T.ink, marginTop: 10 }}>
         Pedido enviado!
       </Text>
       <Text style={{ fontSize: 13, color: T.ink3, marginTop: 6, textAlign: "center", maxWidth: 320 }}>
