@@ -7,12 +7,13 @@
 // Visual Engine F3 (03/07/2026): slug+productId passados ao LivePreview —
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
+import { montarTema } from "./theme";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { SizeGuideModal } from "./SizeGuideModal";
@@ -150,6 +151,18 @@ export function ProductConfigurator({
   // pixels do proprio contador. No desktop o conteudo passa a viver numa
   // coluna centrada, com o preview FIXO ao lado dos campos — o cliente ve
   // a peca mudando enquanto digita, que e o ponto da tela.
+  // A cor da loja finalmente chega ao caminho de compra. Ate aqui o botao
+  // "Adicionar" saia azul-marinho (`tema.marcaTexto`) numa loja violeta — a
+  // marca quebrava exatamente onde o cliente decide pagar.
+  //
+  // Preenchimento e tinta saem de `montarTema`, nao da cor crua: o hex do
+  // lojista e arbitrario e um botao amarelo-limao com texto branco nao se
+  // le. Ver fase 01.
+  const tema = useMemo(
+    () => montarTema((sf.store as any)?.site?.primary_color),
+    [(sf.store as any)?.site?.primary_color],
+  );
+
   const { width: larguraTela } = useWindowDimensions();
   const telaLarga = larguraTela >= 900;
   const LARGURA_MAX = 980;
@@ -207,7 +220,7 @@ export function ProductConfigurator({
               borderRadius: 999, marginTop: 4,
             }}
           >
-            <Text style={{ fontSize: 9, color: T.primary, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+            <Text style={{ fontSize: 9, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
               Estúdio · Arte personalizada
             </Text>
           </View>
@@ -234,7 +247,7 @@ export function ProductConfigurator({
               <Text
                 style={{
                   fontSize: 11,
-                  color: T.primary,
+                  color: tema.marcaTexto,
                   fontWeight: "700",
                   textDecorationLine: "underline",
                 }}
@@ -245,7 +258,7 @@ export function ProductConfigurator({
           )}
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: T.primary }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
             R$ {configuringUnitPrice.toFixed(2)}
           </Text>
           {hasDelta && (
@@ -283,7 +296,7 @@ export function ProductConfigurator({
             preenchido (ver transportarValores em categoryGrouping.ts). */}
         {sf.activeSiblings.length > 1 ? (
           <View style={{ gap: 8 }}>
-            <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
               Modelo
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
@@ -298,18 +311,18 @@ export function ProductConfigurator({
                     accessibilityLabel={m.name}
                     style={{
                       minWidth: 104, padding: 8, borderRadius: 10,
-                      backgroundColor: sel ? T.primary + "12" : T.card,
+                      backgroundColor: sel ? tema.marcaWash : T.card,
                       borderWidth: sel ? 2 : 1,
-                      borderColor: sel ? T.primary : T.border,
+                      borderColor: sel ? tema.marcaTexto : T.border,
                     }}
                   >
                     <Text
                       numberOfLines={2}
-                      style={{ fontSize: 11, fontWeight: sel ? "800" : "600", color: sel ? T.primary : T.ink }}
+                      style={{ fontSize: 11, fontWeight: sel ? "800" : "600", color: sel ? tema.marcaTexto : T.ink }}
                     >
                       {m.name}
                     </Text>
-                    <Text style={{ fontSize: 11, color: sel ? T.primary : T.ink3, fontWeight: "700", marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
                       R$ {Number(m.price).toFixed(2)}
                     </Text>
                   </Pressable>
@@ -330,7 +343,7 @@ export function ProductConfigurator({
                 mais, parecendo secao quebrada. */}
             {frontFields.length > 0 && (
               <View style={{ gap: 4, marginTop: 4 }}>
-                <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
                   Frente
                 </Text>
               </View>
@@ -343,8 +356,8 @@ export function ProductConfigurator({
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Text style={{ fontSize: 12, color: T.primary }}>↻</Text>
-                    <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Text>
+                    <Text style={{ fontSize: 12, color: tema.marcaTexto }}>↻</Text>
+                    <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Text>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -363,20 +376,20 @@ export function ProductConfigurator({
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
                       borderWidth: 1.5,
-                      borderColor: editingAddBack ? T.primary : T.border,
+                      borderColor: editingAddBack ? tema.marcaTexto : T.border,
                     }}
                   >
                     <View
                       style={{
                         width: 22, height: 22, borderRadius: 6,
                         borderWidth: 2,
-                        borderColor: editingAddBack ? T.primary : T.ink4,
-                        backgroundColor: editingAddBack ? T.primary : "transparent",
+                        borderColor: editingAddBack ? tema.marcaFill : T.ink4,
+                        backgroundColor: editingAddBack ? tema.marcaFill : "transparent",
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
                       {editingAddBack && (
-                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
+                        <Text style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Text>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -420,8 +433,8 @@ export function ProductConfigurator({
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Text style={{ fontSize: 12, color: T.primary }}>▭</Text>
-                    <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Text>
+                    <Text style={{ fontSize: 12, color: tema.marcaTexto }}>▭</Text>
+                    <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Text>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -445,20 +458,20 @@ export function ProductConfigurator({
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
                       borderWidth: 1.5,
-                      borderColor: editingAddMiddle ? T.primary : T.border,
+                      borderColor: editingAddMiddle ? tema.marcaTexto : T.border,
                     }}
                   >
                     <View
                       style={{
                         width: 22, height: 22, borderRadius: 6,
                         borderWidth: 2,
-                        borderColor: editingAddMiddle ? T.primary : T.ink4,
-                        backgroundColor: editingAddMiddle ? T.primary : "transparent",
+                        borderColor: editingAddMiddle ? tema.marcaFill : T.ink4,
+                        backgroundColor: editingAddMiddle ? tema.marcaFill : "transparent",
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
                       {editingAddMiddle && (
-                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "900" }}>✓</Text>
+                        <Text style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Text>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -517,7 +530,7 @@ export function ProductConfigurator({
             para a quantidade que ativa o desconto é o gesto todo. */}
         {escada.length > 0 ? (
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 10.5, color: T.primary, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
               Quanto mais, mais barato
             </Text>
             {escada.map((t) => {
@@ -531,16 +544,16 @@ export function ProductConfigurator({
                   style={{
                     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                     paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
-                    backgroundColor: ativa ? T.primary + "12" : T.card,
+                    backgroundColor: ativa ? tema.marcaWash : T.card,
                     borderWidth: ativa ? 2 : 1,
-                    borderColor: ativa ? T.primary : T.border,
+                    borderColor: ativa ? tema.marcaTexto : T.border,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: ativa ? T.primary : T.ink2, fontWeight: ativa ? "800" : "600" }}>
+                  <Text style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink2, fontWeight: ativa ? "800" : "600" }}>
                     {faixaLabel(t)}
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 12, color: ativa ? T.primary : T.ink, fontWeight: "800" }}>
+                    <Text style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "800" }}>
                       R$ {Number(t.unit_price).toFixed(2)}
                     </Text>
                     <View style={{ backgroundColor: T.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
@@ -578,11 +591,11 @@ export function ProductConfigurator({
         <Pressable
           onPress={commitConfigure}
           style={{
-            backgroundColor: T.primary, paddingVertical: 14, borderRadius: 10, alignItems: "center",
+            backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
             width: "100%", maxWidth: telaLarga ? 420 : undefined,
           }}
         >
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+          <Text style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
             {(sf as any)._editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
           </Text>
         </Pressable>

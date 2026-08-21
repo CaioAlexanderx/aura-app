@@ -80,7 +80,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       {/* Hero */}
       <View
         style={[
-          { padding: 24, paddingBottom: 28, backgroundColor: primary },
+          { paddingHorizontal: telaLarga ? 20 : 14, paddingTop: 28, paddingBottom: 32, backgroundColor: primary },
           Platform.OS === "web"
             ? (store.site.cover_url
                 ? ({
@@ -96,44 +96,83 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             : {},
         ]}
       >
-        {store.site.logo_url ? (
-          <Image
-            source={{ uri: store.site.logo_url }}
+        {/* Conteudo do hero alinhado a MESMA coluna de 980 do resto da
+            pagina. Antes ele comecava a 24px da borda enquanto a grade
+            comecava no centro — a loja parecia duas paginas coladas. */}
+        <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: telaLarga ? 20 : 0 }}>
+          {store.site.logo_url ? (
+            <Image
+              source={{ uri: store.site.logo_url }}
+              style={{
+                width: 56, height: 56, borderRadius: 12, marginBottom: 14,
+                backgroundColor: "rgba(255,255,255,0.15)",
+              }}
+              resizeMode="contain"
+              accessibilityLabel={store.site.name}
+            />
+          ) : null}
+
+          {/* Micro-label monoespaçada — a mesma voz do site da Aura. */}
+          <Text
             style={{
-              width: 56, height: 56, borderRadius: 12, marginBottom: 10,
-              backgroundColor: "rgba(255,255,255,0.15)",
+              fontFamily: Fonts.mono,
+              color: "rgba(255,255,255,0.8)",
+              fontSize: 10.5, letterSpacing: 1.6, textTransform: "uppercase",
             }}
-            resizeMode="contain"
-            accessibilityLabel={store.site.name}
-          />
-        ) : null}
-        <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase" }}>
-          Aura Studio · Personalizados
-        </Text>
-        <View
-          style={{
-            alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5,
-            backgroundColor: "rgba(255,255,255,0.18)",
-            paddingHorizontal: 10, paddingVertical: 4,
-            borderRadius: 999, marginTop: 8,
-            borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
-          }}
-        >
-          <Text style={{ color: "#fff", fontSize: 10 }}>●</Text>
-          <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
-            Loja oficial · Arte personalizada
+          >
+            — Aura Studio · Personalizados
           </Text>
+
+          {/* O nome da loja na SERIFADA da marca, grande. Era DM Sans 900,
+              que e voz de UI, nao de vitrine. */}
+          <Text
+            style={{
+              fontFamily: Fonts.heading,
+              color: "#fff",
+              fontSize: telaLarga ? 52 : 36,
+              lineHeight: telaLarga ? 56 : 40,
+              marginTop: 6,
+            }}
+          >
+            {store.site.name}
+          </Text>
+
+          {store.site.tagline ? (
+            <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, marginTop: 8, maxWidth: 520 }}>
+              {store.site.tagline}
+            </Text>
+          ) : null}
+
+          {/* Meta numa linha so: o que a loja e, quanto tempo leva e o
+              tamanho do catalogo. Antes eram tres blocos empilhados. */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
+            <View
+              style={{
+                flexDirection: "row", alignItems: "center", gap: 5,
+                backgroundColor: "rgba(255,255,255,0.18)",
+                paddingHorizontal: 10, paddingVertical: 5,
+                borderRadius: 999,
+                borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 9 }}>●</Text>
+              <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
+                Loja oficial · Arte personalizada
+              </Text>
+            </View>
+
+            <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>
+              Produção em ~{store.sla.total_estimate_days}{" "}
+              {store.sla.total_estimate_days === 1 ? "dia útil" : "dias úteis"}
+            </Text>
+
+            {store.products.length > 0 ? (
+              <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+                · {store.products.length} {store.products.length === 1 ? "produto" : "produtos"}
+              </Text>
+            ) : null}
+          </View>
         </View>
-        <Text style={{ color: "#fff", fontSize: 32, fontWeight: "900", marginTop: 10, letterSpacing: -0.5 }}>
-          {store.site.name}
-        </Text>
-        {store.site.tagline ? (
-          <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 6 }}>{store.site.tagline}</Text>
-        ) : null}
-        <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 10 }}>
-          Prazo de produção: ~{store.sla.total_estimate_days}{" "}
-          {store.sla.total_estimate_days === 1 ? "dia útil" : "dias úteis"}
-        </Text>
       </View>
 
       {/* Busca — a vitrine nao tinha nenhuma. Com 3 produtos da pra rolar;

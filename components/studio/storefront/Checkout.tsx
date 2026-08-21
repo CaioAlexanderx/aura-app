@@ -7,11 +7,17 @@ import { View, Text, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T, sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
 import { CartItemList } from "./Cart";
+import { montarTema } from "./theme";
 import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
 
 export function Checkout({ sf }: { sf: StorefrontState }) {
+  // A cor da loja tambem no botao que fecha a venda — era azul-marinho
+  // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
+  // arbitrario (ver fase 01).
+  const tema = montarTema((sf.store as any)?.site?.primary_color);
+
   if (!sf.store) return null;
   const sendDisabled =
     sf.sending || sf.cart.length === 0 || !sf.customerName.trim() || !sf.customerPhone.trim();
@@ -201,12 +207,12 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           onPress={sf.submitOrder}
           disabled={sendDisabled}
           style={{
-            backgroundColor: T.primary,
+            backgroundColor: tema.marcaFill,
             paddingVertical: 14, borderRadius: 10, alignItems: "center",
             opacity: sendDisabled ? 0.4 : 1,
           }}
         >
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+          <Text style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
             {sf.sending ? "Enviando..." : "Enviar pedido • R$ " + sf.cartTotal.toFixed(2)}
           </Text>
         </Pressable>
