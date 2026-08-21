@@ -184,9 +184,18 @@ export function PersonalizationPreviewBase({
   // A fonte que o lojista configurou no campo — ate agora ela so servia
   // de placeholder no input e a arte saia sempre no sans do sistema.
   const fonteArte = artFontStack((textField as any)?.config?.fonts?.[0]);
-  // Idem a cor: a paleta configurada era ignorada e o texto saia sempre
-  // na tinta da UI.
-  const corArte = (textField as any)?.config?.colors?.[0] || t.ink;
+  // A cor da arte: primeiro a que o CLIENTE escolheu (chave lateral
+  // `<campo>_cor`), depois a primeira da paleta do lojista. Ate a fase 03
+  // a paleta era ignorada por completo e o texto saia sempre na tinta da
+  // UI; depois passou a usar sempre a primeira cor, que numa peca escura
+  // podia ficar ilegivel. Agora quem decide e quem vai vestir.
+  const corEscolhida = textField ? values[`${textField.id}_cor`] : null;
+  const corArte =
+    (typeof corEscolhida === "string" && /^#[0-9A-Fa-f]{3,8}$/.test(corEscolhida.trim())
+      ? corEscolhida.trim()
+      : null) ||
+    (textField as any)?.config?.colors?.[0] ||
+    t.ink;
   // Sobre foto o contraste e IMPREVISIVEL, e a cor da arte vem da paleta
   // do lojista sem ninguem olhar a peca: uma polo azul-marinho recebe o
   // primeiro tom da lista, que costuma ser quase preto. Resultado: escuro

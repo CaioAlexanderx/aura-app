@@ -36,7 +36,23 @@ export function FieldRenderer({
   onFieldChange?: (fieldId: string, v: any) => void;
 }) {
   if (field.type === "text") {
-    return <FieldText field={field} value={value} onChange={onChange} />;
+    // A cor da arte mora numa chave lateral (`<campo>_cor`), mesmo padrao
+    // que `art_service_brief` ja usa. O validador do backend so exige
+    // campos obrigatorios preenchidos, entao chave extra nao derruba o
+    // pedido e o valor viaja junto ate o banco.
+    //
+    // PENDENTE: as telas de producao montam a lista a partir de
+    // `config.fields`, entao uma chave que nao e campo simplesmente nao
+    // aparece. O dado esta salvo; falta exibi-lo pra oficina.
+    return (
+      <FieldText
+        field={field}
+        value={value}
+        onChange={onChange}
+        corValue={values?.[field.id + "_cor"]}
+        onCorChange={onFieldChange ? (v) => onFieldChange(field.id + "_cor", v) : undefined}
+      />
+    );
   }
   if (field.type === "color") {
     return <FieldColor field={field} value={value} onChange={onChange} />;
