@@ -27,6 +27,7 @@ import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type St
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+import { rotuloDaChave, valorDaChave } from "@/components/studio/customizationConfig";
 
 const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   pending_art: "approved",
@@ -91,15 +92,14 @@ function ItemCustomization({
         {entries.length === 0 ? (
           <Text style={s.custRowValue}>—</Text>
         ) : entries.map(([key, value]) => {
-          const field = fieldsById[key];
-          const label = field?.label || key;
+          const label = rotuloDaChave(key, fieldsById);
           const swatch = isHexColor(value);
           return (
             <View key={key} style={s.custRow}>
               <Text style={s.custRowLabel}>{label}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
                 {swatch ? <View style={[s.custSwatch, { backgroundColor: value }]} /> : null}
-                <Text style={s.custRowValue} numberOfLines={2}>{String(value)}</Text>
+                <Text style={s.custRowValue} numberOfLines={2}>{valorDaChave(value)}</Text>
               </View>
             </View>
           );
