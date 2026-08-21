@@ -187,9 +187,17 @@ export function PersonalizationPreviewBase({
   // Idem a cor: a paleta configurada era ignorada e o texto saia sempre
   // na tinta da UI.
   const corArte = (textField as any)?.config?.colors?.[0] || t.ink;
-  // Sobre foto, o contraste e imprevisivel: um halo fino garante que o
-  // nome do cliente seja legivel em cima de qualquer estampa.
-  const haloArte = inkSobre(corArte) === "#FFFFFF" ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.75)";
+  // Sobre foto o contraste e IMPREVISIVEL, e a cor da arte vem da paleta
+  // do lojista sem ninguem olhar a peca: uma polo azul-marinho recebe o
+  // primeiro tom da lista, que costuma ser quase preto. Resultado: escuro
+  // sobre escuro.
+  //
+  // Nao da pra escolher a cor certa sem saber a cor da peca (aqui ela vem
+  // da FOTO, nao de um campo). Entao o contorno vira parte do desenho —
+  // grosso o bastante para ler como letra contornada, que e estilo comum
+  // em estamparia, em vez de acidente.
+  const haloArte = inkSobre(corArte) === "#FFFFFF" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.92)";
+  const haloLargura = fotoProduto ? 0.26 : 0.14;
 
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -216,7 +224,7 @@ export function PersonalizationPreviewBase({
         stroke-opacity="${fotoProduto ? "0.35" : "1"}"
         stroke-dasharray="1.5,0.8"/>
   ${overlayUrl ? `<image href="${escapeXml(overlayUrl)}" x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}" preserveAspectRatio="xMidYMid meet"/>` : ""}
-  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * 0.14).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
+  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * haloLargura).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
   <text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}
   ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${t.ink3}">${escapeXml(productName)}</text>` : ""}
   ${!overlayUrl && !textValue && !fotoProduto ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
