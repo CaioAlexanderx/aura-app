@@ -213,8 +213,8 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
   var rows = [
     { key: "atrasadas", label: "Atrasadas", b: buckets.atrasadas, c: Colors.red, urgentCopy: "vencidas" },
     { key: "esta_semana", label: "Esta semana", b: buckets.esta_semana, c: Colors.amber, urgentCopy: "vencem em 7 dias" },
-    { key: "este_mes", label: "Este mes", b: buckets.este_mes, c: Colors.violet3, urgentCopy: "vencem este mes" },
-    { key: "futuras", label: "Futuras", b: buckets.futuras, c: Colors.green, urgentCopy: "alem deste mes" },
+    { key: "este_mes", label: "Este mês", b: buckets.este_mes, c: Colors.violet3, urgentCopy: "vencem este mês" },
+    { key: "futuras", label: "Futuras", b: buckets.futuras, c: Colors.green, urgentCopy: "além deste mês" },
   ];
 
   return (
@@ -241,7 +241,7 @@ export function Timeline({ buckets, kind }: { buckets: TimelineBuckets; kind: "r
           return (
             <View key={r.key} {...tip(r.label + ": " + r.b.count + " " + (r.b.count === 1 ? "lançamento" : "lançamentos") + " · " + fmt(r.b.total))} style={s.timelineRow}>
               <View style={[s.timelineDot, { backgroundColor: r.c }]} />
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={s.timelineText}>
                 <Text style={[s.timelineLabel, { color: Colors.ink }]}>{r.label}</Text>
                 <Text style={[s.timelineSub, { color: Colors.ink3 }]}>{r.b.count} {r.b.count === 1 ? "lançamento" : "lançamentos"} · {r.urgentCopy}</Text>
               </View>
@@ -355,6 +355,11 @@ var s = StyleSheet.create({
   timelineStack: { height: 18, borderRadius: 9, overflow: "hidden", flexDirection: "row" },
   timelineSegment: { height: "100%" },
   timelineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  // FIX 24/08/2026 (feedback do Caio): este bloco era `flex: 1` puro, entao
+  // empurrava o valor pra borda do card. Num card de 1100px, ler "Atrasadas" e
+  // achar "R$ 434,51" custava mais de mil pixels de travessia. Com teto, o
+  // valor encosta no rotulo e as colunas seguem alinhadas entre as linhas.
+  timelineText: { flex: 1, minWidth: 0, maxWidth: 360 },
   timelineDot: { width: 8, height: 8, borderRadius: 4 },
   timelineLabel: { fontSize: 12.5, fontWeight: "600" },
   timelineSub: { fontSize: 10.5, marginTop: 1 },

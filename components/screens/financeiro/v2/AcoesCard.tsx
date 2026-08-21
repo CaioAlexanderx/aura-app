@@ -160,6 +160,23 @@ export function AcoesCard({ transactions, insights, consolidated, onGoToLancamen
     return list.sort(function(a, b) { return b.weight - a.weight; }).slice(0, MAX_ACTIONS);
   }, [transactions, insights, consolidated, onGoToLancamentos, onGoToDespesas]);
 
+  // FIX 24/08/2026 (QA no app rodando): enquanto os insights do server nao
+  // chegam, o calculo client-side so enxerga o periodo selecionado. Numa conta
+  // com contas vencidas ha 80 dias (fora do mes) isso fazia o card afirmar
+  // "Nada precisa da sua atencao agora" — bem ao lado de um banner dizendo
+  // "3 contas a receber vencidas" — e se corrigir sozinho segundos depois.
+  // Melhor nao afirmar nada do que afirmar o oposto do verdadeiro.
+  if (actions.length === 0 && insights.insights_pending) {
+    return (
+      <View style={[s.card, s.cardClear, { backgroundColor: Colors.bg3, borderColor: Colors.border }]}>
+        <View style={[s.iconBox, { backgroundColor: Colors.violetD }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.clearSub, { color: Colors.ink3 }]}>Verificando o que precisa da sua atenção…</Text>
+        </View>
+      </View>
+    );
+  }
+
   // Estado positivo: uma linha, nao um card vazio de 200px.
   if (actions.length === 0) {
     return (

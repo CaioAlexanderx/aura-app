@@ -103,7 +103,6 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
     ? ((summary.income - previousSummary.income) / previousSummary.income) * 100
     : null;
 
-  var receivable = summary.pendingIncome || 0;
   var collected = summary.income;
 
   // Insights enriquecidos (Onda 2): top5, payment_methods, timeline, dow do server
@@ -114,6 +113,22 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
     period: period,
   });
   var ib = insights.income_breakdown;
+
+  // FIX 24/08/2026 (QA no app rodando): o KPI usava summary.pendingIncome, que
+  // conta so o que vence DENTRO do periodo selecionado, enquanto a timeline
+  // logo abaixo soma todo o horizonte (atrasadas de meses anteriores +
+  // futuras). O resultado aparecia lado a lado se contradizendo: "A receber
+  // R$ 0,00" com "Atrasadas R$ 434,51" dois centimetros abaixo.
+  //
+  // "A receber" sem qualificador significa "quanto me devem", nao "quanto
+  // vence neste mes" — entao o KPI passa a somar os mesmos baldes da timeline
+  // quando ela existe, e so cai no valor do periodo como fallback.
+  var receivable = useMemo(function() {
+    var t = ib?.timeline;
+    if (!t) return summary.pendingIncome || 0;
+    return (t.atrasadas?.total || 0) + (t.esta_semana?.total || 0)
+         + (t.este_mes?.total || 0) + (t.futuras?.total || 0);
+  }, [ib, summary.pendingIncome]);
 
   var categories = useMemo(function() { return groupIncomeByCategory(transactions); }, [transactions]);
   var topCategoryColor = ["#7c3aed", "#a78bfa", "#34d399", "#5b8cff", "#fbbf24", "#f87171"];

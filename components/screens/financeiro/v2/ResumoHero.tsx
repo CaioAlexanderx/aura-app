@@ -129,34 +129,46 @@ function DailyBars({ buckets, reduceMotion }: { buckets: Bucket[]; reduceMotion:
 
   if (buckets.length < 2 || max <= 0) return null;
 
+  // FIX 24/08/2026 (QA no app rodando): com poucos dias de movimento o grafico
+  // ficava feio e ilegivel — 3 colunas em `flex: 1` viravam blocos de um terco
+  // da largura cada, e as barras do lado sem valor, presas no minHeight de 2px,
+  // viravam uma linha vermelha continua atravessando a tela, que parecia um
+  // eixo ou um erro de render. Agora as colunas tem largura maxima e a barra
+  // sem valor simplesmente nao existe.
+  var sparse = buckets.length < 8;
+
   return (
     <View style={g.wrap} accessibilityLabel="Gráfico de entradas e saídas por dia no período">
       <View style={g.chart}>
         {buckets.map(function(b) {
-          var inH = Math.max(2, (b.income / max) * 100);
-          var outH = Math.max(2, (b.expenses / max) * 100);
+          var inH = b.income > 0 ? Math.max(3, (b.income / max) * 100) : 0;
+          var outH = b.expenses > 0 ? Math.max(3, (b.expenses / max) * 100) : 0;
           return (
-            <View key={b.key} style={g.col}>
+            <View key={b.key} style={[g.col, sparse ? g.colSparse : null]}>
               <View style={g.pair}>
-                <Animated.View
-                  style={[
-                    g.bar,
-                    {
-                      backgroundColor: Colors.green,
-                      height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", inH + "%"] }),
-                    },
-                  ]}
-                />
-                <Animated.View
-                  style={[
-                    g.bar,
-                    {
-                      backgroundColor: Colors.red,
-                      opacity: 0.85,
-                      height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", outH + "%"] }),
-                    },
-                  ]}
-                />
+                {b.income > 0 && (
+                  <Animated.View
+                    style={[
+                      g.bar,
+                      {
+                        backgroundColor: Colors.green,
+                        height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", inH + "%"] }),
+                      },
+                    ]}
+                  />
+                )}
+                {b.expenses > 0 && (
+                  <Animated.View
+                    style={[
+                      g.bar,
+                      {
+                        backgroundColor: Colors.red,
+                        opacity: 0.85,
+                        height: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", outH + "%"] }),
+                      },
+                    ]}
+                  />
+                )}
               </View>
             </View>
           );
@@ -314,6 +326,8 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
   // FIX M8: breakpoint reativo. Os cards do Financeiro liam Dimensions.get no
   // escopo do modulo e ficavam presos no tamanho do primeiro load.
   var NARROW = vw < 640;
+  // Acima disso o hero vira duas colunas — abaixo, empilha.
+  var WIDE = vw >= 1080;
 
   var { goalPct, isCustom, setGoal } = useFinanceGoal();
   var [editing, setEditing] = useState(false);
@@ -350,24 +364,33 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
     <View style={[h.card, { backgroundColor: Colors.bg3, borderColor: Colors.border2 }]}>
       <View style={[h.accent, { backgroundColor: barColor }]} />
 
-      <View style={h.headerRow}>
-        <Text style={h.kicker}>
-          RESUMO {periodLabel(period)}
-          {consolidated ? " · TODAS AS EMPRESAS" : ""}
-        </Text>
-      </View>
+      {/* FIX 24/08/2026 (feedback do Caio no app): em tela larga tudo estava
+          esticado na largura inteira do card. "Entrou" ficava a ~950px de
+          "Sobrou", e o olho tinha que atravessar a tela pra ligar um rotulo ao
+          seu numero. Agora, no desktop, a leitura fica agrupada a esquerda
+          (frase + os tres numeros, com medida de leitura) e o grafico + a
+          barra de meta ocupam a coluna da direita. A largura passa a ter
+          proposito em vez de so espalhar o conteudo. */}
+      <View style={WIDE ? h.body : null}>
+        <View style={WIDE ? h.colLeft : null}>
+          <View style={h.headerRow}>
+            <Text style={h.kicker}>
+              RESUMO {periodLabel(period)}
+              {consolidated ? " · TODAS AS EMPRESAS" : ""}
+            </Text>
+          </View>
 
-      {/* Uma frase no lugar do score 0-100 + 4 drivers */}
-      <Text style={[h.phrase, NARROW ? h.phraseNarrow : null, { color: Colors.ink }]}>
-        {insights.health.narrative.headline}
-      </Text>
-      {/* A subline diz o que fazer com o fato acima. Estava sendo montada e
-          descartada desde o F3 — o hero so lia o headline. */}
-      {!!insights.health.narrative.subline && (
-        <Text style={[h.subphrase, { color: Colors.ink3 }]}>
-          {insights.health.narrative.subline}
-        </Text>
-      )}
+          {/* Uma frase no lugar do score 0-100 + 4 drivers */}
+          <Text style={[h.phrase, NARROW ? h.phraseNarrow : null, { color: Colors.ink }]}>
+            {insights.health.narrative.headline}
+          </Text>
+          {/* A subline diz o que fazer com o fato acima. Estava sendo montada e
+              descartada desde o F3 — o hero so lia o headline. */}
+          {!!insights.health.narrative.subline && (
+            <Text style={[h.subphrase, { color: Colors.ink3 }]}>
+              {insights.health.narrative.subline}
+            </Text>
+          )}
 
       {/* entrou · saiu · sobrou */}
       <View style={NARROW ? h.gridNarrow : h.grid}>
@@ -414,22 +437,26 @@ export function ResumoHero({ transactions, summary, previousSummary, insights, p
           </Text>
         </View>
       </View>
+        </View>
 
-      {/* Grafico animado do periodo */}
-      <DailyBars buckets={buckets} reduceMotion={reduceMotion} />
+        <View style={WIDE ? h.colRight : null}>
+          {/* Grafico animado do periodo */}
+          <DailyBars buckets={buckets} reduceMotion={reduceMotion} />
 
-      {/* Barra colorida pelo resultado + meta configuravel. So faz sentido
-          com receita no periodo — a meta e "quanto do que ENTRA pode virar
-          despesa". */}
-      {hasIncome && (
-        <GoalBar
-          expenseRatio={expenseRatio}
-          goalPct={goalPct}
-          isCustom={isCustom}
-          reduceMotion={reduceMotion}
-          onEditGoal={function() { setEditing(function(v) { return !v; }); }}
-        />
-      )}
+          {/* Barra colorida pelo resultado + meta configuravel. So faz sentido
+              com receita no periodo — a meta e "quanto do que ENTRA pode virar
+              despesa". */}
+          {hasIncome && (
+            <GoalBar
+              expenseRatio={expenseRatio}
+              goalPct={goalPct}
+              isCustom={isCustom}
+              reduceMotion={reduceMotion}
+              onEditGoal={function() { setEditing(function(v) { return !v; }); }}
+            />
+          )}
+        </View>
+      </View>
 
       {editing && (
         <GoalEditor
@@ -478,6 +505,11 @@ var h = StyleSheet.create({
   phraseNarrow: { fontSize: 17, lineHeight: 23, marginBottom: 14 },
   subphrase: { fontSize: 12.5, lineHeight: 18, marginTop: -12, marginBottom: 18, maxWidth: 620 },
 
+  body: { flexDirection: "row", gap: 34, alignItems: "flex-start" },
+  // Medida de leitura: a coluna esquerda para de esticar, entao "Entrou" e
+  // "Sobrou" ficam a um golpe de vista um do outro.
+  colLeft: { flex: 1, maxWidth: 560 },
+  colRight: { flex: 1, minWidth: 280, paddingTop: 4 },
   grid: { flexDirection: "row", gap: 18 },
   gridNarrow: { flexDirection: "column", gap: 12 },
   cell: { flex: 1, borderLeftWidth: 2, paddingLeft: 12 },
@@ -496,6 +528,8 @@ var g = StyleSheet.create({
   wrap: { marginTop: 18 },
   chart: { flexDirection: "row", alignItems: "flex-end", gap: 4, height: 56 },
   col: { flex: 1, height: "100%", justifyContent: "flex-end" },
+  // Com poucos dias, limita a largura pra nao virar bloco gigante.
+  colSparse: { maxWidth: 54 },
   pair: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: "100%" },
   bar: { flex: 1, borderRadius: 2, minHeight: 2 },
   legendRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },

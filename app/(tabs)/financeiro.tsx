@@ -50,12 +50,21 @@ var TAB_INDEX_TO_KEY: Record<number, string> = {
   [TAB_INDEX.lancamentos]: "lancamentos",
 };
 
+// FIX 24/08/2026 (feedback do Caio no app rodando): "os campos estao muito
+// amplos para preencher toda a pagina... os olhos precisam percorrer muito
+// para encontrar o complemento da informacao".
+//
+// A causa era esta funcao. Em 1600px de conteudo, uma linha "rotulo a
+// esquerda / valor a direita" separa os dois por mais de mil pixels — ler
+// "Atrasadas" e achar "R$ 434,51" virava uma travessia. Largura de tela nao e
+// largura de leitura: o conteudo agora para de esticar bem antes da borda, e
+// a folga sobra como margem em vez de espalhar a informacao.
 function getLayoutForWidth(w: number): { maxWidth: number | "100%"; padding: number } {
   if (w < 480) return { maxWidth: "100%", padding: 14 };
   if (w < 768) return { maxWidth: "100%", padding: 20 };
-  if (w < 1280) return { maxWidth: 1100, padding: 28 };
-  if (w < 1900) return { maxWidth: 1340, padding: 32 };
-  return { maxWidth: 1600, padding: 36 };
+  if (w < 1280) return { maxWidth: 1040, padding: 28 };
+  if (w < 1900) return { maxWidth: 1160, padding: 32 };
+  return { maxWidth: 1240, padding: 36 };
 }
 
 // FIX 24/08/2026 (QA Financeiro C2/B7): maskDate/brToISO viviam copiados aqui,

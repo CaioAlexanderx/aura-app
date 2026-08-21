@@ -78,7 +78,6 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
-  var payable = summary.pendingExpenses || 0;
   var paid = summary.expenses;
   var marginPct = summary.income > 0 ? ((summary.income - summary.expenses) / summary.income) * 100 : 0;
 
@@ -86,7 +85,7 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
     ? ((summary.expenses - previousSummary.expenses) / previousSummary.expenses) * 100
     : null;
 
-  // Insights enriquecidos (Onda 2/3): top5, payment_methods, timeline, anomalies, gauge, monthly_evolution
+  // Insights enriquecidos (Onda 2/3): top5, payment_methods, timeline, anomalies, monthly_evolution
   var insights = useFinancialInsights({
     transactions: transactions,
     summary: summary,
@@ -94,6 +93,17 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
     period: period,
   });
   var eb = insights.expense_breakdown;
+
+  // FIX 24/08/2026 (QA no app rodando): mesma incoerencia da aba Receitas — o
+  // KPI mostrava "A pagar R$ 1,0k" (so o que vence no periodo) enquanto a
+  // timeline logo abaixo somava R$ 11k (atrasadas + este mes + futuras). Dois
+  // numeros sobre a mesma pergunta, se contradizendo na mesma dobra.
+  var payable = useMemo(function() {
+    var t = eb?.timeline;
+    if (!t) return summary.pendingExpenses || 0;
+    return (t.atrasadas?.total || 0) + (t.esta_semana?.total || 0)
+         + (t.este_mes?.total || 0) + (t.futuras?.total || 0);
+  }, [eb, summary.pendingExpenses]);
 
   var categories = useMemo(function() { return groupExpenseByCategory(transactions); }, [transactions]);
   var catColors = ["#f87171", "#fbbf24", "#a78bfa", "#5b8cff", "#7c3aed", "#34d399"];
