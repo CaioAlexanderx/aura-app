@@ -82,7 +82,17 @@ export var TAB_INDEX = {
   cupons: 91,
 } as const;
 
-export var INCOME_CATS = ["Vendas", "Servicos", "Outros", "Investimentos"];
+// 24/08/2026: "Crediário" entra como categoria de receita.
+//
+// Sem ela, quem recebe uma parcela de fiado no balcao e vai lancar a mao — sem
+// venda de produto vinculada — nao tinha onde classificar, e caia em "Outros".
+// Para os clientes que vendem quase tudo no crediario isso jogava a maior
+// fonte de receita do negocio num balde generico.
+//
+// O backend ja grava categorias proprias no fluxo automatico
+// ('Crediario - A Receber', 'Crediario - Recebido', 'Crediario - Encargos');
+// esta aqui e a opcao equivalente para o lancamento manual.
+export var INCOME_CATS = ["Vendas", "Servicos", "Crediário", "Outros", "Investimentos"];
 export var EXPENSE_CATS = ["Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Outros"];
 
 export function fmt(n: number): string {

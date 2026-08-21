@@ -13,7 +13,9 @@ import { fmt } from "./types";
 var isWeb = Platform.OS === "web";
 var PAGE_SIZE = 50;
 
-var ALL_CATS = ["Vendas", "Servicos", "Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Investimentos", "Outros"];
+// Ordem preferida das categorias conhecidas. NAO e mais uma lista fechada:
+// ver presentCats abaixo.
+var CAT_ORDER = ["Vendas", "Servicos", "Crediário", "Fornecedores", "Fixas", "Operacional", "Folha", "Impostos", "Marketing", "Investimentos", "Outros"];
 
 type Props = {
   transactions: Transaction[];
@@ -63,10 +65,23 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
   var [showAllCats, setShowAllCats] = useState(false);
   var [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+  // FIX 24/08/2026: `ALL_CATS` era uma lista FECHADA, e o filtro so oferecia
+  // categorias que estivessem nela. Toda categoria que o backend grava e o app
+  // nao conhecia ficava invisivel no filtro — inclusive as tres do crediario
+  // ('Crediario - A Receber', 'Crediario - Recebido', 'Crediario - Encargos').
+  // Pra um cliente que vende quase tudo no crediario, o filtro por categoria
+  // simplesmente nao alcancava a maior parte do faturamento dele.
+  //
+  // Agora a lista sai dos DADOS: as conhecidas primeiro, na ordem de sempre, e
+  // as demais em seguida em ordem alfabetica. Nada some por nao estar na lista.
   var presentCats = useMemo(function() {
     var set = new Set<string>();
     transactions.forEach(function(t) { if (t.category) set.add(t.category); });
-    return ALL_CATS.filter(function(c) { return set.has(c); });
+    var conhecidas = CAT_ORDER.filter(function(c) { return set.has(c); });
+    var resto = Array.from(set)
+      .filter(function(c) { return CAT_ORDER.indexOf(c) === -1; })
+      .sort(function(a, b) { return a.localeCompare(b, "pt-BR"); });
+    return conhecidas.concat(resto);
   }, [transactions]);
 
   var displayTransactions = useMemo(function() {
