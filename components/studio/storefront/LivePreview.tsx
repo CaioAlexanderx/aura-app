@@ -132,7 +132,7 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
-  allowSideToggle = false,
+  allowSideToggle = false, fotoProduto,
 }: {
   config: CustomizationConfig | null;
   values: Record<string, any>;
@@ -149,6 +149,9 @@ export function LivePreview({
    * nao ha o que alternar — o cliente ainda nem escolheu nada.
    */
   allowSideToggle?: boolean;
+  /** Foto do produto — vira a base do preview quando nao ha template
+   *  visual. Sem ela o cliente ve um quadrado colorido no lugar da peca. */
+  fotoProduto?: string | null;
 }) {
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
@@ -294,6 +297,7 @@ export function LivePreview({
         config={config}
         values={safeValues}
         side={viewId}
+        fotoProduto={fotoProduto}
         size={size}
         productName={productName}
         showLabel={showLabel}

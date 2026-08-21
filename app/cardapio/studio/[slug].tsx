@@ -13,7 +13,10 @@
 //   Checkout              -- stage="checkout" (dados + pagamento)
 //   SentConfirmation      -- stage="sent" (confirmacao + pix + revisoes)
 // ============================================================
+import { useEffect } from "react";
+import { Platform } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { STOREFRONT_FONTS_CSS } from "@/constants/fonts";
 import { ActivityIndicator, View, Text } from "react-native";
 import { useStorefront } from "@/components/studio/storefront/useStorefront";
 import { T } from "@/components/studio/storefront/types";
@@ -39,6 +42,28 @@ export default function StudioStorefrontPage() {
   const params = useLocalSearchParams<{ slug: string }>();
   const slug = String(params.slug || "");
   const sf = useStorefront(slug);
+
+  // A vitrine nunca carregou fonte nenhuma: o painel e a pagina de
+  // orcamento injetavam as fontes da marca, e justamente a superficie que
+  // vende renderizava tudo em fonte de sistema. Aqui entram a marca e as
+  // fontes de ARTE, que sao a letra estampada na peca — sem elas o
+  // preview cai num fallback silencioso e a caneca "Pacifico" aparece em
+  // Arial.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (document.getElementById("aura-storefront-fonts")) return;
+    const pre1 = document.createElement("link");
+    pre1.rel = "preconnect"; pre1.href = "https://fonts.googleapis.com";
+    const pre2 = document.createElement("link");
+    pre2.rel = "preconnect"; pre2.href = "https://fonts.gstatic.com"; pre2.crossOrigin = "";
+    const link = document.createElement("link");
+    link.id = "aura-storefront-fonts";
+    link.rel = "stylesheet";
+    link.href = STOREFRONT_FONTS_CSS;
+    document.head.appendChild(pre1);
+    document.head.appendChild(pre2);
+    document.head.appendChild(link);
+  }, []);
 
   if (sf.loading) {
     return <Center><ActivityIndicator color={T.primary} size="large" /></Center>;
