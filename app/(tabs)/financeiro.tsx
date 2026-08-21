@@ -424,6 +424,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
               onNewTransaction={handleNewTransaction}
               onImport={!importing && !consolidatedView ? handleImport : undefined}
               onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+              onGoToDespesas={function() { handleTabSelect(TAB_INDEX.despesas); }}
               onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
               onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
             />

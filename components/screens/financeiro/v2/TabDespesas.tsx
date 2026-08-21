@@ -12,6 +12,7 @@
 // shiftando 1 dia em BRT) + tooltips no hover das barras e categorias.
 
 import { View, Text, StyleSheet, Platform, Dimensions } from "react-native";
+import type { DimensionValue } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { Transaction } from "../types";
@@ -280,7 +281,7 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
           <View key={c.label} {...tip(c.label + ": −" + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)")} style={dre.row}>
             <Text style={[dre.label, { color: Colors.ink2 }]} numberOfLines={1}>− {c.label}</Text>
             <View style={dre.track}>
-              <View style={[dre.bar, { width: w + "%", backgroundColor: Colors.red, opacity: 0.85 }]} />
+              <View style={[dre.bar, { width: (w + "%") as DimensionValue, backgroundColor: Colors.red, opacity: 0.85 }]} />
             </View>
             <Text style={[dre.value, { color: Colors.red }]}>−{fmtK(c.value)}</Text>
           </View>
@@ -289,7 +290,7 @@ function DreWaterfall({ income, categories, netResult, marginPct }: {
       <View {...tip("Resultado liquido: " + (netResult >= 0 ? "+" : "") + fmt(netResult) + " · margem " + marginPct.toFixed(1) + "%")} style={[dre.row, dre.totalRow, { borderTopColor: Colors.border }]}>
         <Text style={[dre.label, { color: Colors.ink, fontWeight: "800" }]}>Resultado liquido</Text>
         <View style={dre.track}>
-          <View style={[dre.bar, { width: Math.max(2, (Math.abs(netResult) / max) * 100) + "%", backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
+          <View style={[dre.bar, { width: (Math.max(2, (Math.abs(netResult) / max) * 100) + "%") as DimensionValue, backgroundColor: netResult >= 0 ? Colors.violet : Colors.red }]} />
         </View>
         <Text style={[dre.value, { color: netResult >= 0 ? Colors.violet3 : Colors.red, fontWeight: "800" }]}>
           {netResult >= 0 ? "+" : ""}{fmtK(netResult)}
