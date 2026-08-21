@@ -65,6 +65,8 @@ export type StorePayload = {
   site: {
     name: string; tagline?: string;
     primary_color: string; accent_color: string;
+    /** Par tipografico escolhido pela lojista (ver TIPOGRAFIAS). */
+    font_family?: string | null;
     logo_url: string | null; cover_url?: string | null;
   };
   products: StudioStoreProduct[];

@@ -27,11 +27,13 @@ type Props = {
   /** Largura do cartão — a grade calcula e passa. */
   largura: number;
   corDaLoja?: string | null;
+  /** Fonte de titulo do par escolhido pela lojista. */
+  fonteDisplay?: string;
   onPress: () => void;
 };
 
 export function ProductCard({
-  nome, preco, fotos, descricao, selo, largura, corDaLoja, onPress,
+  nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay, onPress,
 }: Props) {
   const cor = corDaLoja || AURA.violet;
   const desc = resumo(descricao, 64);
@@ -65,7 +67,7 @@ export function ProductCard({
           : ({ elevation: hovered ? 4 : 2 } as any),
       ]}
     >
-      <CarrosselFoto fotos={fotos} nome={nome} tamanho={largura - 20} corDaLoja={cor} />
+      <CarrosselFoto fotos={fotos} nome={nome} tamanho={largura - 20} corDaLoja={cor} fonteDisplay={fonteDisplay} />
 
       <View style={{ gap: 3, paddingHorizontal: 2, paddingBottom: 2 }}>
         {selo ? (
@@ -82,7 +84,7 @@ export function ProductCard({
         <Text
           numberOfLines={2}
           style={{
-            fontFamily: Fonts.heading,
+            fontFamily: fonteDisplay || Fonts.heading,
             fontSize: 16,
             lineHeight: 20,
             color: T.ink,

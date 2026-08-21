@@ -32,9 +32,11 @@ type Props = {
   tamanho: number;
   /** Cor da loja; sem ela, o violeta da Aura assume. */
   corDaLoja?: string | null;
+  /** Fonte de titulo do par escolhido — as iniciais saem nela. */
+  fonteDisplay?: string;
 };
 
-export function CapaProduto({ uri, nome, tamanho, corDaLoja }: Props) {
+export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Props) {
   const cor = corDaLoja || AURA.violet;
   const raio = Math.round(tamanho * 0.14);
 
@@ -91,7 +93,7 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja }: Props) {
     >
       <Text
         style={{
-          fontFamily: Fonts.heading,
+          fontFamily: fonteDisplay || Fonts.heading,
           // A serifada da marca no lugar de um ícone genérico: é o que faz
           // a capa parecer decisão de design, não ausência de conteúdo.
           fontSize: Math.round(tamanho * 0.42),
