@@ -3,11 +3,13 @@
 // Stage="list": hero da loja + grid de produtos + CartBar.
 // ============================================================
 import { useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, Platform, Image, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
+import { Fonts } from "@/constants/fonts";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
+import { casa } from "./buscaVitrine";
 import { CartBar } from "./Cart";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { precoMinimo } from "./categoryGrouping";
@@ -25,12 +27,14 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // desistia. Com 3 categorias isso passa; com as 28 da Finesse, não.
   const { width } = useWindowDimensions();
   const [ativa, setAtiva] = useState<ItemMenu | null>(null);
+  const [busca, setBusca] = useState("");
 
   // ── Grade ─────────────────────────────────────────────────
   // A foto e o que vende. Antes era miniatura de 72px numa lista de
   // linhas — menor que o proprio botao. Agora ocupa a largura do cartao.
   const GAP = 14;
   const LARGURA_MAX = 980;
+  const telaLarga = width >= 720;
   const colunas = width < 560 ? 2 : width < 900 ? 3 : 4;
   const larguraUtil = Math.min(width, LARGURA_MAX) - 28; // padding do scroll
   const larguraCartao = Math.floor((larguraUtil - GAP * (colunas - 1)) / colunas);
@@ -43,16 +47,33 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // Filtra as ENTRADAS já agrupadas, não os produtos crus: assim o cartão
   // "Canecas · 8 modelos" continua sendo um cartão só dentro do filtro.
   const entradas = useMemo(() => {
-    if (!ativa) return sf.vitrine;
-    const ids = new Set<string>();
-    const empilhar = (i: ItemMenu) => { ids.add(i.id); i.filhas.forEach(empilhar); };
-    empilhar(ativa);
-    return sf.vitrine.filter((e) =>
-      e.kind === "category"
-        ? ids.has(e.category.id)
-        : !!(e.product as any).category_id && ids.has((e.product as any).category_id),
-    );
-  }, [sf.vitrine, ativa]);
+    let lista = sf.vitrine;
+
+    if (ativa) {
+      const ids = new Set<string>();
+      const empilhar = (i: ItemMenu) => { ids.add(i.id); i.filhas.forEach(empilhar); };
+      empilhar(ativa);
+      lista = lista.filter((e) =>
+        e.kind === "category"
+          ? ids.has(e.category.id)
+          : !!(e.product as any).category_id && ids.has((e.product as any).category_id),
+      );
+    }
+
+    if (busca.trim()) {
+      lista = lista.filter((e) =>
+        e.kind === "category"
+          // Um grupo aparece se o NOME dele casa ou se algum modelo casa —
+          // procurar "polo" tem que achar a polo mesmo que ela esteja
+          // dentro do cartao "Camisetas".
+          ? casa(busca, e.category.name) ||
+            e.products.some((p) => casa(busca, p.name, p.description))
+          : casa(busca, e.product.name, e.product.description),
+      );
+    }
+
+    return lista;
+  }, [sf.vitrine, ativa, busca]);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -115,6 +136,36 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         </Text>
       </View>
 
+      {/* Busca — a vitrine nao tinha nenhuma. Com 3 produtos da pra rolar;
+          com 30, ou com os 74 da Sheid, nao da. */}
+      <View style={{ backgroundColor: T.card, paddingHorizontal: telaLarga ? 20 : 14, paddingTop: 12 }}>
+        <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TextInput
+            value={busca}
+            onChangeText={setBusca}
+            placeholder="Buscar na loja..."
+            placeholderTextColor={T.ink4}
+            accessibilityLabel="Buscar produtos na loja"
+            style={{
+              flex: 1, backgroundColor: T.bg, color: T.ink,
+              paddingHorizontal: 14, paddingVertical: 10,
+              borderRadius: 999, fontSize: 13.5,
+              borderWidth: 1, borderColor: T.border,
+            }}
+          />
+          {busca ? (
+            <Pressable
+              onPress={() => setBusca("")}
+              accessibilityRole="button"
+              accessibilityLabel="Limpar busca"
+              style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <Text style={{ fontSize: 12.5, color: T.ink3, fontWeight: "700" }}>Limpar</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
       <StoreNav menu={menu} ativa={ativa} onSelect={setAtiva} primary={primary} />
 
       {/* Grade de produtos */}
@@ -139,6 +190,30 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           // S1 — a vitrine itera ENTRADAS, não produtos: categoria com 2+
           // modelos vira um cartão só. As 9 canecas da Sheid deixam de
           // ocupar 9 linhas quase idênticas.
+          entradas.length === 0 ? (
+            // Busca ou filtro sem resultado: em vez de uma grade em branco,
+            // diz o que aconteceu e devolve o caminho de volta.
+            <View style={{ paddingVertical: 48, alignItems: "center", gap: 10 }}>
+              <Text style={{ fontFamily: Fonts.heading, fontSize: 20, color: T.ink, textAlign: "center" }}>
+                Nada encontrado por aqui
+              </Text>
+              <Text style={{ fontSize: 13, color: T.ink3, textAlign: "center", maxWidth: 320 }}>
+                {busca.trim()
+                  ? `Nenhum produto com "${busca.trim()}"${ativa ? ` em ${ativa.name}` : ""}.`
+                  : "Esta categoria ainda não tem produtos publicados."}
+              </Text>
+              <Pressable
+                onPress={() => { setBusca(""); setAtiva(null); }}
+                accessibilityRole="button"
+                style={{
+                  marginTop: 4, paddingHorizontal: 16, paddingVertical: 9,
+                  borderRadius: 999, backgroundColor: primary,
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Ver a loja toda</Text>
+              </Pressable>
+            </View>
+          ) : (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GAP }}>
             {entradas.map((entry) => {
               // Categoria com 2+ modelos vira UM cartao — as 9 canecas da
@@ -173,6 +248,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
               );
             })}
           </View>
+          )
         )}
       </ScrollView>
 
