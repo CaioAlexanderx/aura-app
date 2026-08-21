@@ -65,7 +65,9 @@ export function CartBar({
           </Text>
         </View>
         <View>
-          <Text style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>itens personalizados</Text>
+          <Text style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
+            {sf.cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item personalizado" : "itens personalizados"}
+          </Text>
           <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>R$ {sf.cartSubtotal.toFixed(2)}</Text>
         </View>
       </View>
@@ -109,12 +111,17 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
               flexDirection: "row", alignItems: "center", gap: 12,
             }}
           >
+            {/* Sem a foto, este preview desenhava a AREA DE IMPRESSAO — o
+                cliente via "6x4cm" no lugar da peca que acabou de
+                escolher. Mesmo bug que o configurador tinha; aqui faltou
+                passar a foto junto. */}
             <LivePreview
               config={l.product.customization_config}
               values={l.values}
               size={56}
               productName={l.product.name}
               showLabel={false}
+              fotoProduto={(l.product as any).image_url}
             />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
