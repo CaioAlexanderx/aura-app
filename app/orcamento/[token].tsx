@@ -32,6 +32,8 @@ import { Icon } from "@/components/Icon";
 import { studioApi, type PublicQuote } from "@/services/studioApi";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 
+import { tipografiaDaLoja, cssDaVitrine } from "@/constants/fonts";
+import { PoweredByAura } from "@/components/studio/storefront/ui/PoweredByAura";
 // Fallbacks quando a loja não configurou cores na Loja Digital
 const FALLBACK_PRIMARY = "#1E3A8A";
 const FALLBACK_SECONDARY = "#EC4899";
@@ -111,6 +113,23 @@ export default function OrcamentoPublico() {
   const secondary = isHexColor(data?.shop?.secondary_color) ? data!.shop.secondary_color!.trim() : FALLBACK_SECONDARY;
   const logoUrl = data?.shop?.logo_url || null;
   const waNumber = data?.shop?.whatsapp || null;
+  // Fase 05: cor e logo ja chegavam aqui; a tipografia nao. A escolha da
+  // lojista valia na Loja Virtual e o orcamento dela saia na fonte do
+  // sistema — a peca mais formal que ela manda pro cliente.
+  const tipo = tipografiaDaLoja((data?.shop as any)?.font_family);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined" || !data?.shop) return;
+    const id = "aura-orcamento-fonte";
+    let link = document.getElementById(id) as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    link.href = cssDaVitrine((data.shop as any).font_family);
+  }, [data?.shop]);
 
   function openWhatsApp() {
     if (!waNumber) return;
@@ -135,12 +154,12 @@ export default function OrcamentoPublico() {
           <Image source={{ uri: logoUrl }} style={s.brandLogo} />
         ) : (
           <View style={[s.brandLogo, s.brandLogoFallback, { backgroundColor: primary }]}>
-            <Text style={s.brandLogoLetter}>
+            <Text style={[s.brandLogoLetter, { fontFamily: tipo.display }]}>
               {(data.shop.name || "E").trim().charAt(0).toUpperCase()}
             </Text>
           </View>
         )}
-        <Text style={s.brandName}>{data.shop.name}</Text>
+        <Text style={[s.brandName, { fontFamily: tipo.display }]}>{data.shop.name}</Text>
         <Text style={[s.brandEyebrow, { color: secondary }]}>ORÇAMENTO PERSONALIZADO</Text>
       </View>
     </View>
@@ -201,6 +220,7 @@ export default function OrcamentoPublico() {
             ) : null}
           </View>
           {Footer}
+          <PoweredByAura />
         </ScrollView>
       </View>
     );
@@ -246,6 +266,7 @@ export default function OrcamentoPublico() {
             ) : null}
           </View>
           {Footer}
+          <PoweredByAura />
         </ScrollView>
       </View>
     );
