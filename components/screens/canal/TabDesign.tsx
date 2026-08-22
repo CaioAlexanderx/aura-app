@@ -24,6 +24,7 @@ import { useAccent } from "@/contexts/AccentTheme";
 import { PreviewTipografia } from "./PreviewTipografia";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
+import { SeletorDeCor } from "./SeletorDeCor";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
 type Banner = {
@@ -435,9 +436,14 @@ export function TabDesign({
               style={[cs.colorDot, { backgroundColor: c }, primary === c && cs.colorDotActive]} />
           ))}
         </View>
-        <TextInput style={cs.input} value={primary}
-          onChangeText={(v) => { setPrimary(v); scheduleSave({ primary_color: v }); }}
-          placeholder="#7c3aed" autoCapitalize="none" />
+        {/* 6.1 do QA: as bolinhas cobrem 8 cores; a marca da lojista
+            raramente esta nelas. O conta-gotas abre o seletor nativo. */}
+        <SeletorDeCor
+          valor={primary}
+          onMudar={(v) => { setPrimary(v); scheduleSave({ primary_color: v }); }}
+          placeholder="#7c3aed"
+          estiloInput={cs.input}
+        />
 
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor de destaque</Text>
         <View style={cs.colorRow}>
@@ -446,9 +452,12 @@ export function TabDesign({
               style={[cs.colorDot, { backgroundColor: c }, accentColor === c && cs.colorDotActive]} />
           ))}
         </View>
-        <TextInput style={cs.input} value={accentColor}
-          onChangeText={(v) => { setAccentColor(v); scheduleSave({ accent_color: v }); }}
-          placeholder="#a78bfa" autoCapitalize="none" />
+        <SeletorDeCor
+          valor={accentColor}
+          onMudar={(v) => { setAccentColor(v); scheduleSave({ accent_color: v }); }}
+          placeholder="#a78bfa"
+          estiloInput={cs.input}
+        />
 
         <View style={cs.divider} />
         <Text style={cs.fieldLabel}>Paletas prontas</Text>
