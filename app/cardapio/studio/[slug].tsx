@@ -25,6 +25,7 @@ import { ProductConfigurator } from "@/components/studio/storefront/ProductConfi
 import { Checkout } from "@/components/studio/storefront/Checkout";
 import { SentConfirmation } from "@/components/studio/storefront/SentConfirmation";
 
+import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
 function Center({ children }: { children: any }) {
   return (
     <View
@@ -73,7 +74,9 @@ export default function StudioStorefrontPage() {
   }, [sf.store, parEscolhido]);
 
   if (sf.loading) {
-    return <Center><ActivityIndicator color={T.primary} size="large" /></Center>;
+    // Esqueleto no lugar do spinner: a tela vazia era indistinguivel de
+    // loja quebrada pra quem clicou no link do WhatsApp da lojista.
+    return <VitrineSkeleton />;
   }
   if (sf.error && !sf.store) {
     return (

@@ -15,7 +15,10 @@ import { PoweredByAura } from "./ui/PoweredByAura";
 import { precoMinimo } from "./categoryGrouping";
 import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
+import { wash } from "./theme";
 
+import { AncoraWhatsApp } from "./AncoraWhatsApp";
+import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
   if (!sf.store) return null;
   const { store } = sf;
@@ -28,6 +31,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   const { width } = useWindowDimensions();
   const [ativa, setAtiva] = useState<ItemMenu | null>(null);
   const [busca, setBusca] = useState("");
+  // Ordem e densidade so aparecem em loja grande — ver LIMIAR_CONTROLES.
+  const [ordem, setOrdem] = useState<OrdemVitrine>("destaque");
+  const [denso, setDenso] = useState(false);
 
   // ── Grade ─────────────────────────────────────────────────
   // A foto e o que vende. Antes era miniatura de 72px numa lista de
@@ -45,7 +51,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   const estiloCartao = (((store.site as any).card_style || "editorial") as
     "editorial" | "minimal" | "image-heavy");
   const base = width < 560 ? 2 : width < 900 ? 3 : 4;
-  const colunas = estiloCartao === "minimal" ? base + 1 : base;
+  const colunas = colunasComDensidade(estiloCartao === "minimal" ? base + 1 : base, denso);
   const larguraUtil = Math.min(width, LARGURA_MAX) - 28; // padding do scroll
   const larguraCartao = Math.floor((larguraUtil - GAP * (colunas - 1)) / colunas);
 
@@ -82,8 +88,24 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       );
     }
 
-    return lista;
-  }, [sf.vitrine, ativa, busca]);
+    // Ordena por ultimo: filtrar depois de ordenar daria o mesmo
+    // resultado, mas ordenar a lista inteira pra descartar 90% e trabalho
+    // jogado fora em loja de 500 itens.
+    return ordenarEntradas(
+      lista.map((e) => ({
+        ...e,
+        // Grupo usa o MENOR preco e a data do modelo mais recente: senao o
+        // cartao "Camisetas · 3 modelos" afundaria em "Menor preco" so
+        // porque o primeiro modelo dele e caro.
+        nome: e.kind === "category" ? e.category.name : e.product.name,
+        preco: e.kind === "category" ? precoMinimo(e.products) : Number(e.product.price),
+        criadoEm: e.kind === "category"
+          ? e.products.map((p: any) => p.created_at).sort().reverse()[0]
+          : (e.product as any).created_at,
+      })),
+      ordem,
+    ) as typeof lista;
+  }, [sf.vitrine, ativa, busca, ordem]);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -225,6 +247,61 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           width: "100%", maxWidth: 980, alignSelf: "center",
         }}
       >
+        {/* Barra de controle — so em loja grande. Numa vitrine de 9 itens
+            ela e mais alta que a propria vitrine, entao nao existe. */}
+        {mostrarControles(entradas.length) ? (
+          <View
+            style={{
+              flexDirection: "row", alignItems: "center", flexWrap: "wrap",
+              gap: 8, paddingBottom: 4,
+            }}
+          >
+            <Text style={{ fontSize: 12, color: T.ink3, marginRight: "auto" }}>
+              {entradas.length} itens
+            </Text>
+
+            {ORDENS.map((o) => {
+              const sel = o.chave === ordem;
+              return (
+                <Pressable
+                  key={o.chave}
+                  onPress={() => setOrdem(o.chave)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sel }}
+                  style={{
+                    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: sel ? primary : T.border,
+                    backgroundColor: sel ? wash(primary, 0.12) : "transparent",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: sel ? "800" : "600", color: sel ? primary : T.ink2 }}>
+                    {o.rotulo}
+                  </Text>
+                </Pressable>
+              );
+            })}
+
+            {/* Densidade so faz sentido onde cabe mais uma coluna. */}
+            {telaLarga ? (
+              <Pressable
+                onPress={() => setDenso((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={denso ? "Ver cartões maiores" : "Ver mais produtos por linha"}
+                style={{
+                  paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
+                  borderWidth: 1, borderColor: denso ? primary : T.border,
+                  backgroundColor: denso ? wash(primary, 0.12) : "transparent",
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: denso ? primary : T.ink2 }}>
+                  {denso ? "Cartões maiores" : "Mais por linha"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         {store.products.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
             <Text style={{ fontSize: 36 }}>🎨</Text>
@@ -305,6 +382,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         )}
       </ScrollView>
 
+      <AncoraWhatsApp
+        numero={(store.site as any).whatsapp}
+        nomeDaLoja={store.site.name}
+        corDaLoja={primary}
+        acimaDaBarra={sf.cart.length > 0}
+      />
       <CartBar sf={sf} accent={accent} />
       <PoweredByAura />
     </View>
