@@ -28,6 +28,14 @@ import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
 
 // ─── Fiado (legado) ────────────────────────────────────────────────────────
+// ── Teto de parcelas (21/08/2026) ────────────────────────────────────────
+// Espelha MAX_INSTALLMENTS_CEILING do backend (services/credit/terms.js).
+// Relato Valen: crediário de R$5.400 em 54x. O app tinha três tetos próprios
+// (12 do default de config, 100 hardcoded em três telas) e o backend cortava
+// em silêncio — 54x virava 12x sem erro em lugar nenhum. Agora o teto é um só,
+// alto, e serve de guarda-corpo; o teto de verdade é o da loja (config).
+export const MAX_INSTALLMENTS_CEILING = 500;
+
 export type CreditBalanceItem = {
   id: string; name: string; phone: string | null; cpf_cnpj: string | null;
   balance: number; total_debited: number; total_paid: number; last_activity_at: string | null;

@@ -29,6 +29,7 @@ import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
   creditApi,
+  MAX_INSTALLMENTS_CEILING,
   type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
 } from "@/services/creditApi";
@@ -101,6 +102,7 @@ export function ClienteCrediarioModal({
   const [renegCount, setRenegCount] = useState(1);
   const [renegPerParcel, setRenegPerParcel] = useState("");
   const [renegFirstDue, setRenegFirstDue] = useState("");
+
   const [renegSubmitting, setRenegSubmitting] = useState(false);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
@@ -119,6 +121,18 @@ export function ClienteCrediarioModal({
   const [freePreviewLoading, setFreePreviewLoading] = useState(false);
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Chave de idempotência da renegociação: gerada uma vez por sessão de
+  // submissão e SÓ descartada no sucesso (ou ao fechar o painel). É isso que
+  // permite o backend deduplicar o retry em vez de cancelar e recriar o carnê
+  // outra vez — antes a chave era gerada a cada chamada e não valia nada.
+  const renegKeyRef = useRef<string | null>(null);
+  // Qualquer edição no plano começa uma sessão nova: a chave antiga replicaria
+  // o cronograma ANTERIOR (o backend devolveria o recibo daquele pedido).
+  // Retry do mesmo formulário, sem mexer em nada, mantém a chave — que é
+  // exatamente o caso que precisa deduplicar.
+  useEffect(() => {
+    renegKeyRef.current = null;
+  }, [renegScope?.accountId, renegTotal, renegCount, renegFirstDue]);
 
   // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo).
   useEffect(() => { setReceberGate(false); }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
@@ -341,7 +355,7 @@ export function ClienteCrediarioModal({
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
       : (instByAccount.get(accountId) || []);
-    const count = Math.max(1, Math.min(100, scopeInst.length || 1));
+    const count = Math.max(1, Math.min(MAX_INSTALLMENTS_CEILING, scopeInst.length || 1));
     setRenegScope({ accountId, label, openRemaining });
     setRenegTotal(openRemaining > 0 ? openRemaining.toFixed(2).replace(".", ",") : "");
     setRenegCount(count);
@@ -353,7 +367,7 @@ export function ClienteCrediarioModal({
   }
 
   function setRenegCountSafe(n: number) {
-    const c = Math.max(1, Math.min(100, n));
+    const c = Math.max(1, Math.min(MAX_INSTALLMENTS_CEILING, n));
     setRenegCount(c);
     const total = parseAmount(renegTotal);
     setRenegPerParcel((total / c).toFixed(2).replace(".", ","));
@@ -370,7 +384,7 @@ export function ClienteCrediarioModal({
     const per = parseAmount(clean);
     const total = parseAmount(renegTotal);
     if (per > 0 && total > 0) {
-      setRenegCount(Math.max(1, Math.min(100, Math.round(total / per))));
+      setRenegCount(Math.max(1, Math.min(MAX_INSTALLMENTS_CEILING, Math.round(total / per))));
     }
   }
 
@@ -381,21 +395,29 @@ export function ClienteCrediarioModal({
     if (renegCount < 1) { toast.error("Número de parcelas inválido"); return; }
     const iso = parseBrDate(renegFirstDue);
     if (!iso) { toast.error("Data da 1ª parcela inválida"); return; }
+    if (!renegKeyRef.current) {
+      renegKeyRef.current = "resched-" + companyId + "-" + customerId + "-"
+        + (renegScope.accountId || "general") + "-" + Date.now()
+        + "-" + Math.random().toString(36).slice(2, 8);
+    }
     setRenegSubmitting(true);
     try {
       const res = await rescheduleApi.apply(companyId, customerId, renegScope.accountId, {
         total,
         installments: renegCount,
         first_due_date: iso,
-      });
+      }, renegKeyRef.current);
       const adj = res.adjustment;
       toast.success(
-        adj?.type === "discount"
-          ? `Renegociado! Desconto de ${fmt(adj.amount)} no saldo.`
-          : adj?.type === "surcharge"
-            ? `Renegociado! Acréscimo de ${fmt(adj.amount)} no saldo.`
-            : `Parcelas renegociadas em ${res.installments_count}x.`
+        res.replayed
+          ? `Esta renegociação já tinha sido aplicada — ${res.installments_count}x.`
+          : adj?.type === "discount"
+            ? `Renegociado! Desconto de ${fmt(adj.amount)} no saldo.`
+            : adj?.type === "surcharge"
+              ? `Renegociado! Acréscimo de ${fmt(adj.amount)} no saldo.`
+              : `Parcelas renegociadas em ${res.installments_count}x.`
       );
+      renegKeyRef.current = null;
       setRenegScope(null);
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
