@@ -56,7 +56,17 @@ function Bloco({
   );
 }
 
-export function VitrineSkeleton() {
+type PropsSkeleton = {
+  /**
+   * "grade" e a vitrine Studio (cartoes lado a lado). "lista" e o
+   * cardapio, que e uma linha por item com miniatura a esquerda — desenhar
+   * a grade la faria a tela reorganizar quando o conteudo chegasse, que e
+   * exatamente o que o esqueleto existe pra evitar.
+   */
+  variante?: "grade" | "lista";
+};
+
+export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
   const o = usePulso();
   const { width } = useWindowDimensions();
 
@@ -96,7 +106,30 @@ export function VitrineSkeleton() {
         </View>
       </View>
 
-      {/* Grade */}
+      {/* Lista (cardapio): linha com miniatura, titulo e preco. */}
+      {variante === "lista" ? (
+        <View style={{ padding: 12, gap: 10, width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center" }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row", gap: 12, alignItems: "center",
+                backgroundColor: T.card, borderRadius: 12, padding: 12,
+                borderWidth: 1, borderColor: T.border,
+              }}
+            >
+              <Bloco largura={60} altura={60} raio={10} opacidade={o} />
+              <View style={{ flex: 1, gap: 7 }}>
+                <Bloco largura="64%" altura={12} raio={6} opacidade={o} />
+                <Bloco largura="88%" altura={9} raio={5} opacidade={o} />
+                <Bloco largura={72} altura={12} raio={6} opacidade={o} />
+              </View>
+              <Bloco largura={32} altura={32} raio={10} opacidade={o} />
+            </View>
+          ))}
+        </View>
+      ) : (
+      /* Grade */
       <View style={{ padding: 14, alignItems: "center" }}>
         <View style={{ width: "100%", maxWidth: LARGURA_MAX, flexDirection: "row", flexWrap: "wrap", gap: GAP }}>
           {Array.from({ length: cartoes }).map((_, i) => (
@@ -119,6 +152,7 @@ export function VitrineSkeleton() {
           ))}
         </View>
       </View>
+      )}
 
       {/* Assinatura fantasma: o rodapé existe desde o primeiro frame, então
           a página não cresce por baixo do dedo de quem já começou a rolar. */}

@@ -3,11 +3,16 @@ import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platfo
 import { useLocalSearchParams } from "expo-router";
 import { maskPhone } from "@/utils/masks";
 
+import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
+import { CapaProduto } from "@/components/studio/storefront/CapaProduto";
+import { PoweredByAura } from "@/components/studio/storefront/ui/PoweredByAura";
+import { tipografiaDaLoja, cssDaVitrine } from "@/constants/fonts";
 // ============================================================
 // /cardapio/[slug] — Storefront delivery público. Sem auth.
 //
 // 2026-05-21 (F12 + F14 do polish pre-Fase 7):
-//   F12: photo_url renderizado como Image (fallback emoji 🍽).
+//   F12: photo_url renderizado como Image (o fallback era o emoji 🍽;
+//        a fase 05 do rebrand trocou pela capa composta da vitrine).
 //   F14: quando menu.accepts_online_orders === false mostra banner
 //        amarelo "Loja fechada" no topo e desabilita o botão de envio.
 //   F14b: máscara de telefone (maskPhone) no input de WhatsApp/Telefone.
@@ -47,6 +52,10 @@ export default function CardapioPage() {
   const [categories, setCats] = useState<Cat[]>([]);
   const [items, setItems]     = useState<FoodItem[]>([]);
   const [business, setBiz]    = useState<string>("");
+  // Fase 05 do rebrand: o cardapio nao recebia marca nenhuma e saia em
+  // cinza e vermelho fixos. Agora usa a mesma cor, logo e tipografia
+  // que a Loja Virtual da mesma empresa.
+  const [brand, setBrand]     = useState<any>(null);
   const [zones, setZones]     = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -83,13 +92,30 @@ export default function CardapioPage() {
         setMenu(m.menu);
         setCats(m.categories || []);
         setItems(m.items || []);
-        setBiz(m.menu?.name || "Cardápio");
+        setBrand(m.brand || null);
+        setBiz(m.brand?.name || m.menu?.name || "Cardápio");
         setZones(Array.isArray(z) ? z : []);
         setLoading(false);
       })
       .catch(e => { setError(e?.message || "Erro"); setLoading(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // A tipografia escolhida pela lojista so existe se o par for carregado.
+  // Sem isto o cardapio cairia no fallback do sistema e a escolha dela
+  // valeria na Loja Virtual e nao aqui.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined" || !brand) return;
+    const id = "aura-cardapio-fonte";
+    let link = document.getElementById(id) as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    link.href = cssDaVitrine(brand.font_family);
+  }, [brand]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined" || !slug) return;
@@ -161,8 +187,23 @@ export default function CardapioPage() {
     setSending(false);
   };
 
-  if (loading) return <Center><ActivityIndicator color={T.red} size="large" /></Center>;
-  if (error && !menu) return <Center><Text style={{ fontSize: 36 }}>⚠️</Text><Text style={{ color: T.ink, fontWeight: "700", marginTop: 12 }}>{error}</Text></Center>;
+  // Sem marca configurada, o laranja da vertical Food assume — e o
+  // acento que o design system reserva pra ela, nao um vermelho solto.
+  const cor  = brand?.primary_color || T.orange;
+  const cor2 = brand?.accent_color  || T.red;
+  const tipo = tipografiaDaLoja(brand?.font_family);
+
+  if (loading) return <VitrineSkeleton variante="lista" />;
+  if (error && !menu) return (
+    <Center>
+      {/* Sem emoji: o design system nao usa, e o glifo sai diferente em
+          cada sistema — no Windows o ⚠️ perdia a cor. */}
+      <View style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: T.amber, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: 22, color: T.amber, fontWeight: "800", lineHeight: 26 }}>!</Text>
+      </View>
+      <Text style={{ color: T.ink, fontWeight: "700", marginTop: 12 }}>{error}</Text>
+    </Center>
+  );
   if (!menu) return null;
 
   if (stage === "sent" && sentOrder) {
@@ -292,11 +333,19 @@ export default function CardapioPage() {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View style={[
-        { padding: 24, paddingBottom: 28, backgroundColor: T.red },
-        Platform.OS === "web" ? ({ background: "linear-gradient(135deg, " + T.red + ", " + T.orange + ")" } as any) : {},
+        { padding: 24, paddingBottom: 28, backgroundColor: cor },
+        Platform.OS === "web" ? ({ background: "linear-gradient(135deg, " + cor + ", " + cor2 + ")" } as any) : {},
       ]}>
+        {brand?.logo_url ? (
+          <Image
+            source={{ uri: brand.logo_url }}
+            style={{ width: 48, height: 48, borderRadius: 11, marginBottom: 12, backgroundColor: "rgba(255,255,255,0.15)" }}
+            resizeMode="contain"
+            accessibilityLabel={business}
+          />
+        ) : null}
         <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Delivery</Text>
-        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 4 }}>{business}</Text>
+        <Text style={{ fontFamily: tipo.display, color: "#fff", fontSize: 27, lineHeight: 32, marginTop: 4 }}>{business}</Text>
         {minOrder > 0 && (
           <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 6 }}>
             Pedido mínimo R$ {minOrder.toFixed(2)}
@@ -323,22 +372,21 @@ export default function CardapioPage() {
           const qty = cart[item.id]?.qty || 0;
           return (
             <View key={item.id} style={{ backgroundColor: T.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.border, flexDirection: "row", gap: 12 }}>
-              {/* F12: foto se houver, senão emoji fallback */}
-              {item.photo_url ? (
-                <Image
-                  source={{ uri: item.photo_url }}
-                  style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#f0e9e0" }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#f0e9e0", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 26 }}>🍽</Text>
-                </View>
-              )}
+              {/* Mesmo piso de qualidade da Loja Virtual: "contain" pra nao
+                  cortar o prato, e capa composta no lugar do emoji quando
+                  nao ha foto — 🍽 e igual pra 200 pratos e o design system
+                  nao usa emoji. */}
+              <CapaProduto
+                uri={item.photo_url}
+                nome={item.name}
+                tamanho={60}
+                corDaLoja={cor}
+                fonteDisplay={tipo.display}
+              />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, color: T.ink, fontWeight: "700" }}>{item.name}</Text>
+                <Text style={{ fontFamily: tipo.display, fontSize: 15.5, lineHeight: 19, color: T.ink }}>{item.name}</Text>
                 {item.description && <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }} numberOfLines={2}>{item.description}</Text>}
-                <Text style={{ fontSize: 14, color: T.red, fontWeight: "800", marginTop: 4 }}>R$ {Number(item.price).toFixed(2)}</Text>
+                <Text style={{ fontSize: 14, color: cor, fontWeight: "800", marginTop: 4 }}>R$ {Number(item.price).toFixed(2)}</Text>
               </View>
               {qty === 0 ? (
                 <Pressable onPress={() => addItem(item)} disabled={!!storeClosed} style={{ alignSelf: "flex-end", width: 32, height: 32, borderRadius: 10, backgroundColor: T.red, alignItems: "center", justifyContent: "center", opacity: storeClosed ? 0.3 : 1 }}>
@@ -354,12 +402,16 @@ export default function CardapioPage() {
             </View>
           );
         })}
+
+        {/* Assinatura da Aura, como na Loja Virtual: padrao de mercado, no
+            rodape, sem competir com a marca da lojista. */}
+        <PoweredByAura />
       </ScrollView>
 
       {cartCount > 0 && (
         <Pressable onPress={() => setStage("cart")} style={{ position: "absolute", left: 12, right: 12, bottom: 12, backgroundColor: T.ink, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ backgroundColor: T.red, width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ backgroundColor: cor, width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>{cartCount}</Text>
             </View>
             <View>
