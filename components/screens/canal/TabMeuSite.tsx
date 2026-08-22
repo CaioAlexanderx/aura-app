@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -197,13 +197,23 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     toast.info("Link copiado!");
   }
 
+  // Abaixo de 900px o sticky vira estorvo (ver comentario no bloco).
+  const { width: larguraJanela } = useWindowDimensions();
+  const telaLargaMockup = larguraJanela >= 900;
+
   return (
     <View>
-      {/* Fase 3 — Rec #9: mini-mockup sticky (sticky soh no web; em RN nativo cai como bloco normal) */}
+      {/* Fase 3 — Rec #9: mini-mockup sticky.
+          Sticky SO em tela larga: no desktop ele acompanha enquanto a
+          lojista mexe nas configuracoes — e essa a utilidade. Em tela
+          pequena o mockup ocupava quase a viewport inteira e, grudado no
+          topo, cobria a pagina que a lojista tentava rolar. */}
       <View
         style={[
           s.mockupWrap,
-          Platform.OS === "web" ? ({ position: "sticky" as any, top: 0, zIndex: 10 } as any) : null,
+          Platform.OS === "web" && telaLargaMockup
+            ? ({ position: "sticky" as any, top: 0, zIndex: 10 } as any)
+            : null,
         ]}
       >
         <View style={s.mockupFrame}>
