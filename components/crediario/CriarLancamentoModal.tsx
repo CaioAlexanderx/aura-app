@@ -35,7 +35,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
-import { creditApi, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
+import { creditApi, MAX_INSTALLMENTS_CEILING, type ManualEntryPayload, type PeriodUnit, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
@@ -364,8 +364,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
 
     // Quando unify ativo: lança com installments=1 (débito puro)
     const nInstallments = unifyEnabled ? 1 : (parseInt(installments, 10) || 1);
-    if (!unifyEnabled && (nInstallments < 1 || nInstallments > 100)) {
-      toast.error("Parcelas: 1 a 100"); return;
+    if (!unifyEnabled && (nInstallments < 1 || nInstallments > MAX_INSTALLMENTS_CEILING)) {
+      toast.error(`Parcelas: 1 a ${MAX_INSTALLMENTS_CEILING}`); return;
     }
 
     const payload: ManualEntryPayload = {

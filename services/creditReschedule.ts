@@ -27,7 +27,7 @@ export type ReschedulePlan = {
   target_total: number;
   /** target_total − open_remaining. <0 = desconto, >0 = acréscimo, 0 = só reorganizou. */
   delta: number;
-  /** Nº de parcelas do novo cronograma (clampado 1..100 no backend). */
+  /** Nº de parcelas do novo cronograma (clampado 1..500 no backend). */
   installments_count: number;
   /** Cronograma resultante. */
   schedule: RescheduleScheduleLine[];
@@ -41,6 +41,8 @@ export type ReschedulePlan = {
   adjustment?: { type: "discount" | "surcharge"; amount: number } | null;
   /** Só no apply: saldo novo do cliente após a renegociação. */
   new_balance?: number;
+  /** Só no apply: true quando o backend devolveu uma aplicação anterior (replay). */
+  replayed?: boolean;
 };
 
 export type RescheduleOpts = {
@@ -74,17 +76,36 @@ export const rescheduleApi = {
     );
   },
 
-  /** Aplica a renegociação: cancela o cronograma antigo, grava o novo, ajusta o saldo. */
+  /**
+   * Aplica a renegociação: cancela o cronograma antigo, grava o novo, ajusta o saldo.
+   *
+   * `idempotencyKey` DEVE ser estável entre as tentativas do MESMO clique —
+   * quem chama guarda a chave num ref e só a descarta no sucesso (padrão do
+   * CriarLancamentoModal). Até 21/08/2026 esta função gerava a chave aqui
+   * dentro com `Date.now()`: a chave nunca repetia, então o header não
+   * deduplicava nada. Foi assim que a renegociação da Valen entrou duas vezes
+   * (17:03:16 e 17:03:49) — o servidor aplicou, a resposta se perdeu, o
+   * lojista viu o toast de erro e clicou de novo, e cada clique cancela o
+   * carnê inteiro e recria.
+   *
+   * Sem a chave, o backend ainda protege por impressão digital do pedido
+   * (mesmo carnê/total/nº de parcelas/1º vencimento em até 60s), mas a chave
+   * estável é a proteção de primeira linha.
+   */
   apply(
     companyId: string,
     customerId: string,
     accountId: string | null | undefined,
     opts: RescheduleOpts,
+    idempotencyKey?: string,
   ): Promise<ReschedulePlan> {
-    const idempKey = "resched-" + companyId + "-" + customerId + "-" + acc(accountId) + "-" + Date.now();
     return request<ReschedulePlan>(
       `${base(companyId)}/customers/${customerId}/accounts/${acc(accountId)}/reschedule`,
-      { method: "POST", body: opts, headers: { "Idempotency-Key": idempKey } },
+      {
+        method: "POST",
+        body: opts,
+        headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      },
     );
   },
 };

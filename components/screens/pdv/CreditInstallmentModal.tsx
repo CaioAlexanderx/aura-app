@@ -76,7 +76,7 @@ import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, Activi
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { creditApi, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
+import { creditApi, MAX_INSTALLMENTS_CEILING, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 
 // ConfirmPayload ampliado: campo `unify` presente somente quando o toggle está ativo.
@@ -199,7 +199,9 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
 
   const profile = profileQ.data;
   const config = profile?.config;
-  const maxInstallments = Math.min(config?.max_installments || 12, 100);
+  // 21/08/2026: o `|| 12` era o default de config que ninguem nunca mexeu e o
+  // 100 era um teto proprio do app. Ambos barravam loja que vende em 36x/54x.
+  const maxInstallments = Math.min(config?.max_installments || MAX_INSTALLMENTS_CEILING, MAX_INSTALLMENTS_CEILING);
   const totalNum = parseFloat(amount.replace(",", ".")) || 0;
   const available = profile ? (Number(profile.credit_limit) - Number(profile.credit_used)) : 0;
   const isBlocked = profile?.status === "blocked";
