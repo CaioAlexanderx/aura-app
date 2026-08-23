@@ -758,6 +758,11 @@ export default function TorneioDetalhe() {
                   modality={selectedCategory.modality}
                   competitionName={comp.name}
                   federationName={federationName}
+                  categoryNav={{
+                    items: comp.categories.map((c) => ({ id: c.id, name: c.name, modality: c.modality })),
+                    currentId: selectedCategory.id,
+                    onSelect: handleSelectCategory,
+                  }}
                 />
               )}
             </View>

@@ -18,11 +18,24 @@
 //     e o usuário quer reabrir para nova edição total.
 //   - Mobile: sem drag nativo confiável fora da web — mesma decisão do
 //     Kanban (useBracketDragAndDrop é no-op fora de Platform.OS==="web");
-//     modo edição mostra aviso e o clique-para-vencedor continua disponível.
+//     no mobile a movimentação usa o fluxo por CLIQUE (abaixo).
+//
+// BANCADA DE MONTAGEM (Hub P2) — passe de design/UX:
+//   - Clique-para-mover: em modo edição, tocar num atleta o SELECIONA
+//     (slot acende); tocar em qualquer outro slot troca as posições.
+//     Funciona em web E mobile — é a alternativa robusta ao drag nativo.
+//   - Desfazer: pilha local de trocas; "Desfazer" reverte a última
+//     movimentação (só existe dentro do modo edição, antes de salvar).
+//   - Flash de aterrissagem: os dois slots envolvidos na troca pulsam
+//     suavemente ao soltar (Animated, sem libs novas).
+//   - Aviso de colisão de dojô: confronto de 1ª rodada com os dois
+//     atletas do MESMO dojô ganha badge de atenção — aviso, nunca bloqueio.
+//   - Zoom da chave (web): 100/85/70% para enxergar chaves grandes
+//     inteiras; cabeçalho de rodada mostra o nº de lutas da fase.
 // ============================================================
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, StyleSheet, ViewStyle, TextStyle,
+  View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Platform, StyleSheet, ViewStyle, TextStyle, Animated,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
@@ -36,7 +49,7 @@ import {
 import { buildBracketHtml } from "@/components/karate/chaves/buildBracketHtml";
 import { EventDayMode } from "@/components/karate/chaves/EventDayMode";
 import {
-  styles as S, initials, roundLabel, ByeText, PendingText,
+  styles as S, initials, roundLabel, ByeText, PendingText, SameDojoBadge,
 } from "./shared";
 import {
   useBracketDragAndDrop, useDraggableSlotRef, useSlotDropZoneRef, BracketSlotId,
@@ -53,6 +66,18 @@ const LARGE_BRACKET_EDIT_LIMIT = 16;
 
 // Slot vazio ("bye" ou null) não é arrastável nem carrega atleta.
 type SlotValue = BracketAthleteRef | "bye" | null;
+
+// Chave estável de um slot — usada por seleção (clique-para-mover),
+// flash de aterrissagem e pilha de undo.
+const slotKey = (s: BracketSlotId) => `${s.matchId}::${s.side}`;
+
+// Níveis de zoom da chave (web-only): 100% → 85% → 70%. Aplicado via
+// transform scale com origem no canto superior esquerdo; o scroll
+// horizontal continua o mesmo (a área útil só encolhe).
+const ZOOM_LEVELS = [1, 0.85, 0.7] as const;
+
+// Uma troca registrada na pilha de undo.
+type SwapRecord = { from: BracketSlotId; to: BracketSlotId };
 
 export function BracketView({
   bracket, advancingMatch, onAdvance, onReopen, catName, federationId, cid, catId, onReloaded,
@@ -94,6 +119,18 @@ export function BracketView({
   const [draftMatches, setDraftMatches] = useState<BracketMatch[] | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  // ── Bancada (Hub P2): clique-para-mover + undo + flash ─────────────
+  // Slot selecionado como ORIGEM no fluxo por clique (só em modo edição).
+  const [selectedSlot, setSelectedSlot] = useState<BracketSlotId | null>(null);
+  // Slots que acabaram de receber uma troca → pulso visual de aterrissagem.
+  // Mapa slotKey → timestamp da troca (o ts força o remount do flash).
+  const [movedFlash, setMovedFlash] = useState<Record<string, number>>({});
+  // Pilha de trocas para o Desfazer (última movimentação primeiro a sair).
+  const [history, setHistory] = useState<SwapRecord[]>([]);
+  // Zoom da chave (web): índice em ZOOM_LEVELS.
+  const [zoomIdx, setZoomIdx] = useState(0);
+  const zoom = ZOOM_LEVELS[zoomIdx];
+
   // Placar: modal Shoji reaproveitando o padrão do sheet de nota do Kata.
   const [scoreTarget, setScoreTarget] = useState<{ matchId: string; winnerId: string } | null>(null);
   const [akaScoreInput, setAkaScoreInput] = useState("");
@@ -112,6 +149,24 @@ export function BracketView({
     return activeMatches.find((m) => m.id === matchId);
   }
 
+  // ── Colisão de dojô na 1ª rodada (aviso, NUNCA bloqueio) ────────────
+  // Recalculada sobre o estado ATIVO (rascunho em edição ou servidor):
+  // enquanto o operador move atletas, o aviso acende/apaga em tempo real.
+  const firstRoundIds = useMemo(
+    () => new Set((bracket.rounds[0] || []).map((m) => m.id)),
+    [bracket]
+  );
+  const sameDojoMatchIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of activeMatches) {
+      if (!firstRoundIds.has(m.id)) continue;
+      const aka = m.aka && m.aka !== "bye" ? (m.aka as BracketAthleteRef) : null;
+      const shiro = m.shiro && m.shiro !== "bye" ? (m.shiro as BracketAthleteRef) : null;
+      if (aka && shiro && aka.dojo_name && aka.dojo_name === shiro.dojo_name) ids.add(m.id);
+    }
+    return ids;
+  }, [activeMatches, firstRoundIds]);
+
   // ── Entrar/sair do modo edição ─────────────────────────────────────
   const handleToggleEditMode = useCallback(() => {
     if (isLargeBracket) {
@@ -129,16 +184,21 @@ export function BracketView({
       setEditMode(false);
       setDraftMatches(null);
       setDirty(false);
+      setSelectedSlot(null);
+      setMovedFlash({});
+      setHistory([]);
     } else {
       // Snapshot local (deep-ish copy) pra edição isolada do estado do servidor.
       setDraftMatches(allMatchesFlat.map((m) => ({ ...m })));
       setDirty(false);
+      setHistory([]);
       setEditMode(true);
     }
   }, [locked, editMode, dirty, allMatchesFlat, isLargeBracket]);
 
   // ── Troca (swap) de posições entre dois slots quaisquer ─────────────
-  const handleSwap = useCallback((from: BracketSlotId, to: BracketSlotId) => {
+  // `record` = false quando a troca É o próprio undo (não re-empilha).
+  const doSwap = useCallback((from: BracketSlotId, to: BracketSlotId, record: boolean) => {
     if (from.matchId === to.matchId && from.side === to.side) return;
     setDraftMatches((prev) => {
       if (!prev) return prev;
@@ -156,7 +216,40 @@ export function BracketView({
       return next;
     });
     setDirty(true);
+    setSelectedSlot(null);
+    if (record) setHistory((h) => [...h, { from, to }]);
+    // Pulso de aterrissagem nos dois slots envolvidos.
+    const ts = Date.now();
+    setMovedFlash({ [slotKey(from)]: ts, [slotKey(to)]: ts });
   }, []);
+
+  const handleSwap = useCallback((from: BracketSlotId, to: BracketSlotId) => {
+    doSwap(from, to, true);
+  }, [doSwap]);
+
+  // ── Desfazer (última movimentação) ──────────────────────────────────
+  // Refazer a mesma troca inverte a si mesma (swap é involutivo).
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const last = history[history.length - 1];
+    doSwap(last.from, last.to, false);
+    setHistory((h) => h.slice(0, -1));
+  }, [history, doSwap]);
+
+  // ── Clique-para-mover (alternativa robusta ao drag; funciona no mobile) ──
+  // 1º clique num atleta seleciona a origem; clique em QUALQUER outro slot
+  // (mesmo vazio) conclui a troca; clicar de novo na origem cancela.
+  const handleSlotPress = useCallback((slot: BracketSlotId, hasAthlete: boolean) => {
+    if (!selectedSlot) {
+      if (hasAthlete) setSelectedSlot(slot);
+      return;
+    }
+    if (selectedSlot.matchId === slot.matchId && selectedSlot.side === slot.side) {
+      setSelectedSlot(null);
+      return;
+    }
+    doSwap(selectedSlot, slot, true);
+  }, [selectedSlot, doSwap]);
 
   const dnd = useBracketDragAndDrop(handleSwap);
 
@@ -188,6 +281,9 @@ export function BracketView({
       setEditMode(false);
       setDraftMatches(null);
       setDirty(false);
+      setSelectedSlot(null);
+      setHistory([]);
+      setMovedFlash({});
       return;
     }
 
@@ -198,6 +294,9 @@ export function BracketView({
       setEditMode(false);
       setDraftMatches(null);
       setDirty(false);
+      setSelectedSlot(null);
+      setHistory([]);
+      setMovedFlash({});
       await onReloaded();
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível salvar a chave.");
@@ -329,13 +428,32 @@ export function BracketView({
         </TouchableOpacity>
 
         {editMode ? (
-          <ShojiButton
-            label={saving ? "Salvando..." : "Salvar chave"}
-            icon="save"
-            variant="accent"
-            onPress={handleSave}
-            style={ctrlStyles.actionBtn}
-          />
+          <>
+            <TouchableOpacity
+              style={[ctrlStyles.undoBtn, history.length === 0 && ctrlStyles.undoBtnDisabled]}
+              onPress={handleUndo}
+              disabled={history.length === 0 || saving}
+              accessibilityRole="button"
+              accessibilityLabel="Desfazer última movimentação"
+            >
+              <Icon name="rotate-ccw" size={13} color={history.length === 0 ? C.ink4 : C.ink2} />
+              <Text style={[ctrlStyles.undoBtnText, history.length === 0 && ctrlStyles.undoBtnTextDisabled]}>
+                Desfazer
+              </Text>
+              {history.length > 0 && (
+                <View style={ctrlStyles.undoCount}>
+                  <Text style={ctrlStyles.undoCountText}>{history.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <ShojiButton
+              label={saving ? "Salvando..." : "Salvar chave"}
+              icon="save"
+              variant="accent"
+              onPress={handleSave}
+              style={ctrlStyles.actionBtn}
+            />
+          </>
         ) : (
           <>
             {!locked && (
@@ -385,19 +503,67 @@ export function BracketView({
           {isLargeBracket
             ? "Chave grande — reorganize por \"Refazer sorteio\"; edição por arrasto fica para chaves menores. Clique no vencedor e a impressão continuam disponíveis normalmente."
             : editMode
-              ? (isWeb
-                ? "Arraste um atleta sobre outro slot para trocar as posições. Depois clique em \"Salvar chave\"."
-                : "Arrastar-e-soltar só funciona na versão web. Use a versão web para editar posições; no app, use apenas o clique para lançar vencedores.")
+              ? (selectedSlot
+                ? "Atleta selecionado — clique no slot de destino para trocar as posições (ou clique nele de novo para cancelar)."
+                : (isWeb
+                  ? "Arraste um atleta pelo punho, ou clique nele e depois no destino — as duas posições trocam de lugar. Salve com \"Salvar chave\"."
+                  : "Toque num atleta para selecioná-lo e toque no slot de destino para trocar as posições. Salve com \"Salvar chave\"."))
               : "Clique no vencedor para lançar o resultado."}
         </Text>
       </View>
 
+      {/* Barra de visualização: aviso de colisões de dojô + zoom da chave */}
+      {(sameDojoMatchIds.size > 0 || (isWeb && totalRounds > 2)) && (
+        <View style={ctrlStyles.viewBar}>
+          {sameDojoMatchIds.size > 0 ? (
+            <View style={ctrlStyles.clashChip}>
+              <Icon name="alert" size={13} color={P.warn} />
+              <Text style={ctrlStyles.clashChipText}>
+                {sameDojoMatchIds.size === 1
+                  ? "1 confronto de 1ª rodada com atletas do mesmo dojô"
+                  : `${sameDojoMatchIds.size} confrontos de 1ª rodada com atletas do mesmo dojô`}
+                {editMode ? " — mova um deles se quiser separar." : ""}
+              </Text>
+            </View>
+          ) : <View style={{ flex: 1 }} />}
+          {isWeb && totalRounds > 2 && (
+            <View style={ctrlStyles.zoomCluster}>
+              <TouchableOpacity
+                style={[ctrlStyles.zoomBtn, zoomIdx >= ZOOM_LEVELS.length - 1 && ctrlStyles.zoomBtnDisabled]}
+                onPress={() => setZoomIdx((z) => Math.min(z + 1, ZOOM_LEVELS.length - 1))}
+                disabled={zoomIdx >= ZOOM_LEVELS.length - 1}
+                accessibilityRole="button"
+                accessibilityLabel="Diminuir zoom da chave"
+              >
+                <Icon name="minus" size={13} color={zoomIdx >= ZOOM_LEVELS.length - 1 ? C.ink4 : C.ink2} />
+              </TouchableOpacity>
+              <Text style={ctrlStyles.zoomLabel}>{Math.round(zoom * 100)}%</Text>
+              <TouchableOpacity
+                style={[ctrlStyles.zoomBtn, zoomIdx === 0 && ctrlStyles.zoomBtnDisabled]}
+                onPress={() => setZoomIdx((z) => Math.max(z - 1, 0))}
+                disabled={zoomIdx === 0}
+                accessibilityRole="button"
+                accessibilityLabel="Aumentar zoom da chave"
+              >
+                <Icon name="plus" size={13} color={zoomIdx === 0 ? C.ink4 : C.ink2} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Bracket — horizontal scroll */}
       <ScrollView horizontal showsHorizontalScrollIndicator style={S.bracketScroll}>
-        <View style={S.bracketInner}>
+        <View style={[
+          S.bracketInner,
+          isWeb && zoom !== 1 && ({ transform: [{ scale: zoom }], transformOrigin: "top left" } as any),
+        ]}>
           {bracket.rounds.map((round, rIdx) => (
             <View key={rIdx} style={S.bracketCol}>
-              <Text style={S.roundLabel}>{roundLabel(rIdx, totalRounds)}</Text>
+              <View style={S.roundHead}>
+                <Text style={S.roundLabel}>{roundLabel(rIdx, totalRounds)}</Text>
+                <Text style={S.roundCount}>{round.length === 1 ? "1 luta" : `${round.length} lutas`}</Text>
+              </View>
               {round.map((match) => {
                 const liveMatch = editMode ? (findMatch(match.id) || match) : match;
                 return (
@@ -409,6 +575,10 @@ export function BracketView({
                     editMode={editMode}
                     dnd={dnd}
                     onAdvance={openScoreModal}
+                    sameDojo={sameDojoMatchIds.has(match.id)}
+                    selectedSlot={selectedSlot}
+                    movedFlash={movedFlash}
+                    onSlotPress={handleSlotPress}
                   />
                 );
               })}
@@ -416,9 +586,12 @@ export function BracketView({
           ))}
           {/* Champion column */}
           <View style={S.champCol}>
-            <Text style={S.roundLabel}>Campeão</Text>
+            <View style={S.roundHead}>
+              <Text style={S.roundLabel}>Campeão</Text>
+            </View>
             {bracket.champion ? (
               <View style={S.champCard}>
+                <Icon name="trophy" size={18} color={P.red} />
                 <Text style={S.champLabel}>Campeão</Text>
                 <Text style={S.champName}>{bracket.champion.student_name}</Text>
                 <Text style={S.champDojo}>{bracket.champion.dojo_name}</Text>
@@ -433,7 +606,10 @@ export function BracketView({
         </View>
       </ScrollView>
 
-      <Text style={S.scrollHint}>Role para o lado para ver as rodadas finais →</Text>
+      <View style={ctrlStyles.scrollHintRow}>
+        <Text style={[S.scrollHint, { marginTop: 0 }]}>Role para o lado para ver as rodadas finais</Text>
+        <Icon name="arrow-right" size={12} color={C.ink4} />
+      </View>
 
       {/* 3rd place */}
       {bracket.third_place_match && (
@@ -446,6 +622,10 @@ export function BracketView({
             editMode={editMode}
             dnd={dnd}
             onAdvance={openScoreModal}
+            sameDojo={false}
+            selectedSlot={selectedSlot}
+            movedFlash={movedFlash}
+            onSlotPress={handleSlotPress}
           />
         </View>
       )}
@@ -506,9 +686,27 @@ export function BracketView({
   );
 }
 
+// ── Flash de aterrissagem ────────────────────────────────────────────────
+// Pulso suave sobre o slot que acabou de participar de uma troca. Monta
+// com key={ts} (remonta a cada troca) e desvanece sozinho via Animated.
+function MovedFlash() {
+  const a = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.timing(a, { toValue: 0, duration: 850, useNativeDriver: false });
+    anim.start();
+    return () => anim.stop();
+  }, [a]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(184,70,58,0.16)", opacity: a }]}
+    />
+  );
+}
+
 // ── MatchCard ────────────────────────────────────────────────────────────
 function MatchCard({
-  match, advancing, locked, editMode, dnd, onAdvance,
+  match, advancing, locked, editMode, dnd, onAdvance, sameDojo, selectedSlot, movedFlash, onSlotPress,
 }: {
   match: BracketMatch;
   advancing: boolean;
@@ -516,21 +714,33 @@ function MatchCard({
   editMode: boolean;
   dnd: ReturnType<typeof useBracketDragAndDrop>;
   onAdvance: (matchId: string, winnerId: string) => void;
+  /** Confronto de 1ª rodada com os dois atletas do MESMO dojô (aviso). */
+  sameDojo: boolean;
+  selectedSlot: BracketSlotId | null;
+  movedFlash: Record<string, number>;
+  onSlotPress: (slot: BracketSlotId, hasAthlete: boolean) => void;
 }) {
+  const shared = { advancing, locked, editMode, dnd, onAdvance, selectedSlot, movedFlash, onSlotPress };
   return (
-    <View style={[S.matchCard, { marginBottom: 8 }]}>
+    <View style={[S.matchCard, { marginBottom: 8 }, sameDojo && ctrlStyles.matchCardClash]}>
+      {sameDojo && (
+        <View style={ctrlStyles.clashStrip}>
+          <SameDojoBadge />
+          <Text style={ctrlStyles.clashStripText}>na 1ª luta</Text>
+        </View>
+      )}
       <MatchSide
         matchId={match.id} side="aka" value={match.aka} border={P.red}
         winnerId={match.winner_entry_id} otherValue={match.shiro}
         score={match.aka_score}
-        advancing={advancing} locked={locked} editMode={editMode} dnd={dnd} onAdvance={onAdvance}
+        {...shared}
       />
       <View style={S.matchDivider} />
       <MatchSide
         matchId={match.id} side="shiro" value={match.shiro} border={C.ink3}
         winnerId={match.winner_entry_id} otherValue={match.aka}
         score={match.shiro_score}
-        advancing={advancing} locked={locked} editMode={editMode} dnd={dnd} onAdvance={onAdvance}
+        {...shared}
       />
     </View>
   );
@@ -538,6 +748,7 @@ function MatchCard({
 
 function MatchSide({
   matchId, side, value, border, winnerId, otherValue, score, advancing, locked, editMode, dnd, onAdvance,
+  selectedSlot, movedFlash, onSlotPress,
 }: {
   matchId: string;
   side: "aka" | "shiro";
@@ -551,6 +762,9 @@ function MatchSide({
   editMode: boolean;
   dnd: ReturnType<typeof useBracketDragAndDrop>;
   onAdvance: (matchId: string, winnerId: string) => void;
+  selectedSlot: BracketSlotId | null;
+  movedFlash: Record<string, number>;
+  onSlotPress: (slot: BracketSlotId, hasAthlete: boolean) => void;
 }) {
   const isBye = value === "bye";
   const athlete = !isBye && value !== null ? (value as BracketAthleteRef) : null;
@@ -562,6 +776,12 @@ function MatchSide({
   const isDraggable = editMode && isWeb && !!athlete;
   const isHoverTarget = dnd.hoverSlot?.matchId === matchId && dnd.hoverSlot?.side === side;
   const isDraggingThis = dnd.draggingSlot?.matchId === matchId && dnd.draggingSlot?.side === side;
+
+  // Clique-para-mover: este slot é a origem selecionada? Existe uma seleção
+  // ativa em OUTRO slot (então este acende como destino válido)?
+  const isSelected = !!selectedSlot && selectedSlot.matchId === matchId && selectedSlot.side === side;
+  const isTargetable = editMode && !!selectedSlot && !isSelected;
+  const flashTs = movedFlash[slotKey(slot)];
 
   const dragRef = useDraggableSlotRef(isDraggable, slot, dnd.onSlotDragStart, dnd.onSlotDragEnd);
   const dropRef = useSlotDropZoneRef(slot, dnd.onDrop, dnd.onHoverChange);
@@ -581,7 +801,9 @@ function MatchSide({
     isWinner && S.matchSideWinner,
     isLoser && S.matchSideLoser,
     editMode && isDraggable && ctrlStyles.slotDraggable,
+    isTargetable && ctrlStyles.slotTargetable,
     isHoverTarget && ctrlStyles.slotHover,
+    isSelected && ctrlStyles.slotSelected,
     isDraggingThis && ctrlStyles.slotDragging,
   ];
 
@@ -592,7 +814,7 @@ function MatchSide({
       ) : athlete ? (
         <View style={S.athleteRow}>
           {editMode && isWeb && (
-            <Icon name="drag-handle" size={14} color={C.ink4} />
+            <Icon name="drag-handle" size={14} color={isSelected ? P.red : C.ink4} />
           )}
           <View style={S.av}>
             <Text style={S.avText}>{initials(athlete.student_name)}</Text>
@@ -601,36 +823,43 @@ function MatchSide({
             <Text style={[S.athleteName, isWinner && S.athleteNameWinner]} numberOfLines={1}>
               {athlete.student_name}
             </Text>
-            <Text style={S.athleteDojo} numberOfLines={1}>{athlete.dojo_name}</Text>
+            <Text style={S.athleteDojo} numberOfLines={2}>{athlete.dojo_name}</Text>
           </View>
           {isWinner && typeof score === "number" && (
             <Text style={ctrlStyles.scoreTag}>{score}</Text>
           )}
-          {isWinner && <Text style={S.winMark}>✓</Text>}
+          {isWinner && <Icon name="check" size={13} color={P.red} />}
         </View>
       ) : (
         <PendingText />
       )}
+      {!!flashTs && <MovedFlash key={flashTs} />}
       {advancing && <ActivityIndicator size="small" color={P.red} style={{ position: "absolute", right: 6 }} />}
     </>
   );
 
   // Em web + modo edição: View com refs pro DnD via DOM nativo (mesma técnica
-  // do LeadCard/KanbanColumn do CRM). Fora do modo edição (ou fora da web),
-  // TouchableOpacity comum cuida só do clique-para-vencedor.
+  // do LeadCard/KanbanColumn do CRM). O clique no slot alimenta o fluxo
+  // clique-para-mover (selecionar origem → clicar destino).
   if (isWeb && editMode) {
     return (
       // @ts-ignore — RN Web aceita onClick em View
-      <View ref={combinedRef} style={sideStyle} onClick={canClickAdvance && athlete ? () => onAdvance(matchId, athlete.entry_id) : undefined}>
+      <View ref={combinedRef} style={sideStyle} onClick={() => onSlotPress(slot, !!athlete)}>
         {content}
       </View>
     );
   }
 
+  // Mobile em modo edição: mesmo fluxo clique-para-mover (sem drag nativo).
+  // Fora do modo edição (qualquer plataforma): clique-para-vencedor.
   return (
     <TouchableOpacity
-      disabled={!canClickAdvance}
-      onPress={canClickAdvance && athlete ? () => onAdvance(matchId, athlete.entry_id) : undefined}
+      disabled={editMode ? false : !canClickAdvance}
+      onPress={
+        editMode
+          ? () => onSlotPress(slot, !!athlete)
+          : (canClickAdvance && athlete ? () => onAdvance(matchId, athlete.entry_id) : undefined)
+      }
       style={sideStyle}
     >
       {content}
@@ -653,11 +882,54 @@ const ctrlStyles = StyleSheet.create({
   toggleBtnTextActive: { color: "#fdf8f2" } as TextStyle,
   toggleBtnTextDisabled: { color: C.ink4 } as TextStyle,
 
-  // slot states (drag)
+  // slot states (drag + clique-para-mover)
   slotDraggable: { cursor: "grab" as any },
   slotHover: { backgroundColor: P.redWash, borderLeftColor: P.red } as ViewStyle,
   slotDragging: { opacity: 0.5 } as ViewStyle,
+  // Origem selecionada no fluxo por clique: acende firme.
+  slotSelected: { backgroundColor: P.redWash, borderLeftColor: P.red } as ViewStyle,
+  // Há uma origem selecionada → os demais slots acendem SUAVE como destino.
+  slotTargetable: { backgroundColor: "rgba(184,70,58,0.04)", cursor: "pointer" as any } as ViewStyle,
   scoreTag: { fontFamily: F.mono, fontSize: 11, fontWeight: "700", color: C.ink2, marginLeft: 4, marginRight: 2 } as TextStyle,
+
+  // Desfazer (só em modo edição)
+  undoBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2,
+  } as ViewStyle,
+  undoBtnDisabled: { opacity: 0.55 } as ViewStyle,
+  undoBtnText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: C.ink2 } as TextStyle,
+  undoBtnTextDisabled: { color: C.ink4 } as TextStyle,
+  undoCount: { minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.ink, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 } as ViewStyle,
+  undoCountText: { fontFamily: F.mono, fontSize: 9, fontWeight: "700", color: P.paperWarm } as TextStyle,
+
+  // Barra de visualização (colisões + zoom)
+  viewBar: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 } as ViewStyle,
+  clashChip: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.md,
+    backgroundColor: P.warnWash, borderWidth: 1, borderColor: "rgba(122,87,36,0.24)",
+  } as ViewStyle,
+  clashChipText: { flex: 1, fontFamily: F.body, fontSize: 11.5, color: P.warn, lineHeight: 15 } as TextStyle,
+  zoomCluster: { flexDirection: "row", alignItems: "center", gap: 4 } as ViewStyle,
+  zoomBtn: {
+    width: 26, height: 26, borderRadius: R.sm, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2,
+  } as ViewStyle,
+  zoomBtnDisabled: { opacity: 0.45 } as ViewStyle,
+  zoomLabel: { fontFamily: F.mono, fontSize: 11, color: C.ink3, width: 38, textAlign: "center", fontVariant: ["tabular-nums"] } as TextStyle,
+
+  // Colisão de dojô no card (faixa fina no topo do confronto)
+  matchCardClash: { borderColor: "rgba(122,87,36,0.35)" } as ViewStyle,
+  clashStrip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: P.warnWash, borderBottomWidth: 1, borderBottomColor: "rgba(122,87,36,0.18)",
+  } as ViewStyle,
+  clashStripText: { fontFamily: F.body, fontSize: 9.5, color: P.warn } as TextStyle,
+
+  scrollHintRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 6 } as ViewStyle,
 
   // score modal (mesmo padrão do sheet de nota Kata em chaves.tsx)
   overlay: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
