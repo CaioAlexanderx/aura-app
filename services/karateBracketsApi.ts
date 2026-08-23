@@ -6,8 +6,14 @@
 //   Kata:   apuração por bateria (kata-scores, generate-order, advance)
 //
 // Montado separado de karateCompetitionsApi.ts — mesmo padrão.
+//
+// P2 (modo mesário): o GET do bracket passou a expor phase_plan/
+// phases_by_round (formato por rodada, migration 296) e o advance
+// aceita `decision` (como a luta foi decidida — kiken/W.O. inclusive).
+// POST .../bracket/finalize deriva o pódio e grava nas inscrições.
 // ============================================================
 import { request } from "@/services/api";
+import type { PhasePlan, MatchDecision } from "@/services/karateCompetitionP1Api";
 
 // ── Tipos compartilhados ─────────────────────────────────────────
 export type BracketStatus = "not_generated" | "draft" | "locked";
@@ -37,14 +43,34 @@ export interface BracketMatch {
   is_bye: boolean;
   aka_score?: number;
   shiro_score?: number;
+  /** P1 (296): formato efetivo da luta (snapshot do lançamento OU resolvido do plano). */
+  match_format?: string | null;
+  /** P1 (296): registro de COMO a luta foi decidida (kiken/W.O. inclusive). */
+  decision?: MatchDecision | null;
+}
+
+/** Fase efetiva por rodada, já resolvida pelo backend a partir do phase_plan. */
+export interface PhaseByRound {
+  round: number;
+  format: string | null;
+  format_label: string | null;
+  decision: string | null;
+  duration_sec: number | null;
+  time_mode: "corrido" | "efetivo" | null;
 }
 
 export interface BracketState {
   bracket_id: string;
   status: BracketStatus;
   modality: string;
+  /** 'hantei_tree' | 'score_rounds' | null — kata em árvore vs. por notas. */
+  kata_mode?: string | null;
   seed: string | null;
   options: BracketOptions;
+  /** P1 (296): plano de fases da categoria ({} quando não configurado). */
+  phase_plan?: PhasePlan;
+  /** P1 (296): fase efetiva de cada rodada (índice = round). */
+  phases_by_round?: PhaseByRound[];
   athletes_count: number;
   pending_payment_count?: number;
   bye_count: number;
@@ -79,6 +105,26 @@ export interface LockResult {
   bracket_id: string;
   status: "locked";
   modality: string;
+  message: string;
+}
+
+/** Um degrau do pódio derivado pelo finalize (P2). */
+export interface PodiumEntry {
+  placement: number;
+  entry_id: string;
+  name: string | null;
+  dojo: string | null;
+  points_awarded: number;
+}
+
+/** Resposta do POST .../bracket/finalize (P2 — modo mesário).
+ *  Erros esperados: 422 { code: 'FINAL_PENDENTE' | 'TERCEIRO_PENDENTE' },
+ *  409 { code: 'BRACKET_NOT_LOCKED' } — chegam como ApiError (status + data.code). */
+export interface FinalizeResult {
+  finalized: boolean;
+  category_id: string;
+  podium: PodiumEntry[];
+  points_applied: boolean;
   message: string;
 }
 
@@ -179,16 +225,32 @@ export const karateBracketsApi = {
   ): Promise<BracketState | BracketNotGenerated> =>
     request(`/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket`),
 
-  /** POST /competitions/:cid/categories/:catId/bracket/advance */
+  /** POST /competitions/:cid/categories/:catId/bracket/advance
+   *  `decision` (P1/P2): como a luta foi decidida — em especial
+   *  method 'kiken'/'wo' para ausência (o vencedor é o presente). */
   advanceWinner: (
     federationId: string,
     cid: string,
     catId: string,
-    body: { match_id: string; winner_entry_id: string; aka_score?: number; shiro_score?: number }
+    body: { match_id: string; winner_entry_id: string; aka_score?: number; shiro_score?: number; decision?: MatchDecision }
   ): Promise<AdvanceResult> =>
     request(
       `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/advance`,
       { method: "POST", body }
+    ),
+
+  /** POST /competitions/:cid/categories/:catId/bracket/finalize — P2 (modo
+   *  mesário): deriva o pódio da chave decidida e grava nas inscrições
+   *  (placement + points_awarded). Idempotente no backend; retry 0 mesmo
+   *  assim (ação explícita do operador). */
+  finalizeBracket: (
+    federationId: string,
+    cid: string,
+    catId: string
+  ): Promise<FinalizeResult> =>
+    request(
+      `/federation/${federationId}/competitions/${cid}/categories/${catId}/bracket/finalize`,
+      { method: "POST", body: {}, retry: 0 }
     ),
 
   /** PUT /competitions/:cid/categories/:catId/bracket/matches — edição total (Fase 2) */

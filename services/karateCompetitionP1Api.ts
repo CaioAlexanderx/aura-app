@@ -138,6 +138,37 @@ export interface Scoresheet {
   }[];
 }
 
+// ── Fila de premiação (P2, migration 301) ───────────────────
+
+export interface AwardPodiumEntry {
+  placement: number;
+  entry_id: string;
+  name: string | null;
+  dojo: string | null;
+  points_awarded: number;
+}
+
+export interface AwardsQueueItem {
+  category_id: string;
+  category_name: string;
+  modality: string;
+  group_label: string | null;
+  division_name: string | null;
+  area_name: string | null;
+  awards_delivered: boolean;
+  awards_delivered_at: string | null;
+  podium: AwardPodiumEntry[];
+}
+
+export interface AwardsQueue {
+  data: AwardsQueueItem[];
+  count: number;
+  /** Categorias ainda não entregues (ausente quando schema_pending). */
+  pending?: number;
+  /** Migration 301 pendente — fila indisponível, nunca 500. */
+  schema_pending?: boolean;
+}
+
 // ── Arbitragem (298) ────────────────────────────────────────
 
 export type OfficialRole = "arbitro" | "mesario" | "staff";
@@ -234,6 +265,15 @@ export const karateCompetitionP1Api = {
   // Súmula
   getScoresheet: (fid: string, cid: string, catId: string): Promise<Scoresheet> =>
     request(`${comp(fid, cid)}/categories/${catId}/scoresheet`),
+
+  // Fila de premiação (P2) — pendentes primeiro, na ordem do board.
+  getAwardsQueue: (fid: string, cid: string): Promise<AwardsQueue> =>
+    request(`${comp(fid, cid)}/awards`),
+  /** Marca/desmarca "medalhas entregues" da categoria (delivered: false = desfazer). */
+  setAwardsDelivered: (
+    fid: string, cid: string, catId: string, delivered: boolean
+  ): Promise<{ category_id: string; awards_delivered: boolean; awards_delivered_at: string | null }> =>
+    request(`${comp(fid, cid)}/categories/${catId}/awards-delivered`, { method: "POST", body: { delivered }, retry: 0 }),
 
   // Arbitragem
   listOfficials: (fid: string, params?: { role?: OfficialRole; active?: boolean }): Promise<Official[]> => {

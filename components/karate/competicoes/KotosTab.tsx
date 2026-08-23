@@ -14,6 +14,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput,
   Platform, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -33,6 +34,7 @@ const MODALITY_SHORT: Record<string, string> = {
 };
 
 export function KotosTab({ federationId, competitionId }: { federationId: string; competitionId: string }) {
+  const router = useRouter();
   const [board, setBoard] = useState<ScheduleBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newAreaName, setNewAreaName] = useState("");
@@ -165,6 +167,9 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
             movingId={movingId}
             onMove={moveCategory}
             onRemoveArea={removeArea}
+            onOpenMesario={(areaId) =>
+              router.push(`/karate/competicoes/torneio/koto?id=${competitionId}&area=${areaId}` as any)
+            }
           />
         ))}
       </ScrollView>
@@ -173,7 +178,7 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
 }
 
 function BoardColumn({
-  column, area, categories, areas, dnd, movingId, onMove, onRemoveArea,
+  column, area, categories, areas, dnd, movingId, onMove, onRemoveArea, onOpenMesario,
 }: {
   column: BoardColumnId;
   area: BoardArea | null;
@@ -183,6 +188,8 @@ function BoardColumn({
   movingId: string | null;
   onMove: (categoryId: string, to: BoardColumnId) => void;
   onRemoveArea: (area: BoardArea) => void;
+  /** P2: abre o Modo Mesário deste koto (tela operacional do dia). */
+  onOpenMesario: (areaId: string) => void;
 }) {
   const dropRef = useColumnDropZoneRef(column, dnd.onDrop, dnd.onHoverChange);
   const isHover = dnd.hoverColumn === column;
@@ -207,6 +214,20 @@ function BoardColumn({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* P2: entrada do Modo Mesário — a tela operacional do koto no dia. */}
+      {!isUnassigned && (
+        <TouchableOpacity
+          style={s.mesarioBtn}
+          onPress={() => onOpenMesario(area!.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Abrir o Modo Mesário do ${area!.name}`}
+        >
+          <Icon name="play_circle" size={14} color={C.primary} />
+          <Text style={s.mesarioBtnTxt}>Modo Mesário</Text>
+          <Icon name="arrow_right" size={13} color={C.primary} />
+        </TouchableOpacity>
+      )}
 
       <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 6, padding: 8 }}>
         {categories.length === 0 ? (
@@ -295,6 +316,8 @@ const s = StyleSheet.create({
   columnHover: { borderColor: C.primary, backgroundColor: C.primarySoft } as ViewStyle,
   columnUnassigned: { backgroundColor: C.glassHi, borderStyle: "dashed" } as ViewStyle,
   colHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.glassHi } as ViewStyle,
+  mesarioBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.primarySoft } as ViewStyle,
+  mesarioBtnTxt: { fontSize: 11.5, fontWeight: "700", color: C.primary } as TextStyle,
   colTitle: { fontSize: 13.5, fontWeight: "800", color: C.ink } as TextStyle,
   colMeta: { fontSize: 11, color: C.ink3, marginTop: 1, fontVariant: ["tabular-nums"] } as TextStyle,
   colEmpty: { fontSize: 12, color: C.ink4, textAlign: "center", paddingVertical: 20 } as TextStyle,
