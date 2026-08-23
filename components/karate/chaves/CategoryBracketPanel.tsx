@@ -328,8 +328,13 @@ export function CategoryBracketPanel({
         />
       )}
 
-      {/* ============= BRACKET VIEW (locked) ============= */}
-      {!loading && !!catId && !isKataMode && locked && bracket && (
+      {/* ============= BRACKET VIEW (draft + locked) ============= */}
+      {/* No rascunho é a BANCADA DE MONTAGEM (mover atletas, colisão de
+          dojô, undo — PUT /matches só aceita draft); travada é a chave
+          oficial (lançar vencedores). Antes só renderizava locked, o que
+          tornava o modo de edição INALCANÇÁVEL: no rascunho ninguém via o
+          editor e, travada, ele recusava editar. */}
+      {!loading && !!catId && !isKataMode && (locked || hasDraft) && bracket && (
         <BracketView
           bracket={bracket}
           advancingMatch={advancingMatch}
