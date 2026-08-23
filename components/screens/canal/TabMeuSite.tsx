@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -12,6 +12,7 @@ import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
 import { SPECS } from "./specsDeImagem";
+import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 type Props = {
   config: any;
   saveConfig: (data: any) => Promise<void>;
@@ -60,6 +61,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
   const [cardEnabled, setCardEnabled] = useState(config.card_enabled !== false);
   const [parcelas, setParcelas] = useState<number | null>(config.card_max_installments ?? null);
+  // O parcelamento so aparece na loja com cartao FUNCIONANDO. Sem isso a
+  // lojista escolheria "ate 6x", salvaria, e nada apareceria — sem
+  // explicacao nenhuma. Encontrado no QA: nenhuma loja tem MP hoje.
+  const { mpGateway } = usePaymentGateways();
+  const mpConfigurado = !!mpGateway;
 
   useEffect(() => {
     if (!config.exists) return;
@@ -201,25 +207,19 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     toast.info("Link copiado!");
   }
 
-  // Abaixo de 900px o sticky vira estorvo (ver comentario no bloco).
-  const { width: larguraJanela } = useWindowDimensions();
-  const telaLargaMockup = larguraJanela >= 900;
-
   return (
     <View>
-      {/* Fase 3 — Rec #9: mini-mockup sticky.
-          Sticky SO em tela larga: no desktop ele acompanha enquanto a
-          lojista mexe nas configuracoes — e essa a utilidade. Em tela
-          pequena o mockup ocupava quase a viewport inteira e, grudado no
-          topo, cobria a pagina que a lojista tentava rolar. */}
-      <View
-        style={[
-          s.mockupWrap,
-          Platform.OS === "web" && telaLargaMockup
-            ? ({ position: "sticky" as any, top: 0, zIndex: 10 } as any)
-            : null,
-        ]}
-      >
+      {/* Mini-mockup, NAO sticky.
+          Ele era sticky pra acompanhar a lojista enquanto ela mexia nas
+          configuracoes. Mas esta aba e nome, telefone, endereco e Pix —
+          nada disso muda o visual da loja, entao o preview grudado nao
+          respondia a nada e so cobria o formulario (no QA ele escondia o
+          botao "Salvar pagamentos"). O preview que reage ao que se mexe
+          vive na aba Design, onde ele tem o que refletir.
+
+          Aqui ele continua como cabecalho: e onde estao "Copiar link" e
+          "Ver loja". */}
+      <View style={s.mockupWrap}>
         <View style={s.mockupFrame}>
           {/* Mini-topbar */}
           <View style={s.mockupTopbar}>
@@ -374,9 +374,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
               })}
             </View>
             <Text style={cs.hint}>
-              {parcelas
-                ? `A pagina do produto passa a mostrar "ou ${parcelas}x de ...". Parcela minima de R$ 5 — produto barato mostra menos vezes.`
-                : "A loja mostra so o preco a vista."}
+              {!mpConfigurado
+                ? "Conecte o Mercado Pago abaixo para o parcelamento aparecer na loja. Sem cartao funcionando, anunciar parcela seria promessa que a loja nao cumpre."
+                : parcelas
+                  ? `A pagina do produto passa a mostrar "ou ${parcelas}x de ...". Parcela minima de R$ 5 — produto barato mostra menos vezes.`
+                  : "A loja mostra so o preco a vista."}
             </Text>
           </View>
         ) : null}
