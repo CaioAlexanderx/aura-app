@@ -17,12 +17,13 @@
 //    sobre um ladrilho neutro, com respiro: a peça aparece inteira e a
 //    grade fica regular mesmo com fotos de enquadramento irregular.
 // ============================================================
-import { View, Text, Image } from "react-native";
+import { View, Image } from "react-native";
 import { Fonts } from "@/constants/fonts";
 import { T } from "./types";
 import { wash, corLegivelSobre, AURA } from "./theme";
 import { iniciais, degrauDaCapa } from "./capaModel";
 
+import { Texto } from "./TipografiaVitrine";
 type Props = {
   /** Foto do produto, quando existir. */
   uri?: string | null;
@@ -102,7 +103,7 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay, altur
         overflow: "hidden",
       }}
     >
-      <Text
+      <Texto
         style={{
           fontFamily: fonteDisplay || Fonts.heading,
           // A serifada da marca no lugar de um ícone genérico: é o que faz
@@ -114,7 +115,7 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay, altur
         }}
       >
         {sigla}
-      </Text>
+      </Texto>
     </View>
   );
 }

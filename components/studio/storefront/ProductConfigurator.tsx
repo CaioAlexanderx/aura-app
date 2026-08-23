@@ -8,7 +8,7 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { FieldRenderer } from "./FieldRenderer";
@@ -27,6 +27,7 @@ import { textoDeParcelamento } from "./parcelamento";
 import { FreteNoProduto } from "./FreteNoProduto";
 import { ZoomFoto, DicaDeZoom } from "./ZoomFoto";
 import { fotosDoProduto } from "./CarrosselFoto";
+import { Texto } from "./TipografiaVitrine";
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
   backgroundColor: "#f3f4f6",
@@ -226,11 +227,11 @@ export function ProductConfigurator({
         }}
       >
         <Pressable onPress={() => { goTo("list"); sf.setError(null); }}>
-          <Text style={{ fontSize: 22, color: T.ink2 }}>←</Text>
+          <Texto style={{ fontSize: 22, color: T.ink2 }}>←</Texto>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Text>
-          <Text style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>{activeProduct.name}</Text>
+          <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Texto>
+          <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>{activeProduct.name}</Texto>
           <View
             style={{
               alignSelf: "flex-start",
@@ -239,9 +240,9 @@ export function ProductConfigurator({
               borderRadius: 999, marginTop: 4,
             }}
           >
-            <Text style={{ fontSize: 9, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+            <Texto style={{ fontSize: 9, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
               Estúdio · Arte personalizada
-            </Text>
+            </Texto>
           </View>
 
           {/* Agente I: link 'Ver guia de medidas' — só quando size_guide existe */}
@@ -262,8 +263,8 @@ export function ProductConfigurator({
                 backgroundColor: "rgba(30,58,138,0.05)",
               }}
             >
-              <Text style={{ fontSize: 11 }}>📐</Text>
-              <Text
+              <Texto style={{ fontSize: 11 }}>📐</Texto>
+              <Texto
                 style={{
                   fontSize: 11,
                   color: tema.marcaTexto,
@@ -272,24 +273,24 @@ export function ProductConfigurator({
                 }}
               >
                 Ver guia de medidas
-              </Text>
+              </Texto>
             </Pressable>
           )}
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
+          <Texto style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
             R$ {configuringUnitPrice.toFixed(2)}
-          </Text>
+          </Texto>
           {/* "3x de R$ 53,30" e uma frase diferente de "R$ 159,90" pra
               quem esta decidindo. So aparece quando a lojista declarou o
               teto — a loja nao inventa numero de parcela. */}
           {textoParcelas ? (
-            <Text style={{ fontSize: 10.5, color: T.ink3, marginTop: 1 }}>{textoParcelas}</Text>
+            <Texto style={{ fontSize: 10.5, color: T.ink3, marginTop: 1 }}>{textoParcelas}</Texto>
           ) : null}
           {hasDelta && (
-            <Text style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
+            <Texto style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
               base R$ {Number(activeProduct.price).toFixed(2)}
-            </Text>
+            </Texto>
           )}
         </View>
       </View>
@@ -339,9 +340,9 @@ export function ProductConfigurator({
             preenchido (ver transportarValores em categoryGrouping.ts). */}
         {sf.activeSiblings.length > 1 ? (
           <View style={{ gap: 8 }}>
-            <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
               Modelo
-            </Text>
+            </Texto>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
               {sf.activeSiblings.map((m) => {
                 const sel = m.id === activeProduct.id;
@@ -359,15 +360,15 @@ export function ProductConfigurator({
                       borderColor: sel ? tema.marcaTexto : T.border,
                     }}
                   >
-                    <Text
+                    <Texto
                       numberOfLines={2}
                       style={{ fontSize: 11, fontWeight: sel ? "800" : "600", color: sel ? tema.marcaTexto : T.ink }}
                     >
                       {m.name}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
+                    </Texto>
+                    <Texto style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
                       R$ {Number(m.price).toFixed(2)}
-                    </Text>
+                    </Texto>
                   </Pressable>
                 );
               })}
@@ -386,9 +387,9 @@ export function ProductConfigurator({
                 mais, parecendo secao quebrada. */}
             {frontFields.length > 0 && (
               <View style={{ gap: 4, marginTop: 4 }}>
-                <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
                   Frente
-                </Text>
+                </Texto>
               </View>
             )}
             {frontFields.map(renderField)}
@@ -399,8 +400,8 @@ export function ProductConfigurator({
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Text style={{ fontSize: 12, color: tema.marcaTexto }}>↻</Text>
-                    <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Text>
+                    <Texto style={{ fontSize: 12, color: tema.marcaTexto }}>↻</Texto>
+                    <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Texto>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -432,34 +433,34 @@ export function ProductConfigurator({
                       }}
                     >
                       {editingAddBack && (
-                        <Text style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Text>
+                        <Texto style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Texto>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
+                      <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
                         Personalizar também o verso
-                      </Text>
+                      </Texto>
                       {!editingAddBack && (
-                        <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                        <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
                           Opcional · adiciona arte no lado de trás da peça
-                        </Text>
+                        </Texto>
                       )}
                       {editingAddBack && backPrice > 0 && (
-                        <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                        <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
                           +R$ {backPrice.toFixed(2)} no total
-                        </Text>
+                        </Texto>
                       )}
                     </View>
                     {!editingAddBack && backPrice > 0 && (
                       <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {backPrice.toFixed(2)}</Text>
+                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {backPrice.toFixed(2)}</Texto>
                       </View>
                     )}
                   </Pressable>
                 ) : (
-                  <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
+                  <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
                     Verso incluso · sem custo adicional
-                  </Text>
+                  </Texto>
                 )}
 
                 {/* Fields do verso (so quando ativo) */}
@@ -476,8 +477,8 @@ export function ProductConfigurator({
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Text style={{ fontSize: 12, color: tema.marcaTexto }}>▭</Text>
-                    <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Text>
+                    <Texto style={{ fontSize: 12, color: tema.marcaTexto }}>▭</Texto>
+                    <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Texto>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -514,34 +515,34 @@ export function ProductConfigurator({
                       }}
                     >
                       {editingAddMiddle && (
-                        <Text style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Text>
+                        <Texto style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Texto>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
+                      <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>
                         Personalizar também o meio
-                      </Text>
+                      </Texto>
                       {!editingAddMiddle && (
-                        <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+                        <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
                           Opcional · arte na faixa central / ao redor da peça
-                        </Text>
+                        </Texto>
                       )}
                       {editingAddMiddle && middlePrice > 0 && (
-                        <Text style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                        <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
                           +R$ {middlePrice.toFixed(2)} no total
-                        </Text>
+                        </Texto>
                       )}
                     </View>
                     {!editingAddMiddle && middlePrice > 0 && (
                       <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Text style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {middlePrice.toFixed(2)}</Text>
+                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {middlePrice.toFixed(2)}</Texto>
                       </View>
                     )}
                   </Pressable>
                 ) : (
-                  <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
+                  <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center", fontStyle: "italic", marginTop: -2 }}>
                     Meio incluso · sem custo adicional
-                  </Text>
+                  </Texto>
                 )}
 
                 {/* Fields do meio (so quando ativo) */}
@@ -553,16 +554,16 @@ export function ProductConfigurator({
 
         {/* Quantidade */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 }}>
-          <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>Quantidade</Text>
+          <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>Quantidade</Texto>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable onPress={() => setEditingQty(Math.max(1, editingQty - 1))} style={qtyBtn}>
-              <Text style={qtyTxt}>−</Text>
+              <Texto style={qtyTxt}>−</Texto>
             </Pressable>
-            <Text style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "800", fontSize: 16 }}>
+            <Texto style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "800", fontSize: 16 }}>
               {editingQty}
-            </Text>
+            </Texto>
             <Pressable onPress={() => setEditingQty(editingQty + 1)} style={qtyBtn}>
-              <Text style={qtyTxt}>+</Text>
+              <Texto style={qtyTxt}>+</Texto>
             </Pressable>
           </View>
         </View>
@@ -573,9 +574,9 @@ export function ProductConfigurator({
             para a quantidade que ativa o desconto é o gesto todo. */}
         {escada.length > 0 ? (
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
               Quanto mais, mais barato
-            </Text>
+            </Texto>
             {escada.map((t) => {
               const ativa = faixaAtual && faixaAtual.min_qty === t.min_qty;
               return (
@@ -592,32 +593,32 @@ export function ProductConfigurator({
                     borderColor: ativa ? tema.marcaTexto : T.border,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink2, fontWeight: ativa ? "800" : "600" }}>
+                  <Texto style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink2, fontWeight: ativa ? "800" : "600" }}>
                     {faixaLabel(t)}
-                  </Text>
+                  </Texto>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "800" }}>
+                    <Texto style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "800" }}>
                       R$ {Number(t.unit_price).toFixed(2)}
-                    </Text>
+                    </Texto>
                     <View style={{ backgroundColor: T.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                      <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>
+                      <Texto style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>
                         -{Number(t.discount_pct).toFixed(0)}%
-                      </Text>
+                      </Texto>
                     </View>
                   </View>
                 </Pressable>
               );
             })}
             {proxima ? (
-              <Text style={{ fontSize: 11, color: T.ink3 }}>
+              <Texto style={{ fontSize: 11, color: T.ink3 }}>
                 Leve {proxima.min_qty} e pague R$ {Number(proxima.unit_price).toFixed(2)} por unidade.
-              </Text>
+              </Texto>
             ) : null}
           </View>
         ) : null}
 
         {error && (
-          <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Text>
+          <Texto style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Texto>
         )}
         </View>
         </View>
@@ -640,9 +641,9 @@ export function ProductConfigurator({
             width: "100%", maxWidth: telaLarga ? 420 : undefined,
           }}
         >
-          <Text style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
+          <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
             {(sf as any)._editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
-          </Text>
+          </Texto>
         </Pressable>
       </View>
 

@@ -11,11 +11,12 @@
 // cedo — que é onde a informação importa.
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
+import { View, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
 import { T } from "./types";
 import { wash, AURA } from "./theme";
 import { BASE_URL } from "@/services/api";
 
+import { Texto } from "./TipografiaVitrine";
 /** Só os dígitos, no formato que a rota espera. */
 export function cepLimpo(v: string): string {
   return String(v || "").replace(/\D/g, "").slice(0, 8);
@@ -81,9 +82,9 @@ export function FreteNoProduto({
         padding: 12, gap: 9, backgroundColor: wash(cor, 0.04),
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", color: T.ink3 }}>
+      <Texto style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", color: T.ink3 }}>
         Quanto custa a entrega
-      </Text>
+      </Texto>
 
       <View style={{ flexDirection: "row", gap: 8 }}>
         <TextInput
@@ -116,20 +117,20 @@ export function FreteNoProduto({
         >
           {carregando
             ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={{ color: pronto ? "#fff" : T.ink3, fontWeight: "800", fontSize: 13 }}>Calcular</Text>}
+            : <Texto style={{ color: pronto ? "#fff" : T.ink3, fontWeight: "800", fontSize: 13 }}>Calcular</Texto>}
         </Pressable>
       </View>
 
       {resultado ? (
-        <Text style={{ fontSize: 13.5, color: T.ink }}>
-          <Text style={{ fontWeight: "800", color: cor }}>
+        <Texto style={{ fontSize: 13.5, color: T.ink }}>
+          <Texto style={{ fontWeight: "800", color: cor }}>
             {resultado.fee > 0 ? `R$ ${resultado.fee.toFixed(2).replace(".", ",")}` : "Entrega grátis"}
-          </Text>
-          {resultado.etaText ? <Text style={{ color: T.ink3 }}>{` · ${resultado.etaText}`}</Text> : null}
-        </Text>
+          </Texto>
+          {resultado.etaText ? <Texto style={{ color: T.ink3 }}>{` · ${resultado.etaText}`}</Texto> : null}
+        </Texto>
       ) : null}
 
-      {erro ? <Text style={{ fontSize: 12.5, color: T.ink3 }}>{erro}</Text> : null}
+      {erro ? <Texto style={{ fontSize: 12.5, color: T.ink3 }}>{erro}</Texto> : null}
     </View>
   );
 }

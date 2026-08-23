@@ -3,7 +3,7 @@
 // Stage="list": hero da loja + grid de produtos + CartBar.
 // ============================================================
 import { useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
+import { View, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { Fonts, tipografiaDaLoja } from "@/constants/fonts";
@@ -19,6 +19,7 @@ import { wash } from "./theme";
 
 import { AncoraWhatsApp } from "./AncoraWhatsApp";
 import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
+import { Texto } from "./TipografiaVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
   if (!sf.store) return null;
   const { store } = sf;
@@ -145,7 +146,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           ) : null}
 
           {/* Micro-label monoespaçada — a mesma voz do site da Aura. */}
-          <Text
+          <Texto
             style={{
               fontFamily: Fonts.mono,
               color: "rgba(255,255,255,0.8)",
@@ -153,11 +154,11 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             }}
           >
             — Aura Studio · Personalizados
-          </Text>
+          </Texto>
 
           {/* O nome da loja na SERIFADA da marca, grande. Era DM Sans 900,
               que e voz de UI, nao de vitrine. */}
-          <Text
+          <Texto
             style={{
               fontFamily: tipo.display,
               color: "#fff",
@@ -167,12 +168,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             }}
           >
             {store.site.name}
-          </Text>
+          </Texto>
 
           {store.site.tagline ? (
-            <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, marginTop: 8, maxWidth: 520 }}>
+            <Texto style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, marginTop: 8, maxWidth: 520 }}>
               {store.site.tagline}
-            </Text>
+            </Texto>
           ) : null}
 
           {/* Meta numa linha so: o que a loja e, quanto tempo leva e o
@@ -187,21 +188,21 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                 borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
               }}
             >
-              <Text style={{ color: "#fff", fontSize: 9 }}>●</Text>
-              <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
+              <Texto style={{ color: "#fff", fontSize: 9 }}>●</Texto>
+              <Texto style={{ color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
                 Loja oficial · Arte personalizada
-              </Text>
+              </Texto>
             </View>
 
-            <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>
+            <Texto style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>
               Produção em ~{store.sla.total_estimate_days}{" "}
               {store.sla.total_estimate_days === 1 ? "dia útil" : "dias úteis"}
-            </Text>
+            </Texto>
 
             {store.products.length > 0 ? (
-              <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+              <Texto style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
                 · {store.products.length} {store.products.length === 1 ? "produto" : "produtos"}
-              </Text>
+              </Texto>
             ) : null}
           </View>
         </View>
@@ -231,7 +232,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
               accessibilityLabel="Limpar busca"
               style={{ paddingHorizontal: 12, paddingVertical: 9 }}
             >
-              <Text style={{ fontSize: 12.5, color: T.ink3, fontWeight: "700" }}>Limpar</Text>
+              <Texto style={{ fontSize: 12.5, color: T.ink3, fontWeight: "700" }}>Limpar</Texto>
             </Pressable>
           ) : null}
         </View>
@@ -256,9 +257,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
               gap: 8, paddingBottom: 4,
             }}
           >
-            <Text style={{ fontSize: 12, color: T.ink3, marginRight: "auto" }}>
+            <Texto style={{ fontSize: 12, color: T.ink3, marginRight: "auto" }}>
               {entradas.length} itens
-            </Text>
+            </Texto>
 
             {ORDENS.map((o) => {
               const sel = o.chave === ordem;
@@ -275,9 +276,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                     backgroundColor: sel ? wash(primary, 0.12) : "transparent",
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: sel ? "800" : "600", color: sel ? primary : T.ink2 }}>
+                  <Texto style={{ fontSize: 12, fontWeight: sel ? "800" : "600", color: sel ? primary : T.ink2 }}>
                     {o.rotulo}
-                  </Text>
+                  </Texto>
                 </Pressable>
               );
             })}
@@ -294,9 +295,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   backgroundColor: denso ? wash(primary, 0.12) : "transparent",
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: denso ? primary : T.ink2 }}>
+                <Texto style={{ fontSize: 12, fontWeight: "700", color: denso ? primary : T.ink2 }}>
                   {denso ? "Cartões maiores" : "Mais por linha"}
-                </Text>
+                </Texto>
               </Pressable>
             ) : null}
           </View>
@@ -304,13 +305,13 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
         {store.products.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
-            <Text style={{ fontSize: 36 }}>🎨</Text>
-            <Text style={{ color: T.ink, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
+            <Texto style={{ fontSize: 36 }}>🎨</Texto>
+            <Texto style={{ color: T.ink, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
               Esta loja ainda não tem produtos personalizáveis publicados.
-            </Text>
-            <Text style={{ color: T.ink3, fontSize: 12, marginTop: 6, textAlign: "center" }}>
+            </Texto>
+            <Texto style={{ color: T.ink3, fontSize: 12, marginTop: 6, textAlign: "center" }}>
               Volte em breve!
-            </Text>
+            </Texto>
           </View>
         ) : (
           // S1 — a vitrine itera ENTRADAS, não produtos: categoria com 2+
@@ -320,14 +321,14 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             // Busca ou filtro sem resultado: em vez de uma grade em branco,
             // diz o que aconteceu e devolve o caminho de volta.
             <View style={{ paddingVertical: 48, alignItems: "center", gap: 10 }}>
-              <Text style={{ fontFamily: tipo.display, fontSize: 20, color: T.ink, textAlign: "center" }}>
+              <Texto style={{ fontFamily: tipo.display, fontSize: 20, color: T.ink, textAlign: "center" }}>
                 Nada encontrado por aqui
-              </Text>
-              <Text style={{ fontSize: 13, color: T.ink3, textAlign: "center", maxWidth: 320 }}>
+              </Texto>
+              <Texto style={{ fontSize: 13, color: T.ink3, textAlign: "center", maxWidth: 320 }}>
                 {busca.trim()
                   ? `Nenhum produto com "${busca.trim()}"${ativa ? ` em ${ativa.name}` : ""}.`
                   : "Esta categoria ainda não tem produtos publicados."}
-              </Text>
+              </Texto>
               <Pressable
                 onPress={() => { setBusca(""); setAtiva(null); }}
                 accessibilityRole="button"
@@ -336,7 +337,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   borderRadius: 999, backgroundColor: primary,
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Ver a loja toda</Text>
+                <Texto style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Ver a loja toda</Texto>
               </Pressable>
             </View>
           ) : (

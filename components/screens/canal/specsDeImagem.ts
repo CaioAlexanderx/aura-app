@@ -2,9 +2,13 @@
 // Canal digital · o que a lojista precisa subir, e em que formato
 //
 // Nenhum campo de upload do painel dizia tamanho, proporção ou peso. A
-// lojista subia o que tinha e descobria o resultado na loja — logo
-// esticado, banner com o texto cortado no mobile, foto de 4 MB deixando
-// a vitrine lenta.
+// lojista subia o que tinha e descobria o resultado na loja.
+//
+// COMO ESCREVER AQUI: o texto fala COM a lojista sobre o que ELA faz —
+// "Envie a foto de 8 produtos", não "8 produtos aparecem com as iniciais
+// no lugar da peça". Nada de termo interno ("hero", "vitrine", "capa
+// composta"), nada de explicar o mecanismo, nada de sermão. Se a frase
+// só faz sentido pra quem leu o código, ela está errada.
 //
 // As specs moram aqui porque duas telas precisam delas: o campo de
 // upload (na hora de subir) e o checklist (na hora de planejar).
@@ -19,36 +23,37 @@ export type SpecDeImagem = {
 
 export const SPECS: Record<"logo" | "banner" | "produto" | "capa", SpecDeImagem> = {
   logo: {
-    resumo: "512×512px · PNG com fundo transparente · até 2 MB",
+    resumo: "PNG com fundo transparente, quadrado, 512×512px",
     detalhes: [
+      "Salve em PNG com fundo transparente — se o fundo for branco, aparece um quadrado branco em volta do seu logo",
       "Quadrado, 512×512px ou maior",
-      "PNG com fundo transparente — o logo assenta sobre a cor da loja",
-      "Sem moldura branca em volta: ela aparece como um quadrado no hero",
+      "Sem moldura e sem borda em volta",
     ],
   },
   banner: {
-    resumo: "1600×600px (16:6) · JPG · até 2 MB · texto à esquerda",
+    resumo: "1600×600px, JPG, até 2 MB",
     detalhes: [
-      "1600×600px — a mesma proporção 16:6 do quadro na loja",
-      "JPG até 2 MB; imagem pesada atrasa a primeira tela",
-      "Deixe o lado esquerdo mais limpo: é onde o texto entra",
-      "No celular o quadro vira 4:3 e corta as laterais — nada essencial nas bordas",
+      "Use 1600×600px — é a proporção do espaço na sua loja",
+      "Deixe o lado esquerdo mais vazio: é onde entra o texto",
+      "No celular as laterais são cortadas, então não coloque nada importante nas pontas",
+      "Até 2 MB — imagem pesada deixa sua loja lenta pra abrir",
     ],
   },
   produto: {
-    resumo: "1000×1000px · JPG ou PNG · até 10 MB · até 5 por produto",
+    resumo: "Foto quadrada, 1000×1000px, até 5 por produto",
     detalhes: [
+      "Fotografe a peça inteira, sem cortar",
       "Quadrada, 1000×1000px ou maior",
-      "A peça inteira no quadro — a loja não corta, mas também não inventa o que ficou de fora",
-      "Fundo limpo (parede, chão, cabide) e luz do dia bastam; estúdio não é necessário",
-      "Até 5 fotos por produto viram carrossel no cartão",
+      "Parede, chão ou cabide já servem de fundo — não precisa de estúdio",
+      "Prefira luz do dia, perto de uma janela",
+      "Você pode enviar até 5 fotos do mesmo produto",
     ],
   },
   capa: {
-    resumo: "1600×900px · JPG · até 2 MB",
+    resumo: "1600×900px, JPG, até 2 MB",
     detalhes: [
-      "1600×900px, paisagem",
-      "Entra atrás do hero com um véu da cor da loja por cima",
+      "Use 1600×900px, deitada",
+      "Ela fica atrás do nome da sua loja, com um véu da sua cor por cima",
     ],
   },
 };
@@ -96,46 +101,50 @@ export function montarChecklist(e: EstadoDaLoja): ItemChecklist[] {
     {
       chave: "fotos",
       titulo: "Fotos dos produtos",
-      acao: semFoto > 0
-        ? `${semFoto} ${semFoto === 1 ? "produto está" : "produtos estão"} sem foto e ${semFoto === 1 ? "aparece" : "aparecem"} com as iniciais no lugar da peça.`
-        : "Todos os produtos da vitrine têm foto.",
+      acao:
+        total === 0
+          ? "Cadastre seus produtos e envie uma foto de cada um."
+          : semFoto > 0
+            ? `Envie a foto de ${semFoto} ${semFoto === 1 ? "produto" : "produtos"}. Sem foto, o cliente não vê o que está comprando.`
+            : "Todos os seus produtos têm foto.",
       // Vitrine vazia não é "feito" — é "nem começou".
       feito: total > 0 && semFoto === 0,
-      medida: total > 0 ? `${comFoto} de ${total} com foto` : "nenhum produto na vitrine ainda",
+      medida: total > 0 ? `${comFoto} de ${total}` : null,
       spec: SPECS.produto,
     },
     {
       chave: "logo",
       titulo: "Logo da loja",
       acao: e.logoUrl
-        ? "Logo no ar, no topo e no hero."
-        : "Sem logo, o hero mostra só o nome escrito.",
+        ? "Seu logo aparece no topo da loja."
+        : "Envie seu logo. Sem ele, a loja mostra só o nome escrito.",
       feito: !!e.logoUrl,
       spec: SPECS.logo,
     },
     {
       chave: "cor",
-      titulo: "Cor da marca",
-      acao: (e.corPrimaria || "").toLowerCase() !== COR_PADRAO
-        ? "Cor escolhida — ela atravessa a loja inteira."
-        : "A loja está no violeta da Aura. Use o conta-gotas para pegar a cor do seu logo.",
+      titulo: "Cor da sua marca",
+      acao:
+        (e.corPrimaria || "").toLowerCase() !== COR_PADRAO
+          ? "Sua loja usa a sua cor nos botões e nos preços."
+          : "Escolha a cor da sua marca. Use o conta-gotas para pegar a cor do seu logo.",
       feito: !!e.corPrimaria && e.corPrimaria.toLowerCase() !== COR_PADRAO,
     },
     {
       chave: "banner",
       titulo: "Banner do topo",
       acao: (e.banners || []).length > 0
-        ? "Banner próprio no ar."
-        : "Sem banner, a loja usa um gerado na sua cor — funciona, mas o seu deixa a loja parecer sua.",
+        ? "Seu banner está no ar."
+        : "Envie um banner com sua campanha ou sua melhor peça. Até lá, usamos um na sua cor.",
       feito: (e.banners || []).length > 0,
       spec: SPECS.banner,
     },
     {
       chave: "voz",
-      titulo: "Aviso e contato",
+      titulo: "Aviso e WhatsApp",
       acao: e.anuncio || e.whatsapp
-        ? "Sua loja fala com quem chega."
-        : "Uma linha de aviso (frete, prazo, promoção) e o WhatsApp no ar. É o que loja grande tem e loja nova esquece.",
+        ? "Seu aviso e seu WhatsApp estão na loja."
+        : "Escreva um aviso curto (frete, prazo ou promoção) e confirme seu WhatsApp, para o cliente tirar dúvidas antes de comprar.",
       feito: !!(e.anuncio || e.whatsapp),
     },
   ];

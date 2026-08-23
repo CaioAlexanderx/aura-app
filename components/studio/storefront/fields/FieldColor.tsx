@@ -2,10 +2,11 @@
 // components/studio/storefront/fields/FieldColor.tsx
 // Campo type="color" — swatches de cor, suporte a price_delta.
 // ============================================================
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
 import { T, sectionLabel } from "../types";
 
+import { Texto } from "../TipografiaVitrine";
 export function FieldColor({
   field, value, onChange,
 }: {
@@ -17,9 +18,9 @@ export function FieldColor({
   const choices = field.config.choices || [];
   return (
     <View>
-      <Text style={sectionLabel}>
-        {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
-      </Text>
+      <Texto style={sectionLabel}>
+        {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
+      </Texto>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         {colors.map((c) => {
           const choice = choices.find((ch: any) => ch.value === c || ch.label === c);
@@ -37,9 +38,9 @@ export function FieldColor({
                 }}
               />
               {typeof delta === "number" && delta !== 0 && (
-                <Text style={{ fontSize: 9, fontWeight: "700", color: selected ? T.accent : T.ink3 }}>
+                <Texto style={{ fontSize: 9, fontWeight: "700", color: selected ? T.accent : T.ink3 }}>
                   {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
-                </Text>
+                </Texto>
               )}
             </View>
           );

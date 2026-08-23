@@ -10,10 +10,11 @@
 // suporte. Por isso ele fica alcançável de qualquer ponto da prateleira,
 // como no Oscar, e não escondido num rodapé.
 // ============================================================
-import { View, Text, Pressable, Platform, Linking } from "react-native";
+import { View, Pressable, Platform, Linking } from "react-native";
 import { T } from "./types";
 import { AURA, wash, parLegivel } from "./theme";
 
+import { Texto } from "./TipografiaVitrine";
 /**
  * Número em E.164 sem sinais, como o wa.me exige.
  *
@@ -107,7 +108,7 @@ export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: 
         ]}
       >
         <Icone cor={tinta} />
-        <Text style={{ color: tinta, fontSize: 13.5, fontWeight: "700" }}>Tirar dúvida</Text>
+        <Texto style={{ color: tinta, fontSize: 13.5, fontWeight: "700" }}>Tirar dúvida</Texto>
       </Pressable>
     </View>
   );

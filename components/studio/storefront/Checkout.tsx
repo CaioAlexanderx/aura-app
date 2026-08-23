@@ -3,7 +3,7 @@
 // Stage="checkout": dados do cliente, endereço, pagamento,
 // resumo do carrinho e botão "Enviar pedido".
 // ============================================================
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T, sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
 import { CartItemList } from "./Cart";
@@ -13,6 +13,7 @@ import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
 
 import { tipografiaDaLoja } from "@/constants/fonts";
+import { Texto } from "./TipografiaVitrine";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   // A cor da loja tambem no botao que fecha a venda — era azul-marinho
   // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
@@ -44,11 +45,11 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         }}
       >
         <Pressable onPress={() => sf.goTo("list")}>
-          <Text style={{ fontSize: 22, color: T.ink2 }}>←</Text>
+          <Texto style={{ fontSize: 22, color: T.ink2 }}>←</Texto>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Finalizar</Text>
-          <Text style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Text>
+          <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Finalizar</Texto>
+          <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Texto>
         </View>
       </View>
 
@@ -59,10 +60,10 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           width: "100%", maxWidth: 720, alignSelf: "center",
         }}
       >
-        <Text style={sectionLabel}>Itens personalizados</Text>
+        <Texto style={sectionLabel}>Itens personalizados</Texto>
         <CartItemList sf={sf} />
 
-        <Text style={sectionLabel}>Seus dados</Text>
+        <Texto style={sectionLabel}>Seus dados</Texto>
         <FInput v={sf.customerName} on={sf.setCustomerName} ph="Nome *" />
         <FInput v={sf.customerPhone} on={sf.setCustomerPhone} ph="WhatsApp *" kb="phone-pad" />
         <FInput v={sf.customerEmail} on={sf.setCustomerEmail} ph="E-mail (opcional)" kb="email-address" />
@@ -72,7 +73,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             em casa" para o cliente tomar 400 no fechamento. */}
         {modalidades.length > 0 ? (
           <>
-            <Text style={sectionLabel}>Como você quer receber?</Text>
+            <Texto style={sectionLabel}>Como você quer receber?</Texto>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {modalidades.map((m) => (
                 <Pressable
@@ -82,7 +83,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
                   accessibilityState={{ selected: sf.deliveryType === m.value }}
                   style={[chip, sf.deliveryType === m.value && chipActive]}
                 >
-                  <Text style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Text>
+                  <Texto style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Texto>
                 </Pressable>
               ))}
             </View>
@@ -93,10 +94,10 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             de um cliente para o primeiro motoboy que citar o pedido. */}
         {sf.deliveryType === "courier" && (
           <>
-            <Text style={sectionLabel}>Quem vai retirar</Text>
-            <Text style={{ fontSize: 11, color: T.ink3, marginTop: -4 }}>
+            <Texto style={sectionLabel}>Quem vai retirar</Texto>
+            <Texto style={{ fontSize: 11, color: T.ink3, marginTop: -4 }}>
               Você chama o entregador pelo app e nos diz quem é. O frete é pago direto no aplicativo.
-            </Text>
+            </Texto>
             <FInput v={sf.courierName} on={sf.setCourierName} ph="Nome do entregador *" />
             <FInput v={sf.courierPlate} on={sf.setCourierPlate} ph="Placa (ABC-1234) *" />
           </>
@@ -104,7 +105,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
 
         {sf.deliveryType === "delivery" && (
           <>
-            <Text style={sectionLabel}>Endereço</Text>
+            <Texto style={sectionLabel}>Endereço</Texto>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <FInput v={sf.addressStreet} on={sf.setAddressStreet} ph="Rua" flex={3} />
               <FInput v={sf.addressNumber} on={sf.setAddressNumber} ph="Nº" flex={1} />
@@ -127,32 +128,32 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
               accessibilityRole="button"
               style={[chip, { alignSelf: "flex-start", opacity: sf.quotingShipping ? 0.6 : 1 }]}
             >
-              <Text style={chipTxt}>
+              <Texto style={chipTxt}>
                 {sf.quotingShipping ? "Calculando frete..." : "Calcular frete"}
-              </Text>
+              </Texto>
             </Pressable>
 
             {sf.shippingError ? (
-              <Text style={{ fontSize: 12, color: T.red, fontWeight: "700" }}>{sf.shippingError}</Text>
+              <Texto style={{ fontSize: 12, color: T.red, fontWeight: "700" }}>{sf.shippingError}</Texto>
             ) : sf.shippingQuote && typeof sf.shippingQuote.fee === "number" ? (
-              <Text style={{ fontSize: 12, color: T.ink2 }}>
+              <Texto style={{ fontSize: 12, color: T.ink2 }}>
                 {sf.shippingQuote.free_shipping
                   ? "Frete grátis para este CEP"
                   : "Frete: R$ " + sf.shippingQuote.fee.toFixed(2)}
                 {sf.shippingQuote.eta ? " · " + sf.shippingQuote.eta : ""}
-              </Text>
+              </Texto>
             ) : null}
           </>
         )}
 
-        <Text style={sectionLabel}>Pagamento</Text>
+        <Texto style={sectionLabel}>Pagamento</Texto>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {sf.store.payment.has_pix && (
             <Pressable
               onPress={() => sf.setPaymentMethod("pix")}
               style={[chip, sf.paymentMethod === "pix" && chipActive]}
             >
-              <Text style={[chipTxt, sf.paymentMethod === "pix" && chipTxtActive]}>Pix</Text>
+              <Texto style={[chipTxt, sf.paymentMethod === "pix" && chipTxtActive]}>Pix</Texto>
             </Pressable>
           )}
           {sf.store.payment.has_card && (
@@ -160,7 +161,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
               onPress={() => sf.setPaymentMethod("card")}
               style={[chip, sf.paymentMethod === "card" && chipActive]}
             >
-              <Text style={[chipTxt, sf.paymentMethod === "card" && chipTxtActive]}>Cartão</Text>
+              <Texto style={[chipTxt, sf.paymentMethod === "card" && chipTxtActive]}>Cartão</Texto>
             </Pressable>
           )}
           {sf.store.payment.pay_on_delivery_enabled && (
@@ -168,14 +169,14 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
               onPress={() => sf.setPaymentMethod("on_delivery")}
               style={[chip, sf.paymentMethod === "on_delivery" && chipActive]}
             >
-              <Text style={[chipTxt, sf.paymentMethod === "on_delivery" && chipTxtActive]}>
+              <Texto style={[chipTxt, sf.paymentMethod === "on_delivery" && chipTxtActive]}>
                 Pagar {sf.deliveryType === "delivery" ? "na entrega" : "na retirada"}
-              </Text>
+              </Texto>
             </Pressable>
           )}
         </View>
 
-        <Text style={sectionLabel}>Observação</Text>
+        <Texto style={sectionLabel}>Observação</Texto>
         <FInput v={sf.notes} on={sf.setNotes} ph="Algo importante pra loja saber?" multi />
 
         <View
@@ -194,13 +195,13 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           <TotalRow l="Total" v={sf.cartTotal} big />
         </View>
 
-        <Text style={{ fontSize: 11, color: T.ink3, textAlign: "center", marginTop: 4 }}>
+        <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center", marginTop: 4 }}>
           Prazo de produção estimado: ~{sf.store.sla.total_estimate_days}{" "}
           {sf.store.sla.total_estimate_days === 1 ? "dia útil" : "dias úteis"}
-        </Text>
+        </Texto>
 
         {sf.error && (
-          <Text style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{sf.error}</Text>
+          <Texto style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{sf.error}</Texto>
         )}
       </ScrollView>
 
@@ -214,9 +215,9 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             opacity: sendDisabled ? 0.4 : 1,
           }}
         >
-          <Text style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
+          <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
             {sf.sending ? "Enviando..." : "Enviar pedido • R$ " + sf.cartTotal.toFixed(2)}
-          </Text>
+          </Texto>
         </Pressable>
       </View>
 

@@ -2,7 +2,7 @@
 // components/studio/storefront/Cart.tsx
 // Barra flutuante do carrinho (stage="list") + lista no checkout.
 // ============================================================
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { T } from "./types";
 import { LivePreview } from "./LivePreview";
@@ -10,6 +10,7 @@ import { LivePreview } from "./LivePreview";
 import { CapaProduto } from "./CapaProduto";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
 import { tipografiaDaLoja } from "@/constants/fonts";
+import { Texto } from "./TipografiaVitrine";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
   cfg: any, explicit: boolean | undefined
@@ -63,18 +64,18 @@ export function CartBar({
             borderRadius: 13, alignItems: "center", justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>
+          <Texto style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0)}
-          </Text>
+          </Texto>
         </View>
         <View>
-          <Text style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
+          <Texto style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item personalizado" : "itens personalizados"}
-          </Text>
-          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>R$ {sf.cartSubtotal.toFixed(2)}</Text>
+          </Texto>
+          <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>R$ {sf.cartSubtotal.toFixed(2)}</Texto>
         </View>
       </View>
-      <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Text>
+      <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
     </Pressable>
   );
 }
@@ -143,44 +144,44 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
               />
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Text>
-              <Text style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+              <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Texto>
+              <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
                 Qtd {l.qty} · R$ {sf._lineTotal(l).toFixed(2)}
-              </Text>
+              </Texto>
               {hasDelta && (
-                <Text style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
+                <Texto style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
                   inclui R$ {(unit - Number(l.product.price)).toFixed(2)} por opções
-                </Text>
+                </Texto>
               )}
               {backActive &&
                 (Number(l.product.customization_config?.back_price_delta) || 0) > 0 && (
-                  <Text style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
+                  <Texto style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
                     + verso (R$ {Number(l.product.customization_config?.back_price_delta || 0).toFixed(2)})
-                  </Text>
+                  </Texto>
                 )}
               {backActive &&
                 (Number(l.product.customization_config?.back_price_delta) || 0) === 0 &&
                 l.product.customization_config?.has_back === true && (
-                  <Text style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com verso personalizado</Text>
+                  <Texto style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com verso personalizado</Texto>
                 )}
               {middleActive &&
                 (Number(l.product.customization_config?.middle_price_delta) || 0) > 0 && (
-                  <Text style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
+                  <Texto style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
                     + meio (R$ {Number(l.product.customization_config?.middle_price_delta || 0).toFixed(2)})
-                  </Text>
+                  </Texto>
                 )}
               {middleActive &&
                 (Number(l.product.customization_config?.middle_price_delta) || 0) === 0 &&
                 l.product.customization_config?.has_middle === true && (
-                  <Text style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com meio personalizado</Text>
+                  <Texto style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com meio personalizado</Texto>
                 )}
             </View>
             <View style={{ gap: 6 }}>
               <Pressable onPress={() => sf.editCartLine(l)} style={editChip}>
-                <Text style={editChipTxt}>Editar</Text>
+                <Texto style={editChipTxt}>Editar</Texto>
               </Pressable>
               <Pressable onPress={() => sf.removeCartLine(l.lineId)} style={removeChip}>
-                <Text style={removeChipTxt}>Remover</Text>
+                <Texto style={removeChipTxt}>Remover</Texto>
               </Pressable>
             </View>
           </View>
