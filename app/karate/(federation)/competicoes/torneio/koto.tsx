@@ -122,6 +122,10 @@ export default function ModoMesarioScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, CatStatus>>({});
+  // QA pós-Paulista: o painel é decidido pelo kata_mode do BRACKET, não pela
+  // modalidade — kata em hantei_tree (bandeirada, o formato dominante até 13
+  // anos) opera como ÁRVORE de lutas. true = notas (score_rounds).
+  const [scoreModes, setScoreModes] = useState<Record<string, boolean>>({});
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
 
   const categories = boardArea?.categories ?? [];
@@ -166,28 +170,37 @@ export default function ModoMesarioScreen() {
       if (!awards.schema_pending) finalizedIds = new Set(awards.data.map((a) => a.category_id));
     } catch { /* fila indisponível não bloqueia o status básico */ }
 
-    const entries = await Promise.all(cats.map(async (cat): Promise<[string, CatStatus]> => {
+    // O BRACKET decide o fluxo: kata_mode === 'score_rounds' → notas; qualquer
+    // outra coisa (inclusive kata hantei_tree = bandeirada) → árvore de lutas.
+    // Sem chave gerada ainda, cai na heurística da modalidade (só afeta a
+    // mensagem de "pendente"; o modo re-resolve quando a chave existir).
+    const entries = await Promise.all(cats.map(async (cat): Promise<[string, CatStatus, boolean]> => {
+      const fallbackScore = isKataModality(cat.modality);
       try {
-        if (finalizedIds.has(cat.id)) return [cat.id, "finalizada"];
-        if (isKataModality(cat.modality)) {
+        const resp = await karateBracketsApi.getBracket(federationId, cid, cat.id);
+        if (!resp || resp.status === "not_generated") {
+          return [cat.id, finalizedIds.has(cat.id) ? "finalizada" : "pendente", fallbackScore];
+        }
+        const b = resp as BracketState;
+        const scoreMode = b.kata_mode === "score_rounds";
+        if (finalizedIds.has(cat.id)) return [cat.id, "finalizada", scoreMode];
+        if (scoreMode) {
           const scores = await karateBracketsApi.getKataScores(federationId, cid, cat.id);
-          if (!scores || !scores.length) return [cat.id, "pendente"];
+          if (!scores || !scores.length) return [cat.id, "pendente", true];
           const hasFinalNota = scores.some((s) => s.phase === "final" && s.nota != null);
           const hasAnyNota = scores.some((s) => s.nota != null);
-          return [cat.id, hasFinalNota ? "decidida" : hasAnyNota ? "andamento" : "pendente"];
+          return [cat.id, hasFinalNota ? "decidida" : hasAnyNota ? "andamento" : "pendente", true];
         }
-        const resp = await karateBracketsApi.getBracket(federationId, cid, cat.id);
-        if (!resp || resp.status === "not_generated") return [cat.id, "pendente"];
-        const b = resp as BracketState;
-        if (b.status !== "locked") return [cat.id, "pendente"];
+        if (b.status !== "locked") return [cat.id, "pendente", false];
         const next = findNextPendingMatch(b);
-        if (next) return [cat.id, "andamento"];
-        return [cat.id, b.champion ? "decidida" : "andamento"];
+        if (next) return [cat.id, "andamento", false];
+        return [cat.id, b.champion ? "decidida" : "andamento", false];
       } catch {
-        return [cat.id, "desconhecido"];
+        return [cat.id, "desconhecido", fallbackScore];
       }
     }));
-    setStatuses(Object.fromEntries(entries));
+    setStatuses(Object.fromEntries(entries.map(([id, st]) => [id, st])));
+    setScoreModes(Object.fromEntries(entries.map(([id, , sm]) => [id, sm])));
   }, [federationId, cid]);
 
   useEffect(() => {
@@ -289,9 +302,11 @@ export default function ModoMesarioScreen() {
           </View>
         )}
 
-        {/* Painel operacional da categoria aberta */}
+        {/* Painel operacional da categoria aberta — decidido pelo kata_mode
+            do bracket (scoreModes), com fallback pela modalidade só enquanto
+            a chave não existe. Kata bandeirada (hantei_tree) opera em árvore. */}
         {selectedCat && (
-          isKataModality(selectedCat.modality) ? (
+          (scoreModes[selectedCat.id] ?? isKataModality(selectedCat.modality)) ? (
             <KataPanel
               key={selectedCat.id}
               federationId={federationId}
