@@ -34,7 +34,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Platform, Vibration,
   AccessibilityInfo, Animated, TextInput, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -145,7 +145,11 @@ function useMesaTokenBootstrap(): string | null {
       setToken(fromUrl);
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { window.sessionStorage.setItem(STORAGE_KEY, fromUrl); } catch { /* storage cheio/bloqueado */ }
-        try { window.history.replaceState({}, "", "/mesa"); } catch { /* ok manter a query */ }
+        // history.replaceState cru NÃO limpa: o Expo Router re-sincroniza a
+        // URL do próprio estado de navegação e o ?t= voltava (confirmado no
+        // QA). Limpar pelo router remove o token da barra/histórico de
+        // verdade — ele já vive em sessionStorage + estado.
+        try { router.replace("/mesa"); } catch { /* ok manter a query */ }
       }
     }
   }, [t]);
