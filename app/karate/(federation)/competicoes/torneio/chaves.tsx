@@ -165,6 +165,17 @@ export default function ChavesScreen() {
             modality={selectedModality}
             competitionName={competitionName}
             federationName={federationName}
+            categoryNav={{
+              items: categories,
+              currentId: selectedCatId,
+              onSelect: (id) => {
+                const cat = categories.find((c) => c.id === id);
+                if (!cat) return;
+                setSelectedCatId(cat.id);
+                setSelectedModality(cat.modality);
+                setSelectedCatName(cat.name);
+              },
+            }}
           />
         )}
       </ScrollView>

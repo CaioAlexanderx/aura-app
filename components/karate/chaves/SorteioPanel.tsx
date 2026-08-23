@@ -15,7 +15,7 @@ import {
   BracketState, BracketMatch, BracketAthleteRef, DrawMethod,
 } from "@/services/karateBracketsApi";
 import {
-  styles as S, ConfigRow, MiniAvatar, ByeText, PendingText,
+  styles as S, ConfigRow, MiniAvatar, ByeText, PendingText, SameDojoBadge,
 } from "./shared";
 
 export function SorteioPanel({
@@ -150,7 +150,7 @@ function DraftMatchCard({ match, idx }: { match: BracketMatch; idx: number }) {
     <View style={[S.matchCard, { marginBottom: 8 }]}>
       <View style={S.matchCardHead}>
         <Text style={S.matchCardIdx}>Chave {idx}</Text>
-        {sameDojo && <Text style={S.sameDojoWarn}>mesmo dojô</Text>}
+        {sameDojo && <SameDojoBadge compact />}
       </View>
       {[{ ref: akaRef, isBye: match.aka === "bye", border: P.red },
         { ref: shiroRef, isBye: match.shiro === "bye", border: C.ink3 }].map(({ ref, isBye, border }, si) => (
@@ -160,8 +160,10 @@ function DraftMatchCard({ match, idx }: { match: BracketMatch; idx: number }) {
           ) : ref ? (
             <View style={S.athleteRow}>
               <MiniAvatar name={ref.student_name} />
-              <Text style={S.athleteName} numberOfLines={1}>{ref.student_name}</Text>
-              <Text style={S.athleteDojo} numberOfLines={1}>{ref.dojo_name}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={S.athleteName} numberOfLines={1}>{ref.student_name}</Text>
+                <Text style={S.athleteDojo} numberOfLines={2}>{ref.dojo_name}</Text>
+              </View>
             </View>
           ) : (
             <PendingText />

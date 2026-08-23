@@ -13,8 +13,9 @@ import React from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
+import { Icon } from "@/components/Icon";
 import {
-  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F,
+  KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F, KarateShadows as SH,
 } from "@/constants/karateTheme";
 import type { BracketAthleteRef } from "@/services/karateBracketsApi";
 
@@ -78,6 +79,9 @@ export function MiniAvatar({ name }: { name: string | null }) {
 }
 
 // ── Bloco de atleta (avatar + nome + dojô) ─────────────────────────────
+// Regra da bancada: nome E dojô sempre legíveis — nome em destaque numa
+// linha, dojô atenuado podendo quebrar em DUAS linhas (nunca truncado a
+// ponto de ficar ilegível).
 export function AthleteCell({
   athlete, winner,
 }: { athlete: BracketAthleteRef; winner?: boolean }) {
@@ -88,9 +92,24 @@ export function AthleteCell({
         <Text style={[styles.athleteName, winner && styles.athleteNameWinner]} numberOfLines={1}>
           {athlete.student_name}
         </Text>
-        <Text style={styles.athleteDojo} numberOfLines={1}>{athlete.dojo_name}</Text>
+        <Text style={styles.athleteDojo} numberOfLines={2}>{athlete.dojo_name}</Text>
       </View>
-      {winner && <Text style={styles.winMark}>✓</Text>}
+      {winner && <Icon name="check" size={13} color={P.red} />}
+    </View>
+  );
+}
+
+// ── Badge de colisão de dojô (aviso, NUNCA bloqueio) ───────────────────
+// Usado no rascunho do sorteio e no bracket travado/edição: sinaliza que
+// os dois atletas do confronto de 1ª rodada são do MESMO dojô.
+export function SameDojoBadge({ compact }: { compact?: boolean }) {
+  return (
+    <View
+      style={styles.sameDojoBadge}
+      accessibilityLabel="Atenção: os dois atletas deste confronto são do mesmo dojô. É só um aviso — a chave pode ser salva assim mesmo."
+    >
+      <Icon name="alert" size={10} color={P.warn} />
+      <Text style={styles.sameDojoBadgeText}>{compact ? "mesmo dojô" : "Mesmo dojô"}</Text>
     </View>
   );
 }
@@ -152,23 +171,26 @@ export const styles = StyleSheet.create({
   emptyText: { fontFamily: F.body, fontSize: 12, color: C.ink4, textAlign: "center" } as TextStyle,
 
   // match primitives (compartilhado bracket + draft)
-  matchCard: { backgroundColor: P.paper, borderRadius: 10, borderWidth: 1, borderColor: C.line, overflow: "hidden" } as ViewStyle,
-  matchCardHead: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 10, paddingVertical: 5, backgroundColor: P.glass2, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
+  matchCard: { backgroundColor: P.glassHi, borderRadius: 10, borderWidth: 1, borderColor: C.line, overflow: "hidden", ...(SH.sm as object) } as ViewStyle,
+  matchCardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 10, paddingVertical: 5, backgroundColor: P.glass2, borderBottomWidth: 1, borderBottomColor: C.line } as ViewStyle,
   matchCardIdx: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.0, color: C.ink3 } as TextStyle,
   sameDojoWarn: { fontFamily: F.body, fontSize: 9, color: P.red } as TextStyle,
-  matchSide: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderLeftWidth: 3, minHeight: 38 } as ViewStyle,
+  sameDojoBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: R.pill, backgroundColor: P.warnWash, borderWidth: 1, borderColor: "rgba(122,87,36,0.28)" } as ViewStyle,
+  sameDojoBadgeText: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6, color: P.warn } as TextStyle,
+  matchSide: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderLeftWidth: 3, minHeight: 44 } as ViewStyle,
   matchSideShiro: { borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
   matchSideWinner: { backgroundColor: P.redWash } as ViewStyle,
   matchSideLoser: { opacity: 0.42 } as ViewStyle,
   matchDivider: { height: 1, backgroundColor: C.line } as ViewStyle,
 
-  // athlete block
+  // athlete block — hierarquia: nome maior/escuro em 1 linha, dojô
+  // atenuado em até 2 linhas (clareza de nome E dojô é requisito da bancada).
   athleteRow: { flexDirection: "row", alignItems: "center", gap: 7, flex: 1 } as ViewStyle,
-  av: { width: 22, height: 22, borderRadius: 11, backgroundColor: P.neutralWash, alignItems: "center", justifyContent: "center", flexShrink: 0 } as ViewStyle,
+  av: { width: 24, height: 24, borderRadius: 12, backgroundColor: P.neutralWash, alignItems: "center", justifyContent: "center", flexShrink: 0, borderWidth: 1, borderColor: C.line } as ViewStyle,
   avText: { fontFamily: F.body, fontSize: 9, fontWeight: "700", color: C.ink } as TextStyle,
-  athleteName: { fontFamily: F.body, fontSize: 12, fontWeight: "500", color: C.ink } as TextStyle,
+  athleteName: { fontFamily: F.body, fontSize: 13, fontWeight: "600", color: C.ink, lineHeight: 17 } as TextStyle,
   athleteNameWinner: { fontWeight: "700" } as TextStyle,
-  athleteDojo: { fontFamily: F.body, fontSize: 9.5, color: C.ink3, marginTop: 1 } as TextStyle,
+  athleteDojo: { fontFamily: F.body, fontSize: 10.5, color: C.ink3, marginTop: 1, lineHeight: 13 } as TextStyle,
   winMark: { fontFamily: F.body, fontSize: 11, fontWeight: "700", color: P.red, marginLeft: 4 } as TextStyle,
   byeText: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.2, color: C.ink4 } as TextStyle,
   pendingText: { fontFamily: F.body, fontSize: 11, color: C.ink4, fontStyle: "italic" } as TextStyle,
@@ -179,10 +201,14 @@ export const styles = StyleSheet.create({
   bracketHint: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 } as ViewStyle,
   bracketHintText: { fontFamily: F.body, fontSize: 11.5, color: C.ink3 } as TextStyle,
   bracketScroll: { borderWidth: 1, borderColor: C.line, borderRadius: R.lg, backgroundColor: P.glass2 } as ViewStyle,
-  bracketInner: { flexDirection: "row", padding: 22, gap: 60, minWidth: 400 } as ViewStyle,
-  bracketCol: { gap: 8, width: 200 } as ViewStyle,
-  champCol: { width: 180, justifyContent: "center" } as ViewStyle,
-  roundLabel: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink3, textAlign: "center", marginBottom: 8 } as TextStyle,
+  bracketInner: { flexDirection: "row", padding: 22, gap: 56, minWidth: 400 } as ViewStyle,
+  bracketCol: { gap: 10, width: 224 } as ViewStyle,
+  champCol: { width: 196, justifyContent: "center" } as ViewStyle,
+  roundLabel: { fontFamily: F.body, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink2, textAlign: "center" } as TextStyle,
+  // Cabeçalho de rodada: rótulo + contagem de lutas, num chip discreto que
+  // "ancora" cada coluna (leitura clara em chaves grandes).
+  roundHead: { alignSelf: "center", alignItems: "center", gap: 1, paddingHorizontal: 12, paddingVertical: 5, borderRadius: R.pill, backgroundColor: P.neutralWash, borderWidth: 1, borderColor: C.line, marginBottom: 8 } as ViewStyle,
+  roundCount: { fontFamily: F.body, fontSize: 9, color: C.ink3, textAlign: "center" } as TextStyle,
   champCard: { backgroundColor: P.redWash, borderRadius: R.md, borderWidth: 1, borderColor: P.red, padding: 16, alignItems: "center", gap: 4 } as ViewStyle,
   champLabel: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.4, color: C.ink3 } as TextStyle,
   champName: { fontFamily: F.heading, fontSize: 16, fontWeight: "700", color: C.ink } as TextStyle,

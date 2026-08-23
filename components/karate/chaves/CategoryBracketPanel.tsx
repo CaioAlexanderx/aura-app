@@ -45,8 +45,58 @@ import { SorteioPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
 
+// ── Seletor rápido de categoria (Hub P2 — bancada) ─────────────────
+// Permite "movimentar entre chaves" (anterior/próxima categoria) sem
+// voltar telas nem rolar até o rail/chips. Opcional: o painel continua
+// funcionando sozinho quando o pai não fornece a navegação.
+export type CategoryNav = {
+  items: Array<{ id: string; name: string; modality: string }>;
+  currentId: string;
+  onSelect: (id: string) => void;
+};
+
+function CategoryQuickNav({ nav }: { nav: CategoryNav }) {
+  const idx = nav.items.findIndex((i) => i.id === nav.currentId);
+  if (idx < 0 || nav.items.length < 2) return null;
+  const prev = idx > 0 ? nav.items[idx - 1] : null;
+  const next = idx < nav.items.length - 1 ? nav.items[idx + 1] : null;
+
+  return (
+    <View style={styles.quickNav}>
+      <TouchableOpacity
+        style={[styles.quickNavBtn, !prev && styles.quickNavBtnDisabled]}
+        disabled={!prev}
+        onPress={() => prev && nav.onSelect(prev.id)}
+        accessibilityRole="button"
+        accessibilityLabel={prev ? `Chave anterior: ${prev.name}` : "Não há chave anterior"}
+      >
+        <Icon name="chevron-left" size={14} color={prev ? C.ink2 : C.ink4} />
+        <Text style={[styles.quickNavBtnText, !prev && styles.quickNavBtnTextDisabled]} numberOfLines={1}>
+          {prev ? prev.name : "Início"}
+        </Text>
+      </TouchableOpacity>
+      <View style={styles.quickNavCenter}>
+        <Text style={styles.quickNavPos}>{idx + 1} de {nav.items.length}</Text>
+        <Text style={styles.quickNavLabel}>chaves</Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.quickNavBtn, styles.quickNavBtnRight, !next && styles.quickNavBtnDisabled]}
+        disabled={!next}
+        onPress={() => next && nav.onSelect(next.id)}
+        accessibilityRole="button"
+        accessibilityLabel={next ? `Próxima chave: ${next.name}` : "Não há próxima chave"}
+      >
+        <Text style={[styles.quickNavBtnText, !next && styles.quickNavBtnTextDisabled]} numberOfLines={1}>
+          {next ? next.name : "Fim"}
+        </Text>
+        <Icon name="chevron-right" size={14} color={next ? C.ink2 : C.ink4} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function CategoryBracketPanel({
-  federationId, cid, catId, catName, modality, competitionName, federationName,
+  federationId, cid, catId, catName, modality, competitionName, federationName, categoryNav,
 }: {
   federationId: string;
   cid: string;
@@ -57,6 +107,8 @@ export function CategoryBracketPanel({
   competitionName?: string;
   /** Nome da federação, usado no cabeçalho da folha impressa (opcional — cai para o contexto). */
   federationName?: string;
+  /** Navegação rápida anterior/próxima entre categorias (opcional). */
+  categoryNav?: CategoryNav;
 }) {
   const isKataMode = modality === "kata" || modality === "team_kata";
 
@@ -227,6 +279,9 @@ export function CategoryBracketPanel({
 
   return (
     <View>
+      {/* Seletor rápido: anterior/próxima categoria sem voltar telas */}
+      {categoryNav && <CategoryQuickNav nav={categoryNav} />}
+
       {/* Loading */}
       {loading && !!catId && <ActivityIndicator color={P.red} style={{ marginTop: 32 }} />}
 
@@ -321,6 +376,22 @@ export function CategoryBracketPanel({
 
 // ── Styles ──────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // Seletor rápido de categoria (bancada)
+  quickNav: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 } as ViewStyle,
+  quickNavBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.line2, backgroundColor: P.glass2,
+    maxWidth: 260,
+  } as ViewStyle,
+  quickNavBtnRight: { justifyContent: "flex-end" } as ViewStyle,
+  quickNavBtnDisabled: { opacity: 0.45 } as ViewStyle,
+  quickNavBtnText: { fontFamily: F.body, fontSize: 12, fontWeight: "600", color: C.ink2, flexShrink: 1 } as TextStyle,
+  quickNavBtnTextDisabled: { color: C.ink4 } as TextStyle,
+  quickNavCenter: { alignItems: "center", minWidth: 64 } as ViewStyle,
+  quickNavPos: { fontFamily: F.mono, fontSize: 12, fontWeight: "700", color: C.ink, fontVariant: ["tabular-nums"] } as TextStyle,
+  quickNavLabel: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.0, color: C.ink3 } as TextStyle,
+
   pendingBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.md, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14 } as ViewStyle,
   pendingText: { flex: 1, fontFamily: F.body, fontSize: 12.5, color: C.ink2, lineHeight: 17 } as TextStyle,
   overlay: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
