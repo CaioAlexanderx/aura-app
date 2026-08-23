@@ -205,6 +205,17 @@ export interface EventOfficial {
   role: OfficialRole;
   credential: Credential | null;
   dojo_name: string | null;
+  /** P2.1 (302): há um link de mesa ATIVO para esta convocação. */
+  mesa_token_active?: boolean;
+  mesa_token_created_at?: string | null;
+}
+
+/** P2.1 — resposta da emissão do link de mesa. O token aparece UMA vez. */
+export interface MesaTokenIssued {
+  token: string;
+  created_at: string;
+  official_name: string;
+  note: string;
 }
 
 // ── Termos (298) ────────────────────────────────────────────
@@ -301,6 +312,13 @@ export const karateCompetitionP1Api = {
     request(`${comp(fid, cid)}/officials/${rowId}`, { method: "PATCH", body: patch, retry: 0 }),
   removeEventOfficial: (fid: string, cid: string, rowId: string): Promise<{ removed: boolean }> =>
     request(`${comp(fid, cid)}/officials/${rowId}`, { method: "DELETE" }),
+
+  // P2.1 — link da mesa do mesário (acesso fora do shell, migration 302).
+  // Emitir ROTACIONA: substitui qualquer link anterior da convocação.
+  issueMesaToken: (fid: string, cid: string, rowId: string): Promise<MesaTokenIssued> =>
+    request(`${comp(fid, cid)}/officials/${rowId}/mesa-token`, { method: "POST", body: {}, retry: 0 }),
+  revokeMesaToken: (fid: string, cid: string, rowId: string): Promise<{ revoked: boolean; id: string }> =>
+    request(`${comp(fid, cid)}/officials/${rowId}/mesa-token`, { method: "DELETE", retry: 0 }),
 
   // Termos
   saveWaiverTerms: (fid: string, cid: string, body: { waiver_terms?: WaiverTerms; waiver_required?: boolean }): Promise<{ id: string; waiver_terms: WaiverTerms; waiver_required: boolean }> =>

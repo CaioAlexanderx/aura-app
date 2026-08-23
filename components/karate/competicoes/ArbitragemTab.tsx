@@ -14,20 +14,26 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, TouchableOpacity, ActivityIndicator, TextInput, ScrollView,
-  StyleSheet, ViewStyle, TextStyle,
+  Modal, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KarateColors as C, KarateRadius as R } from "@/constants/karateTheme";
+import { KarateColors as C, KarateFonts as F, KarateRadius as R } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { KarateEmptyState } from "@/components/karate/EmptyState";
 import { KarateErrorState } from "@/components/karate/ErrorState";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
+import { ModalPop } from "@/components/karate/anim/ModalPop";
 import { toast } from "@/components/Toast";
+import { copyToClipboard } from "@/utils/clipboard";
 import {
   karateCompetitionP1Api, Official, EventOfficial, OfficialStatus, OfficialRole,
   CompetitionArea, WaiverStatus, WaiverItem,
   OFFICIAL_STATUS_LABEL, OFFICIAL_ROLE_LABEL,
 } from "@/services/karateCompetitionP1Api";
+
+// URL pública da mesa do mesário (Hub P2.1) — a rota /mesa vive fora do
+// shell autenticado e lê o token pela query (?t=).
+const MESA_BASE_URL = "https://app.getaura.com.br/mesa";
 
 const STATUS_TONE: Record<OfficialStatus, { bg: string; fg: string }> = {
   summoned: { bg: C.glassHi, fg: C.ink3 },
@@ -66,6 +72,8 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
   const [newCred, setNewCred] = useState<"A" | "B" | "C" | "D" | "">("");
   const [newRole, setNewRole] = useState<OfficialRole>("arbitro");
   const [creating, setCreating] = useState(false);
+  // P2.1 — link da mesa (acesso do mesário fora do shell) por convocação.
+  const [mesaRow, setMesaRow] = useState<EventOfficial | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -224,6 +232,19 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
                   </View>
                 )}
 
+                {/* P2.1 — link da mesa: acesso do mesário fora do shell */}
+                <TouchableOpacity
+                  style={[s.mesaChip, row.mesa_token_active && s.mesaChipOn]}
+                  onPress={() => setMesaRow(row)}
+                  accessibilityRole="button"
+                  accessibilityLabel={row.mesa_token_active ? `Gerenciar o link da mesa de ${row.name}` : `Gerar link da mesa para ${row.name}`}
+                >
+                  <Icon name="link" size={12} color={row.mesa_token_active ? "#2e7d4f" : C.ink3} />
+                  <Text style={[s.mesaChipTxt, row.mesa_token_active && s.mesaChipTxtOn]}>
+                    {row.mesa_token_active ? "Mesa ativa" : "Link da mesa"}
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity onPress={() => patchRow(row, { is_chief: !row.is_chief })} hitSlop={6} disabled={busyRow === row.id}>
                   <Icon name="star" size={15} color={row.is_chief ? C.primary : C.ink4} />
                 </TouchableOpacity>
@@ -278,7 +299,201 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
           </ScrollView>
         )}
       </View>
+
+      {/* P2.1 — modal do link da mesa */}
+      {mesaRow && (
+        <MesaLinkModal
+          federationId={federationId}
+          competitionId={competitionId}
+          row={mesaRow}
+          onClose={() => setMesaRow(null)}
+          onChanged={load}
+        />
+      )}
     </View>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// P2.1 — MODAL DO LINK DA MESA (acesso do mesário fora do shell)
+//
+// Fluxos:
+//   sem link ativo → explica o que o link dá e gera (POST mesa-token);
+//   emitido        → mostra o LINK COMPLETO uma única vez (copiar);
+//   link ativo     → gerenciar: gerar novo (rotaciona) ou revogar.
+//
+// O escopo do acesso segue o koto ATUAL da convocação — trocar o
+// mesário de koto NÃO exige novo link (o backend relê a cada request).
+// ════════════════════════════════════════════════════════════
+function fmtIssuedAt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso); // timestamptz completo — Date é seguro aqui
+  if (isNaN(d.getTime())) return null;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} às ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function MesaLinkModal({
+  federationId, competitionId, row, onClose, onChanged,
+}: {
+  federationId: string;
+  competitionId: string;
+  row: EventOfficial;
+  onClose: () => void;
+  onChanged: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  // Token emitido NESTA abertura do modal — única chance de ver o link.
+  const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // O flag da listagem pode ficar defasado após emitir/revogar aqui dentro.
+  const [active, setActive] = useState(!!row.mesa_token_active);
+
+  const issue = async () => {
+    if (active) {
+      const ok = await confirmAsync({
+        title: "Gerar um novo link?",
+        message: `${row.name} já tem um link de mesa ativo. Gerar um novo SUBSTITUI o anterior — o link antigo para de funcionar na hora.`,
+        confirmLabel: "Gerar novo link",
+      });
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      const out = await karateCompetitionP1Api.issueMesaToken(federationId, competitionId, row.id);
+      setIssuedUrl(`${MESA_BASE_URL}?t=${out.token}`);
+      setActive(true);
+      setCopied(false);
+      await onChanged();
+    } catch (e: any) {
+      if (e?.data?.code === "SCHEMA_PENDING") {
+        toast.error("Link da mesa ainda indisponível — atualização do servidor pendente (migration 302).");
+      } else {
+        toast.error(e?.message || "Não foi possível gerar o link da mesa.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async () => {
+    const ok = await confirmAsync({
+      title: "Revogar o acesso da mesa?",
+      message: `${row.name} perde o acesso à mesa imediatamente. Para devolver o acesso será preciso gerar (e enviar) um novo link.`,
+      confirmLabel: "Revogar acesso",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await karateCompetitionP1Api.revokeMesaToken(federationId, competitionId, row.id);
+      toast.success("Acesso da mesa revogado.");
+      setActive(false);
+      setIssuedUrl(null);
+      await onChanged();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível revogar o link.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!issuedUrl) return;
+    const ok = await copyToClipboard(issuedUrl);
+    if (ok) { setCopied(true); toast.success("Link copiado — envie ao mesário."); }
+    else toast.error("Não foi possível copiar — selecione o link e copie manualmente.");
+  };
+
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <View style={s.mesaOverlay}>
+        <ModalPop visible style={s.mesaCard}>
+          <View style={s.mesaHead}>
+            <View style={s.mesaSeal}>
+              <Icon name="link" size={18} color="#fdf8f2" />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.mesaTitle}>Link da mesa</Text>
+              <Text style={s.mesaSub} numberOfLines={1}>{row.name} · {OFFICIAL_ROLE_LABEL[row.role]}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Fechar">
+              <Icon name="x" size={17} color={C.ink3} />
+            </TouchableOpacity>
+          </View>
+
+          {issuedUrl ? (
+            <>
+              {/* ── Link emitido — mostrado UMA única vez ── */}
+              <View style={s.mesaWarnBox}>
+                <Icon name="alert" size={14} color="#7a5724" />
+                <Text style={s.mesaWarnTxt}>
+                  Este link aparece <Text style={{ fontWeight: "800" }}>uma única vez</Text>. Copie e envie ao mesário agora — ao fechar, ele não poderá ser recuperado (só gerando outro).
+                </Text>
+              </View>
+              <View style={s.mesaUrlBox}>
+                <Text style={s.mesaUrlTxt} selectable numberOfLines={3}>{issuedUrl}</Text>
+              </View>
+              <KarateButton
+                label={copied ? "Link copiado" : "Copiar link"}
+                variant="sumi" size="lg"
+                onPress={copy}
+              />
+              <Text style={s.mesaHint}>
+                O acesso é escopado ao koto atual da convocação: se você mover {row.name.split(" ")[0]} de koto, o MESMO link passa a operar o koto novo — sem reenviar nada.
+              </Text>
+              <KarateButton label="Concluído" variant="ghost" size="md" onPress={onClose} />
+            </>
+          ) : active ? (
+            <>
+              {/* ── Link ativo — gerenciar ── */}
+              <View style={s.mesaActiveBox}>
+                <Icon name="check_circle" size={15} color="#2e7d4f" />
+                <Text style={s.mesaActiveTxt}>
+                  Link ativo{fmtIssuedAt(row.mesa_token_created_at) ? ` — emitido em ${fmtIssuedAt(row.mesa_token_created_at)}` : ""}.
+                  Por segurança o link não pode ser exibido de novo.
+                </Text>
+              </View>
+              <Text style={s.mesaHint}>
+                Perdeu o link? Gere um novo (o atual para de funcionar). Encerrou a participação? Revogue o acesso.
+              </Text>
+              <KarateButton
+                label={busy ? "Gerando..." : "Gerar novo link (substitui o atual)"}
+                variant="sumi" size="md" loading={busy} disabled={busy}
+                onPress={issue}
+              />
+              <KarateButton
+                label="Revogar acesso"
+                variant="primary" size="md" disabled={busy}
+                onPress={revoke}
+              />
+            </>
+          ) : (
+            <>
+              {/* ── Sem link — explicar e gerar ── */}
+              <Text style={s.mesaBody}>
+                O link da mesa dá acesso à operação do koto <Text style={{ fontWeight: "700" }}>sem conta Aura</Text>: chamada
+                das lutas, vencedor e decisão, notas de kata, cronômetro e fechamento de resultado — sempre limitado às
+                categorias do koto em que {row.name.split(" ")[0]} estiver alocado agora.
+              </Text>
+              <View style={s.mesaWarnBox}>
+                <Icon name="info" size={14} color={C.ink2} />
+                <Text style={s.mesaWarnTxt}>
+                  O link será mostrado uma única vez após a geração. Você pode revogá-lo a qualquer momento.
+                </Text>
+              </View>
+              <KarateButton
+                label={busy ? "Gerando..." : "Gerar link da mesa"}
+                variant="sumi" size="lg" loading={busy} disabled={busy}
+                onPress={issue}
+              />
+              <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} />
+            </>
+          )}
+        </ModalPop>
+      </View>
+    </Modal>
   );
 }
 
@@ -444,4 +659,25 @@ const s = StyleSheet.create({
   waiverOk: { fontSize: 12, fontWeight: "700", color: "#2e7d4f" } as TextStyle,
   waiverRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.sm, padding: 10 } as ViewStyle,
   waiverForm: { width: "100%", gap: 6, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 } as ViewStyle,
+
+  // P2.1 — link da mesa
+  mesaChip: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 999, borderWidth: 1, borderColor: C.border2, backgroundColor: C.glassHi, paddingHorizontal: 9, paddingVertical: 4 } as ViewStyle,
+  mesaChipOn: { backgroundColor: "#e8f2ec", borderColor: "#2e7d4f" } as ViewStyle,
+  mesaChipTxt: { fontSize: 10.5, fontWeight: "700", color: C.ink3 } as TextStyle,
+  mesaChipTxtOn: { color: "#2e7d4f" } as TextStyle,
+
+  mesaOverlay: { flex: 1, backgroundColor: "rgba(28,23,20,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
+  mesaCard: { width: "100%", maxWidth: 460, backgroundColor: "#fdf8f2", borderRadius: 16, padding: 20, gap: 12 } as ViewStyle,
+  mesaHead: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
+  mesaSeal: { width: 38, height: 38, borderRadius: 999, backgroundColor: C.ink, alignItems: "center", justifyContent: "center" } as ViewStyle,
+  mesaTitle: { fontFamily: F.heading, fontSize: 19, fontWeight: "600", color: C.ink } as TextStyle,
+  mesaSub: { fontSize: 12, color: C.ink3, marginTop: 1 } as TextStyle,
+  mesaBody: { fontSize: 13, color: C.ink2, lineHeight: 19 } as TextStyle,
+  mesaWarnBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "rgba(156,111,46,0.10)", borderWidth: 1, borderColor: "rgba(156,111,46,0.28)", borderRadius: R.md, padding: 11 } as ViewStyle,
+  mesaWarnTxt: { flex: 1, fontSize: 12.5, color: "#7a5724", lineHeight: 18 } as TextStyle,
+  mesaActiveBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#e8f2ec", borderWidth: 1, borderColor: "rgba(46,125,79,0.3)", borderRadius: R.md, padding: 11 } as ViewStyle,
+  mesaActiveTxt: { flex: 1, fontSize: 12.5, color: "#2e7d4f", lineHeight: 18 } as TextStyle,
+  mesaUrlBox: { backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12 } as ViewStyle,
+  mesaUrlTxt: { fontFamily: F.mono, fontSize: 12.5, color: C.ink, lineHeight: 19 } as TextStyle,
+  mesaHint: { fontSize: 11.5, color: C.ink3, lineHeight: 17 } as TextStyle,
 });
