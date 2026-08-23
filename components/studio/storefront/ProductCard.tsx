@@ -50,6 +50,15 @@ export function ProductCard({
   const compacto = estilo === "minimal";
   const sobreposto = estilo === "image-heavy";
 
+  // As tres formas que separam os estilos de verdade. Antes os tres
+  // usavam foto QUADRADA em `contain` dentro de uma moldura, e a unica
+  // diferenca visivel era o tamanho da fonte — dai "o estilo dos cards
+  // pouco ou nada muda".
+  const larguraFoto = largura - (sobreposto ? 0 : 20);
+  // Minimal em retrato 3:4: e a proporcao de catalogo de moda, e cabe
+  // mais produto na mesma altura de tela.
+  const alturaFoto = compacto ? Math.round(larguraFoto * 4 / 3) : larguraFoto;
+
   return (
     <Pressable
       onPress={onPress}
@@ -60,10 +69,10 @@ export function ProductCard({
           width: largura,
           backgroundColor: T.card,
           borderRadius: 14,
-          borderWidth: 1,
+          borderWidth: compacto ? 0 : 1,
           borderColor: hovered ? wash(cor, 0.3) : T.border,
-          padding: sobreposto ? 0 : 10,
-          gap: sobreposto ? 0 : 10,
+          padding: sobreposto ? 0 : compacto ? 0 : 10,
+          gap: sobreposto ? 0 : compacto ? 7 : 10,
           overflow: sobreposto ? "hidden" : "visible",
           // Movimento do design system: sobe e cresce de leve, numa curva
           // só. Nada de spring.
@@ -72,18 +81,24 @@ export function ProductCard({
         Platform.OS === "web"
           ? ({
               transition: `transform ${AURA.motion.base}ms ${AURA.motion.ease}, border-color ${AURA.motion.base}ms ${AURA.motion.ease}, box-shadow ${AURA.motion.base}ms ${AURA.motion.ease}`,
-              boxShadow: hovered
-                ? `0 10px 24px -12px ${wash(cor, 0.45)}`
-                : `0 2px 8px -6px ${wash(cor, 0.35)}`,
+              boxShadow: compacto
+                ? "none"
+                : hovered
+                  ? `0 10px 24px -12px ${wash(cor, 0.45)}`
+                  : `0 2px 8px -6px ${wash(cor, 0.35)}`,
               cursor: "pointer",
             } as any)
-          : ({ elevation: hovered ? 4 : 2 } as any),
+          : ({ elevation: compacto ? 0 : hovered ? 4 : 2 } as any),
       ]}
     >
       <CarrosselFoto
         fotos={fotos}
         nome={nome}
-        tamanho={largura - (sobreposto ? 0 : 20)}
+        tamanho={larguraFoto}
+        altura={alturaFoto}
+        // So o "Imagem" sangra: quem escolhe esse estilo troca a peca
+        // inteira por impacto. Nos outros dois vale o guardrail.
+        preencher={sobreposto}
         corDaLoja={cor}
         fonteDisplay={fonteDisplay}
       />
@@ -117,9 +132,10 @@ export function ProductCard({
         <Text
           numberOfLines={2}
           style={{
-            fontFamily: fonteDisplay || Fonts.heading,
-            fontSize: compacto ? 13.5 : 16,
-            lineHeight: compacto ? 17 : 20,
+            fontFamily: compacto ? undefined : (fonteDisplay || Fonts.heading),
+            fontSize: compacto ? 13 : 16,
+            lineHeight: compacto ? 16 : 20,
+            fontWeight: compacto ? "500" : "400",
             color: sobreposto ? "#fff" : T.ink,
           }}
         >

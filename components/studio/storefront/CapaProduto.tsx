@@ -34,11 +34,22 @@ type Props = {
   corDaLoja?: string | null;
   /** Fonte de titulo do par escolhido — as iniciais saem nela. */
   fonteDisplay?: string;
+  /** Altura, quando o cartao nao e quadrado (o minimal e 3:4). */
+  altura?: number;
+  /**
+   * Sangra a foto no quadro inteiro, cortando o que sobra.
+   *
+   * So o estilo "Imagem" pede isso, e pede de proposito: quem escolhe
+   * esse estilo esta trocando a peca inteira por impacto visual. Nos
+   * outros dois vale o guardrail — `contain`, peca inteira.
+   */
+  preencher?: boolean;
 };
 
-export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Props) {
+export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay, altura, preencher }: Props) {
   const cor = corDaLoja || AURA.violet;
-  const raio = Math.round(tamanho * 0.14);
+  const alt = altura || tamanho;
+  const raio = Math.round(Math.min(tamanho, alt) * 0.14);
 
   // ── Com foto ────────────────────────────────────────────
   if (uri) {
@@ -46,18 +57,18 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Pro
       <View
         style={{
           width: tamanho,
-          height: tamanho,
-          borderRadius: raio,
+          height: alt,
+          borderRadius: preencher ? 0 : raio,
           // Ladrilho neutro: foto recortada em fundo branco, foto de
           // celular com fundo de mesa e print de marketplace passam a
           // dividir a mesma moldura.
           backgroundColor: T.bg,
-          borderWidth: 1,
+          borderWidth: preencher ? 0 : 1,
           borderColor: wash(cor, 0.1),
           overflow: "hidden",
           alignItems: "center",
           justifyContent: "center",
-          padding: Math.round(tamanho * 0.06),
+          padding: preencher ? 0 : Math.round(tamanho * 0.06),
         }}
       >
         <Image
@@ -65,7 +76,7 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Pro
           style={{ width: "100%", height: "100%" }}
           // `contain`, nunca `cover`: melhor sobrar moldura do que cortar
           // a peça que o cliente está tentando comprar.
-          resizeMode="contain"
+          resizeMode={preencher ? "cover" : "contain"}
           accessibilityLabel={nome}
         />
       </View>
@@ -81,8 +92,8 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Pro
       accessibilityLabel={nome}
       style={{
         width: tamanho,
-        height: tamanho,
-        borderRadius: raio,
+        height: alt,
+        borderRadius: preencher ? 0 : raio,
         backgroundColor: wash(cor, intensidade),
         borderWidth: 1,
         borderColor: wash(cor, 0.18),
@@ -96,8 +107,8 @@ export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay }: Pro
           fontFamily: fonteDisplay || Fonts.heading,
           // A serifada da marca no lugar de um ícone genérico: é o que faz
           // a capa parecer decisão de design, não ausência de conteúdo.
-          fontSize: Math.round(tamanho * 0.42),
-          lineHeight: Math.round(tamanho * 0.5),
+          fontSize: Math.round(Math.min(tamanho, alt) * 0.42),
+          lineHeight: Math.round(Math.min(tamanho, alt) * 0.5),
           color: corLegivelSobre(cor, "#FFFFFF"),
           letterSpacing: 0.5,
         }}

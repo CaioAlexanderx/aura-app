@@ -54,34 +54,39 @@ type Props = {
   tamanho: number;
   corDaLoja?: string | null;
   fonteDisplay?: string;
+  /** Altura, quando o cartao nao e quadrado. */
+  altura?: number;
+  /** Sangra a foto no quadro — so o estilo "Imagem". */
+  preencher?: boolean;
 };
 
-export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay }: Props) {
+export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay, altura, preencher }: Props) {
   const [i, setI] = useState(0);
   const [hover, setHover] = useState(false);
   const cor = corDaLoja || AURA.violet;
+  const alt = altura || tamanho;
   const total = fotos.length;
 
   // Sem foto: a capa composta da fase 02 assume.
   if (total === 0) {
-    return <CapaProduto nome={nome} tamanho={tamanho} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
+    return <CapaProduto nome={nome} tamanho={tamanho} altura={alt} preencher={preencher} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
   }
 
   // Uma foto: sem controle nenhum.
   if (total === 1) {
-    return <CapaProduto uri={fotos[0]} nome={nome} tamanho={tamanho} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
+    return <CapaProduto uri={fotos[0]} nome={nome} tamanho={tamanho} altura={alt} preencher={preencher} corDaLoja={cor} fonteDisplay={fonteDisplay} />;
   }
 
   const atual = Math.min(i, total - 1);
-  const raio = Math.round(tamanho * 0.06);
+  const raio = preencher ? 0 : Math.round(Math.min(tamanho, alt) * 0.06);
   const seta = (dir: 1 | -1) => () => setI(proximoIndice(atual, total, dir));
 
   return (
     <View
       style={{
-        width: tamanho, height: tamanho, borderRadius: raio,
+        width: tamanho, height: alt, borderRadius: raio,
         backgroundColor: T.bg,
-        borderWidth: 1, borderColor: wash(cor, 0.1),
+        borderWidth: preencher ? 0 : 1, borderColor: wash(cor, 0.1),
         overflow: "hidden",
       }}
       {...(Platform.OS === "web"
@@ -90,10 +95,10 @@ export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay }:
     >
       <Image
         source={{ uri: fotos[atual] }}
-        style={{ width: "100%", height: "100%", padding: Math.round(tamanho * 0.05) }}
+        style={{ width: "100%", height: "100%", padding: preencher ? 0 : Math.round(tamanho * 0.05) }}
         // `contain` pelo mesmo motivo da capa: melhor sobrar moldura do
         // que cortar a peça que o cliente quer ver.
-        resizeMode="contain"
+        resizeMode={preencher ? "cover" : "contain"}
         accessibilityLabel={`${nome} — foto ${atual + 1} de ${total}`}
       />
 

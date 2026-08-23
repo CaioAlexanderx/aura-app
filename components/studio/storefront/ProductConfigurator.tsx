@@ -23,6 +23,10 @@ import { SizeGuideModal } from "./SizeGuideModal";
 import { sideOf } from "@/components/studio/customizationConfig";
 
 import { tipografiaDaLoja } from "@/constants/fonts";
+import { textoDeParcelamento } from "./parcelamento";
+import { FreteNoProduto } from "./FreteNoProduto";
+import { ZoomFoto, DicaDeZoom } from "./ZoomFoto";
+import { fotosDoProduto } from "./CarrosselFoto";
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
   backgroundColor: "#f3f4f6",
@@ -167,6 +171,12 @@ export function ProductConfigurator({
   // A tipografia escolhida pela lojista parava na prateleira: o titulo do
   // produto saia na fonte do sistema. Mesma fonte de verdade do ProductList.
   const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const fotosDaPeca = fotosDoProduto((activeProduct as any)?.gallery_urls, (activeProduct as any)?.image_url);
+  const textoParcelas = textoDeParcelamento(
+    configuringUnitPrice,
+    (sf.store as any)?.payment?.card_max_installments,
+  );
 
   const { width: larguraTela } = useWindowDimensions();
   const telaLarga = larguraTela >= 900;
@@ -266,6 +276,12 @@ export function ProductConfigurator({
           <Text style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
             R$ {configuringUnitPrice.toFixed(2)}
           </Text>
+          {/* "3x de R$ 53,30" e uma frase diferente de "R$ 159,90" pra
+              quem esta decidindo. So aparece quando a lojista declarou o
+              teto — a loja nao inventa numero de parcela. */}
+          {textoParcelas ? (
+            <Text style={{ fontSize: 10.5, color: T.ink3, marginTop: 1 }}>{textoParcelas}</Text>
+          ) : null}
           {hasDelta && (
             <Text style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
               base R$ {Number(activeProduct.price).toFixed(2)}
@@ -280,17 +296,33 @@ export function ProductConfigurator({
       >
         <View style={linhaConteudo}>
         <View style={colunaPreview}>
-          <LivePreview
-            config={cfg ?? null}
-            values={editingValues}
-            size={telaLarga ? 360 : defaultConfiguratorSize()}
-            productName={activeProduct.name}
-            showLabel={false}
-            slug={slug}
-            productId={activeProduct.id}
-            fotoProduto={(activeProduct as any).image_url}
-            allowSideToggle
-          />
+          <View>
+            <LivePreview
+              config={cfg ?? null}
+              values={editingValues}
+              size={telaLarga ? 360 : defaultConfiguratorSize()}
+              productName={activeProduct.name}
+              showLabel={false}
+              slug={slug}
+              productId={activeProduct.id}
+              fotoProduto={(activeProduct as any).image_url}
+              allowSideToggle
+            />
+            {/* Em peca personalizada o detalhe E o produto: textura do
+                tecido, acabamento da costura. So oferece zoom quando ha
+                foto — ampliar a area de impressao nao serve a ninguem. */}
+            {fotosDaPeca.length > 0 ? <DicaDeZoom onPress={() => setZoom(0)} /> : null}
+          </View>
+
+          {/* O cliente so via o frete depois de configurar a peca e
+              preencher endereco — e desistia no numero que aparecia no
+              fim. A rota de cotacao e a MESMA do checkout, chamada aqui
+              mais cedo. */}
+          {sf.store?.delivery?.delivery_enabled ? (
+            <View style={{ marginTop: 14 }}>
+              <FreteNoProduto slug={slug} corDaLoja={(sf.store as any)?.site?.primary_color} />
+            </View>
+          ) : null}
         </View>
 
         <View style={colunaCampos}>
@@ -584,6 +616,8 @@ export function ProductConfigurator({
         </View>
         </View>
       </ScrollView>
+
+      <ZoomFoto fotos={fotosDaPeca} nome={activeProduct.name} indice={zoom} onFechar={() => setZoom(null)} />
 
       {/* Botao CTA */}
       <View

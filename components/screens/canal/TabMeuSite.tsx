@@ -11,6 +11,7 @@ import { MpGatewayCard } from "./MpGatewayCard";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
+import { SPECS } from "./specsDeImagem";
 type Props = {
   config: any;
   saveConfig: (data: any) => Promise<void>;
@@ -58,6 +59,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [pixHolderCity, setPixHolderCity] = useState(config.pix_holder_city || "");
   const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
   const [cardEnabled, setCardEnabled] = useState(config.card_enabled !== false);
+  const [parcelas, setParcelas] = useState<number | null>(config.card_max_installments ?? null);
 
   useEffect(() => {
     if (!config.exists) return;
@@ -72,6 +74,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setPixHolderCity(config.pix_holder_city || "");
     setPayOnDelivery(config.pay_on_delivery_enabled === true);
     setCardEnabled(config.card_enabled !== false);
+    setParcelas(config.card_max_installments ?? null);
   }, [config.exists]);
 
   function pickImage(type: "logo" | "banner") {
@@ -122,6 +125,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       pix_holder_city: pixHolderCity.trim() || null,
       pay_on_delivery_enabled: payOnDelivery,
       card_enabled: cardEnabled,
+      card_max_installments: parcelas,
     });
   }
 
@@ -306,7 +310,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             )}
           </View>
           <View style={{ flex: 1, gap: 8 }}>
-            <Text style={s.imgHint}>Quadrado, min. 200x200px{"\n"}PNG ou JPG, max. 5MB</Text>
+            {/* PNG TRANSPARENTE, e a spec diz por que: logo com fundo
+                branco vira um quadrado visivel sobre a cor da loja. */}
+            <Text style={s.imgHint}>{SPECS.logo.resumo}</Text>
             {Platform.OS === "web" && (
               <Pressable
                 onPress={() => pickImage("logo")}
@@ -335,6 +341,46 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           </View>
           <Switch value={cardEnabled} onValueChange={setCardEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
+
+        {/* Migration 301 — parcelamento MOSTRADO na pagina do produto.
+            O numero e declarado por ela: a tabela de gateway guarda
+            credencial e nada mais, e o Mercado Pago so decide parcelas no
+            checkout. Melhor a lojista dizer a politica dela do que a loja
+            inventar um numero. */}
+        {cardEnabled ? (
+          <View style={{ paddingTop: 10, gap: 8 }}>
+            <Text style={cs.fieldLabel}>Parcelamento mostrado na loja</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {[null, 2, 3, 4, 6, 10, 12].map((n) => {
+                const sel = (parcelas ?? null) === n;
+                return (
+                  <Pressable
+                    key={String(n)}
+                    onPress={() => setParcelas(n)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sel }}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: sel ? accent.primary : Colors.border,
+                      backgroundColor: sel ? accent.primarySoft : "transparent",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12.5, fontWeight: sel ? "800" : "600", color: sel ? accent.primary : Colors.ink2 }}>
+                      {n === null ? "Não mostrar" : `até ${n}x`}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={cs.hint}>
+              {parcelas
+                ? `A pagina do produto passa a mostrar "ou ${parcelas}x de ...". Parcela minima de R$ 5 — produto barato mostra menos vezes.`
+                : "A loja mostra so o preco a vista."}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={cs.divider} />
 
         {/* Toggle: pagamento na entrega */}
