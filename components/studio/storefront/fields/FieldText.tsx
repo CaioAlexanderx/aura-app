@@ -2,10 +2,11 @@
 // components/studio/storefront/fields/FieldText.tsx
 // Campo type="text" — entrada de texto com contador de chars.
 // ============================================================
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, TextInput, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
 import { T, sectionLabel } from "../types";
 
+import { Texto } from "../TipografiaVitrine";
 export function FieldText({
   field, value, onChange, corValue, onCorChange,
 }: {
@@ -32,9 +33,9 @@ export function FieldText({
   const corAtual = corValue || paleta[0];
   return (
     <View>
-      <Text style={sectionLabel}>
-        {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
-      </Text>
+      <Texto style={sectionLabel}>
+        {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
+      </Texto>
       <TextInput
         value={String(value || "")}
         onChangeText={(t) => onChange(t.slice(0, maxChars))}
@@ -47,15 +48,15 @@ export function FieldText({
           borderWidth: 1, borderColor: T.border,
         }}
       />
-      <Text style={{ fontSize: 10, color: T.ink3, marginTop: 4 }}>
+      <Texto style={{ fontSize: 10, color: T.ink3, marginTop: 4 }}>
         {String(value || "").length}/{maxChars}
-      </Text>
+      </Texto>
 
       {podeEscolher ? (
         <View style={{ marginTop: 10, gap: 6 }}>
-          <Text style={{ fontSize: 10.5, color: T.ink3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" }}>
+          <Texto style={{ fontSize: 10.5, color: T.ink3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" }}>
             Cor da arte
-          </Text>
+          </Texto>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {paleta.map((c: string) => {
               const sel = c.toLowerCase() === String(corAtual || "").toLowerCase();

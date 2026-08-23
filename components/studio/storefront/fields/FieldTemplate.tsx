@@ -2,10 +2,11 @@
 // components/studio/storefront/fields/FieldTemplate.tsx
 // Campo type="template" — galeria horizontal de templates.
 // ============================================================
-import { View, Text, Pressable, ScrollView, Platform } from "react-native";
+import { View, Pressable, ScrollView, Platform } from "react-native";
 import type { CustomizationField, StudioStoreProduct } from "../types";
 import { T, sectionLabel } from "../types";
 
+import { Texto } from "../TipografiaVitrine";
 export function FieldTemplate({
   field, value, templates, onChange,
 }: {
@@ -16,13 +17,13 @@ export function FieldTemplate({
 }) {
   return (
     <View>
-      <Text style={sectionLabel}>
-        {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
-      </Text>
+      <Texto style={sectionLabel}>
+        {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
+      </Texto>
       {templates.length === 0 ? (
-        <Text style={{ fontSize: 12, color: T.ink3, fontStyle: "italic" }}>
+        <Texto style={{ fontSize: 12, color: T.ink3, fontStyle: "italic" }}>
           Loja não cadastrou templates ainda.
-        </Text>
+        </Texto>
       ) : (
         <ScrollView
           horizontal
@@ -49,7 +50,7 @@ export function FieldTemplate({
                   style={{ width: "100%", height: "100%", objectFit: "cover" } as any}
                 />
               ) : (
-                <Text style={{ fontSize: 10, color: T.ink3, padding: 6 }}>{t.name}</Text>
+                <Texto style={{ fontSize: 10, color: T.ink3, padding: 6 }}>{t.name}</Texto>
               )}
             </Pressable>
           ))}

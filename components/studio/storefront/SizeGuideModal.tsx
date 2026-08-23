@@ -6,9 +6,10 @@
 // Respects reduceMotion — sem animações de entrada.
 // ============================================================
 import { useEffect } from "react";
-import { View, Text, Pressable, Modal, ScrollView, Platform } from "react-native";
+import { View, Pressable, Modal, ScrollView, Platform } from "react-native";
 import { T } from "./types";
 
+import { Texto } from "./TipografiaVitrine";
 export type SizeGuide = {
   file_url: string;
   content_type: string; // e.g. "image/png", "image/jpeg", "image/webp", "application/pdf"
@@ -82,8 +83,8 @@ export function SizeGuideModal({
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ fontSize: 18 }}>📐</Text>
-              <Text
+              <Texto style={{ fontSize: 18 }}>📐</Texto>
+              <Texto
                 style={{
                   fontSize: 16,
                   fontWeight: "800",
@@ -92,7 +93,7 @@ export function SizeGuideModal({
                 }}
               >
                 Guia de medidas
-              </Text>
+              </Texto>
             </View>
             <Pressable
               onPress={onClose}
@@ -106,7 +107,7 @@ export function SizeGuideModal({
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 16, color: T.ink3, fontWeight: "700" }}>✕</Text>
+              <Texto style={{ fontSize: 16, color: T.ink3, fontWeight: "700" }}>✕</Texto>
             </Pressable>
           </View>
 
@@ -143,9 +144,9 @@ export function SizeGuideModal({
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ fontSize: 13, color: T.ink3, textAlign: "center" }}>
+                    <Texto style={{ fontSize: 13, color: T.ink3, textAlign: "center" }}>
                       Abra no browser para visualizar a imagem.
-                    </Text>
+                    </Texto>
                     <Pressable
                       onPress={() => {
                         if (typeof window !== "undefined") {
@@ -160,9 +161,9 @@ export function SizeGuideModal({
                         borderRadius: 8,
                       }}
                     >
-                      <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
+                      <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
                         Abrir imagem
-                      </Text>
+                      </Texto>
                     </Pressable>
                   </View>
                 )}
@@ -196,8 +197,8 @@ export function SizeGuideModal({
                       gap: 8,
                     }}
                   >
-                    <Text style={{ fontSize: 28 }}>📄</Text>
-                    <Text
+                    <Texto style={{ fontSize: 28 }}>📄</Texto>
+                    <Texto
                       style={{
                         fontSize: 13,
                         color: T.ink2,
@@ -206,8 +207,8 @@ export function SizeGuideModal({
                       }}
                     >
                       Guia de medidas em PDF
-                    </Text>
-                    <Text
+                    </Texto>
+                    <Texto
                       style={{
                         fontSize: 12,
                         color: T.ink3,
@@ -215,7 +216,7 @@ export function SizeGuideModal({
                       }}
                     >
                       Clique para abrir o PDF no seu navegador.
-                    </Text>
+                    </Texto>
                   </View>
                 )}
 
@@ -240,8 +241,8 @@ export function SizeGuideModal({
                     alignSelf: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 14 }}>📥</Text>
-                  <Text
+                  <Texto style={{ fontSize: 14 }}>📥</Texto>
+                  <Texto
                     style={{
                       fontSize: 13,
                       color: T.primary,
@@ -249,7 +250,7 @@ export function SizeGuideModal({
                     }}
                   >
                     Abrir guia (PDF)
-                  </Text>
+                  </Texto>
                 </Pressable>
               </View>
             )}
@@ -267,8 +268,8 @@ export function SizeGuideModal({
                   gap: 8,
                 }}
               >
-                <Text style={{ fontSize: 28 }}>📎</Text>
-                <Text
+                <Texto style={{ fontSize: 28 }}>📎</Texto>
+                <Texto
                   style={{
                     fontSize: 13,
                     color: T.ink2,
@@ -277,7 +278,7 @@ export function SizeGuideModal({
                   }}
                 >
                   Guia de medidas
-                </Text>
+                </Texto>
                 <Pressable
                   onPress={() => {
                     if (typeof window !== "undefined") {
@@ -292,9 +293,9 @@ export function SizeGuideModal({
                     borderRadius: 8,
                   }}
                 >
-                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
+                  <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
                     Abrir arquivo
-                  </Text>
+                  </Texto>
                 </Pressable>
               </View>
             )}
@@ -320,7 +321,7 @@ export function SizeGuideModal({
                 borderColor: T.border,
               }}
             >
-              <Text style={{ color: T.ink2, fontSize: 14, fontWeight: "700" }}>Fechar</Text>
+              <Texto style={{ color: T.ink2, fontSize: 14, fontWeight: "700" }}>Fechar</Texto>
             </Pressable>
           </View>
         </Pressable>

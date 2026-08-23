@@ -2,10 +2,11 @@
 // components/studio/storefront/fields/FieldOption.tsx
 // Campo type="option" — chips de escolha, suporte a price_delta.
 // ============================================================
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
 import { T, sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "../types";
 
+import { Texto } from "../TipografiaVitrine";
 export function FieldOption({
   field, value, onChange,
 }: {
@@ -16,9 +17,9 @@ export function FieldOption({
   const choices = field.config.choices || [];
   return (
     <View>
-      <Text style={sectionLabel}>
-        {field.label} {field.required && <Text style={{ color: T.red }}>*</Text>}
-      </Text>
+      <Texto style={sectionLabel}>
+        {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
+      </Texto>
       <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
         {choices.map((c: any) => {
           const selected = value === c.value;
@@ -29,9 +30,9 @@ export function FieldOption({
               onPress={() => onChange(c.value)}
               style={[chip, selected && chipActive, { alignItems: "center" }]}
             >
-              <Text style={[chipTxt, selected && chipTxtActive]}>{c.label}</Text>
+              <Texto style={[chipTxt, selected && chipTxtActive]}>{c.label}</Texto>
               {delta !== 0 && (
-                <Text
+                <Texto
                   style={{
                     fontSize: 9.5, fontWeight: "700",
                     color: selected ? "rgba(255,255,255,0.8)" : T.accent,
@@ -39,7 +40,7 @@ export function FieldOption({
                   }}
                 >
                   {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
-                </Text>
+                </Texto>
               )}
             </Pressable>
           );

@@ -10,11 +10,12 @@
 // carrossel numa foto só é ruído.
 // ============================================================
 import { useState } from "react";
-import { View, Text, Pressable, Image, Platform } from "react-native";
+import { View, Pressable, Image, Platform } from "react-native";
 import { T } from "./types";
 import { wash, AURA } from "./theme";
 import { CapaProduto } from "./CapaProduto";
 
+import { Texto } from "./TipografiaVitrine";
 /** Próximo índice com volta ao início — o cliente nunca trava na ponta. */
 export function proximoIndice(atual: number, total: number, passo: 1 | -1): number {
   if (total <= 1) return 0;
@@ -152,9 +153,9 @@ function Chevron({ dir, cor }: { dir: "esquerda" | "direita"; cor: string }) {
         alignItems: "center", justifyContent: "center",
       }}
     >
-      <Text style={{ fontSize: 12, color: T.ink2, lineHeight: 14 }}>
+      <Texto style={{ fontSize: 12, color: T.ink2, lineHeight: 14 }}>
         {dir === "esquerda" ? "‹" : "›"}
-      </Text>
+      </Texto>
     </View>
   );
 }

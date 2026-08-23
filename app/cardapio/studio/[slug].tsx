@@ -26,6 +26,7 @@ import { Checkout } from "@/components/studio/storefront/Checkout";
 import { SentConfirmation } from "@/components/studio/storefront/SentConfirmation";
 
 import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
+import { TipografiaDaVitrine } from "@/components/studio/storefront/TipografiaVitrine";
 function Center({ children }: { children: any }) {
   return (
     <View
@@ -88,17 +89,22 @@ export default function StudioStorefrontPage() {
   }
   if (!sf.store) return null;
 
-  if (sf.stage === "sent") {
-    return <SentConfirmation sf={sf} />;
-  }
-  if (sf.stage === "configure" && sf.activeProduct) {
-    // slug e passado explicitamente pro ProductConfigurator
-    // para que o FieldImage monte a URL do endpoint de upload
-    return <ProductConfigurator sf={sf} slug={slug} />;
-  }
-  if (sf.stage === "checkout") {
-    return <Checkout sf={sf} />;
-  }
-  // stage === "list" (default)
-  return <ProductList sf={sf} />;
+  // A fonte da loja vale pra PAGINA TODA, nao so pros titulos. Medido na
+  // loja de teste antes disto: de 20 textos da tela de produto, 19 saiam
+  // em -apple-system. Ver TipografiaVitrine.tsx.
+  return (
+    <TipografiaDaVitrine chave={parEscolhido}>
+      {sf.stage === "sent" ? (
+        <SentConfirmation sf={sf} />
+      ) : sf.stage === "configure" && sf.activeProduct ? (
+        // slug e passado explicitamente pro ProductConfigurator
+        // para que o FieldImage monte a URL do endpoint de upload
+        <ProductConfigurator sf={sf} slug={slug} />
+      ) : sf.stage === "checkout" ? (
+        <Checkout sf={sf} />
+      ) : (
+        <ProductList sf={sf} />
+      )}
+    </TipografiaDaVitrine>
+  );
 }

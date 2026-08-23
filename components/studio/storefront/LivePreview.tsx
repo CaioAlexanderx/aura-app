@@ -27,7 +27,7 @@
 // PersonalizationPreviewBase com STOREFRONT_PALETTE no fallback.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Platform, Pressable } from "react-native";
+import { View, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
 import { valuesForSide } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "./types";
@@ -52,6 +52,7 @@ function corDaLouca(
 import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
+import { Texto } from "./TipografiaVitrine";
 // Paleta do storefront (light) derivada do T da loja — sem tocar no
 // tema interno do painel. Mantém o mockup coerente com a vitrine pública.
 const STOREFRONT_PALETTE: PreviewPalette = {
@@ -115,13 +116,13 @@ function PdfNote({ size }: { size: number }) {
       accessibilityRole="text"
       accessibilityLabel="PDF enviado. Pré-visualização indisponível."
     >
-      <Text style={{ fontSize: 12, color: T.ink3 }}>📄</Text>
-      <Text
+      <Texto style={{ fontSize: 12, color: T.ink3 }}>📄</Texto>
+      <Texto
         style={{ fontSize: 11, color: T.ink3, fontWeight: "600", flexShrink: 1 }}
         numberOfLines={1}
       >
         PDF enviado — pré-visualização indisponível
-      </Text>
+      </Texto>
     </View>
   );
 }
@@ -234,9 +235,9 @@ export function LivePreview({
               borderWidth: 1.5, borderColor: sel ? T.primary : T.border,
             }}
           >
-            <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
+            <Texto style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
               {label}
-            </Text>
+            </Texto>
           </Pressable>
         );
       })}

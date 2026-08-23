@@ -10,10 +10,11 @@
 // continua aparecendo (`contain`) — ampliar não é motivo para cortar.
 // ============================================================
 import { useEffect, useState } from "react";
-import { View, Text, Image, Pressable, Modal, Platform, useWindowDimensions } from "react-native";
+import { View, Image, Pressable, Modal, Platform, useWindowDimensions } from "react-native";
 import { T } from "./types";
 import { proximoIndice } from "./CarrosselFoto";
 
+import { Texto } from "./TipografiaVitrine";
 type Props = {
   fotos: string[];
   nome: string;
@@ -71,9 +72,9 @@ export function ZoomFoto({ fotos, nome, indice, onFechar }: Props) {
         {fotos.length > 1 ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 18, marginTop: 18 }}>
             <Seta rotulo="Foto anterior" glifo="‹" onPress={() => setI(proximoIndice(atual, fotos.length, -1))} />
-            <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, fontVariant: ["tabular-nums"] }}>
+            <Texto style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, fontVariant: ["tabular-nums"] }}>
               {atual + 1} / {fotos.length}
-            </Text>
+            </Texto>
             <Seta rotulo="Próxima foto" glifo="›" onPress={() => setI(proximoIndice(atual, fotos.length, 1))} />
           </View>
         ) : null}
@@ -94,7 +95,7 @@ function Seta({ glifo, rotulo, onPress }: { glifo: string; rotulo: string; onPre
         alignItems: "center", justifyContent: "center",
       }}
     >
-      <Text style={{ color: "#fff", fontSize: 20, lineHeight: 24 }}>{glifo}</Text>
+      <Texto style={{ color: "#fff", fontSize: 20, lineHeight: 24 }}>{glifo}</Texto>
     </Pressable>
   );
 }
@@ -136,7 +137,7 @@ export function DicaDeZoom({ onPress, corDaLoja }: { onPress: () => void; corDaL
       {/* Lupa desenhada: o design system não usa emoji, e o 🔍 sai
           diferente em cada sistema. */}
       <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1.6, borderColor: cor }} />
-      <Text style={{ fontSize: 12.5, fontWeight: "700", color: cor }}>Ver a peça de perto</Text>
+      <Texto style={{ fontSize: 12.5, fontWeight: "700", color: cor }}>Ver a peça de perto</Texto>
     </Pressable>
   );
 }

@@ -10,13 +10,14 @@
 // foto (com carrossel quando há mais de uma), o que é, quanto custa e se
 // há modelos para escolher.
 // ============================================================
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Pressable, Platform } from "react-native";
 import { Fonts } from "@/constants/fonts";
 import { T } from "./types";
 import { wash, AURA } from "./theme";
 import { CarrosselFoto } from "./CarrosselFoto";
 import { resumo } from "./capaModel";
 
+import { Texto } from "./TipografiaVitrine";
 type Props = {
   nome: string;
   preco: number;
@@ -119,17 +120,17 @@ export function ProductCard({
         ]}
       >
         {selo ? (
-          <Text
+          <Texto
             style={{
               fontSize: 10, fontWeight: "800", letterSpacing: 0.8,
               textTransform: "uppercase", color: sobreposto ? "rgba(255,255,255,0.85)" : cor,
             }}
           >
             {selo}
-          </Text>
+          </Texto>
         ) : null}
 
-        <Text
+        <Texto
           numberOfLines={2}
           style={{
             fontFamily: compacto ? undefined : (fonteDisplay || Fonts.heading),
@@ -140,15 +141,15 @@ export function ProductCard({
           }}
         >
           {nome}
-        </Text>
+        </Texto>
 
         {desc ? (
-          <Text numberOfLines={1} style={{ fontSize: 11.5, color: T.ink3 }}>
+          <Texto numberOfLines={1} style={{ fontSize: 11.5, color: T.ink3 }}>
             {desc}
-          </Text>
+          </Texto>
         ) : null}
 
-        <Text
+        <Texto
           style={{
             fontSize: compacto ? 13 : 15, fontWeight: "800",
             color: sobreposto ? "#fff" : cor, marginTop: 2,
@@ -156,7 +157,7 @@ export function ProductCard({
           }}
         >
           R$ {preco.toFixed(2)}
-        </Text>
+        </Texto>
       </View>
     </Pressable>
   );

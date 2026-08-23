@@ -499,11 +499,18 @@ export function TabDesign({
             colunas={3}
           />
           <Text style={cs.hint}>
-            Sua loja como ela fica. Muda junto com a cor, a fonte e o estilo dos cards.
+            É assim que sua loja aparece pro cliente. Mexa nas opções abaixo e veja mudar aqui.
           </Text>
         </View>
 
-        <Text style={cs.fieldLabel}>Cor primária</Text>
+        {/* "Cor primaria" e "Cor de destaque" nao dizem nada pra quem nao
+            e designer. O rotulo agora diz O QUE muda — e diz a verdade:
+            a primaria governa 21 pontos da loja, a de destaque governa 4
+            (o degrade do topo e a bolinha do carrinho). */}
+        <Text style={cs.fieldLabel}>Cor dos botões e preços</Text>
+        <Text style={[cs.hint, { marginTop: -4, marginBottom: 8 }]}>
+          É a cor que mais aparece: botões, preços e a categoria selecionada.
+        </Text>
         <View style={cs.colorRow}>
           {COLOR_PRESETS.map((c) => (
             <Pressable key={c} onPress={() => { setPrimary(c); scheduleSave({ primary_color: c }); }}
@@ -519,7 +526,10 @@ export function TabDesign({
           estiloInput={cs.input}
         />
 
-        <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor de destaque</Text>
+        <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor do degradê do topo</Text>
+        <Text style={[cs.hint, { marginTop: -4, marginBottom: 8 }]}>
+          Combina com a primeira no topo da loja. Também tinge a bolinha do carrinho.
+        </Text>
         <View style={cs.colorRow}>
           {ACCENT_PRESETS.map((c) => (
             <Pressable key={c} onPress={() => { setAccentColor(c); scheduleSave({ accent_color: c }); }}

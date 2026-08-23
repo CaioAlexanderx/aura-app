@@ -30,15 +30,15 @@ describe("checklist — ordem e estado", () => {
 describe("termômetro das fotos", () => {
   test("mede quantos têm foto", () => {
     const item = montarChecklist({ produtosTotal: 30, produtosComFoto: 18 })[0];
-    expect(item.medida).toBe("18 de 30 com foto");
+    expect(item.medida).toBe("18 de 30");
     expect(item.feito).toBe(false);
-    expect(item.acao).toContain("12 produtos");
+    expect(item.acao).toContain("Envie a foto de 12 produtos");
   });
 
   test("singular quando falta um só", () => {
     const item = montarChecklist({ produtosTotal: 10, produtosComFoto: 9 })[0];
-    expect(item.acao).toContain("1 produto está");
-    expect(item.acao).not.toContain("produtos estão");
+    expect(item.acao).toContain("1 produto.");
+    expect(item.acao).not.toContain("produtos.");
   });
 
   test("vitrine vazia NÃO conta como pronta", () => {
@@ -46,7 +46,8 @@ describe("termômetro das fotos", () => {
     // mandaria a lojista embora achando que terminou.
     const item = montarChecklist({ produtosTotal: 0, produtosComFoto: 0 })[0];
     expect(item.feito).toBe(false);
-    expect(item.medida).toContain("nenhum produto");
+    expect(item.acao).toContain("Cadastre seus produtos");
+    expect(item.medida).toBeNull();
   });
 
   test("todos com foto fecha o item", () => {
@@ -90,8 +91,21 @@ describe("specs de imagem", () => {
     }
   });
 
-  test("o resumo do banner traz a proporção — é o erro mais comum", () => {
-    expect(SPECS.banner.resumo).toContain("16:6");
+  test("o resumo do banner traz a medida — é o erro mais comum", () => {
+    expect(SPECS.banner.resumo).toContain("1600×600");
+  });
+
+  test("o texto fala COM a lojista, sem termo interno", () => {
+    // "hero", "vitrine", "capa composta", "guardrail" sao palavras nossas.
+    // Se aparecerem na tela, a lojista le documentacao de sistema em vez
+    // de instrucao — foi exatamente a queixa no QA.
+    const INTERNO = /hero|vitrine|capa composta|guardrail|placeholder/i;
+    const tudo = [
+      ...Object.values(SPECS).flatMap((s) => [s.resumo, ...s.detalhes]),
+      ...montarChecklist({ produtosTotal: 30, produtosComFoto: 22 }).flatMap((i) => [i.titulo, i.acao]),
+      ...montarChecklist({}).flatMap((i) => [i.titulo, i.acao]),
+    ];
+    for (const frase of tudo) expect(frase).not.toMatch(INTERNO);
   });
 
   test("o do logo exige transparência", () => {

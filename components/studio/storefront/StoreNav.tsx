@@ -15,11 +15,12 @@
 // marcando o item ativo — a marca dela avançando uma casa.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, useWindowDimensions, Platform, Animated, Easing } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions, Platform, Animated, Easing } from "react-native";
 import { AURA } from "./theme";
 import { T } from "./types";
 import type { ItemMenu, Menu } from "./storeNavModel";
 
+import { Texto } from "./TipografiaVitrine";
 type Props = {
   menu: Menu;
   /** Categoria ativa, ou null para "Tudo". */
@@ -73,7 +74,7 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
           opacity: pressed ? 0.75 : 1,
         })}
       >
-        <Text
+        <Texto
           numberOfLines={1}
           style={{
             fontSize: 13,
@@ -82,9 +83,9 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
           }}
         >
           {rotulo}
-        </Text>
+        </Texto>
         {item !== null && (
-          <Text
+          <Texto
             style={{
               fontSize: 11,
               fontVariant: ["tabular-nums"],
@@ -92,10 +93,10 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
             }}
           >
             {item.total}
-          </Text>
+          </Texto>
         )}
         {temFilhas && telaLarga && (
-          <Text style={{ fontSize: 9, color: sel ? "rgba(255,255,255,0.8)" : T.ink4 }}>▾</Text>
+          <Texto style={{ fontSize: 9, color: sel ? "rgba(255,255,255,0.8)" : T.ink4 }}>▾</Texto>
         )}
       </Pressable>
     );
@@ -131,9 +132,9 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
       >
         <View style={{ width: "100%", maxWidth: 980, alignSelf: "center", gap: 12 }}>
           {titulo ? (
-            <Text style={{ fontSize: 10.5, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: T.ink3 }}>
+            <Texto style={{ fontSize: 10.5, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: T.ink3 }}>
               {titulo}
-            </Text>
+            </Texto>
           ) : null}
           <View style={{ flexDirection: "row", gap: 28, flexWrap: "wrap" }}>
             {colunas.map((coluna, ci) => (
@@ -150,8 +151,8 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
                       backgroundColor: pressed ? T.bg : "transparent",
                     })}
                   >
-                    <Text style={{ fontSize: 13.5, color: T.ink, fontWeight: "600" }}>{f.name}</Text>
-                    <Text style={{ fontSize: 11.5, color: T.ink4, fontVariant: ["tabular-nums"] }}>{f.total}</Text>
+                    <Texto style={{ fontSize: 13.5, color: T.ink, fontWeight: "600" }}>{f.name}</Texto>
+                    <Texto style={{ fontSize: 11.5, color: T.ink4, fontVariant: ["tabular-nums"] }}>{f.total}</Texto>
                   </Pressable>
                 ))}
               </View>
@@ -248,10 +249,10 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
                 opacity: pressed ? 0.75 : 1,
               })}
             >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: T.ink2 }}>
+              <Texto style={{ fontSize: 13, fontWeight: "700", color: T.ink2 }}>
                 Mais {menu.extras.length}
-              </Text>
-              <Text style={{ fontSize: 9, color: T.ink4 }}>▾</Text>
+              </Texto>
+              <Texto style={{ fontSize: 9, color: T.ink4 }}>▾</Texto>
             </Pressable>
           )}
         </ScrollView>

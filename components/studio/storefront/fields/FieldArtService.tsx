@@ -27,9 +27,10 @@
 //   - NÃO toca em FieldImage.tsx, LivePreview.tsx, ProductConfigurator.tsx
 //   - dark tokens via T (paleta Studio), reduceMotion respeitado
 // ============================================================
-import { View, Text, Pressable, TextInput, StyleSheet, Platform } from "react-native";
+import { View, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import type { CustomizationField } from "../types";
 import { T } from "../types";
+import { Texto } from "../TipografiaVitrine";
 import {
   ART_DESIGNER, priceLabel, choiceHint, briefingFor,
 } from "@/components/studio/artService";
@@ -66,11 +67,11 @@ export function FieldArtService({
       {/* Header do bloco */}
       <View style={styles.header}>
         <View style={styles.sparkIco}>
-          <Text style={styles.sparkEmoji}>✦</Text>
+          <Texto style={styles.sparkEmoji}>✦</Texto>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.fieldLabel}>{field.label}</Text>
-          <Text style={styles.fieldSub}>Como você quer resolver a arte?</Text>
+          <Texto style={styles.fieldLabel}>{field.label}</Texto>
+          <Texto style={styles.fieldSub}>Como você quer resolver a arte?</Texto>
         </View>
       </View>
 
@@ -96,23 +97,23 @@ export function FieldArtService({
               {sel && <View style={[styles.radioDot, destaque && { backgroundColor: T.accent }]} />}
             </View>
             <View style={{ flex: 1 }}>
-              <Text
+              <Texto
                 style={[
                   styles.optionTitle,
                   sel && (destaque ? styles.designerTitleActive : styles.optionTitleActive),
                 ]}
               >
                 {c.label}
-              </Text>
-              <Text style={styles.optionSub}>{choiceHint(c.value)}</Text>
+              </Texto>
+              <Texto style={styles.optionSub}>{choiceHint(c.value)}</Texto>
             </View>
             {pago && etiqueta ? (
               <View style={[styles.priceBadge, sel && styles.priceBadgeActive]}>
-                <Text style={[styles.priceBadgeTxt, sel && styles.priceBadgeTxtActive]}>{etiqueta}</Text>
+                <Texto style={[styles.priceBadgeTxt, sel && styles.priceBadgeTxtActive]}>{etiqueta}</Texto>
               </View>
             ) : (
               <View style={styles.freeBadge}>
-                <Text style={styles.freeBadgeTxt}>Incluso</Text>
+                <Texto style={styles.freeBadgeTxt}>Incluso</Texto>
               </View>
             )}
           </Pressable>
@@ -124,8 +125,8 @@ export function FieldArtService({
           cores, que é o padrão do serviço. */}
       {brief && (
         <View style={styles.briefBlock}>
-          <Text style={styles.briefTitle}>{brief.title}</Text>
-          <Text style={styles.briefHint}>{brief.hint}</Text>
+          <Texto style={styles.briefTitle}>{brief.title}</Texto>
+          <Texto style={styles.briefHint}>{brief.hint}</Texto>
           <TextInput
             style={styles.briefInput}
             multiline
@@ -137,7 +138,7 @@ export function FieldArtService({
             maxLength={600}
             accessibilityLabel={brief.title}
           />
-          <Text style={styles.charCount}>{briefValue.length}/600</Text>
+          <Texto style={styles.charCount}>{briefValue.length}/600</Texto>
         </View>
       )}
     </View>

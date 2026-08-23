@@ -18,10 +18,11 @@
 // seguindo exatamente a mesma lógica de useStorefront.uploadImage.
 // ============================================================
 import { useState, useRef, useCallback } from "react";
-import { View, Text, Pressable, Platform, ActivityIndicator } from "react-native";
+import { View, Pressable, Platform, ActivityIndicator } from "react-native";
 import type { CustomizationField } from "../types";
 import { T, sectionLabel } from "../types";
 
+import { Texto } from "../TipografiaVitrine";
 const API_BASE =
   (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -208,10 +209,10 @@ export function FieldImage({
   return (
     <View>
       {/* Label */}
-      <Text style={sectionLabel}>
+      <Texto style={sectionLabel}>
         {field.label}{" "}
-        {field.required && <Text style={{ color: T.red }}>*</Text>}
-      </Text>
+        {field.required && <Texto style={{ color: T.red }}>*</Texto>}
+      </Texto>
 
       {/* ---- Estado: ARQUIVO ENVIADO ---- */}
       {hasValue && (
@@ -245,10 +246,10 @@ export function FieldImage({
                 gap: 6,
               }}
             >
-              <Text style={{ fontSize: 16 }}>🖼️</Text>
-              <Text style={{ fontSize: 12, color: T.green, fontWeight: "700", flex: 1 }}>
+              <Texto style={{ fontSize: 16 }}>🖼️</Texto>
+              <Texto style={{ fontSize: 12, color: T.green, fontWeight: "700", flex: 1 }}>
                 Imagem enviada com sucesso
-              </Text>
+              </Texto>
             </View>
           )}
 
@@ -266,13 +267,13 @@ export function FieldImage({
                 borderColor: T.green,
               }}
             >
-              <Text style={{ fontSize: 18 }}>📄</Text>
+              <Texto style={{ fontSize: 18 }}>📄</Texto>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, color: T.green, fontWeight: "700" }}>
+                <Texto style={{ fontSize: 12, color: T.green, fontWeight: "700" }}>
                   Arquivo enviado
-                </Text>
+                </Texto>
                 {uploadedMeta?.name && (
-                  <Text
+                  <Texto
                     style={{
                       fontSize: 11,
                       color: T.ink3,
@@ -281,7 +282,7 @@ export function FieldImage({
                     numberOfLines={1}
                   >
                     {uploadedMeta.name}
-                  </Text>
+                  </Texto>
                 )}
               </View>
               {/* Link para abrir o PDF */}
@@ -348,7 +349,7 @@ export function FieldImage({
                 opacity: uploading ? 0.5 : 1,
               }}
             >
-              <Text style={{ color: T.red, fontSize: 11, fontWeight: "700" }}>Remover</Text>
+              <Texto style={{ color: T.red, fontSize: 11, fontWeight: "700" }}>Remover</Texto>
             </Pressable>
           </View>
 
@@ -356,7 +357,7 @@ export function FieldImage({
           {uploading && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <ActivityIndicator size="small" color={T.primary} />
-              <Text style={{ fontSize: 11, color: T.ink3 }}>Enviando novo arquivo…</Text>
+              <Texto style={{ fontSize: 11, color: T.ink3 }}>Enviando novo arquivo…</Texto>
             </View>
           )}
         </View>
@@ -388,9 +389,9 @@ export function FieldImage({
               {uploading ? (
                 <ActivityIndicator size="large" color={T.primary} />
               ) : (
-                <Text style={{ fontSize: 28 }}>📁</Text>
+                <Texto style={{ fontSize: 28 }}>📁</Texto>
               )}
-              <Text
+              <Texto
                 style={{
                   fontSize: 13,
                   color: T.ink,
@@ -399,8 +400,8 @@ export function FieldImage({
                 }}
               >
                 {uploading ? "Enviando…" : "Escolher arquivo de arte"}
-              </Text>
-              <Text
+              </Texto>
+              <Texto
                 style={{
                   fontSize: 11,
                   color: T.ink3,
@@ -408,7 +409,7 @@ export function FieldImage({
                 }}
               >
                 {formatLabel} · Máx {maxMb} MB
-              </Text>
+              </Texto>
               {/* @ts-ignore */}
               <input
                 ref={inputRef}
@@ -431,10 +432,10 @@ export function FieldImage({
                 borderColor: T.border,
               }}
             >
-              <Text style={{ fontSize: 12, color: T.ink3, lineHeight: 18 }}>
+              <Texto style={{ fontSize: 12, color: T.ink3, lineHeight: 18 }}>
                 Envie a arte pelo WhatsApp após confirmar o pedido, ou acesse esta
                 página pelo navegador do computador para fazer upload direto.
-              </Text>
+              </Texto>
             </View>
           )}
 
@@ -452,8 +453,8 @@ export function FieldImage({
                 borderColor: "#fecdd3",
               }}
             >
-              <Text style={{ fontSize: 15 }}>⚠️</Text>
-              <Text style={{ fontSize: 12, color: T.red, flex: 1 }}>{uploadError}</Text>
+              <Texto style={{ fontSize: 15 }}>⚠️</Texto>
+              <Texto style={{ fontSize: 12, color: T.red, flex: 1 }}>{uploadError}</Texto>
               {/* Retry: reabre o picker */}
               {Platform.OS === "web" && (
                 // @ts-ignore
