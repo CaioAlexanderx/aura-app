@@ -635,9 +635,24 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         />
       )}
 
-      <FormField label="Descricao (opcional)">
-        <TextInput style={[s.input, { minHeight: 60, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes}
-          placeholder="Detalhes do produto, composicao..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
+      {/* O campo sempre existiu e sempre foi pra `products.description`,
+          que a loja publica ja lia. Mas o rotulo nao dizia isso: na
+          Finesse, 1 produto em 500 tem descricao. Quem preenche um campo
+          chamado so "Descricao (opcional)" no fim de um formulario longo
+          nao sabe que aquilo vira texto de vitrine. */}
+      <FormField label="Descrição — aparece na página do produto">
+        <TextInput
+          style={[s.input, { minHeight: 76, textAlignVertical: "top" }]}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder={"Do que é feito, como veste, como cuidar. Ex.: Viscose com elastano, modelagem soltinha, lavar à mão."}
+          placeholderTextColor={Colors.ink3}
+          multiline
+          numberOfLines={4}
+        />
+        <Text style={s.hint}>
+          É o que o cliente lê antes de decidir. Sem isso, a página mostra só a foto e o preço.
+        </Text>
       </FormField>
 
       <View style={s.footer}>
