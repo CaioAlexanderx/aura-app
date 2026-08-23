@@ -94,3 +94,31 @@ describe("WhatsApp da loja", () => {
     expect(decodeURIComponent(linkWhatsApp("34984124181", null)!)).toContain("Vim pela loja e");
   });
 });
+
+import { contraste, parLegivel } from "@/components/studio/storefront/theme";
+
+describe("âncora de WhatsApp — a tinta tem que ler SOBRE a pílula", () => {
+  // Cores reais das lojas em produção, mais o vermelho que expôs o bug.
+  const CORES = [
+    "#dc2626", // loja de teste no QA — foi aqui que o botão sumiu
+    "#7c3aed", // Aura / FPKT
+    "#1a1612", // Sheid Mania
+    "#0891b2", // ciano
+    "#db2777", // Looks da Jenny
+    "#0bbdea", // Davi Calçados
+    "#7a1f3a", // Finesse
+    "#e8b5a0", // pêssego claro
+  ];
+
+  test.each(CORES)("texto legível sobre %s", (cor) => {
+    // O bug: eu usava corLegivelSobre(cor, "#FFF"), que devolve uma versão
+    // da COR legível sobre BRANCO — e aplicava como tinta sobre a própria
+    // pílula colorida. Em #dc2626 saía vermelho-escuro em vermelho: uma
+    // pílula sólida, sem ícone nem texto.
+    // E `tintaSobre` sozinho nao basta: no meio-tom nenhuma das duas
+    // tintas passa de 4.5. `parLegivel` move o preenchimento ate existir
+    // um par legivel — e o botao preenchido precisa disso.
+    const { fundo, tinta } = parLegivel(cor);
+    expect(contraste(fundo, tinta)).toBeGreaterThanOrEqual(4.5);
+  });
+});

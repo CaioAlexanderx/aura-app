@@ -180,6 +180,10 @@ export function ProductConfigurator({
 
   const { width: larguraTela } = useWindowDimensions();
   const telaLarga = larguraTela >= 900;
+  // DEPOIS de telaLarga: declarar antes daria "Cannot access
+  // 'telaLarga' before initialization" — o mesmo erro que ja derrubou
+  // esta tela antes.
+  const ladoDoPreview = telaLarga ? 360 : defaultConfiguratorSize();
   const LARGURA_MAX = 980;
   // Sobra de cada lado pra alinhar cabecalho e rodape com a coluna.
   const recuoLateral = telaLarga ? Math.max(28, (larguraTela - LARGURA_MAX) / 2) : 16;
@@ -296,11 +300,15 @@ export function ProductConfigurator({
       >
         <View style={linhaConteudo}>
         <View style={colunaPreview}>
-          <View>
+          {/* Caixa do TAMANHO do preview: o chip "Ver de perto" e absoluto
+              e precisa de um pai com a medida certa, senao ele cai fora da
+              foto — no QA ele apareceu 17px ABAIXO dela, solto no meio do
+              nada. LivePreview desenha um quadrado de lado `size`. */}
+          <View style={{ width: ladoDoPreview, height: ladoDoPreview, alignSelf: "center" }}>
             <LivePreview
               config={cfg ?? null}
               values={editingValues}
-              size={telaLarga ? 360 : defaultConfiguratorSize()}
+              size={ladoDoPreview}
               productName={activeProduct.name}
               showLabel={false}
               slug={slug}

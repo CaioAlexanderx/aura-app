@@ -12,7 +12,7 @@
 // ============================================================
 import { View, Text, Pressable, Platform, Linking } from "react-native";
 import { T } from "./types";
-import { AURA, wash, corLegivelSobre } from "./theme";
+import { AURA, wash, parLegivel } from "./theme";
 
 /**
  * Número em E.164 sem sinais, como o wa.me exige.
@@ -56,8 +56,17 @@ export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: 
   // nenhum é pior que ausência.
   if (!href) return null;
 
-  const cor = corDaLoja || AURA.violet;
-  const tinta = corLegivelSobre(cor, "#FFFFFF");
+  const corBruta = corDaLoja || AURA.violet;
+  // `parLegivel`, nao `corLegivelSobre(cor, "#FFF")`. O segundo devolve
+  // uma versao da COR legivel sobre BRANCO — eu aplicava isso como tinta
+  // sobre a propria pilula colorida, entao em #dc2626 o botao saia
+  // vermelho-escuro em vermelho: uma pilula solida, sem icone nem texto.
+  //
+  // E `tintaSobre` sozinho tambem nao basta: ele escolhe a melhor das
+  // duas tintas, e no meio-tom NENHUMA passa de 4.5 (medido: 4.02 e
+  // 4.20). Botao preenchido precisa do par que MOVE o preenchimento —
+  // e exatamente pra isso que parLegivel existe desde a fase 01.
+  const { fundo: cor, tinta } = parLegivel(corBruta);
 
   return (
     <View
