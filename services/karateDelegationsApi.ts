@@ -108,6 +108,65 @@ export interface DelegationAthleteInput {
   category_ids: string[];
 }
 
+// ── Triagem automática (P2.2) ───────────────────────────────
+// POST .../delegation/triage — DRY-RUN: o sensei manda atleta+modalidades
+// e o backend resolve a categoria pelos requisitos da federação (idade na
+// data do evento, sexo, corte de graduação). Nada é gravado; o front usa
+// o resultado para montar os category_ids do quote/submit (inalterados).
+
+/** Modalidades INDIVIDUAIS (v1 da triagem não cobre equipes). */
+export type IndividualModality = Exclude<EnrollmentCategory["modality"], "team_kata" | "team_kumite">;
+
+export interface TriageCategoryRef {
+  category_id: string;
+  name: string;
+  modality: string;
+  group_label: string | null;
+  division_id: string | null;
+}
+
+export interface TriageMiss {
+  category: TriageCategoryRef;
+  /** Critérios que falharam: 'age' | 'sex' | 'belt' | 'graduacao_minima' | 'graduacao_maxima'. */
+  failed: string[];
+}
+
+export interface TriageModalityResult {
+  modality: string;
+  status: "resolved" | "ambiguous" | "no_fit";
+  /** status='resolved' — o match único. */
+  category?: TriageCategoryRef;
+  /** status='ambiguous' — o sensei só desempata. */
+  options?: TriageCategoryRef[];
+  /** status='no_fit' — candidatas e por que cada uma não serviu. */
+  considered?: TriageMiss[];
+  message?: string;
+}
+
+export type TriageAthleteStatus =
+  | "ok" | "ID_INVALIDO" | "ALUNO_NAO_ENCONTRADO" | "ALUNO_NAO_FEDERADO" | "SEM_MODALIDADE";
+
+export interface TriageAthleteResult {
+  student_id: string | null;
+  name?: string;
+  status: TriageAthleteStatus;
+  message?: string;
+  /** belt_level atual do praticante (quando federado e graduado). */
+  belt?: string | null;
+  /** Um item por modalidade pedida (status='ok'). */
+  triage?: TriageModalityResult[];
+}
+
+export interface TriageBody {
+  athletes: { student_id: string; modalities: string[] }[];
+}
+
+export interface TriageResponse {
+  competition_id: string;
+  event_date: string | null;
+  results: TriageAthleteResult[];
+}
+
 export interface DelegationTeamInput {
   name: string;
   sex: "M" | "F" | "mixed";
@@ -219,6 +278,10 @@ export const karateDelegationsApi = {
   quote: (fid: string, competitionId: string, body: DelegationBody): Promise<QuoteResponse> =>
     request(`${base(fid)}/competitions/${competitionId}/delegation/quote`, { method: "POST", body }),
 
+  /** Triagem automática DRY-RUN (P2.2) — resolve a categoria por atleta×modalidade. */
+  triageDelegation: (fid: string, competitionId: string, body: TriageBody): Promise<TriageResponse> =>
+    request(`${base(fid)}/competitions/${competitionId}/delegation/triage`, { method: "POST", body }),
+
   /** Submete a delegação. Mutação — NUNCA retry (risco de duplicar pedido). */
   submit: (
     fid: string,
@@ -269,6 +332,19 @@ export const MODALITY_LABEL: Record<EnrollmentCategory["modality"], string> = {
 
 export function isTeamModality(m: EnrollmentCategory["modality"]): boolean {
   return m === "team_kata" || m === "team_kumite";
+}
+
+/** Critério reprovado da triagem → texto legível (pt-BR, tom do produto). */
+export const TRIAGE_FAIL_LABEL: Record<string, string> = {
+  age: "idade fora da faixa da categoria",
+  sex: "sexo diferente do exigido",
+  belt: "graduação fora do corte da categoria",
+  graduacao_minima: "graduação abaixo da mínima exigida",
+  graduacao_maxima: "graduação acima da máxima permitida",
+};
+
+export function triageFailLabel(criterion: string): string {
+  return TRIAGE_FAIL_LABEL[criterion] || `critério "${criterion}" não atendido`;
 }
 
 export function formatBRL(v: number | null | undefined): string {
