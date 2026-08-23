@@ -25,6 +25,9 @@ import { PreviewTipografia } from "./PreviewTipografia";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
 import { SeletorDeCor } from "./SeletorDeCor";
+import { MiniLoja, type ProdutoDemo } from "./MiniLoja";
+import { PreviewCartao } from "./PreviewCartao";
+import { BASE_URL } from "@/services/api";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
 type Banner = {
@@ -46,6 +49,8 @@ type Cfg = {
   // Usados pelo preview de tipografia: e a loja DELA que aparece na
   // amostra, nao um texto generico.
   site_name?: string | null; logo_url?: string | null;
+  // A mini-loja mostra a tagline; o slug ja existe mais abaixo.
+  tagline?: string | null;
   dark_mode?: boolean; font_family?: string; card_style?: string;
   announcement_bar?: string;
   banners?: Banner[];
@@ -291,6 +296,33 @@ export function TabDesign({
   const [serviceCards, setServiceCards] = useState<ServiceCard[]>(normalizeServiceCards(config.service_cards));
   const [device, setDevice]     = useState<"desktop" | "mobile">(IS_WIDE ? "desktop" : "mobile");
   const [previewKey, setPreviewKey] = useState(0);
+  // Produtos reais pro preview. A diferenca entre "Editorial" e "Imagem"
+  // E a foto: com retangulo cinza os tres estilos parecem iguais, que foi
+  // a queixa. Leitura publica, sem efeito colateral; se falhar, o preview
+  // cai no produto de exemplo.
+  const [produtosDemo, setProdutosDemo] = useState<ProdutoDemo[]>([]);
+  const slugDaLoja = config.slug || "";
+
+  useEffect(() => {
+    if (!slugDaLoja) return;
+    let vivo = true;
+    fetch(`${BASE_URL}/storefront/${encodeURIComponent(slugDaLoja)}/studio/products`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!vivo || !Array.isArray(j?.products)) return;
+        const comFoto = j.products.filter((p: any) => p?.image_url);
+        const escolhidos = (comFoto.length ? comFoto : j.products).slice(0, 3);
+        setProdutosDemo(
+          escolhidos.map((p: any) => ({
+            nome: String(p.name || "Produto"),
+            preco: Number(p.price) || 0,
+            foto: p.image_url || null,
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [slugDaLoja]);
 
   useEffect(() => { setPrimary(config.primary_color || "#7c3aed"); }, [config.primary_color]);
   useEffect(() => { setAccentColor(config.accent_color   || "#a78bfa"); }, [config.accent_color]);
@@ -429,6 +461,26 @@ export function TabDesign({
 
       <SectionTitle title="Identidade visual" />
       <View style={cs.card}>
+        {/* A loja dela, ao vivo. Antes a cor mudava so a bolinha
+            selecionada e o efeito ficava numa OUTRA aba — dai a queixa de
+            que "a troca de cores nao faz muito". */}
+        <View style={{ marginBottom: 16, gap: 7 }}>
+          <MiniLoja
+            cor={primary}
+            corDestaque={accentColor}
+            fonte={font}
+            estiloCartao={cardStyle as any}
+            nomeDaLoja={config.site_name}
+            tagline={config.tagline}
+            logoUrl={config.logo_url}
+            produtos={produtosDemo}
+            colunas={3}
+          />
+          <Text style={cs.hint}>
+            Sua loja como ela fica. Muda junto com a cor, a fonte e o estilo dos cards.
+          </Text>
+        </View>
+
         <Text style={cs.fieldLabel}>Cor primária</Text>
         <View style={cs.colorRow}>
           {COLOR_PRESETS.map((c) => (
@@ -502,8 +554,15 @@ export function TabDesign({
         />
 
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Estilo dos cards de produto</Text>
-        <ChipToggle options={CARD_STYLES} value={cardStyle}
-          onChange={(v) => { setCardStyle(v); scheduleSave({ card_style: v }); }} />
+        {/* Era ChipToggle de texto puro ("Compacto, sem destaque").
+            Agora cada opcao e a prateleira dela, com produto da loja. */}
+        <PreviewCartao
+          valor={cardStyle}
+          onChange={(v) => { setCardStyle(v); scheduleSave({ card_style: v }); }}
+          cor={primary}
+          fonte={font}
+          produtos={produtosDemo}
+        />
       </View>
 
       <SectionTitle title="Anúncio (faixa superior)" />
