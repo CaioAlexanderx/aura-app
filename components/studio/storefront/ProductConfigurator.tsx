@@ -300,11 +300,7 @@ export function ProductConfigurator({
       >
         <View style={linhaConteudo}>
         <View style={colunaPreview}>
-          {/* Caixa do TAMANHO do preview: o chip "Ver de perto" e absoluto
-              e precisa de um pai com a medida certa, senao ele cai fora da
-              foto — no QA ele apareceu 17px ABAIXO dela, solto no meio do
-              nada. LivePreview desenha um quadrado de lado `size`. */}
-          <View style={{ width: ladoDoPreview, height: ladoDoPreview, alignSelf: "center" }}>
+          <View style={{ width: ladoDoPreview, alignSelf: "center" }}>
             <LivePreview
               config={cfg ?? null}
               values={editingValues}
@@ -319,7 +315,9 @@ export function ProductConfigurator({
             {/* Em peca personalizada o detalhe E o produto: textura do
                 tecido, acabamento da costura. So oferece zoom quando ha
                 foto — ampliar a area de impressao nao serve a ninguem. */}
-            {fotosDaPeca.length > 0 ? <DicaDeZoom onPress={() => setZoom(0)} /> : null}
+            {fotosDaPeca.length > 0 ? (
+              <DicaDeZoom onPress={() => setZoom(0)} corDaLoja={(sf.store as any)?.site?.primary_color} />
+            ) : null}
           </View>
 
           {/* O cliente so via o frete depois de configurar a peca e

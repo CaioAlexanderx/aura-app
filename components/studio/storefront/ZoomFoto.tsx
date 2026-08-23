@@ -99,25 +99,44 @@ function Seta({ glifo, rotulo, onPress }: { glifo: string; rotulo: string; onPre
   );
 }
 
-/** Selo discreto sobre a foto, avisando que dá para ampliar. */
-export function DicaDeZoom({ onPress }: { onPress: () => void }) {
+/**
+ * Controle de ampliar, ABAIXO do preview.
+ *
+ * Era um selo absoluto no canto inferior direito da foto. Não funciona:
+ * o LivePreview desenha a peça MENOR que a caixa que ele ocupa (medido
+ * no QA: foto de 220px numa caixa de 360px), então o canto da caixa cai
+ * longe da foto e o selo aparece solto no meio do nada.
+ *
+ * Ancorar numa posição que este componente não consegue prever é frágil.
+ * Como controle abaixo do preview ele é honesto sobre onde está, lê como
+ * botão e alcança o teclado na ordem natural.
+ */
+export function DicaDeZoom({ onPress, corDaLoja }: { onPress: () => void; corDaLoja?: string | null }) {
+  const cor = corDaLoja || T.ink2;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Ver a foto de perto"
-      style={{
-        position: "absolute", right: 8, bottom: 8,
-        flexDirection: "row", alignItems: "center", gap: 5,
-        paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999,
-        backgroundColor: "rgba(255,255,255,0.92)",
-        borderWidth: 1, borderColor: T.border,
-      }}
+      style={({ hovered }: any) => [
+        {
+          alignSelf: "center",
+          marginTop: 10,
+          flexDirection: "row", alignItems: "center", gap: 6,
+          paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+          borderWidth: 1,
+          borderColor: hovered ? cor : T.border,
+          backgroundColor: T.card,
+        },
+        Platform.OS === "web"
+          ? ({ transition: "border-color 200ms cubic-bezier(.4,0,.2,1)", cursor: "pointer" } as any)
+          : null,
+      ]}
     >
       {/* Lupa desenhada: o design system não usa emoji, e o 🔍 sai
           diferente em cada sistema. */}
-      <View style={{ width: 11, height: 11, borderRadius: 6, borderWidth: 1.5, borderColor: T.ink2 }} />
-      <Text style={{ fontSize: 11, fontWeight: "700", color: T.ink2 }}>Ver de perto</Text>
+      <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1.6, borderColor: cor }} />
+      <Text style={{ fontSize: 12.5, fontWeight: "700", color: cor }}>Ver a peça de perto</Text>
     </Pressable>
   );
 }
