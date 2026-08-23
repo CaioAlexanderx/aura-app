@@ -50,11 +50,31 @@ export type ParTipografico = {
   familias: string[];
 };
 
+/**
+ * Os quatro pares.
+ *
+ * REESCRITO em 23/08/2026. Antes TRES dos quatro eram serifados —
+ * Instrument Serif, Fraunces e Playfair — e o quarto era DM Sans, que ja
+ * era o CORPO do "classic". Num cartao de 19px ninguem distinguia: o
+ * feedback foi literal, "nao consigo diferenciá-las".
+ *
+ * Agora cada par e um TIPO DE LOJA diferente, e a diferenca aparece no
+ * thumbnail:
+ *
+ *   Elegante   serifada fina, alto contraste   boutique, joalheria
+ *   Moderna    sem serifa, geometrica          streetwear, tecnologia
+ *   Marcante   peso alto, comercial            atacado, promocao
+ *   Acolhedora serifada macia                  artesanal, doces, brecho
+ *
+ * As CHAVES continuam as mesmas (classic/modern/editorial/humanist)
+ * porque estao gravadas no banco e no CHECK da migration 299. Elas sao
+ * ids opacos; o que a lojista le e `nome`.
+ */
 export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   classic: {
     chave: "classic",
-    nome: "Clássica",
-    hint: "Serifada fina e elegante. É a da marca Aura.",
+    nome: "Elegante",
+    hint: "Serifada fina. Para loja que vende peça cara.",
     display: "'Instrument Serif', Georgia, serif",
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Instrument+Serif:ital@0;1", "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700"],
@@ -62,26 +82,26 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   modern: {
     chave: "modern",
     nome: "Moderna",
-    hint: "Serifada com peso e personalidade. Aguenta texto pequeno.",
-    display: "'Fraunces', Georgia, serif",
-    body: "'Manrope', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Fraunces:opsz,wght@9..144,400;9..144,600", "Manrope:wght@400;500;700;800"],
+    hint: "Sem serifa, geométrica. Para loja jovem e direta.",
+    display: "'Space Grotesk', -apple-system, sans-serif",
+    body: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Space+Grotesk:wght@500;600;700", "Inter:wght@400;500;600;700"],
   },
   editorial: {
     chave: "editorial",
-    nome: "Editorial",
-    hint: "Alto contraste, vocabulário de moda. Brilha em título grande.",
-    display: "'Playfair Display', Georgia, serif",
-    body: "'Manrope', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Playfair+Display:ital,wght@0,400;0,600", "Manrope:wght@400;500;700;800"],
+    nome: "Marcante",
+    hint: "Peso alto, chama atenção. Para quem vive de promoção.",
+    display: "'Archivo Black', Impact, sans-serif",
+    body: "'Archivo', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Archivo+Black", "Archivo:wght@400;500;600;700"],
   },
   humanist: {
     chave: "humanist",
-    nome: "Humanista",
-    hint: "Sem serifa, calorosa e direta. Sem título serifado.",
-    display: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800"],
+    nome: "Acolhedora",
+    hint: "Serifada macia. Para loja de feito à mão.",
+    display: "'Fraunces', Georgia, serif",
+    body: "'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Fraunces:opsz,wght@9..144,400;9..144,600", "Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700"],
   },
 };
 
