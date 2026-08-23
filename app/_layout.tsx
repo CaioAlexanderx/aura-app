@@ -142,6 +142,11 @@ function AuthGuard() {
     // /acompanhar/[token]. Link vai na mensagem da venda — o cliente final
     // não tem conta, então exigir login mataria a função.
     const onPublicTrack = segments[0] === "acompanhar";
+    // Hub P2.1 (23/08/2026): mesa PÚBLICA do mesário em /mesa?t=<token>.
+    // O mesário do campeonato NÃO tem conta Aura — o acesso é o token
+    // opaco da convocação (aura-backend PR #579). Sem este pass-through
+    // o AuthGuard mandaria o link da federação direto pro login.
+    const onPublicMesa = segments[0] === "mesa";
     // Track D Karatê: páginas PÚBLICAS sob /karate (sem login). Ficam FORA do
     // grupo autenticado (federation) — que é transparente, então também tem
     // segments[0]==="karate". Distinguimos pelos marcadores públicos:
@@ -172,7 +177,7 @@ function AuthGuard() {
       segments[1] === "roster-self" ||
       segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicOrcamento || onPublicTrack || onKaratePublic) return;
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicOrcamento || onPublicTrack || onPublicMesa || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
