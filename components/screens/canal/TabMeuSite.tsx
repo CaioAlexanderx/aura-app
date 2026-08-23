@@ -11,6 +11,7 @@ import { MpGatewayCard } from "./MpGatewayCard";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
+import { SPECS } from "./specsDeImagem";
 type Props = {
   config: any;
   saveConfig: (data: any) => Promise<void>;
@@ -306,7 +307,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             )}
           </View>
           <View style={{ flex: 1, gap: 8 }}>
-            <Text style={s.imgHint}>Quadrado, min. 200x200px{"\n"}PNG ou JPG, max. 5MB</Text>
+            {/* PNG TRANSPARENTE, e a spec diz por que: logo com fundo
+                branco vira um quadrado visivel sobre a cor da loja. */}
+            <Text style={s.imgHint}>{SPECS.logo.resumo}</Text>
             {Platform.OS === "web" && (
               <Pressable
                 onPress={() => pickImage("logo")}

@@ -28,6 +28,8 @@ import { SeletorDeCor } from "./SeletorDeCor";
 import { MiniLoja, type ProdutoDemo } from "./MiniLoja";
 import { PreviewCartao } from "./PreviewCartao";
 import { BASE_URL } from "@/services/api";
+import { ChecklistDaLoja } from "./ChecklistDaLoja";
+import { SPECS } from "./specsDeImagem";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
 type Banner = {
@@ -301,6 +303,8 @@ export function TabDesign({
   // a queixa. Leitura publica, sem efeito colateral; se falhar, o preview
   // cai no produto de exemplo.
   const [produtosDemo, setProdutosDemo] = useState<ProdutoDemo[]>([]);
+  // Termometro da vitrine: quantos produtos tem foto. Sai do mesmo GET.
+  const [contagem, setContagem] = useState<{ total: number; comFoto: number }>({ total: 0, comFoto: 0 });
   const slugDaLoja = config.slug || "";
 
   useEffect(() => {
@@ -311,6 +315,7 @@ export function TabDesign({
       .then((j) => {
         if (!vivo || !Array.isArray(j?.products)) return;
         const comFoto = j.products.filter((p: any) => p?.image_url);
+        setContagem({ total: j.products.length, comFoto: comFoto.length });
         const escolhidos = (comFoto.length ? comFoto : j.products).slice(0, 3);
         setProdutosDemo(
           escolhidos.map((p: any) => ({
@@ -457,6 +462,23 @@ export function TabDesign({
         <Text style={s.tabIntroText}>
           Aqui você define o visual da loja. Logo, contato e Pix ficam em <Text style={{ fontWeight: "700" }}>Meu Site</Text>.
         </Text>
+      </View>
+
+      {/* O que fazer, em ordem de impacto. Sem isto a lojista via cor,
+          fonte, cartao, banner e avisos no mesmo peso — e a foto do
+          produto muda dez vezes mais a loja que a escolha da serifada. */}
+      <View style={{ marginBottom: 4 }}>
+        <ChecklistDaLoja
+          estado={{
+            logoUrl: config.logo_url,
+            corPrimaria: primary,
+            banners,
+            anuncio: annBar,
+            tagline: config.tagline,
+            produtosTotal: contagem.total,
+            produtosComFoto: contagem.comFoto,
+          }}
+        />
       </View>
 
       <SectionTitle title="Identidade visual" />
@@ -679,7 +701,9 @@ export function TabDesign({
                 <>
                   <Icon name="image" size={20} color={Colors.ink3} />
                   <Text style={s.uploadText}>Adicionar imagem</Text>
-                  <Text style={s.uploadHint}>JPG, PNG ou WebP · até 5 MB</Text>
+                  {/* A spec exata, nao "JPG ou PNG": a lojista subia o
+                      que tinha e descobria o texto cortado no celular. */}
+                  <Text style={s.uploadHint}>{SPECS.banner.resumo}</Text>
                 </>
               )}
             </Pressable>
