@@ -543,14 +543,16 @@ export default function DelegationCart() {
         </View>
 
         {tab === "chaves" ? (
-          <MyBracketsPanel
-            state={brackets}
-            loading={bracketsLoading}
-            error={bracketsError}
-            printingCat={printingCat}
-            onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
-            onPrint={printMyBracket}
-          />
+          <View style={s.tabPanelCol}>
+            <MyBracketsPanel
+              state={brackets}
+              loading={bracketsLoading}
+              error={bracketsError}
+              printingCat={printingCat}
+              onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
+              onPrint={printMyBracket}
+            />
+          </View>
         ) : tab === "presenca" ? (
           <PresencaDojoTab federationId={federationId} competitionId={String(cid)} />
         ) : !enrollmentOpen ? (
@@ -1338,12 +1340,15 @@ const s = StyleSheet.create({
   athleteName: { fontSize: 13.5, fontWeight: "700", color: C.ink } as TextStyle,
 
   // ── Dia do evento: wizard bloqueado (inscrições encerradas) ──
-  closedBox: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 20, alignItems: "center", gap: 8 } as ViewStyle,
+  // Segue a premissa da coluna central (24/08): não estica a tela.
+  closedBox: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 20, alignItems: "center", gap: 8, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   closedTitle: { fontSize: 15, fontWeight: "800", color: C.ink } as TextStyle,
   closedTxt: { fontSize: 12.5, color: C.ink3, textAlign: "center", lineHeight: 18 } as TextStyle,
 
-  // ── Abas (inscrição × minhas chaves) ──
-  tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4 } as ViewStyle,
+  // ── Abas (inscrição × minhas chaves × presença) ──
+  // PREMISSA (24/08): coluna central — abas e painéis não esticam a tela.
+  tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
+  tabPanelCol: { width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   tabBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: R.md } as ViewStyle,
   tabBtnOn: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border2 } as ViewStyle,
   tabTxt: { fontSize: 13, fontWeight: "600", color: C.ink3 } as TextStyle,

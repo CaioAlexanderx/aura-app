@@ -192,7 +192,7 @@ function CheckInPanel({ source, grouped, fetcher, marker, intro, emptyTitle, emp
   if (error) return <KarateErrorState message={error} onRetry={load} />;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={s.panel}>
       {schemaPending && (
         <View style={s.notice}>
           <Icon name="clock" size={14} color={C.ink3} />
@@ -421,6 +421,10 @@ export function PresencaDojoTab({ federationId, competitionId }: { federationId:
 }
 
 const s = StyleSheet.create({
+  // PREMISSA (24/08): coluna central com largura máxima — em monitor largo,
+  // linha full-width separa nome e status por ~1500px e vira defeito de
+  // escaneabilidade. Mesmo padrão da mesa pública (maxWidth + alignSelf).
+  panel: { gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   intro: { fontSize: 12.5, color: C.ink3, lineHeight: 18 } as TextStyle,
 
   notice: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border, borderRadius: R.md, paddingHorizontal: 11, paddingVertical: 9 } as ViewStyle,
@@ -428,8 +432,9 @@ const s = StyleSheet.create({
   noticeTxt: { flex: 1, fontSize: 12, color: C.ink3, lineHeight: 17 } as TextStyle,
 
   totalsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
-  stat: { flexGrow: 1, flexBasis: 90, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.md, paddingVertical: 9, paddingHorizontal: 12, gap: 1 } as ViewStyle,
-  statValue: { fontFamily: F.mono, fontSize: 19, fontWeight: "800", color: C.ink, fontVariant: ["tabular-nums"] } as TextStyle,
+  // Chips inline dimensionados pelo conteúdo — não caixas de ¼ de tela.
+  stat: { flexDirection: "row", alignItems: "baseline", gap: 6, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 } as ViewStyle,
+  statValue: { fontFamily: F.mono, fontSize: 15, fontWeight: "800", color: C.ink, fontVariant: ["tabular-nums"] } as TextStyle,
   statLabel: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", color: C.ink3 } as TextStyle,
 
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
@@ -452,7 +457,9 @@ const s = StyleSheet.create({
   statusTxt: { fontSize: 11, fontWeight: "700" } as TextStyle,
 
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
-  actionBtn: { flexGrow: 1, flexBasis: 104, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, backgroundColor: C.glassHi, paddingHorizontal: 12 } as ViewStyle,
+  // Botões pelo CONTEÚDO (minWidth p/ alvo de toque) — nunca flex:1
+  // dividindo a tela inteira (premissa 24/08).
+  actionBtn: { minWidth: 116, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, backgroundColor: C.glassHi, paddingHorizontal: 14 } as ViewStyle,
   actionBtnOff: { opacity: 0.5 } as ViewStyle,
   actionTxt: { fontSize: 13, fontWeight: "700" } as TextStyle,
 });
