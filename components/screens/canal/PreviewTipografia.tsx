@@ -1,19 +1,25 @@
 // ============================================================
 // Canal digital · escolher a tipografia
 //
-// REFEITO em 24/08/2026. A versão anterior era um mini-hero com logo, cor
-// e uma linha de prateleira — e o único elemento que mudava entre as
-// quatro opções era o nome da loja em 22px. Quatro letras nesse tamanho
-// não distinguem tipografia nenhuma: o feedback foi "as fontes ainda são
-// muito parecidas", e a queixa era da AMOSTRA, não das fontes (as quatro
-// famílias carregam e são de desenhos diferentes — conferido no Google
-// Fonts e no bundle).
+// REFEITO em 24/08/2026, em DUAS etapas — e a primeira estava errada.
 //
-// Agora cada opção é um espécime de tipo: a palavra grande o suficiente
-// para as letras se lerem, e uma linha de corpo abaixo. Sem logo, sem
-// cor de fundo, sem cartão de produto — a cor da loja tem o próprio
-// preview logo acima, e repetir aqui só disputava atenção com o que está
-// sendo escolhido.
+// A queixa foi "as fontes ainda são muito parecidas". A primeira leitura
+// foi que o defeito era a AMOSTRA: o cartão antigo era um mini-hero com
+// logo, cor e prateleira, e o único elemento que mudava entre as quatro
+// opções era o nome da loja em 22px. Isso era verdade e valia consertar —
+// cada opção virou um espécime de tipo, palavra em 34px com a linha de
+// corpo abaixo, sem logo e sem cor disputando atenção.
+//
+// Mas NÃO era a causa. Medido na tela depois: os quatro espécimes
+// computavam a MESMA font-family e a MESMA largura em pixels. As quatro
+// famílias carregavam, a escolha chegava aqui, e a regra global do painel
+// — `*, *::before, *::after { font-family: <corpo> !important }` — vencia
+// todas elas. `!important` num seletor universal ganha de qualquer estilo
+// de componente.
+//
+// O conserto é o `dataSet` nos dois textos abaixo, que é o mesmo padrão
+// que o wordmark já usava (ver AuraStudioMark). A lição: verificar que a
+// fonte CARREGA não é verificar que ela é APLICADA.
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
@@ -91,9 +97,19 @@ export function PreviewTipografia({ valor, onChange, cor, nomeDaLoja }: Props) {
           >
             <View style={{ flex: 1, gap: 2 }}>
               {/* O espécime. 34px é onde serifa, peso e largura aparecem;
-                  em 22px as quatro pareciam a mesma fonte. */}
+                  em 22px as quatro pareciam a mesma fonte.
+
+                  O `dataSet` NÃO é decoração. Ele vira `data-aura-display`
+                  no DOM e é o que faz a fonte escolhida sobreviver à regra
+                  global do painel — `* { font-family: … !important }`, que
+                  ganha de qualquer `fontFamily` que um componente defina.
+                  Sem ele as quatro amostras saem em DM Sans, que é o que
+                  estava acontecendo: medido na tela, os quatro espécimes
+                  computavam a MESMA família e a MESMA largura em pixels.
+                  Ver `cssDeExcecaoDeFonte` em constants/fonts. */}
               <Text
                 numberOfLines={1}
+                {...({ dataSet: { auraDisplay: chave } } as any)}
                 style={{
                   fontFamily: par.display,
                   color: Colors.ink,
@@ -109,6 +125,7 @@ export function PreviewTipografia({ valor, onChange, cor, nomeDaLoja }: Props) {
                   no tamanho pequeno. */}
               <Text
                 numberOfLines={2}
+                {...({ dataSet: { auraBody: chave } } as any)}
                 style={{ fontFamily: par.body, color: Colors.ink3, fontSize: 13, lineHeight: 18 }}
               >
                 {par.hint}
