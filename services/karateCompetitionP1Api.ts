@@ -42,11 +42,32 @@ export interface BoardArea {
   categories: BoardCategory[];
 }
 
+/**
+ * Onda B — atleta com provas alocadas em kotos DIFERENTES: no dia, pode ser
+ * chamado em duas áreas ao mesmo tempo. É AVISO, nunca bloqueio: a federação
+ * continua livre para mover categorias; a mesa central usa isso para sequenciar.
+ */
+export interface BoardConflictCategory {
+  id: string;
+  name: string;
+  area_name: string;
+}
+
+export interface BoardConflict {
+  student_id: string;
+  student_name: string;
+  /** Quantidade de kotos distintos em que o atleta tem prova. */
+  area_count: number;
+  categories: BoardConflictCategory[];
+}
+
 export interface ScheduleBoard {
   competition_id: string;
   areas: BoardArea[];
   unassigned: BoardCategory[];
-  totals: { categories: number; assigned: number; entry_count: number };
+  totals: { categories: number; assigned: number; entry_count: number; conflict_count?: number };
+  /** Ausente em backends antigos — tratar como lista vazia. */
+  conflicts?: BoardConflict[];
 }
 
 // ── Plano de fases (296) ────────────────────────────────────
