@@ -582,7 +582,6 @@ export function TabDesign({
           onChange={(v) => { setFont(v); scheduleSave({ font_family: v }); }}
           cor={primary}
           nomeDaLoja={config.site_name}
-          logoUrl={config.logo_url}
         />
 
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Estilo dos cards de produto</Text>
