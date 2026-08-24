@@ -61,6 +61,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
   const [cardEnabled, setCardEnabled] = useState(config.card_enabled !== false);
   const [parcelas, setParcelas] = useState<number | null>(config.card_max_installments ?? null);
+
+  // Politica de troca (24/08/2026). O texto padrao NAO e escrito aqui: vem
+  // do backend, do mesmo lugar que a loja usa pra renderizar o rodape. Se
+  // fosse duplicado, uma correcao no texto passaria a valer na loja e nao
+  // no painel — e ela leria uma politica e publicaria outra.
+  const politicaPadrao = config.politica_troca_padrao || "";
+  const [politica, setPolitica] = useState(config.politica_troca || "");
   // O parcelamento so aparece na loja com cartao FUNCIONANDO. Sem isso a
   // lojista escolheria "ate 6x", salvaria, e nada apareceria — sem
   // explicacao nenhuma. Encontrado no QA: nenhuma loja tem MP hoje.
@@ -81,6 +88,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setPayOnDelivery(config.pay_on_delivery_enabled === true);
     setCardEnabled(config.card_enabled !== false);
     setParcelas(config.card_max_installments ?? null);
+    setPolitica(config.politica_troca || "");
   }, [config.exists]);
 
   function pickImage(type: "logo" | "banner") {
@@ -132,6 +140,12 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       pay_on_delivery_enabled: payOnDelivery,
       card_enabled: cardEnabled,
       card_max_installments: parcelas,
+      // Campo em branco volta ao padrao — e assim que ela desfaz uma
+      // edicao sem ter que recopiar o texto de lugar nenhum. Texto igual
+      // ao padrao tambem salva vazio: melhora do padrao continua chegando
+      // em quem nunca escreveu nada proprio.
+      politica_troca:
+        politica.trim() && politica.trim() !== politicaPadrao.trim() ? politica.trim() : null,
     });
   }
 
@@ -455,6 +469,51 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       {/* MP Fase 0 (20/05/2026): cartao de credito via Mercado Pago.
           Card autonomo — gerencia proprio estado via usePaymentGateways hook. */}
       <MpGatewayCard />
+
+      {/* Trocas e devolucoes (24/08/2026).
+          O rodape da loja publica esse texto. Nenhuma das lojas escreveria
+          uma politica do zero — nenhuma preencheu nem o aviso da faixa
+          superior — entao o campo ja nasce com o padrao dentro, editavel.
+          Ele fica logo abaixo de Pagamentos porque as duas coisas respondem
+          a mesma pergunta do cliente: da pra confiar em comprar aqui. */}
+      <SectionTitle title="Trocas e devolucoes" />
+      <View style={cs.card}>
+        <Text style={cs.hint}>
+          Esse texto aparece no rodape da sua loja. Ja deixamos preenchido com o prazo
+          que a lei garante ao cliente. Se voce troca em mais dias ou tem alguma regra
+          propria, reescreva do seu jeito.
+        </Text>
+
+        <View style={{ height: 10 }} />
+
+        <Field
+          label="O que voce oferece em troca ou devolucao"
+          value={politica || politicaPadrao}
+          onChange={setPolitica}
+          placeholder={politicaPadrao}
+          multiline
+        />
+
+        {politica.trim() && politica.trim() !== politicaPadrao.trim() ? (
+          <Pressable onPress={() => setPolitica("")} accessibilityRole="button">
+            <Text style={[cs.hint, { color: accent.primaryStrong, fontWeight: "700" }]}>
+              Voltar ao texto sugerido
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <View style={cs.infoCard}>
+          <Icon name="alert" size={13} color={accent.primaryStrong} />
+          <Text style={cs.infoText}>
+            Prometa so o que voce consegue cumprir: o que estiver escrito aqui vale
+            para o cliente.
+          </Text>
+        </View>
+
+        <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }, { marginTop: 12 }]}>
+          <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar politica"}</Text>
+        </Pressable>
+      </View>
 
       <SectionTitle title="Dominio personalizado" />
       <View style={cs.card}>
