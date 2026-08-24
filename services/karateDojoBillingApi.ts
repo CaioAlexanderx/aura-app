@@ -226,6 +226,13 @@ export interface DojoReminderConfig {
   /** Inteiros -15..30, no máx. 6, únicos. */
   offsets: number[];
   send_email: boolean;
+  /**
+   * Onda 5b: além do e-mail, a régua enfileira TEMPLATES de WhatsApp
+   * automaticamente pela Cloud API (services/waApi.ts). Opcional na
+   * resposta porque backend anterior à Onda 5b não devolve o campo —
+   * ausente = desligado (a UI trata como false).
+   */
+  send_whatsapp_auto?: boolean;
   updated_at: string | null;
 }
 
@@ -233,6 +240,8 @@ export interface DojoReminderConfigPayload {
   enabled: boolean;
   offsets: number[];
   send_email: boolean;
+  /** Onda 5b — backend anterior ignora o campo extra sem quebrar. */
+  send_whatsapp_auto?: boolean;
 }
 
 export type DojoReminderChannel = "email";

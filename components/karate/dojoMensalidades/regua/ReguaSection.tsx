@@ -8,10 +8,15 @@
 //   GET     /federation/:id/dojo/billing/reminder-log?competence=
 //   POST    /federation/:id/dojo/billing/reminders/run
 //
-// enabled/offsets são salvos juntos (botão "Salvar régua" só habilita
-// quando há diferença pro que está salvo no servidor). send_email é
-// enviado sempre true — hoje o único canal automatico é e-mail; o campo
-// existe no contrato pra suportar canais futuros sem quebrar o payload.
+// enabled/offsets/send_whatsapp_auto são salvos juntos (botão "Salvar
+// régua" só habilita quando há diferença pro que está salvo no
+// servidor). send_email é enviado sempre true — e-mail é o canal base.
+//
+// Onda 5b: send_whatsapp_auto liga o SEGUNDO canal automático — templates
+// de WhatsApp pela Cloud API (aba "WhatsApp" da mesma tela, contrato em
+// services/waApi.ts). Depende de número conectado + template aprovado
+// pela Meta, e o opt-out do destinatário vence sempre. Backend anterior
+// à Onda 5b não devolve o campo: ausente = desligado.
 //
 // Degrade: 503 SCHEMA_PENDING (migration pendente) → aviso amigável,
 // sem crash — mesmo padrão de PixConfigCard/ContaAuraCard. O log é
@@ -48,7 +53,9 @@ import { OffsetsEditor } from "./OffsetsEditor";
 import { ReminderLogList } from "./ReminderLogList";
 import { WhatsAppQueueSection } from "./WhatsAppQueueSection";
 
-const DEFAULT_CONFIG: DojoReminderConfig = { enabled: false, offsets: [-3, 0, 3], send_email: true, updated_at: null };
+const DEFAULT_CONFIG: DojoReminderConfig = {
+  enabled: false, offsets: [-3, 0, 3], send_email: true, send_whatsapp_auto: false, updated_at: null,
+};
 
 function sameOffsets(a: number[], b: number[]): boolean {
   const sa = [...a].sort((x, y) => x - y);
@@ -65,6 +72,8 @@ export function ReguaSection() {
 
   const [enabled, setEnabled] = useState(false);
   const [offsets, setOffsets] = useState<number[]>([-3, 0, 3]);
+  // Onda 5b — canal automático por WhatsApp (Cloud API), ver aba "WhatsApp".
+  const [waAuto, setWaAuto] = useState(false);
   const [saved, setSaved] = useState<DojoReminderConfig>(DEFAULT_CONFIG);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
@@ -92,6 +101,7 @@ export function ReguaSection() {
       setSaved(cfg);
       setEnabled(cfg.enabled);
       setOffsets(cfg.offsets ?? []);
+      setWaAuto(cfg.send_whatsapp_auto === true);
     } catch (e: any) {
       const mapped = mapBillingError(e);
       if (mapped.code === "SCHEMA_PENDING") setSchemaPending(true);
@@ -121,7 +131,10 @@ export function ReguaSection() {
 
   if (!federationId) return null;
 
-  const dirty = enabled !== saved.enabled || !sameOffsets(offsets, saved.offsets ?? []);
+  const dirty =
+    enabled !== saved.enabled ||
+    !sameOffsets(offsets, saved.offsets ?? []) ||
+    waAuto !== (saved.send_whatsapp_auto === true);
 
   async function save() {
     setSaving(true);
@@ -131,10 +144,12 @@ export function ReguaSection() {
         enabled,
         offsets,
         send_email: true,
+        send_whatsapp_auto: waAuto,
       });
       setSaved(cfg);
       setEnabled(cfg.enabled);
       setOffsets(cfg.offsets ?? []);
+      setWaAuto(cfg.send_whatsapp_auto === true);
       // Quem é elegível hoje pro WhatsApp muda junto com a régua.
       setQueueRefreshKey((k) => k + 1);
     } catch (e: any) {
@@ -218,6 +233,28 @@ export function ReguaSection() {
           <View style={{ marginTop: 12, gap: 10 }}>
             <Text style={styles.label}>Quando enviar</Text>
             <OffsetsEditor offsets={offsets} onChange={setOffsets} />
+
+            <View style={styles.subToggle}>
+              <View style={styles.subToggleHead}>
+                <View style={styles.subToggleTitleRow}>
+                  <Icon name="whatsapp" size={15} color={KarateColors.whatsapp} />
+                  <Text style={styles.subToggleTitle}>Enviar também por WhatsApp (automático)</Text>
+                </View>
+                <Switch
+                  value={waAuto}
+                  onValueChange={setWaAuto}
+                  trackColor={{ false: KarateColors.border2, true: KarateColors.primarySoft }}
+                  thumbColor={waAuto ? KarateColors.primary : "#fff"}
+                  accessibilityLabel="Enviar também por WhatsApp (automático)"
+                />
+              </View>
+              <Text style={styles.subToggleSub}>
+                Nos mesmos dias da régua, o lembrete também sai por WhatsApp — sem você abrir o
+                aplicativo. Exige o WhatsApp do dojô conectado e um template aprovado pela Meta
+                (aba WhatsApp). Quem pediu para não receber nunca recebe, mesmo com isto ligado.
+                A fila manual abaixo continua disponível de qualquer forma.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -271,7 +308,12 @@ export function ReguaSection() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
+  content: { padding: 16, gap: 14, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
+  subToggle: { marginTop: 4, backgroundColor: KarateColors.bg2, borderRadius: KarateRadius.sm, borderWidth: 1, borderColor: KarateColors.border, padding: 11 } as ViewStyle,
+  subToggleHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 } as ViewStyle,
+  subToggleTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, flex: 1 } as ViewStyle,
+  subToggleTitle: { fontSize: 13, fontWeight: "700", color: KarateColors.ink, flexShrink: 1 } as TextStyle,
+  subToggleSub: { fontSize: 11.5, color: KarateColors.ink2, marginTop: 7, lineHeight: 16.5, maxWidth: 620 } as TextStyle,
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
