@@ -32,7 +32,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Platform, Vibration,
-  AccessibilityInfo, Animated, StyleSheet, ViewStyle, TextStyle,
+  AccessibilityInfo, Animated, StyleSheet, TextInput, ViewStyle, TextStyle,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -48,7 +48,7 @@ import {
   BracketState, BracketAthleteRef, PhaseByRound, PodiumEntry, KataScore,
 } from "@/services/karateBracketsApi";
 import {
-  FORMAT_LABEL, DECISION_LABEL, MatchFormat, DecisionMethod,
+  FORMAT_LABEL, DECISION_LABEL, MatchFormat, DecisionMethod, Scoresheet,
 } from "@/services/karateCompetitionP1Api";
 import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
@@ -399,23 +399,36 @@ export default function MesaPublicaScreen() {
 
         {/* ── Painel operacional da categoria aberta ── */}
         {selectedCat && (
-          isScoreMode(selectedCat) ? (
-            <MesaKataPanel
-              key={selectedCat.id}
+          <>
+            {isScoreMode(selectedCat) ? (
+              <MesaKataPanel
+                key={selectedCat.id}
+                cat={selectedCat}
+                onFinalized={() => markFinalized(selectedCat.id)}
+                onCategoryMoved={handleCategoryMoved}
+                onLinkInvalid={handleLinkInvalid}
+              />
+            ) : (
+              <MesaKumitePanel
+                key={selectedCat.id}
+                cat={selectedCat}
+                onFinalized={() => markFinalized(selectedCat.id)}
+                onCategoryMoved={handleCategoryMoved}
+                onLinkInvalid={handleLinkInvalid}
+              />
+            )}
+            {/* A súmula acompanha a categoria em operação (vale para as duas
+                modalidades) — fechada por padrão, para não competir com o
+                painel de lançamento. */}
+            <MesaSumulaSection
+              key={`sumula-${selectedCat.id}`}
               cat={selectedCat}
-              onFinalized={() => markFinalized(selectedCat.id)}
+              fallbackKoto={me.area.name}
+              officialName={me.official.name}
               onCategoryMoved={handleCategoryMoved}
               onLinkInvalid={handleLinkInvalid}
             />
-          ) : (
-            <MesaKumitePanel
-              key={selectedCat.id}
-              cat={selectedCat}
-              onFinalized={() => markFinalized(selectedCat.id)}
-              onCategoryMoved={handleCategoryMoved}
-              onLinkInvalid={handleLinkInvalid}
-            />
-          )
+          </>
         )}
 
         {/* Rodapé discreto: de onde vem este acesso */}
@@ -1278,6 +1291,297 @@ function MesaKataPanel({
 }
 
 // ════════════════════════════════════════════════════════════
+// SÚMULA da categoria — o que na folha real era impresso (cabeçalho
+// + rodapé de regras) e o que era MANUSCRITO na hora (shuchin,
+// mesário, duração). Aqui os três viram campos gravados no servidor;
+// o resto é leitura, para conferência na mesa.
+//
+// Fechada por padrão: durante a operação o que importa é o painel de
+// lançamento — a súmula é consulta e fechamento.
+// ════════════════════════════════════════════════════════════
+const SUMULA_MAX = 120;
+
+function MesaSumulaSection({
+  cat, fallbackKoto, officialName, onCategoryMoved, onLinkInvalid,
+}: {
+  cat: MesaCategory;
+  fallbackKoto: string;
+  officialName: string;
+  onCategoryMoved: () => void;
+  onLinkInvalid: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [sheet, setSheet] = useState<Scoresheet | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [noBracket, setNoBracket] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Valores em edição + o último estado conhecido do servidor (para "dirty").
+  const [shuchin, setShuchin] = useState("");
+  const [mesario, setMesario] = useState("");
+  const [duracao, setDuracao] = useState("");
+  const [saved, setSaved] = useState({ shuchin: "", mesario: "", duracao: "" });
+  /** true = "Mesário" está pré-preenchido com o nome do /me, ainda NÃO gravado. */
+  const [suggestedMesario, setSuggestedMesario] = useState(false);
+
+  const loadedRef = useRef(false);
+  const handleFlowError = usePanelErrorHandler(onCategoryMoved, onLinkInvalid);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await karateMesaApi.getScoresheet(cat.id);
+      setSheet(data);
+      setNoBracket(false);
+      const f = data.fields || { koto: null, shuchin: null, mesario: null, duracao: null };
+      const base = {
+        shuchin: (f.shuchin || "").trim(),
+        mesario: (f.mesario || "").trim(),
+        duracao: (f.duracao || "").trim(),
+      };
+      setSaved(base);
+      setShuchin(base.shuchin);
+      setDuracao(base.duracao);
+      // Pré-preenchimento do mesário: SUGESTÃO editável (o oficial do token),
+      // nunca gravação automática — só entra na súmula se ele salvar.
+      const suggest = !base.mesario && !!officialName;
+      setMesario(suggest ? officialName : base.mesario);
+      setSuggestedMesario(suggest);
+    } catch (e: any) {
+      if (handleFlowError(e)) return;
+      if (mesaErrorCode(e) === "NO_BRACKET" || e?.status === 409) {
+        setNoBracket(true);
+        setSheet(null);
+      } else {
+        setLoadError(e?.message || "Não foi possível carregar a súmula.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [cat.id, officialName, handleFlowError]);
+
+  const toggle = useCallback(() => {
+    setOpen((prev) => !prev);
+    if (!open && !loadedRef.current) {
+      loadedRef.current = true;
+      load();
+    }
+  }, [open, load]);
+
+  const retry = useCallback(() => { loadedRef.current = true; load(); }, [load]);
+
+  const dirty =
+    shuchin.trim() !== saved.shuchin ||
+    mesario.trim() !== saved.mesario ||
+    duracao.trim() !== saved.duracao;
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      await karateMesaApi.patchScoresheet(cat.id, {
+        shuchin: shuchin.trim(),
+        mesario: mesario.trim(),
+        duracao: duracao.trim(),
+      });
+      setSuggestedMesario(false);
+      toast.success("Súmula salva.");
+      await load(); // releitura do GET — o que aparece é o que ficou gravado
+    } catch (e: any) {
+      if (handleFlowError(e)) return;
+      if (mesaErrorCode(e) === "NO_BRACKET" || e?.status === 409) {
+        setNoBracket(true);
+        toast.warning("Aguardando a chave desta categoria — a súmula abre quando a mesa central gerar a chave.");
+      } else {
+        toast.error(e?.message || "Não foi possível salvar a súmula.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [cat.id, shuchin, mesario, duracao, load, handleFlowError]);
+
+  const rules = useMemo(() => {
+    const f = sheet?.rules_footer;
+    if (!f) return [] as { label: string; value: string }[];
+    const out: { label: string; value: string }[] = [];
+    if (f.tiebreak?.length) {
+      out.push({ label: "Desempate", value: f.tiebreak.map((t, i) => `${i + 1}) ${t}`).join("  ·  ") });
+    }
+    if (f.required_kata) out.push({ label: "Kata exigido", value: f.required_kata });
+    out.push({ label: "Premiação", value: `até ${f.prize_places}º lugar` });
+    out.push({
+      label: "3º lugar",
+      value: f.third_place_dispute ? "Com disputa de 3º lugar" : "Sem disputa de 3º lugar",
+    });
+    if (f.notes) out.push({ label: "Observações", value: f.notes });
+    return out;
+  }, [sheet]);
+
+  const headerLine = useMemo(() => {
+    if (!sheet) return null;
+    const koto = sheet.fields?.koto || sheet.area?.name || fallbackKoto;
+    const cName = [sheet.category.name, sheet.category.division_name, sheet.category.group_label]
+      .filter(Boolean).join(" · ");
+    return [sheet.competition.name, cName, koto ? `Koto ${koto}` : null].filter(Boolean).join("  ·  ");
+  }, [sheet, fallbackKoto]);
+
+  return (
+    <View style={s.sumulaBox}>
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Súmula da categoria"
+        style={(state) => [s.sumulaHead, (state as { hovered?: boolean }).hovered && s.sumulaHeadHover]}
+      >
+        <Icon name="clipboard" size={16} color={C.ink2} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.sumulaHeadTxt}>Súmula</Text>
+          <Text style={s.sumulaHeadSub} numberOfLines={1}>
+            Cabeçalho, regras e os campos da folha (shuchin, mesário, duração)
+          </Text>
+        </View>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={15} color={C.ink4} />
+      </Pressable>
+
+      {open && (
+        <View style={s.sumulaBody}>
+          {loading ? (
+            <>
+              <Skeleton width={220} height={14} />
+              <Skeleton height={70} radius={R.md} style={{ marginTop: 8 }} />
+              <Skeleton height={120} radius={R.md} style={{ marginTop: 8 }} />
+            </>
+          ) : noBracket ? (
+            <>
+              <View style={s.noticeBox}>
+                <Icon name="clock" size={16} color={C.ink3} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.noticeTitle}>Aguardando chave</Text>
+                  <Text style={s.noticeTxt}>
+                    A súmula desta categoria só existe depois que a mesa central gera a chave.
+                    Assim que sair, os campos abrem aqui.
+                  </Text>
+                </View>
+              </View>
+              <KarateButton label="Verificar de novo" variant="secondary" size="md" onPress={retry} />
+            </>
+          ) : loadError || !sheet ? (
+            <>
+              <View style={s.noticeBox}>
+                <Icon name="alert" size={16} color={C.ink3} />
+                <Text style={[s.noticeTxt, { flex: 1 }]}>{loadError || "Súmula indisponível no momento."}</Text>
+              </View>
+              <KarateButton label="Tentar de novo" variant="secondary" size="md" onPress={retry} />
+            </>
+          ) : (
+            <>
+              {/* Cabeçalho impresso da folha */}
+              <View style={s.sumulaHeaderCard}>
+                <Text style={s.sumulaEyebrow}>Cabeçalho</Text>
+                <Text style={s.sumulaHeaderTxt}>{headerLine}</Text>
+                <Text style={s.sumulaHeaderMeta}>
+                  {sheet.athletes.length} atleta{sheet.athletes.length === 1 ? "" : "s"} inscrito
+                  {sheet.athletes.length === 1 ? "" : "s"}
+                </Text>
+              </View>
+
+              {/* Rodapé de regras — leitura, é o que valia impresso */}
+              {(rules.length > 0 || !!sheet.rules_footer?.third_place_note) && (
+                <View style={s.rulesCard}>
+                  <Text style={s.sumulaEyebrow}>Regras da categoria</Text>
+                  {rules.map((r) => (
+                    <View key={r.label} style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>{r.label}</Text>
+                      <Text style={s.ruleValue}>{r.value}</Text>
+                    </View>
+                  ))}
+                  {!!sheet.rules_footer?.third_place_note && (
+                    <View style={s.ruleNoteBox}>
+                      <Icon name="info" size={13} color={P.red2} />
+                      <Text style={s.ruleNoteTxt}>{sheet.rules_footer.third_place_note}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Campos manuscritos — o que a mesa preenche à mão na folha */}
+              <View style={s.fieldsCard}>
+                <Text style={s.sumulaEyebrow}>Preenchimento da mesa</Text>
+
+                <SumulaField
+                  label="Shuchin"
+                  hint="Árbitro-chefe responsável pela categoria."
+                  value={shuchin}
+                  onChange={setShuchin}
+                  editable={!saving}
+                />
+                <SumulaField
+                  label="Mesário"
+                  hint={suggestedMesario
+                    ? "Sugerido pelo seu acesso — confira e salve para gravar."
+                    : "Quem operou a mesa nesta categoria."}
+                  hintAccent={suggestedMesario}
+                  value={mesario}
+                  onChange={(v) => { setMesario(v); setSuggestedMesario(false); }}
+                  editable={!saving}
+                />
+                <SumulaField
+                  label="Duração"
+                  hint="Tempo de luta/apresentação registrado na folha (ex.: 2 min)."
+                  value={duracao}
+                  onChange={setDuracao}
+                  editable={!saving}
+                />
+
+                <KarateButton
+                  label={saving ? "Salvando..." : dirty ? "Salvar súmula" : "Súmula salva"}
+                  variant="sumi"
+                  size="lg"
+                  loading={saving}
+                  disabled={saving || !dirty}
+                  onPress={handleSave}
+                />
+                <Text style={s.fieldsFoot}>
+                  Campo em branco limpa o valor gravado. Máximo de {SUMULA_MAX} caracteres por campo.
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SumulaField({ label, hint, hintAccent, value, onChange, editable }: {
+  label: string;
+  hint: string;
+  hintAccent?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  editable: boolean;
+}) {
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <TextInput
+        style={s.fieldInput}
+        value={value}
+        onChangeText={(v) => onChange(v.slice(0, SUMULA_MAX))}
+        editable={editable}
+        maxLength={SUMULA_MAX}
+        placeholder="Em branco"
+        placeholderTextColor={C.ink4}
+        accessibilityLabel={`${label} da súmula`}
+      />
+      <Text style={[s.fieldHint, hintAccent && s.fieldHintAccent]}>{hint}</Text>
+    </View>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
 // Card do pódio (após o finalize) — celebratório, sóbrio.
 // ════════════════════════════════════════════════════════════
 function PodiumCard({ catName, podium }: { catName: string; podium: PodiumEntry[] }) {
@@ -1480,6 +1784,38 @@ const s = StyleSheet.create({
   tieBreakBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.warnWash, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12 } as ViewStyle,
   tieBreakTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.warn } as TextStyle,
   tieBreakTxt: { fontFamily: F.body, fontSize: 12, color: C.ink2, lineHeight: 17, marginTop: 2 } as TextStyle,
+
+  // Súmula — seção discreta abaixo do painel de operação
+  sumulaBox: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.md, overflow: "hidden" } as ViewStyle,
+  sumulaHead: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 12, minHeight: 60 } as ViewStyle,
+  sumulaHeadHover: { backgroundColor: C.glassHi } as ViewStyle,
+  sumulaHeadTxt: { fontFamily: F.body, fontSize: 14, fontWeight: "700", color: C.ink } as TextStyle,
+  sumulaHeadSub: { fontFamily: F.body, fontSize: 11.5, color: C.ink3, marginTop: 2 } as TextStyle,
+  sumulaBody: { padding: 12, paddingTop: 0, gap: 10 } as ViewStyle,
+  sumulaEyebrow: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 0.9, textTransform: "uppercase", color: C.ink3 } as TextStyle,
+
+  sumulaHeaderCard: { backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12, gap: 4 } as ViewStyle,
+  sumulaHeaderTxt: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink, lineHeight: 19 } as TextStyle,
+  sumulaHeaderMeta: { fontFamily: F.body, fontSize: 11.5, color: C.ink3 } as TextStyle,
+
+  rulesCard: { backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12, gap: 7 } as ViewStyle,
+  ruleRow: { gap: 1 } as ViewStyle,
+  ruleLabel: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: C.ink3 } as TextStyle,
+  ruleValue: { fontFamily: F.body, fontSize: 12.5, color: C.ink2, lineHeight: 18 } as TextStyle,
+  ruleNoteBox: { flexDirection: "row", alignItems: "flex-start", gap: 7, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.sm, padding: 10, marginTop: 2 } as ViewStyle,
+  ruleNoteTxt: { flex: 1, fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: P.red3, lineHeight: 18 } as TextStyle,
+
+  fieldsCard: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12, gap: 12 } as ViewStyle,
+  fieldWrap: { gap: 5 } as ViewStyle,
+  fieldLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: C.ink2 } as TextStyle,
+  fieldInput: {
+    minHeight: 52, borderWidth: 1, borderColor: C.border2, borderRadius: R.md,
+    backgroundColor: C.glassHi, paddingHorizontal: 12, paddingVertical: 10,
+    fontFamily: F.body, fontSize: 15, color: C.ink,
+  } as TextStyle,
+  fieldHint: { fontFamily: F.body, fontSize: 11, color: C.ink4, lineHeight: 15 } as TextStyle,
+  fieldHintAccent: { color: P.red2, fontWeight: "700" } as TextStyle,
+  fieldsFoot: { fontFamily: F.body, fontSize: 10.5, color: C.ink4, lineHeight: 15 } as TextStyle,
 
   footNote: { flexDirection: "row", alignItems: "flex-start", gap: 6, paddingHorizontal: 4, marginTop: 6 } as ViewStyle,
   footNoteTxt: { flex: 1, fontFamily: F.body, fontSize: 11, color: C.ink4, lineHeight: 16 } as TextStyle,
