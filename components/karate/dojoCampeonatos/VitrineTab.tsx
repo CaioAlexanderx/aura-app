@@ -1,9 +1,10 @@
 // ============================================================
 // AURA DOJÔ — Campeonatos: VITRINE (cara de engine de eventos)
 //
-// Cards dos campeonatos 'open' da federação: data em destaque, local,
-// divisões como chips, "a partir de R$ X" e o CTA "Inscrever delegação"
-// → /karate/(dojo)/campeonatos/[cid] (o carrinho).
+// Cards dos campeonatos 'open' da federação — e dos closed/done onde o
+// dojô TEM delegação (dia do evento: badge "Inscrições encerradas" e CTA
+// "Presença e chaves"): data em destaque, local, divisões como chips,
+// "a partir de R$ X" e o CTA → /karate/(dojo)/campeonatos/[cid].
 //
 // Gate de conexão via resposta { not_linked } (nunca 403 mudo) → CTA de
 // conexão. schema_pending degrada para aviso (migração pendente).
@@ -21,7 +22,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { formatEventDateLong } from "@/utils/eventDate";
-import { karateDelegationsApi, OpenCompetition, formatBRL } from "@/services/karateDelegationsApi";
+import { karateDelegationsApi, OpenCompetition, formatBRL, isEnrollmentOpen } from "@/services/karateDelegationsApi";
 
 export function VitrineTab() {
   const router = useRouter();
@@ -96,6 +97,9 @@ function CompetitionCard({ comp, onEnroll }: { comp: OpenCompetition; onEnroll: 
   // "A partir de": menor valor conhecido no card. A cotação real (com
   // bandas, equipes e isenções) é papel do carrinho — aqui é só vitrine.
   const fromPrice = comp.fee_amount != null && comp.fee_amount > 0 ? comp.fee_amount : null;
+  // closed/done só chegam aqui quando o dojô TEM delegação — no dia do
+  // evento o card vira a porta da Presença/Minhas chaves, não da inscrição.
+  const open = isEnrollmentOpen(comp);
   return (
     <View style={s.card}>
       <View style={s.cardHead}>
@@ -103,7 +107,12 @@ function CompetitionCard({ comp, onEnroll }: { comp: OpenCompetition; onEnroll: 
           <Icon name="calendar" size={13} color={C.primary} />
           <Text style={s.dateTxt}>{formatEventDateLong(comp.event_date)}</Text>
         </View>
-        {comp.rectification_deadline ? (
+        {!open ? (
+          <View style={s.closedBadge}>
+            <Icon name="lock-closed" size={11} color={C.ink3} />
+            <Text style={s.closedBadgeTxt}>Inscrições encerradas</Text>
+          </View>
+        ) : comp.rectification_deadline ? (
           <Text style={s.deadline}>Retificações até {formatEventDateLong(comp.rectification_deadline)}</Text>
         ) : null}
       </View>
@@ -128,7 +137,9 @@ function CompetitionCard({ comp, onEnroll }: { comp: OpenCompetition; onEnroll: 
 
       <View style={s.footer}>
         <View>
-          {comp.has_pricing ? (
+          {!open ? (
+            <Text style={s.priceHint}>Sua delegação está inscrita</Text>
+          ) : comp.has_pricing ? (
             <Text style={s.priceHint}>Cotação por atleta e equipe no carrinho</Text>
           ) : fromPrice ? (
             <Text style={s.price}>a partir de <Text style={s.priceStrong}>{formatBRL(fromPrice)}</Text></Text>
@@ -136,7 +147,7 @@ function CompetitionCard({ comp, onEnroll }: { comp: OpenCompetition; onEnroll: 
             <Text style={s.priceHint}>Consulte valores no carrinho</Text>
           )}
         </View>
-        <KarateButton label="Inscrever delegação" variant="sumi" size="md" onPress={onEnroll} />
+        <KarateButton label={open ? "Inscrever delegação" : "Presença e chaves"} variant="sumi" size="md" onPress={onEnroll} />
       </View>
     </View>
   );
@@ -148,6 +159,8 @@ const s = StyleSheet.create({
   dateBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.primarySoft, borderRadius: R.sm, paddingHorizontal: 10, paddingVertical: 4 } as ViewStyle,
   dateTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
   deadline: { fontSize: 11, color: C.ink3 } as TextStyle,
+  closedBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: C.border2, backgroundColor: C.glassHi, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 } as ViewStyle,
+  closedBadgeTxt: { fontSize: 11, fontWeight: "700", color: C.ink3 } as TextStyle,
   name: { fontSize: 18, fontFamily: F.heading, color: C.ink, marginTop: 2 } as TextStyle,
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
   metaTxt: { fontSize: 13, color: C.ink2 } as TextStyle,
