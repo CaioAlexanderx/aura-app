@@ -333,16 +333,25 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
       const midX = colRight + TT.CONN_W / 2;
       // P&B: o caminho do vencedor (vermelho) também é MAIS ESPESSO (2px vs
       // 1.4px) — sobrevive em grayscale como traço mais forte.
-      const seg = function (x: number, y: number, w: number, h: number, red: boolean) {
-        const thick = red ? 2 : 1.4;
+      // `alive` = vencedor ainda em prova (luta seguinte indefinida ou
+      // vencida por ele) → traço vermelho GROSSO; eliminado = vermelho 2px.
+      const seg = function (x: number, y: number, w: number, h: number, red: boolean, alive?: boolean) {
+        const thick = alive ? 3 : (red ? 2 : 1.4);
         const horizontal = h === 0;
         const gxs = side === "L" ? x : canvasW - x - (horizontal ? w : 0);
         abs += '<div class="tline' + (red ? ' tred' : '') + '" style="left:' + (horizontal ? gxs : gxs - thick / 2) +
           'px;top:' + (y - thick / 2) + 'px;width:' + (horizontal ? w : thick) +
           'px;height:' + (horizontal ? thick : h + thick) + 'px"></div>';
       };
+      const feederAlive = (feeder: BracketMatch | undefined, next: BracketMatch | undefined) => {
+        const w = feeder?.winner_entry_id;
+        if (!w) return false;
+        const nw = next?.winner_entry_id;
+        return !nw || nw === w;
+      };
       if (c === wingRounds - 1) {
-        seg(colRight, centers[c][0], TT.CONN_W, 0, !!wing[c][0]?.winner_entry_id);
+        seg(colRight, centers[c][0], TT.CONN_W, 0, !!wing[c][0]?.winner_entry_id,
+          feederAlive(wing[c][0], rounds[totalRounds - 1][0]));
       } else {
         for (let i = 0; i < centers[c + 1].length; i++) {
           const topY = centers[c][2 * i];
@@ -351,11 +360,14 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
           const childY = (topY + botY) / 2;
           const topRed = !!wing[c][2 * i]?.winner_entry_id;
           const botRed = !!wing[c][2 * i + 1]?.winner_entry_id;
-          seg(colRight, topY, TT.CONN_W / 2, 0, topRed);
-          seg(colRight, botY, TT.CONN_W / 2, 0, botRed);
-          seg(midX, topY, 0, childY - topY, topRed);
-          seg(midX, childY, 0, botY - childY, botRed);
-          seg(midX, childY, TT.CONN_W / 2, 0, topRed || botRed);
+          const child = wing[c + 1][i];
+          const topAlive = feederAlive(wing[c][2 * i], child);
+          const botAlive = feederAlive(wing[c][2 * i + 1], child);
+          seg(colRight, topY, TT.CONN_W / 2, 0, topRed, topAlive);
+          seg(colRight, botY, TT.CONN_W / 2, 0, botRed, botAlive);
+          seg(midX, topY, 0, childY - topY, topRed, topAlive);
+          seg(midX, childY, 0, botY - childY, botRed, botAlive);
+          seg(midX, childY, TT.CONN_W / 2, 0, topRed || botRed, topAlive || botAlive);
         }
       }
     }
