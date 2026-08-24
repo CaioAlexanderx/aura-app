@@ -61,7 +61,7 @@ const MODALITY_LABEL: Record<string, string> = {
   enbu: "Enbu", fukugo: "Fukugo",
 };
 
-const isKataModality = (m: string) => m === "kata" || m === "team_kata";
+const isKataModality = (m: string) => m === "kata" || m === "team_kata" || m === "enbu";
 
 type CatStatus = "pendente" | "andamento" | "decidida" | "finalizada" | "desconhecido";
 
