@@ -11,6 +11,12 @@ export type Product = {
   unit: string;
   brand: string;
   notes: string;
+  // Migration 305 — ficha tecnica. Opcionais: a maioria dos catalogos
+  // hoje nao tem nenhum dos tres, e a loja simplesmente nao mostra a
+  // secao quando estao vazios.
+  material?: string;
+  medidas?: string;
+  cuidados?: string;
   color: string;
   size: string;
   image_url?: string;
