@@ -21,7 +21,7 @@
 import { request } from "@/services/api";
 import type {
   BracketState, BracketNotGenerated, AdvanceResult, FinalizeResult,
-  KataScore, KataScoreUpdate, KataAdvanceResult, KataPhase,
+  KataScore, KataScoreInput, KataScoreUpdate, KataAdvanceResult,
 } from "@/services/karateBracketsApi";
 import type { MatchDecision, Scoresheet } from "@/services/karateCompetitionP1Api";
 
@@ -109,10 +109,13 @@ export const karateMesaApi = {
   getKataScores: (catId: string): Promise<KataScore[]> =>
     req(`/categories/${catId}/kata-scores`),
 
-  /** PUT /categories/:catId/kata-scores — lança/edita UMA nota. */
+  /**
+   * PUT /categories/:catId/kata-scores — lança/edita a nota de um atleta.
+   * Onda B: `notas` (uma por árbitro) é o modo novo; `nota` única segue aceita.
+   */
   putKataScore: (
     catId: string,
-    body: { entry_id: string; phase: KataPhase; nota: number }
+    body: KataScoreInput
   ): Promise<KataScoreUpdate> =>
     req(`/categories/${catId}/kata-scores`, { method: "PUT", body, retry: 0 }),
 

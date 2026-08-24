@@ -161,15 +161,33 @@ export interface KataScore {
   student_name: string;
   dojo_name: string | null;
   phase: KataPhase;
+  /** TOTAL computado pelo backend (soma cortando a maior e a menor). */
   nota: number | null;
+  /** Onda B: notas individuais dos árbitros (3–7, padrão 5). null no legado. */
+  notas?: number[] | null;
   presentation_order: number | null;
   advances: boolean | null;
+}
+
+/**
+ * Onda B — corpo do PUT .../kata-scores.
+ * `notas` (uma nota por árbitro, 3–7 valores 0..10) é o modo novo: o backend
+ * computa o TOTAL cortando a maior e a menor. `nota` única segue aceita
+ * (legado / bandeirada convertida). Enviar um dos dois.
+ */
+export interface KataScoreInput {
+  entry_id: string;
+  phase: KataPhase;
+  nota?: number;
+  notas?: number[];
 }
 
 export interface KataScoreUpdate {
   entry_id: string;
   phase: KataPhase;
+  /** TOTAL computado pelo servidor — a verdade. */
   nota: number;
+  notas?: number[] | null;
   updated_at: string;
 }
 
@@ -177,6 +195,11 @@ export interface KataAdvanceResult {
   advanced: number;
   eliminated: number;
   advancing_entry_ids: string[];
+  /**
+   * Onda B: entry_ids empatados NA LINHA DE CORTE após a cascata de desempate
+   * — exigem novo kata. O avanço acontece mesmo assim.
+   */
+  tie_break_needed?: string[];
 }
 
 export interface KataOrderResult {
@@ -302,7 +325,7 @@ export const karateBracketsApi = {
     federationId: string,
     cid: string,
     catId: string,
-    body: { entry_id: string; phase: KataPhase; nota: number }
+    body: KataScoreInput
   ): Promise<KataScoreUpdate> =>
     request(
       `/federation/${federationId}/competitions/${cid}/categories/${catId}/kata-scores`,
