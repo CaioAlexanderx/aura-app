@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
-import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
+import { Fonts, GOOGLE_FONTS_CSS, cssDeExcecaoDeFonte } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { PageTransition } from "@/components/PageTransition";
@@ -64,7 +64,18 @@ function useWebFonts() {
     const p2 = document.createElement("link"); p2.rel = "preconnect"; p2.href = "https://fonts.gstatic.com"; p2.crossOrigin = ""; document.head.appendChild(p2);
     const lk = document.createElement("link"); lk.id = "aura-fonts"; lk.rel = "stylesheet"; lk.href = GOOGLE_FONTS_CSS; document.head.appendChild(lk);
     const st = document.createElement("style"); st.id = "aura-font-override";
-    st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
+    // A regra universal com !important segura a tipografia da Aura contra
+    // as fontes de sistema que o react-native-web espalha. Ela fica.
+    //
+    // O que faltava era a EXCECAO: `!important` num seletor universal ganha
+    // tambem de quem tem motivo legitimo pra usar outra fonte. O preview de
+    // tipografia mostrava as quatro opcoes identicas por causa disto — as
+    // familias carregavam, a escolha chegava no componente, e esta linha
+    // sobrescrevia as quatro pra DM Sans. As regras de excecao vem DEPOIS
+    // e ganham por especificidade (seletor de atributo > universal).
+    st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n"
+      + cssDeExcecaoDeFonte() + "\n"
+      + "@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
     document.head.appendChild(st);
     document.documentElement.lang = "pt-BR";
     if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/png"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png"; document.head.appendChild(fav); }

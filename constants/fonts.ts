@@ -191,3 +191,56 @@ export const Typography = {
   caption: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "500" as const },
   mono: { fontFamily: Fonts.mono, fontSize: 13, fontWeight: "500" as const },
 } as const;
+
+/**
+ * A saída de emergência da regra global de fonte.
+ *
+ * O painel injeta `*, *::before, *::after { font-family: <corpo> !important }`
+ * (ver app/(tabs)/_layout.tsx). A regra existe porque o react-native-web
+ * espalha fontes de sistema por toda parte e sem ela metade do painel sai
+ * na fonte errada — não é sujeira, é o que segura a tipografia da Aura.
+ *
+ * Só que `!important` num seletor universal ganha de TUDO, inclusive do
+ * `fontFamily` que um componente define no próprio estilo. Foi por isso
+ * que o preview de tipografia mostrava as quatro opções idênticas: as
+ * quatro famílias carregavam, a escolha chegava no componente, e a regra
+ * global sobrescrevia as quatro para DM Sans. Medido na tela: os quatro
+ * espécimes computavam a mesma `font-family` e tinham a mesma largura em
+ * pixels.
+ *
+ * Estas regras são a exceção declarada. Um seletor de atributo tem
+ * especificidade maior que `*`, então entre duas declarações `!important`
+ * ele vence. Quem quiser fugir da regra global marca o elemento com
+ * `dataSet={{ auraDisplay: chave }}` (ou `auraBody`) — API do
+ * react-native-web que vira `data-aura-display` no DOM.
+ *
+ * ATENÇÃO AO ATRIBUTO REPETIDO — não é engano de digitação.
+ *
+ * A regra global não é só o `*`: ela traz junto um
+ * `div[dir] { … !important }`, e `div[dir]` tem especificidade (0,1,1),
+ * MAIOR que um seletor de atributo sozinho (0,1,0). O react-native-web
+ * renderiza `<Text>` como `<div dir="auto">`, então a exceção casava no
+ * elemento e perdia mesmo assim. Repetindo o atributo a especificidade vai
+ * a (0,2,0) e vence (0,1,1) sem depender da ordem das regras no arquivo.
+ *
+ * Medido no navegador: com um atributo só, os quatro espécimes seguiam em
+ * DM Sans; com dois, saem em Instrument Serif, Space Grotesk, Archivo
+ * Black e Fraunces.
+ *
+ * (É por isso que o `[data-aura-wm]` do wordmark funciona com um atributo
+ * só: `<Text>` dentro de `<Text>` vira `<span dir>`, e `div[dir]` não casa
+ * com span. O padrão da casa estava certo por acaso do tipo de elemento.)
+ *
+ * As regras saem daqui, do MESMO objeto que descreve os pares, para que
+ * adicionar uma quinta tipografia não exija lembrar de um segundo lugar.
+ */
+export function cssDeExcecaoDeFonte(): string {
+  const regras: string[] = [];
+  for (const par of Object.values(TIPOGRAFIAS)) {
+    const d = `[data-aura-display="${par.chave}"][data-aura-display]`;
+    const b = `[data-aura-body="${par.chave}"][data-aura-body]`;
+    regras.push(`${d} { font-family: ${par.display} !important; }`);
+    regras.push(`${b} { font-family: ${par.body} !important; }`);
+  }
+  return regras.join("\n");
+}
