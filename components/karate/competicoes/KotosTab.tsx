@@ -232,7 +232,7 @@ function BoardColumn({
       <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 6, padding: 8 }}>
         {categories.length === 0 ? (
           <Text style={s.colEmpty}>
-            {isUnassigned ? "Tudo alocado 🎉" : dnd.isWeb ? "Solte categorias aqui" : "Sem categorias"}
+            {isUnassigned ? "Tudo alocado" : dnd.isWeb ? "Solte categorias aqui" : "Sem categorias"}
           </Text>
         ) : (
           categories.map((cat) => (

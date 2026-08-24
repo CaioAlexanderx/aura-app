@@ -439,10 +439,13 @@ export function AlunoFormModal({ visible, federationId, student, onClose, onSave
       const r = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const j = await r.json();
       if (!j?.erro) {
-        setStreet((v) => j.logradouro || v);
-        setNeighborhood((v) => j.bairro || v);
-        setCity((v) => j.localidade || v);
-        setUfState((v) => j.uf || v);
+        // Só preenche campo VAZIO — o que o usuário digitou vence. A ordem
+        // invertida (ViaCEP vencia) sobrescrevia/duplicava o texto de quem
+        // digitava bairro/cidade enquanto a busca estava em voo (QA 23/08).
+        setStreet((v) => v || j.logradouro || "");
+        setNeighborhood((v) => v || j.bairro || "");
+        setCity((v) => v || j.localidade || "");
+        setUfState((v) => v || j.uf || "");
       }
     } catch {
       // silencioso — CEP é opcional
