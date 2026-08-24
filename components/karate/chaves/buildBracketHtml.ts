@@ -89,7 +89,8 @@ function renderTradSlot(
   const otherAthlete = isAthlete(otherValue) ? otherValue : null;
   const isWinner = !!winnerId && !!athlete && winnerId === athlete.entry_id;
   const isLoser = !!winnerId && !!otherAthlete && winnerId === otherAthlete.entry_id;
-  const cls = "tslot" + (isWinner ? " twin" : "") + (isLoser ? " tlose" : "");
+  // AKA = linha vermelha, como na folha oficial (mesma regra do BracketView).
+  const cls = "tslot" + (side === "aka" ? " taka" : "") + (isWinner ? " twin" : "") + (isLoser ? " tlose" : "");
 
   let inner: string;
   if (isBye) {
@@ -484,11 +485,12 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
   // Linha do atleta: nome à esquerda, dojô à direita, sublinhado de tinta.
   // P&B: vencedor = sublinhado MAIS GROSSO + negrito + ✓ (nunca só cor).
   html += '.tslot{height:' + TT.SLOT_H + 'px;display:flex;align-items:flex-end;gap:5px;padding:0 2px 2px;border-bottom:1.4px solid ' + INK + '}';
+  html += '.tslot.taka{border-bottom-color:' + RED + '}';
   html += '.tslot.twin{border-bottom:2.2px solid ' + RED + '}';
   html += '.tslot.twin .tname{font-weight:700}';
   html += '.tslot.tlose{opacity:0.5}';
   html += '.tdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-bottom:2px}';
-  html += '.tdot-aka{background:' + RED + '}';
+  html += '.tdot-aka{background:' + RED + ';width:7px;height:7px}';
   html += '.tdot-shiro{background:' + INK_2 + '}';
   html += '.tname{font-size:8.4pt;font-weight:500;color:' + INK + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}';
   html += '.tdojo{margin-left:auto;font-family:"DM Mono",monospace;font-size:6.4pt;color:' + INK_3 + ';text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44%}';
