@@ -76,7 +76,7 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
 
   if (!queue && !error) {
     return (
-      <View style={{ gap: 10 }}>
+      <View style={s.panel}>
         <Skeleton width={220} height={20} />
         <Skeleton height={120} radius={R.md} />
         <Skeleton height={120} radius={R.md} />
@@ -88,10 +88,12 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
 
   if (queue.schema_pending) {
     return (
-      <View style={s.emptyBox}>
-        <Icon name="clock" size={18} color={C.ink3} />
-        <Text style={s.emptyTitle}>Fila de premiação ainda não disponível</Text>
-        <Text style={s.emptyTxt}>O sistema está sendo atualizado (migração pendente). Tente novamente em instantes.</Text>
+      <View style={s.panel}>
+        <View style={s.emptyBox}>
+          <Icon name="clock" size={18} color={C.ink3} />
+          <Text style={s.emptyTitle}>Fila de premiação ainda não disponível</Text>
+          <Text style={s.emptyTxt}>O sistema está sendo atualizado (migração pendente). Tente novamente em instantes.</Text>
+        </View>
       </View>
     );
   }
@@ -99,7 +101,7 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
   const pendingCount = queue.pending ?? queue.data.filter((c) => !c.awards_delivered).length;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={s.panel}>
       <View style={s.head}>
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Fila de premiação</Text>
@@ -191,6 +193,9 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
 }
 
 const s = StyleSheet.create({
+  // PREMISSA (24/08): coluna central com largura máxima — mesma regra do
+  // Credenciamento; a fila de premiação não estica em monitor largo.
+  panel: { gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   head: { flexDirection: "row", alignItems: "flex-end", gap: 12, flexWrap: "wrap" } as ViewStyle,
   title: { fontFamily: F.heading, fontSize: 19, fontWeight: "400", color: C.ink } as TextStyle,
   hint: { fontFamily: F.body, fontSize: 12, color: C.ink3, marginTop: 2 } as TextStyle,

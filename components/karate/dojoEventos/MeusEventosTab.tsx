@@ -330,7 +330,9 @@ function Meta({ icon, text }: { icon: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingBottom: 40 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — meus eventos
+  // não esticam em monitor largo (padrão da mesa pública).
+  wrap: { padding: 16, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   section: { marginTop: 20 } as ViewStyle,
 
   cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 } as ViewStyle,

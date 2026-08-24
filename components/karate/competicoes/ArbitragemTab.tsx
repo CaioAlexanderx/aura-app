@@ -46,7 +46,7 @@ const STATUS_TONE: Record<OfficialStatus, { bg: string; fg: string }> = {
 export function ArbitragemTab({ federationId, competitionId }: { federationId: string; competitionId: string }) {
   const [section, setSection] = useState<"escala" | "termos">("escala");
   return (
-    <View style={{ gap: 12 }}>
+    <View style={s.panel}>
       <View style={s.sectionTabs}>
         {([["escala", "Arbitragem"], ["termos", "Termos"]] as [typeof section, string][]).map(([key, label]) => (
           <TouchableOpacity key={key} style={[s.sectionTab, section === key && s.sectionTabOn]} onPress={() => setSection(key)}>
@@ -616,6 +616,9 @@ function TermosSection({ federationId, competitionId }: { federationId: string; 
 }
 
 const s = StyleSheet.create({
+  // PREMISSA (24/08): coluna central com largura máxima — mesma regra do
+  // Credenciamento; escala e termos não esticam em monitor largo.
+  panel: { gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   sectionTabs: { flexDirection: "row", gap: 6 } as ViewStyle,
   sectionTab: { borderRadius: 999, borderWidth: 1, borderColor: C.border2, paddingHorizontal: 14, paddingVertical: 6 } as ViewStyle,
   sectionTabOn: { backgroundColor: C.primarySoft, borderColor: C.primaryLine } as ViewStyle,

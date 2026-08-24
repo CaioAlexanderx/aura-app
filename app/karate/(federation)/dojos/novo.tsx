@@ -187,7 +187,9 @@ export default function NovoDojo() {
 
 const styles = StyleSheet.create({
   screen:        { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content:       { padding: 16, gap: 12, paddingBottom: 32 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — o formulário
+  // não estica em monitor largo (padrão da mesa pública).
+  content:       { padding: 16, gap: 12, paddingBottom: 32, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   pageTitle:     { fontSize: 20, fontWeight: "800", color: KarateColors.ink, marginBottom: 4 } as TextStyle,
   card:          { backgroundColor: "#fff", borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 12 } as ViewStyle,
   sectionLabel:  { fontSize: 10, fontWeight: "800", color: KarateColors.ink3, letterSpacing: 1.2, textTransform: "uppercase" } as TextStyle,

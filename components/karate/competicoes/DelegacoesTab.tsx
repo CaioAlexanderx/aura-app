@@ -133,7 +133,7 @@ export function DelegacoesTab({ federationId, competitionId }: { federationId: s
   const pendingCount = (orders || []).filter((o) => o.status === "awaiting_confirmation").length;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={s.panel}>
       <View style={s.filters}>
         {FILTERS.map(([key, label]) => (
           <TouchableOpacity
@@ -274,6 +274,9 @@ function DetailView({ detail, rejectReason, onReason, actionable }: {
 }
 
 const s = StyleSheet.create({
+  // PREMISSA (24/08): coluna central com largura máxima — mesma regra do
+  // Credenciamento; a fila de conferência não estica em monitor largo.
+  panel: { gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 6 } as ViewStyle,
   filterChip: { borderRadius: 999, borderWidth: 1, borderColor: C.border2, paddingHorizontal: 11, paddingVertical: 5 } as ViewStyle,
   filterChipOn: { backgroundColor: C.primarySoft, borderColor: C.primaryLine } as ViewStyle,

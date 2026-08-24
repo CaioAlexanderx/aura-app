@@ -689,7 +689,9 @@ export default function ExameGraduacaoScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: P.paper } as ViewStyle,
-  wrap: { padding: 16, paddingBottom: 60 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a tela do exame
+  // não estica em monitor largo (padrão da mesa pública).
+  wrap: { padding: 16, paddingBottom: 60, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   section: { marginTop: 20 } as ViewStyle,
 
   rulesNote: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.glass2, borderWidth: 1, borderColor: P.line2, borderRadius: R.md, padding: 12, marginTop: 12 } as ViewStyle,

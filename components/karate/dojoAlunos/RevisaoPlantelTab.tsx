@@ -694,7 +694,9 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 12, paddingBottom: 60 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a revisão do
+  // plantel não estica em monitor largo (padrão da mesa pública).
+  content: { padding: 16, gap: 12, paddingBottom: 60, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
 
   lead: { gap: 4 } as ViewStyle,
   leadTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,

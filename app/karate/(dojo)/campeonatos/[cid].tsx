@@ -769,6 +769,7 @@ export default function DelegationCart() {
           evento (closed/done) não há o que cotar nem enviar. */}
       {tab === "inscricao" && enrollmentOpen && (
       <View style={s.footerBar}>
+        <View style={s.footerInner}>
         <View style={s.payRow}>
           {([["pix_direct", "PIX da federação"], ["manual", "Comprovante depois"]] as const).map(([mode, label]) => (
             <TouchableOpacity
@@ -792,6 +793,7 @@ export default function DelegationCart() {
             onPress={submit}
             disabled={!canSubmit}
           />
+        </View>
         </View>
       </View>
       )}
@@ -1328,10 +1330,12 @@ function SuccessView({ result, onDone }: { result: SubmitResponse; onDone: () =>
 
 // ── Estilos ─────────────────────────────────────────────────
 const s = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — cabeçalho e os
+  // cards do wizard (Atletas/Equipes/Oficiais/Cotação) não esticam a tela.
+  header: { flexDirection: "row", alignItems: "center", gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   compName: { fontSize: 19, fontFamily: F.heading, color: C.ink } as TextStyle,
   compMeta: { fontSize: 12.5, color: C.ink3, marginTop: 2 } as TextStyle,
-  section: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 14, gap: 10 } as ViewStyle,
+  section: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 14, gap: 10, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } as ViewStyle,
   sectionTitle: { fontSize: 13, fontWeight: "800", color: C.ink, flexShrink: 1 } as TextStyle,
   addBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: C.primaryLine, backgroundColor: C.primarySoft, borderRadius: R.sm, paddingHorizontal: 11, paddingVertical: 6 } as ViewStyle,
@@ -1451,7 +1455,10 @@ const s = StyleSheet.create({
   quoteTotalLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 } as ViewStyle,
   quoteTotalLabel: { fontSize: 13.5, fontWeight: "800", color: C.ink } as TextStyle,
   quoteTotalValue: { fontSize: 17, fontWeight: "800", color: C.ink, fontVariant: ["tabular-nums"] } as TextStyle,
-  footerBar: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border, padding: 12, gap: 8 } as ViewStyle,
+  // A barra do rodapé cobre a tela; o conteúdo (pagamento + total/enviar)
+  // segue a coluna central — total e botão não se separam em monitor largo.
+  footerBar: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border, padding: 12 } as ViewStyle,
+  footerInner: { width: "100%", maxWidth: 920, alignSelf: "center", gap: 8 } as ViewStyle,
   payRow: { flexDirection: "row", gap: 6 } as ViewStyle,
   payChip: { borderRadius: 999, borderWidth: 1, borderColor: C.border2, paddingHorizontal: 12, paddingVertical: 6 } as ViewStyle,
   payChipOn: { backgroundColor: C.primarySoft, borderColor: C.primaryLine } as ViewStyle,

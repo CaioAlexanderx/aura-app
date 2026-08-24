@@ -131,7 +131,9 @@ export function PedidosTab() {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
+      // PREMISSA (24/08): coluna central com largura máxima — pedidos não
+      // esticam em monitor largo (status/valor ficam perto do nome).
+      contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={C.primary} />}
     >
       {!orders || orders.length === 0 ? (

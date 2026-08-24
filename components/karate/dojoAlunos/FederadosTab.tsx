@@ -161,7 +161,9 @@ export function FederadosTab() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a lista de
+  // federados não estica em monitor largo (padrão da mesa pública).
+  content: { padding: 16, gap: 14, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, lineHeight: 18, maxWidth: 520 } as TextStyle,
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
   stateTxt: { fontSize: 14, fontWeight: "600", color: KarateColors.ink2, textAlign: "center" } as TextStyle,

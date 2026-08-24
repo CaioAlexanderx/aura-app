@@ -65,7 +65,7 @@ export function SetupTab({
   rectificationDeadline, conferencePublishedAt, bracketsPublishedAt, onChanged,
 }: Props) {
   return (
-    <View style={{ gap: 14 }}>
+    <View style={s.panel}>
       <DivisionsBlock federationId={federationId} competitionId={competitionId} divisions={divisions} onChanged={onChanged} />
       <PricingBlock federationId={federationId} competitionId={competitionId} pricing={pricing} onChanged={onChanged} />
       <CycleBlock
@@ -473,6 +473,9 @@ function PublishRow({ label, hint, publishedAt, busy, onToggle }: {
 }
 
 const s = StyleSheet.create({
+  // PREMISSA (24/08): coluna central com largura máxima — mesma regra do
+  // Credenciamento; blocos de configuração não esticam em monitor largo.
+  panel: { gap: 14, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   block: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 14, gap: 10 } as ViewStyle,
   blockHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 } as ViewStyle,
   blockTitle: { fontSize: 14, fontWeight: "800", color: C.ink } as TextStyle,
