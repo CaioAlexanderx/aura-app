@@ -2,8 +2,9 @@
 // buildBracketHtml — Aura Karatê (Fase 3: impressão da chave Kumite)
 //
 // Gera um documento HTML completo para impressão da chave (bracket)
-// de Kumite: rounds em colunas (mesmos rótulos de roundLabel em
-// components/karate/chaves/shared.tsx), coluna do Campeão e a
+// de Kumite no MESMO layout de chave tradicional da tela (duas asas
+// espelhadas convergindo para a final no centro), com os mesmos rótulos
+// de roundLabel de components/karate/chaves/shared.tsx, o Campeão e a
 // disputa de 3º lugar quando existir. Segue o MESMO padrão de
 // buildCarteirinhaHtml.ts (botão flutuante "Imprimir" via window.print(),
 // @media print escondendo os controles de tela, Blob + window.open no
@@ -58,14 +59,25 @@ function isAthlete(v: BracketAthleteRef | "bye" | null | undefined): v is Bracke
   return !!v && v !== "bye";
 }
 
-// ── Lado do match (aka/shiro) ───────────────────────────────────────────
-// P&B: o vencedor NUNCA é indicado só por cor. Usamos:
-//   - ✓ (caractere, sempre visível em preto/cinza)
-//   - negrito no nome
-//   - classe "winner" que aplica fundo cinza-claro (funciona em grayscale)
-//     e borda mais escura — além do wash vermelho (só aparece a cores)
-//   - o lado perdedor fica com opacidade reduzida (cinza mais claro em P&B)
-function renderSide(
+// ── FOLHA TRADICIONAL (≤ 16 atletas) — mesma geometria do BracketView ───
+// Duas asas espelhadas convergindo para a final no CENTRO (referência:
+// folha oficial FPKT do Paulista JKA). Mesmo algoritmo do TraditionalSheet
+// em BracketView.tsx: coluna 0 em passos fixos, coluna c centralizada na
+// média das alimentadoras, asa direita espelhada (x' = canvasW − x − w).
+// Tudo em divs absolutos; o transform:scale que faz caber no A4 paisagem
+// é calculado AQUI em build time (a geometria é conhecida).
+//
+// P&B: o vencedor NUNCA é indicado só por cor — sublinhado MAIS GROSSO
+// (2px vs 1.4px), nome em negrito, ✓ e placar; perdedor com opacidade
+// reduzida. O traço vermelho do caminho do vencedor também é mais espesso,
+// então sobrevive em grayscale como linha mais forte.
+const TT = { SLOT_H: 26, SLOT_GAP: 14, GAP0: 20, COL_W: 195, CONN_W: 26, FINAL_W: 210 };
+const TT_MATCH_H = TT.SLOT_H * 2 + TT.SLOT_GAP;
+const AMBER_BG = "rgba(156,111,46,0.16)";
+const AMBER_BORDER = "rgba(122,87,36,0.45)";
+const AMBER_TEXT = "#7a5724";
+
+function renderTradSlot(
   value: BracketAthleteRef | "bye" | null | undefined,
   winnerId: string | null | undefined,
   otherValue: BracketAthleteRef | "bye" | null | undefined,
@@ -77,42 +89,45 @@ function renderSide(
   const otherAthlete = isAthlete(otherValue) ? otherValue : null;
   const isWinner = !!winnerId && !!athlete && winnerId === athlete.entry_id;
   const isLoser = !!winnerId && !!otherAthlete && winnerId === otherAthlete.entry_id;
+  const cls = "tslot" + (isWinner ? " twin" : "") + (isLoser ? " tlose" : "");
 
-  const sideClass = "side side-" + side + (isWinner ? " winner" : "") + (isLoser ? " loser" : "");
-  const dotClass = "dot dot-" + side;
-
-  let body: string;
+  let inner: string;
   if (isBye) {
-    body = '<span class="bye">BYE</span>';
+    inner = '<span class="tbye">BYE</span>';
   } else if (athlete) {
     const scoreTag = (isWinner && typeof score === "number")
-      ? '<span class="score">' + esc(String(score)) + '</span>'
+      ? '<span class="tscore">' + esc(String(score)) + '</span>'
       : "";
-    const check = isWinner ? '<span class="check">&#10003;</span>' : "";
-    body =
-      '<span class="' + dotClass + '"></span>' +
-      '<span class="athlete-block">' +
-        '<span class="athlete-name">' + esc(athlete.student_name) + '</span>' +
-        '<span class="athlete-dojo">' + esc(athlete.dojo_name || "&mdash;") + '</span>' +
-      '</span>' +
-      scoreTag + check;
+    const check = isWinner ? '<span class="tcheck">&#10003;</span>' : "";
+    inner =
+      '<span class="tdot tdot-' + side + '"></span>' +
+      '<span class="tname">' + esc(athlete.student_name) + '</span>' +
+      scoreTag + check +
+      '<span class="tdojo">' + esc(athlete.dojo_name || "") + '</span>';
   } else {
-    body = '<span class="pending">a definir</span>';
+    inner = '<span class="tpend">a definir</span>';
   }
-
-  return '<div class="' + sideClass + '">' + body + '</div>';
+  return '<div class="' + cls + '">' + inner + '</div>';
 }
 
-function renderMatch(match: BracketMatch, label?: string): string {
-  const aka = renderSide(match.aka, match.winner_entry_id, match.shiro, "aka", match.aka_score);
-  const shiro = renderSide(match.shiro, match.winner_entry_id, match.aka, "shiro", match.shiro_score);
-  const labelHtml = label ? '<div class="match-label">' + esc(label) + '</div>' : "";
+// A "dupla" da folha: duas linhas sublinhadas + chip âmbar com o nº da
+// luta no encontro das linhas. `dir` = L/R/C (asa esquerda/direita/centro).
+function renderTradMatch(m: BracketMatch, dir: "L" | "R" | "C", num?: number): string {
+  const chip = typeof num === "number"
+    ? '<div class="tnumrow tnum-' + dir + '"><span class="tnum">' + num + '</span></div>'
+    : "";
   return (
-    '<div class="match">' +
-      labelHtml +
-      '<div class="match-box">' + aka + '<div class="match-divider"></div>' + shiro + '</div>' +
+    '<div class="tmatch">' +
+      renderTradSlot(m.aka, m.winner_entry_id, m.shiro, "aka", m.aka_score) +
+      '<div class="tgap"></div>' +
+      renderTradSlot(m.shiro, m.winner_entry_id, m.aka, "shiro", m.shiro_score) +
+      chip +
     '</div>'
   );
+}
+
+function tradAthlete(v: BracketAthleteRef | "bye" | null | undefined): BracketAthleteRef | null {
+  return isAthlete(v) ? v : null;
 }
 
 // ── Planilha de confrontos (chaves grandes) ─────────────────────────────
@@ -251,48 +266,188 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
     return buildLargeBracketSheetHtml(bracket, totalRounds, printedAt, federationName, categoryName, competitionName, subtitle);
   }
 
-  // ── Colunas de rounds ──
-  const roundsHtml = bracket.rounds.map(function (round, rIdx) {
-    const matches = round.map(function (m) { return renderMatch(m); }).join("\n");
-    return (
-      '<div class="col">' +
-        '<div class="col-head">' + esc(roundLabel(rIdx, totalRounds)) + '</div>' +
-        '<div class="col-matches">' + matches + '</div>' +
-      '</div>'
-    );
-  }).join("\n");
+  // ── Geometria das duas asas (mesmo algoritmo do TraditionalSheet) ──
+  const rounds = bracket.rounds;
+  const hasWings = totalRounds >= 2;
+  const wingRounds = totalRounds - 1;
 
-  // ── Coluna do Campeão ──
-  const champHtml = bracket.champion
-    ? (
-      '<div class="champ-card">' +
-        '<div class="champ-eyebrow">Campe&atilde;o</div>' +
-        '<div class="champ-name">' + esc(bracket.champion.student_name) + '</div>' +
-        '<div class="champ-dojo">' + esc(bracket.champion.dojo_name || "&mdash;") + '</div>' +
-      '</div>'
-    )
-    : (
-      '<div class="champ-card champ-pending">' +
-        '<div class="champ-eyebrow">Campe&atilde;o</div>' +
-        '<div class="champ-name-pending">a definir</div>' +
-      '</div>'
-    );
+  const wingL: BracketMatch[][] = [];
+  const wingR: BracketMatch[][] = [];
+  for (let c = 0; c < wingRounds; c++) {
+    const half = Math.floor(rounds[c].length / 2);
+    wingL.push(rounds[c].slice(0, half));
+    wingR.push(rounds[c].slice(half));
+  }
 
-  const champCol =
-    '<div class="col col-champ">' +
-      '<div class="col-head">Campeão</div>' +
-      champHtml +
-    '</div>';
+  const centers: number[][] = [];
+  for (let c = 0; c < wingRounds; c++) {
+    const arr: number[] = [];
+    for (let i = 0; i < wingL[c].length; i++) {
+      if (c === 0) { arr.push(i * (TT_MATCH_H + TT.GAP0) + TT_MATCH_H / 2); continue; }
+      // Mesmo fallback do TraditionalSheet: chave que não é potência de 2
+      // exata pode não ter a segunda alimentadora — evita NaN na geometria.
+      const a = centers[c - 1][2 * i];
+      const b = centers[c - 1][2 * i + 1];
+      arr.push(b === undefined ? (a ?? i * (TT_MATCH_H + TT.GAP0) + TT_MATCH_H / 2) : (a + b) / 2);
+    }
+    centers.push(arr);
+  }
 
-  // ── Disputa de 3º lugar ──
-  const thirdHtml = bracket.third_place_match
-    ? (
-      '<div class="third-section">' +
-        '<div class="third-head">3º lugar</div>' +
-        renderMatch(bracket.third_place_match) +
-      '</div>'
-    )
-    : "";
+  const wingW = wingRounds * (TT.COL_W + TT.CONN_W);
+  const finalCenterY = hasWings ? centers[wingRounds - 1][0] : TT_MATCH_H / 2;
+  const wingH = hasWings
+    ? wingL[0].length * TT_MATCH_H + (wingL[0].length - 1) * TT.GAP0
+    : TT_MATCH_H;
+  const canvasW = wingW * 2 + TT.FINAL_W;
+  const finalTopLocal = finalCenterY - TT_MATCH_H / 2;
+  const stackH = TT_MATCH_H + 14 + 86 + (bracket.third_place_match ? 36 + TT_MATCH_H : 0);
+  const canvasH = Math.max(wingH, finalTopLocal + stackH) + 8;
+
+  // Numeração das lutas igual à folha: rodada a rodada, asa esquerda
+  // primeiro, final por último.
+  const numberById: Record<string, number> = {};
+  let seq = 1;
+  for (let r = 0; r < totalRounds; r++) {
+    const round = rounds[r];
+    if (round.length === 1) { numberById[round[0].id] = seq++; continue; }
+    const half = Math.floor(round.length / 2);
+    for (let i = 0; i < half; i++) numberById[round[i].id] = seq++;
+    for (let i = half; i < round.length; i++) numberById[round[i].id] = seq++;
+  }
+
+  // ── Células + conectores (divs absolutos) ──
+  let abs = "";
+  (["L", "R"] as Array<"L" | "R">).forEach(function (side) {
+    const wing = side === "L" ? wingL : wingR;
+    for (let c = 0; c < wingRounds; c++) {
+      const localX = c * (TT.COL_W + TT.CONN_W);
+      const gx = side === "L" ? localX : canvasW - localX - TT.COL_W;
+      wing[c].forEach(function (m, i) {
+        const top = centers[c][i] - TT_MATCH_H / 2;
+        abs += '<div class="tcell" style="left:' + gx + 'px;top:' + top + 'px;width:' + TT.COL_W + 'px">' +
+          renderTradMatch(m, side, numberById[m.id]) + '</div>';
+      });
+
+      const colRight = localX + TT.COL_W;
+      const midX = colRight + TT.CONN_W / 2;
+      // P&B: o caminho do vencedor (vermelho) também é MAIS ESPESSO (2px vs
+      // 1.4px) — sobrevive em grayscale como traço mais forte.
+      const seg = function (x: number, y: number, w: number, h: number, red: boolean) {
+        const thick = red ? 2 : 1.4;
+        const horizontal = h === 0;
+        const gxs = side === "L" ? x : canvasW - x - (horizontal ? w : 0);
+        abs += '<div class="tline' + (red ? ' tred' : '') + '" style="left:' + (horizontal ? gxs : gxs - thick / 2) +
+          'px;top:' + (y - thick / 2) + 'px;width:' + (horizontal ? w : thick) +
+          'px;height:' + (horizontal ? thick : h + thick) + 'px"></div>';
+      };
+      if (c === wingRounds - 1) {
+        seg(colRight, centers[c][0], TT.CONN_W, 0, !!wing[c][0]?.winner_entry_id);
+      } else {
+        for (let i = 0; i < centers[c + 1].length; i++) {
+          const topY = centers[c][2 * i];
+          const botY = centers[c][2 * i + 1];
+          if (topY === undefined || botY === undefined) continue;
+          const childY = (topY + botY) / 2;
+          const topRed = !!wing[c][2 * i]?.winner_entry_id;
+          const botRed = !!wing[c][2 * i + 1]?.winner_entry_id;
+          seg(colRight, topY, TT.CONN_W / 2, 0, topRed);
+          seg(colRight, botY, TT.CONN_W / 2, 0, botRed);
+          seg(midX, topY, 0, childY - topY, topRed);
+          seg(midX, childY, 0, botY - childY, botRed);
+          seg(midX, childY, TT.CONN_W / 2, 0, topRed || botRed);
+        }
+      }
+    }
+  });
+
+  // ── Coluna central: final → campeão → disputa de 3º ──
+  const finalMatch = rounds[totalRounds - 1][0];
+  let center = '<div class="tcenter" style="left:' + wingW + 'px;top:' + finalTopLocal + 'px;width:' + TT.FINAL_W + 'px">';
+  center += renderTradMatch(finalMatch, "C", numberById[finalMatch.id]);
+  if (bracket.champion) {
+    center += '<div class="tchamp"><div class="tchamp-eyebrow">Campe&atilde;o</div>' +
+      '<div class="tchamp-name">' + esc(bracket.champion.student_name) + '</div>' +
+      '<div class="tchamp-dojo">' + esc(bracket.champion.dojo_name || "&mdash;") + '</div></div>';
+  } else {
+    center += '<div class="tchamp tchamp-pending"><div class="tchamp-eyebrow">Campe&atilde;o</div>' +
+      '<div class="tchamp-name-pending">a definir</div></div>';
+  }
+  if (bracket.third_place_match) {
+    center += '<div class="tthird-label">Disputa de 3&ordm; lugar</div>' +
+      renderTradMatch(bracket.third_place_match, "C");
+  }
+  center += '</div>';
+
+  // ── Cabeçalhos de rodada ──
+  let roundHeads = "";
+  for (let c = 0; c < wingRounds; c++) {
+    const lx = c * (TT.COL_W + TT.CONN_W);
+    const label = esc(roundLabel(c, totalRounds));
+    const count = rounds[c].length === 1 ? "1 luta" : rounds[c].length + " lutas";
+    roundHeads += '<div class="thead-col" style="left:' + lx + 'px;width:' + TT.COL_W + 'px">' + label + '<span class="thead-count">' + count + '</span></div>';
+    roundHeads += '<div class="thead-col" style="left:' + (canvasW - lx - TT.COL_W) + 'px;width:' + TT.COL_W + 'px">' + label + '<span class="thead-count">' + count + '</span></div>';
+  }
+  roundHeads += '<div class="thead-col" style="left:' + wingW + 'px;width:' + TT.FINAL_W + 'px">' + esc(roundLabel(totalRounds - 1, totalRounds)) + '<span class="thead-count">1 luta</span></div>';
+
+  // ── Pódio (1º/2º/3º/3º — dois terceiros sem disputa, como na folha) ──
+  const finalAka = tradAthlete(finalMatch.aka);
+  const finalShiro = tradAthlete(finalMatch.shiro);
+  const second = finalMatch.winner_entry_id
+    ? (finalAka && finalAka.entry_id === finalMatch.winner_entry_id ? finalShiro : finalAka)
+    : null;
+  let thirds: Array<BracketAthleteRef | null> = [];
+  if (bracket.third_place_match) {
+    const tm = bracket.third_place_match;
+    const ta = tradAthlete(tm.aka);
+    const ts = tradAthlete(tm.shiro);
+    thirds = [tm.winner_entry_id
+      ? (ta && ta.entry_id === tm.winner_entry_id ? ta : ts && ts.entry_id === tm.winner_entry_id ? ts : null)
+      : null];
+  } else if (totalRounds >= 2) {
+    thirds = (rounds[totalRounds - 2] || []).map(function (m) {
+      if (!m.winner_entry_id) return null;
+      const a = tradAthlete(m.aka);
+      const s = tradAthlete(m.shiro);
+      return a && a.entry_id === m.winner_entry_id ? s : a;
+    });
+  }
+  const podiumLine = function (label: string, athlete: BracketAthleteRef | null): string {
+    const fill = athlete
+      ? esc(athlete.student_name) + (athlete.dojo_name ? '<span class="tpodium-dojo"> &middot; ' + esc(athlete.dojo_name) + '</span>' : "")
+      : "&nbsp;";
+    return '<div class="tpodium-line"><span class="tpodium-label">' + label + '</span><span class="tpodium-fill">' + fill + '</span></div>';
+  };
+  let podium = podiumLine("1&ordm; LUGAR", bracket.champion) + podiumLine("2&ordm; LUGAR", second);
+  thirds.forEach(function (t) { podium += podiumLine("3&ordm; LUGAR", t); });
+
+  // ── Observações de formato (phase_plan resolvido por rodada) ──
+  let obs = "";
+  const pbr = bracket.phases_by_round || [];
+  if (pbr.length > 0) {
+    let start = 0;
+    for (let r = 1; r <= pbr.length; r++) {
+      const cur = r < pbr.length ? ((pbr[r] && pbr[r].format_label) || null) : null;
+      const prev = (pbr[start] && pbr[start].format_label) || null;
+      if (r === pbr.length || cur !== prev) {
+        if (prev) {
+          const a = roundLabel(start, totalRounds);
+          const b = roundLabel(r - 1, totalRounds);
+          obs += '<div>' + esc(a === b ? a + ": " + prev : a + " até " + b + ": " + prev) + '</div>';
+        }
+        start = r;
+      }
+    }
+  }
+  if (!bracket.third_place_match && totalRounds >= 2) {
+    obs += '<div>N&atilde;o tem disputa de 3&ordm; lugar</div>';
+  }
+
+  // ── Escala pra caber no A4 paisagem (margens de 10mm ≈ 1046×718px) ──
+  const headerH = 62;
+  const roundBandH = 28;
+  const footerH = 120;
+  const totalH = headerH + roundBandH + canvasH + footerH;
+  const scale = Math.min(1, 1000 / canvasW, 660 / totalH);
 
   let html = '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Chave - ' + esc(categoryName || "Kumite") + '</title>';
@@ -302,93 +457,100 @@ export function buildBracketHtml(bracket: BracketState, options?: BuildBracketHt
   html += '*{margin:0;padding:0;box-sizing:border-box}';
   html += 'html,body{background:' + PAPER + ';color:' + INK + ';font-family:"Zen Kaku Gothic New",system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
 
-  // ── Cabeçalho ──
-  html += '.sheet{padding:70px 24px 60px}';
-  html += '.header{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid ' + INK + ';padding-bottom:10px;margin-bottom:20px}';
-  html += '.header-left{display:flex;flex-direction:column;gap:2px}';
-  html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:13pt;font-weight:500;color:' + INK + '}';
-  html += '.cat-name{font-size:10.5pt;font-weight:700;color:' + INK + ';margin-top:4px}';
-  html += '.comp-sub{font-size:9pt;color:' + INK_2 + '}';
-  html += '.header-right{text-align:right;font-family:"DM Mono",monospace;font-size:8pt;color:' + INK_3 + '}';
+  html += '.sheet{padding:70px 24px 40px}';
+  html += '.twrap{width:' + Math.ceil(canvasW * scale) + 'px;height:' + Math.ceil(totalH * scale) + 'px;margin:0 auto;overflow:visible}';
+  html += '.tscale{width:' + canvasW + 'px;transform:scale(' + scale.toFixed(4) + ');transform-origin:top left}';
 
-  // ── Grid do bracket ──
-  html += '.bracket{display:flex;gap:26px;align-items:center;overflow:visible}';
-  html += '.col{display:flex;flex-direction:column;gap:14px;min-width:190px}';
-  html += '.col-champ{min-width:170px}';
-  html += '.col-head{font-family:"DM Mono",monospace;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1.4pt;color:' + INK_2 + ';text-align:center;border-bottom:1px solid ' + LINE_2 + ';padding-bottom:6px;margin-bottom:2px}';
-  html += '.col-matches{display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:14px}';
+  // Cabeçalho da folha: Koto · categoria centralizada · Data
+  html += '.theader{display:flex;align-items:flex-end;gap:14px;height:' + headerH + 'px;padding-bottom:10px}';
+  html += '.tfield{flex:1;font-family:"DM Mono",monospace;font-size:8.5pt;color:' + INK_2 + '}';
+  html += '.tfield.tright{text-align:right}';
+  html += '.tcat-wrap{flex:2;text-align:center}';
+  html += '.tcat{font-family:"Shippori Mincho",serif;font-size:13.5pt;font-weight:500;color:' + INK + '}';
+  html += '.tcomp{font-size:8.5pt;font-weight:700;color:' + RED + ';text-transform:uppercase;letter-spacing:0.08em;margin-top:2px}';
 
-  // ── Match card ──
-  // P&B: borda preta sólida sempre visível (não depende de tinta colorida);
-  // .match-box tem fundo branco puro (contraste máximo em qualquer impressora).
-  html += '.match{display:flex;flex-direction:column;gap:2px}';
-  html += '.match-label{font-family:"DM Mono",monospace;font-size:6.5pt;text-transform:uppercase;letter-spacing:0.8pt;color:' + INK_3 + '}';
-  html += '.match-box{border:1.3px solid ' + INK + ';border-radius:6px;overflow:hidden;background:#ffffff}';
-  html += '.side{display:flex;align-items:center;gap:6px;padding:6px 8px;min-height:34px;position:relative}';
-  html += '.side-shiro{border-top:1px solid ' + INK + '}';
+  // Cabeçalhos de rodada
+  html += '.theads{position:relative;height:' + roundBandH + 'px}';
+  html += '.thead-col{position:absolute;top:0;text-align:center;font-family:"DM Mono",monospace;font-size:7pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + INK_2 + '}';
+  html += '.thead-count{display:block;font-size:6.3pt;font-weight:400;letter-spacing:0;color:' + INK_3 + '}';
 
-  // P&B: dot colorido (aka=vermelho, shiro=cinza-escuro) é SÓ decorativo —
-  // a distinção real de lado vem do texto/posição, não da cor do dot.
-  html += '.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}';
-  html += '.dot-aka{background:' + RED + '}';
-  html += '.dot-shiro{background:' + INK_2 + '}';
+  // Canvas da árvore
+  html += '.tcanvas{position:relative;width:' + canvasW + 'px;height:' + canvasH + 'px}';
+  html += '.tcell{position:absolute}';
+  html += '.tcenter{position:absolute}';
+  html += '.tmatch{position:relative;height:' + TT_MATCH_H + 'px}';
+  html += '.tgap{height:' + TT.SLOT_GAP + 'px}';
 
-  html += '.athlete-block{flex:1;min-width:0;display:flex;flex-direction:column}';
-  html += '.athlete-name{font-size:8.6pt;font-weight:500;color:' + INK + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}';
-  html += '.athlete-dojo{font-family:"DM Mono",monospace;font-size:6.6pt;color:' + INK_3 + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}';
+  // Linha do atleta: nome à esquerda, dojô à direita, sublinhado de tinta.
+  // P&B: vencedor = sublinhado MAIS GROSSO + negrito + ✓ (nunca só cor).
+  html += '.tslot{height:' + TT.SLOT_H + 'px;display:flex;align-items:flex-end;gap:5px;padding:0 2px 2px;border-bottom:1.4px solid ' + INK + '}';
+  html += '.tslot.twin{border-bottom:2.2px solid ' + RED + '}';
+  html += '.tslot.twin .tname{font-weight:700}';
+  html += '.tslot.tlose{opacity:0.5}';
+  html += '.tdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-bottom:2px}';
+  html += '.tdot-aka{background:' + RED + '}';
+  html += '.tdot-shiro{background:' + INK_2 + '}';
+  html += '.tname{font-size:8.4pt;font-weight:500;color:' + INK + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}';
+  html += '.tdojo{margin-left:auto;font-family:"DM Mono",monospace;font-size:6.4pt;color:' + INK_3 + ';text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44%}';
+  html += '.tscore{font-family:"DM Mono",monospace;font-size:7pt;font-weight:700;color:' + INK + ';background:#fff;border:1px solid ' + INK_3 + ';border-radius:3px;padding:0 3px}';
+  html += '.tcheck{font-size:8pt;font-weight:700;color:' + RED + '}';
+  html += '.tbye{font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1pt;color:' + INK_4 + '}';
+  html += '.tpend{font-size:7.5pt;font-style:italic;color:' + INK_4 + '}';
 
-  // ── P&B: vencedor/perdedor ──
-  // Vencedor: fundo cinza MUITO claro (visível em grayscale, não some ao
-  // imprimir sem toner colorido) + borda esquerda mais grossa/escura +
-  // nome em negrito + ✓ + placar. É a combinação de 4 sinais não-cromáticos
-  // que garante legibilidade em P&B — a cor (wash vermelho) é só um reforço
-  // para quem imprime colorido.
-  html += '.side.winner{background:#eeeae2;border-left:3px solid ' + INK + '}';
-  html += '.side.winner .athlete-name{font-weight:700}';
-  html += '.side.winner .check{font-size:9.5pt;font-weight:700;color:' + INK + ';margin-left:2px}';
-  html += '.side.winner .score{font-family:"DM Mono",monospace;font-size:8pt;font-weight:700;color:' + INK + ';background:#fff;border:1px solid ' + INK_3 + ';border-radius:3px;padding:1px 5px;margin-left:4px}';
-  // Perdedor: opacidade reduzida — em grayscale vira cinza mais claro
-  // (contraste menor), sem depender de matiz.
-  html += '.side.loser{opacity:0.45}';
-  html += '.side .bye{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1pt;color:' + INK_4 + '}';
-  html += '.side .pending{font-size:8pt;font-style:italic;color:' + INK_4 + '}';
-  html += '.match-divider{display:none}'; // a borda de .side-shiro já faz a separação
+  // Chip do número da luta (o retângulo amarelo da folha oficial)
+  html += '.tnumrow{position:absolute;left:0;right:0;top:' + (TT.SLOT_H + TT.SLOT_GAP / 2 - 8) + 'px;display:flex;padding:0 2px}';
+  html += '.tnum-L{justify-content:flex-end}.tnum-R{justify-content:flex-start}.tnum-C{justify-content:center}';
+  html += '.tnum{min-width:20px;height:15px;padding:0 4px;border-radius:3px;background:' + AMBER_BG + ';border:1px solid ' + AMBER_BORDER + ';color:' + AMBER_TEXT + ';font-family:"DM Mono",monospace;font-size:7.5pt;font-weight:700;display:flex;align-items:center;justify-content:center}';
 
-  // ── Coluna do campeão ──
-  html += '.champ-card{border:2px solid ' + INK + ';border-radius:8px;padding:16px 12px;text-align:center;background:#fff;display:flex;flex-direction:column;gap:4px}';
-  html += '.champ-eyebrow{font-family:"DM Mono",monospace;font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1.4pt;color:' + INK_3 + '}';
-  html += '.champ-name{font-family:"Shippori Mincho",serif;font-size:12.5pt;font-weight:500;color:' + INK + '}';
-  html += '.champ-dojo{font-size:8.5pt;color:' + INK_2 + '}';
-  html += '.champ-card.champ-pending{border-style:dashed;border-color:' + INK_3 + ';background:transparent}';
-  html += '.champ-name-pending{font-family:"Shippori Mincho",serif;font-size:11pt;color:' + INK_4 + ';font-style:italic}';
+  // Conectores em cotovelo; caminho do vencedor em vermelho (e mais espesso)
+  html += '.tline{position:absolute;background:' + INK + '}';
+  html += '.tline.tred{background:' + RED + '}';
 
-  // ── 3º lugar ──
-  html += '.third-section{margin-top:26px;max-width:260px}';
-  html += '.third-head{font-family:"DM Mono",monospace;font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1.2pt;color:' + INK_2 + ';border-bottom:1px solid ' + LINE_2 + ';padding-bottom:6px;margin-bottom:10px}';
+  // Campeão / 3º lugar (coluna central)
+  html += '.tchamp{margin-top:14px;border:2px solid ' + INK + ';border-radius:6px;background:#fff;text-align:center;padding:8px 6px}';
+  html += '.tchamp-eyebrow{font-family:"DM Mono",monospace;font-size:6.8pt;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:' + INK_3 + '}';
+  html += '.tchamp-name{font-family:"Shippori Mincho",serif;font-size:11.5pt;font-weight:500;color:' + INK + ';margin-top:2px}';
+  html += '.tchamp-dojo{font-size:7.5pt;color:' + INK_2 + '}';
+  html += '.tchamp.tchamp-pending{border-style:dashed;border-color:' + INK_3 + ';background:transparent}';
+  html += '.tchamp-name-pending{font-family:"Shippori Mincho",serif;font-size:10pt;color:' + INK_4 + ';font-style:italic;margin-top:2px}';
+  html += '.tthird-label{margin-top:14px;margin-bottom:4px;text-align:center;font-family:"DM Mono",monospace;font-size:6.8pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + INK_2 + '}';
 
-  // ── Controles de tela (escondidos na impressão) — mesmo padrão de buildCarteirinhaHtml.ts ──
+  // Rodapé da folha: pódio + observações + campos da mesa
+  html += '.tfooter{display:flex;gap:26px;margin-top:14px;align-items:flex-start}';
+  html += '.tpodium{flex:1;max-width:330px}';
+  html += '.tpodium-line{display:flex;align-items:flex-end;gap:8px;margin-bottom:6px}';
+  html += '.tpodium-label{font-family:"DM Mono",monospace;font-size:7.5pt;font-weight:700;color:' + INK_2 + ';width:70px}';
+  html += '.tpodium-fill{flex:1;border-bottom:1px solid ' + INK_2 + ';min-height:12px;font-size:8pt;font-weight:700;color:' + INK + ';padding-bottom:1px}';
+  html += '.tpodium-dojo{font-weight:400;color:' + INK_3 + ';font-size:7pt}';
+  html += '.tobs{flex:1;text-align:right;font-size:7.5pt;font-weight:700;color:' + RED + ';text-transform:uppercase;letter-spacing:0.04em}';
+  html += '.tobs div{margin-bottom:3px}';
+  html += '.tfields{display:flex;gap:30px;margin-top:12px;font-family:"DM Mono",monospace;font-size:7.5pt;color:' + INK_2 + '}';
+  html += '.tprinted{margin-left:auto;font-family:"DM Mono",monospace;font-size:6.8pt;color:' + INK_3 + '}';
+
+  // Controles de tela (escondidos na impressão) — padrão buildCarteirinhaHtml.ts
   html += '.print-fab{position:fixed;bottom:20px;right:20px;z-index:999;background:#7c3aed;color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.35);font-family:-apple-system,"Segoe UI",sans-serif}';
   html += '.print-fab:hover{background:#6d28d9}';
   html += '.top-bar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;z-index:999;display:flex;align-items:center;justify-content:space-between;font-family:-apple-system,"Segoe UI",sans-serif}';
   html += '.top-bar span{color:#a78bfa;font-size:12px}.top-bar b{color:#e2e8f0;font-size:13px}';
-  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.sheet{padding-top:0}html,body{background:#fff}.champ-card{background:#fff}.side.winner{background:#eeeae2!important}}';
+  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.sheet{padding-top:0}html,body{background:#fff}.tchamp{background:#fff}}';
   html += '</style></head><body>';
 
-  html += '<div class="top-bar"><div><span>Chave Aura &mdash; A4 paisagem</span><br>';
+  html += '<div class="top-bar"><div><span>Chave Aura &mdash; folha tradicional (A4 paisagem)</span><br>';
   html += '<b>' + esc(categoryName || "Kumite") + (competitionName ? " &middot; " + esc(competitionName) : "") + '</b></div></div>';
 
-  html += '<div class="sheet">';
-  html += '<div class="header">';
-  html += '<div class="header-left">';
-  html += '<div class="fed-name">' + esc(federationName) + '</div>';
-  if (subtitle) html += '<div class="cat-name">' + subtitle + '</div>';
-  html += '</div>';
-  html += '<div class="header-right">Impresso em ' + esc(printedAt) + '</div>';
-  html += '</div>';
+  const fedComp = [federationName, competitionName].filter(Boolean).map(esc).join(" &mdash; ");
 
-  html += '<div class="bracket">' + roundsHtml + champCol + '</div>';
-  html += thirdHtml;
+  html += '<div class="sheet"><div class="twrap"><div class="tscale">';
+  html += '<div class="theader">';
+  html += '<div class="tfield">KOTO: ________</div>';
+  html += '<div class="tcat-wrap"><div class="tcat">' + esc(categoryName || "Kumite") + '</div>' + (fedComp ? '<div class="tcomp">' + fedComp + '</div>' : '') + '</div>';
+  html += '<div class="tfield tright">DATA: ___/___/___</div>';
   html += '</div>';
+  html += '<div class="theads">' + roundHeads + '</div>';
+  html += '<div class="tcanvas">' + abs + center + '</div>';
+  html += '<div class="tfooter"><div class="tpodium">' + podium + '</div>' + (obs ? '<div class="tobs">' + obs + '</div>' : '') + '</div>';
+  html += '<div class="tfields"><span>DURA&Ccedil;&Atilde;O: ____________</span><span>SHUCHIN: ____________________</span><span>MES&Aacute;RIO: ____________________</span><span class="tprinted">Impresso em ' + esc(printedAt) + '</span></div>';
+  html += '</div></div></div>';
 
   html += '<button class="print-fab" onclick="window.print()">Imprimir</button>';
 
