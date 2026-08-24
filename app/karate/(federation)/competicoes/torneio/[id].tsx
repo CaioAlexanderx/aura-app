@@ -42,6 +42,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import {
   karateCompetitionsApi, Entry, CompetitionDetail, Modality, CompetitionStatus, Category, Sex, EntryStatus,
+  MODALITY_LABEL, MODALITY_OPTIONS,
 } from "@/services/karateCompetitionsApi";
 import { EventBannerManager } from "@/components/karate/EventBannerManager";
 import { EditarTorneioInfoModal } from "@/components/karate/EditarTorneioInfoModal";
@@ -65,9 +66,8 @@ import { karateCompetitionSetupApi, CompetitionDivision } from "@/services/karat
 import { Card } from "@/components/karate/shoji";
 import { useCountUp } from "@/hooks/useCountUp";
 
-const MODALITY_LABEL: Record<Modality, string> = {
-  kata: "Kata", kumite: "Kumite", kihon_ippon: "Kihon-Ippon", team_kata: "Kata Equipe", team_kumite: "Kumite Equipe",
-};
+// MODALITY_LABEL / MODALITY_OPTIONS vêm do service (fonte única com o
+// wizard de criação do torneio — inclui Enbu e Fukugo).
 const STATUS_BADGE: Record<CompetitionStatus, "ok" | "warn" | "alert" | "neutral"> = {
   draft: "neutral", open: "ok", closed: "warn", done: "neutral", cancelled: "alert",
 };
@@ -78,13 +78,6 @@ const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
   registered: "Inscrito", confirmed: "Confirmado", checked_in: "Check-in", competing: "Em disputa", done: "Concluído", withdrawn: "Desistiu",
 };
 
-const MODALITIES: { value: Modality; label: string }[] = [
-  { value: "kata", label: "Kata" },
-  { value: "kumite", label: "Kumite" },
-  { value: "kihon_ippon", label: "Kihon-Ippon" },
-  { value: "team_kata", label: "Kata Equipe" },
-  { value: "team_kumite", label: "Kumite Equipe" },
-];
 const SEXES: { value: Sex; label: string }[] = [
   { value: "M", label: "Masculino" },
   { value: "F", label: "Feminino" },
@@ -101,6 +94,22 @@ function maskMoney(v: string) {
 function moneyToNumber(v: string): number {
   const cents = onlyD(v);
   return cents ? parseInt(cents, 10) / 100 : 0;
+}
+
+// ── Divisão / grupo da categoria ────────────────────────────────────
+// O backend já devolve division_name nos GETs; a lista de divisões só é
+// consultada como fallback (detalhe carregado antes da divisão existir).
+function categoryScope(cat: Category, divisions: CompetitionDivision[]): { division: string | null; group: string | null } {
+  const division =
+    (cat.division_name || "").trim() ||
+    (cat.division_id ? divisions.find((d) => d.id === cat.division_id)?.name ?? null : null) ||
+    null;
+  return { division, group: (cat.group_label || "").trim() || null };
+}
+/** "Paulista · Grupo 1" — vazio quando a categoria não tem divisão nem grupo. */
+function categoryScopeText(cat: Category, divisions: CompetitionDivision[]): string {
+  const { division, group } = categoryScope(cat, divisions);
+  return [division, group].filter(Boolean).join(" · ");
 }
 
 // Breakpoint do workspace: acima disso o rail fica fixo à esquerda;
@@ -614,6 +623,7 @@ export default function TorneioDetalhe() {
           onSelect={setSelection}
           onSelectCategory={handleSelectCategory}
           entriesByCat={entriesByCat}
+          divisions={divisions}
         />
 
         <View style={styles.contentArea}>
@@ -626,6 +636,7 @@ export default function TorneioDetalhe() {
                 loadingProgress={loadingProgress}
                 isKataModality={isKataModality}
                 onSelectCategory={handleSelectCategory}
+                divisions={divisions}
               />
               {/* Divulgação/Banners: anexo do evento, dentro da Visão geral
                   para não roubar altura do rail + chaves no workspace. */}
@@ -681,6 +692,28 @@ export default function TorneioDetalhe() {
                   <Text style={styles.catMeta}>
                     {MODALITY_LABEL[selectedCategory.modality]} · {selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)} {(selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)) === 1 ? "inscrito" : "inscritos"}
                   </Text>
+                  {(() => {
+                    // Divisão e grupo da categoria (quando existirem) — linha
+                    // secundária em pills, sem competir com o nome.
+                    const scope = categoryScope(selectedCategory, divisions);
+                    if (!scope.division && !scope.group) return null;
+                    return (
+                      <View style={styles.scopeRow}>
+                        {!!scope.division && (
+                          <View style={styles.scopePill}>
+                            <Icon name="layers" size={11} color={KarateColors.ink3} />
+                            <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.division}</Text>
+                          </View>
+                        )}
+                        {!!scope.group && (
+                          <View style={styles.scopePill}>
+                            <Icon name="grid" size={11} color={KarateColors.ink3} />
+                            <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.group}</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })()}
                 </View>
                 <Pressable
                   onPress={() => setEditFor(selectedCategory)}
@@ -776,6 +809,7 @@ export default function TorneioDetalhe() {
         category={copyFor}
         federationId={federationId}
         competitionId={cid}
+        divisions={divisions}
         onClose={() => setCopyFor(null)}
         onSaved={(newCat) => {
           setCopyFor(null);
@@ -787,6 +821,7 @@ export default function TorneioDetalhe() {
         category={editFor}
         federationId={federationId}
         competitionId={cid}
+        divisions={divisions}
         onClose={() => setEditFor(null)}
         onSaved={(updatedCat) => {
           setEditFor(null);
@@ -876,8 +911,8 @@ const PROGRESS_TONE: Record<ProgressTone, { fg: string; chip: keyof typeof style
   loading: { fg: KarateColors.ink3, chip: "chipLoading" },
 };
 
-function ProgressRow({ kata, name, modalityLabel, count, statusText, tone, onPress }: {
-  kata: boolean; name: string; modalityLabel: string; count: number;
+function ProgressRow({ kata, name, modalityLabel, scope, count, statusText, tone, onPress }: {
+  kata: boolean; name: string; modalityLabel: string; scope?: string; count: number;
   statusText: string; tone: ProgressTone; onPress: () => void;
 }) {
   const t = PROGRESS_TONE[tone];
@@ -892,7 +927,9 @@ function ProgressRow({ kata, name, modalityLabel, count, statusText, tone, onPre
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.progressCatName} numberOfLines={1}>{name}</Text>
-        <Text style={styles.progressCatMeta}>{modalityLabel} · {count} {count === 1 ? "inscrito" : "inscritos"}</Text>
+        <Text style={styles.progressCatMeta} numberOfLines={1}>
+          {modalityLabel}{scope ? ` · ${scope}` : ""} · {count} {count === 1 ? "inscrito" : "inscritos"}
+        </Text>
       </View>
       <View style={[styles.statChip, styles[t.chip] as ViewStyle]}>
         {tone !== "loading" && <View style={[styles.statLed, { backgroundColor: t.fg }]} />}
@@ -904,7 +941,7 @@ function ProgressRow({ kata, name, modalityLabel, count, statusText, tone, onPre
 }
 
 function CategoryRail({
-  isWide, categories, selection, onSelect, onSelectCategory, entriesByCat,
+  isWide, categories, selection, onSelect, onSelectCategory, entriesByCat, divisions,
 }: {
   isWide: boolean;
   categories: Category[];
@@ -912,6 +949,7 @@ function CategoryRail({
   onSelect: (s: RailSelection) => void;
   onSelectCategory: (categoryId: string) => void;
   entriesByCat: Record<string, Entry[]>;
+  divisions: CompetitionDivision[];
 }) {
   const isOverview = selection.kind === "overview";
   const isRanking = selection.kind === "ranking";
@@ -974,13 +1012,14 @@ function CategoryRail({
       )}
       {categories.map((cat) => {
         const count = cat.entry_count ?? (entriesByCat[cat.id]?.length ?? 0);
+        const scope = categoryScopeText(cat, divisions);
         return (
           <RailItem
             key={cat.id}
             isWide={isWide}
             icon="albums-outline"
             label={cat.name}
-            sub={MODALITY_LABEL[cat.modality]}
+            sub={scope ? `${MODALITY_LABEL[cat.modality]} · ${scope}` : MODALITY_LABEL[cat.modality]}
             count={count}
             active={selection.kind === "category" && selection.categoryId === cat.id}
             onPress={() => onSelectCategory(cat.id)}
@@ -1059,7 +1098,7 @@ function RailItem({
 // loadOverviewProgress acima), total de inscritos e pendências de
 // pagamento (Entry.fee_paid — quando o dado existe no modelo).
 function VisaoGeral({
-  comp, entriesByCat, catProgress, loadingProgress, isKataModality, onSelectCategory,
+  comp, entriesByCat, catProgress, loadingProgress, isKataModality, onSelectCategory, divisions,
 }: {
   comp: CompetitionDetail;
   entriesByCat: Record<string, Entry[]>;
@@ -1067,6 +1106,7 @@ function VisaoGeral({
   loadingProgress: boolean;
   isKataModality: (m: Modality) => boolean;
   onSelectCategory: (categoryId: string) => void;
+  divisions: CompetitionDivision[];
 }) {
   const totalCategorias = comp.categories.length;
   const progressValues = comp.categories.map((c) => catProgress[c.id]);
@@ -1148,6 +1188,7 @@ function VisaoGeral({
                 kata={kata}
                 name={cat.name}
                 modalityLabel={MODALITY_LABEL[cat.modality]}
+                scope={categoryScopeText(cat, divisions)}
                 count={count}
                 statusText={statusText}
                 tone={tone}
@@ -1321,11 +1362,12 @@ function ResultadoModal({ entry, onClose, onSave }: {
 // Form único para os dois fluxos: "copy" cria uma categoria nova a partir dos
 // dados de outra (sufixo "(cópia)", POST /categories); "edit" altera a própria
 // categoria existente (sem sufixo, PATCH /categories/:catId).
-function CategoriaFormModal({ mode, category, federationId, competitionId, onClose, onSaved }: {
+function CategoriaFormModal({ mode, category, federationId, competitionId, divisions, onClose, onSaved }: {
   mode: "copy" | "edit";
   category: Category | null;
   federationId: string;
   competitionId: string;
+  divisions: CompetitionDivision[];
   onClose: () => void;
   onSaved: (cat: Category) => void;
 }) {
@@ -1338,6 +1380,8 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
   const [beltMax, setBeltMax] = useState<BeltKey | "">("");
   const [maxEntries, setMaxEntries] = useState("");
   const [fee, setFee] = useState("");
+  const [divisionId, setDivisionId] = useState<string>("");
+  const [groupLabel, setGroupLabel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1354,6 +1398,8 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
     setMaxEntries(category.max_entries != null ? String(category.max_entries) : "");
     const cents = category.fee_amount != null ? Math.round(category.fee_amount * 100) : 0;
     setFee(cents ? maskMoney(String(cents)) : "");
+    setDivisionId(category.division_id || "");
+    setGroupLabel(category.group_label || "");
     setError(null);
     setSaving(false);
   }, [category, mode]);
@@ -1375,6 +1421,8 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
         sex,
         max_entries: maxEntries ? parseInt(maxEntries, 10) : null,
         fee_amount: fee ? moneyToNumber(fee) : null,
+        division_id: divisionId || null,
+        group_label: groupLabel.trim() || null,
       };
       const saved = mode === "edit"
         ? await karateCompetitionsApi.updateCategory(federationId, competitionId, category.id, payload)
@@ -1382,7 +1430,11 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
       onSaved(saved);
     } catch (e: any) {
       const fallback = mode === "edit" ? "Não foi possível salvar a categoria. Tente novamente." : "Não foi possível criar a categoria. Tente novamente.";
-      setError(e?.message ?? fallback);
+      const raw = e?.code || e?.message || "";
+      // 422 do backend quando a divisão é de outra competição — texto honesto.
+      if (String(raw).includes("DIVISION_NOT_FOUND")) {
+        setError("Essa divisão não pertence a este campeonato. Escolha uma divisão da lista.");
+      } else setError(e?.message ?? fallback);
     } finally {
       setSaving(false);
     }
@@ -1415,18 +1467,64 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, onClo
 
             <Text style={styles.inputLabel}>Modalidade</Text>
             <View style={styles.chipsRow}>
-              {MODALITIES.map((m) => (
+              {MODALITY_OPTIONS.map((m) => (
                 <TouchableOpacity
                   key={m.value}
                   onPress={() => setModality(m.value)}
                   style={[styles.chip, modality === m.value && styles.chipActive]}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: modality === m.value }}
+                  accessibilityHint={m.hint}
                 >
                   <Text style={[styles.chipText, modality === m.value && styles.chipTextActive]}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.fieldHint}>{MODALITY_OPTIONS.find((m) => m.value === modality)?.hint}</Text>
+
+            <Text style={styles.inputLabel}>Divisão</Text>
+            {divisions.length === 0 ? (
+              <View style={styles.emptyPickerBox}>
+                <Text style={styles.emptyPickerTxt}>
+                  Este campeonato ainda não tem divisões. Crie em Configurar para separar, por exemplo, Principal e Aspirantes.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.chipsRow}>
+                  <TouchableOpacity
+                    onPress={() => setDivisionId("")}
+                    style={[styles.chip, divisionId === "" && styles.chipActive]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: divisionId === "" }}
+                  >
+                    <Text style={[styles.chipText, divisionId === "" && styles.chipTextActive]}>Sem divisão</Text>
+                  </TouchableOpacity>
+                  {divisions.map((d) => (
+                    <TouchableOpacity
+                      key={d.id}
+                      onPress={() => setDivisionId(d.id)}
+                      style={[styles.chip, divisionId === d.id && styles.chipActive]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: divisionId === d.id }}
+                    >
+                      <Text style={[styles.chipText, divisionId === d.id && styles.chipTextActive]}>{d.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.fieldHint}>A divisão define as cotas por clube que valem para esta categoria.</Text>
+              </>
+            )}
+
+            <Text style={styles.inputLabel}>Grupo</Text>
+            <TextInput
+              style={styles.input}
+              value={groupLabel}
+              onChangeText={(v) => setGroupLabel(v.slice(0, 40))}
+              placeholder="Grupo 1"
+              placeholderTextColor={KarateColors.ink4}
+            />
+            <Text style={styles.fieldHint}>Opcional — rótulo curto para blocos dentro da divisão.</Text>
 
             <Text style={styles.inputLabel}>Sexo</Text>
             <View style={styles.chipsRow}>
@@ -1607,6 +1705,12 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 12.5, color: P.red2, flex: 1 } as TextStyle,
   row2: { flexDirection: "row", gap: 10 } as ViewStyle,
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 } as ViewStyle,
+  fieldHint: { fontSize: 11.5, color: KarateColors.ink3, marginTop: -2 } as TextStyle,
+  emptyPickerBox: { borderWidth: 1, borderStyle: "dashed", borderColor: KarateColors.border, borderRadius: KarateRadius.sm, padding: 10, backgroundColor: KarateColors.surface } as ViewStyle,
+  emptyPickerTxt: { fontSize: 12, color: KarateColors.ink3, lineHeight: 17 } as TextStyle,
+  scopeRow: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" } as ViewStyle,
+  scopePill: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface, paddingHorizontal: 8, paddingVertical: 3 } as ViewStyle,
+  scopePillTxt: { fontSize: 11, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
   chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: KarateColors.border, backgroundColor: KarateColors.surface } as ViewStyle,
   chipActive: { backgroundColor: "rgba(184,70,58,0.08)", borderColor: P.red } as ViewStyle,
   chipText: { fontSize: 12, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,

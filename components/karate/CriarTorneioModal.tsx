@@ -45,7 +45,7 @@ import { ShojiPalette as P, KarateColors, KarateRadius as R, KarateFonts as F, K
 import { Stepper } from "@/components/karate/Stepper";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { parseBrDate } from "@/components/inputs/DateInput";
-import { karateCompetitionsApi, Modality, Sex } from "@/services/karateCompetitionsApi";
+import { karateCompetitionsApi, Modality, Sex, MODALITY_OPTIONS } from "@/services/karateCompetitionsApi";
 
 const STEPS = ["Dados", "Categorias", "Revisão"];
 
@@ -73,13 +73,9 @@ function moneyToNumber(v: string): number {
   return cents ? parseInt(cents, 10) / 100 : 0;
 }
 
-const MODALITIES: { value: Modality; label: string }[] = [
-  { value: "kata",        label: "Kata" },
-  { value: "kumite",      label: "Kumite" },
-  { value: "kihon_ippon", label: "Kihon-Ippon" },
-  { value: "team_kata",   label: "Kata Equipe" },
-  { value: "team_kumite", label: "Kumite Equipe" },
-];
+// Modalidades (com microcopy) vêm do service — mesma fonte do editor de
+// categoria no workspace do campeonato. Inclui Enbu e Fukugo.
+const MODALITIES = MODALITY_OPTIONS;
 const SEXES: { value: Sex; label: string }[] = [
   { value: "M", label: "Masculino" },
   { value: "F", label: "Feminino" },
@@ -99,6 +95,9 @@ interface DraftCategory {
   sex: Sex;
   maxEntries: string;
   fee: string;
+  /** Rótulo curto de agrupamento (group_label). A DIVISÃO só existe depois
+   *  que o campeonato é criado — vinculada na edição da categoria. */
+  groupLabel: string;
   // estado de envio (transacional no front) — não enviado ao backend
   state?: CatState;
   errorMsg?: string;
@@ -110,7 +109,7 @@ let __k = 0;
 const newKey = () => `cat-${Date.now()}-${++__k}`;
 const emptyDraft = (): DraftCategory => ({
   key: newKey(), name: "", modality: "kata", ageMin: "", ageMax: "",
-  beltMin: "", beltMax: "", sex: "mixed", maxEntries: "", fee: "",
+  beltMin: "", beltMax: "", sex: "mixed", maxEntries: "", fee: "", groupLabel: "",
 });
 
 interface Props {
@@ -208,6 +207,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           sex: c.sex,
           max_entries: c.maxEntries ? parseInt(c.maxEntries, 10) : null,
           fee_amount: c.fee ? moneyToNumber(c.fee) : null,
+          group_label: c.groupLabel.trim() || null,
         });
         results[c.key] = { state: "ok" };
       } catch (e: any) {
@@ -362,6 +362,7 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                         {MODALITIES.find((m) => m.value === c.modality)?.label}
                         {c.sex !== "mixed" ? ` · ${c.sex === "M" ? "Masc." : "Fem."}` : " · Misto"}
                         {c.ageMin || c.ageMax ? ` · ${c.ageMin || "0"}–${c.ageMax || "∞"} anos` : ""}
+                        {c.groupLabel.trim() ? ` · ${c.groupLabel.trim()}` : ""}
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => copyCategory(c)} accessibilityLabel={`Copiar ${c.name}`} style={styles.iconBtn}>
@@ -385,11 +386,15 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                       <TouchableOpacity key={m.value}
                         onPress={() => setDraft((d) => ({ ...d, modality: m.value }))}
                         style={[styles.chip, draft.modality === m.value && styles.chipActive]}
-                        accessibilityRole="radio" accessibilityState={{ checked: draft.modality === m.value }}>
+                        accessibilityRole="radio" accessibilityState={{ checked: draft.modality === m.value }}
+                        accessibilityHint={m.hint}>
                         <Text style={[styles.chipText, draft.modality === m.value && styles.chipTextActive]}>{m.label}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
+                  <Text style={styles.modalityHint}>
+                    {MODALITIES.find((m) => m.value === draft.modality)?.hint}
+                  </Text>
 
                   <Text style={styles.fieldLabel}>Sexo</Text>
                   <View style={styles.chipsRow}>
@@ -427,6 +432,11 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
                     onChangeText={(v) => setDraft((d) => ({ ...d, maxEntries: onlyD(v) }))} placeholder="sem limite" keyboardType="numeric" />
                   <Field label="Taxa da categoria" hint="usa a taxa padrão se vazio" mono value={draft.fee}
                     onChangeText={(v) => setDraft((d) => ({ ...d, fee: maskMoney(v) }))} placeholder="0,00" keyboardType="numeric" prefix="R$" />
+                  <Field label="Grupo" hint="opcional" value={draft.groupLabel}
+                    onChangeText={(v) => setDraft((d) => ({ ...d, groupLabel: v.slice(0, 40) }))} placeholder="Grupo 1" />
+                  <Text style={styles.modalityHint}>
+                    A divisão (Principal, Aspirantes…) é vinculada depois, na edição da categoria — o campeonato precisa existir primeiro.
+                  </Text>
 
                   <KarateButton label="Adicionar categoria" variant="secondary" size="sm" onPress={addCategory} />
                 </View>
@@ -643,6 +653,7 @@ const styles = StyleSheet.create({
   noteBad: { color: P.red } as TextStyle,
 
   fieldLabel: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.3, color: P.ink2, marginBottom: 5 } as TextStyle,
+  modalityHint: { fontFamily: F.body, fontSize: 11.5, color: P.ink3, marginTop: 6, marginBottom: 4, lineHeight: 16 } as TextStyle,
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 } as ViewStyle,
   chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: P.line2, backgroundColor: P.glassHi } as ViewStyle,
   chipActive: { backgroundColor: P.redWash, borderColor: P.red } as ViewStyle,

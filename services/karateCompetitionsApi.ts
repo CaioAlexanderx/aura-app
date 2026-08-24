@@ -11,8 +11,31 @@
 import { request } from "@/services/api";
 
 export type CompetitionStatus = "draft" | "open" | "closed" | "done" | "cancelled";
-export type Modality = "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite";
+export type Modality =
+  | "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite"
+  // Provas de dupla/combinada aceitas pelo backend desde o P2 (só entravam por API).
+  | "enbu" | "fukugo";
 export type Sex = "M" | "F" | "mixed";
+
+/**
+ * Rótulos e microcopy das modalidades — fonte única para o wizard de
+ * categorias (criação do torneio) e para o editor da categoria, que antes
+ * mantinham listas paralelas e divergiram quando ENBU/FUKUGO entraram.
+ */
+export const MODALITY_OPTIONS: { value: Modality; label: string; hint: string }[] = [
+  { value: "kata", label: "Kata", hint: "Forma individual, avaliada por notas." },
+  { value: "kumite", label: "Kumite", hint: "Luta individual em chave eliminatória." },
+  { value: "kihon_ippon", label: "Kihon-Ippon", hint: "Combate com ataque e defesa combinados." },
+  { value: "team_kata", label: "Kata Equipe", hint: "Kata em trio, sincronia avaliada em conjunto." },
+  { value: "team_kumite", label: "Kumite Equipe", hint: "Luta por equipes, ponto a ponto entre os clubes." },
+  { value: "enbu", label: "Enbu", hint: "Dupla em apresentação combinada, de 50s a 1min10." },
+  { value: "fukugo", label: "Fukugo", hint: "Prova combinada: Kitei seguido de shobu-ippon." },
+];
+
+export const MODALITY_LABEL: Record<Modality, string> = MODALITY_OPTIONS.reduce(
+  (acc, m) => { acc[m.value] = m.label; return acc; },
+  {} as Record<Modality, string>
+);
 export type EntryStatus = "registered" | "confirmed" | "checked_in" | "competing" | "done" | "withdrawn";
 
 export interface Competition {
@@ -45,6 +68,12 @@ export interface Category {
   max_entries: number | null;
   fee_amount: number | null;
   entry_count?: number;
+  /** Divisão da competição (ex.: "Paulista" / "Copa Aspirantes"). Opcional. */
+  division_id?: string | null;
+  /** Nome da divisão resolvido pelo backend nos GETs (evita join no front). */
+  division_name?: string | null;
+  /** Rótulo curto de agrupamento dentro da divisão (ex.: "Grupo 1"). */
+  group_label?: string | null;
 }
 
 export interface CompetitionDetail extends Competition {
@@ -216,6 +245,8 @@ export const karateCompetitionsApi = {
       name: string; modality: Modality; min_age?: number | null; max_age?: number | null;
       belt_min?: string | null; belt_max?: string | null; sex?: Sex;
       weight_class?: string | null; max_entries?: number | null; fee_amount?: number | null;
+      // 422 DIVISION_NOT_FOUND se a divisão for de outra competição.
+      division_id?: string | null; group_label?: string | null;
     }
   ): Promise<Category> =>
     request(`/federation/${federationId}/competitions/${cid}/categories`, { method: "POST", body }),
@@ -229,6 +260,7 @@ export const karateCompetitionsApi = {
       name: string; modality: Modality; min_age: number | null; max_age: number | null;
       belt_min: string | null; belt_max: string | null; sex: Sex;
       weight_class: string | null; max_entries: number | null; fee_amount: number | null;
+      division_id: string | null; group_label: string | null;
     }>
   ): Promise<Category> =>
     request(`/federation/${federationId}/competitions/${cid}/categories/${catId}`, { method: "PATCH", body }),
