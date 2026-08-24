@@ -192,6 +192,44 @@ export interface AwardsQueue {
   schema_pending?: boolean;
 }
 
+// ── Check-in leve (credenciamento do dia) ───────────────────
+//
+// Presença por ATLETA — marcar propaga para todas as inscrições dele no
+// campeonato. Duas pontas escrevem no mesmo dado: o dojô (balcão do
+// próprio time) e a federação (balcão do credenciamento). A origem fica
+// registrada para o dia seguir sem discussão sobre "quem marcou".
+
+export type CheckInStatus = "presente" | "ausente" | "pendente";
+export type CheckInSource = "dojo" | "federacao";
+/** 'limpar' devolve o atleta ao estado 'pendente'. */
+export type CheckInAction = "presente" | "ausente" | "limpar";
+
+export interface CheckInEntry {
+  student_id: string;
+  student_name: string;
+  dojo_id: string | null;
+  dojo_name: string | null;
+  /** Provas do atleta no campeonato (nomes das categorias). */
+  categories: string[];
+  status: CheckInStatus;
+  checked_in_at: string | null;
+  check_in_source: CheckInSource | null;
+}
+
+export interface CheckInTotals {
+  atletas: number;
+  presentes: number;
+  ausentes: number;
+  pendentes: number;
+}
+
+export interface CheckInResponse {
+  data: CheckInEntry[];
+  totals: CheckInTotals;
+  /** Migration do check-in ainda não aplicada — lista vazia, nunca 500. */
+  schema_pending?: boolean;
+}
+
 // ── Arbitragem (298) ────────────────────────────────────────
 
 export type OfficialRole = "arbitro" | "mesario" | "staff";
@@ -308,6 +346,13 @@ export const karateCompetitionP1Api = {
     fid: string, cid: string, catId: string, delivered: boolean
   ): Promise<{ category_id: string; awards_delivered: boolean; awards_delivered_at: string | null }> =>
     request(`${comp(fid, cid)}/categories/${catId}/awards-delivered`, { method: "POST", body: { delivered }, retry: 0 }),
+
+  // Check-in leve — credenciamento do dia (ordenado por dojô, atleta).
+  getCheckIn: (fid: string, cid: string): Promise<CheckInResponse> =>
+    request(`${comp(fid, cid)}/check-in`),
+  /** Marca a presença do ATLETA — propaga para todas as inscrições dele. */
+  setCheckIn: (fid: string, cid: string, studentId: string, status: CheckInAction): Promise<{ entries_updated: number }> =>
+    request(`${comp(fid, cid)}/check-in/${studentId}`, { method: "PATCH", body: { status }, retry: 0 }),
 
   // Arbitragem
   listOfficials: (fid: string, params?: { role?: OfficialRole; active?: boolean }): Promise<Official[]> => {
