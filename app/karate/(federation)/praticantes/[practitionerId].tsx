@@ -261,7 +261,7 @@ export default function FichaPraticanteScreen() {
       </ScrollView>
 
       {/* Tab Content */}
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {activeTab === "Cadastro"       && (
           <>
             <CadastroTab practitioner={data} />
@@ -312,8 +312,11 @@ export default function FichaPraticanteScreen() {
 
 const styles = StyleSheet.create({
   screen:     { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a barra do
+  // cabeçalho segue full-width, mas o conteúdo (nome/ações) e o corpo
+  // ficam na coluna central; nome e ações não se separam pela tela.
   headerCard: { backgroundColor: "#fff", padding: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-  headerRow:  { flexDirection: "row", alignItems: "flex-start", gap: 12 } as ViewStyle,
+  headerRow:  { flexDirection: "row", alignItems: "flex-start", gap: 12, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   headerActions: { alignItems: "flex-end", gap: 8 } as ViewStyle,
   headerBtnRow: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   editBtn:    { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 12, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft, borderWidth: 1, borderColor: KarateColors.primaryLine } as ViewStyle,
@@ -325,10 +328,13 @@ const styles = StyleSheet.create({
   regNum:     { fontSize: 11, fontWeight: "800", color: KarateColors.primary, letterSpacing: 0.8, fontFamily: KarateFonts.mono } as TextStyle,
   fullName:   { fontFamily: KarateFonts.heading, fontSize: 20, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   tabBar:     { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: KarateColors.border, backgroundColor: "#fff" } as ViewStyle,
+  // (tabBarContent fica sem a coluna central: é um scroll horizontal e
+  // travar a largura do container quebraria a rolagem das abas no mobile.)
   tabBarContent: { flexDirection: "row", paddingHorizontal: 8 } as ViewStyle,
   tab:        { paddingVertical: 12, paddingHorizontal: 14 } as ViewStyle,
   tabActive:  { borderBottomWidth: 2, borderBottomColor: KarateColors.primary } as ViewStyle,
   tabLabel:   { fontSize: 13, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   tabLabelActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
   content:    { flex: 1 } as ViewStyle,
+  contentInner: { paddingBottom: 32, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
 });
