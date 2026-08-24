@@ -1115,6 +1115,9 @@ function MatchSide({
 
   const sideStyle = [
     tradStyles.slot,
+    // AKA = linha VERMELHA (como na folha oficial da FPKT, onde o lado
+    // aka é o traço vermelho) — pedido do produto: aka bem mais visual.
+    side === "aka" && tradStyles.slotAka,
     isWinner && tradStyles.slotWinner,
     isLoser && tradStyles.slotLoser,
     editMode && isDraggable && ctrlStyles.slotDraggable,
@@ -1270,10 +1273,11 @@ const tradStyles = StyleSheet.create({
     paddingHorizontal: 3, paddingBottom: 2,
     borderBottomWidth: 1.5, borderBottomColor: "rgba(43,38,32,0.55)",
   } as ViewStyle,
+  slotAka: { borderBottomColor: P.red } as ViewStyle,
   slotWinner: { borderBottomWidth: 2, borderBottomColor: P.red } as ViewStyle,
   slotLoser: { opacity: 0.45 } as ViewStyle,
   sideDot: { width: 5, height: 5, borderRadius: 2.5, flexShrink: 0 } as ViewStyle,
-  sideDotAka: { backgroundColor: P.red } as ViewStyle,
+  sideDotAka: { backgroundColor: P.red, width: 7, height: 7, borderRadius: 3.5 } as ViewStyle,
   sideDotShiro: { backgroundColor: C.ink3 } as ViewStyle,
   name: { flexShrink: 1, fontFamily: F.body, fontSize: 12.5, fontWeight: "600", color: C.ink, lineHeight: 16 } as TextStyle,
   nameWinner: { fontWeight: "700" } as TextStyle,
