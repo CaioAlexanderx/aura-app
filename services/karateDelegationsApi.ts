@@ -45,11 +45,26 @@ export interface OpenCompetition {
   /** 'YYYY-MM-DD' — data pura (formatar com utils/eventDate, tz-safe). */
   event_date: string | null;
   location: string | null;
+  status?: "open" | "closed" | "done";
+  /** false = inscrições encerradas: a competição está na lista porque o
+   *  dojô TEM delegação nela (dia do evento — Presença e Minhas chaves
+   *  seguem ativas; só o wizard de inscrição bloqueia). Backend antigo
+   *  não manda o campo (e só lista 'open') → ausente conta como aberto. */
+  enrollment_open?: boolean;
   fee_amount: number | null;
   has_pricing: boolean;
   rectification_deadline: string | null;
   divisions: DelegationDivision[];
 }
+
+/** Inscrições abertas? Tolerante a backend antigo (campo ausente = sim). */
+export const isEnrollmentOpen = (comp: Pick<OpenCompetition, "enrollment_open"> | null | undefined): boolean =>
+  !comp || comp.enrollment_open !== false;
+
+/** Aba inicial do carrinho: no dia do evento (inscrições encerradas) o
+ *  sensei cai direto na Presença — é o que ele veio fazer. */
+export const initialCartTab = (comp: Pick<OpenCompetition, "enrollment_open"> | null | undefined): "inscricao" | "presenca" =>
+  isEnrollmentOpen(comp) ? "inscricao" : "presenca";
 
 export interface EnrollmentCategory {
   id: string;

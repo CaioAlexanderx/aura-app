@@ -49,6 +49,7 @@ import { CategoryPickerModal } from "@/components/karate/dojoCampeonatos/Categor
 import { karateDojoStudentsApi, DojoStudent, DOJO_STUDENTS_MAX_LIMIT } from "@/services/karateDojoStudentsApi";
 import {
   karateDelegationsApi, OpenCompetition, EnrollmentCategory, QuoteResponse,
+  isEnrollmentOpen, initialCartTab,
   SubmitResponse, DelegationBody, formatBRL, MODALITY_LABEL, isTeamModality,
   IndividualModality, TriageAthleteResult, TriageCategoryRef, triageFailLabel,
   MyBracketCategory, MyBracketsResponse, BRACKET_STATUS_LABEL, isNotPublishedError,
@@ -156,7 +157,12 @@ export default function DelegationCart() {
       ]);
       const comp = (comps.data || []).find((c) => c.id === String(cid)) || null;
       if (!comp) {
-        setLoadError("Campeonato não encontrado ou com inscrições encerradas.");
+        setLoadError("Campeonato não encontrado ou encerrado sem delegação do seu dojô.");
+      }
+      // Dia do evento (inscrições encerradas): o sensei veio pela
+      // Presença/chaves — não faz sentido cair no wizard bloqueado.
+      if (comp && !isEnrollmentOpen(comp)) {
+        setTab((t) => (t === "inscricao" ? initialCartTab(comp) : t));
       }
       setCompetition(comp);
       setCategories(cats.data || []);
@@ -423,6 +429,10 @@ export default function DelegationCart() {
     return <KarateErrorState message={loadError || "Campeonato não encontrado."} onRetry={load} />;
   }
 
+  // Dia do evento: competição closed/done segue na tela (o dojô tem
+  // delegação nela) — Presença e Minhas chaves ativas, wizard bloqueado.
+  const enrollmentOpen = isEnrollmentOpen(competition);
+
   if (result) {
     return <SuccessView result={result} onDone={() => router.replace("/karate/(dojo)/campeonatos" as any)} />;
   }
@@ -543,6 +553,22 @@ export default function DelegationCart() {
           />
         ) : tab === "presenca" ? (
           <PresencaDojoTab federationId={federationId} competitionId={String(cid)} />
+        ) : !enrollmentOpen ? (
+          /* Wizard bloqueado — a delegação já foi consolidada; hoje o
+             trabalho do sensei é Presença e Minhas chaves. */
+          <View style={s.closedBox}>
+            <Icon name="lock-closed" size={28} color={C.ink3} />
+            <Text style={s.closedTitle}>Inscrições encerradas</Text>
+            <Text style={s.closedTxt}>
+              A federação encerrou as inscrições deste campeonato. Sua delegação
+              já enviada continua valendo — acompanhe o dia do evento pelas abas
+              Presença e Minhas chaves.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+              <KarateButton label="Presença" variant="sumi" size="md" onPress={() => setTab("presenca")} />
+              <KarateButton label="Minhas chaves" variant="ghost" size="md" onPress={() => setTab("chaves")} />
+            </View>
+          </View>
         ) : (
         <>
         {/* ── Atletas — triagem automática ── */}
@@ -737,8 +763,9 @@ export default function DelegationCart() {
       </ScrollView>
 
       {/* ── Rodapé fixo: pagamento + enviar ──
-          Só na aba de inscrição — em "Minhas chaves" não há o que enviar. */}
-      {tab === "inscricao" && (
+          Só na aba de inscrição, e só com inscrições abertas — no dia do
+          evento (closed/done) não há o que cotar nem enviar. */}
+      {tab === "inscricao" && enrollmentOpen && (
       <View style={s.footerBar}>
         <View style={s.payRow}>
           {([["pix_direct", "PIX da federação"], ["manual", "Comprovante depois"]] as const).map(([mode, label]) => (
@@ -1309,6 +1336,11 @@ const s = StyleSheet.create({
   addBtnTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
   emptyHint: { fontSize: 12.5, color: C.ink3 } as TextStyle,
   athleteName: { fontSize: 13.5, fontWeight: "700", color: C.ink } as TextStyle,
+
+  // ── Dia do evento: wizard bloqueado (inscrições encerradas) ──
+  closedBox: { backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.border, padding: 20, alignItems: "center", gap: 8 } as ViewStyle,
+  closedTitle: { fontSize: 15, fontWeight: "800", color: C.ink } as TextStyle,
+  closedTxt: { fontSize: 12.5, color: C.ink3, textAlign: "center", lineHeight: 18 } as TextStyle,
 
   // ── Abas (inscrição × minhas chaves) ──
   tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4 } as ViewStyle,
