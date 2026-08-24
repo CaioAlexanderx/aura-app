@@ -533,14 +533,16 @@ export default function DelegationCart() {
         </View>
 
         {tab === "chaves" ? (
-          <MyBracketsPanel
-            state={brackets}
-            loading={bracketsLoading}
-            error={bracketsError}
-            printingCat={printingCat}
-            onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
-            onPrint={printMyBracket}
-          />
+          <View style={s.tabPanelCol}>
+            <MyBracketsPanel
+              state={brackets}
+              loading={bracketsLoading}
+              error={bracketsError}
+              printingCat={printingCat}
+              onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
+              onPrint={printMyBracket}
+            />
+          </View>
         ) : tab === "presenca" ? (
           <PresencaDojoTab federationId={federationId} competitionId={String(cid)} />
         ) : (
@@ -1310,8 +1312,10 @@ const s = StyleSheet.create({
   emptyHint: { fontSize: 12.5, color: C.ink3 } as TextStyle,
   athleteName: { fontSize: 13.5, fontWeight: "700", color: C.ink } as TextStyle,
 
-  // ── Abas (inscrição × minhas chaves) ──
-  tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4 } as ViewStyle,
+  // ── Abas (inscrição × minhas chaves × presença) ──
+  // PREMISSA (24/08): coluna central — abas e painéis não esticam a tela.
+  tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
+  tabPanelCol: { width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   tabBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: R.md } as ViewStyle,
   tabBtnOn: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border2 } as ViewStyle,
   tabTxt: { fontSize: 13, fontWeight: "600", color: C.ink3 } as TextStyle,
