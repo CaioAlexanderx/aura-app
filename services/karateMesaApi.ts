@@ -123,7 +123,28 @@ export const karateMesaApi = {
   advanceKata: (catId: string, body?: { advance_count?: number }): Promise<KataAdvanceResult> =>
     req(`/categories/${catId}/kata-scores/advance`, { method: "POST", body: body || {}, retry: 0 }),
 
-  /** GET /categories/:catId/scoresheet — súmula da categoria. */
+  /** GET /categories/:catId/scoresheet — súmula da categoria (fields = campos gravados). */
   getScoresheet: (catId: string): Promise<Scoresheet> =>
     req(`/categories/${catId}/scoresheet`),
+
+  /**
+   * PATCH /categories/:catId/scoresheet — grava os campos que na folha real
+   * eram manuscritos (shuchin, mesário, duração). String vazia LIMPA o campo;
+   * campo ausente no body fica como está. 409 NO_BRACKET quando a categoria
+   * ainda não tem chave.
+   */
+  patchScoresheet: (catId: string, body: ScoresheetFieldsPatch): Promise<ScoresheetPatchResult> =>
+    req(`/categories/${catId}/scoresheet`, { method: "PATCH", body, retry: 0 }),
 };
+
+// ── Campos manuscritos da súmula ─────────────────────────────
+/** Strings de até 120 chars; vazia limpa o campo. */
+export interface ScoresheetFieldsPatch {
+  shuchin?: string;
+  mesario?: string;
+  duracao?: string;
+}
+
+export interface ScoresheetPatchResult {
+  sumula: Scoresheet;
+}
