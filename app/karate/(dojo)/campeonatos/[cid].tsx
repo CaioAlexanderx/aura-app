@@ -51,7 +51,9 @@ import {
   karateDelegationsApi, OpenCompetition, EnrollmentCategory, QuoteResponse,
   SubmitResponse, DelegationBody, formatBRL, MODALITY_LABEL, isTeamModality,
   IndividualModality, TriageAthleteResult, TriageCategoryRef, triageFailLabel,
+  MyBracketCategory, MyBracketsResponse, BRACKET_STATUS_LABEL, isNotPublishedError,
 } from "@/services/karateDelegationsApi";
+import { printScoresheet } from "@/components/karate/chaves/buildScoresheetHtml";
 
 type TeamDraft = {
   key: string;
@@ -132,6 +134,15 @@ export default function DelegationCart() {
   const [result, setResult] = useState<SubmitResponse | null>(null);
   const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Minhas chaves (Onda B) ──
+  // Aba separada do wizard: só leitura + impressão. Carrega sob demanda
+  // (a primeira vez que o sensei abre a aba) para não pesar a inscrição.
+  const [tab, setTab] = useState<"inscricao" | "chaves">("inscricao");
+  const [brackets, setBrackets] = useState<MyBracketsResponse | null>(null);
+  const [bracketsLoading, setBracketsLoading] = useState(false);
+  const [bracketsError, setBracketsError] = useState<string | null>(null);
+  const [printingCat, setPrintingCat] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!federationId || !cid) return;
     setLoading(true);
@@ -157,6 +168,50 @@ export default function DelegationCart() {
   }, [federationId, cid]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadBrackets = useCallback(async () => {
+    if (!federationId || !cid) return;
+    setBracketsLoading(true);
+    setBracketsError(null);
+    try {
+      const res = await karateDelegationsApi.getMyBrackets(federationId, String(cid));
+      setBrackets({ published: !!res?.published, competition_name: res?.competition_name ?? null, data: res?.data || [] });
+    } catch (e: any) {
+      // Despublicado é estado, não erro: cai no vazio elegante.
+      if (isNotPublishedError(e)) setBrackets({ published: false, data: [] });
+      else setBracketsError(e?.message || "Não foi possível carregar as chaves.");
+    } finally {
+      setBracketsLoading(false);
+    }
+  }, [federationId, cid]);
+
+  // Carrega na primeira abertura da aba (e só nela).
+  useEffect(() => {
+    if (tab === "chaves" && !brackets && !bracketsLoading && !bracketsError) loadBrackets();
+  }, [tab, brackets, bracketsLoading, bracketsError, loadBrackets]);
+
+  /** Súmula da MINHA categoria → mesma folha impressa pela federação. */
+  const printMyBracket = useCallback(async (categoryId: string) => {
+    if (!federationId || !cid) return;
+    setPrintingCat(categoryId);
+    try {
+      const sheet = await karateDelegationsApi.getMyScoresheet(federationId, String(cid), categoryId);
+      const ok = printScoresheet(sheet);
+      if (!ok) toast.error("Popup bloqueado — permita popups para app.getaura.com.br");
+      else toast.success("Folha aberta para impressão");
+    } catch (e: any) {
+      if (isNotPublishedError(e)) {
+        // Federação despublicou entre o load e o toque: refaz a lista.
+        toast.error("A federação despublicou as chaves — a lista foi atualizada.");
+        setBrackets(null);
+        loadBrackets();
+      } else {
+        toast.error(e?.message || "Não foi possível abrir a folha da chave.");
+      }
+    } finally {
+      setPrintingCat((prev) => (prev === categoryId ? null : prev));
+    }
+  }, [federationId, cid, loadBrackets]);
 
   // ── Modalidades individuais que o campeonato oferece (chips) ──
   const availableMods = useMemo<IndividualModality[]>(() => {
@@ -461,6 +516,32 @@ export default function DelegationCart() {
           </View>
         </View>
 
+        {/* ── Abas: o wizard de inscrição × as chaves do dia ── */}
+        <View style={s.tabsRow}>
+          {([["inscricao", "Inscrição"], ["chaves", "Minhas chaves"]] as const).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              style={[s.tabBtn, tab === key && s.tabBtnOn]}
+              onPress={() => setTab(key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === key }}
+            >
+              <Text style={[s.tabTxt, tab === key && s.tabTxtOn]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {tab === "chaves" ? (
+          <MyBracketsPanel
+            state={brackets}
+            loading={bracketsLoading}
+            error={bracketsError}
+            printingCat={printingCat}
+            onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
+            onPrint={printMyBracket}
+          />
+        ) : (
+        <>
         {/* ── Atletas — triagem automática ── */}
         <Section
           title="Atletas — provas individuais"
@@ -648,9 +729,13 @@ export default function DelegationCart() {
             )}
           </Section>
         )}
+        </>
+        )}
       </ScrollView>
 
-      {/* ── Rodapé fixo: pagamento + enviar ── */}
+      {/* ── Rodapé fixo: pagamento + enviar ──
+          Só na aba de inscrição — em "Minhas chaves" não há o que enviar. */}
+      {tab === "inscricao" && (
       <View style={s.footerBar}>
         <View style={s.payRow}>
           {([["pix_direct", "PIX da federação"], ["manual", "Comprovante depois"]] as const).map(([mode, label]) => (
@@ -677,6 +762,7 @@ export default function DelegationCart() {
           />
         </View>
       </View>
+      )}
 
       {/* ── Modais ── */}
       <SelecionarAlunosModal
@@ -735,6 +821,202 @@ function Section({ title, action, children }: { title: string; action?: React.Re
       </View>
       {children}
     </View>
+  );
+}
+
+// ── Minhas chaves (Onda B) ─────────────────────────────────
+// A tradução do ritual do ginásio: o sensei chega, procura o KOTO
+// (área/tatame) da categoria do aluno e imprime a folha. Aqui ele vê SÓ
+// as categorias onde tem atleta — e a folha é a MESMA da federação.
+
+const KATA_MODE_LABEL: Record<string, string> = {
+  scores: "Kata por notas",
+  notas: "Kata por notas",
+  score: "Kata por notas",
+  bracket: "Kata em chave",
+  chave: "Kata em chave",
+  flag: "Kata por bandeiras",
+  flags: "Kata por bandeiras",
+};
+
+/** KOTO legível — é o primeiro dado que o sensei procura no ginásio. */
+function kotoOf(c: MyBracketCategory): string {
+  if (c.area_name) return c.area_name;
+  if (c.area_order != null) return `Área ${c.area_order}`;
+  return "a definir";
+}
+
+function MyBracketsPanel({
+  state, loading, error, printingCat, onRetry, onPrint,
+}: {
+  state: MyBracketsResponse | null;
+  loading: boolean;
+  error: string | null;
+  printingCat: string | null;
+  onRetry: () => void;
+  onPrint: (categoryId: string) => void;
+}) {
+  const rows = useMemo(() => {
+    const list = [...(state?.data || [])];
+    list.sort((a, b) => {
+      const ao = a.area_order ?? 9999;
+      const bo = b.area_order ?? 9999;
+      if (ao !== bo) return ao - bo;
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
+    return list;
+  }, [state]);
+
+  if (loading && !state) {
+    return (
+      <Section title="Minhas chaves">
+        <ActivityIndicator color={C.primary} style={{ marginVertical: 12 }} />
+      </Section>
+    );
+  }
+
+  if (error) {
+    return (
+      <Section title="Minhas chaves">
+        <View style={s.brEmpty}>
+          <Icon name="alert-circle" size={22} color={C.warn} />
+          <Text style={s.brEmptyTitle}>{error}</Text>
+          <TouchableOpacity style={s.brRetry} onPress={onRetry} accessibilityRole="button">
+            <Icon name="refresh-cw" size={13} color={C.primary} />
+            <Text style={s.brRetryTxt}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      </Section>
+    );
+  }
+
+  if (state && !state.published) {
+    return (
+      <Section title="Minhas chaves">
+        <View style={s.brEmpty}>
+          <Icon name="layout-grid" size={24} color={C.ink3} />
+          <Text style={s.brEmptyTitle}>A federação ainda não publicou as chaves</Text>
+          <Text style={s.brEmptyHint}>
+            Assim que o sorteio for publicado, as categorias dos seus atletas aparecem
+            aqui com o KOTO e a folha pronta para imprimir.
+          </Text>
+          <TouchableOpacity style={s.brRetry} onPress={onRetry} accessibilityRole="button">
+            <Icon name="refresh-cw" size={13} color={C.primary} />
+            <Text style={s.brRetryTxt}>Verificar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      </Section>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <Section title="Minhas chaves">
+        <View style={s.brEmpty}>
+          <Icon name="layout-grid" size={24} color={C.ink3} />
+          <Text style={s.brEmptyTitle}>Nenhum atleta seu nas chaves deste campeonato</Text>
+          <Text style={s.brEmptyHint}>
+            Só aparecem aqui as categorias com pelo menos um atleta do seu dojô confirmado.
+          </Text>
+        </View>
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title={`Minhas chaves (${rows.length})`}
+      action={
+        <TouchableOpacity style={s.brRetry} onPress={onRetry} accessibilityRole="button" accessibilityLabel="Atualizar chaves">
+          <Icon name="refresh-cw" size={13} color={C.primary} />
+          <Text style={s.brRetryTxt}>Atualizar</Text>
+        </TouchableOpacity>
+      }
+    >
+      <Text style={s.emptyHint}>
+        Confira o KOTO da categoria e imprima a folha — é a mesma súmula usada pela mesa.
+      </Text>
+      {rows.map((c) => (
+        <MyBracketCard
+          key={c.id}
+          cat={c}
+          printing={printingCat === c.id}
+          onPrint={() => onPrint(c.id)}
+        />
+      ))}
+    </Section>
+  );
+}
+
+function MyBracketCard({ cat, printing, onPrint }: { cat: MyBracketCategory; printing: boolean; onPrint: () => void }) {
+  const printable = cat.bracket_status !== "not_generated";
+  const meta = [cat.division_name, cat.group_label, MODALITY_LABEL[cat.modality as EnrollmentCategory["modality"]] || cat.modality]
+    .filter(Boolean).join(" · ");
+  const kata = cat.kata_mode ? KATA_MODE_LABEL[String(cat.kata_mode).toLowerCase()] : null;
+  const done = cat.bracket_status === "done";
+  const official = cat.bracket_status === "locked";
+
+  const body = (
+    <>
+      <View style={s.brTopRow}>
+        <View style={s.brKoto}>
+          <Text style={s.brKotoLabel}>KOTO</Text>
+          <Text style={s.brKotoValue} numberOfLines={1}>{kotoOf(cat)}</Text>
+        </View>
+        <View style={[s.brPill, official && s.brPillOk, done && s.brPillMuted]}>
+          <Icon
+            name={official ? "lock-closed" : done ? "check-circle" : "information-circle"}
+            size={12}
+            color={official ? C.ok : done ? C.ink3 : C.ink2}
+          />
+          <Text style={[s.brPillTxt, official && s.brPillTxtOk, done && s.brPillTxtMuted]}>
+            {BRACKET_STATUS_LABEL[cat.bracket_status] || cat.bracket_status}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={s.brCatName} numberOfLines={2}>{cat.name}</Text>
+      {meta ? <Text style={s.brCatMeta} numberOfLines={2}>{meta}</Text> : null}
+      {kata ? <Text style={s.brCatMeta}>{kata}</Text> : null}
+
+      <View style={s.brAthletes}>
+        <Text style={s.brAthLabel}>
+          {cat.my_athletes.length === 1 ? "Meu atleta" : `Meus atletas (${cat.my_athletes.length})`}
+        </Text>
+        {cat.my_athletes.length === 0 ? (
+          <Text style={s.brAthName}>—</Text>
+        ) : (
+          cat.my_athletes.map((n, i) => (
+            <Text key={`${n}-${i}`} style={s.brAthName} numberOfLines={1}>{n}</Text>
+          ))
+        )}
+      </View>
+
+      {printable ? (
+        <View style={s.brPrintRow}>
+          <Icon name="print" size={14} color={C.primary} />
+          <Text style={s.brPrintTxt}>{printing ? "Abrindo folha…" : "Imprimir folha da chave"}</Text>
+        </View>
+      ) : (
+        <Text style={s.brNote}>
+          O sorteio desta categoria ainda não foi feito — a folha fica disponível quando a chave sair.
+        </Text>
+      )}
+    </>
+  );
+
+  if (!printable) return <View style={s.brCard}>{body}</View>;
+
+  return (
+    <TouchableOpacity
+      style={s.brCard}
+      onPress={onPrint}
+      disabled={printing}
+      accessibilityRole="button"
+      accessibilityLabel={`Imprimir folha da chave de ${cat.name}`}
+    >
+      {body}
+    </TouchableOpacity>
   );
 }
 
@@ -1024,6 +1306,39 @@ const s = StyleSheet.create({
   addBtnTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
   emptyHint: { fontSize: 12.5, color: C.ink3 } as TextStyle,
   athleteName: { fontSize: 13.5, fontWeight: "700", color: C.ink } as TextStyle,
+
+  // ── Abas (inscrição × minhas chaves) ──
+  tabsRow: { flexDirection: "row", gap: 6, backgroundColor: C.glass2, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 4 } as ViewStyle,
+  tabBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: R.md } as ViewStyle,
+  tabBtnOn: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border2 } as ViewStyle,
+  tabTxt: { fontSize: 13, fontWeight: "600", color: C.ink3 } as TextStyle,
+  tabTxtOn: { color: C.ink, fontWeight: "800" } as TextStyle,
+
+  // ── Minhas chaves (Onda B) ──
+  brEmpty: { alignItems: "center", gap: 8, paddingVertical: 18, paddingHorizontal: 10 } as ViewStyle,
+  brEmptyTitle: { fontSize: 13.5, fontWeight: "700", color: C.ink, textAlign: "center" } as TextStyle,
+  brEmptyHint: { fontSize: 12.5, color: C.ink3, textAlign: "center", lineHeight: 18, maxWidth: 380 } as TextStyle,
+  brRetry: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: C.primaryLine, backgroundColor: C.primarySoft, borderRadius: R.sm, paddingHorizontal: 11, paddingVertical: 6 } as ViewStyle,
+  brRetryTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
+  brCard: { borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12, gap: 8, backgroundColor: C.glass2 } as ViewStyle,
+  brTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } as ViewStyle,
+  brKoto: { flexDirection: "row", alignItems: "baseline", gap: 7, borderWidth: 1, borderColor: C.primaryLine, backgroundColor: C.primarySoft, borderRadius: R.sm, paddingHorizontal: 10, paddingVertical: 5 } as ViewStyle,
+  brKotoLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: C.primary } as TextStyle,
+  brKotoValue: { fontSize: 15, fontWeight: "800", color: C.primary } as TextStyle,
+  brPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: C.glassHi, paddingHorizontal: 9, paddingVertical: 3 } as ViewStyle,
+  brPillOk: { backgroundColor: C.okSoft, borderColor: C.okLine } as ViewStyle,
+  brPillMuted: { backgroundColor: C.glass2 } as ViewStyle,
+  brPillTxt: { fontSize: 11, fontWeight: "700", color: C.ink2 } as TextStyle,
+  brPillTxtOk: { color: C.ok } as TextStyle,
+  brPillTxtMuted: { color: C.ink3 } as TextStyle,
+  brCatName: { fontSize: 14.5, fontWeight: "800", color: C.ink } as TextStyle,
+  brCatMeta: { fontSize: 12, color: C.ink3 } as TextStyle,
+  brAthletes: { gap: 2, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 } as ViewStyle,
+  brAthLabel: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", color: C.ink3, marginBottom: 2 } as TextStyle,
+  brAthName: { fontSize: 13, fontWeight: "600", color: C.ink2 } as TextStyle,
+  brPrintRow: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: C.primaryLine, backgroundColor: C.primarySoft, borderRadius: R.sm, paddingHorizontal: 11, paddingVertical: 7 } as ViewStyle,
+  brPrintTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
+  brNote: { fontSize: 12, color: C.ink3, fontStyle: "italic" } as TextStyle,
 
   // ── Triagem P2.2 — card do atleta ──
   athCard: { borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 11, gap: 9, backgroundColor: C.glass2 } as ViewStyle,

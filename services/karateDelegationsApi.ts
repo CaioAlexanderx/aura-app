@@ -16,6 +16,9 @@
 // Normalização defensiva: campo ausente vira null/0, nunca quebra a UI.
 // ============================================================
 import { request } from "@/services/api";
+import type { Scoresheet } from "@/services/karateCompetitionP1Api";
+
+export type { Scoresheet };
 
 // ── Tipos ───────────────────────────────────────────────────
 
@@ -262,6 +265,53 @@ export interface DelegationOrderDetail {
   entries: DelegationOrderEntry[];
 }
 
+// ── Minhas chaves (Onda B) ──────────────────────────────────
+// O "procurar minha chave no PDF / na parede do ginásio", só que no
+// celular: o sensei vê APENAS as categorias onde tem atleta e imprime a
+// MESMA folha da federação. A súmula devolvida é o payload `Scoresheet`
+// de karateCompetitionP1Api — nada é remontado aqui, o gerador de HTML
+// (buildScoresheetHtml/printScoresheet) é literalmente o mesmo.
+
+/** Status da chave de uma categoria (espelha o da federação). */
+export type MyBracketStatus = "not_generated" | "draft" | "locked" | "done";
+
+export interface MyBracketCategory {
+  id: string;
+  name: string;
+  modality: string;
+  group_label: string | null;
+  division_name: string | null;
+  /** KOTO — a área/tatame do ginásio. É o que o sensei procura primeiro. */
+  area_name: string | null;
+  area_order: number | null;
+  bracket_status: MyBracketStatus;
+  kata_mode: string | null;
+  /** Nomes dos MEUS atletas nessa categoria. */
+  my_athletes: string[];
+}
+
+export interface MyBracketsResponse {
+  /** false = a federação ainda não publicou as chaves. */
+  published: boolean;
+  competition_name?: string | null;
+  data: MyBracketCategory[];
+}
+
+/** 404 NOT_PUBLISHED — chaves despublicadas entre o load e o toque. */
+export function isNotPublishedError(e: any): boolean {
+  if (!e) return false;
+  return [e?.code, e?.data?.code, e?.data?.error, e?.message]
+    .filter(Boolean)
+    .some((v: any) => String(v).toUpperCase().includes("NOT_PUBLISHED"));
+}
+
+export const BRACKET_STATUS_LABEL: Record<MyBracketStatus, string> = {
+  not_generated: "Chave ainda não sorteada",
+  draft: "Chave provisória",
+  locked: "Chave oficial",
+  done: "Encerrada",
+};
+
 // ── Cliente ─────────────────────────────────────────────────
 
 const base = (fid: string) => `/federation/${fid}/dojo`;
@@ -289,6 +339,14 @@ export const karateDelegationsApi = {
     body: DelegationBody & { payment_mode: Exclude<PaymentMode, "aura_pay"> }
   ): Promise<SubmitResponse> =>
     request(`${base(fid)}/competitions/${competitionId}/delegation`, { method: "POST", body, retry: 0, timeout: 30000 }),
+
+  /** Minhas chaves: categorias do campeonato onde o dojô tem atleta. */
+  getMyBrackets: (fid: string, competitionId: string): Promise<MyBracketsResponse> =>
+    request(`${base(fid)}/competitions/${competitionId}/my-brackets`),
+
+  /** Súmula da categoria — MESMO payload da federação (para imprimir). */
+  getMyScoresheet: (fid: string, competitionId: string, categoryId: string): Promise<Scoresheet> =>
+    request(`${base(fid)}/competitions/${competitionId}/categories/${categoryId}/scoresheet`),
 
   listOrders: (fid: string): Promise<{ data: DelegationOrderSummary[]; schema_pending?: boolean }> =>
     request(`${base(fid)}/delegations`),
