@@ -148,6 +148,12 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [minStock, setMinStock] = useState(editProduct ? String(editProduct.minStock) : "");
   const [unit, setUnit]         = useState(editProduct?.unit || "un");
   const [notes, setNotes]       = useState(editProduct?.notes || "");
+  // Migration 305 — ficha tecnica. Texto livre: o objetivo e a lojista
+  // conseguir escrever "Viscose com elastano" sem esperar uma modelagem
+  // de composicao por percentual.
+  const [material, setMaterial] = useState((editProduct as any)?.material || "");
+  const [medidas, setMedidas]   = useState((editProduct as any)?.medidas || "");
+  const [cuidados, setCuidados] = useState((editProduct as any)?.cuidados || "");
   const [color, setColor]       = useState(editProduct?.color || "");
   const [size, setSize]         = useState(editProduct?.size || "");
   // NCM: campo fiscal de 8 dígitos. Strip de não-dígitos no onChangeText e
@@ -275,6 +281,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       unit, brand: editProduct?.brand || "",
       notes: notes.trim(), color: color || "", size: size.trim(),
       ncm: ncm || "",
+      material: material.trim(), medidas: medidas.trim(), cuidados: cuidados.trim(),
       // D1: consumido por handleSaveProduct em estoque.tsx.
       categorySelection: selecao.primaryCategoryId ? selecao : undefined,
     } as any);
@@ -652,6 +659,28 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         />
         <Text style={s.hint}>
           É o que o cliente lê antes de decidir. Sem isso, a página mostra só a foto e o preço.
+        </Text>
+      </FormField>
+
+      {/* Migration 305 — ficha tecnica. Sao as tres perguntas que sobram
+          depois da foto e do preco: de que e feito, quanto mede, como
+          cuidar. Cada linha so aparece na loja se estiver preenchida —
+          "Material: —" e pior que ficha nenhuma. */}
+      <FormField label="Material">
+        <TextInput style={s.input} value={material} onChangeText={setMaterial}
+          placeholder="Ex.: Viscose com elastano" placeholderTextColor={Colors.ink3} />
+      </FormField>
+
+      <FormField label="Medidas">
+        <TextInput style={s.input} value={medidas} onChangeText={setMedidas}
+          placeholder="Ex.: Busto 92cm, comprimento 105cm" placeholderTextColor={Colors.ink3} />
+      </FormField>
+
+      <FormField label="Cuidados">
+        <TextInput style={s.input} value={cuidados} onChangeText={setCuidados}
+          placeholder="Ex.: Lavar à mão, não usar secadora" placeholderTextColor={Colors.ink3} />
+        <Text style={s.hint}>
+          Os três aparecem numa ficha na página do produto. Deixe em branco o que não se aplica.
         </Text>
       </FormField>
 

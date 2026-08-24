@@ -45,6 +45,9 @@ function mapApiProduct(p: any): Product {
     unit: p.unit || "un",
     brand: p.brand || "",
     notes: p.notes || p.description || "",
+    material: p.material || "",
+    medidas:  p.medidas  || "",
+    cuidados: p.cuidados || "",
     color: p.color || "",
     size: p.size || "",
     image_url: p.image_url || "",
@@ -96,6 +99,12 @@ export function useProducts() {
       color: product.color || undefined,
       size: product.size || undefined,
       ncm: product.ncm || undefined,
+      // Migration 305 — ficha tecnica. String vazia LIMPA o campo; por
+      // isso nao usa `|| undefined`, que deixaria o valor antigo no banco
+      // quando a lojista apagasse o texto.
+      material: (product as any).material ?? undefined,
+      medidas:  (product as any).medidas  ?? undefined,
+      cuidados: (product as any).cuidados ?? undefined,
     };
   }
 
