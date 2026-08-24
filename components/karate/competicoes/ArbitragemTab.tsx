@@ -555,7 +555,7 @@ function TermosSection({ federationId, competitionId }: { federationId: string; 
         {data.pending > 0 ? (
           <Text style={s.waiverPending}>{data.pending} pendente{data.pending === 1 ? "" : "s"}</Text>
         ) : (
-          <Text style={s.waiverOk}>Delegações completas 🎉</Text>
+          <Text style={s.waiverOk}>Delegações completas</Text>
         )}
       </View>
 
