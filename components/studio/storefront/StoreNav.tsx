@@ -63,14 +63,24 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
         accessibilityLabel={
           item === null ? "Ver todos os produtos" : `${item.name}, ${item.total} ${item.total === 1 ? "produto" : "produtos"}`
         }
+        // A ativa se marca por REGUA, nao por pilula preenchida — mesma
+        // regra da loja comum (backend #600): preenchimento solido da cor
+        // da loja fica reservado a acao que fecha a venda. Uma fila de
+        // categorias com uma delas preenchida disputava atencao com o
+        // proprio produto, logo abaixo dela.
+        //
+        // Dentro do painel ("Mais") o item continua item de lista: regua
+        // ali nao teria a fila de vizinhos que da o contraste.
         style={({ pressed }) => ({
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
-          paddingHorizontal: ehExtra ? 14 : 12,
+          paddingHorizontal: ehExtra ? 14 : 2,
           paddingVertical: ehExtra ? 10 : 9,
-          borderRadius: ehExtra ? 8 : 999,
-          backgroundColor: sel && !ehExtra ? cor : "transparent",
+          borderRadius: ehExtra ? 8 : 0,
+          backgroundColor: "transparent",
+          borderBottomWidth: ehExtra ? 0 : 2,
+          borderBottomColor: sel && !ehExtra ? cor : "transparent",
           opacity: pressed ? 0.75 : 1,
         })}
       >
@@ -79,7 +89,10 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
           style={{
             fontSize: 13,
             fontWeight: sel ? "800" : "600",
-            color: sel && !ehExtra ? "#fff" : T.ink2,
+            // Inativa em ink2, ativa em ink — mesmo par de tons que a loja
+            // comum usa depois que os controles perderam a caixa. Sem essa
+            // diferenca a fila fica chapada e so a regua distingue.
+            color: sel && !ehExtra ? T.ink : T.ink2,
           }}
         >
           {rotulo}
@@ -89,14 +102,14 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
             style={{
               fontSize: 11,
               fontVariant: ["tabular-nums"],
-              color: sel && !ehExtra ? "rgba(255,255,255,0.75)" : T.ink4,
+              color: T.ink4,
             }}
           >
             {item.total}
           </Texto>
         )}
         {temFilhas && telaLarga && (
-          <Texto style={{ fontSize: 9, color: sel ? "rgba(255,255,255,0.8)" : T.ink4 }}>▾</Texto>
+          <Texto style={{ fontSize: 9, color: T.ink4 }}>▾</Texto>
         )}
       </Pressable>
     );

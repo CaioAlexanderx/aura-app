@@ -30,6 +30,12 @@ export type StudioStoreProduct = {
   // (preco unitario e percentual por faixa). [] quando nao ha faixa.
   qty_tiers?: QtyTier[];
   stock_qty: number;
+  // Ficha tecnica (migration 305). Nasceu na loja comum em 23/08 e levou
+  // uma correcao pra chegar ate aqui (backend #598) — o SELECT da vitrine
+  // e outro. Opcional porque o backend so devolve depois da migration.
+  material?: string | null;
+  medidas?: string | null;
+  cuidados?: string | null;
   customization_config: CustomizationConfig | null;
   templates: Array<{
     id: string; name: string; image_url: string; thumb_url: string | null;
