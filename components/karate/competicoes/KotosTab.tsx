@@ -22,7 +22,7 @@ import { KarateErrorState } from "@/components/karate/ErrorState";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import {
-  karateCompetitionP1Api, ScheduleBoard, BoardArea, BoardCategory, formatEstMinutes,
+  karateCompetitionP1Api, ScheduleBoard, BoardArea, BoardCategory, BoardConflict, formatEstMinutes,
 } from "@/services/karateCompetitionP1Api";
 import {
   useBoardDragAndDrop, useDraggableCategoryRef, useColumnDropZoneRef, BoardColumnId,
@@ -146,6 +146,13 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
         </View>
       </View>
 
+      {/* Onda B: aviso de atleta com provas em kotos diferentes. Some sozinho
+          quando a federação resolve movendo as categorias (o board recarrega). */}
+      <ConflictBanner
+        conflicts={board.conflicts ?? []}
+        count={board.totals.conflict_count ?? (board.conflicts?.length ?? 0)}
+      />
+
       {board.areas.length === 0 && (
         <View style={s.emptyBox}>
           <Icon name="grid" size={16} color={C.ink3} />
@@ -173,6 +180,52 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
           />
         ))}
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Aviso — NUNCA bloqueio. O mesmo atleta com provas em kotos diferentes pode
+ * ser chamado em duas áreas ao mesmo tempo; a mesa central precisa saber para
+ * sequenciar. Sem conflito, nada renderiza (não é um estado vazio a preencher).
+ */
+function ConflictBanner({ conflicts, count }: { conflicts: BoardConflict[]; count: number }) {
+  const [open, setOpen] = useState(false);
+  if (count <= 0) return null;
+
+  const plural = count === 1 ? "atleta" : "atletas";
+  const summary = `${count} ${plural} com provas em kotos diferentes`;
+
+  return (
+    <View style={s.conflict}>
+      <TouchableOpacity
+        style={s.conflictHead}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={open ? `Ocultar ${summary}` : `Ver ${summary}`}
+        hitSlop={8}
+      >
+        <Icon name="alert" size={15} color={C.warn} />
+        <Text style={s.conflictTitle}>{summary}</Text>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={14} color={C.warn} />
+      </TouchableOpacity>
+
+      {open && (
+        <View style={s.conflictBody}>
+          <Text style={s.conflictHint}>
+            Sequencie as chamadas na mesa central ou mova uma das categorias para o mesmo koto.
+          </Text>
+          {conflicts.map((c) => (
+            <View key={c.student_id} style={s.conflictRow}>
+              <Text style={s.conflictName} numberOfLines={1}>{c.student_name}</Text>
+              <Text style={s.conflictCats}>
+                {c.categories.map((cat) => `${cat.name} (${cat.area_name})`).join(" · ")}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -310,6 +363,14 @@ const s = StyleSheet.create({
   hint: { fontSize: 12, color: C.ink3, marginTop: 2 } as TextStyle,
   newArea: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   newAreaInput: { width: 190, fontSize: 13, color: C.ink, borderWidth: 1, borderColor: C.border2, borderRadius: R.sm, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: C.glassHi } as TextStyle,
+  conflict: { backgroundColor: C.warnSoft, borderWidth: 1, borderColor: C.warn, borderRadius: R.md, overflow: "hidden" } as ViewStyle,
+  conflictHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11, minHeight: 44 } as ViewStyle,
+  conflictTitle: { flex: 1, fontSize: 12.5, fontWeight: "700", color: C.warn } as TextStyle,
+  conflictBody: { paddingHorizontal: 12, paddingBottom: 11, gap: 8 } as ViewStyle,
+  conflictHint: { fontSize: 11.5, color: C.ink2 } as TextStyle,
+  conflictRow: { gap: 2 } as ViewStyle,
+  conflictName: { fontSize: 12.5, fontWeight: "700", color: C.ink } as TextStyle,
+  conflictCats: { fontSize: 11.5, color: C.ink2 } as TextStyle,
   emptyBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12 } as ViewStyle,
   emptyTxt: { flex: 1, fontSize: 12.5, color: C.ink2 } as TextStyle,
   column: { width: 250, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.md, overflow: "hidden" } as ViewStyle,
