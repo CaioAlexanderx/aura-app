@@ -573,7 +573,9 @@ export function downloadCsv(baseName: string, header: string[], rows: string[][]
 
 const st = StyleSheet.create({
   screen:       { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content:      { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a lista de
+  // entradas não estica em monitor largo (padrão da mesa pública).
+  content:      { padding: 16, gap: 8, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
 
   summaryRow:   { flexDirection: "row", gap: 8, marginBottom: 4 } as ViewStyle,
   summaryCell:  { flex: 1, backgroundColor: KarateColors.glass, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 10, gap: 4 } as ViewStyle,
