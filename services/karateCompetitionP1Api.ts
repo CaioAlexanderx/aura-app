@@ -155,6 +155,8 @@ export interface Scoresheet {
   kata_scores?: {
     entry_id: string; name: string | null; dojo_name: string | null;
     phase: "eliminatoria" | "final"; nota: number | null;
+    /** Onda B: notas individuais dos árbitros (3–7). Ausente/null no legado. */
+    notas?: number[] | null;
     presentation_order: number | null; advances: boolean | null;
   }[];
 }

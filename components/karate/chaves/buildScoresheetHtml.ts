@@ -12,6 +12,7 @@
 // ============================================================
 import type { Scoresheet, ScoresheetMatch } from "@/services/karateCompetitionP1Api";
 import { DECISION_LABEL } from "@/services/karateCompetitionP1Api";
+import { trimmedIndexes, fmtNota as fmtNotaBR, MIN_JUDGE_COUNT } from "@/components/karate/NotasArbitros";
 
 const esc = (v: unknown): string =>
   String(v ?? "").replace(/[&<>"]/g, (ch) =>
@@ -60,17 +61,45 @@ export function buildScoresheetHtml(sheet: Scoresheet): string {
     ? `<div class="round"><div class="rlabel">3º lugar</div>${matchHtml(sheet.third_place_match)}</div>`
     : "";
 
-  const kataHtml = sheet.kata_scores?.length
-    ? `<table class="kata">
-        <tr><th>#</th><th>Atleta</th><th>Dojô</th><th>Fase</th><th>Nota</th></tr>
-        ${sheet.kata_scores.map((k) => `
+  // Onda B: com lançamento por árbitro, a súmula lista A1..An com a maior e
+  // a menor riscadas (as descartadas) e o TOTAL à direita. Corte pelo mesmo
+  // helper da tela — nunca uma segunda implementação da regra.
+  const kataRows = sheet.kata_scores ?? [];
+  const kataNotas = (k: { notas?: number[] | null }): number[] | null =>
+    Array.isArray(k.notas) && k.notas.length >= MIN_JUDGE_COUNT ? k.notas : null;
+  const kataJudges = kataRows.reduce((max, k) => {
+    const list = kataNotas(k);
+    return list && list.length > max ? list.length : max;
+  }, 0);
+  const NUM_WORD: Record<number, string> = { 3: "Três", 4: "Quatro", 5: "Cinco", 6: "Seis", 7: "Sete" };
+  const kataJudgeHead = Array.from({ length: kataJudges }, (_, i) => `<th class="a">A${i + 1}</th>`).join("");
+
+  const kataHtml = kataRows.length
+    ? `${kataJudges > 0
+        ? `<div class="kata-note">${esc(
+            `${NUM_WORD[kataJudges] || kataJudges} árbitros — desconsidera-se a maior e a menor nota`)}</div>`
+        : ""}
+      <table class="kata">
+        <tr><th>#</th><th>Atleta</th><th>Dojô</th><th>Fase</th>${kataJudgeHead}<th>${
+          kataJudges > 0 ? "Total" : "Nota"}</th></tr>
+        ${kataRows.map((k) => {
+          const list = kataNotas(k);
+          const trimmed = list ? trimmedIndexes(list) : null;
+          const cells = Array.from({ length: kataJudges }, (_, i) => {
+            if (!list || i >= list.length) return `<td class="a">${k.nota == null ? "____" : "—"}</td>`;
+            const cut = !!trimmed && (i === trimmed.maxIdx || i === trimmed.minIdx);
+            return `<td class="a${cut ? " cut" : ""}">${esc(fmtNotaBR(list[i]))}</td>`;
+          }).join("");
+          return `
           <tr>
             <td>${esc(k.presentation_order ?? "")}</td>
             <td>${esc(k.name || "")}</td>
             <td>${esc(k.dojo_name || "")}</td>
             <td>${k.phase === "final" ? "Final" : "Eliminatória"}</td>
-            <td class="nota">${k.nota != null ? k.nota.toFixed(1) : "____"}</td>
-          </tr>`).join("")}
+            ${cells}
+            <td class="nota">${k.nota != null ? esc(fmtNotaBR(k.nota)) : "____"}</td>
+          </tr>`;
+        }).join("")}
       </table>`
     : "";
 
@@ -122,6 +151,9 @@ export function buildScoresheetHtml(sheet: Scoresheet): string {
   table.kata th { text-align: left; border-bottom: 1px solid #211d1a; padding: 4px; font-size: 9.5px; text-transform: uppercase; }
   table.kata td { border-bottom: 1px solid #e2ded6; padding: 4px; }
   table.kata .nota { text-align: right; font-weight: 700; }
+  table.kata th.a, table.kata td.a { text-align: center; width: 30px; padding: 4px 2px; font-size: 10px; color: #4a443d; }
+  table.kata td.a.cut { color: #8a8279; text-decoration: line-through; }
+  .kata-note { font-size: 9.5px; color: #4a443d; margin-bottom: 4px; }
   .places { display: flex; gap: 14px; margin-top: 14px; }
   .place { flex: 1; font-size: 10px; }
   .place span { display: block; font-weight: 700; letter-spacing: .04em; color: #544e47; }
