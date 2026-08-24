@@ -6,6 +6,10 @@
 //     do mês, lista com ações (Pix/Confirmar/Cancelar/WhatsApp vencidas)
 //   • "Planos"    — CRUD de planos de mensalidade
 //   • "Régua"     — lembretes automáticos por e-mail perto do vencimento
+//   • "WhatsApp"  — canal oficial pela Cloud API (Onda 5b): status da
+//                   conexão, templates aprovados pela Meta, fila de
+//                   envio e envio de teste. A fila manual wa.me segue
+//                   morando na aba "Régua" — são canais diferentes.
 //
 // Rota nova (não existe versão federada equivalente — não entra em
 // FEDERATION_SHARED_SECTIONS do _layout do grupo).
@@ -17,13 +21,15 @@ import { useKarateDojo } from "@/contexts/KarateDojo";
 import { CobrancasTab } from "@/components/karate/dojoMensalidades/CobrancasTab";
 import { PlanosSection } from "@/components/karate/dojoMensalidades/PlanosSection";
 import { ReguaSection } from "@/components/karate/dojoMensalidades/regua/ReguaSection";
+import { WhatsAppCloudSection } from "@/components/karate/dojoWhatsapp/WhatsAppCloudSection";
 
-type TabKey = "cobrancas" | "planos" | "regua";
+type TabKey = "cobrancas" | "planos" | "regua" | "whatsapp";
 
 const TABS: [TabKey, string][] = [
   ["cobrancas", "Cobranças"],
   ["planos", "Planos"],
   ["regua", "Régua"],
+  ["whatsapp", "WhatsApp"],
 ];
 
 export default function DojoMensalidades() {
@@ -55,8 +61,10 @@ export default function DojoMensalidades() {
           <CobrancasTab onGoToPlanos={() => setTab("planos")} />
         ) : tab === "planos" ? (
           <PlanosSection />
-        ) : (
+        ) : tab === "regua" ? (
           <ReguaSection />
+        ) : (
+          <WhatsAppCloudSection />
         )}
       </View>
     </View>
