@@ -164,6 +164,8 @@ export function MeusAlunosTab() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a lista de
+  // alunos não estica em monitor largo (padrão da mesa pública).
+  content: { padding: 16, gap: 14, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   actionsRow: { flexDirection: "row", justifyContent: "flex-end", gap: 10 } as ViewStyle,
 });
