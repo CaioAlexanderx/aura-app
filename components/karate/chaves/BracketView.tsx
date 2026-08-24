@@ -820,8 +820,13 @@ function TraditionalSheet({
       // O espelho da asa direita reflete a BORDA no horizontal
       // (x' = canvasW − x − w) e o EIXO no vertical (x' = canvasW − x),
       // senão o traço vertical fica deslocado de uma espessura.
-      const pushSeg = (x: number, y: number, w: number, h: number, red: boolean, key: string) => {
+      // `alive` = o vencedor deste segmento AINDA está em prova (não foi
+      // eliminado na luta seguinte): traço vermelho GROSSO — o caminho de
+      // quem está avançando salta aos olhos; eliminado fica no vermelho
+      // fino (pedido do produto no QA da chave tradicional).
+      const pushSeg = (x: number, y: number, w: number, h: number, red: boolean, key: string, alive = false) => {
         const horizontal = h === 0;
+        const th = alive ? T.LINE * 2 : T.LINE;
         const mx = side === "L" ? x : canvasW - x - (horizontal ? w : 0);
         lines.push(
           <View
@@ -829,18 +834,28 @@ function TraditionalSheet({
             pointerEvents="none"
             style={{
               position: "absolute",
-              left: horizontal ? mx : mx - T.LINE / 2,
-              top: T.PAD_TOP + y - T.LINE / 2,
-              width: horizontal ? w : T.LINE,
-              height: horizontal ? T.LINE : h + T.LINE,
+              left: horizontal ? mx : mx - th / 2,
+              top: T.PAD_TOP + y - th / 2,
+              width: horizontal ? w : th,
+              height: horizontal ? th : h + th,
               backgroundColor: red ? P.red : CONNECT_COLOR,
             }}
           />
         );
       };
+      // Vencedor da alimentadora segue vivo? (luta seguinte indefinida ou
+      // vencida por ele.)
+      const feederAlive = (feeder: any, next: any) => {
+        const w = feeder?.winner_entry_id;
+        if (!w) return false;
+        const nw = next?.winner_entry_id;
+        return !nw || nw === w;
+      };
       if (c === wingRounds - 1) {
         // Asa → final: linha reta (o centro da final é o centro da semi).
-        pushSeg(colRight, centers[c][0], T.CONN_W, 0, !!wing[c][0]?.winner_entry_id, `${side}-fin`);
+        const finM = rounds[totalRounds - 1][0];
+        pushSeg(colRight, centers[c][0], T.CONN_W, 0, !!wing[c][0]?.winner_entry_id, `${side}-fin`,
+          feederAlive(wing[c][0], finM));
       } else {
         // Percorre pelos CENTROS da coluna seguinte (não pelo array da asa):
         // garante que topY/botY existam mesmo em chave desbalanceada.
@@ -851,11 +866,14 @@ function TraditionalSheet({
           const childY = (topY + botY) / 2;
           const topRed = !!wing[c][2 * i]?.winner_entry_id;
           const botRed = !!wing[c][2 * i + 1]?.winner_entry_id;
-          pushSeg(colRight, topY, T.CONN_W / 2, 0, topRed, `${side}-${c}-${i}-a`);
-          pushSeg(colRight, botY, T.CONN_W / 2, 0, botRed, `${side}-${c}-${i}-b`);
-          pushSeg(midX, topY, 0, childY - topY, topRed, `${side}-${c}-${i}-v1`);
-          pushSeg(midX, childY, 0, botY - childY, botRed, `${side}-${c}-${i}-v2`);
-          pushSeg(midX, childY, T.CONN_W / 2, 0, topRed || botRed, `${side}-${c}-${i}-c`);
+          const child = wing[c + 1][i];
+          const topAlive = feederAlive(wing[c][2 * i], child);
+          const botAlive = feederAlive(wing[c][2 * i + 1], child);
+          pushSeg(colRight, topY, T.CONN_W / 2, 0, topRed, `${side}-${c}-${i}-a`, topAlive);
+          pushSeg(colRight, botY, T.CONN_W / 2, 0, botRed, `${side}-${c}-${i}-b`, botAlive);
+          pushSeg(midX, topY, 0, childY - topY, topRed, `${side}-${c}-${i}-v1`, topAlive);
+          pushSeg(midX, childY, 0, botY - childY, botRed, `${side}-${c}-${i}-v2`, botAlive);
+          pushSeg(midX, childY, T.CONN_W / 2, 0, topRed || botRed, `${side}-${c}-${i}-c`, topAlive || botAlive);
         }
       }
     }
