@@ -247,7 +247,9 @@ export function ExpensesTab({ federationId }: Props) {
 
 const st = StyleSheet.create({
   screen:       { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
-  content:      { padding: 16, gap: 8, paddingBottom: 40 } as ViewStyle,
+  // PREMISSA (24/08): coluna central com largura máxima — a lista de
+  // saídas não estica em monitor largo (padrão da mesa pública).
+  content:      { padding: 16, gap: 8, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" } as ViewStyle,
   headerRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 } as ViewStyle,
   totalLabel:   { fontSize: 11, fontWeight: "600", color: KarateColors.ink3, textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
   totalValue:   { fontFamily: KarateFonts.mono, fontSize: 22, fontWeight: "700", color: KarateColors.danger } as TextStyle,
