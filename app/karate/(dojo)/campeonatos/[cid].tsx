@@ -54,6 +54,7 @@ import {
   MyBracketCategory, MyBracketsResponse, BRACKET_STATUS_LABEL, isNotPublishedError,
 } from "@/services/karateDelegationsApi";
 import { printScoresheet } from "@/components/karate/chaves/buildScoresheetHtml";
+import { PresencaDojoTab } from "@/components/karate/competicoes/CredenciamentoTab";
 
 type TeamDraft = {
   key: string;
@@ -137,7 +138,7 @@ export default function DelegationCart() {
   // ── Minhas chaves (Onda B) ──
   // Aba separada do wizard: só leitura + impressão. Carrega sob demanda
   // (a primeira vez que o sensei abre a aba) para não pesar a inscrição.
-  const [tab, setTab] = useState<"inscricao" | "chaves">("inscricao");
+  const [tab, setTab] = useState<"inscricao" | "chaves" | "presenca">("inscricao");
   const [brackets, setBrackets] = useState<MyBracketsResponse | null>(null);
   const [bracketsLoading, setBracketsLoading] = useState(false);
   const [bracketsError, setBracketsError] = useState<string | null>(null);
@@ -516,9 +517,9 @@ export default function DelegationCart() {
           </View>
         </View>
 
-        {/* ── Abas: o wizard de inscrição × as chaves do dia ── */}
+        {/* ── Abas: o wizard de inscrição × as chaves × a presença do dia ── */}
         <View style={s.tabsRow}>
-          {([["inscricao", "Inscrição"], ["chaves", "Minhas chaves"]] as const).map(([key, label]) => (
+          {([["inscricao", "Inscrição"], ["chaves", "Minhas chaves"], ["presenca", "Presença"]] as const).map(([key, label]) => (
             <TouchableOpacity
               key={key}
               style={[s.tabBtn, tab === key && s.tabBtnOn]}
@@ -540,6 +541,8 @@ export default function DelegationCart() {
             onRetry={() => { setBrackets(null); setBracketsError(null); loadBrackets(); }}
             onPrint={printMyBracket}
           />
+        ) : tab === "presenca" ? (
+          <PresencaDojoTab federationId={federationId} competitionId={String(cid)} />
         ) : (
         <>
         {/* ── Atletas — triagem automática ── */}

@@ -16,9 +16,15 @@
 // Normalização defensiva: campo ausente vira null/0, nunca quebra a UI.
 // ============================================================
 import { request } from "@/services/api";
-import type { Scoresheet } from "@/services/karateCompetitionP1Api";
+import type {
+  Scoresheet, CheckInAction, CheckInEntry, CheckInResponse,
+  CheckInStatus, CheckInSource, CheckInTotals,
+} from "@/services/karateCompetitionP1Api";
 
-export type { Scoresheet };
+export type {
+  Scoresheet, CheckInAction, CheckInEntry, CheckInResponse,
+  CheckInStatus, CheckInSource, CheckInTotals,
+};
 
 // ── Tipos ───────────────────────────────────────────────────
 
@@ -305,6 +311,12 @@ export function isNotPublishedError(e: any): boolean {
     .some((v: any) => String(v).toUpperCase().includes("NOT_PUBLISHED"));
 }
 
+/** 403 PORTAL_READ_ONLY — Canal B (portal do dojô) não escreve. */
+export function isPortalReadOnlyError(e: any): boolean {
+  const code = e?.data?.code ?? e?.code ?? null;
+  return code === "PORTAL_READ_ONLY" || String(e?.message || "").includes("PORTAL_READ_ONLY");
+}
+
 export const BRACKET_STATUS_LABEL: Record<MyBracketStatus, string> = {
   not_generated: "Chave ainda não sorteada",
   draft: "Chave provisória",
@@ -347,6 +359,18 @@ export const karateDelegationsApi = {
   /** Súmula da categoria — MESMO payload da federação (para imprimir). */
   getMyScoresheet: (fid: string, competitionId: string, categoryId: string): Promise<Scoresheet> =>
     request(`${base(fid)}/competitions/${competitionId}/categories/${categoryId}/scoresheet`),
+
+  /** Check-in do dia — SÓ os atletas do meu dojô neste campeonato. */
+  getCheckIn: (fid: string, competitionId: string): Promise<CheckInResponse> =>
+    request(`${base(fid)}/competitions/${competitionId}/check-in`),
+
+  /** Marca a presença do atleta. Canal A apenas — portal responde 403 PORTAL_READ_ONLY. */
+  setCheckIn: (
+    fid: string, competitionId: string, studentId: string, status: CheckInAction
+  ): Promise<{ entries_updated: number }> =>
+    request(`${base(fid)}/competitions/${competitionId}/check-in/${studentId}`, {
+      method: "PATCH", body: { status }, retry: 0,
+    }),
 
   listOrders: (fid: string): Promise<{ data: DelegationOrderSummary[]; schema_pending?: boolean }> =>
     request(`${base(fid)}/delegations`),

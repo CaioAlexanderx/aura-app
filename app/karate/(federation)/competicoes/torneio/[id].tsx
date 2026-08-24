@@ -59,6 +59,7 @@ import { SetupTab } from "@/components/karate/competicoes/SetupTab";
 import { KotosTab } from "@/components/karate/competicoes/KotosTab";
 import { PremiacaoTab } from "@/components/karate/competicoes/PremiacaoTab";
 import { ArbitragemTab } from "@/components/karate/competicoes/ArbitragemTab";
+import { CredenciamentoTab } from "@/components/karate/competicoes/CredenciamentoTab";
 import { PhasePlanModal } from "@/components/karate/chaves/PhasePlanModal";
 import { printScoresheet } from "@/components/karate/chaves/buildScoresheetHtml";
 import { karateCompetitionP1Api, PhasePlan } from "@/services/karateCompetitionP1Api";
@@ -118,7 +119,7 @@ const WIDE_BREAKPOINT = 820;
 
 // Seleção no rail: nível-competição ("overview"/"ranking") ou uma
 // categoria (guardamos o id da categoria).
-type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "delegacoes" } | { kind: "kotos" } | { kind: "premiacao" } | { kind: "arbitragem" } | { kind: "setup" } | { kind: "category"; categoryId: string };
+type RailSelection = { kind: "overview" } | { kind: "ranking" } | { kind: "delegacoes" } | { kind: "credenciamento" } | { kind: "kotos" } | { kind: "premiacao" } | { kind: "arbitragem" } | { kind: "setup" } | { kind: "category"; categoryId: string };
 // Aba local dentro do painel de uma categoria. "chaves" cobre tanto
 // Kumite ("Chaves & Resultados") quanto Kata ("Apuração Kata") — o
 // rótulo muda conforme a modalidade, mas a intenção (ver o
@@ -658,6 +659,9 @@ export default function TorneioDetalhe() {
           {selection.kind === "delegacoes" && (
             <DelegacoesTab federationId={federationId} competitionId={cid} />
           )}
+          {selection.kind === "credenciamento" && (
+            <CredenciamentoTab federationId={federationId} competitionId={cid} />
+          )}
           {selection.kind === "kotos" && (
             <KotosTab federationId={federationId} competitionId={cid} />
           )}
@@ -977,6 +981,13 @@ function CategoryRail({
         label="Delegações"
         active={selection.kind === "delegacoes"}
         onPress={() => onSelect({ kind: "delegacoes" })}
+      />
+      <RailItem
+        isWide={isWide}
+        icon="check_circle"
+        label="Credenciamento"
+        active={selection.kind === "credenciamento"}
+        onPress={() => onSelect({ kind: "credenciamento" })}
       />
       <RailItem
         isWide={isWide}
