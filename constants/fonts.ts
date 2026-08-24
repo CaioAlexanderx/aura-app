@@ -74,7 +74,7 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   classic: {
     chave: "classic",
     nome: "Elegante",
-    hint: "Serifada fina. Para loja que vende peça cara.",
+    hint: "Serifada fina, de traço clássico. Boutique, joalheria, moda autoral.",
     display: "'Instrument Serif', Georgia, serif",
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Instrument+Serif:ital@0;1", "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700"],
@@ -82,7 +82,7 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   modern: {
     chave: "modern",
     nome: "Moderna",
-    hint: "Sem serifa, geométrica. Para loja jovem e direta.",
+    hint: "Sem serifa, geométrica. Streetwear, esporte, tecnologia.",
     display: "'Space Grotesk', -apple-system, sans-serif",
     body: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Space+Grotesk:wght@500;600;700", "Inter:wght@400;500;600;700"],
@@ -90,7 +90,7 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   editorial: {
     chave: "editorial",
     nome: "Marcante",
-    hint: "Peso alto, chama atenção. Para quem vive de promoção.",
+    hint: "Peso alto e largura estreita. Atacado, liquidação, preço em destaque.",
     display: "'Archivo Black', Impact, sans-serif",
     body: "'Archivo', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Archivo+Black", "Archivo:wght@400;500;600;700"],
@@ -98,7 +98,7 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
   humanist: {
     chave: "humanist",
     nome: "Acolhedora",
-    hint: "Serifada macia. Para loja de feito à mão.",
+    hint: "Serifada macia, de curvas abertas. Artesanal, casa, presentes.",
     display: "'Fraunces', Georgia, serif",
     body: "'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Fraunces:opsz,wght@9..144,400;9..144,600", "Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700"],

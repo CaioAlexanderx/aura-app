@@ -112,3 +112,29 @@ describe("specs de imagem", () => {
     expect(SPECS.logo.resumo.toLowerCase()).toContain("transparente");
   });
 });
+
+import { TIPOGRAFIAS } from "@/constants/fonts";
+
+describe("descrições das tipografias", () => {
+  const hints = Object.values(TIPOGRAFIAS).map((p) => p.hint);
+
+  test("dizem o DESENHO e para que tipo de loja serve", () => {
+    // "Para loja que vende peça cara" era informal demais — o feedback foi
+    // literal. Cada hint agora tem duas partes: como a letra é, e onde ela
+    // cabe. O ponto no meio separa as duas.
+    for (const h of hints) {
+      expect(h).toMatch(/\.\s/);
+      expect(h.length).toBeGreaterThan(35);
+    }
+  });
+
+  test("não usam registro coloquial", () => {
+    // Nada de "peça cara", "gente que", "pra quem vive de".
+    const COLOQUIAL = /\bpra\b|\bgente\b|peça cara|vive de|loja jovem/i;
+    for (const h of hints) expect(h).not.toMatch(COLOQUIAL);
+  });
+
+  test("nenhuma descrição se repete", () => {
+    expect(new Set(hints).size).toBe(hints.length);
+  });
+});

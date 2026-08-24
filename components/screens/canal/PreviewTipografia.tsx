@@ -1,56 +1,68 @@
 // ============================================================
-// Canal digital · escolher a tipografia da loja VENDO
+// Canal digital · escolher a tipografia
 //
-// O seletor mostrava só o nome do par e uma dica ("Serif clássica,
-// elegante"). A lojista escolhia no escuro: nome de fonte não diz nada
-// para quem não é designer, e "elegante" diz menos ainda.
+// REFEITO em 24/08/2026. A versão anterior era um mini-hero com logo, cor
+// e uma linha de prateleira — e o único elemento que mudava entre as
+// quatro opções era o nome da loja em 22px. Quatro letras nesse tamanho
+// não distinguem tipografia nenhuma: o feedback foi "as fontes ainda são
+// muito parecidas", e a queixa era da AMOSTRA, não das fontes (as quatro
+// famílias carregam e são de desenhos diferentes — conferido no Google
+// Fonts e no bundle).
 //
-// Aqui cada opção é um pedaço da loja DELA — a cor dela, o logo dela, o
-// nome dela — renderizado no par. A pergunta deixa de ser "qual nome
-// você prefere" e passa a ser "qual desses parece a sua loja".
+// Agora cada opção é um espécime de tipo: a palavra grande o suficiente
+// para as letras se lerem, e uma linha de corpo abaixo. Sem logo, sem
+// cor de fundo, sem cartão de produto — a cor da loja tem o próprio
+// preview logo acima, e repetir aqui só disputava atenção com o que está
+// sendo escolhido.
 // ============================================================
 import { useEffect } from "react";
-import { View, Text, Pressable, Image, Platform } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import { TIPOGRAFIAS, cssDeTodasTipografias, type ChaveTipografia } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
-import { useAccent } from "@/contexts/AccentTheme";
 import { Colors } from "@/constants/colors";
-// `wash` e puro e ja trata hex de 3 digitos e valor invalido — concatenar
-// alpha na mao ("cor + 1A") quebra assim que a lojista digita #0AF.
-import { wash } from "@/components/studio/storefront/theme";
 
-/** Ordem em que a lojista vê: do mais próximo da marca Aura ao mais distante. */
+/** Do mais próximo da marca Aura ao mais distante. */
 const ORDEM: ChaveTipografia[] = ["classic", "modern", "editorial", "humanist"];
 
 type Props = {
   valor?: string | null;
   onChange: (v: ChaveTipografia) => void;
-  /** Cor da loja — é ela que faz o preview parecer a loja da pessoa. */
+  /** Cor da loja — entra só como marca de seleção, não como fundo. */
   cor: string;
   nomeDaLoja?: string | null;
-  logoUrl?: string | null;
 };
 
-export function PreviewTipografia({ valor, onChange, cor, nomeDaLoja, logoUrl }: Props) {
-  const t = useAccent();
+export function PreviewTipografia({ valor, onChange, cor, nomeDaLoja }: Props) {
   const escolhida = (ORDEM.includes(valor as ChaveTipografia) ? valor : "classic") as ChaveTipografia;
-  const nome = (nomeDaLoja || "").trim() || "Sua loja";
 
-  // O painel carrega as QUATRO famílias — ao contrário da vitrine, que
+  // A palavra do espécime é o nome da loja quando ele tem tamanho para
+  // mostrar as letras. Nome curto não serve de amostra — "Aura" tem
+  // quatro letras e nenhuma descendente. A palavra de reserva tem
+  // ascendente, descendente, curva e diagonal de propósito.
+  const bruto = (nomeDaLoja || "").trim();
+  const palavra = bruto.length >= 6 ? bruto : "Agradável";
+
+  // O painel carrega as QUATRO famílias — ao contrário da loja, que
   // carrega só a escolhida. Sem isto as quatro amostras sairiam na mesma
   // fonte de fallback e o preview mentiria.
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    if (document.getElementById("aura-tipografias")) return;
-    const link = document.createElement("link");
-    link.id = "aura-tipografias";
-    link.rel = "stylesheet";
+    const id = "aura-tipografias";
+    let link = document.getElementById(id) as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    // href sempre reatribuído: quando os pares mudam, um <link> antigo
+    // deixaria as famílias novas de fora e tudo cairia no fallback — que
+    // é exatamente como quatro fontes diferentes viram quatro iguais.
     link.href = cssDeTodasTipografias();
-    document.head.appendChild(link);
   }, []);
 
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+    <View style={{ gap: 8 }}>
       {ORDEM.map((chave) => {
         const par = TIPOGRAFIAS[chave];
         const sel = chave === escolhida;
@@ -63,78 +75,51 @@ export function PreviewTipografia({ valor, onChange, cor, nomeDaLoja, logoUrl }:
             accessibilityState={{ selected: sel }}
             accessibilityLabel={`Tipografia ${par.nome}. ${par.hint}`}
             style={{
-              flexGrow: 1, flexBasis: 210, minWidth: 200,
-              borderRadius: 12, overflow: "hidden",
-              borderWidth: sel ? 2 : 1,
-              borderColor: sel ? t.primary : Colors.border,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 14,
+              paddingVertical: 14,
+              paddingHorizontal: 16,
+              borderRadius: 12,
+              borderWidth: sel ? 1.5 : 1,
+              // Selecionado se marca pela BORDA na cor da loja, não por
+              // fundo colorido: fundo atrás de um espécime muda como a
+              // letra é percebida, que é justamente o que está em jogo.
+              borderColor: sel ? cor : Colors.border,
               backgroundColor: Colors.bg3,
             }}
           >
-            {/* Mini-hero, na cor da loja */}
-            <View style={{ backgroundColor: cor, padding: 12, gap: 6 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {logoUrl ? (
-                  <Image
-                    source={{ uri: logoUrl }}
-                    style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.2)" }}
-                    resizeMode="contain"
-                  />
-                ) : null}
-                <Text
-                  numberOfLines={1}
-                  style={{ fontFamily: par.display, color: "#fff", fontSize: 22, lineHeight: 26, flex: 1 }}
-                >
-                  {nome}
-                </Text>
-              </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              {/* O espécime. 34px é onde serifa, peso e largura aparecem;
+                  em 22px as quatro pareciam a mesma fonte. */}
               <Text
                 numberOfLines={1}
-                style={{ fontFamily: par.body, color: "rgba(255,255,255,0.85)", fontSize: 10.5 }}
+                style={{
+                  fontFamily: par.display,
+                  color: Colors.ink,
+                  fontSize: 34,
+                  lineHeight: 44,
+                }}
               >
-                Produção em ~3 dias úteis
+                {palavra}
+              </Text>
+
+              {/* A fonte de CORPO também precisa aparecer: metade do texto
+                  da loja sai nela, e par bonito no título às vezes falha
+                  no tamanho pequeno. */}
+              <Text
+                numberOfLines={2}
+                style={{ fontFamily: par.body, color: Colors.ink3, fontSize: 13, lineHeight: 18 }}
+              >
+                {par.hint}
               </Text>
             </View>
 
-            {/* Uma linha de prateleira: é onde a fonte pequena aparece, e
-                é aí que par bonito no título costuma falhar. */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12 }}>
-              <View
-                style={{
-                  width: 40, height: 40, borderRadius: 8,
-                  backgroundColor: wash(cor, 0.12),
-                  alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontFamily: par.display, color: cor, fontSize: 17 }}>CB</Text>
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text numberOfLines={1} style={{ fontFamily: par.display, color: Colors.ink, fontSize: 14, lineHeight: 17 }}>
-                  Camiseta Básica
-                </Text>
-                <Text style={{ fontFamily: par.body, color: cor, fontSize: 12, fontWeight: "700" }}>
-                  R$ 49,90
-                </Text>
-              </View>
-            </View>
-
-            {/* Rodapé do cartão: nome do par + a marca de escolhido */}
-            <View
-              style={{
-                flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                gap: 8, paddingHorizontal: 12, paddingVertical: 9,
-                borderTopWidth: 1, borderTopColor: Colors.border,
-                backgroundColor: sel ? t.primarySoft : "transparent",
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12.5, fontWeight: "800", color: sel ? t.primary : Colors.ink }}>
-                  {par.nome}
-                </Text>
-                <Text numberOfLines={1} style={{ fontSize: 10.5, color: Colors.ink3, marginTop: 1 }}>
-                  {par.hint}
-                </Text>
-              </View>
-              {sel ? <Icon name="check-circle" size={16} color={t.primary} /> : null}
+            <View style={{ alignItems: "flex-end", gap: 5, minWidth: 76 }}>
+              <Text style={{ fontSize: 12.5, fontWeight: "800", color: sel ? cor : Colors.ink2 }}>
+                {par.nome}
+              </Text>
+              {sel ? <Icon name="check-circle" size={15} color={cor} /> : null}
             </View>
           </Pressable>
         );
