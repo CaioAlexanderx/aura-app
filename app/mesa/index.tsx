@@ -32,7 +32,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Platform, Vibration,
-  AccessibilityInfo, Animated, TextInput, StyleSheet, ViewStyle, TextStyle,
+  AccessibilityInfo, Animated, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -50,6 +50,7 @@ import {
 import {
   FORMAT_LABEL, DECISION_LABEL, MatchFormat, DecisionMethod,
 } from "@/services/karateCompetitionP1Api";
+import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
 import { roundLabel } from "@/components/karate/chaves/shared";
 
@@ -987,10 +988,11 @@ function MesaKataPanel({
   const [scores, setScores] = useState<KataScore[] | null>(null);
   const [bracketLocked, setBracketLocked] = useState<boolean | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null); // `${entry_id}:${phase}`
-  const [notaInput, setNotaInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [advanceCount, setAdvanceCount] = useState(8);
   const [advancing, setAdvancing] = useState(false);
+  /** Onda B: empate persistente na linha de corte devolvido pelo advance. */
+  const [tieBreakNames, setTieBreakNames] = useState<string[] | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [podium, setPodium] = useState<PodiumEntry[] | null>(null);
   const handleFlowError = usePanelErrorHandler(onCategoryMoved, onLinkInvalid);
@@ -1032,20 +1034,15 @@ function MesaKataPanel({
   const openEditor = useCallback((row: KataScore) => {
     const key = `${row.entry_id}:${row.phase}`;
     setEditingKey((prev) => (prev === key ? null : key));
-    setNotaInput(row.nota != null ? String(row.nota).replace(".", ",") : "");
   }, []);
 
-  const saveNota = useCallback(async (row: KataScore) => {
-    const parsed = Number(notaInput.trim().replace(",", "."));
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) {
-      toast.error("Nota inválida — use um valor entre 0 e 10 (ex.: 7,5).");
-      return;
-    }
+  // Onda B: envia as notas dos árbitros (ou a nota única do modo legado).
+  // O TOTAL é computado pelo BACKEND — aqui só recarregamos a lista.
+  const saveNota = useCallback(async (row: KataScore, payload: NotasSubmit) => {
     setSaving(true);
     try {
-      await karateMesaApi.putKataScore(cat.id, { entry_id: row.entry_id, phase: row.phase, nota: parsed });
+      await karateMesaApi.putKataScore(cat.id, { entry_id: row.entry_id, phase: row.phase, ...payload });
       setEditingKey(null);
-      setNotaInput("");
       await loadScores();
     } catch (e: any) {
       if (handleFlowError(e)) return;
@@ -1053,13 +1050,19 @@ function MesaKataPanel({
     } finally {
       setSaving(false);
     }
-  }, [cat.id, notaInput, loadScores, handleFlowError]);
+  }, [cat.id, loadScores, handleFlowError]);
 
   const handleAdvance = useCallback(async () => {
     setAdvancing(true);
     try {
       const result = await karateMesaApi.advanceKata(cat.id, { advance_count: advanceCount });
       toast.success(`${result.advanced} atleta${result.advanced === 1 ? "" : "s"} classificado${result.advanced === 1 ? "" : "s"} para a final.`);
+      const tied = result.tie_break_needed || [];
+      setTieBreakNames(
+        tied.length
+          ? tied.map((id) => (scores || []).find((r) => r.entry_id === id)?.student_name || id)
+          : null
+      );
       await loadScores();
     } catch (e: any) {
       if (handleFlowError(e)) return;
@@ -1067,7 +1070,7 @@ function MesaKataPanel({
     } finally {
       setAdvancing(false);
     }
-  }, [cat.id, advanceCount, loadScores, handleFlowError]);
+  }, [cat.id, advanceCount, scores, loadScores, handleFlowError]);
 
   const handleFinalize = useCallback(async () => {
     setFinalizing(true);
@@ -1150,39 +1153,21 @@ function MesaKataPanel({
                   <Text style={s.kataOutTxt}>Eliminada</Text>
                 </View>
               )}
-              <Text style={s.kataNota}>{r.nota != null ? String(r.nota).replace(".", ",") : "—"}</Text>
+              <NotasBreakdown nota={r.nota} notas={r.notas} style={s.kataNotaBox} />
               <Icon name="edit" size={14} color={editing ? P.red2 : C.ink4} />
             </Pressable>
 
             {editing && (
-              <View style={s.notaEditor}>
-                <Text style={s.notaEditorLabel}>Nota de {r.student_name}</Text>
-                <View style={s.notaEditorRow}>
-                  <TextInput
-                    style={s.notaInput}
-                    value={notaInput}
-                    onChangeText={setNotaInput}
-                    placeholder="7,5"
-                    placeholderTextColor={C.ink4}
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    autoFocus
-                    maxLength={5}
-                    onSubmitEditing={() => saveNota(r)}
-                    accessibilityLabel={`Nota de ${r.student_name}`}
-                  />
-                  <TouchableOpacity
-                    style={[s.notaSaveBtn, saving && s.btnDisabled]}
-                    disabled={saving}
-                    onPress={() => saveNota(r)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Salvar nota"
-                  >
-                    <Icon name="check" size={16} color={P.paperWarm} />
-                    <Text style={s.notaSaveTxt}>{saving ? "Salvando…" : "Salvar nota"}</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={s.notaEditorHint}>Some as notas válidas dos jurados (descartando a maior e a menor) e lance o total aqui.</Text>
+              <View style={s.notaEditorWrap}>
+                <NotasArbitros
+                  athleteName={r.student_name}
+                  phaseLabel={r.phase === "eliminatoria" ? "Eliminatória" : "Final"}
+                  initialNotas={r.notas}
+                  initialNota={r.nota}
+                  saving={saving}
+                  onSubmit={(payload) => saveNota(r, payload)}
+                  onCancel={() => setEditingKey(null)}
+                />
               </View>
             )}
           </View>
@@ -1199,6 +1184,26 @@ function MesaKataPanel({
           <Text style={[s.noticeTxt, { flex: 1 }]}>
             A apuração ainda não foi travada pela mesa central — dá para conferir a ordem, mas o lançamento pode ser recusado até travar.
           </Text>
+        </View>
+      )}
+
+      {!!tieBreakNames?.length && (
+        <View style={s.tieBreakBox}>
+          <Icon name="alert-circle" size={16} color={P.warn} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.tieBreakTitle}>Empate persistente na linha de corte</Text>
+            <Text style={s.tieBreakTxt}>
+              Novo kata para: {tieBreakNames.join(", ")}. A classificação foi aplicada mesmo assim — refaça a apresentação e relance as notas para desempatar.
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setTieBreakNames(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dispensar aviso de empate"
+            style={{ padding: 6 }}
+          >
+            <Icon name="close" size={14} color={C.ink3} />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1465,15 +1470,16 @@ const s = StyleSheet.create({
   kataAdvTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: P.ok } as TextStyle,
   kataOutChip: { backgroundColor: P.neutralWash, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 } as ViewStyle,
   kataOutTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: P.neutral } as TextStyle,
-  kataNota: { fontFamily: F.mono, fontSize: 15, color: C.ink, minWidth: 44, textAlign: "right" } as TextStyle,
+  kataNotaBox: { minWidth: 60 } as ViewStyle,
 
-  notaEditor: { backgroundColor: C.glassHi, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12, gap: 8, marginTop: 4, marginBottom: 4 } as ViewStyle,
-  notaEditorLabel: { fontFamily: F.body, fontSize: 12.5, fontWeight: "700", color: C.ink } as TextStyle,
-  notaEditorRow: { flexDirection: "row", gap: 8, alignItems: "stretch" } as ViewStyle,
-  notaInput: { width: 110, fontFamily: F.mono, fontSize: 24, color: C.ink, textAlign: "center", borderWidth: 1, borderColor: C.border2, borderRadius: R.md, backgroundColor: C.surface, paddingHorizontal: 10, paddingVertical: 10, minHeight: 56 } as TextStyle,
-  notaSaveBtn: { flex: 1, minHeight: 56, borderRadius: R.md, backgroundColor: C.sumi, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 } as ViewStyle,
-  notaSaveTxt: { fontFamily: F.body, fontSize: 15, fontWeight: "700", color: P.paperWarm } as TextStyle,
-  notaEditorHint: { fontFamily: F.body, fontSize: 11.5, color: C.ink3, lineHeight: 16 } as TextStyle,
+  // Onda B: o editor de nota virou o bloco compartilhado NotasArbitros —
+  // aqui só a caixa que o acomoda entre duas linhas da bateria.
+  notaEditorWrap: { marginTop: 4, marginBottom: 4 } as ViewStyle,
+
+  // Aviso de empate persistente na linha de corte (tie_break_needed)
+  tieBreakBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.warnWash, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12 } as ViewStyle,
+  tieBreakTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.warn } as TextStyle,
+  tieBreakTxt: { fontFamily: F.body, fontSize: 12, color: C.ink2, lineHeight: 17, marginTop: 2 } as TextStyle,
 
   footNote: { flexDirection: "row", alignItems: "flex-start", gap: 6, paddingHorizontal: 4, marginTop: 6 } as ViewStyle,
   footNoteTxt: { flex: 1, fontFamily: F.body, fontSize: 11, color: C.ink4, lineHeight: 16 } as TextStyle,

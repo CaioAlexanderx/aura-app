@@ -31,6 +31,7 @@ import { ShojiButton } from "@/components/karate/shoji";
 import { toast } from "@/components/Toast";
 import { karateBracketsApi, KataScore, KataPhase } from "@/services/karateBracketsApi";
 import { buildKataHtml } from "@/components/karate/chaves/buildKataHtml";
+import { NotasBreakdown } from "@/components/karate/NotasArbitros";
 import { styles as S, MiniAvatar } from "./shared";
 import {
   useBracketDragAndDrop, useDraggableSlotRef, useSlotDropZoneRef, BracketSlotId,
@@ -253,7 +254,7 @@ export function KataView({
                     <Text style={S.athleteName} numberOfLines={1}>{s.student_name}</Text>
                     <Text style={S.athleteDojo} numberOfLines={1}>{s.dojo_name}</Text>
                   </View>
-                  <Text style={S.kataNota}>{s.nota !== null ? s.nota.toFixed(1).replace(".", ",") : "—"}</Text>
+                  <NotasBreakdown nota={s.nota} notas={s.notas} />
                   <View style={[S.pill, s.advances ? S.pillAccent : S.pillNeutral]}>
                     <Text style={[S.pillText, s.advances ? S.pillTextAccent : S.pillTextNeutral]}>
                       {s.advances ? "Classificada" : s.advances === false ? "Eliminada" : ""}
@@ -281,7 +282,7 @@ export function KataView({
                       <Text style={S.athleteName} numberOfLines={1}>{s.student_name}</Text>
                       <Text style={S.athleteDojo} numberOfLines={1}>{s.dojo_name}</Text>
                     </View>
-                    <Text style={S.kataNota}>{s.nota !== null ? s.nota.toFixed(1).replace(".", ",") : "—"}</Text>
+                    <NotasBreakdown nota={s.nota} notas={s.notas} />
                     {i < 3 && (
                       <Text style={[S.medalText, { color: MEDAL_COLORS[i] }]}>{MEDALS[i]}</Text>
                     )}
@@ -386,7 +387,7 @@ function OrderRow({
         <Text style={S.athleteName} numberOfLines={1}>{score.student_name}</Text>
         <Text style={S.athleteDojo} numberOfLines={1}>{score.dojo_name}</Text>
       </View>
-      <Text style={S.kataNota}>{score.nota !== null ? score.nota.toFixed(1).replace(".", ",") : "—"}</Text>
+      <NotasBreakdown nota={score.nota} notas={score.notas} />
       <View style={ctrlStyles.moveArrows}>
         <TouchableOpacity
           disabled={index === 0}

@@ -47,6 +47,7 @@ import {
 import {
   karateBracketsApi, BracketState, BracketAthleteRef, PhaseByRound, PodiumEntry, KataScore,
 } from "@/services/karateBracketsApi";
+import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
 import { roundLabel } from "@/components/karate/chaves/shared";
 
@@ -802,9 +803,10 @@ function PhaseTimer({ matchKey, durationSec, timeMode }: {
 }
 
 // ════════════════════════════════════════════════════════════
-// Painel Kata (por notas): leitura da ordem/notas + atalho para o
-// lançamento na tela do torneio. O finalize funciona igual após as
-// notas da final.
+// Painel Kata (por notas): ordem da bateria + lançamento das notas
+// dos árbitros (Onda B — 5 notas, o TOTAL é do backend). O atalho
+// para a tela do torneio segue disponível para sorteio/impressão.
+// O finalize funciona igual após as notas da final.
 // ════════════════════════════════════════════════════════════
 function KataPanel({
   federationId, cid, cat, onFinalized, onOpenTorneio,
@@ -818,14 +820,36 @@ function KataPanel({
   const [scores, setScores] = useState<KataScore[] | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [podium, setPodium] = useState<PodiumEntry[] | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null); // `${entry_id}:${phase}`
+  const [savingNota, setSavingNota] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    karateBracketsApi.getKataScores(federationId, cid, cat.id)
-      .then((rows) => { if (mounted) setScores(rows || []); })
-      .catch(() => { if (mounted) setScores([]); });
-    return () => { mounted = false; };
+  const loadScores = useCallback(async () => {
+    try {
+      const rows = await karateBracketsApi.getKataScores(federationId, cid, cat.id);
+      setScores(rows || []);
+    } catch {
+      setScores([]);
+    }
   }, [federationId, cid, cat.id]);
+
+  useEffect(() => { loadScores(); }, [loadScores]);
+
+  // Onda B: uma nota por árbitro. O TOTAL é computado pelo BACKEND —
+  // aqui só recarregamos a bateria depois do PUT.
+  const handleSaveNota = useCallback(async (row: KataScore, payload: NotasSubmit) => {
+    setSavingNota(true);
+    try {
+      await karateBracketsApi.putKataScore(federationId, cid, cat.id, {
+        entry_id: row.entry_id, phase: row.phase, ...payload,
+      });
+      setEditingKey(null);
+      await loadScores();
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível salvar a nota.");
+    } finally {
+      setSavingNota(false);
+    }
+  }, [federationId, cid, cat.id, loadScores]);
 
   const handleFinalize = useCallback(async () => {
     setFinalizing(true);
@@ -872,7 +896,7 @@ function KataPanel({
       <View style={s.noticeBox}>
         <Icon name="info" size={15} color={C.ink3} />
         <Text style={[s.noticeTxt, { flex: 1 }]}>
-          Kata por notas: o lançamento das notas acontece na tela do torneio — aqui é a leitura da ordem de apresentação e das notas já lançadas.
+          Kata por notas: toque no atleta para lançar as cinco notas dos árbitros. O total (soma cortando a maior e a menor) é computado pelo sistema. O sorteio da ordem e a impressão ficam na tela do torneio.
         </Text>
       </View>
 
@@ -884,12 +908,28 @@ function KataPanel({
         </View>
       ) : (
         <>
-          <KataPhaseList title={`Eliminatória · ${eliminatoria.length}`} rows={eliminatoria} />
-          {final.length > 0 && <KataPhaseList title={`Final · ${final.length}`} rows={final} />}
+          <KataPhaseList
+            title={`Eliminatória · ${eliminatoria.length}`}
+            rows={eliminatoria}
+            editingKey={editingKey}
+            saving={savingNota}
+            onToggle={setEditingKey}
+            onSave={handleSaveNota}
+          />
+          {final.length > 0 && (
+            <KataPhaseList
+              title={`Final · ${final.length}`}
+              rows={final}
+              editingKey={editingKey}
+              saving={savingNota}
+              onToggle={setEditingKey}
+              onSave={handleSaveNota}
+            />
+          )}
         </>
       )}
 
-      <KarateButton label="Lançar notas na tela do torneio" variant="secondary" size="md" onPress={onOpenTorneio} />
+      <KarateButton label="Abrir a bateria na tela do torneio" variant="secondary" size="md" onPress={onOpenTorneio} />
 
       {hasFinalNota && (
         <View style={s.finalizeCard}>
@@ -914,26 +954,67 @@ function KataPanel({
   );
 }
 
-function KataPhaseList({ title, rows }: { title: string; rows: KataScore[] }) {
+function KataPhaseList({
+  title, rows, editingKey, saving, onToggle, onSave,
+}: {
+  title: string;
+  rows: KataScore[];
+  editingKey: string | null;
+  saving: boolean;
+  onToggle: (key: string | null) => void;
+  onSave: (row: KataScore, payload: NotasSubmit) => void | Promise<void>;
+}) {
   return (
     <View style={s.kataList}>
       <Text style={s.kataListTitle}>{title}</Text>
-      {rows.map((r) => (
-        <View key={`${r.entry_id}-${r.phase}`} style={s.kataRow}>
-          <Text style={s.kataOrder}>{r.presentation_order ?? "—"}</Text>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.kataName} numberOfLines={1}>{r.student_name}</Text>
-            {!!r.dojo_name && <Text style={s.kataDojo} numberOfLines={1}>{r.dojo_name}</Text>}
+      {rows.map((r) => {
+        const key = `${r.entry_id}:${r.phase}`;
+        const editing = editingKey === key;
+        return (
+          <View key={key}>
+            <Pressable
+              onPress={() => onToggle(editing ? null : key)}
+              accessibilityRole="button"
+              accessibilityLabel={`Lançar notas de ${r.student_name}`}
+              accessibilityState={{ expanded: editing }}
+              style={(state) => [
+                s.kataRow,
+                s.kataRowTouch,
+                (state as { hovered?: boolean }).hovered && s.kataRowHover,
+                editing && s.kataRowEditing,
+              ]}
+            >
+              <Text style={s.kataOrder}>{r.presentation_order ?? "—"}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.kataName} numberOfLines={1}>{r.student_name}</Text>
+                {!!r.dojo_name && <Text style={s.kataDojo} numberOfLines={1}>{r.dojo_name}</Text>}
+              </View>
+              {r.advances === true && (
+                <View style={s.kataAdvChip}>
+                  <Icon name="check" size={11} color={P.ok} />
+                  <Text style={s.kataAdvTxt}>Classificou</Text>
+                </View>
+              )}
+              <NotasBreakdown nota={r.nota} notas={r.notas} style={s.kataNotaBox} />
+              <Icon name="edit" size={14} color={editing ? P.red2 : C.ink4} />
+            </Pressable>
+
+            {editing && (
+              <View style={s.kataEditorWrap}>
+                <NotasArbitros
+                  athleteName={r.student_name}
+                  phaseLabel={r.phase === "eliminatoria" ? "Eliminatória" : "Final"}
+                  initialNotas={r.notas}
+                  initialNota={r.nota}
+                  saving={saving}
+                  onSubmit={(payload) => onSave(r, payload)}
+                  onCancel={() => onToggle(null)}
+                />
+              </View>
+            )}
           </View>
-          {r.advances === true && (
-            <View style={s.kataAdvChip}>
-              <Icon name="check" size={11} color={P.ok} />
-              <Text style={s.kataAdvTxt}>Classificou</Text>
-            </View>
-          )}
-          <Text style={s.kataNota}>{r.nota != null ? String(r.nota).replace(".", ",") : "—"}</Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -1097,10 +1178,15 @@ const s = StyleSheet.create({
   kataList: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 12, gap: 8 } as ViewStyle,
   kataListTitle: { fontFamily: F.body, fontSize: 11.5, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", color: C.ink3 } as TextStyle,
   kataRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
+  // Onda B: a linha virou alvo de toque (abre o lançamento das 5 notas).
+  kataRowTouch: { borderRadius: R.sm, paddingVertical: 8, paddingHorizontal: 6, minHeight: 52, borderWidth: 1, borderColor: "transparent" } as ViewStyle,
+  kataRowHover: { backgroundColor: C.glassHi } as ViewStyle,
+  kataRowEditing: { backgroundColor: P.redWash, borderColor: P.redLine } as ViewStyle,
+  kataNotaBox: { minWidth: 60 } as ViewStyle,
+  kataEditorWrap: { marginTop: 4, marginBottom: 4 } as ViewStyle,
   kataOrder: { fontFamily: F.mono, fontSize: 13, color: C.ink3, width: 24, textAlign: "center" } as TextStyle,
   kataName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   kataDojo: { fontFamily: F.body, fontSize: 11, color: C.ink3 } as TextStyle,
   kataAdvChip: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: P.okWash, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 } as ViewStyle,
   kataAdvTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: P.ok } as TextStyle,
-  kataNota: { fontFamily: F.mono, fontSize: 15, color: C.ink, minWidth: 44, textAlign: "right" } as TextStyle,
 });

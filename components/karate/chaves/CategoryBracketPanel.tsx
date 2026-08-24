@@ -23,7 +23,6 @@ import {
   Modal,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ViewStyle,
@@ -33,7 +32,6 @@ import { Icon } from "@/components/Icon";
 import {
   KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F,
 } from "@/constants/karateTheme";
-import { ShojiButton } from "@/components/karate/shoji";
 import {
   karateBracketsApi,
   BracketState,
@@ -44,6 +42,7 @@ import { notify } from "@/utils/webAlert";
 import { SorteioPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
+import { NotasArbitros, NotasSubmit } from "@/components/karate/NotasArbitros";
 
 // ── Seletor rápido de categoria (Hub P2 — bancada) ─────────────────
 // Permite "movimentar entre chaves" (anterior/próxima categoria) sem
@@ -129,7 +128,6 @@ export function CategoryBracketPanel({
   // ── Kata state
   const [kataScores, setKataScores] = useState<KataScore[]>([]);
   const [editScore, setEditScore] = useState<KataScore | null>(null);
-  const [scoreInput, setScoreInput] = useState("");
   const [savingScore, setSavingScore] = useState(false);
 
   // Load bracket for this category (Kumite)
@@ -249,23 +247,22 @@ export function CategoryBracketPanel({
     }
   };
 
-  const handleSaveScore = async () => {
-    if (!editScore || !scoreInput) return;
-    const nota = parseFloat(scoreInput.replace(",", "."));
-    if (isNaN(nota)) return;
+  // Onda B: o payload vem do NotasArbitros ({ notas } ou { nota } legado).
+  // O TOTAL é do BACKEND — a resposta do PUT é o que entra na lista.
+  const handleSaveScore = async (payload: NotasSubmit) => {
+    if (!editScore) return;
     setSavingScore(true);
     try {
-      await karateBracketsApi.putKataScore(federationId, cid || "", catId, {
-        entry_id: editScore.entry_id, phase: editScore.phase, nota,
+      const saved = await karateBracketsApi.putKataScore(federationId, cid || "", catId, {
+        entry_id: editScore.entry_id, phase: editScore.phase, ...payload,
       });
       setKataScores((prev) =>
         prev.map((s) =>
           s.entry_id === editScore.entry_id && s.phase === editScore.phase
-            ? { ...s, nota } : s
+            ? { ...s, nota: saved.nota, notas: saved.notas ?? ("notas" in payload ? payload.notas : null) } : s
         )
       );
       setEditScore(null);
-      setScoreInput("");
     } catch (e: any) {
       notify("Não foi possível salvar a nota", e?.message ?? "Tente novamente.");
     } finally {
@@ -300,7 +297,7 @@ export function CategoryBracketPanel({
         <KataView
           catName={catName}
           scores={kataScores}
-          onEditScore={(s) => { setEditScore(s); setScoreInput(s.nota !== null ? String(s.nota).replace(".", ",") : ""); }}
+          onEditScore={(s) => setEditScore(s)}
           federationId={federationId}
           cid={cid || ""}
           catId={catId}
@@ -350,28 +347,24 @@ export function CategoryBracketPanel({
         />
       )}
 
-      {/* Kata score modal */}
+      {/* Kata score modal — Onda B: uma nota por árbitro (5 no padrão) */}
       <Modal visible={!!editScore} transparent animationType="fade" onRequestClose={() => setEditScore(null)}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Lançar nota</Text>
+            <Text style={styles.sheetTitle}>Lançar notas</Text>
             <Text style={styles.sheetSub}>{editScore?.student_name}</Text>
-            <Text style={styles.sheetSub2}>
-              {editScore?.phase === "eliminatoria" ? "Eliminatória" : "Final"}
-            </Text>
-            <Text style={styles.inputLabel}>Nota (ex: 26,4)</Text>
-            <TextInput
-              style={styles.input}
-              value={scoreInput}
-              onChangeText={setScoreInput}
-              keyboardType="decimal-pad"
-              placeholder="0,0"
-              placeholderTextColor={C.ink4}
-            />
-            <View style={styles.sheetActions}>
-              <ShojiButton label="Cancelar" variant="ghost" onPress={() => setEditScore(null)} style={{ flex: 1 }} />
-              <ShojiButton label={savingScore ? "Salvando..." : "Salvar"} variant="sumi" onPress={handleSaveScore} style={{ flex: 1 }} />
-            </View>
+            {!!editScore && (
+              <NotasArbitros
+                key={`${editScore.entry_id}:${editScore.phase}`}
+                phaseLabel={editScore.phase === "eliminatoria" ? "Eliminatória" : "Final"}
+                initialNotas={editScore.notas}
+                initialNota={editScore.nota}
+                saving={savingScore}
+                onSubmit={handleSaveScore}
+                onCancel={() => setEditScore(null)}
+                style={{ marginTop: 6 }}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -400,11 +393,8 @@ const styles = StyleSheet.create({
   pendingBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: P.redWash, borderWidth: 1, borderColor: P.redLine, borderRadius: R.md, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14 } as ViewStyle,
   pendingText: { flex: 1, fontFamily: F.body, fontSize: 12.5, color: C.ink2, lineHeight: 17 } as TextStyle,
   overlay: { flex: 1, backgroundColor: "rgba(43,38,32,0.45)", alignItems: "center", justifyContent: "center", padding: 24 } as ViewStyle,
-  sheet: { width: "100%", maxWidth: 360, backgroundColor: P.glassHi, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: 20, gap: 8 } as ViewStyle,
+  // Onda B: o modal ficou mais largo — cinco campos de nota lado a lado.
+  sheet: { width: "100%", maxWidth: 460, backgroundColor: P.glassHi, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: 20, gap: 8 } as ViewStyle,
   sheetTitle: { fontFamily: F.heading, fontSize: 18, fontWeight: "400", color: C.ink } as TextStyle,
   sheetSub: { fontFamily: F.body, fontSize: 13, color: C.ink3 } as TextStyle,
-  sheetSub2: { fontFamily: F.body, fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: 0.8 } as TextStyle,
-  inputLabel: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: C.ink3, marginTop: 4 } as TextStyle,
-  input: { borderWidth: 1, borderColor: C.line2, borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.mono, fontSize: 20, color: C.ink, backgroundColor: P.glass2 } as TextStyle,
-  sheetActions: { flexDirection: "row", gap: 8, marginTop: 12 } as ViewStyle,
 });
