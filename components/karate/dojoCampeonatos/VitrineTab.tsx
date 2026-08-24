@@ -76,7 +76,9 @@ export function VitrineTab() {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+      // PREMISSA (24/08): coluna central com largura máxima — cards da
+      // vitrine não esticam em monitor largo (mesmo padrão da mesa pública).
+      contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40, width: "100%", maxWidth: 920, alignSelf: "center" }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={C.primary} />}
     >
       {!items || items.length === 0 ? (
