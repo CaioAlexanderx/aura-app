@@ -109,7 +109,8 @@ export function CategoryBracketPanel({
   /** Navegação rápida anterior/próxima entre categorias (opcional). */
   categoryNav?: CategoryNav;
 }) {
-  const isKataMode = modality === "kata" || modality === "team_kata";
+  // Enbu também é apurado por notas (regra real FPKT) — alinhado ao backend.
+  const isKataMode = modality === "kata" || modality === "team_kata" || modality === "enbu";
 
   // ── Sorteio panel state
   const [method, setMethod] = useState<DrawMethod>("ranking");

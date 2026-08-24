@@ -67,7 +67,7 @@ const MODALITY_LABEL: Record<string, string> = {
   enbu: "Enbu", fukugo: "Fukugo",
 };
 
-const isKataModality = (m: string) => m === "kata" || m === "team_kata";
+const isKataModality = (m: string) => m === "kata" || m === "team_kata" || m === "enbu";
 
 /** true = painel de NOTAS; false = árvore de lutas (inclui kata bandeirada). */
 function isScoreMode(cat: MesaCategory): boolean {
@@ -151,6 +151,17 @@ function useMesaTokenBootstrap(): string | null {
         // QA). Limpar pelo router remove o token da barra/histórico de
         // verdade — ele já vive em sessionStorage + estado.
         try { router.replace("/mesa"); } catch { /* ok manter a query */ }
+        // Cinto e suspensório: no primeiro mount a navegação pode ainda não
+        // estar pronta e o replace acima ser engolido (QA 24/08: o ?t=
+        // continuou na barra). Re-checa depois que o router assentou.
+        setTimeout(() => {
+          try {
+            if (window.location.search.includes("t=")) {
+              try { router.replace("/mesa"); } catch { /* segue */ }
+              try { window.history.replaceState({}, "", "/mesa"); } catch { /* segue */ }
+            }
+          } catch { /* ambiente sem window */ }
+        }, 800);
       }
     }
   }, [t]);
@@ -1423,7 +1434,10 @@ function MesaSumulaSection({
     const koto = sheet.fields?.koto || sheet.area?.name || fallbackKoto;
     const cName = [sheet.category.name, sheet.category.division_name, sheet.category.group_label]
       .filter(Boolean).join(" · ");
-    return [sheet.competition.name, cName, koto ? `Koto ${koto}` : null].filter(Boolean).join("  ·  ");
+    // Nome de área geralmente JÁ é "Koto N" — não duplicar o prefixo
+    // ("Koto Koto QA", achado do QA de 24/08).
+    const kotoLabel = koto ? (/^\s*koto\b/i.test(koto) ? koto : `Koto ${koto}`) : null;
+    return [sheet.competition.name, cName, kotoLabel].filter(Boolean).join("  ·  ");
   }, [sheet, fallbackKoto]);
 
   return (
