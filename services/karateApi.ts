@@ -2163,6 +2163,45 @@ export interface EditPractitionerRequestBody {
   fpkt_number_claimed?: string | null;
 }
 
+// ── Lote (24/08/2026) — aprovação/rejeição em massa ─────────
+// QA 23/08: "5 passos, um por um". O backend processa item a item (cada
+// item na própria transação — falha de um não desfaz os demais) e devolve
+// a resposta ITEMIZADA: o que falhou permanece pendente na fila, com o
+// motivo em `error`. Transferência não entra em lote (análise individual).
+
+/** Um item do lote de aprovação como criação — número FPKT por item, obrigatório. */
+export interface BatchApproveCreateItem {
+  request_id: string;
+  fpkt_number: string;
+}
+
+export interface BatchResultItem {
+  request_id: string;
+  ok: boolean;
+  /** Só nos que falharam: código do erro (ex.: FPKT_NUMBER_TAKEN, ALREADY_RESOLVED). */
+  code?: string | null;
+  /** Só nos que falharam: mensagem legível do backend. */
+  error?: string;
+  /** Só nas aprovações ok: o praticante criado. */
+  practitioner?: { id: string; name: string; karate_registration_number: string; dojo_id: string };
+  student_linked?: boolean;
+  dojo_access_reopened?: boolean;
+}
+
+export interface BatchApproveCreateResult {
+  results: BatchResultItem[];
+  approved: number;
+  failed: number;
+}
+
+export interface BatchRejectResult {
+  results: BatchResultItem[];
+  /** O motivo efetivamente persistido (o texto padrão, quando nenhum foi enviado). */
+  reason: string;
+  rejected: number;
+  failed: number;
+}
+
 export const karateApi = {
   // Dashboard
   getDashboard: (federationId: string): Promise<DashboardPayload> =>
@@ -3610,6 +3649,36 @@ export const karateApi = {
     request(`/federation/${federationId}/practitioner-requests/${requestId}/reject`, {
       method: "POST",
       body: { reason },
+    }),
+
+  /**
+   * Aprova VÁRIAS solicitações como criação numa chamada — número FPKT por
+   * item (obrigatório, emitido pela federação). Resposta itemizada: o que
+   * falhou permanece pendente na fila com o motivo. 422 antes de executar
+   * se um item vier sem número ou com número repetido dentro do lote.
+   */
+  batchApproveCreatePractitionerRequests: (
+    federationId: string,
+    items: BatchApproveCreateItem[]
+  ): Promise<BatchApproveCreateResult> =>
+    request(`/federation/${federationId}/practitioner-requests/batch-approve-create`, {
+      method: "POST",
+      body: { items },
+    }),
+
+  /**
+   * Rejeita várias solicitações com um motivo compartilhado OPCIONAL — sem
+   * motivo, o backend persiste um texto padrão (o sensei sempre vê algum
+   * motivo). Reabertura do link do dojô preservada por item.
+   */
+  batchRejectPractitionerRequests: (
+    federationId: string,
+    requestIds: string[],
+    reason?: string
+  ): Promise<BatchRejectResult> =>
+    request(`/federation/${federationId}/practitioner-requests/batch-reject`, {
+      method: "POST",
+      body: { request_ids: requestIds, ...(reason && reason.trim() ? { reason: reason.trim() } : {}) },
     }),
 
   /** Lista todos os pedidos de certificado da federação (visão admin). */
