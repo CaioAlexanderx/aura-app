@@ -12,7 +12,12 @@
 // primeira colocação e borda mais escura, igual à decisão já tomada
 // para o vencedor no bracket de Kumite.
 // ============================================================
+// Onda B: quando o lançamento veio por 5 notas (uma por árbitro), a folha
+// mostra as individuais A1..A5 com a MAIOR e a MENOR riscadas — as
+// descartadas — e o TOTAL destacado. O corte usa os MESMOS helpers da
+// tela (trimmedIndexes), nunca uma segunda implementação da regra.
 import type { KataScore } from "@/services/karateBracketsApi";
+import { trimmedIndexes, fmtNota as fmtNotaBR, MIN_JUDGE_COUNT } from "@/components/karate/NotasArbitros";
 
 const RED = "#b8463a";
 const INK = "#2b2620";
@@ -32,11 +37,31 @@ function fmtBRDateTime(d: Date): string {
     " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function fmtNota(nota: number | null): string {
-  return nota !== null && nota !== undefined ? nota.toFixed(1).replace(".", ",") : "—";
+function fmtNota(nota: number | null | undefined): string {
+  return nota !== null && nota !== undefined ? fmtNotaBR(nota) : "—";
 }
 
-function renderRow(s: KataScore, idx: number, isFinal: boolean): string {
+/** Notas individuais utilizáveis (3–7 árbitros) ou null no legado (nota única). */
+function notasOf(s: KataScore): number[] | null {
+  const list = s.notas;
+  return Array.isArray(list) && list.length >= MIN_JUDGE_COUNT ? list : null;
+}
+
+/** Quantas colunas de árbitro a folha precisa. 0 = ninguém tem notas (legado). */
+function judgeCountOf(rows: KataScore[]): number {
+  return rows.reduce((max, s) => {
+    const list = notasOf(s);
+    return list && list.length > max ? list.length : max;
+  }, 0);
+}
+
+const NUM_WORD: Record<number, string> = { 3: "Três", 4: "Quatro", 5: "Cinco", 6: "Seis", 7: "Sete" };
+
+function judgesNote(count: number): string {
+  return (NUM_WORD[count] || String(count)) + " árbitros — desconsidera-se a maior e a menor nota";
+}
+
+function renderRow(s: KataScore, idx: number, isFinal: boolean, judgeCount: number): string {
   const pos = s.presentation_order ?? idx + 1;
   const isFirst = idx === 0;
   const rowClass = "row" + (isFirst ? " row-first" : "");
@@ -52,12 +77,24 @@ function renderRow(s: KataScore, idx: number, isFinal: boolean): string {
     else statusHtml = '<span class="tag tag-pending">—</span>';
   }
 
+  let notasHtml = "";
+  if (judgeCount > 0) {
+    const list = notasOf(s);
+    const trimmed = list ? trimmedIndexes(list) : null;
+    for (let i = 0; i < judgeCount; i++) {
+      const n = list && i < list.length ? list[i] : null;
+      const cut = !!trimmed && (i === trimmed.maxIdx || i === trimmed.minIdx);
+      notasHtml += '<td class="col-a' + (cut ? ' nota-cut' : '') + '">' + esc(fmtNota(n)) + '</td>';
+    }
+  }
+
   return (
     '<tr class="' + rowClass + '">' +
       '<td class="col-order">' + esc(String(pos)) + '</td>' +
       '<td class="col-name"><div class="athlete-name' + (isFinal && idx < 3 ? ' bold' : '') + '">' + esc(s.student_name) + '</div>' +
         '<div class="athlete-dojo">' + esc(s.dojo_name || "&mdash;") + '</div></td>' +
-      '<td class="col-nota">' + esc(fmtNota(s.nota)) + '</td>' +
+      notasHtml +
+      '<td class="col-nota' + (judgeCount > 0 ? ' col-total' : '') + '">' + esc(fmtNota(s.nota)) + '</td>' +
       '<td class="col-status">' + statusHtml + '</td>' +
     '</tr>'
   );
@@ -65,18 +102,25 @@ function renderRow(s: KataScore, idx: number, isFinal: boolean): string {
 
 function renderTable(title: string, subtitle: string, rows: KataScore[], isFinal: boolean): string {
   if (!rows.length) return "";
+  const judgeCount = judgeCountOf(rows);
   const sorted = [...rows].sort((a, b) => {
     const ao = a.presentation_order;
     const bo = b.presentation_order;
     if (ao !== null && ao !== undefined && bo !== null && bo !== undefined) return ao - bo;
     return (b.nota ?? -1) - (a.nota ?? -1);
   });
-  const bodyRows = sorted.map((s, i) => renderRow(s, i, isFinal)).join("\n");
+  const bodyRows = sorted.map((s, i) => renderRow(s, i, isFinal, judgeCount)).join("\n");
+
+  let notasHead = "";
+  for (let i = 0; i < judgeCount; i++) notasHead += '<th class="col-a">A' + (i + 1) + '</th>';
+
   return (
     '<div class="table-block">' +
       '<div class="table-head"><span class="table-title">' + esc(title) + '</span><span class="table-sub">' + esc(subtitle) + '</span></div>' +
-      '<table>' +
-        '<thead><tr><th class="col-order">Ordem</th><th class="col-name">Atleta / Dojô</th><th class="col-nota">Nota</th><th class="col-status">' + (isFinal ? "Classificação" : "Status") + '</th></tr></thead>' +
+      '<table' + (judgeCount > 0 ? ' class="with-notas"' : '') + '>' +
+        '<thead><tr><th class="col-order">Ordem</th><th class="col-name">Atleta / Dojô</th>' + notasHead +
+          '<th class="col-nota' + (judgeCount > 0 ? ' col-total' : '') + '">' + (judgeCount > 0 ? "Total" : "Nota") + '</th>' +
+          '<th class="col-status">' + (isFinal ? "Classificação" : "Status") + '</th></tr></thead>' +
         '<tbody>' + bodyRows + '</tbody>' +
       '</table>' +
     '</div>'
@@ -97,6 +141,7 @@ export function buildKataHtml(scores: KataScore[], options?: BuildKataHtmlOption
 
   const elim = scores.filter((s) => s.phase === "eliminatoria");
   const final = scores.filter((s) => s.phase === "final");
+  const judgeCount = judgeCountOf(scores);
 
   const subtitleParts = [categoryName, competitionName].filter(Boolean).map(esc);
   const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" &middot; ") : "";
@@ -118,6 +163,7 @@ export function buildKataHtml(scores: KataScore[], options?: BuildKataHtmlOption
   html += '.fed-name{font-family:"Shippori Mincho",serif;font-size:14pt;font-weight:500;color:' + INK + '}';
   html += '.cat-name{font-size:10.5pt;font-weight:700;color:' + INK + ';margin-top:4px}';
   html += '.header-right{text-align:right;font-family:"DM Mono",monospace;font-size:8pt;color:' + INK_3 + '}';
+  html += '.judges-note{font-size:8.5pt;color:' + INK_2 + ';margin-top:3px}';
 
   html += '.table-block{margin-bottom:30px}';
   html += '.table-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid rgba(43,38,32,0.17);padding-bottom:6px;margin-bottom:10px}';
@@ -129,6 +175,14 @@ export function buildKataHtml(scores: KataScore[], options?: BuildKataHtmlOption
   html += 'th.col-order,td.col-order{text-align:center;width:60px}';
   html += 'th.col-nota,td.col-nota{text-align:center;width:80px;font-family:"DM Mono",monospace}';
   html += 'th.col-status,td.col-status{text-align:center;width:130px}';
+  html += 'th.col-a,td.col-a{text-align:center;width:34px;padding-left:2px;padding-right:2px;font-family:"DM Mono",monospace;font-size:8pt;color:' + INK_2 + '}';
+  html += 'th.col-a{letter-spacing:0.2pt}';
+  // Descartadas: risco + tom mais claro. O risco é o que sobrevive no P&B.
+  html += 'td.nota-cut{color:' + INK_3 + ';text-decoration:line-through;text-decoration-thickness:1px}';
+  html += 'th.col-total,td.col-total{width:72px;background:#eeeae2;border-left:1px solid rgba(43,38,32,0.28)}';
+  html += 'table.with-notas th.col-order,table.with-notas td.col-order{width:44px}';
+  html += 'table.with-notas th.col-status,table.with-notas td.col-status{width:104px}';
+  html += 'table.with-notas .tag{padding:2px 6px;font-size:7pt;letter-spacing:0.3pt}';
   html += 'tbody td{padding:7px 10px;border-top:1px solid rgba(43,38,32,0.12);font-size:9pt;vertical-align:middle}';
 
   html += 'tr.row-first{background:#eeeae2}';
@@ -151,7 +205,7 @@ export function buildKataHtml(scores: KataScore[], options?: BuildKataHtmlOption
   html += '.print-fab:hover{background:#6d28d9}';
   html += '.top-bar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;z-index:999;display:flex;align-items:center;justify-content:space-between;font-family:-apple-system,"Segoe UI",sans-serif}';
   html += '.top-bar span{color:#a78bfa;font-size:12px}.top-bar b{color:#e2e8f0;font-size:13px}';
-  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.sheet{padding-top:0}html,body{background:#fff}table{background:#fff}thead th{background:#eeeae2!important}tr.row-first{background:#eeeae2!important}}';
+  html += '@media print{.print-fab{display:none!important}.top-bar{display:none!important}.sheet{padding-top:0}html,body{background:#fff}table{background:#fff}thead th{background:#eeeae2!important}tr.row-first{background:#eeeae2!important}th.col-total,td.col-total{background:#eeeae2!important}td.nota-cut{color:' + INK_3 + '!important;text-decoration:line-through!important}}';
   html += '</style></head><body>';
 
   html += '<div class="top-bar"><div><span>Bateria Aura &mdash; A4 retrato</span><br>';
@@ -162,6 +216,7 @@ export function buildKataHtml(scores: KataScore[], options?: BuildKataHtmlOption
   html += '<div class="header-left">';
   html += '<div class="fed-name">' + esc(federationName) + '</div>';
   if (subtitle) html += '<div class="cat-name">' + subtitle + '</div>';
+  if (judgeCount > 0) html += '<div class="judges-note">' + esc(judgesNote(judgeCount)) + '</div>';
   html += '</div>';
   html += '<div class="header-right">Impresso em ' + esc(printedAt) + '</div>';
   html += '</div>';
