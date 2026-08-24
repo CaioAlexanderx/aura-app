@@ -45,7 +45,7 @@ export interface OpenCompetition {
 export interface EnrollmentCategory {
   id: string;
   name: string;
-  modality: "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite";
+  modality: "kata" | "kumite" | "kihon_ippon" | "team_kata" | "team_kumite" | "enbu" | "fukugo";
   min_age: number | null;
   max_age: number | null;
   belt_min: string | null;
@@ -328,6 +328,8 @@ export const MODALITY_LABEL: Record<EnrollmentCategory["modality"], string> = {
   kihon_ippon: "Kihon Ippon",
   team_kata: "Kata Equipe",
   team_kumite: "Kumite Equipe",
+  enbu: "Enbu",
+  fukugo: "Fukugo",
 };
 
 export function isTeamModality(m: EnrollmentCategory["modality"]): boolean {
