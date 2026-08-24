@@ -506,7 +506,13 @@ export function useStorefront(slug: string) {
     setError(null);
   }
 
-  function commitConfigure() {
+  /**
+   * @param opcoes.direto "Comprar agora" — pula a lista e vai pro
+   *   checkout. Quem clica ali ja decidiu; devolver pra vitrine faz a
+   *   pessoa procurar o carrinho pra fazer o que ela acabou de pedir.
+   *   Mesma regra que a loja comum aplica no botao "Comprar agora".
+   */
+  function commitConfigure(opcoes?: { direto?: boolean }) {
     if (!activeProduct) return;
     const cfg = activeProduct.customization_config;
     const backActive = effectiveBackSelected(cfg, editingAddBack);
@@ -558,7 +564,10 @@ export function useStorefront(slug: string) {
     setEditingLineId(null);
     setEditingAddBack(false);
     setEditingAddMiddle(false);
-    setStage("list");
+    // Editar uma linha do carrinho NUNCA vai direto pro checkout, mesmo
+    // que o botao direto seja clicado: quem esta editando veio de la e
+    // volta pra lista, que e de onde ela decide.
+    setStage(opcoes?.direto && !editingLineId ? "checkout" : "list");
   }
 
   function removeCartLine(lineId: string) {

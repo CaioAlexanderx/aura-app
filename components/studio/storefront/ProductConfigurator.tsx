@@ -28,6 +28,12 @@ import { FreteNoProduto } from "./FreteNoProduto";
 import { ZoomFoto, DicaDeZoom } from "./ZoomFoto";
 import { fotosDoProduto } from "./CarrosselFoto";
 import { Texto } from "./TipografiaVitrine";
+// Porte da loja comum (24/08/2026): descricao, ficha tecnica, "Comprar
+// agora" e relacionados. Nenhuma linha de UI e compartilhada entre as
+// duas lojas — o que e compartilhado e o payload, e ha teste no backend
+// que falha se um campo de produto existir so de um lado.
+import { FichaTecnica } from "./FichaTecnica";
+import { relacionadosDe } from "./relacionados";
 const qtyBtn: any = {
   width: 30, height: 30, borderRadius: 8,
   backgroundColor: "#f3f4f6",
@@ -48,6 +54,9 @@ export function ProductConfigurator({
     editingAddBack, setEditingAddBack,
     editingAddMiddle, setEditingAddMiddle,
     configuringUnitPrice, commitConfigure,
+    // openConfigure entra aqui pra secao de relacionados: tocar num
+    // vizinho troca o produto ativo sem sair da tela.
+    openConfigure,
     goTo, error,
     // editingLineId nao e exposto diretamente — inferimos pelo comportamento:
     // quando activeProduct nao e null E tem um lineId travado, e edicao.
@@ -56,6 +65,14 @@ export function ProductConfigurator({
 
   // Agente I: estado local do modal do guia de medidas
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+
+  // Vizinhos de categoria. Sem rede: a vitrine ja tem o catalogo inteiro
+  // em memoria (a maior loja tem 30 produtos). Antes do early return
+  // porque useMemo nao pode ser condicional.
+  const relacionados = useMemo(
+    () => relacionadosDe(activeProduct, sf.store?.products),
+    [activeProduct, sf.store],
+  );
 
   // Agente J: detecta o campo art_service e o campo image em todos os fields.
   // Calculado ANTES do early return para que o useEffect abaixo possa ser
@@ -617,11 +634,80 @@ export function ProductConfigurator({
           </View>
         ) : null}
 
+        {/* Sobre este produto. A vitrine tinha o campo no payload desde
+            sempre e nunca mostrava — a tela e um configurador, e a
+            descricao ficou de fora quando ela nasceu. Fica DEPOIS das
+            opcoes: quem ja esta configurando decidiu; o texto e pra quem
+            desceu procurando mais. */}
+        {activeProduct.description && String(activeProduct.description).trim() ? (
+          <View style={{ gap: 7 }}>
+            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+              Sobre este produto
+            </Texto>
+            <Texto style={{ fontSize: 13, lineHeight: 20, color: T.ink2 }}>
+              {String(activeProduct.description).trim()}
+            </Texto>
+          </View>
+        ) : null}
+
+        <FichaTecnica produto={activeProduct} T={T} marcaTexto={tema.marcaTexto} />
+
         {error && (
           <Texto style={{ fontSize: 12, color: T.red, textAlign: "center" }}>{error}</Texto>
         )}
         </View>
         </View>
+
+        {/* Produtos relacionados. Some sozinho quando sobra menos de dois
+            vizinhos — fileira de um item so chama atencao pro tamanho da
+            loja em vez de mostrar produto. */}
+        {relacionados.length ? (
+          <View style={{ paddingHorizontal: recuoLateral, paddingBottom: 26, gap: 14 }}>
+            <Texto style={{ fontFamily: tipo.display, fontSize: 19, color: T.ink }}>
+              Produtos relacionados
+            </Texto>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+              {relacionados.map((r) => {
+                const foto = fotosDoProduto(r.gallery_urls, r.image_url)[0] || null;
+                return (
+                  <Pressable
+                    key={r.id}
+                    onPress={() => openConfigure(r)}
+                    accessibilityRole="button"
+                    accessibilityLabel={r.name + ", R$ " + Number(r.price).toFixed(2)}
+                    style={{ width: 138 }}
+                  >
+                    <View
+                      style={{
+                        width: 138, height: 138, borderRadius: 12, overflow: "hidden",
+                        backgroundColor: T.bg, borderWidth: 1, borderColor: T.border,
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {foto ? (
+                        <img
+                          src={foto}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "contain", padding: "6%" }}
+                        />
+                      ) : (
+                        <Texto style={{ fontSize: 22, color: T.ink3 }}>
+                          {(r.name || "?").trim().charAt(0).toUpperCase()}
+                        </Texto>
+                      )}
+                    </View>
+                    <Texto numberOfLines={2} style={{ fontFamily: tipo.display, fontSize: 13.5, lineHeight: 17, color: T.ink, marginTop: 8 }}>
+                      {r.name}
+                    </Texto>
+                    <Texto style={{ fontSize: 12.5, fontWeight: "800", color: tema.marcaTexto, marginTop: 2 }}>
+                      R$ {Number(r.price).toFixed(2)}
+                    </Texto>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
       <ZoomFoto fotos={fotosDaPeca} nome={activeProduct.name} indice={zoom} onFechar={() => setZoom(null)} />
@@ -634,17 +720,61 @@ export function ProductConfigurator({
           alignItems: telaLarga ? "center" : "stretch",
         }}
       >
-        <Pressable
-          onPress={commitConfigure}
-          style={{
-            backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
-            width: "100%", maxWidth: telaLarga ? 420 : undefined,
-          }}
-        >
-          <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
-            {(sf as any)._editingLineId ? "Atualizar" : "Adicionar"} • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
-          </Texto>
-        </Pressable>
+        {/* Editando uma linha do carrinho ha UMA acao: atualizar. Oferecer
+            "Comprar agora" ali seria oferecer o que a pessoa ja fez —
+            ela veio do carrinho. */}
+        {(sf as any)._editingLineId ? (
+          <Pressable
+            onPress={() => commitConfigure()}
+            style={{
+              backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
+              width: "100%", maxWidth: telaLarga ? 420 : undefined,
+            }}
+          >
+            <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
+              Atualizar • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
+            </Texto>
+          </Pressable>
+        ) : (
+          <View style={{ flexDirection: "row", gap: 10, width: "100%", maxWidth: telaLarga ? 420 : undefined }}>
+            {/* "Comprar agora" e a acao PRINCIPAL e leva o preenchimento
+                solido; "Adicionar" fica contornado. Mesma hierarquia da
+                loja comum — uma cor cheia por tela, e ela pertence a acao
+                que fecha a venda. */}
+            <Pressable
+              onPress={() => commitConfigure({ direto: true })}
+              accessibilityRole="button"
+              accessibilityLabel={"Comprar agora por R$ " + (configuringUnitPrice * editingQty).toFixed(2)}
+              style={{
+                flex: 1, backgroundColor: tema.marcaFill, paddingVertical: 14,
+                borderRadius: 10, alignItems: "center",
+                borderWidth: 1.5, borderColor: tema.marcaFill,
+              }}
+            >
+              <Texto style={{ color: tema.sobreMarca, fontSize: 14.5, fontWeight: "800" }}>
+                Comprar agora
+              </Texto>
+              <Texto style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "700", opacity: 0.85, marginTop: 1 }}>
+                R$ {(configuringUnitPrice * editingQty).toFixed(2)}
+              </Texto>
+            </Pressable>
+
+            <Pressable
+              onPress={() => commitConfigure()}
+              accessibilityRole="button"
+              accessibilityLabel="Adicionar ao carrinho e continuar comprando"
+              style={{
+                flex: 1, backgroundColor: "transparent", paddingVertical: 14,
+                borderRadius: 10, alignItems: "center", justifyContent: "center",
+                borderWidth: 1.5, borderColor: tema.marcaFill,
+              }}
+            >
+              <Texto style={{ color: tema.marcaTexto, fontSize: 14.5, fontWeight: "800", textAlign: "center" }}>
+                Adicionar ao carrinho
+              </Texto>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <PoweredByAura />
