@@ -31,6 +31,14 @@ export interface BracketAthleteRef {
   entry_id: string;
   student_name: string | null;
   dojo_name: string | null;
+  /**
+   * Credenciamento do dia. ATENÇÃO à regra de produto: `checked_in:false`
+   * com `no_show:false` significa SEM INFORMAÇÃO — NÃO é ausente.
+   * Só `no_show === true` marca alguém como ausente na chave/chamada.
+   * Opcionais: telas/endpoints antigos não devolvem esses campos.
+   */
+  checked_in?: boolean;
+  no_show?: boolean;
 }
 
 export interface BracketMatch {
@@ -167,6 +175,9 @@ export interface KataScore {
   notas?: number[] | null;
   presentation_order: number | null;
   advances: boolean | null;
+  /** Credenciamento do dia — mesma regra do BracketAthleteRef acima. */
+  checked_in?: boolean;
+  no_show?: boolean;
 }
 
 /**

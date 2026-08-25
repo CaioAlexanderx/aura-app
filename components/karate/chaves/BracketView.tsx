@@ -51,7 +51,7 @@ import {
 import { buildBracketHtml } from "@/components/karate/chaves/buildBracketHtml";
 import { EventDayMode } from "@/components/karate/chaves/EventDayMode";
 import {
-  styles as S, roundLabel, ByeText, PendingText, SameDojoBadge,
+  styles as S, roundLabel, ByeText, PendingText, SameDojoBadge, AbsentPill, isAbsent,
 } from "./shared";
 import type { PhaseByRound } from "@/services/karateBracketsApi";
 import {
@@ -1107,6 +1107,9 @@ function MatchSide({
   const otherAthlete = otherValue && otherValue !== "bye" ? (otherValue as BracketAthleteRef) : null;
   const isWinner = !!winnerId && !!athlete && winnerId === athlete.entry_id;
   const isLoser = !!winnerId && !!otherAthlete && winnerId === otherAthlete.entry_id;
+  // Ausente = SÓ `no_show === true`. Quem não passou no credenciamento
+  // (checked_in:false, no_show:false) é "sem informação", não ausente.
+  const absent = isAbsent(athlete);
 
   const slot: BracketSlotId = { matchId, side };
   const isDraggable = editMode && isWeb && !!athlete;
@@ -1157,9 +1160,13 @@ function MatchSide({
             <Icon name="drag-handle" size={13} color={isSelected ? P.red : C.ink4} />
           )}
           <View style={[tradStyles.sideDot, side === "aka" ? tradStyles.sideDotAka : tradStyles.sideDotShiro]} />
-          <Text style={[tradStyles.name, isWinner && tradStyles.nameWinner]} numberOfLines={1}>
+          <Text
+            style={[tradStyles.name, isWinner && tradStyles.nameWinner, absent && S.absentName]}
+            numberOfLines={1}
+          >
             {athlete.student_name}
           </Text>
+          {absent && <AbsentPill compact />}
           {isWinner && typeof score === "number" && (
             <Text style={ctrlStyles.scoreTag}>{score}</Text>
           )}

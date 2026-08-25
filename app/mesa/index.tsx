@@ -52,7 +52,7 @@ import {
 } from "@/services/karateCompetitionP1Api";
 import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
-import { roundLabel } from "@/components/karate/chaves/shared";
+import { roundLabel, AbsentPill, isAbsent } from "@/components/karate/chaves/shared";
 
 // ── Constantes (mesmos valores do Modo Mesário interno) ─────
 const ATOSHI_SEC = 30;
@@ -750,8 +750,8 @@ function MesaKumitePanel({
           <Text style={s.fightEyebrow}>Próxima luta</Text>
 
           <View style={s.sideBlock}>
-            <SideHeader label="AKA" tone="aka" name={akaAthlete.student_name} dojo={akaAthlete.dojo_name} />
-            <SideHeader label="SHIRO" tone="shiro" name={shiroAthlete.student_name} dojo={shiroAthlete.dojo_name} />
+            <SideHeader label="AKA" tone="aka" name={akaAthlete.student_name} dojo={akaAthlete.dojo_name} absent={isAbsent(akaAthlete)} />
+            <SideHeader label="SHIRO" tone="shiro" name={shiroAthlete.student_name} dojo={shiroAthlete.dojo_name} absent={isAbsent(shiroAthlete)} />
           </View>
 
           <View style={s.winnerBtns}>
@@ -851,15 +851,18 @@ function MesaKumitePanel({
   );
 }
 
-function SideHeader({ label, tone, name, dojo }: {
+function SideHeader({ label, tone, name, dojo, absent }: {
   label: string; tone: "aka" | "shiro"; name: string | null; dojo: string | null;
+  /** Só true quando `no_show === true` — não credenciado NÃO é ausente. */
+  absent?: boolean;
 }) {
   const aka = tone === "aka";
   return (
     <View style={[s.sideHead, aka ? s.sideHeadAka : s.sideHeadShiro]}>
       <Text style={[s.sideTag, aka ? s.sideTagAka : s.sideTagShiro]}>{label}</Text>
-      <Text style={s.sideName} numberOfLines={2}>{name || "—"}</Text>
+      <Text style={[s.sideName, absent && s.absentName]} numberOfLines={2}>{name || "—"}</Text>
       {!!dojo && <Text style={s.sideDojo} numberOfLines={1}>{dojo}</Text>}
+      {absent && <View style={s.sideAbsent}><AbsentPill /></View>}
     </View>
   );
 }
@@ -1163,9 +1166,11 @@ function MesaKataPanel({
             >
               <Text style={s.kataOrder}>{r.presentation_order ?? "—"}</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.kataName} numberOfLines={1}>{r.student_name}</Text>
+                <Text style={[s.kataName, isAbsent(r) && s.absentName]} numberOfLines={1}>{r.student_name}</Text>
                 {!!r.dojo_name && <Text style={s.kataDojo} numberOfLines={1}>{r.dojo_name}</Text>}
               </View>
+              {/* Ausente = só `no_show === true` (não credenciado ≠ ausente). */}
+              {isAbsent(r) && <AbsentPill />}
               {r.advances === true && (
                 <View style={s.kataAdvChip}>
                   <Icon name="check" size={11} color={P.ok} />
@@ -1789,6 +1794,10 @@ const s = StyleSheet.create({
   kataOutChip: { backgroundColor: P.neutralWash, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 } as ViewStyle,
   kataOutTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: P.neutral } as TextStyle,
   kataNotaBox: { minWidth: 60 } as ViewStyle,
+  // Nome do ausente: esmaecido (recua sem sumir) — a pill AUSENTE ao lado
+  // é quem carrega o aviso.
+  absentName: { opacity: 0.55 } as TextStyle,
+  sideAbsent: { flexDirection: "row", marginTop: 4 } as ViewStyle,
 
   // Onda B: o editor de nota virou o bloco compartilhado NotasArbitros —
   // aqui só a caixa que o acomoda entre duas linhas da bateria.

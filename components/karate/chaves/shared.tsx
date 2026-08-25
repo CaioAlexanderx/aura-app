@@ -114,6 +114,29 @@ export function SameDojoBadge({ compact }: { compact?: boolean }) {
   );
 }
 
+// ── Ausente (credenciamento do dia) ────────────────────────────────────
+// REGRA DE PRODUTO INEGOCIÁVEL: só é ausente quem tem `no_show === true`.
+// `checked_in:false` + `no_show:false` = SEM INFORMAÇÃO (o atleta apenas
+// não passou no credenciamento ainda) — NUNCA marcar como ausente.
+export const isAbsent = (a?: { no_show?: boolean } | null): boolean => a?.no_show === true;
+export const isCheckedIn = (a?: { checked_in?: boolean } | null): boolean => a?.checked_in === true;
+
+// Pill "AUSENTE" — âmbar de aviso, NUNCA vermelho: AKA já é vermelho na
+// chave e o ausente não pode competir visualmente com o lado da luta.
+// O ponto é um ANEL VAZADO desenhado em View (cadeira vazia) — sem emoji
+// e sem ícone de biblioteca, pra ler de longe na bancada.
+export function AbsentPill({ compact }: { compact?: boolean }) {
+  return (
+    <View
+      style={[styles.absentPill, compact && styles.absentPillCompact]}
+      accessibilityLabel="Atleta ausente — não se apresentou"
+    >
+      <View style={[styles.absentRing, compact && styles.absentRingCompact]} />
+      <Text style={[styles.absentPillText, compact && styles.absentPillTextCompact]}>AUSENTE</Text>
+    </View>
+  );
+}
+
 export function ByeText() {
   return <Text style={styles.byeText}>BYE</Text>;
 }
@@ -177,6 +200,20 @@ export const styles = StyleSheet.create({
   sameDojoWarn: { fontFamily: F.body, fontSize: 9, color: P.red } as TextStyle,
   sameDojoBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: R.pill, backgroundColor: P.warnWash, borderWidth: 1, borderColor: "rgba(122,87,36,0.28)" } as ViewStyle,
   sameDojoBadgeText: { fontFamily: F.body, fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6, color: P.warn } as TextStyle,
+
+  // ausente (no_show) — pill âmbar + nome esmaecido
+  absentPill: {
+    flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0,
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: R.pill,
+    backgroundColor: P.warnWash, borderWidth: 1, borderColor: "rgba(122,87,36,0.28)",
+  } as ViewStyle,
+  absentPillCompact: { paddingHorizontal: 5, paddingVertical: 1, gap: 3 } as ViewStyle,
+  absentRing: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: P.warn, backgroundColor: "transparent" } as ViewStyle,
+  absentRingCompact: { width: 7, height: 7, borderRadius: 3.5 } as ViewStyle,
+  absentPillText: { fontFamily: F.body, fontSize: 9.5, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: P.warn } as TextStyle,
+  absentPillTextCompact: { fontSize: 8.5, letterSpacing: 0.5 } as TextStyle,
+  // Nome do ausente: esmaecido (a linha continua legível, mas recua).
+  absentName: { opacity: 0.55 } as TextStyle,
   matchSide: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderLeftWidth: 3, minHeight: 44 } as ViewStyle,
   matchSideShiro: { borderTopWidth: 1, borderTopColor: C.line } as ViewStyle,
   matchSideWinner: { backgroundColor: P.redWash } as ViewStyle,
