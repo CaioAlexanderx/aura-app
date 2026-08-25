@@ -32,7 +32,7 @@ import { toast } from "@/components/Toast";
 import { karateBracketsApi, KataScore, KataPhase } from "@/services/karateBracketsApi";
 import { buildKataHtml } from "@/components/karate/chaves/buildKataHtml";
 import { NotasBreakdown } from "@/components/karate/NotasArbitros";
-import { styles as S, MiniAvatar } from "./shared";
+import { styles as S, MiniAvatar, AbsentPill, isAbsent } from "./shared";
 import {
   useBracketDragAndDrop, useDraggableSlotRef, useSlotDropZoneRef, BracketSlotId,
 } from "./useBracketDragAndDrop";
@@ -251,9 +251,10 @@ export function KataView({
                   <Text style={S.kataPos}>{i + 1}</Text>
                   <MiniAvatar name={s.student_name} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={S.athleteName} numberOfLines={1}>{s.student_name}</Text>
+                    <Text style={[S.athleteName, isAbsent(s) && S.absentName]} numberOfLines={1}>{s.student_name}</Text>
                     <Text style={S.athleteDojo} numberOfLines={1}>{s.dojo_name}</Text>
                   </View>
+                  {isAbsent(s) && <AbsentPill />}
                   <NotasBreakdown nota={s.nota} notas={s.notas} />
                   <View style={[S.pill, s.advances ? S.pillAccent : S.pillNeutral]}>
                     <Text style={[S.pillText, s.advances ? S.pillTextAccent : S.pillTextNeutral]}>
@@ -279,9 +280,10 @@ export function KataView({
                     <Text style={[S.kataPos, i < 3 && { fontWeight: "800", color: C.ink }]}>{i + 1}º</Text>
                     <MiniAvatar name={s.student_name} />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={S.athleteName} numberOfLines={1}>{s.student_name}</Text>
+                      <Text style={[S.athleteName, isAbsent(s) && S.absentName]} numberOfLines={1}>{s.student_name}</Text>
                       <Text style={S.athleteDojo} numberOfLines={1}>{s.dojo_name}</Text>
                     </View>
+                    {isAbsent(s) && <AbsentPill />}
                     <NotasBreakdown nota={s.nota} notas={s.notas} />
                     {i < 3 && (
                       <Text style={[S.medalText, { color: MEDAL_COLORS[i] }]}>{MEDALS[i]}</Text>
@@ -384,9 +386,10 @@ function OrderRow({
       {isWeb && <Icon name="drag-handle" size={14} color={C.ink4} />}
       <MiniAvatar name={score.student_name} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={S.athleteName} numberOfLines={1}>{score.student_name}</Text>
+        <Text style={[S.athleteName, isAbsent(score) && S.absentName]} numberOfLines={1}>{score.student_name}</Text>
         <Text style={S.athleteDojo} numberOfLines={1}>{score.dojo_name}</Text>
       </View>
+      {isAbsent(score) && <AbsentPill compact />}
       <NotasBreakdown nota={score.nota} notas={score.notas} />
       <View style={ctrlStyles.moveArrows}>
         <TouchableOpacity
