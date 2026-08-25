@@ -64,16 +64,34 @@ function useWebFonts() {
     const p2 = document.createElement("link"); p2.rel = "preconnect"; p2.href = "https://fonts.gstatic.com"; p2.crossOrigin = ""; document.head.appendChild(p2);
     const lk = document.createElement("link"); lk.id = "aura-fonts"; lk.rel = "stylesheet"; lk.href = GOOGLE_FONTS_CSS; document.head.appendChild(lk);
     const st = document.createElement("style"); st.id = "aura-font-override";
-    // A regra universal com !important segura a tipografia da Aura contra
-    // as fontes de sistema que o react-native-web espalha. Ela fica.
+    // ============================================================
+    // A regra de fonte do painel — SEM !important.
     //
-    // O que faltava era a EXCECAO: `!important` num seletor universal ganha
-    // tambem de quem tem motivo legitimo pra usar outra fonte. O preview de
-    // tipografia mostrava as quatro opcoes identicas por causa disto — as
-    // familias carregavam, a escolha chegava no componente, e esta linha
-    // sobrescrevia as quatro pra DM Sans. As regras de excecao vem DEPOIS
-    // e ganham por especificidade (seletor de atributo > universal).
-    st.textContent = "*, *::before, *::after { font-family: " + Fonts.body + " !important; }\n[data-testid] { font-family: " + Fonts.body + " !important; }\ndiv[dir] { font-family: " + Fonts.body + " !important; }\n"
+    // O trabalho dela e um so: vencer as fontes de sistema que o
+    // react-native-web espalha em classe atomica. Ela fazia isso com
+    // `!important` num seletor universal, e o efeito colateral era que
+    // NENHUM componente conseguia escolher outra fonte. Varredura de
+    // 25/08: 14 chamadas de Fonts.heading/Fonts.mono dentro do alcance do
+    // painel, TODAS mortas — os numeros monoespacados do estoque, o titulo
+    // serifado de 64px, o nome da loja na sidebar. Nada quebrava e nada
+    // avisava: o texto so saia na fonte errada.
+    //
+    // A troca e de arma, nao de objetivo. `html body [class]` tem
+    // especificidade (0,1,2) e vence a classe atomica do RNW (0,1,0) sem
+    // precisar de `!important` — e, por nao ser !important, PERDE para
+    // estilo inline, que e exatamente como um componente diz "aqui eu
+    // quero outra fonte".
+    //
+    // Medido nos dois sentidos antes de escrever isto (ver
+    // __tests__/regraDeFonteDoPainel.test.ts, que carrega este mesmo CSS
+    // e mede com jsdom): a classe atomica continua perdendo pra regra, e
+    // as 14 chamadas voltam a ser respeitadas.
+    // ============================================================
+    st.textContent =
+        "html body [class], html body [class]::before, html body [class]::after { font-family: " + Fonts.body + "; }\n"
+      + "html body [dir] { font-family: " + Fonts.body + "; }\n"
+      // As excecoes continuam com !important: elas precisam vencer tambem
+      // o estilo inline que o proprio componente possa ter deixado pra tras.
       + cssDeExcecaoDeFonte() + "\n"
       + "@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
     document.head.appendChild(st);

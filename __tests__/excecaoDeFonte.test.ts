@@ -65,14 +65,17 @@ describe("as duas pontas estão ligadas", () => {
     expect(layout).toContain("cssDeExcecaoDeFonte()");
   });
 
-  test("a exceção vem DEPOIS da regra universal", () => {
-    // Empate de especificidade entre dois !important é resolvido pela
-    // ordem. Aqui não há empate (atributo > universal), mas inverter a
-    // ordem é o tipo de mudança inocente que reintroduz o bug.
-    const universal = layout.indexOf("*, *::before, *::after { font-family:");
+  test("a exceção vem DEPOIS da regra base", () => {
+    // Empate de especificidade é resolvido pela ordem, e inverter a ordem
+    // é o tipo de mudança inocente que reintroduz o bug.
+    //
+    // A âncora mudou em 25/08: a regra base deixou de ser o seletor
+    // universal com !important e virou `html body [class]` sem
+    // !important. Ver [[regra-global-de-fonte-do-painel]].
+    const base = layout.indexOf("html body [class]");
     const excecao = layout.indexOf("cssDeExcecaoDeFonte()");
-    expect(universal).toBeGreaterThan(0);
-    expect(excecao).toBeGreaterThan(universal);
+    expect(base).toBeGreaterThan(0);
+    expect(excecao).toBeGreaterThan(base);
   });
 
   test("o preview marca título e corpo com a chave do par", () => {
@@ -108,9 +111,18 @@ describe("a especificidade que o bug ensinou", () => {
     }
   });
 
-  test("a regra global que exige isso continua lá", () => {
-    // Se um dia `div[dir]` sair da regra global, o atributo repetido vira
-    // desnecessário — mas enquanto estiver, ele é obrigatório.
-    expect(layout).toContain("div[dir]");
+  test("o atributo repetido virou cinto e suspensório — e fica", () => {
+    // ATUALIZADO em 25/08. O `div[dir] { … !important }` que EXIGIA o
+    // atributo repetido saiu: a regra base não usa mais !important, e
+    // qualquer declaração !important passa a vencê-la por definição, com
+    // um atributo só.
+    //
+    // O duplicado fica assim mesmo, por dois motivos: não custa nada, e é
+    // a rede se alguém devolver o !important à regra base. Quem guarda
+    // ESSA porta é o teste "NÃO usa !important" em
+    // regraDeFonteDoPainel.test.ts — este aqui só registra que a duplicação
+    // deixou de ser obrigatória e continua de propósito.
+    expect(layout).not.toContain("div[dir] { font-family");
+    expect(layout).toContain("html body [dir]");
   });
 });
