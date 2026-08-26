@@ -142,8 +142,28 @@ export function waErrorLabel(err: string | null | undefined): string | null {
 }
 
 // ── Erros da API → pt-BR ─────────────────────────────────
-export function mapWaError(e: any): { code: string | null; message: string } {
+/**
+ * `detail` é o texto cru da Meta (inglês). Fica AQUI só para suporte —
+ * a tela principal mostra `message` e nada mais.
+ */
+export interface WaMappedError {
+  code: string | null;
+  message: string;
+  detail?: string | null;
+}
+
+export function mapWaError(e: any): WaMappedError {
   const code = e?.data?.code ?? e?.code ?? null;
+  if (code === "TOKEN_EXPIRADO") {
+    return {
+      code,
+      // O backend já manda esta frase em pt-BR; o fallback é só rede de proteção.
+      message:
+        e?.data?.error ||
+        "A conexão com o WhatsApp expirou. Reconecte o número do dojô para voltar a enviar.",
+      detail: e?.data?.detail ?? null,
+    };
+  }
   if (code === "NAO_CONECTADO") {
     return {
       code,
@@ -161,15 +181,24 @@ export function mapWaError(e: any): { code: string | null; message: string } {
 }
 
 // ── Formatação ───────────────────────────────────────────
-/** Telefone em dígitos → '+55 (11) 91234-5678' (best-effort, nunca quebra). */
+/**
+ * Telefone → '+55 (11) 91234-5678'. A máscara BR só entra quando o número
+ * É brasileiro: DDI 55 + 12 ou 13 dígitos no total (10 ou 11 locais).
+ *
+ * Qualquer outro país sai como veio, com '+' na frente e SEM máscara — o
+ * número de teste da Meta (+1 555-630-9005 → 15556309005) tem 11 dígitos e
+ * virava '(15) 55630-9005' quando a máscara olhava só o tamanho.
+ */
 export function fmtPhoneBR(phone: string | null | undefined): string {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "—";
-  const local = digits.startsWith("55") ? digits.slice(2) : digits;
-  const ddi = digits.startsWith("55") ? "+55 " : "";
-  if (local.length === 11) return `${ddi}(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
-  if (local.length === 10) return `${ddi}(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
-  return String(phone || "—");
+  const isBR = digits.startsWith("55") && (digits.length === 12 || digits.length === 13);
+  if (isBR) {
+    const local = digits.slice(2);
+    if (local.length === 11) return `+55 (${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    return `+55 (${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  }
+  return `+${digits}`;
 }
 
 /** Timestamp ISO → 'DD/MM HH:mm' (fuso do device). '—' se ausente. */
@@ -182,6 +211,14 @@ export function fmtWhenBR(iso: string | null | undefined): string {
   const hh = String(d.getHours()).padStart(2, "0");
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm} ${hh}:${mi}`;
+}
+
+/** Timestamp ISO → 'DD/MM' (data seca, sem hora). null se ausente/inválido. */
+export function fmtDayMonthBR(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 /** Só dígitos, com no mínimo 10 — mesma régua do wa.me do módulo de cobrança. */

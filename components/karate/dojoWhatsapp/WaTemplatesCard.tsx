@@ -38,18 +38,24 @@ export function WaTemplatesCard({ companyId, templates, loading, notConnected, e
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
+  // Token vencido não é falha do sync: é aviso de reconexão (âmbar, não vermelho).
+  const [syncErrExpired, setSyncErrExpired] = useState(false);
 
   async function sync() {
     setSyncing(true);
     setSyncMsg(null);
     setSyncErr(null);
+    setSyncErrExpired(false);
     try {
       const res = await waApi.syncTemplates(companyId);
       const n = res?.synced ?? 0;
       setSyncMsg(n === 1 ? "1 template sincronizado da Meta." : `${n} templates sincronizados da Meta.`);
       onReload();
     } catch (e: any) {
-      setSyncErr(mapWaError(e).message);
+      // Só `message` (pt-BR do backend) vai pra tela — `detail` é o inglês da Meta.
+      const mapped = mapWaError(e);
+      setSyncErr(mapped.message);
+      setSyncErrExpired(mapped.code === "TOKEN_EXPIRADO");
     } finally {
       setSyncing(false);
     }
@@ -75,7 +81,9 @@ export function WaTemplatesCard({ companyId, templates, loading, notConnected, e
         acontece do lado da Meta — aqui você acompanha o status e traz as atualizações.
       </Text>
 
-      {!!syncErr && <Text style={styles.errTxt}>{syncErr}</Text>}
+      {!!syncErr && (
+        <Text style={[styles.errTxt, syncErrExpired && styles.warnTxt]}>{syncErr}</Text>
+      )}
       {!syncErr && !!syncMsg && (
         <View style={styles.okBox}>
           <Icon name="check_circle" size={14} color={KarateColors.ok} />
@@ -169,6 +177,7 @@ const styles = StyleSheet.create({
   stateTxt: { fontSize: 12.5, fontWeight: "600", color: KarateColors.ink2, textAlign: "center" } as TextStyle,
   stateSub: { fontSize: 11.5, color: KarateColors.ink3, textAlign: "center", maxWidth: 400, lineHeight: 16 } as TextStyle,
   errTxt: { fontSize: 12, color: KarateColors.danger, marginTop: 8, textAlign: "center" } as TextStyle,
+  warnTxt: { color: KarateColors.warn, fontWeight: "600" } as TextStyle,
   retryTxt: { fontSize: 12.5, fontWeight: "700", color: KarateColors.primary, marginTop: 4 } as TextStyle,
   okBox: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, backgroundColor: KarateColors.okSoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 10, alignSelf: "flex-start" } as ViewStyle,
   okTxt: { fontSize: 12, fontWeight: "700", color: KarateColors.ok } as TextStyle,
