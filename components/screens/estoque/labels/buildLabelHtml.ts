@@ -310,10 +310,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.setup-guide .confirm input[type=checkbox]{width:17px;height:17px;accent-color:#7c3aed;cursor:pointer}';
   html += '.setup-guide .specs{font-size:12px;color:#64748b;flex:1;min-width:240px}';
   html += '.setup-guide .specs b{color:#334155;font-weight:700}';
-  html += '.setup-guide .adjust-link{background:none;border:none;padding:4px 0;font-size:12px;color:#7c3aed;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}';
   html += '.setup-guide.ready{background:#fbfefb;border-bottom-color:#86efac}';
-  html += '.offset-row{display:none;align-items:center;gap:10px;padding-top:10px;margin-top:10px;border-top:1px dashed #e2e8f0;flex-wrap:wrap}';
-  html += '.offset-row.open{display:flex}';
+  // 26/08/2026: slider SEMPRE visivel — colapsado atras de um link, na
+  // pratica, sumia (o link caia pra fora de vista em janelas estreitas e
+  // ninguem descobria a calibracao). Linha fina, nao volta a ser paredao.
+  html += '.offset-row{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:8px;border-top:1px dashed #e2e8f0;flex-wrap:wrap}';
   html += '.offset-row label{font-size:12px;font-weight:600;color:#334155}';
   html += '.offset-row input[type=range]{width:180px;accent-color:#7c3aed;cursor:pointer}';
   html += '.offset-row .val{font-size:12px;font-weight:800;color:#7c3aed;min-width:46px;text-align:center}';
@@ -331,10 +332,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '<div class="setup-row">';
   html += '<label class="confirm"><input type="checkbox" id="confirmSetup"> Setup conferido</label>';
   html += '<span class="specs">Papel <b>' + preset.pageWidthMm + '&times;' + preset.pageHeightMm + 'mm</b> &middot; Margens <b>Nenhuma</b> &middot; Escala <b>100%</b> &middot; Cabe&ccedil;alho/rodap&eacute; <b>desligados</b></span>';
-  html += '<button type="button" class="adjust-link" id="adjustToggle">Etiqueta saindo cortada?</button>';
   html += '</div>';
   html += '<div class="offset-row" id="offsetRow">';
-  html += '<label for="offsetRange">Deslocar:</label>';
+  html += '<label for="offsetRange">Etiqueta saindo cortada? Deslocar:</label>';
   html += '<input type="range" id="offsetRange" min="-6" max="2" step="0.5" value="' + offsetMm + '">';
   html += '<span class="val" id="offsetVal">' + offsetMm + 'mm</span>';
   html += '<span class="offset-hint">Arraste at&eacute; centralizar &mdash; fica salvo para a loja.</span>';
@@ -354,12 +354,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'if(cb.checked){btn.disabled=false;btn.textContent="Imprimir";guide.classList.add("ready");}';
   html += 'else{btn.disabled=true;btn.textContent="Confirme o setup para imprimir";guide.classList.remove("ready");}';
   html += '});';
-  // Slider de calibracao (colapsado atras do link "Etiqueta saindo cortada?"):
-  // aplica ao vivo (tela + impressao) e, ao soltar, avisa o app (opener)
-  // pra persistir em pdv_settings.label_offset_mm.
-  html += 'var tgl=document.getElementById("adjustToggle");';
-  html += 'var row=document.getElementById("offsetRow");';
-  html += 'if(tgl&&row){tgl.addEventListener("click",function(){row.classList.toggle("open");});}';
+  // Slider de calibracao: aplica ao vivo (tela + impressao) e, ao soltar,
+  // avisa o app (opener) pra persistir em pdv_settings.label_offset_mm.
   html += 'var tbl=document.getElementById("labelsTable");';
   html += 'var rng=document.getElementById("offsetRange");';
   html += 'var val=document.getElementById("offsetVal");';
