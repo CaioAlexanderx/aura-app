@@ -194,6 +194,13 @@ type BuildOptions = {
   storeName: string;
   showStoreName: boolean;
   labelSize?: LabelSizeKey;
+  // 26/08/2026: offset horizontal de calibracao (mm) — compensa a margem
+  // fisica do driver da impressora, causa raiz do corte recorrente da
+  // Finesse. 0 = neutro: NENHUMA regra extra e emitida e o HTML sai
+  // byte-identico ao historico (zona LOCKED preservada). O valor vem de
+  // pdv_settings.label_offset_mm e o slider da pagina de impressao envia
+  // ajustes ao app via postMessage pra persistir.
+  offsetMm?: number;
 };
 
 export function buildLabelHtml(items: LabelItem[], options: BuildOptions): string {
@@ -202,6 +209,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const COLS = preset.cols;
   // Vao horizontal entre colunas (0 = etiquetas coladas, comportamento original).
   const colGapMm = preset.colGapMm || 0;
+  const rawOffset = Number(options.offsetMm);
+  const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
   const totalLabels = items.reduce((s, i) => s + i.qty, 0);
 
@@ -264,7 +273,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // 99x21 (sem vao) pageHeightMm == cellHeightMm, entao sai identico ao antigo.
   html += '@page{margin:0;size:' + preset.pageWidthMm + 'mm ' + preset.pageHeightMm + 'mm}*{margin:0;padding:0;box-sizing:border-box}';
   html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
-  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed}tr{height:' + preset.pageHeightMm + 'mm;page-break-inside:avoid}';
+  // Offset de calibracao: translateX na tabela inteira — nao mexe em barra,
+  // fonte nem geometria da celula. Com offsetMm=0 nada e emitido (byte-identico).
+  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed' + (offsetMm !== 0 ? ';transform:translateX(' + offsetMm + 'mm)' : '') + '}tr{height:' + preset.pageHeightMm + 'mm;page-break-inside:avoid}';
   html += '.cell{width:' + preset.cellWidthMm + 'mm;height:' + preset.cellHeightMm + 'mm;overflow:hidden;vertical-align:top;padding:0}';
   // Coluna espacadora = vao horizontal entre etiquetas (so quando colGapMm>0).
   if (colGapMm > 0) html += '.colgap{width:' + colGapMm + 'mm;height:' + preset.cellHeightMm + 'mm;padding:0;border:none;background:transparent}';
@@ -301,6 +312,15 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"✅"}';
   html += '.setup-guide.ready .step{color:#14532d}.setup-guide.ready .step b{background:#16a34a}';
   html += '.setup-guide.ready .confirm-row{border-top-color:#86efac}.setup-guide.ready .confirm-row label{color:#166534}';
+  html += '.setup-guide .offset-row{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:8px;border-top:1px dashed #fca5a5;flex-wrap:wrap}';
+  html += '.setup-guide .offset-row label{font-size:12px;font-weight:700;color:#7f1d1d;cursor:default}';
+  html += '.setup-guide .offset-row input[type=range]{width:160px;accent-color:#dc2626;cursor:pointer}';
+  html += '.setup-guide .offset-row .val{font-size:12px;font-weight:800;color:#7f1d1d;min-width:46px;text-align:center}';
+  html += '.setup-guide .offset-row .offset-hint{font-size:11px;color:#991b1b;flex-basis:100%;font-weight:500}';
+  html += '.setup-guide.ready .offset-row{border-top-color:#86efac}';
+  html += '.setup-guide.ready .offset-row label,.setup-guide.ready .offset-row .val{color:#166534}';
+  html += '.setup-guide.ready .offset-row .offset-hint{color:#14532d}';
+  html += '.setup-guide.ready .offset-row input[type=range]{accent-color:#16a34a}';
   html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
   html += '.preview-bar span{color:#a78bfa;font-size:12px}.preview-bar b{color:#e2e8f0;font-size:13px}';
   html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
@@ -319,9 +339,13 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '<div class="step"><b>4</b> Cabeçalho/Rodapé: <b>Desligados</b></div>';
   html += '</div>';
   html += '<div class="confirm-row"><label><input type="checkbox" id="confirmSetup"> Confirmo que o setup acima está correto</label></div>';
+  html += '<div class="offset-row"><label for="offsetRange">Compensar margem da impressora:</label>';
+  html += '<input type="range" id="offsetRange" min="-6" max="2" step="0.5" value="' + offsetMm + '">';
+  html += '<span class="val" id="offsetVal">' + offsetMm + 'mm</span>';
+  html += '<span class="offset-hint">Se a etiqueta sai cortada na lateral, arraste até o código ficar centralizado — o ajuste fica salvo para a loja toda.</span></div>';
   html += '</div>';
 
-  html += '<div class="preview-wrap"><table>' + rowsHtml + '</table></div>';
+  html += '<div class="preview-wrap"><table id="labelsTable">' + rowsHtml + '</table></div>';
   html += '<div class="preview-bar"><div><span>Etiqueta ' + preset.cellWidthMm + 'x' + preset.cellHeightMm + 'mm x ' + preset.cols + ' coluna' + (preset.cols > 1 ? 's' : '') + ' (' + (isQR ? "QR Code" : "EAN-13") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
   html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirmação acima</button></div>';
@@ -334,6 +358,15 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'if(cb.checked){btn.disabled=false;btn.textContent="Imprimir";guide.classList.add("ready");}';
   html += 'else{btn.disabled=true;btn.textContent="Marque a confirmação acima";guide.classList.remove("ready");}';
   html += '});';
+  // Slider de calibracao: aplica ao vivo (tela + impressao) e, ao soltar,
+  // avisa o app (opener) pra persistir em pdv_settings.label_offset_mm.
+  html += 'var tbl=document.getElementById("labelsTable");';
+  html += 'var rng=document.getElementById("offsetRange");';
+  html += 'var val=document.getElementById("offsetVal");';
+  html += 'if(rng&&tbl){';
+  html += 'rng.addEventListener("input",function(){val.textContent=rng.value+"mm";tbl.style.transform="translateX("+rng.value+"mm)";});';
+  html += 'rng.addEventListener("change",function(){if(window.opener){try{window.opener.postMessage({type:"aura:label-offset",value:parseFloat(rng.value)},"*");}catch(e){}}});';
+  html += '}';
   html += '})();</scr' + 'ipt>';
 
   if (!isQR) {

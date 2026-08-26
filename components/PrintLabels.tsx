@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
-import { companiesApi } from "@/services/api";
+import { companiesApi, pdvSettingsApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
 import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
@@ -100,6 +100,39 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   var isWeb = Platform.OS === "web";
   var storeName = (company && (company.trade_name || company.legal_name)) || "";
+
+  // 26/08/2026: calibracao de offset por loja (causa raiz do corte recorrente
+  // da Finesse — o ajuste vivia so no dialogo do Chrome e evaporava). O valor
+  // persiste em pdv_settings.label_offset_mm; 0 = neutro (comportamento antigo).
+  var [labelOffsetMm, setLabelOffsetMm] = useState(0);
+  useEffect(function() {
+    if (!isWeb || !company?.id) return;
+    pdvSettingsApi.get(company.id).then(function(res) {
+      var v = Number(res.settings && res.settings.label_offset_mm);
+      if (Number.isFinite(v)) setLabelOffsetMm(v);
+    }).catch(function() { /* sem calibracao salva -> neutro */ });
+  }, [isWeb, company?.id]);
+
+  // A pagina de impressao (blob) envia o ajuste do slider via postMessage.
+  // Validar forma + faixa: qualquer janela pode postar mensagem.
+  useEffect(function() {
+    if (!isWeb || !company?.id) return;
+    var cid = company.id;
+    function onMessage(e: MessageEvent) {
+      var d: any = e.data;
+      if (!d || d.type !== "aura:label-offset") return;
+      var v = Number(d.value);
+      if (!Number.isFinite(v) || v < -8 || v > 5) return;
+      setLabelOffsetMm(v);
+      pdvSettingsApi.save(cid, { label_offset_mm: v }).then(function() {
+        toast.success("Calibração de etiqueta salva para a loja (" + v + "mm)");
+      }).catch(function() {
+        toast.error("Não foi possível salvar a calibração — o ajuste vale só para esta impressão");
+      });
+    }
+    window.addEventListener("message", onMessage);
+    return function() { window.removeEventListener("message", onMessage); };
+  }, [isWeb, company?.id]);
 
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
@@ -216,7 +249,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   // Executa a impressao com os itens ja prontos (barcodes validos EAN-13)
   function doPrint(items: LabelItem[]) {
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize });
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm });
     try {
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);

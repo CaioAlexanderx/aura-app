@@ -97,6 +97,12 @@ export type PdvSettings = {
   card_fee_enabled?: boolean;
   card_fee_credit_pct?: number;
   card_fee_debit_pct?: number;
+  // 26/08/2026: calibracao da impressao de etiquetas por loja. O offset
+  // compensa a margem fisica do driver da impressora (pode ser negativo,
+  // faixa -8..5). 0 = neutro (comportamento historico). O PUT do backend
+  // faz merge, entao pode salvar so { label_offset_mm } sem resetar o resto.
+  label_offset_mm?: number;
+  label_cols?: number;
 };
 
 export var authApi = {
@@ -126,7 +132,9 @@ export var sidebarLayoutApi = {
 
 export var pdvSettingsApi = {
   get: function(companyId: string) { return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { retry: 1 }); },
-  save: function(companyId: string, settings: PdvSettings) {
+  // 26/08/2026: o PUT do backend faz MERGE com o salvo (nao replace), entao
+  // o contrato real e um parcial — pode enviar so a chave que mudou.
+  save: function(companyId: string, settings: Partial<PdvSettings>) {
     return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: settings }, retry: 0 });
   },
 };
