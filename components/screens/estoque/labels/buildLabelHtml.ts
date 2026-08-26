@@ -299,56 +299,52 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
 
   // ===== GUIA VISUAL PRE-IMPRESSAO (livre, so tela) =====
-  html += '.setup-guide{position:fixed;top:0;left:0;right:0;background:#fef2f2;border-bottom:3px solid #dc2626;padding:14px 20px;z-index:1000;font-family:-apple-system,"Segoe UI",sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.1)}';
-  html += '.setup-guide h2{color:#991b1b;font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}';
-  html += '.setup-guide h2::before{content:"⚠️";font-size:18px}';
-  html += '.setup-guide .steps{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:10px}';
-  html += '.setup-guide .step{display:flex;align-items:center;gap:8px;font-size:12px;color:#7f1d1d;font-weight:600}';
-  html += '.setup-guide .step b{background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:800;letter-spacing:0.3px}';
-  html += '.setup-guide .confirm-row{display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed #fca5a5}';
-  html += '.setup-guide .confirm-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#991b1b;font-weight:700}';
-  html += '.setup-guide .confirm-row input[type=checkbox]{width:18px;height:18px;accent-color:#dc2626;cursor:pointer}';
-  html += '.setup-guide.ready{background:#f0fdf4;border-bottom-color:#16a34a}';
-  html += '.setup-guide.ready h2{color:#166534}.setup-guide.ready h2::before{content:"✅"}';
-  html += '.setup-guide.ready .step{color:#14532d}.setup-guide.ready .step b{background:#16a34a}';
-  html += '.setup-guide.ready .confirm-row{border-top-color:#86efac}.setup-guide.ready .confirm-row label{color:#166534}';
-  html += '.setup-guide .offset-row{display:flex;align-items:center;gap:10px;padding-top:8px;margin-top:8px;border-top:1px dashed #fca5a5;flex-wrap:wrap}';
-  html += '.setup-guide .offset-row label{font-size:12px;font-weight:700;color:#7f1d1d;cursor:default}';
-  html += '.setup-guide .offset-row input[type=range]{width:160px;accent-color:#dc2626;cursor:pointer}';
-  html += '.setup-guide .offset-row .val{font-size:12px;font-weight:800;color:#7f1d1d;min-width:46px;text-align:center}';
-  html += '.setup-guide .offset-row .offset-hint{font-size:11px;color:#991b1b;flex-basis:100%;font-weight:500}';
-  html += '.setup-guide.ready .offset-row{border-top-color:#86efac}';
-  html += '.setup-guide.ready .offset-row label,.setup-guide.ready .offset-row .val{color:#166534}';
-  html += '.setup-guide.ready .offset-row .offset-hint{color:#14532d}';
-  html += '.setup-guide.ready .offset-row input[type=range]{accent-color:#16a34a}';
+  // 26/08/2026: compactado pra uma faixa de linha unica — a loja imprime
+  // varias vezes ao dia e o paredao vermelho de 4 passos + slider aberto
+  // virava ruido. Specs numa linha muted, checkbox de confirmacao, e o
+  // slider de calibracao (tarefa de uma vez) escondido atras do link
+  // "Etiqueta saindo cortada?".
+  html += '.setup-guide{position:fixed;top:0;left:0;right:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 16px;z-index:1000;font-family:-apple-system,"Segoe UI",sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.06)}';
+  html += '.setup-guide .setup-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}';
+  html += '.setup-guide .confirm{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#334155;font-weight:700;white-space:nowrap}';
+  html += '.setup-guide .confirm input[type=checkbox]{width:17px;height:17px;accent-color:#7c3aed;cursor:pointer}';
+  html += '.setup-guide .specs{font-size:12px;color:#64748b;flex:1;min-width:240px}';
+  html += '.setup-guide .specs b{color:#334155;font-weight:700}';
+  html += '.setup-guide .adjust-link{background:none;border:none;padding:4px 0;font-size:12px;color:#7c3aed;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}';
+  html += '.setup-guide.ready{background:#fbfefb;border-bottom-color:#86efac}';
+  html += '.offset-row{display:none;align-items:center;gap:10px;padding-top:10px;margin-top:10px;border-top:1px dashed #e2e8f0;flex-wrap:wrap}';
+  html += '.offset-row.open{display:flex}';
+  html += '.offset-row label{font-size:12px;font-weight:600;color:#334155}';
+  html += '.offset-row input[type=range]{width:180px;accent-color:#7c3aed;cursor:pointer}';
+  html += '.offset-row .val{font-size:12px;font-weight:800;color:#7c3aed;min-width:46px;text-align:center}';
+  html += '.offset-row .offset-hint{font-size:11px;color:#94a3b8}';
   html += '.preview-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-family:-apple-system,sans-serif}';
   html += '.preview-bar span{color:#a78bfa;font-size:12px}.preview-bar b{color:#e2e8f0;font-size:13px}';
   html += '.preview-bar button{background:#7c3aed;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}';
   html += '.preview-bar button:disabled{background:#4b5563;color:#9ca3af;cursor:not-allowed;opacity:0.7}';
-  html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-top:170px;padding-bottom:80px}';
+  html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-top:84px;padding-bottom:80px}';
   html += '.preview-wrap table{border:1px dashed #ccc}.preview-wrap .cell{border:1px dashed #eee}.preview-wrap .colgap{border:none}';
   html += '@media print{.setup-guide{display:none!important}.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
   html += '</style></head><body>';
 
   html += '<div class="setup-guide" id="setupGuide">';
-  html += '<h2>Antes de imprimir — confira o setup da impressora</h2>';
-  html += '<div class="steps">';
-  html += '<div class="step"><b>1</b> Papel: <b>' + preset.pageWidthMm + ' x ' + preset.pageHeightMm + ' mm</b> (bobina ' + preset.cols + ' etiqueta' + (preset.cols > 1 ? 's' : '') + ')</div>';
-  html += '<div class="step"><b>2</b> Margens: <b>Nenhuma</b></div>';
-  html += '<div class="step"><b>3</b> Escala: <b>100%</b> (não usar "Ajustar à página")</div>';
-  html += '<div class="step"><b>4</b> Cabeçalho/Rodapé: <b>Desligados</b></div>';
+  html += '<div class="setup-row">';
+  html += '<label class="confirm"><input type="checkbox" id="confirmSetup"> Setup conferido</label>';
+  html += '<span class="specs">Papel <b>' + preset.pageWidthMm + '&times;' + preset.pageHeightMm + 'mm</b> &middot; Margens <b>Nenhuma</b> &middot; Escala <b>100%</b> &middot; Cabe&ccedil;alho/rodap&eacute; <b>desligados</b></span>';
+  html += '<button type="button" class="adjust-link" id="adjustToggle">Etiqueta saindo cortada?</button>';
   html += '</div>';
-  html += '<div class="confirm-row"><label><input type="checkbox" id="confirmSetup"> Confirmo que o setup acima está correto</label></div>';
-  html += '<div class="offset-row"><label for="offsetRange">Compensar margem da impressora:</label>';
+  html += '<div class="offset-row" id="offsetRow">';
+  html += '<label for="offsetRange">Deslocar:</label>';
   html += '<input type="range" id="offsetRange" min="-6" max="2" step="0.5" value="' + offsetMm + '">';
   html += '<span class="val" id="offsetVal">' + offsetMm + 'mm</span>';
-  html += '<span class="offset-hint">Se a etiqueta sai cortada na lateral, arraste até o código ficar centralizado — o ajuste fica salvo para a loja toda.</span></div>';
+  html += '<span class="offset-hint">Arraste at&eacute; centralizar &mdash; fica salvo para a loja.</span>';
+  html += '</div>';
   html += '</div>';
 
   html += '<div class="preview-wrap"><table id="labelsTable">' + rowsHtml + '</table></div>';
   html += '<div class="preview-bar"><div><span>Etiqueta ' + preset.cellWidthMm + 'x' + preset.cellHeightMm + 'mm x ' + preset.cols + ' coluna' + (preset.cols > 1 ? 's' : '') + ' (' + (isQR ? "QR Code" : "EAN-13") + ')</span><br>';
   html += '<b>' + totalLabels + ' etiqueta' + (totalLabels > 1 ? 's' : '') + ' (' + items.length + ' produto' + (items.length > 1 ? 's' : '') + ') em ' + totalRows + ' linha' + (totalRows > 1 ? 's' : '') + '</b></div>';
-  html += '<button id="printBtn" disabled onclick="window.print()">Marque a confirmação acima</button></div>';
+  html += '<button id="printBtn" disabled onclick="window.print()">Confirme o setup para imprimir</button></div>';
 
   html += '<script>(function(){';
   html += 'var cb=document.getElementById("confirmSetup");';
@@ -356,10 +352,14 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'var guide=document.getElementById("setupGuide");';
   html += 'cb.addEventListener("change",function(){';
   html += 'if(cb.checked){btn.disabled=false;btn.textContent="Imprimir";guide.classList.add("ready");}';
-  html += 'else{btn.disabled=true;btn.textContent="Marque a confirmação acima";guide.classList.remove("ready");}';
+  html += 'else{btn.disabled=true;btn.textContent="Confirme o setup para imprimir";guide.classList.remove("ready");}';
   html += '});';
-  // Slider de calibracao: aplica ao vivo (tela + impressao) e, ao soltar,
-  // avisa o app (opener) pra persistir em pdv_settings.label_offset_mm.
+  // Slider de calibracao (colapsado atras do link "Etiqueta saindo cortada?"):
+  // aplica ao vivo (tela + impressao) e, ao soltar, avisa o app (opener)
+  // pra persistir em pdv_settings.label_offset_mm.
+  html += 'var tgl=document.getElementById("adjustToggle");';
+  html += 'var row=document.getElementById("offsetRow");';
+  html += 'if(tgl&&row){tgl.addEventListener("click",function(){row.classList.toggle("open");});}';
   html += 'var tbl=document.getElementById("labelsTable");';
   html += 'var rng=document.getElementById("offsetRange");';
   html += 'var val=document.getElementById("offsetVal");';
