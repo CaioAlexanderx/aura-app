@@ -80,6 +80,9 @@ export interface BracketState {
   /** P1 (296): fase efetiva de cada rodada (índice = round). */
   phases_by_round?: PhaseByRound[];
   athletes_count: number;
+  /** Inscritos que de fato entram no sorteio (taxa paga) — ver nota em
+   *  BracketNotGenerated. Opcional: backend antigo não devolve o campo. */
+  eligible_count?: number;
   pending_payment_count?: number;
   bye_count: number;
   rounds: BracketMatch[][];
@@ -87,9 +90,20 @@ export interface BracketState {
   champion: BracketAthleteRef | null;
 }
 
+/**
+ * GET .../bracket antes de existir chave. Três números, e eles NÃO são
+ * sinônimos (PR #614):
+ *   athletes_count        todos os inscritos não-desistentes
+ *   eligible_count        os que de fato entram no sorteio (taxa paga);
+ *                         em categoria gratuita vem igual a athletes_count
+ *   pending_payment_count quantos aguardam confirmação da federação
+ * `eligible_count` é opcional porque backend antigo não devolve — quem
+ * consome cai para athletes_count nesse caso.
+ */
 export interface BracketNotGenerated {
   status: "not_generated";
   athletes_count: number;
+  eligible_count?: number;
   pending_payment_count?: number;
   bracket: null;
 }
@@ -228,7 +242,11 @@ export interface KataOrderItem {
 export const karateBracketsApi = {
   // ── Kumite bracket ────────────────────────────────────────
 
-  /** POST /competitions/:cid/categories/:catId/bracket/generate */
+  /** POST /competitions/:cid/categories/:catId/bracket/generate
+   *  Erro esperado: 422 { code: 'PAGAMENTO_PENDENTE', error, eligible_count,
+   *  pending_payment_count } — chega como ApiError (status + data.code) e o
+   *  `error` já vem pronto em pt-BR, dizendo onde resolver. Exibir esse
+   *  texto, não um inventado aqui. */
   generateBracket: (
     federationId: string,
     cid: string,

@@ -22,9 +22,35 @@ import {
   styles as S, ConfigRow, MiniAvatar, ByeText, PendingText, SameDojoBadge,
 } from "./shared";
 
+// ── Elegibilidade do sorteio (regra de produto) ───────────────────────────
+// Só entra na chave quem está com a taxa paga. `eligible` vem do backend
+// (eligible_count); em categoria gratuita ele já chega igual a `total`, e em
+// backend antigo o chamador cai para `total` — a copy volta a ser a de antes.
+// O QA pegou o oposto disso: a pill dizia "2 atletas confirmados" com 1 dos 2
+// devendo a taxa. Nada aqui pode chamar de confirmado quem ainda deve.
+function drawEligibility(total: number, eligible: number, pending: number) {
+  const leftOut = Math.max(0, total - eligible);
+  const canDraw = eligible >= 2;
+  const countLabel = leftOut > 0
+    ? `${eligible} de ${total} inscritos entram na chave`
+    : eligible === 1
+      ? "1 atleta entra na chave"
+      : `${eligible} atletas entram na chave`;
+  const blockedReason = eligible === 0
+    ? pending > 0
+      ? `Nenhum inscrito está com a taxa paga. ${pending} inscrito${pending > 1 ? "s" : ""} ${pending > 1 ? "entram" : "entra"} na chave depois que a federação confirmar o pagamento.`
+      : "Nenhum atleta inscrito nesta categoria até agora."
+    : pending > 0
+      ? `Só 1 inscrito está com a taxa paga — o sorteio precisa de pelo menos 2. ${pending > 1 ? `Os outros ${pending} entram` : "O outro entra"} assim que a federação confirmar o pagamento.`
+      : "Só 1 atleta inscrito — o sorteio precisa de pelo menos 2.";
+  const blockedIcon = pending > 0 ? "clock" : "users";
+  return { canDraw, countLabel, blockedReason, blockedIcon, leftOut };
+}
+
 export function SorteioPanel({
   method, setMethod, separateSameDojo, setSeparateSameDojo,
   thirdPlace, setThirdPlace, bracket, catName, generating, locking,
+  athletesCount = 0, eligibleCount = 0, pendingPayment = 0,
   onGenerate, onLock,
 }: {
   method: DrawMethod; setMethod: (m: DrawMethod) => void;
@@ -32,10 +58,17 @@ export function SorteioPanel({
   thirdPlace: boolean; setThirdPlace: (v: boolean) => void;
   bracket: BracketState | null; catName: string;
   generating: boolean; locking: boolean;
+  /** TODOS os inscritos não-desistentes (athletes_count). */
+  athletesCount?: number;
+  /** Os que de fato entram no sorteio — taxa paga (eligible_count). */
+  eligibleCount?: number;
+  /** Inscritos aguardando confirmação de pagamento pela federação. */
+  pendingPayment?: number;
   onGenerate: () => void; onLock: () => void;
 }) {
   const hasDraft = bracket?.status === "draft";
   const statusLabel = hasDraft ? "Pré-visualização gerada" : "Chave não gerada";
+  const el = drawEligibility(athletesCount, eligibleCount, pendingPayment);
 
   return (
     <View style={S.grid2}>
@@ -82,13 +115,34 @@ export function SorteioPanel({
           onToggle={() => setThirdPlace(!thirdPlace)}
         />
 
+        {/* Contagem honesta ANTES de sortear: quem entra, e quantos ficaram
+            de fora por taxa pendente. */}
+        {!hasDraft && athletesCount > 0 && (
+          <View style={S.pills}>
+            <Pill label={el.countLabel} accent={el.leftOut > 0} />
+          </View>
+        )}
+
+        {!hasDraft && !el.canDraw && (
+          <View style={S.infoRow}>
+            <Icon name={el.blockedIcon} size={13} color={C.ink3} />
+            <Text style={S.infoText}>{el.blockedReason}</Text>
+          </View>
+        )}
+
         {!hasDraft ? (
-          <ShojiButton
-            label={generating ? "Gerando..." : "Gerar chave"}
-            variant="sumi"
-            onPress={onGenerate}
-            style={S.fullBtn}
-          />
+          <View
+            style={el.canDraw ? undefined : K.actionDisabled}
+            pointerEvents={el.canDraw && !generating ? "auto" : "none"}
+            accessibilityState={{ disabled: !el.canDraw }}
+          >
+            <ShojiButton
+              label={generating ? "Gerando..." : "Gerar chave"}
+              variant="sumi"
+              onPress={onGenerate}
+              style={S.fullBtn}
+            />
+          </View>
         ) : (
           <View style={S.draftActions}>
             <ShojiButton
@@ -151,24 +205,24 @@ export function SorteioPanel({
 // lugar) são de kumite, e o backend as ignora nas modalidades por notas:
 // lá só o seed é usado. Mesmo skin Shoji, apenas com o que é verdade aqui.
 export function KataDrawPanel({
-  catName, athletesCount, pendingPayment, generating, onGenerate,
+  catName, athletesCount, eligibleCount, pendingPayment, generating, onGenerate,
 }: {
   catName: string;
-  /** Inscritos CONFIRMADOS (os que realmente entram na bateria). */
+  /** TODOS os inscritos não-desistentes (athletes_count). */
   athletesCount: number;
+  /** Os que de fato entram na bateria — taxa paga (eligible_count). */
+  eligibleCount: number;
   /** Inscritos ainda aguardando confirmação de pagamento pela federação. */
   pendingPayment: number;
   generating: boolean;
   onGenerate: () => void;
 }) {
-  const hasAthletes = athletesCount > 0;
+  const el = drawEligibility(athletesCount, eligibleCount, pendingPayment);
   // Estado vazio honesto: o texto diz o motivo REAL de não dar para sortear.
-  const helper = hasAthletes
+  const helper = el.canDraw
     ? "O sorteio define a ordem em que os atletas se apresentam na eliminatória. Depois de sortear, a ordem pode ser ajustada à mão em \"Ordem de apresentação\"."
-    : pendingPayment > 0
-      ? `Nenhum inscrito confirmado ainda. ${pendingPayment} inscrito${pendingPayment > 1 ? "s" : ""} ${pendingPayment > 1 ? "entram" : "entra"} na chave depois que a federação confirmar o pagamento.`
-      : "Nenhum atleta inscrito nesta categoria até agora.";
-  const helperIcon = hasAthletes ? "info" : pendingPayment > 0 ? "clock" : "users";
+    : el.blockedReason;
+  const helperIcon = el.canDraw ? "info" : el.blockedIcon;
 
   return (
     <View style={[S.card, K.card]}>
@@ -180,9 +234,9 @@ export function KataDrawPanel({
         <ShojiBadge status="neutral" label="Chave não gerada" />
       </View>
 
-      {hasAthletes && (
+      {athletesCount > 0 && (
         <View style={S.pills}>
-          <Pill label={`${athletesCount} atleta${athletesCount > 1 ? "s" : ""} confirmado${athletesCount > 1 ? "s" : ""}`} />
+          <Pill label={el.countLabel} accent={el.leftOut > 0} />
         </View>
       )}
 
@@ -192,9 +246,9 @@ export function KataDrawPanel({
       </View>
 
       <View
-        style={[K.action, !hasAthletes && K.actionDisabled]}
-        pointerEvents={hasAthletes && !generating ? "auto" : "none"}
-        accessibilityState={{ disabled: !hasAthletes }}
+        style={[K.action, !el.canDraw && K.actionDisabled]}
+        pointerEvents={el.canDraw && !generating ? "auto" : "none"}
+        accessibilityState={{ disabled: !el.canDraw }}
       >
         <ShojiButton
           label={generating ? "Sorteando..." : "Sortear ordem de apresentação"}
