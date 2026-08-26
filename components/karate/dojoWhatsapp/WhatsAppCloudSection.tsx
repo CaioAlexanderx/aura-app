@@ -32,7 +32,7 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useAuthStore } from "@/stores/auth";
 import { waApi, WaStatus, WaTemplate } from "@/services/waApi";
-import { fmtPhoneBR, mapWaError, waQueueChips } from "./helpers";
+import { fmtDayMonthBR, fmtPhoneBR, mapWaError, waQueueChips } from "./helpers";
 import { WaTemplatesCard } from "./WaTemplatesCard";
 import { WaTestSendCard } from "./WaTestSendCard";
 import { WaOutboxCard } from "./WaOutboxCard";
@@ -132,7 +132,18 @@ export function WhatsAppCloudSection() {
     );
   }
 
-  const connected = !!status?.connected;
+  // Token vencido é estado de AVISO, não de erro nem de "nunca conectou":
+  // o número segue cadastrado, só a autorização da Meta caducou. O backend
+  // já manda connected=false nesse caso — o selo é que precisa distinguir.
+  const expired = !!status?.token_expired;
+  const connected = !!status?.connected && !expired;
+  const hasNumber = connected || expired;
+  const expiredAt = fmtDayMonthBR(status?.token_expired_at);
+  const badge = expired
+    ? { label: "Conexão expirada", icon: "alert", color: KarateColors.warn, bg: KarateColors.warnSoft }
+    : connected
+      ? { label: "Conectado", icon: "check_circle", color: KarateColors.ok, bg: KarateColors.okSoft }
+      : { label: "Não conectado", icon: "link", color: KarateColors.neutral, bg: KarateColors.neutralSoft };
   const chips = waQueueChips(status?.queue);
   const approved = templates.filter((t) => String(t.status || "").toUpperCase() === "APPROVED");
 
@@ -144,24 +155,28 @@ export function WhatsAppCloudSection() {
             <Icon name="whatsapp" size={16} color={KarateColors.whatsapp} />
             <Text style={styles.cardTitle}>WhatsApp (Cloud API)</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: connected ? KarateColors.okSoft : KarateColors.neutralSoft }]}>
-            <Icon
-              name={connected ? "check_circle" : "link"}
-              size={12}
-              color={connected ? KarateColors.ok : KarateColors.neutral}
-            />
-            <Text style={[styles.badgeTxt, { color: connected ? KarateColors.ok : KarateColors.neutral }]}>
-              {connected ? "Conectado" : "Não conectado"}
-            </Text>
+          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+            <Icon name={badge.icon} size={12} color={badge.color} />
+            <Text style={[styles.badgeTxt, { color: badge.color }]}>{badge.label}</Text>
           </View>
         </View>
 
-        {connected ? (
+        {hasNumber ? (
           <>
             <Text style={styles.cardSub}>
               Número oficial do dojô: {fmtPhoneBR(status?.phone_display)}
               {status?.waba_id ? ` · conta ${status.waba_id}` : ""}
             </Text>
+            {expired && (
+              <View style={styles.warnBox}>
+                <Icon name="alert" size={14} color={KarateColors.warn} />
+                <Text style={styles.warnTxt}>
+                  A autorização da Meta{expiredAt ? ` expirou em ${expiredAt}` : " expirou"} — é
+                  preciso reconectar o número do dojô para voltar a enviar. Até lá, a fila manual da
+                  aba Régua continua funcionando.
+                </Text>
+              </View>
+            )}
             {chips.length > 0 ? (
               <View style={styles.chips}>
                 {chips.map((c) => (
@@ -221,6 +236,12 @@ const styles = StyleSheet.create({
   hint: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 10, lineHeight: 16 } as TextStyle,
   badge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 } as ViewStyle,
   badgeTxt: { fontSize: 10.5, fontWeight: "700" } as TextStyle,
+  warnBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 10,
+    backgroundColor: KarateColors.warnSoft, borderRadius: KarateRadius.sm,
+    paddingVertical: 9, paddingHorizontal: 10, maxWidth: 620,
+  } as ViewStyle,
+  warnTxt: { flex: 1, fontSize: 12, fontWeight: "600", color: KarateColors.warn, lineHeight: 17 } as TextStyle,
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 } as ViewStyle,
   chip: {
     flexDirection: "row", alignItems: "baseline", gap: 5,

@@ -14,6 +14,9 @@
 // Erros conhecidos (ApiError.data.code — ver mapWaError em
 // components/karate/dojoWhatsapp/helpers.ts):
 //   409 NAO_CONECTADO — sem WABA/token configurado para a company.
+//   409 TOKEN_EXPIRADO — o token existe mas a Meta o recusou. O corpo traz
+//     `error` já em pt-BR (é o que vai pra tela) e `detail` com o texto da
+//     Meta em inglês — detalhe de suporte, NUNCA na tela principal.
 // `schema_pending` NÃO é erro: vem true dentro do GET /status quando a
 // migration ainda não rodou no ambiente (estado vazio, nunca crash).
 // ============================================================
@@ -31,12 +34,21 @@ export interface WaQueueCounts {
 }
 
 export interface WaStatus {
+  /** Já vem false quando a Meta recusou o token (ver token_expired). */
   connected: boolean;
   phone_display: string | null;
   waba_id: string | null;
   queue: WaQueueCounts;
   /** true = migration pendente no ambiente; a UI mostra estado vazio. */
   schema_pending: boolean;
+  /**
+   * true = o número está cadastrado mas o token da Meta venceu — estado de
+   * AVISO (reconectar), não de "nunca conectou". Opcional: backend antigo
+   * não devolve o campo.
+   */
+  token_expired?: boolean;
+  /** ISO de quando o token venceu; null/ausente quando não dá pra saber. */
+  token_expired_at?: string | null;
 }
 
 // ── Templates ─────────────────────────────────
