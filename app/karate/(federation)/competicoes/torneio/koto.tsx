@@ -822,11 +822,21 @@ function KataPanel({
   const [podium, setPodium] = useState<PodiumEntry[] | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null); // `${entry_id}:${phase}`
   const [savingNota, setSavingNota] = useState(false);
+  /** Quantos árbitros dão nota nesta categoria — o editor normaliza o padrão. */
+  const [judgeCount, setJudgeCount] = useState<number | undefined>(undefined);
 
   const loadScores = useCallback(async () => {
     try {
-      const rows = await karateBracketsApi.getKataScores(federationId, cid, cat.id);
+      // A chave vem junto só pelo judge_count (3..7) — falha nela não pode
+      // derrubar a bateria: o editor cai no padrão.
+      const [rows, bracketResp] = await Promise.all([
+        karateBracketsApi.getKataScores(federationId, cid, cat.id),
+        karateBracketsApi.getBracket(federationId, cid, cat.id).catch(() => null),
+      ]);
       setScores(rows || []);
+      setJudgeCount(
+        bracketResp && bracketResp.status !== "not_generated" ? bracketResp.judge_count : undefined
+      );
     } catch {
       setScores([]);
     }
@@ -912,6 +922,7 @@ function KataPanel({
             title={`Eliminatória · ${eliminatoria.length}`}
             rows={eliminatoria}
             editingKey={editingKey}
+            judgeCount={judgeCount}
             saving={savingNota}
             onToggle={setEditingKey}
             onSave={handleSaveNota}
@@ -921,6 +932,7 @@ function KataPanel({
               title={`Final · ${final.length}`}
               rows={final}
               editingKey={editingKey}
+              judgeCount={judgeCount}
               saving={savingNota}
               onToggle={setEditingKey}
               onSave={handleSaveNota}
@@ -955,11 +967,13 @@ function KataPanel({
 }
 
 function KataPhaseList({
-  title, rows, editingKey, saving, onToggle, onSave,
+  title, rows, editingKey, judgeCount, saving, onToggle, onSave,
 }: {
   title: string;
   rows: KataScore[];
   editingKey: string | null;
+  /** `judge_count` da chave (3..7); ausente → padrão dentro do editor. */
+  judgeCount?: number;
   saving: boolean;
   onToggle: (key: string | null) => void;
   onSave: (row: KataScore, payload: NotasSubmit) => void | Promise<void>;
@@ -1006,6 +1020,7 @@ function KataPhaseList({
                   phaseLabel={r.phase === "eliminatoria" ? "Eliminatória" : "Final"}
                   initialNotas={r.notas}
                   initialNota={r.nota}
+                  judgeCount={judgeCount}
                   saving={saving}
                   onSubmit={(payload) => onSave(r, payload)}
                   onCancel={() => onToggle(null)}

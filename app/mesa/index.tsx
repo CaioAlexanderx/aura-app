@@ -1014,6 +1014,8 @@ function MesaKataPanel({
 }) {
   const [scores, setScores] = useState<KataScore[] | null>(null);
   const [bracketLocked, setBracketLocked] = useState<boolean | null>(null);
+  /** Quantos árbitros dão nota nesta categoria — o editor normaliza o padrão. */
+  const [judgeCount, setJudgeCount] = useState<number | undefined>(undefined);
   const [editingKey, setEditingKey] = useState<string | null>(null); // `${entry_id}:${phase}`
   const [saving, setSaving] = useState(false);
   const [advanceCount, setAdvanceCount] = useState(8);
@@ -1032,10 +1034,14 @@ function MesaKataPanel({
       ]);
       setScores(rows || []);
       setBracketLocked(!!bracketResp && bracketResp.status === "locked");
+      setJudgeCount(
+        bracketResp && bracketResp.status !== "not_generated" ? bracketResp.judge_count : undefined
+      );
     } catch (e: any) {
       if (handleFlowError(e)) return;
       setScores([]);
       setBracketLocked(null);
+      setJudgeCount(undefined);
     }
   }, [cat.id, handleFlowError]);
   useEffect(() => { loadScores(); }, [loadScores]);
@@ -1193,6 +1199,7 @@ function MesaKataPanel({
                   phaseLabel={r.phase === "eliminatoria" ? "Eliminatória" : "Final"}
                   initialNotas={r.notas}
                   initialNota={r.nota}
+                  judgeCount={judgeCount}
                   saving={saving}
                   onSubmit={(payload) => saveNota(r, payload)}
                   onCancel={() => setEditingKey(null)}

@@ -31,7 +31,7 @@ import { ShojiButton } from "@/components/karate/shoji";
 import { toast } from "@/components/Toast";
 import { karateBracketsApi, KataScore, KataPhase } from "@/services/karateBracketsApi";
 import { buildKataHtml } from "@/components/karate/chaves/buildKataHtml";
-import { NotasBreakdown } from "@/components/karate/NotasArbitros";
+import { NotasBreakdown, normalizeJudgeCount } from "@/components/karate/NotasArbitros";
 import { styles as S, MiniAvatar, AbsentPill, isAbsent } from "./shared";
 import {
   useBracketDragAndDrop, useDraggableSlotRef, useSlotDropZoneRef, BracketSlotId,
@@ -44,12 +44,21 @@ const MEDAL_COLORS = ["#9a7b1f", "#7d7d7d", "#8a5a2b"];
 
 type ViewMode = "notas" | "ordem";
 
+// A dica é texto corrido; número por extenso lê melhor que algarismo.
+const JUDGE_WORD: Record<number, string> = {
+  3: "Três", 4: "Quatro", 5: "Cinco", 6: "Seis", 7: "Sete",
+};
+
 export function KataView({
   catName, scores, onEditScore, federationId, cid, catId, competitionName, federationName, onReloaded,
+  judgeCount,
 }: {
   catName: string;
   scores: KataScore[];
   onEditScore: (s: KataScore) => void;
+  /** Árbitros que dão nota nesta categoria (3..7). Só a dica de tela usa
+   *  — o lançamento em si não trava pela quantidade. */
+  judgeCount?: number;
   /** Necessários para salvar ordem (PUT) e montar o cabeçalho da impressão. */
   federationId?: string;
   cid?: string;
@@ -235,7 +244,7 @@ export function KataView({
           <View style={S.infoRow}>
             <Icon name="info" size={13} color={C.ink3} />
             <Text style={S.infoText}>
-              Cinco jurados; desconsidera a maior e a menor nota. Ordem de apresentação sorteada. Os melhores da eliminatória avançam à final.
+              {JUDGE_WORD[normalizeJudgeCount(judgeCount)]} jurados; desconsidera a maior e a menor nota. Ordem de apresentação sorteada. Os melhores da eliminatória avançam à final.
             </Text>
           </View>
 

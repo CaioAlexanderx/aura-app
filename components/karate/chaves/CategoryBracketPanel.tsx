@@ -136,6 +136,8 @@ export function CategoryBracketPanel({
   const [kataScores, setKataScores] = useState<KataScore[]>([]);
   const [editScore, setEditScore] = useState<KataScore | null>(null);
   const [savingScore, setSavingScore] = useState(false);
+  /** Quantos árbitros dão nota nesta categoria — o editor normaliza o padrão. */
+  const [judgeCount, setJudgeCount] = useState<number | undefined>(undefined);
 
   // Leitura ÚNICA do GET /bracket — vale para kumite E kata. Devolve
   // `status` ("not_generated" ou não), `athletes_count`, `eligible_count` e
@@ -149,6 +151,7 @@ export function CategoryBracketPanel({
       setPendingPayment(0);
       setAthletesCount(0);
       setEligibleCount(0);
+      setJudgeCount(undefined);
       return;
     }
     try {
@@ -159,6 +162,9 @@ export function CategoryBracketPanel({
       // Fallback para backend antigo (sem eligible_count): volta ao
       // comportamento anterior — todo inscrito conta como elegível.
       setEligibleCount((resp as any)?.eligible_count ?? total);
+      // judge_count (3..7) vem no MESMO GET — aproveitamos a viagem em vez
+      // de uma chamada só para saber quantos campos de nota desenhar.
+      setJudgeCount((resp as any)?.judge_count ?? undefined);
       if (resp && resp.status !== "not_generated" && (resp as any).bracket !== null) {
         const bs = resp as BracketState;
         setBracket(bs);
@@ -176,6 +182,7 @@ export function CategoryBracketPanel({
       setPendingPayment(0);
       setAthletesCount(0);
       setEligibleCount(0);
+      setJudgeCount(undefined);
     }
   }, [federationId, cid, catId]);
 
@@ -362,6 +369,7 @@ export function CategoryBracketPanel({
           competitionName={competitionName ?? catName}
           federationName={federationName}
           onReloaded={loadKata}
+          judgeCount={judgeCount}
         />
       )}
 
@@ -420,6 +428,7 @@ export function CategoryBracketPanel({
                 phaseLabel={editScore.phase === "eliminatoria" ? "Eliminatória" : "Final"}
                 initialNotas={editScore.notas}
                 initialNota={editScore.nota}
+                judgeCount={judgeCount}
                 saving={savingScore}
                 onSubmit={handleSaveScore}
                 onCancel={() => setEditScore(null)}
