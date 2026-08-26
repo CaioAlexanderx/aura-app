@@ -5,9 +5,13 @@
 // rascunho (DraftMatchCard). Estado/handlers vêm por props do
 // orquestrador — este componente é só apresentação. A lógica de
 // confrontos (bracket.rounds[0], byes, mesmo dojô) é preservada.
+//
+// Exporta TAMBÉM o KataDrawPanel (fim do arquivo): o equivalente
+// para as modalidades apuradas por notas (kata/team_kata/enbu),
+// onde não se sorteia chave e sim ORDEM DE APRESENTAÇÃO.
 // ============================================================
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P } from "@/constants/karateTheme";
 import { ShojiBadge, ShojiButton, Pill } from "@/components/karate/shoji";
@@ -139,6 +143,78 @@ export function SorteioPanel({
     </View>
   );
 }
+
+// ── KataDrawPanel (kata / team_kata / enbu, chave ainda não gerada) ───────
+// Em kata não se "sorteia chave": sorteia-se a ORDEM DE APRESENTAÇÃO da
+// bateria. Por isso este bloco NÃO reaproveita o SorteioPanel acima — todas
+// as opções dele (método de chaveamento, separar mesmo dojô, disputa de 3º
+// lugar) são de kumite, e o backend as ignora nas modalidades por notas:
+// lá só o seed é usado. Mesmo skin Shoji, apenas com o que é verdade aqui.
+export function KataDrawPanel({
+  catName, athletesCount, pendingPayment, generating, onGenerate,
+}: {
+  catName: string;
+  /** Inscritos CONFIRMADOS (os que realmente entram na bateria). */
+  athletesCount: number;
+  /** Inscritos ainda aguardando confirmação de pagamento pela federação. */
+  pendingPayment: number;
+  generating: boolean;
+  onGenerate: () => void;
+}) {
+  const hasAthletes = athletesCount > 0;
+  // Estado vazio honesto: o texto diz o motivo REAL de não dar para sortear.
+  const helper = hasAthletes
+    ? "O sorteio define a ordem em que os atletas se apresentam na eliminatória. Depois de sortear, a ordem pode ser ajustada à mão em \"Ordem de apresentação\"."
+    : pendingPayment > 0
+      ? `Nenhum inscrito confirmado ainda. ${pendingPayment} inscrito${pendingPayment > 1 ? "s" : ""} ${pendingPayment > 1 ? "entram" : "entra"} na chave depois que a federação confirmar o pagamento.`
+      : "Nenhum atleta inscrito nesta categoria até agora.";
+  const helperIcon = hasAthletes ? "info" : pendingPayment > 0 ? "clock" : "users";
+
+  return (
+    <View style={[S.card, K.card]}>
+      <View style={S.cardHead}>
+        <View style={K.headText}>
+          <Text style={S.cardTitle}>Ordem de apresentação</Text>
+          <Text style={S.cardSub}>{catName} · apuração por notas</Text>
+        </View>
+        <ShojiBadge status="neutral" label="Chave não gerada" />
+      </View>
+
+      {hasAthletes && (
+        <View style={S.pills}>
+          <Pill label={`${athletesCount} atleta${athletesCount > 1 ? "s" : ""} confirmado${athletesCount > 1 ? "s" : ""}`} />
+        </View>
+      )}
+
+      <View style={S.infoRow}>
+        <Icon name={helperIcon} size={13} color={C.ink3} />
+        <Text style={S.infoText}>{helper}</Text>
+      </View>
+
+      <View
+        style={[K.action, !hasAthletes && K.actionDisabled]}
+        pointerEvents={hasAthletes && !generating ? "auto" : "none"}
+        accessibilityState={{ disabled: !hasAthletes }}
+      >
+        <ShojiButton
+          label={generating ? "Sorteando..." : "Sortear ordem de apresentação"}
+          icon="list"
+          variant="sumi"
+          onPress={onGenerate}
+        />
+      </View>
+    </View>
+  );
+}
+
+// Largura máxima: bloco de ação lê melhor em coluna estreita; o botão é
+// dimensionado pelo conteúdo (alignSelf), nunca esticado na tela.
+const K = StyleSheet.create({
+  card: { maxWidth: 560 } as ViewStyle,
+  headText: { flex: 1, minWidth: 0, paddingRight: 8 } as ViewStyle,
+  action: { alignSelf: "flex-start", marginTop: 2 } as ViewStyle,
+  actionDisabled: { opacity: 0.45 } as ViewStyle,
+});
 
 // ── DraftMatchCard ────────────────────────────────────────────────────────
 function DraftMatchCard({ match, idx }: { match: BracketMatch; idx: number }) {
