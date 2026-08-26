@@ -39,7 +39,7 @@ import {
   DrawMethod,
 } from "@/services/karateBracketsApi";
 import { notify } from "@/utils/webAlert";
-import { SorteioPanel } from "@/components/karate/chaves/SorteioPanel";
+import { SorteioPanel, KataDrawPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
 import { NotasArbitros, NotasSubmit } from "@/components/karate/NotasArbitros";
@@ -123,6 +123,8 @@ export function CategoryBracketPanel({
   const [bracket, setBracket] = useState<BracketState | null>(null);
   // Inscritos com pagamento pendente (aguardando confirmação da federação).
   const [pendingPayment, setPendingPayment] = useState(0);
+  // Inscritos CONFIRMADOS — os que de fato entram na chave/bateria.
+  const [athletesCount, setAthletesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [advancingMatch, setAdvancingMatch] = useState<string | null>(null);
 
@@ -131,16 +133,24 @@ export function CategoryBracketPanel({
   const [editScore, setEditScore] = useState<KataScore | null>(null);
   const [savingScore, setSavingScore] = useState(false);
 
-  // Load bracket for this category (Kumite)
-  const loadBracket = useCallback(async () => {
+  // Leitura ÚNICA do GET /bracket — vale para kumite E kata. Devolve
+  // `status` ("not_generated" ou não), `athletes_count` e
+  // `pending_payment_count` mesmo quando a chave ainda não existe. Antes o
+  // modo kata só lia getKataScores e por isso não sabia distinguir "chave
+  // não gerada" de "chave gerada e ainda sem notas"; e o pending vinha de
+  // uma TERCEIRA chamada ao mesmo endpoint. Agora é uma só.
+  const fetchBracketState = useCallback(async () => {
     if (!catId) {
-      setLoading(false);
+      setBracket(null);
+      setPendingPayment(0);
+      setAthletesCount(0);
       return;
     }
-    setLoading(true);
     try {
       const resp = await karateBracketsApi.getBracket(federationId, cid || "", catId);
-      if (resp && resp.status !== "not_generated" && resp.bracket !== null) {
+      setPendingPayment((resp as any)?.pending_payment_count ?? 0);
+      setAthletesCount((resp as any)?.athletes_count ?? 0);
+      if (resp && resp.status !== "not_generated" && (resp as any).bracket !== null) {
         const bs = resp as BracketState;
         setBracket(bs);
         if (bs.options) {
@@ -154,13 +164,27 @@ export function CategoryBracketPanel({
     } catch {
       // sem dado real: não fabricar — mantém estado vazio
       setBracket(null);
-      setKataScores([]);
-    } finally {
-      setLoading(false);
+      setPendingPayment(0);
+      setAthletesCount(0);
     }
   }, [federationId, cid, catId]);
 
-  // Load kata scores for this category (Kata)
+  // Load bracket for this category (Kumite)
+  const loadBracket = useCallback(async () => {
+    if (!catId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      await fetchBracketState();
+    } finally {
+      setLoading(false);
+    }
+  }, [catId, fetchBracketState]);
+
+  // Load kata scores for this category (Kata) — notas da bateria E estado da
+  // chave, em paralelo: sem o segundo não há como oferecer o sorteio.
   const loadKata = useCallback(async () => {
     if (!catId) {
       setLoading(false);
@@ -168,14 +192,15 @@ export function CategoryBracketPanel({
     }
     setLoading(true);
     try {
-      const scores = await karateBracketsApi.getKataScores(federationId, cid || "", catId);
-      if (scores) setKataScores(scores);
-    } catch {
-      setKataScores([]);
+      const [scores] = await Promise.all([
+        karateBracketsApi.getKataScores(federationId, cid || "", catId).catch(() => null),
+        fetchBracketState(),
+      ]);
+      setKataScores(scores ?? []);
     } finally {
       setLoading(false);
     }
-  }, [federationId, cid, catId]);
+  }, [federationId, cid, catId, fetchBracketState]);
 
   useEffect(() => {
     if (!catId) {
@@ -189,27 +214,24 @@ export function CategoryBracketPanel({
     }
   }, [catId, isKataMode, loadBracket, loadKata]);
 
-  // Pending de pagamento: GET /bracket retorna pending_payment_count para kata
-  // e kumite (inclusive not_generated). Independente do fluxo kata/kumite.
-  const loadPending = useCallback(async () => {
-    if (!catId) { setPendingPayment(0); return; }
-    try {
-      const resp = await karateBracketsApi.getBracket(federationId, cid || "", catId);
-      setPendingPayment((resp as any)?.pending_payment_count ?? 0);
-    } catch { setPendingPayment(0); }
-  }, [federationId, cid, catId]);
-  useEffect(() => { loadPending(); }, [loadPending]);
-
   // ── Actions
+  // Kata (inclui team_kata/enbu): o mesmo endpoint gera a ORDEM DE
+  // APRESENTAÇÃO (linhas de karate_kata_scores com presentation_order). O
+  // backend só usa o seed nessas modalidades — método/mesmo dojô/3º lugar
+  // são de kumite e não são enviados.
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await karateBracketsApi.generateBracket(federationId, cid || "", catId, {
-        method, separateSameDojo, thirdPlace,
-      });
-      await loadBracket();
+      await karateBracketsApi.generateBracket(
+        federationId, cid || "", catId,
+        isKataMode ? {} : { method, separateSameDojo, thirdPlace },
+      );
+      if (isKataMode) await loadKata(); else await loadBracket();
     } catch (e: any) {
-      notify("Não foi possível gerar a chave", e?.message ?? "Tente novamente.");
+      notify(
+        isKataMode ? "Não foi possível sortear a ordem" : "Não foi possível gerar a chave",
+        e?.message ?? "Tente novamente.",
+      );
     } finally {
       setGenerating(false);
     }
@@ -274,6 +296,13 @@ export function CategoryBracketPanel({
   const locked = bracket?.status === "locked";
   const hasDraft = bracket?.status === "draft";
   const notGenerated = !bracket;
+  // Kata: a bateria só existe depois de gerada. Sem isso a tela desenhava
+  // "Eliminatória — 0 atletas" e não oferecia nada para clicar. Fallback
+  // para dados legados que tenham notas sem linha de bracket.
+  const kataReady = !notGenerated || kataScores.length > 0;
+  // Nesse estado o próprio bloco de sorteio já explica o pendente de
+  // pagamento — não repetir o mesmo aviso duas vezes na mesma tela.
+  const pendingShownByDraw = isKataMode && !kataReady && athletesCount === 0;
 
   return (
     <View>
@@ -284,7 +313,7 @@ export function CategoryBracketPanel({
       {loading && !!catId && <ActivityIndicator color={P.red} style={{ marginTop: 32 }} />}
 
       {/* ============= AVISO: inscritos aguardando pagamento ============= */}
-      {!loading && !!catId && pendingPayment > 0 && (
+      {!loading && !!catId && pendingPayment > 0 && !pendingShownByDraw && (
         <View style={styles.pendingBanner}>
           <Icon name="time-outline" size={16} color={P.red} />
           <Text style={styles.pendingText}>
@@ -293,8 +322,19 @@ export function CategoryBracketPanel({
         </View>
       )}
 
+      {/* ===== SORTEIO DA ORDEM (kata/team_kata/enbu, chave não gerada) ===== */}
+      {!loading && !!catId && isKataMode && !kataReady && (
+        <KataDrawPanel
+          catName={catName}
+          athletesCount={athletesCount}
+          pendingPayment={pendingPayment}
+          generating={generating}
+          onGenerate={handleGenerate}
+        />
+      )}
+
       {/* ============= KATA VIEW ============= */}
-      {!loading && !!catId && isKataMode && (
+      {!loading && !!catId && isKataMode && kataReady && (
         <KataView
           catName={catName}
           scores={kataScores}
