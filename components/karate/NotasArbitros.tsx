@@ -1,5 +1,5 @@
 // ============================================================
-// NotasArbitros — Onda B · lançamento de kata por 5 notas
+// NotasArbitros — Onda B · lançamento de kata por N notas
 //
 // Cada árbitro dá UMA nota (5 no padrão WKF; 3 a 7 aceitos). O
 // TOTAL é a soma cortando a maior e a menor. A prévia daqui é só
@@ -17,10 +17,14 @@
 // nenhuma das telas — assim o mesmo bloco encaixa nas três sem
 // quebrar o visual de cada uma.
 //
+// Quantos campos aparecem vem do `judge_count` da chave (3..7) — o
+// número GUIA a tela, não trava o lançamento: a apuração corta a maior
+// e a menor seja qual for a quantidade lançada.
+//
 // Uso em TABLET no calor do evento: alvos de toque generosos
-// (56pt+), teclado decimal, vírgula pt-BR, foco encadeado A1→A5.
+// (56pt+), teclado decimal, vírgula pt-BR, foco encadeado A1→An.
 // ============================================================
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
@@ -33,6 +37,16 @@ import {
 export const DEFAULT_JUDGE_COUNT = 5;
 export const MIN_JUDGE_COUNT = 3;
 export const MAX_JUDGE_COUNT = 7;
+
+/**
+ * ÚNICO lugar onde mora o padrão: inteiro de 3 a 7, qualquer outra
+ * coisa (ausente, null, 0, 9, "cinco") vira 5. Chamador não normaliza.
+ */
+export function normalizeJudgeCount(n: number | null | undefined): number {
+  const i = Math.trunc(Number(n));
+  if (!Number.isFinite(i) || i < MIN_JUDGE_COUNT || i > MAX_JUDGE_COUNT) return DEFAULT_JUDGE_COUNT;
+  return i;
+}
 
 // ── Helpers de número (pt-BR) ────────────────────────────────
 
@@ -79,7 +93,7 @@ export function computeKataTotal(notas: number[]): number | null {
 
 // ── NotasBreakdown — exibição (total + notas individuais) ────
 /**
- * Mostra o TOTAL e, discreto, as 5 individuais quando existirem
+ * Mostra o TOTAL e, discreto, as individuais quando existirem
  * ("21,6 · 7,0/7,2/7,4/7,6/6,8"), com a maior e a menor esmaecidas
  * e riscadas — são as descartadas.
  */
@@ -122,7 +136,7 @@ export function NotasArbitros({
   phaseLabel,
   initialNotas,
   initialNota,
-  judgeCount = DEFAULT_JUDGE_COUNT,
+  judgeCount,
   saving = false,
   autoFocus = true,
   submitLabel = "Salvar notas",
@@ -136,7 +150,8 @@ export function NotasArbitros({
   initialNotas?: number[] | null;
   /** Total já lançado — usado só no modo legado de nota única. */
   initialNota?: number | null;
-  judgeCount?: number;
+  /** `judge_count` da chave (3..7). Ausente/inválido → 5 (normalizado aqui). */
+  judgeCount?: number | null;
   saving?: boolean;
   autoFocus?: boolean;
   submitLabel?: string;
@@ -144,16 +159,34 @@ export function NotasArbitros({
   onCancel?: () => void;
   style?: ViewStyle;
 }) {
-  const count = Math.min(MAX_JUDGE_COUNT, Math.max(MIN_JUDGE_COUNT, judgeCount));
+  const count = normalizeJudgeCount(judgeCount);
 
   const [legacy, setLegacy] = useState(false);
   const [fields, setFields] = useState<string[]>(() => {
-    const base = Array.from({ length: count }, () => "");
-    if (Array.isArray(initialNotas)) {
-      initialNotas.slice(0, count).forEach((n, i) => { base[i] = fmtNota(n); });
-    }
+    // Notas já lançadas mandam no tamanho: se vierem 5 e a categoria hoje
+    // pede 3, abrem as 5 — nota lançada nunca some em silêncio.
+    const given = (Array.isArray(initialNotas) ? initialNotas : []).filter((n) => Number.isFinite(n));
+    const base = Array.from({ length: Math.max(count, given.length) }, () => "");
+    given.forEach((n, i) => { base[i] = fmtNota(n); });
     return base;
   });
+
+  // `judge_count` pode chegar depois (a chave carrega em paralelo): cresce
+  // até N e só encolhe cortando campos VAZIOS do fim.
+  useEffect(() => {
+    setFields((prev) => {
+      if (prev.length === count) return prev;
+      if (prev.length < count) {
+        return prev.concat(Array.from({ length: count - prev.length }, () => ""));
+      }
+      const next = prev.slice();
+      while (next.length > count && next[next.length - 1] === "") next.pop();
+      return next.length === prev.length ? prev : next;
+    });
+  }, [count]);
+
+  /** Quantos campos estão de fato na tela (≥ count quando há notas antigas). */
+  const fieldCount = fields.length;
   const [notaUnica, setNotaUnica] = useState(
     initialNota != null ? fmtNota(initialNota) : ""
   );
@@ -176,10 +209,25 @@ export function NotasArbitros({
     [parsed]
   );
   const anyError = fieldErrors.some(Boolean);
-  const allFilled = parsed.every((n) => n !== null);
-  const validNotas = allFilled && !anyError ? (parsed as number[]) : null;
+  // A quantidade NÃO precisa bater com judge_count: o corte de maior e
+  // menor funciona com qualquer número entre 3 e 7. Campo vazio é campo
+  // que aquele árbitro não usou, não é bloqueio.
+  const filled = useMemo(
+    () => parsed.filter((n): n is number => n !== null && Number.isFinite(n)),
+    [parsed]
+  );
+  const tooMany = filled.length > MAX_JUDGE_COUNT;
+  const enough = filled.length >= MIN_JUDGE_COUNT && !tooMany;
+  const validNotas = enough && !anyError ? filled : null;
   const preview = validNotas ? computeKataTotal(validNotas) : null;
-  const trimmed = validNotas ? trimmedIndexes(validNotas) : null;
+  // Índices de corte no ARRAY DE CAMPOS (o filtro reindexa; a tela não pode).
+  const trimmed = useMemo(() => {
+    if (!validNotas) return null;
+    const map: number[] = [];
+    parsed.forEach((n, i) => { if (n !== null && Number.isFinite(n)) map.push(i); });
+    const t = trimmedIndexes(validNotas);
+    return { maxIdx: map[t.maxIdx], minIdx: map[t.minIdx] };
+  }, [validNotas, parsed]);
 
   const notaUnicaParsed = parseNotaBR(notaUnica);
   const notaUnicaInvalid =
@@ -212,7 +260,7 @@ export function NotasArbitros({
       <View style={st.head}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.title} numberOfLines={1}>
-            {legacy ? "Nota única" : `Notas dos ${count} árbitros`}
+            {legacy ? "Nota única" : `Notas dos ${fieldCount} árbitros`}
             {athleteName ? ` · ${athleteName}` : ""}
           </Text>
           {!!phaseLabel && <Text style={st.phase}>{phaseLabel}</Text>}
@@ -223,7 +271,7 @@ export function NotasArbitros({
           accessibilityRole="button"
           accessibilityLabel={legacy ? "Voltar para notas por árbitro" : "Lançar nota única"}
         >
-          <Text style={st.modeBtnTxt}>{legacy ? `${count} árbitros` : "nota única"}</Text>
+          <Text style={st.modeBtnTxt}>{legacy ? `${fieldCount} árbitros` : "nota única"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -269,7 +317,7 @@ export function NotasArbitros({
                   autoFocus={autoFocus && i === 0}
                   maxLength={5}
                   selectTextOnFocus
-                  returnKeyType={i === count - 1 ? "done" : "next"}
+                  returnKeyType={i === fieldCount - 1 ? "done" : "next"}
                   onSubmitEditing={() => focusNext(i)}
                   accessibilityLabel={`Nota do árbitro ${i + 1}`}
                 />
@@ -277,10 +325,14 @@ export function NotasArbitros({
             ))}
           </View>
 
-          {anyError && (
+          {(anyError || tooMany) && (
             <View style={st.errorRow}>
               <Icon name="alert-circle" size={13} color={P.danger} />
-              <Text style={st.errorTxt}>Cada nota vai de 0 a 10 (ex.: 7,4).</Text>
+              <Text style={st.errorTxt}>
+                {anyError
+                  ? "Cada nota vai de 0 a 10 (ex.: 7,4)."
+                  : `No máximo ${MAX_JUDGE_COUNT} notas por apresentação.`}
+              </Text>
             </View>
           )}
 
@@ -290,7 +342,7 @@ export function NotasArbitros({
             <Text style={st.totalHint}>
               {preview != null
                 ? "soma cortando a maior e a menor — o servidor recalcula ao salvar"
-                : `preencha as ${count} notas para lançar`}
+                : `preencha ao menos ${MIN_JUDGE_COUNT} notas para lançar`}
             </Text>
           </View>
         </>
@@ -347,8 +399,11 @@ const st = StyleSheet.create({
   modeBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: R.pill, borderWidth: 1, borderColor: C.border2, backgroundColor: P.glass2 } as ViewStyle,
   modeBtnTxt: { fontFamily: F.body, fontSize: 11, fontWeight: "600", color: C.ink3 } as TextStyle,
 
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 } as ViewStyle,
-  cell: { alignItems: "center", gap: 3, minWidth: 76, flexGrow: 1, flexBasis: 76 } as ViewStyle,
+  // Com 3 a 7 campos o bloco NUNCA rola na horizontal: os campos quebram
+  // em linha nova e a última linha fica centrada. O teto de 116 evita o
+  // campo esticado quando sobram poucos árbitros num painel largo.
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 } as ViewStyle,
+  cell: { alignItems: "center", gap: 3, minWidth: 72, maxWidth: 116, flexGrow: 1, flexBasis: 72 } as ViewStyle,
   cellLabel: { fontFamily: F.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 0.8, color: C.ink3 } as TextStyle,
   cellLabelCut: { color: C.ink4 } as TextStyle,
   input: {

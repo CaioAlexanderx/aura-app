@@ -73,6 +73,12 @@ export interface BracketState {
   modality: string;
   /** 'hantei_tree' | 'score_rounds' | null — kata em árvore vs. por notas. */
   kata_mode?: string | null;
+  /**
+   * Quantos árbitros dão nota nesta categoria (3–7). Já vem efetivo do
+   * backend: COALESCE(categoria, competição, 5). Ausente em deploy antigo
+   * — quem consome cai no padrão dentro do NotasArbitros.
+   */
+  judge_count?: number;
   seed: string | null;
   options: BracketOptions;
   /** P1 (296): plano de fases da categoria ({} quando não configurado). */
