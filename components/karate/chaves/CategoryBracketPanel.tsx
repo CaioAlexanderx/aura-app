@@ -123,8 +123,12 @@ export function CategoryBracketPanel({
   const [bracket, setBracket] = useState<BracketState | null>(null);
   // Inscritos com pagamento pendente (aguardando confirmação da federação).
   const [pendingPayment, setPendingPayment] = useState(0);
-  // Inscritos CONFIRMADOS — os que de fato entram na chave/bateria.
+  // TODOS os inscritos não-desistentes (athletes_count) — inclui quem ainda
+  // deve a taxa. NÃO é "confirmados": esse era exatamente o erro que o QA
+  // pegou (pill dizia "2 atletas confirmados" com 1 devendo).
   const [athletesCount, setAthletesCount] = useState(0);
+  // Os que de fato entram na chave/bateria: taxa paga (eligible_count).
+  const [eligibleCount, setEligibleCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [advancingMatch, setAdvancingMatch] = useState<string | null>(null);
 
@@ -134,7 +138,7 @@ export function CategoryBracketPanel({
   const [savingScore, setSavingScore] = useState(false);
 
   // Leitura ÚNICA do GET /bracket — vale para kumite E kata. Devolve
-  // `status` ("not_generated" ou não), `athletes_count` e
+  // `status` ("not_generated" ou não), `athletes_count`, `eligible_count` e
   // `pending_payment_count` mesmo quando a chave ainda não existe. Antes o
   // modo kata só lia getKataScores e por isso não sabia distinguir "chave
   // não gerada" de "chave gerada e ainda sem notas"; e o pending vinha de
@@ -144,12 +148,17 @@ export function CategoryBracketPanel({
       setBracket(null);
       setPendingPayment(0);
       setAthletesCount(0);
+      setEligibleCount(0);
       return;
     }
     try {
       const resp = await karateBracketsApi.getBracket(federationId, cid || "", catId);
+      const total = (resp as any)?.athletes_count ?? 0;
       setPendingPayment((resp as any)?.pending_payment_count ?? 0);
-      setAthletesCount((resp as any)?.athletes_count ?? 0);
+      setAthletesCount(total);
+      // Fallback para backend antigo (sem eligible_count): volta ao
+      // comportamento anterior — todo inscrito conta como elegível.
+      setEligibleCount((resp as any)?.eligible_count ?? total);
       if (resp && resp.status !== "not_generated" && (resp as any).bracket !== null) {
         const bs = resp as BracketState;
         setBracket(bs);
@@ -166,6 +175,7 @@ export function CategoryBracketPanel({
       setBracket(null);
       setPendingPayment(0);
       setAthletesCount(0);
+      setEligibleCount(0);
     }
   }, [federationId, cid, catId]);
 
@@ -228,10 +238,16 @@ export function CategoryBracketPanel({
       );
       if (isKataMode) await loadKata(); else await loadBracket();
     } catch (e: any) {
-      notify(
-        isKataMode ? "Não foi possível sortear a ordem" : "Não foi possível gerar a chave",
-        e?.message ?? "Tente novamente.",
-      );
+      const title = isKataMode ? "Não foi possível sortear a ordem" : "Não foi possível gerar a chave";
+      // 422 PAGAMENTO_PENDENTE: o backend manda o texto pronto em pt-BR e já
+      // diz onde resolver. Repetir com palavra nossa só confundiria — e o
+      // estado local está velho, então recarrega a contagem junto.
+      if (e?.data?.code === "PAGAMENTO_PENDENTE") {
+        notify(title, e?.data?.error ?? e?.message ?? "Tente novamente.");
+        await fetchBracketState();
+      } else {
+        notify(title, e?.message ?? "Tente novamente.");
+      }
     } finally {
       setGenerating(false);
     }
@@ -302,7 +318,7 @@ export function CategoryBracketPanel({
   const kataReady = !notGenerated || kataScores.length > 0;
   // Nesse estado o próprio bloco de sorteio já explica o pendente de
   // pagamento — não repetir o mesmo aviso duas vezes na mesma tela.
-  const pendingShownByDraw = isKataMode && !kataReady && athletesCount === 0;
+  const pendingShownByDraw = isKataMode && !kataReady && eligibleCount === 0;
 
   return (
     <View>
@@ -327,6 +343,7 @@ export function CategoryBracketPanel({
         <KataDrawPanel
           catName={catName}
           athletesCount={athletesCount}
+          eligibleCount={eligibleCount}
           pendingPayment={pendingPayment}
           generating={generating}
           onGenerate={handleGenerate}
@@ -361,6 +378,9 @@ export function CategoryBracketPanel({
           catName={catName}
           generating={generating}
           locking={locking}
+          athletesCount={athletesCount}
+          eligibleCount={eligibleCount}
+          pendingPayment={pendingPayment}
           onGenerate={handleGenerate}
           onLock={handleLock}
         />
