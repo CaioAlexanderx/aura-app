@@ -18,6 +18,7 @@ import { CategoryTreePicker, type CategorySelection } from "@/components/catalog
 import { useCategories } from "@/hooks/useCategories";
 import type { Product } from "./types";
 import { UNITS } from "./types";
+import { suggestNcm, formatNcmDisplay, ncmFamilyByCode, getNcmStatus } from "@/utils/ncm";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -28,64 +29,14 @@ const PRESET_COLORS = [
 ];
 
 // ============================================================================
-// NCM smart: regras de inferência baseadas em palavras-chave do nome do produto.
-// Mesmo dicionário usado no UPDATE em massa do Davi (mai/2026). Quando o user
-// digita o nome, mostramos sugestão proativa abaixo do row de identificadores.
+// NCM smart: a inferencia mora em utils/ncm.ts.
+//
+// Estava aqui dentro -- e outra copia, divergente, dentro do DanfeImportModal.
+// As duas casavam por substring, entao "botao" virava bota e "blusa social"
+// virava sapato de couro. Medido no catalogo da Finesse: 46% das sugestoes
+// estavam erradas. O modulo novo casa por token inteiro, usa o substantivo-
+// nucleo do nome e aceita a categoria como veto.
 // ============================================================================
-type NcmRule = { pattern: RegExp; ncm: string; label: string; family: string };
-const NCM_RULES: NcmRule[] = [
-  { pattern: /(bolsa|mochila|necessaire|carteira|pochete|cinto)/i, ncm: '42029220',
-    label: 'Bolsa/acessório', family: 'Capítulo 42 — Bolsas e similares' },
-  { pattern: /\b(meia|meiao|soquete)\b/i, ncm: '61159500',
-    label: 'Meia', family: 'Capítulo 61 — Meias de algodão' },
-  { pattern: /\b(bone|boné|chapeu|chapéu|gorro)\b/i, ncm: '65050090',
-    label: 'Boné/chapéu', family: 'Capítulo 65 — Acessórios de cabeça' },
-  { pattern: /(tenis|tênis|chuteira|jordan|nike|adidas|olympikus|asics|wave\s*prophecy|mizuno\s*wave|all\s*star|allstar|airwalk)/i,
-    ncm: '64041100',
-    label: 'Tênis/calçado esportivo', family: 'Capítulo 64 — Calçado têxtil esportivo' },
-  { pattern: /(chinelo|chin\.|havaian|rasteir|papet|patete|babuche|slip|slide|ipanema|kenner|crocs|rider|mormaii)/i,
-    ncm: '64022000',
-    label: 'Chinelo/sandália de tiras', family: 'Capítulo 64 — Calçado plástico/borracha' },
-  { pattern: /(bota|coturn)/i, ncm: '64039190',
-    label: 'Bota', family: 'Capítulo 64 — Calçado de couro' },
-  { pattern: /(tamanco|tam\.|anabela)/i, ncm: '64029990',
-    label: 'Tamanco/anabela', family: 'Capítulo 64 — Calçado plástico/borracha' },
-  { pattern: /(sapatilha|sapatinha|casual|mule|loafer|mocassim)/i, ncm: '64041900',
-    label: 'Sapatilha/casual', family: 'Capítulo 64 — Calçado têxtil' },
-  { pattern: /(sap\.|sapato|scarpin|social)/i, ncm: '64039900',
-    label: 'Sapato fechado', family: 'Capítulo 64 — Calçado de couro' },
-  { pattern: /(sandal|sand\.|san\.|zaxy|azaleia)/i, ncm: '64029990',
-    label: 'Sandália', family: 'Capítulo 64 — Calçado plástico/borracha' },
-];
-
-function suggestNcm(name: string): NcmRule | null {
-  if (!name || name.trim().length < 3) return null;
-  const n = name.toLowerCase();
-  for (const rule of NCM_RULES) {
-    if (rule.pattern.test(n)) return rule;
-  }
-  return null;
-}
-
-// "64041100" → "6404.11.00" pra exibição amigável
-function formatNcmDisplay(ncm: string): string {
-  if (!ncm || ncm.length !== 8) return ncm;
-  return `${ncm.slice(0, 4)}.${ncm.slice(4, 6)}.${ncm.slice(6, 8)}`;
-}
-
-// Família NCM curta pro hint do campo válido (busca no NCM_RULES)
-function ncmFamilyByCode(ncm: string): string | null {
-  if (!ncm || ncm.length !== 8) return null;
-  const rule = NCM_RULES.find(r => r.ncm === ncm);
-  return rule ? rule.family : null;
-}
-
-type NcmStatus = 'empty' | 'partial' | 'valid';
-function getNcmStatus(ncm: string): NcmStatus {
-  if (!ncm) return 'empty';
-  if (ncm.length === 8) return 'valid';
-  return 'partial';
-}
 
 // Fix 7: helper para inicializar campo mascarado a partir de número
 function amountToMask(n: number): string {
@@ -129,6 +80,10 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [code, setCode]         = useState(editProduct?.code || "");
   const [barcode, setBarcode]   = useState(editProduct?.barcode || "");
   const [category, setCategory] = useState(editProduct?.category || mergedCategoryList[0] || "");
+  // O chip acima nasce pre-selecionado com o primeiro da lista. Default nao e
+  // escolha: sem esta flag, a sugestao de NCM usaria como veto uma categoria
+  // que a lojista nunca tocou. No EDIT a categoria salva ja e escolha real.
+  const [categoryTouched, setCategoryTouched] = useState(isEdit && !!editProduct?.category);
   // D1: selecao na arvore. `category` (texto) CONTINUA sendo enviado no
   // corpo do POST/PATCH -- e o que a rota de produto grava hoje, e o
   // trigger de dual-write o sobrescreve assim que o vinculo existe.
@@ -161,9 +116,6 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const [ncm, setNcm]           = useState(editProduct?.ncm || "");
   const [newCategory, setNewCategory] = useState("");
   const [showNewCat, setShowNewCat]   = useState(false);
-  // Sugestão automática NCM dispensada (user clicou em X). Não mostra de novo
-  // até o nome mudar significativamente.
-  const [ncmSuggestionDismissed, setNcmSuggestionDismissed] = useState(false);
 
   // Refs pra navegação por setas no scroll de categorias (UX desktop)
   const categoryScrollRef = useRef<any>(null);
@@ -204,14 +156,29 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     return () => clearTimeout(timer);
   }, [name, company?.id, editProduct?.id]);
 
-  // Sugestão NCM: re-calcula quando o nome muda, e dispensar reset se o nome muda
-  // significativamente (>=3 chars). Só mostra se NCM ainda está vazio.
-  const ncmSuggestionResult = useMemo(() => suggestNcm(name), [name]);
-  useEffect(() => {
-    // Quando o nome muda, libera o dismiss pra permitir nova sugestão
-    setNcmSuggestionDismissed(false);
-  }, [name]);
-  const showNcmSuggestion = !!ncmSuggestionResult && !ncm && !ncmSuggestionDismissed;
+  // Sugestão NCM: re-calcula quando o nome (ou a categoria escolhida) muda.
+  // Nunca entra sozinha no campo -- quem escreve o valor e o botao "Gerar".
+  // Categoria que conta como escolha: no da arvore > categoria nova digitada >
+  // chip clicado. Nada disso => null, e a sugestao volta a depender so do nome.
+  const categoriaEscolhida = useMemo(() => {
+    const no = selecao.primaryCategoryId ? categoriaPorId[selecao.primaryCategoryId] : null;
+    if (no) return no.name;
+    if (showNewCat && newCategory.trim()) return newCategory.trim();
+    return categoryTouched ? category : null;
+  }, [selecao.primaryCategoryId, categoriaPorId, showNewCat, newCategory, categoryTouched, category]);
+
+  const ncmSuggestionResult = useMemo(
+    () => suggestNcm(name, { category: categoriaEscolhida, material }),
+    [name, categoriaEscolhida, material]
+  );
+
+  // O botao "Gerar" so acende quando a inferencia tem confianca. Sem sugestao
+  // ele fica apagado -- que e o comportamento desejado: NCM errado vai pra nota
+  // fiscal, entao nao gerar e melhor que gerar chute.
+  const podeGerarNcm = !!ncmSuggestionResult;
+  function gerarNcm() {
+    if (ncmSuggestionResult) setNcm(ncmSuggestionResult.ncm);
+  }
 
   const { data: variationsData } = useQuery({
     queryKey: ["productVariations", company?.id, editProduct?.id],
@@ -241,6 +208,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     if (nextIdx < 0 || nextIdx >= list.length) return;
     const newCat = list[nextIdx];
     setCategory(newCat);
+    setCategoryTouched(true);
     const pos = chipPositionsRef.current[newCat];
     if (pos && categoryScrollRef.current?.scrollTo) {
       categoryScrollRef.current.scrollTo({ x: Math.max(0, pos.x - 80), animated: true });
@@ -292,6 +260,9 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
   const ncmBadgeStyle = ncmStatus === 'valid' ? s.ncmBadgeValid
                       : ncmStatus === 'partial' ? s.ncmBadgePartial
                       : s.ncmBadgeEmpty;
+  const ncmFamilyText = (ncmSuggestionResult && ncm === ncmSuggestionResult.ncm)
+    ? ncmSuggestionResult.family
+    : (ncmFamilyByCode(ncm) || 'NCM valido');
   const ncmBadgeLabel = ncmStatus === 'valid' ? '✓ OK'
                       : ncmStatus === 'partial' ? `${ncm.length}/8`
                       : 'vazio';
@@ -357,59 +328,54 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         </View>
         <View style={{ flex: 1 }}>
           <FormField label="NCM (codigo fiscal)">
-            <View style={{ position: "relative" as any }}>
-              <TextInput
-                style={[s.input, { paddingRight: 60 }]}
-                value={ncm}
-                onChangeText={(v) => setNcm(v.replace(/\D/g, "").slice(0, 8))}
-                placeholder="00000000"
-                placeholderTextColor={Colors.ink3}
-                keyboardType="number-pad"
-                maxLength={8}
-              />
-              <View style={[s.ncmBadge, ncmBadgeStyle]} pointerEvents="none">
-                <Text style={[s.ncmBadgeText,
-                  ncmStatus === 'valid' && { color: Colors.green },
-                  ncmStatus === 'partial' && { color: Colors.amber },
-                  ncmStatus === 'empty' && { color: Colors.ink3 },
-                ]}>{ncmBadgeLabel}</Text>
+            <View style={{ flexDirection: "row", gap: 5 }}>
+              <View style={{ flex: 1, position: "relative" as any }}>
+                <TextInput
+                  style={[s.input, { paddingRight: 46 }]}
+                  value={ncm}
+                  onChangeText={(v) => setNcm(v.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="00000000"
+                  placeholderTextColor={Colors.ink3}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                />
+                <View style={[s.ncmBadge, ncmBadgeStyle]} pointerEvents="none">
+                  <Text style={[s.ncmBadgeText,
+                    ncmStatus === 'valid' && { color: Colors.green },
+                    ncmStatus === 'partial' && { color: Colors.amber },
+                    ncmStatus === 'empty' && { color: Colors.ink3 },
+                  ]}>{ncmBadgeLabel}</Text>
+                </View>
               </View>
+              <Pressable
+                onPress={gerarNcm}
+                disabled={!podeGerarNcm}
+                style={[s.miniBtn, !podeGerarNcm && s.miniBtnOff]}
+                accessibilityLabel="Gerar NCM a partir do nome do produto"
+              >
+                <Text style={[s.miniBtnText, !podeGerarNcm && s.miniBtnTextOff]}>Gerar</Text>
+              </Pressable>
             </View>
             {/* Hint contextual abaixo */}
             <Text style={s.ncmHint}>
-              {ncmStatus === 'empty' && '8 digitos. Necessario pra emitir nota fiscal.'}
+              {ncmStatus === 'empty' && (ncmSuggestionResult
+                ? <Text>
+                    Pelo nome: <Text style={s.ncmHintStrong}>{ncmSuggestionResult.label}</Text>
+                    {' '}· <Text style={s.ncmHintCode}>{formatNcmDisplay(ncmSuggestionResult.ncm)}</Text>. Toque em Gerar.
+                  </Text>
+                : '8 digitos. Necessario pra emitir nota fiscal.')}
               {ncmStatus === 'partial' && (
                 <Text style={{ color: Colors.red }}>Faltam {8 - ncm.length} digito{8 - ncm.length > 1 ? 's' : ''}.</Text>
               )}
               {ncmStatus === 'valid' && (
                 <Text style={{ color: Colors.green }}>
-                  ✓ {ncmFamilyByCode(ncm) || 'NCM valido'}
+                  ✓ {ncmFamilyText}
                 </Text>
               )}
             </Text>
           </FormField>
         </View>
       </View>
-
-      {/* ===== Banner de sugestão NCM (proativo, baseado no nome) ===== */}
-      {showNcmSuggestion && ncmSuggestionResult && (
-        <View style={s.ncmSuggestion}>
-          <Text style={s.ncmSuggestionIcon}>💡</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.ncmSuggestionText}>
-              Detectado <Text style={s.ncmSuggestionLabel}>{ncmSuggestionResult.label}</Text>
-              {' '}· NCM <Text style={s.ncmSuggestionCode}>{formatNcmDisplay(ncmSuggestionResult.ncm)}</Text>
-            </Text>
-            <Text style={s.ncmSuggestionFamily}>{ncmSuggestionResult.family}</Text>
-          </View>
-          <Pressable onPress={() => setNcm(ncmSuggestionResult.ncm)} style={s.ncmSuggestionBtn}>
-            <Text style={s.ncmSuggestionBtnText}>Usar</Text>
-          </Pressable>
-          <Pressable onPress={() => setNcmSuggestionDismissed(true)} style={s.ncmSuggestionDismiss}>
-            <Text style={s.ncmSuggestionDismissText}>×</Text>
-          </Pressable>
-        </View>
-      )}
 
       <FormField label="Unidade">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 4 }}>
@@ -468,7 +434,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                     const { x, width } = e.nativeEvent.layout;
                     chipPositionsRef.current[c] = { x, width };
                   }}
-                  onPress={() => { setCategory(c); setShowNewCat(false); }}
+                  onPress={() => { setCategory(c); setCategoryTouched(true); setShowNewCat(false); }}
                   style={[s.chip, selected && s.chipActive]}
                 >
                   {chipColor ? <View style={[s.chipDot, { backgroundColor: chipColor }]} /> : null}
@@ -712,6 +678,8 @@ const s = StyleSheet.create({
   chipTextActive: { color: Colors.violet3, fontWeight: "600" },
   categoryHint: { fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" as any },
   ncmHint: { fontSize: 10, color: Colors.ink3, marginTop: 4, lineHeight: 14 },
+  ncmHintStrong: { color: Colors.violet3, fontWeight: "700" },
+  ncmHintCode: { color: Colors.violet3, fontWeight: "700", fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace" },
   // ===== NCM badge dentro do input =====
   ncmBadge: { position: "absolute" as any, right: 6, top: 6, bottom: 6, paddingHorizontal: 7, borderRadius: 5, alignItems: "center", justifyContent: "center" },
   ncmBadgeEmpty: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
@@ -719,23 +687,6 @@ const s = StyleSheet.create({
   ncmBadgeValid: { backgroundColor: "rgba(34,197,94,0.18)" },
   ncmBadgeText: { fontSize: 10, fontWeight: "700" },
   // ===== Banner sugestão NCM =====
-  ncmSuggestion: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 10, paddingVertical: 8,
-    backgroundColor: Colors.violetD,
-    borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2,
-    borderRadius: 7,
-    marginTop: -3, marginBottom: 11,
-  },
-  ncmSuggestionIcon: { fontSize: 14 },
-  ncmSuggestionText: { fontSize: 11.5, color: Colors.ink, lineHeight: 15 },
-  ncmSuggestionLabel: { color: Colors.violet3, fontWeight: "700" },
-  ncmSuggestionCode: { color: Colors.violet3, fontWeight: "700", fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace" },
-  ncmSuggestionFamily: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
-  ncmSuggestionBtn: { backgroundColor: Colors.violet, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
-  ncmSuggestionBtnText: { fontSize: 10.5, color: "#fff", fontWeight: "700" },
-  ncmSuggestionDismiss: { paddingHorizontal: 4, paddingVertical: 2 },
-  ncmSuggestionDismissText: { fontSize: 14, color: Colors.ink3, fontWeight: "600", lineHeight: 14 },
   // ===== Setas de navegação no scroll horizontal de categorias =====
   categoryRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   catArrow: {
@@ -748,6 +699,8 @@ const s = StyleSheet.create({
   catArrowTextDisabled: { color: Colors.ink3 },
   miniBtn: { backgroundColor: Colors.violetD, borderRadius: 7, paddingHorizontal: 10, justifyContent: "center", borderWidth: 1, borderColor: Colors.border2 },
   miniBtnText: { fontSize: 10.5, color: Colors.violet3, fontWeight: "600" },
+  miniBtnOff: { backgroundColor: Colors.bg3, borderColor: Colors.border },
+  miniBtnTextOff: { color: Colors.ink3 },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, padding: 8 },
   colorSwatch: { width: 30, height: 30, borderRadius: 7, borderWidth: 1.5, borderColor: Colors.border },
   colorText: { fontSize: 12, color: Colors.ink, fontWeight: "500", flex: 1 },

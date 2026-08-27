@@ -10,8 +10,8 @@
 // handleImport salva o custo real ao criar o produto.
 //
 // NCM (08/05): coluna NCM adicionada com TextInput 8 dígitos,
-// badge ✓/n/8/💡 e inferência automática via suggestNcm().
-// Mesma lógica do AddProductForm (NCM_RULES + suggestNcm).
+// badge ✓/n/8/💡. O 💡 e um BOTAO: a sugestao so entra no clique.
+// Inferência compartilhada com o AddProductForm via utils/ncm.ts.
 //
 // Fix #5 (08/05): overlay usa position: fixed (web) para garantir
 // que o modal abre sempre na viewport, mesmo com ScrollView rolada.
@@ -39,6 +39,7 @@ import {
 import { companiesApi } from "@/services/api";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
+import { suggestNcm } from "@/utils/ncm";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -70,30 +71,12 @@ interface DanfeImportModalProps {
   onSuccess: () => void;
 }
 
-// ─── NCM helpers (mesma lógica do AddProductForm) ─────────────────────────────
-
-interface NcmRule { pattern: RegExp; ncm: string; label: string }
-
-const NCM_RULES: NcmRule[] = [
-  { pattern: /t[eê]nis|sneaker|esportivo/i,        ncm: "64041100", label: "Tênis esportivo" },
-  { pattern: /sandália|chinelo|tamanco/i,           ncm: "64029990", label: "Sandália/chinelo" },
-  { pattern: /bota|botina|coturno/i,               ncm: "64031990", label: "Bota/botina couro" },
-  { pattern: /sapatilha|bailarina|flat/i,          ncm: "64041900", label: "Sapatilha" },
-  { pattern: /scarpin|salto|peep.?toe|mule/i,      ncm: "64041900", label: "Sapato salto" },
-  { pattern: /sapato|calçado|shoes?/i,             ncm: "64041900", label: "Calçado genérico" },
-  { pattern: /bolsa|mochila|carteira|clutch/i,     ncm: "42022200", label: "Bolsa/acessório" },
-  { pattern: /cinto|cinta/i,                       ncm: "42032100", label: "Cinto" },
-  { pattern: /meia|sock/i,                         ncm: "61159900", label: "Meias" },
-  { pattern: /palmilha|solado|cadarço/i,           ncm: "64069000", label: "Acessório calçado" },
-];
-
-function suggestNcm(name: string): NcmRule | null {
-  if (!name) return null;
-  for (const rule of NCM_RULES) {
-    if (rule.pattern.test(name)) return rule;
-  }
-  return null;
-}
+// ─── NCM ─────────────────────────────────────────────────────────────
+// A tabela era local e DIVERGIA da do AddProductForm -- bota aqui era
+// 64031990, la 64039190, e ninguem tinha reparado. Agora as duas telas leem
+// utils/ncm.ts. Aqui NAO passamos categoria: a coluna nasce chumbada em
+// "Calçados" pra toda linha do XML, e default nao e escolha da lojista --
+// usar isso como veto vetaria toda loja que não vende calçado.
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
