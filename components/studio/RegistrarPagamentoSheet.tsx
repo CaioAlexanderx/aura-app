@@ -19,13 +19,17 @@
 // "sim" sem ler.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
+} from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioBottomSheet } from "@/components/studio/StudioBottomSheet";
 import {
   FORMAS_PAGAMENTO,
+  FORMA_PADRAO,
   type FormaPagamento,
   type RegistrarPagamentoController,
 } from "@/components/studio/useRegistrarPagamento";
@@ -36,7 +40,7 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
 
-  const [forma, setForma] = useState<FormaPagamento>("dinheiro");
+  const [forma, setForma] = useState<FormaPagamento>(FORMA_PADRAO);
   const [valorTxt, setValorTxt] = useState("");
 
   // Reabrir o sheet noutra encomenda tem que trazer o valor DAQUELA. Sem isto
@@ -45,7 +49,7 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
   useEffect(() => {
     if (alvo) {
       setValorTxt(alvo.amount.toFixed(2).replace(".", ","));
-      setForma("dinheiro");
+      setForma(FORMA_PADRAO);
     }
   }, [alvo]);
 
@@ -61,11 +65,25 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
       visible={!!alvo}
       onClose={fechar}
       eyebrow="Saldo da encomenda"
-      title={alvo?.customerName ? `Recebido de ${alvo.customerName}` : "Registrar pagamento"}
+      // Título fixo: é o que a lojista está prestes a FAZER. "Recebido de
+      // Fulano" estava no passado antes de confirmar, e nome comprido virava
+      // título de três linhas (o title do sheet base não trunca). O nome vive
+      // na caixa do saldo, onde cabe e pode truncar.
+      title="Registrar recebimento"
     >
+      <KeyboardAvoidingView
+        // O campo de valor é editável justamente pro pagamento parcial — e é
+        // aí que o teclado do iOS sobe por cima das formas e do botão de
+        // confirmar. Este é o primeiro sheet do Studio com input, então o
+        // ajuste mora aqui e não no StudioBottomSheet (que serve outros).
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={12}
+      >
       <View style={s.body}>
         <View style={s.saldoBox}>
-          <Text style={s.saldoLabel}>Saldo em aberto</Text>
+          <Text style={s.saldoLabel} numberOfLines={1}>
+            {alvo?.customerName ? `Saldo de ${alvo.customerName}` : "Saldo em aberto"}
+          </Text>
           <Text style={[s.saldoValor, alvo?.status === "overdue" && { color: t.dangerInk }]}>
             R$ {saldo.toFixed(2).replace(".", ",")}
           </Text>
@@ -88,6 +106,10 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
         </View>
         {acimaDoSaldo ? (
           <Text style={s.aviso}>Maior que o saldo em aberto. O máximo é R$ {saldo.toFixed(2).replace(".", ",")}.</Text>
+        ) : invalido ? (
+          // Antes o botão só apagava, sem dizer por quê — a lojista ficava
+          // olhando pra um botão morto.
+          <Text style={s.avisoNeutro}>Informe quanto entrou pra registrar.</Text>
         ) : parcial ? (
           <Text style={s.avisoNeutro}>
             Pagamento parcial — a encomenda segue em "A receber" com R$ {restanteApos(valor as number, saldo).toFixed(2).replace(".", ",")}.
@@ -104,6 +126,9 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
                 style={[s.forma, ativa && s.formaAtiva]}
                 disabled={salvando}
                 onPress={() => setForma(f.key)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: ativa, disabled: salvando }}
+                accessibilityLabel={`Pagou em ${f.label}`}
               >
                 <Icon name={f.icon} size={14} color={ativa ? t.primary : t.ink3} />
                 <Text style={[s.formaTxt, ativa && s.formaTxtAtiva]}>{f.label}</Text>
@@ -116,6 +141,9 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
           style={[s.btnConfirmar, (invalido || salvando) && s.btnDisabled]}
           disabled={invalido || salvando}
           onPress={() => confirmar(valor as number, forma)}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: invalido || salvando }}
+          accessibilityLabel="Registrar recebimento"
         >
           {salvando ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -129,6 +157,7 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
 
         <Text style={s.rodape}>Entra no caixa de hoje e baixa o "A receber" desta encomenda.</Text>
       </View>
+      </KeyboardAvoidingView>
     </StudioBottomSheet>
   );
 }
@@ -146,14 +175,18 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   saldoLabel: { fontSize: 12, color: t.ink3, fontWeight: "600", marginBottom: 4 },
   saldoValor: { fontSize: 26, color: t.ink, fontWeight: "800", letterSpacing: -0.5 },
   campoLabel: { fontSize: 12.5, color: t.ink2, fontWeight: "700", marginBottom: 8 },
+  // No dark, paperCardElev e ink5 são a MESMA cor (#334155) — e o sheet já é
+  // paperCardElev. O campo sumia inteiro: sobrava o "R$" flutuando no vazio.
+  // bgSoft recua do fundo do sheet nos dois temas (é o que o input de valor do
+  // StageCheckout usa), e ink4 dá borda visível.
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: t.ink5,
+    borderColor: t.ink4,
     borderRadius: 12,
     paddingHorizontal: 14,
-    backgroundColor: t.paperCardElev,
+    backgroundColor: t.bgSoft,
   },
   inputPrefix: { fontSize: 15, color: t.ink3, fontWeight: "700", marginRight: 8 },
   input: { flex: 1, fontSize: 19, color: t.ink, fontWeight: "700", paddingVertical: 12 },
@@ -171,16 +204,23 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     borderColor: t.ink5,
     backgroundColor: t.paperCard,
   },
-  formaAtiva: { borderColor: t.primary, backgroundColor: t.primaryGhost },
+  // primarySoft (não ghost): é o que o StageCheckout usa no chip selecionado,
+  // e no dark o ghost tem alpha 0.08 — a seleção ficava só na borda.
+  formaAtiva: { borderColor: t.primary, backgroundColor: t.primarySoft },
   formaTxt: { fontSize: 13, color: t.ink3, fontWeight: "600" },
   formaTxtAtiva: { color: t.primary, fontWeight: "700" },
+  // CTA em primary, não em success: texto branco sobre t.success dá ~2,5:1 no
+  // light e ~1,9:1 no dark (success vira mint claro) — ilegível. É também o
+  // padrão de CTA dos modais vizinhos (saveBtn do CollectCustomization,
+  // uploadBtn do ApprovalRequest). O verde de "dinheiro entrou" continua no
+  // botão "Recebi" do card e no toast, onde é fundo soft com texto ink.
   btnConfirmar: {
     marginTop: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: t.success,
+    backgroundColor: t.primary,
     borderRadius: 14,
     paddingVertical: 15,
   },

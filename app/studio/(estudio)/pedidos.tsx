@@ -346,6 +346,11 @@ export default function StudioPedidosHub() {
                           }}
                           disabled={cobrandoId === item.balance_installment_id}
                           style={s.cobrarBtn}
+                          // Alvo de ~26px numa linha que navega ao toque: sem
+                          // hitSlop, o mis-tap abre o detalhe do pedido.
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Cobrar saldo de ${item.name || "cliente"} pelo WhatsApp`}
                         >
                           <Icon name="message-circle" size={12} color={t.primary} />
                           <Text style={s.cobrarBtnTxt}>
@@ -366,6 +371,9 @@ export default function StudioPedidosHub() {
                           }}
                           disabled={baixa.registrandoId === item.balance_installment_id}
                           style={s.recebiBtn}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Registrar recebimento de ${item.name || "cliente"}`}
                         >
                           <Icon name="check-circle" size={12} color={t.successInk} />
                           <Text style={s.recebiBtnTxt}>Recebi</Text>

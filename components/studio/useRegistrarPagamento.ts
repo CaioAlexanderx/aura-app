@@ -29,18 +29,36 @@ import { useCallback, useState } from "react";
 import { toast } from "@/components/Toast";
 import { studioApi } from "@/services/studioApi";
 import { ehBaixaIntegral, round2 } from "@/components/studio/baixaDeSaldo";
+import { PAY_METHODS } from "@/components/studio/pdv/types";
 
-// As mesmas quatro do sinal no PDV (BALANCE_PAYMENT_METHODS no backend):
-// dinheiro de verdade entrando no caixa. 'crediario' fica de fora de
-// propósito — saldo pago no crediário seria só mais saldo devedor.
-export const FORMAS_PAGAMENTO = [
-  { key: "dinheiro", label: "Dinheiro", icon: "dollar-sign" },
-  { key: "pix", label: "Pix", icon: "zap" },
-  { key: "cartao", label: "Crédito", icon: "credit-card" },
-  { key: "debito", label: "Débito", icon: "credit-card" },
-] as const;
+// As formas saem do PAY_METHODS do checkout do Studio — mesma fonte, não uma
+// cópia. O backend aceita 'debito' também, mas o Studio decidiu em 05/06/2026
+// que aqui são três (dinheiro, PIX, cartão): é a mesma lojista fechando a
+// venda e dando a baixa, e ela não pode ver "Cartão" num lugar e "Crédito"
+// noutro. Mudou lá, muda aqui.
+//
+// 'crediario' fica de fora dos dois de propósito — saldo pago no crediário
+// seria só mais saldo devedor, não pagamento.
+//
+// Só os ícones são nossos: os nomes em PAY_METHODS são os do StageCheckout.
+const ICONE_DA_FORMA: Record<string, string> = {
+  dinheiro: "dollar-sign",
+  pix: "zap",
+  cartao: "credit-card",
+};
 
-export type FormaPagamento = (typeof FORMAS_PAGAMENTO)[number]["key"];
+export const FORMAS_PAGAMENTO = PAY_METHODS.map((m) => ({
+  key: m.id,
+  label: m.label,
+  icon: ICONE_DA_FORMA[m.id] || "dollar-sign",
+}));
+
+export type FormaPagamento = string;
+
+// A encomenda é cobrada por WhatsApp com chave Pix (ver useCobrarSaldo), então
+// o pagamento que volta é Pix na grande maioria das vezes. Default que erra
+// menos.
+export const FORMA_PADRAO: FormaPagamento = "pix";
 
 export type SaldoParaBaixa = {
   orderId: string;

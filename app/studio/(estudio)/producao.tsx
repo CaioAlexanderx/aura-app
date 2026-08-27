@@ -273,12 +273,17 @@ function DraggableCard({
           registrar que entrou. Antes só existia o primeiro, e quem recebia o
           Pix não tinha onde dar baixa. "Recebi" fica à direita e em verde
           porque é o botão que ENCERRA o assunto. */}
-      {o.balance_installment_id && (
+      {/* balance_amount != null junto do id: o handler já desistia sem o
+          valor, então sem esta condição o botão apareceria clicável e não
+          faria nada. Mesmo critério do balanceBadge acima. */}
+      {o.balance_installment_id && o.balance_amount != null && (
         <View style={s.saldoAcoes}>
           <Pressable
             style={[s.btnCobrar, { flex: 1 }]}
             disabled={cobrandoId === o.balance_installment_id}
             onPress={(e) => { e.stopPropagation && e.stopPropagation(); onCobrar(o); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Cobrar saldo de ${o.customer_name || o.display_name || "cliente"} pelo WhatsApp`}
           >
             <Icon name="message-circle" size={12} color={t.primary} />
             <Text style={s.btnCobrarTxt}>
@@ -289,6 +294,8 @@ function DraggableCard({
             style={[s.btnRecebi, { flex: 1 }]}
             disabled={registrandoId === o.balance_installment_id}
             onPress={(e) => { e.stopPropagation && e.stopPropagation(); onRegistrarPagamento(o); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Registrar recebimento de ${o.customer_name || o.display_name || "cliente"}`}
           >
             <Icon name="check-circle" size={12} color={t.successInk} />
             <Text style={s.btnRecebiTxt}>Recebi</Text>
