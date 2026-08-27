@@ -51,6 +51,8 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
+import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
+import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { resumoDaSemana, colunaGargalo, riscoDoCard } from "@/components/studio/fluxoDoQuadro";
 import {
   useStudioKanbanDnD,
@@ -154,7 +156,8 @@ function fmtDueShort(iso?: string | null) {
 // Separado para poder chamar useDraggableCardRef como hook (regra dos hooks:
 // não pode ser chamado dentro de .map() diretamente).
 function DraggableCard({
-  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, onCollect, onCobrar, cobrandoId, router,
+  o, col, t, s, dnd, NEXT_STATUS: NEXT, PLATFORM_LABELS, onAdvance, onApproval, onCollect,
+  onCobrar, cobrandoId, onRegistrarPagamento, registrandoId, router,
 }: {
   o: StudioOrder;
   col: Column;
@@ -168,6 +171,8 @@ function DraggableCard({
   onCollect: (order: StudioOrder) => void;
   onCobrar: (order: StudioOrder) => void;
   cobrandoId: string | null;
+  onRegistrarPagamento: (order: StudioOrder) => void;
+  registrandoId: string | null;
   router: ReturnType<typeof useRouter>;
 }) {
   const cardRef = useDraggableCardRef(dnd.isWeb, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
@@ -264,17 +269,38 @@ function DraggableCard({
           <Text style={s.riscoTxt}>Entrega chegando e ainda não foi pra produção</Text>
         </View>
       )}
-      {o.balance_installment_id && (
-        <Pressable
-          style={s.btnCobrar}
-          disabled={cobrandoId === o.balance_installment_id}
-          onPress={(e) => { e.stopPropagation && e.stopPropagation(); onCobrar(o); }}
-        >
-          <Icon name="message-circle" size={12} color={t.primary} />
-          <Text style={s.btnCobrarTxt}>
-            {cobrandoId === o.balance_installment_id ? "Abrindo..." : "Cobrar saldo"}
-          </Text>
-        </Pressable>
+      {/* 27/08/2026 — os dois lados do saldo, lado a lado: mandar a cobrança e
+          registrar que entrou. Antes só existia o primeiro, e quem recebia o
+          Pix não tinha onde dar baixa. "Recebi" fica à direita e em verde
+          porque é o botão que ENCERRA o assunto. */}
+      {/* balance_amount != null junto do id: o handler já desistia sem o
+          valor, então sem esta condição o botão apareceria clicável e não
+          faria nada. Mesmo critério do balanceBadge acima. */}
+      {o.balance_installment_id && o.balance_amount != null && (
+        <View style={s.saldoAcoes}>
+          <Pressable
+            style={[s.btnCobrar, { flex: 1 }]}
+            disabled={cobrandoId === o.balance_installment_id}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); onCobrar(o); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Cobrar saldo de ${o.customer_name || o.display_name || "cliente"} pelo WhatsApp`}
+          >
+            <Icon name="message-circle" size={12} color={t.primary} />
+            <Text style={s.btnCobrarTxt}>
+              {cobrandoId === o.balance_installment_id ? "Abrindo..." : "Cobrar saldo"}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[s.btnRecebi, { flex: 1 }]}
+            disabled={registrandoId === o.balance_installment_id}
+            onPress={(e) => { e.stopPropagation && e.stopPropagation(); onRegistrarPagamento(o); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Registrar recebimento de ${o.customer_name || o.display_name || "cliente"}`}
+          >
+            <Icon name="check-circle" size={12} color={t.successInk} />
+            <Text style={s.btnRecebiTxt}>Recebi</Text>
+          </Pressable>
+        </View>
       )}
       <View style={s.cardActions}>
         {col.key === "awaiting_customization" && (
@@ -314,7 +340,8 @@ function DraggableCard({
 // O genérico é omitido na chamada (inferência de tipo) para evitar que o
 // Babel interprete o angle-bracket como JSX em contexto de expressão.
 function KanbanColumn({
-  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCollect, onCobrar, cobrandoId, ehGargalo, highlighted, router,
+  col, orders, t, s, dnd, PLATFORM_LABELS, onAdvance, onApproval, onCollect,
+  onCobrar, cobrandoId, onRegistrarPagamento, registrandoId, ehGargalo, highlighted, router,
 }: {
   col: Column;
   orders: StudioOrder[];
@@ -327,6 +354,8 @@ function KanbanColumn({
   onCollect: (order: StudioOrder) => void;
   onCobrar: (order: StudioOrder) => void;
   cobrandoId: string | null;
+  onRegistrarPagamento: (order: StudioOrder) => void;
+  registrandoId: string | null;
   ehGargalo: boolean;
   highlighted?: boolean;
   router: ReturnType<typeof useRouter>;
@@ -382,6 +411,8 @@ function KanbanColumn({
             onCollect={onCollect}
             onCobrar={onCobrar}
             cobrandoId={cobrandoId}
+            onRegistrarPagamento={onRegistrarPagamento}
+            registrandoId={registrandoId}
             router={router}
           />
         ))}
@@ -579,6 +610,23 @@ export default function StudioProducao() {
     });
   }, [cobrar]);
 
+  // 27/08/2026 — dar baixa no saldo. Ao contrário do cobrar, ESTE recarrega:
+  // o dinheiro entrou, e o card tem que parar de dizer que deve. Continua sem
+  // mexer no status de produção — receber e fabricar seguem eixos
+  // independentes (encomenda quitada pode estar só na fila da arte).
+  const baixa = useRegistrarPagamento(company?.id, { onSucesso: load });
+  const onRegistrarPagamento = useCallback((o: StudioOrder) => {
+    if (!o.balance_installment_id || o.balance_amount == null) return;
+    baixa.abrir({
+      orderId: o.id,
+      installmentId: o.balance_installment_id,
+      customerName: o.customer_name,
+      amount: Number(o.balance_amount) || 0,
+      dueDate: o.balance_due_date,
+      status: o.balance_status,
+    });
+  }, [baixa]);
+
   const byStatus: Record<string, StudioOrder[]> = {};
   for (const col of COLUMNS) byStatus[col.key] = [];
   for (const o of orders) {
@@ -701,6 +749,8 @@ export default function StudioProducao() {
               onCollect={openCollect}
               onCobrar={onCobrar}
               cobrandoId={cobrandoId}
+              onRegistrarPagamento={onRegistrarPagamento}
+              registrandoId={baixa.registrandoId}
               ehGargalo={gargalo === col.key}
               highlighted={highlightCol === col.key}
               router={router}
@@ -736,6 +786,9 @@ export default function StudioProducao() {
           />
         )}
       </Modal>
+
+      {/* Baixa do saldo — o sheet cuida do próprio visible via controller. */}
+      <RegistrarPagamentoSheet controller={baixa} />
     </StudioScreen>
   );
 }
@@ -844,12 +897,21 @@ function buildStyles(t: StudioPalette) {
       borderRadius: 6, backgroundColor: t.warningSoft,
     },
     balanceBadgeTxt: { fontSize: 10.5, color: t.warningInk, fontWeight: "700" },
+    // 27/08/2026 — cobrar e dar baixa dividem a linha. O marginTop saiu do
+    // botão e foi pro container: com ele nos dois filhos, o row desalinhava.
+    saldoAcoes: { flexDirection: "row", gap: 6, marginTop: 6 },
     btnCobrar: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
-      marginTop: 6, paddingVertical: 6, borderRadius: 8,
+      paddingVertical: 6, borderRadius: 8,
       borderWidth: 1, borderColor: t.primary,
     },
     btnCobrarTxt: { fontSize: 11.5, color: t.primary, fontWeight: "700" },
+    btnRecebi: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+      paddingVertical: 6, borderRadius: 8,
+      borderWidth: 1, borderColor: t.success, backgroundColor: t.successSoft,
+    },
+    btnRecebiTxt: { fontSize: 11.5, color: t.successInk, fontWeight: "700" },
 
     cardActions: { gap: 6, marginTop: 8 },
     btnApproval: {

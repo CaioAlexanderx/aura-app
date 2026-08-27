@@ -44,6 +44,8 @@ import {
 } from "@/services/studioBulkHubApi";
 import { studioApi } from "@/services/studioApi";
 import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
+import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
+import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { BulkOrderWizard } from "@/components/studio/BulkOrderWizard";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
@@ -154,6 +156,11 @@ export default function StudioPedidosHub() {
   // FIX (bug #15 QA): dados não recarregavam ao voltar pra essa tela.
   // useFocusEffect cobre mount inicial + toda vez que a tela ganha foco.
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // 27/08/2026 — baixa do saldo. Declarado DEPOIS do `load` de propósito:
+  // ele é a dependência (diferente do cobrar, este recarrega — a encomenda
+  // quitada tem que sumir da aba "A receber" na hora).
+  const baixa = useRegistrarPagamento(company?.id, { onSucesso: load });
 
   // Carrega produtos personalizáveis pra wizard de evento.
   // FIX (25/05): usa request() do projeto em vez de fetch direto —
@@ -319,27 +326,59 @@ export default function StudioPedidosHub() {
                       {item.balance_status === "overdue" ? "venceu " : "vence "}
                       {fmtDueDate(item.balance_due_date)} · de {fmtBRL(item.amount)}
                     </Text>
+                    {/* 27/08/2026 — os dois lados do saldo: mandar a cobrança
+                        e registrar que entrou. Sem o segundo, quem recebia o
+                        Pix não tinha onde dar baixa e a linha ficava aqui pra
+                        sempre. */}
                     {item.balance_installment_id ? (
-                      <Pressable
-                        onPress={(e: any) => {
-                          e?.stopPropagation?.();
-                          cobrar({
-                            orderId: item.id,
-                            installmentId: item.balance_installment_id as string,
-                            phone: item.customer_phone,
-                            customerName: item.name,
-                            dueDate: item.balance_due_date,
-                            status: item.balance_status,
-                          });
-                        }}
-                        disabled={cobrandoId === item.balance_installment_id}
-                        style={s.cobrarBtn}
-                      >
-                        <Icon name="message-circle" size={12} color={t.primary} />
-                        <Text style={s.cobrarBtnTxt}>
-                          {cobrandoId === item.balance_installment_id ? "Abrindo..." : "Cobrar"}
-                        </Text>
-                      </Pressable>
+                      <View style={s.saldoAcoes}>
+                        <Pressable
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            cobrar({
+                              orderId: item.id,
+                              installmentId: item.balance_installment_id as string,
+                              phone: item.customer_phone,
+                              customerName: item.name,
+                              dueDate: item.balance_due_date,
+                              status: item.balance_status,
+                            });
+                          }}
+                          disabled={cobrandoId === item.balance_installment_id}
+                          style={s.cobrarBtn}
+                          // Alvo de ~26px numa linha que navega ao toque: sem
+                          // hitSlop, o mis-tap abre o detalhe do pedido.
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Cobrar saldo de ${item.name || "cliente"} pelo WhatsApp`}
+                        >
+                          <Icon name="message-circle" size={12} color={t.primary} />
+                          <Text style={s.cobrarBtnTxt}>
+                            {cobrandoId === item.balance_installment_id ? "Abrindo..." : "Cobrar"}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            baixa.abrir({
+                              orderId: item.id,
+                              installmentId: item.balance_installment_id as string,
+                              customerName: item.name,
+                              amount: Number(item.balance_amount) || 0,
+                              dueDate: item.balance_due_date,
+                              status: item.balance_status,
+                            });
+                          }}
+                          disabled={baixa.registrandoId === item.balance_installment_id}
+                          style={s.recebiBtn}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Registrar recebimento de ${item.name || "cliente"}`}
+                        >
+                          <Icon name="check-circle" size={12} color={t.successInk} />
+                          <Text style={s.recebiBtnTxt}>Recebi</Text>
+                        </Pressable>
+                      </View>
                     ) : null}
                   </>
                 ) : (
@@ -364,6 +403,9 @@ export default function StudioPedidosHub() {
           onSaved={() => { setBulkOpen(false); load(); }}
         />
       </Modal>
+
+      {/* Baixa do saldo — o sheet cuida do próprio visible via controller. */}
+      <RegistrarPagamentoSheet controller={baixa} />
     </StudioScreen>
   );
 }
@@ -443,11 +485,21 @@ function makeStyles(t: StudioPalette) {
     feedStatusTxt: { fontSize: 10, color: t.ink3, fontWeight: "700", textTransform: "uppercase" },
     // 17/08/2026 — aba "A receber"
     feedBalanceMeta: { fontSize: 10, color: t.ink3, marginTop: 1 },
+    // 27/08/2026 — a dupla cobrar/recebi. O marginTop mudou do botão pro
+    // container: nos dois filhos de um row ele desalinharia.
+    saldoAcoes: { flexDirection: "row", gap: 6, marginTop: 6 },
     cobrarBtn: {
       flexDirection: "row", alignItems: "center", gap: 4,
-      marginTop: 6, paddingHorizontal: 8, paddingVertical: 4,
+      paddingHorizontal: 8, paddingVertical: 4,
       borderRadius: 999, borderWidth: 1, borderColor: t.primary,
     },
     cobrarBtnTxt: { fontSize: 11, color: t.primary, fontWeight: "700" },
+    recebiBtn: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 8, paddingVertical: 4,
+      borderRadius: 999, borderWidth: 1, borderColor: t.success,
+      backgroundColor: t.successSoft,
+    },
+    recebiBtnTxt: { fontSize: 11, color: t.successInk, fontWeight: "700" },
   });
 }
