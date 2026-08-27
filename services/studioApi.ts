@@ -735,6 +735,26 @@ export const studioApi = {
       phone: string | null;
       days_late: number;
     }>(base(cid) + "/orders/" + oid + "/cobrar-saldo", { method: "POST", body: {}, retry: 0, timeout: 12000 }),
+  // 27/08/2026 — a OUTRA metade do cobrarSaldo: registrar que o dinheiro
+  // entrou. Até aqui a encomenda tinha cobrança e não tinha quitação — a única
+  // baixa do saldo era a de crediário, atrás do gate que o Studio não liga.
+  //
+  // `amount` omitido = baixa o saldo INTEIRO (o caso de 9 em 10 cliques).
+  // Informado = pagamento parcial, e a encomenda segue em "A receber" com o
+  // que falta.
+  //
+  // retry: 0 é obrigatório aqui — é dinheiro. Um retry automático em cima de
+  // um timeout de rede (com a baixa já efetivada no servidor) lançaria o
+  // recebimento duas vezes no caixa.
+  registrarPagamentoSaldo: (cid: string, oid: string, body: { method: string; amount?: number }) =>
+    request<{
+      success: boolean;
+      installment_id: string;
+      paid: number;
+      method: string;
+      remaining: number;
+      settled: boolean;
+    }>(base(cid) + "/orders/" + oid + "/registrar-pagamento", { method: "POST", body, retry: 0, timeout: 12000 }),
   // P1 (30/05): force?: boolean — bypassa gate require_deposit_for_production no backend
   updateProductionStatus: (cid: string, oid: string, status: StudioProductionStatus, force?: boolean) =>
     request<{ id: string; studio_production_status: StudioProductionStatus }>(
