@@ -27,10 +27,8 @@
 // F6 (conexão/filiação): item "Federação" — antes desta feature o dojô
 // self-serve não tinha NENHUM caminho no produto para se conectar à
 // federação (linked=false travava Eventos/Anuidade/Certificados sem
-// saída). Ver app/karate/(dojo)/conexao.tsx. sidebarOnly:false de
-// propósito — o público que mais precisa dessa porta é o sensei no
-// celular, então ela também aparece nas bottom tabs (não só no rodapé
-// da sidebar, como Configurações).
+// saída). Ver app/karate/(dojo)/conexao.tsx. O público que mais precisa
+// dessa porta é o sensei no celular, então ela nunca pode sair da nav.
 //
 // F9 (04/08/2026 — pedido do Caio): o item "Solicitações" SAIU da nav.
 // A tela pedia pro sensei REDIGITAR a ficha de um praticante que
@@ -83,6 +81,7 @@ import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useDojoTrialBanner } from "@/components/karate/DojoBillingGate";
 import { useShojiFonts } from "@/components/karate/shoji";
 import { DojoLogo } from "@/components/karate/DojoLogo";
+import { BottomTabBar } from "@/components/karate/BottomTabBar";
 import { useAuthStore } from "@/stores/auth";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -91,34 +90,42 @@ interface DojoNavItem {
   icon: string;   // chave válida do <Icon> (ou alias)
   route: string;  // alvo do push (COM o grupo)
   match: string;  // segmento após /karate na pathname ("" = índice)
-  sidebarOnly: boolean;
+  // Onde o item cai NA SIDEBAR: true = bloco do rodapé, false = lista
+  // principal. Antes se chamava sidebarOnly e fazia DUAS coisas — também
+  // escondia o item da barra mobile, o que deixou Configurações sem
+  // nenhum caminho no celular (28/08/2026). Quem decide o mobile agora é
+  // o BottomTabBar, por ORDEM, não por flag.
+  sidebarFooter: boolean;
 }
 
 const DOJO_NAV: DojoNavItem[] = [
-  { label: "Painel",        icon: "grid",                route: "/karate/(dojo)",               match: "",              sidebarOnly: false },
+  { label: "Painel",        icon: "grid",                route: "/karate/(dojo)",               match: "",              sidebarFooter: false },
   // F2: "Praticantes" virou "Alunos" — a tela reúne o registro PRÓPRIO do
   // dojô (aba "Meus alunos") e os federados (aba "Na federação"). A URL
   // antiga /karate/praticantes segue viva como redirect fino → /alunos.
-  { label: "Alunos",        icon: "users",               route: "/karate/(dojo)/alunos",        match: "alunos",        sidebarOnly: false },
+  { label: "Alunos",        icon: "users",               route: "/karate/(dojo)/alunos",        match: "alunos",        sidebarFooter: false },
   // F4: Turmas — CRUD de turmas, matrícula e chamada (presença), com
   // check-in por QR opcional (o toggle mora em Configurações).
-  { label: "Turmas",        icon: "dumbbell",            route: "/karate/(dojo)/turmas",        match: "turmas",        sidebarOnly: false },
+  { label: "Turmas",        icon: "dumbbell",            route: "/karate/(dojo)/turmas",        match: "turmas",        sidebarFooter: false },
   // F3a: Mensalidades — planos, assinaturas e cobranças (Pix) do dojô,
   // separado da Anuidade (que é a filiação do DOJÔ à federação).
-  { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarOnly: false },
-  { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarOnly: false },
+  { label: "Mensalidades",  icon: "receipt",             route: "/karate/(dojo)/mensalidades",  match: "mensalidades",  sidebarFooter: false },
+  { label: "Eventos",       icon: "calendar",            route: "/karate/(dojo)/eventos",       match: "eventos",       sidebarFooter: false },
   // P0 Hub de Campeonatos: vitrine dos campeonatos 'open' da federação +
   // carrinho da delegação (atletas/equipes/cotação) + meus pedidos.
-  { label: "Campeonatos",   icon: "trophy",              route: "/karate/(dojo)/campeonatos",   match: "campeonatos",   sidebarOnly: false },
-  { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarOnly: false },
-  { label: "Certificados",  icon: "ribbon",              route: "/karate/(dojo)/certificados",  match: "certificados",  sidebarOnly: false },
+  { label: "Campeonatos",   icon: "trophy",              route: "/karate/(dojo)/campeonatos",   match: "campeonatos",   sidebarFooter: false },
+  { label: "Anuidade",      icon: "wallet",              route: "/karate/(dojo)/anuidade",      match: "anuidade",      sidebarFooter: false },
+  { label: "Certificados",  icon: "ribbon",              route: "/karate/(dojo)/certificados",  match: "certificados",  sidebarFooter: false },
   // F6: conexão/filiação do dojô à federação — sempre visível (é a
   // própria porta de saída de "não conectado", não pode ficar atrás de
   // um gate de "já conectado"). F9: também é onde o sensei envia alunos
   // do dojô para a federação validar (ver comentário de topo).
-  { label: "Federação",     icon: "link",                route: "/karate/(dojo)/conexao",       match: "conexao",       sidebarOnly: false },
-  // Configurações: só na sidebar (rodapé), padrão do shell da federação.
-  { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarOnly: true },
+  { label: "Federação",     icon: "link",                route: "/karate/(dojo)/conexao",       match: "conexao",       sidebarFooter: false },
+  // Configurações fica no RODAPÉ da sidebar (padrão do shell da federação),
+  // e no mobile cai no menu "Mais" por ser o último da ordem. Até 28/08/2026
+  // ela simplesmente não existia no celular — e é de onde se sobe a logo do
+  // dojô, entre outras coisas.
+  { label: "Configurações", icon: "settings",            route: "/karate/(dojo)/configuracoes", match: "configuracoes", sidebarFooter: true },
 ];
 
 // F10 (04/08/2026 — revertido): "Eventos" ficava escondido da nav
@@ -261,8 +268,8 @@ function SidebarNav() {
   // visibleDojoNav acima. `linked` segue lido aqui só porque outros itens
   // futuros podem voltar a precisar (fail-open, nunca esconde por engano).
   const visibleNav = visibleDojoNav(linked);
-  const mainItems = visibleNav.filter((i) => !i.sidebarOnly);
-  const footerItems = visibleNav.filter((i) => i.sidebarOnly);
+  const mainItems = visibleNav.filter((i) => !i.sidebarFooter);
+  const footerItems = visibleNav.filter((i) => i.sidebarFooter);
 
   const renderItem = (item: DojoNavItem) => {
     const active = isItemActive(item, path);
@@ -381,31 +388,19 @@ function BottomTabNav() {
   const router = useRouter();
   const path = usePathname();
   const { linked } = useKarateDojo();
-  // Configurações fica fora da barra mobile (tarefa de mesa, padrão da casa).
+  // A nav INTEIRA vai para a barra — quem não couber nos slots cai no menu
+  // "Mais" (ver BottomTabBar). Antes o filtro por flag tirava Configurações
+  // do mobile e, como não há nenhum outro link para ela no app, a tela
+  // ficava inalcançável no celular.
   // F10 (04/08/2026): "Eventos" não depende mais de vínculo — ver visibleDojoNav.
-  const tabs = visibleDojoNav(linked).filter((i) => !i.sidebarOnly);
+  const tabs = visibleDojoNav(linked);
 
   return (
-    <View style={styles.bottomBar}>
-      {tabs.map((item) => {
-        const active = isItemActive(item, path);
-        return (
-          <TouchableOpacity
-            key={item.route}
-            style={styles.tabItem}
-            onPress={() => router.push(item.route as any)}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: active }}
-          >
-            <Icon name={item.icon as any} size={22} color={active ? KarateColors.primary : KarateColors.ink4} />
-            <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    <BottomTabBar
+      items={tabs}
+      isActive={(item) => isItemActive(item as DojoNavItem, path)}
+      onNavigate={(route) => router.push(route as any)}
+    />
   );
 }
 
@@ -759,21 +754,4 @@ const styles = StyleSheet.create({
     color: KarateColors.ink,
     letterSpacing: 0.3,
   } as TextStyle,
-
-  // ── Bottom tabs ────
-  bottomBar: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: KarateColors.border,
-    backgroundColor: KarateColors.bg,
-    paddingBottom: Platform.OS === "ios" ? 16 : 6,
-  } as ViewStyle,
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    paddingTop: 8,
-    gap: 2,
-  } as ViewStyle,
-  tabLabel: { fontSize: 10, color: KarateColors.ink4, fontWeight: "600" } as TextStyle,
-  tabLabelActive: { color: KarateColors.primary, fontWeight: "700" } as TextStyle,
 });
