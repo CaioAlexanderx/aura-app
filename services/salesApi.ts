@@ -12,10 +12,19 @@ export type SaleDetailsItem = {
   total_price: number;
   product_name: string;
   image_url?: string | null;
+  // 28/08/2026: no crediario a devolucao NAO apaga o sale_item — ela ancora uma
+  // venda type='devolucao' e grava troca_returned_items. Sem expor isso, a tela
+  // mostraria o produto como se ainda estivesse inteiro na venda.
+  // Opcionais: backend anterior ao deploy do fix nao manda.
+  returned_quantity?: number;
+  available_quantity?: number;
 };
 
 export type SaleDetails = {
   has_sale: boolean;
+  // De onde veio o vinculo: "pdv" = receita recebida na hora,
+  // "credit" = "A Receber" do crediario. Ausente em backend antigo.
+  sale_source?: "pdv" | "credit";
   transaction: {
     id: string;
     amount: number;
@@ -31,11 +40,41 @@ export type SaleDetails = {
     status: string | null;
     cancelled_at?: string | null;
     created_at: string;
+    is_credit?: boolean;
+    // Crediario nao aceita produto novo depois de fechada: a divida e as
+    // parcelas ja foram geradas junto com a venda.
+    can_add_items?: boolean;
   };
   customer?: { id: string; name: string; phone?: string | null } | null;
   seller?: { id?: string | null; name?: string | null };
   items?: SaleDetailsItem[];
   available_employees: Array<{ id: string; name: string }>;
+};
+
+// Resultado da remocao de um item pela edicao do lancamento.
+// No crediario o backend delega ao motor oficial de devolucao (abate as
+// ultimas parcelas abertas, lanca 'refund' no ledger, reduz o A Receber) —
+// por isso mode='credit_refund' e o bloco credit_refund.
+export type RemoveSaleItemResult = {
+  ok: boolean;
+  mode?: "credit_refund";
+  removed_item: { id: string; name: string; quantity: number; refund_amount: number };
+  new_sale_total: number;
+  new_tx_amount: number;
+  sale_cancelled: boolean;
+  credit_refund?: {
+    devolucao_sale_id: string;
+    refund_value: number;
+    abated_installments: Array<{
+      installment_id: string;
+      number: number;
+      action: "cancelled" | "reduced";
+      amount: number;
+      new_amount_due?: number;
+    }>;
+    credit_generated: number;
+    new_balance: number;
+  };
 };
 
 export type SalesListItem = {
@@ -310,13 +349,7 @@ export var transactionSaleApi = {
     );
   },
   removeItem: function(companyId: string, txId: string, itemId: string) {
-    return request<{
-      ok: boolean;
-      removed_item: { id: string; name: string; quantity: number; refund_amount: number };
-      new_sale_total: number;
-      new_tx_amount: number;
-      sale_cancelled: boolean;
-    }>(
+    return request<RemoveSaleItemResult>(
       "/companies/" + companyId + "/transactions/" + txId + "/sale-items/" + itemId,
       { method: "DELETE", retry: 0, timeout: 15000 }
     );

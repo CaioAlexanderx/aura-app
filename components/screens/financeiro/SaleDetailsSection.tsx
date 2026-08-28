@@ -26,6 +26,18 @@ import type { SaleDetailsItem } from "@/services/api";
 //     so mostra o seletor de vendedora.
 //   - Se a venda foi cancelada, items aparecem mas botoes de
 //     remover e adicionar ficam desabilitados.
+//
+// 28/08/2026 (relato Eryca) — VENDA NO CREDIARIO:
+//   Antes essa secao nunca aparecia numa venda fiada: o lancamento dela nao e
+//   "pdv-sale-<id>" (venda 100% no crediario nao gera receita na hora) e sim o
+//   "A Receber" "pdv-credit-receivable-<id>". Corrigido o vinculo, o crediario
+//   muda tres coisas aqui:
+//     1. Remover item nao "devolve dinheiro" — abate as ultimas parcelas em
+//        aberto e, se sobrar, vira credito a favor do cliente.
+//     2. O item devolvido CONTINUA na lista, marcado como devolvido: o motor
+//        de devolucao ancora uma venda type='devolucao' em vez de apagar o
+//        sale_item (guarda anti-dupla-devolucao).
+//     3. "Adicionar produto" nao existe: divida e carne ja foram gerados.
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -64,6 +76,16 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
   const currentSellerName = details.seller?.name || details.transaction.employee_name || null;
   const items = details.items || [];
 
+  // 28/08/2026: venda no crediario. O lancamento aberto e o "A Receber", nao
+  // uma receita ja embolsada — logo a devolucao aqui abate parcela, nao devolve
+  // dinheiro. E nao da pra acrescentar produto: divida e carne ja foram gerados.
+  const isCredit = sale?.is_credit === true || details.sale_source === "credit";
+  const canAddItems = sale?.can_add_items !== false;
+  // available_quantity so vem do backend novo; sem ele, assume item inteiro.
+  const availableOf = function(item: SaleDetailsItem): number {
+    return item.available_quantity != null ? item.available_quantity : item.quantity;
+  };
+
   const filteredEmps = empSearch.trim().length > 0
     ? employees.filter(function(e) { return e.name.toLowerCase().includes(empSearch.toLowerCase()); })
     : employees;
@@ -72,10 +94,19 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
     if (!pendingRemoveItemId) return;
     try {
       const result = await removeItem(pendingRemoveItemId);
-      toast.success(
-        "Devolucao feita: " + (result.removed_item?.name || "item") +
-        ". " + fmt(result.removed_item?.refund_amount || 0) + " devolvido."
-      );
+      const nome = result.removed_item?.name || "item";
+      const valor = fmt(result.removed_item?.refund_amount || 0);
+      if (result.mode === "credit_refund") {
+        // No crediario o dinheiro nao sai do caixa: ele abate parcela. Dizer
+        // "devolvido" aqui faria a lojista procurar uma saida que nao existe.
+        const credito = result.credit_refund?.credit_generated || 0;
+        toast.success(
+          "Devolucao feita: " + nome + ". " + valor + " abatido do crediario" +
+          (credito > 0 ? " · " + fmt(credito) + " viraram credito a favor do cliente." : ".")
+        );
+      } else {
+        toast.success("Devolucao feita: " + nome + ". " + valor + " devolvido.");
+      }
       if (result.sale_cancelled && onClose) {
         // Venda inteira cancelada: fecha modal pra evitar estado inconsistente
         onClose();
@@ -216,18 +247,30 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
           </View>
           {items.length > 0 && (
             <Text style={s.warnHint}>
-              Remover devolve a quantidade ao estoque e cria devolucao no financeiro.
-              Adicionar decrementa o estoque e soma na venda.
+              {isCredit
+                ? "Remover devolve a quantidade ao estoque e abate as ultimas parcelas em aberto. Sobra vira credito a favor do cliente."
+                : "Remover devolve a quantidade ao estoque e cria devolucao no financeiro. Adicionar decrementa o estoque e soma na venda."}
             </Text>
           )}
           {items.map(function(item: SaleDetailsItem) {
+            const available = availableOf(item);
+            const isReturned = available <= 0;
+            const isPartial = !isReturned && available < item.quantity;
             return (
-              <View key={item.id} style={s.itemRow}>
+              <View key={item.id} style={[s.itemRow, isReturned && s.itemRowReturned]}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.itemName} numberOfLines={2}>{item.product_name}</Text>
                   <Text style={s.itemMeta}>
                     {item.quantity}x {fmt(item.unit_price)} = {fmt(item.total_price)}
                   </Text>
+                  {/* O crediario nao apaga o item devolvido: ele fica na venda
+                      com a marca. Sem isso a lojista devolveria duas vezes. */}
+                  {isReturned && <Text style={s.itemReturned}>Devolvido</Text>}
+                  {isPartial && (
+                    <Text style={s.itemReturned}>
+                      {item.quantity - available} devolvido(s) · restam {available}
+                    </Text>
+                  )}
                 </View>
                 <Pressable
                   onPress={function() {
@@ -235,16 +278,20 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
                       toast.error("Venda ja cancelada — items nao podem ser removidos");
                       return;
                     }
+                    if (isReturned) {
+                      toast.error("Esse produto ja foi devolvido por inteiro");
+                      return;
+                    }
                     setPendingRemoveItemId(item.id);
                     setPendingRemoveItemName(item.product_name);
                   }}
-                  disabled={isRemoving || isCancelled}
-                  style={[s.removeBtn, isCancelled && s.removeBtnDisabled]}
+                  disabled={isRemoving || isCancelled || isReturned}
+                  style={[s.removeBtn, (isCancelled || isReturned) && s.removeBtnDisabled]}
                 >
                   {isRemoving && pendingRemoveItemId === item.id ? (
                     <ActivityIndicator size="small" color={Colors.red} />
                   ) : (
-                    <Icon name="trash" size={13} color={isCancelled ? Colors.ink3 : Colors.red} />
+                    <Icon name="trash" size={13} color={isCancelled || isReturned ? Colors.ink3 : Colors.red} />
                   )}
                 </Pressable>
               </View>
@@ -257,8 +304,10 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
             </Text>
           )}
 
-          {/* Botao "+ Adicionar produto" (EXTRA C) */}
-          {!isCancelled && !addPickerOpen && (
+          {/* Botao "+ Adicionar produto" (EXTRA C).
+              Crediario fica de fora: acrescentar item aqui aumentaria o
+              recebivel sem aumentar a divida do ledger nem o carne. */}
+          {!isCancelled && canAddItems && !addPickerOpen && (
             <Pressable
               onPress={function() { setAddPickerOpen(true); }}
               disabled={isAdding}
@@ -267,6 +316,15 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
               <Icon name="plus" size={13} color={Colors.violet3} />
               <Text style={s.addBtnText}>Adicionar produto</Text>
             </Pressable>
+          )}
+          {!isCancelled && !canAddItems && (
+            <View style={s.creditHint}>
+              <Icon name="info" size={11} color={Colors.violet3} />
+              <Text style={s.creditHintText}>
+                Venda no crediario: as parcelas ja foram geradas, entao nao da pra
+                incluir produto aqui. Pra vender mais, lance uma venda nova.
+              </Text>
+            </View>
           )}
 
           {/* Picker (quando aberto) */}
@@ -293,8 +351,12 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
         visible={!!pendingRemoveItemId}
         title="Devolver este item?"
         message={
-          'Voce vai remover "' + pendingRemoveItemName + '" da venda. ' +
-          'A quantidade volta pro estoque, o total da venda diminui e um lancamento de devolucao eh criado no financeiro.'
+          isCredit
+            ? 'Voce vai devolver "' + pendingRemoveItemName + '" desta venda no crediario. ' +
+              'A quantidade volta pro estoque e o valor abate as ultimas parcelas em aberto ' +
+              '(o que sobrar vira credito a favor do cliente). Parcelas ja pagas nao sao tocadas.'
+            : 'Voce vai remover "' + pendingRemoveItemName + '" da venda. ' +
+              'A quantidade volta pro estoque, o total da venda diminui e um lancamento de devolucao eh criado no financeiro.'
         }
         confirmLabel="Sim, devolver"
         destructive
@@ -343,6 +405,9 @@ const s = StyleSheet.create({
   itemRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
   itemName: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   itemMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
+  // Item devolvido no crediario segue na lista (o motor nao apaga o sale_item).
+  itemRowReturned: { opacity: 0.55 },
+  itemReturned: { fontSize: 10, color: "#fb923c", fontWeight: "700", marginTop: 3 },
   removeBtn: { width: 30, height: 30, borderRadius: 7, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red + "33" },
   removeBtnDisabled: { backgroundColor: Colors.bg3, borderColor: Colors.border, opacity: 0.5 },
   emptyItemsText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center", paddingVertical: 12 },
@@ -352,6 +417,8 @@ const s = StyleSheet.create({
 
   cancelledHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red + "33" },
   cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 14 },
+  creditHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, padding: 10, backgroundColor: Colors.violetD, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2 },
+  creditHintText: { flex: 1, fontSize: 11, color: Colors.ink3, lineHeight: 14 },
 });
 
 export default SaleDetailsSection;
