@@ -50,6 +50,7 @@ import { karateDojoClassesApi } from "@/services/karateDojoClassesApi";
 import { todayISO, weekdayOfISO } from "@/components/karate/dojoTurmas/helpers";
 import { agruparPiramidePorFaixa } from "@/components/karate/dojoAlunos/helpers";
 import { Skeleton } from "@/components/karate/Skeleton";
+import { DojoLogo } from "@/components/karate/DojoLogo";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -97,7 +98,7 @@ const REQ_STATUS_LABEL: Record<string, string> = {
 export default function DojoPainel() {
   const router = useRouter();
   const { federationId } = useKarateFederation();
-  const { dojoName } = useKarateDojo();
+  const { dojoName, dojoCode, dojoLogoUrl, dojoMe } = useKarateDojo();
 
   const [loading, setLoading] = useState(true);
   // null = aquele bloco falhou (mostra aviso no card); [] = veio vazio.
@@ -243,15 +244,37 @@ export default function DojoPainel() {
     dashboard.schema_pending || ((ranking?.count ?? 0) === 0 && (evasao?.count ?? 0) === 0)
   );
 
+  // Subtítulo do hero — só o que o /dojo/me REAL já respondeu. Cada pedaço
+  // some sozinho quando falta (dojô não filiado não vê "FPKT null").
+  const heroPractitioners = dojoMe?.practitioners_count ?? null;
+  const heroSub = [
+    dojoCode ? `FPKT ${dojoCode}` : null,
+    heroPractitioners != null
+      ? `${heroPractitioners} praticante${heroPractitioners === 1 ? "" : "s"}`
+      : null,
+    dojoMe?.founded_at ? `desde ${String(dojoMe.founded_at).slice(0, 4)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const go = (route: string) => router.push(route as any);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <View>
-        <Text style={styles.eyebrow}>Aura Karatê · {dojoName}</Text>
-        <Text style={styles.title}>Painel do dojô</Text>
-        <Text style={styles.lead}>O resumo do seu dojô num lugar só: alunos, mensalidades, anuidade, solicitações e certificados.</Text>
+      {/* Hero: a marca do dojô abrindo o painel (QA 27/08/2026). O nome era
+          um eyebrow miúdo ao lado de "Painel do dojô"; quem entra aqui é o
+          sensei, e a casa é dele. Sem logo, DojoLogo desenha o monograma —
+          o hero nunca fica com um quadro vazio.
+          O eyebrow segura o nome da SEÇÃO, que no mobile não tem breadcrumb. */}
+      <View style={styles.hero}>
+        <DojoLogo name={dojoName} logoUrl={dojoLogoUrl} size={76} radiusRatio={0.2} />
+        <View style={styles.heroMeta}>
+          <Text style={styles.eyebrow}>Aura Karatê · Painel do dojô</Text>
+          <Text style={styles.title} numberOfLines={2}>{dojoName}</Text>
+          {!!heroSub && <Text style={styles.heroSub} numberOfLines={1}>{heroSub}</Text>}
+        </View>
       </View>
+      <Text style={styles.lead}>O resumo do seu dojô num lugar só: alunos, mensalidades, anuidade, solicitações e certificados.</Text>
 
       {loading && (
         <View style={styles.grid}>
@@ -549,9 +572,23 @@ export default function DojoPainel() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: KarateColors.bg } as ViewStyle,
   content: { padding: 16, gap: 14, paddingBottom: 40 } as ViewStyle,
+  // Hero da marca do dojô. maxWidth trava a linha num tamanho legível: numa
+  // tela ultrawide o nome afastado da logo pelo flex viraria uma faixa vazia
+  // no meio (telas esticadas são defeito, não escala).
+  hero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    maxWidth: 720,
+  } as ViewStyle,
+  heroMeta: { flex: 1, minWidth: 0 } as ViewStyle,
+  heroSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 5 } as TextStyle,
+
   eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
   title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
-  lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
+  // Sem marginTop: o lead saiu de dentro do bloco do título e agora é filho
+  // direto do content, que já tem gap 14 — somar os dois abriria um buraco.
+  lead: { fontSize: 13, color: KarateColors.ink3, lineHeight: 18, maxWidth: 460 } as TextStyle,
   stateBox: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 40 } as ViewStyle,
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 } as ViewStyle,

@@ -58,6 +58,8 @@ import { FormField } from "@/components/karate/FormField";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { karateDojoInfoApi, DojoMeUpdatePayload } from "@/services/karateDojoInfoApi";
+import { pickImageBase64 } from "@/services/studioUploadApi";
+import { DojoLogo } from "@/components/karate/DojoLogo";
 import { PixConfigCard } from "@/components/karate/dojoMensalidades/PixConfigCard";
 import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/ContaAuraCard";
 import { QrSettingsCard } from "@/components/karate/dojoTurmas/QrSettingsCard";
@@ -106,6 +108,126 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue} numberOfLines={2}>{value ?? "—"}</Text>
+    </View>
+  );
+}
+
+// ── Logo do dojô (QA 27/08/2026) ─────────────────────────────
+// A sidebar e o Painel mostram a marca do dojô; este é o único lugar onde
+// ela entra. Sem logo o app desenha o monograma (DojoLogo) — o card mostra
+// EXATAMENTE o que o resto do app vai mostrar, então o sensei vê o
+// resultado antes de decidir se precisa subir alguma coisa.
+//
+// Upload: pickImageBase64 (o mesmo picker web+nativo do resto da casa) e
+// base64 puro no POST — nunca FormData. O servidor aceita até 5 MB
+// (express.json), por isso o corte acontece AQUI: um 413 genérico depois de
+// o sensei esperar o upload inteiro não diz o que fazer.
+const LOGO_MAX_MB = 5;
+const LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function LogoDojoCard() {
+  const { dojoMe, dojoName, dojoLogoUrl, applyDojoMe } = useKarateDojo();
+  const { federationId } = useKarateFederation();
+
+  const [busy, setBusy] = useState<null | "upload" | "remove">(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function escolher() {
+    if (!federationId || busy) return;
+    setErro(null);
+    let picked;
+    try {
+      picked = await pickImageBase64("image/png,image/jpeg,image/webp");
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível abrir suas imagens.");
+      return;
+    }
+    if (!picked) return; // cancelou o seletor
+
+    const tipo = (picked.content_type || "").toLowerCase().split(";")[0].trim();
+    if (!LOGO_TYPES.includes(tipo)) {
+      setErro("Use uma imagem PNG, JPG ou WEBP.");
+      return;
+    }
+    if (picked.size_mb != null && picked.size_mb > LOGO_MAX_MB) {
+      setErro(`Imagem de ${picked.size_mb} MB — o limite é ${LOGO_MAX_MB} MB. Reduza e tente de novo.`);
+      return;
+    }
+
+    setBusy("upload");
+    try {
+      const me = await karateDojoInfoApi.uploadDojoLogo(federationId, {
+        content: picked.base64,
+        content_type: tipo,
+      });
+      // A resposta é o /dojo/me inteiro: aplicar direto atualiza a sidebar
+      // na hora, sem um GET a mais e sem piscar a logo antiga.
+      applyDojoMe(me);
+    } catch (e: any) {
+      setErro(e?.data?.error || e?.message || "Não foi possível enviar a logo. Tente de novo.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remover() {
+    if (!federationId || busy) return;
+    setErro(null);
+    setBusy("remove");
+    try {
+      applyDojoMe(await karateDojoInfoApi.removeDojoLogo(federationId));
+    } catch (e: any) {
+      setErro(e?.data?.error || e?.message || "Não foi possível remover a logo. Tente de novo.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const temLogo = !!dojoLogoUrl;
+  const nome = dojoMe?.name ?? dojoName;
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeadRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>Logo do dojô</Text>
+          <Text style={styles.cardSub}>
+            Aparece no menu lateral e no topo do Painel. PNG, JPG ou WEBP, até {LOGO_MAX_MB} MB.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.logoRow}>
+        <DojoLogo name={nome} logoUrl={dojoLogoUrl} size={84} radiusRatio={0.2} />
+        <View style={styles.logoActions}>
+          <Text style={styles.logoHint}>
+            {temLogo
+              ? "É assim que o seu dojô aparece no app."
+              : "Sem logo, o app usa as iniciais do nome do dojô."}
+          </Text>
+          <View style={styles.logoBtns}>
+            <KarateButton
+              label={temLogo ? "Trocar logo" : "Enviar logo"}
+              onPress={escolher}
+              size="sm"
+              loading={busy === "upload"}
+              disabled={busy !== null}
+            />
+            {temLogo && (
+              <KarateButton
+                label="Remover"
+                onPress={remover}
+                variant="ghost"
+                size="sm"
+                loading={busy === "remove"}
+                disabled={busy !== null}
+              />
+            )}
+          </View>
+        </View>
+      </View>
+
+      {!!erro && <Text style={styles.logoErr}>{erro}</Text>}
     </View>
   );
 }
@@ -334,6 +456,7 @@ export default function DojoConfiguracoes() {
       {!loading && !error && (
         <>
           <DadosDojoCard />
+          <LogoDojoCard />
           <FiliacaoCard />
         </>
       )}
@@ -371,6 +494,14 @@ const styles = StyleSheet.create({
   cardHeadRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12, color: KarateColors.ink3, marginTop: 2 } as TextStyle,
+
+  // Logo do dojô: preview + ações. flexWrap deixa as ações caírem para
+  // baixo da marca no mobile em vez de espremer os botões.
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 16, marginTop: 14, flexWrap: "wrap" } as ViewStyle,
+  logoActions: { flex: 1, minWidth: 200, gap: 10 } as ViewStyle,
+  logoHint: { fontSize: 12, color: KarateColors.ink3, lineHeight: 17 } as TextStyle,
+  logoBtns: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as ViewStyle,
+  logoErr: { fontSize: 12, color: KarateColors.danger, marginTop: 12, lineHeight: 17 } as TextStyle,
   editBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: KarateRadius.sm, backgroundColor: KarateColors.primarySoft } as ViewStyle,
   editBtnTxt: { fontSize: 12.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   infoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,

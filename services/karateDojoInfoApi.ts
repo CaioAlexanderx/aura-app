@@ -46,6 +46,14 @@ export interface DojoMeInfo {
   phone: string | null;
   /** 'YYYY-MM-DD' — date puro; parse manual, NUNCA new Date() direto. */
   founded_at: string | null;
+  /**
+   * Logo do PRÓPRIO dojô — URL absoluta do R2, já com ?v= de cache-buster.
+   * Na coluna é companies.karate_logo_url; no fio o backend usa `logo_url`,
+   * o mesmo nome da identidade da federação (um nome só para a mesma coisa).
+   * O Canal B do portal ainda expõe `karate_logo_url` cru — a normalização
+   * abaixo aceita os dois para o shell não depender de qual lado respondeu.
+   */
+  logo_url: string | null;
   federation_id: string | null;
   federation_name: string | null;
   federation_slug: string | null;
@@ -112,6 +120,7 @@ export function normalizeDojoMe(raw: any): DojoMeInfo {
     email: str(d.email),
     phone: str(d.phone),
     founded_at: str(d.founded_at),
+    logo_url: str(d.logo_url) ?? str(d.karate_logo_url),
     federation_id: str(d.federation_id),
     federation_name:
       str(d.federation_name) ?? str(raw?.federation?.name) ?? str(d.federation?.name),
@@ -144,6 +153,37 @@ export const karateDojoInfoApi = {
       await request<any>(`/federation/${federationId}/dojo/me`, {
         method: "PATCH",
         body: payload,
+      })
+    ),
+
+  /**
+   * POST /dojo/me/logo — sobe a logo do dojô.
+   *
+   * Mesmo contrato dos outros uploads da casa (foto do praticante, foto do
+   * aluno, imagem de produto): JSON + base64 PURO no campo `content`, nunca
+   * FormData e nunca com o prefixo `data:...;base64,`. Limite de 5 MB no
+   * servidor (express.json), por isso o picker checa o tamanho antes.
+   *
+   * Responde com o MESMO shape do GET — a tela rehidrata inteira sem um
+   * segundo GET, e a URL já vem com ?v= (o Image não serve a logo antiga).
+   */
+  uploadDojoLogo: async (
+    federationId: string,
+    body: { content: string; content_type?: string }
+  ): Promise<DojoMeInfo> =>
+    normalizeDojoMe(
+      await request<any>(`/federation/${federationId}/dojo/me/logo`, {
+        method: "POST",
+        body,
+        timeout: 60000,
+      })
+    ),
+
+  /** DELETE /dojo/me/logo — volta ao monograma. Mesmo shape do GET. */
+  removeDojoLogo: async (federationId: string): Promise<DojoMeInfo> =>
+    normalizeDojoMe(
+      await request<any>(`/federation/${federationId}/dojo/me/logo`, {
+        method: "DELETE",
       })
     ),
 };
