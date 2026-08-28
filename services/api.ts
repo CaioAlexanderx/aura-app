@@ -196,7 +196,7 @@ export const api = {
 export type { VerticalKey, LoginResponse, RegisterBody, CodeValidation, VerificationResponse, SidebarLayoutItem, SidebarLayout, PdvSettings } from "./authApi";
 export { authApi, sidebarLayoutApi, pdvSettingsApi } from "./authApi";
 
-export type { SaleStatus, SaleDetailsItem, SaleDetails, SalesListItem, SalesStats, SalesListResponse, SaleDetailFull, SalesFilters } from "./salesApi";
+export type { SaleStatus, SaleDetailsItem, SaleDetails, SalesListItem, SalesStats, SalesListResponse, SaleDetailFull, SalesFilters, UpdateSellerResponse } from "./salesApi";
 export { salesApi, transactionSaleApi } from "./salesApi";
 
 export type { PdvScanResult } from "./pdvApi";

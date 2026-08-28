@@ -302,6 +302,20 @@ export var salesApi = {
   },
 };
 
+// 28/08/2026: era `transaction: any`. Tipagem veio do services/transactionSaleApi.ts,
+// arquivo orfao que duplicava este bloco e foi removido — a implementacao viva
+// (consumida por hooks/useTransactionSale.ts) sempre foi esta aqui.
+export type UpdateSellerResponse = {
+  ok: boolean;
+  transaction: {
+    id: string;
+    idempotency_key: string | null;
+    employee_id: string | null;
+    employee_name: string | null;
+  };
+  synced_to_sale: boolean;
+};
+
 export var transactionSaleApi = {
   getDetails: function(companyId: string, txId: string) {
     return request<SaleDetails>(
@@ -337,7 +351,7 @@ export var transactionSaleApi = {
     );
   },
   updateSeller: function(companyId: string, txId: string, employee_id: string | null, employee_name?: string) {
-    return request<{ ok: boolean; transaction: any; synced_to_sale: boolean }>(
+    return request<UpdateSellerResponse>(
       "/companies/" + companyId + "/transactions/" + txId + "/seller",
       { method: "PATCH", body: { employee_id: employee_id, employee_name: employee_name }, retry: 0 }
     );
