@@ -32,6 +32,10 @@
 // pulado do backend (corrida), o card de resultado explica e oferece o
 // mesmo atalho.
 //
+// QA véspera da liberação: "Próximos eventos" listava evento com data já
+// passada. A lista passa a ser só futuro (+ hoje + sem data), ordenada
+// por data crescente; o passado vai pro bloco "Encerrados", colapsado.
+//
 // Polish QA 25/07 (item 3, mantido): a rota some da nav (DojoShell)
 // enquanto o dojô não está conectado (`linked === false`,
 // contexts/KarateDojo). Se o usuário chegar direto pela URL, esta aba
@@ -40,7 +44,7 @@
 // a conexão cai DEPOIS do primeiro load — o teste seguro é
 // `!!body.not_linked`, então o gate cobre os dois sinais.
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle,
@@ -68,6 +72,18 @@ function fmtDataLonga(iso: string | null): string {
   const mi = parseInt(mo, 10) - 1;
   if (mi < 0 || mi > 11) return String(iso);
   return `${parseInt(d, 10)} de ${MESES[mi]} de ${y}`;
+}
+
+/** Hoje no fuso do device, 'YYYY-MM-DD' (componentes locais, nunca toISOString). */
+function hojeISO(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+/** 'YYYY-MM-DD' do evento, ou "" quando a data ainda não foi definida. */
+function dataISO(e: SenseiEvent): string {
+  const s = String(e.event_date ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
 }
 
 function fmtTaxa(v: number | null): string | null {
@@ -110,6 +126,8 @@ export function EventosFederacaoTab() {
   const [submitBusy, setSubmitBusy] = useState(false);
   const [results, setResults] = useState<Record<string, EventResult>>({});
   const [extras, setExtras] = useState<Record<string, EventExtra>>({});
+  // Bloco "Encerrados" começa fechado: é histórico, não pauta.
+  const [encerradosOpen, setEncerradosOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!federationId) return;
@@ -132,6 +150,25 @@ export function EventosFederacaoTab() {
   // aditivo) — cast local, teste seguro `!!`.
   const notLinked = !linked || !!(data as any)?.not_linked;
   const eventos: SenseiEvent[] = data?.events ?? [];
+
+  // QA véspera: "Próximos eventos" listava evento com data JÁ PASSADA.
+  // Separa por data — comparação lexicográfica de 'YYYY-MM-DD', segura e
+  // sem new Date() (mesmo racional de fmtDataLonga). Futuro (e hoje)
+  // primeiro, em ordem crescente; encerrados num bloco colapsado abaixo.
+  // Evento sem data ("Data a definir") conta como futuro e vai pro fim da
+  // lista — nunca esconder o que ainda pode acontecer.
+  const { proximos, encerrados } = useMemo(() => {
+    const hoje = hojeISO();
+    const fut: SenseiEvent[] = [];
+    const pas: SenseiEvent[] = [];
+    for (const e of eventos) {
+      const d = dataISO(e);
+      if (d && d < hoje) pas.push(e); else fut.push(e);
+    }
+    fut.sort((a, b) => (dataISO(a) || "9999-12-31").localeCompare(dataISO(b) || "9999-12-31"));
+    pas.sort((a, b) => dataISO(b).localeCompare(dataISO(a)));
+    return { proximos: fut, encerrados: pas };
+  }, [eventos]);
 
   const ensureExtra = useCallback(async (e: SenseiEvent) => {
     if (!federationId) return;
@@ -203,6 +240,74 @@ export function EventosFederacaoTab() {
 
   const goFederar = () => router.push("/karate/(dojo)/alunos" as any);
 
+  // Mesmo card nos dois blocos (próximos e encerrados) — `encerrado`
+  // apenas rotula e apaga visualmente; a inscrição continua disponível
+  // porque quem decide o prazo é a federação, não esta tela.
+  const renderEvento = (e: SenseiEvent, encerrado = false) => {
+    const taxa = fmtTaxa(e.fee_amount);
+    const exame = isExame(e);
+    const extra = extras[e.id];
+    const result = results[e.id];
+    return (
+      <View key={e.id} style={[styles.card, encerrado && styles.cardPast]}>
+        <View style={styles.evHead}>
+          <Text style={styles.evEyebrow}>{tipoLabel(e.exam_type)}</Text>
+          {encerrado && <Text style={styles.pastTag}>Encerrado</Text>}
+        </View>
+        <Text style={styles.evTipo}>{e.name}</Text>
+        <View style={styles.metaRow}><Icon name="calendar" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{fmtDataLonga(e.event_date)}</Text></View>
+        {!!e.location && (
+          <View style={styles.metaRow}><Icon name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.location}</Text></View>
+        )}
+        {!!taxa && (
+          <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{taxa}</Text></View>
+        )}
+        {exame && (
+          <Text style={styles.examNote}>A banca da federação decide quem gradua — o dojô só envia os candidatos.</Text>
+        )}
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.askBtn} onPress={() => setSelectorEvent(e)} accessibilityRole="button">
+            <Icon name={exame ? "send" : "user_plus"} size={14} color={KarateColors.primary} />
+            <Text style={styles.askTxt}>{exame ? "Enviar candidatos" : "Inscrever alunos"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.counterRow} onPress={() => toggleExtra(e)} accessibilityRole="button">
+            <Icon name={extra?.expanded ? "chevron_up" : "chevron_down"} size={13} color={KarateColors.ink3} />
+            <Text style={styles.counterTxt}>
+              {extra?.loaded
+                ? `${extra.count} ${exame ? "candidato(s) enviado(s)" : "aluno(s) inscrito(s)"}`
+                : (exame ? "Ver candidatos enviados" : "Ver alunos inscritos")}
+            </Text>
+            {extra?.loading && <ActivityIndicator size="small" color={KarateColors.ink3} />}
+          </TouchableOpacity>
+        </View>
+
+        {extra?.expanded && !extra.loading && (
+          <View style={styles.counterList}>
+            {extra.rows.length === 0 ? (
+              <Text style={styles.counterEmpty}>Nenhum ainda.</Text>
+            ) : (
+              extra.rows.map((r) => (
+                <Text key={r.id} style={styles.counterItemTxt} numberOfLines={1}>• {r.student_name}</Text>
+              ))
+            )}
+          </View>
+        )}
+
+        {!!result && (
+          <ResultadoLoteCard
+            successCount={result.successCount}
+            successLabel={result.successLabel}
+            skipped={result.skipped}
+            onGoFederar={goFederar}
+            onClose={() => setResults((prev) => { const next = { ...prev }; delete next[e.id]; return next; })}
+          />
+        )}
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <View>
@@ -238,7 +343,7 @@ export function EventosFederacaoTab() {
             </View>
           )}
 
-          {!loading && !error && eventos.length === 0 && (
+          {!loading && !error && proximos.length === 0 && (
             <View style={styles.stateBox}>
               <Icon name="calendar" size={28} color={KarateColors.ink3} />
               <Text style={styles.stateTxt}>Nenhum evento aberto no momento.</Text>
@@ -246,67 +351,22 @@ export function EventosFederacaoTab() {
             </View>
           )}
 
-          {!loading && !error && eventos.map((e) => {
-            const taxa = fmtTaxa(e.fee_amount);
-            const exame = isExame(e);
-            const extra = extras[e.id];
-            const result = results[e.id];
-            return (
-              <View key={e.id} style={styles.card}>
-                <Text style={styles.evEyebrow}>{tipoLabel(e.exam_type)}</Text>
-                <Text style={styles.evTipo}>{e.name}</Text>
-                <View style={styles.metaRow}><Icon name="calendar" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{fmtDataLonga(e.event_date)}</Text></View>
-                {!!e.location && (
-                  <View style={styles.metaRow}><Icon name="location-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta} numberOfLines={1}>{e.location}</Text></View>
-                )}
-                {!!taxa && (
-                  <View style={styles.metaRow}><Icon name="pricetag-outline" size={13} color={KarateColors.ink3} /><Text style={styles.meta}>{taxa}</Text></View>
-                )}
-                {exame && (
-                  <Text style={styles.examNote}>A banca da federação decide quem gradua — o dojô só envia os candidatos.</Text>
-                )}
+          {!loading && !error && proximos.map((e) => renderEvento(e))}
 
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity style={styles.askBtn} onPress={() => setSelectorEvent(e)} accessibilityRole="button">
-                    <Icon name={exame ? "send" : "user_plus"} size={14} color={KarateColors.primary} />
-                    <Text style={styles.askTxt}>{exame ? "Enviar candidatos" : "Inscrever alunos"}</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.counterRow} onPress={() => toggleExtra(e)} accessibilityRole="button">
-                    <Icon name={extra?.expanded ? "chevron_up" : "chevron_down"} size={13} color={KarateColors.ink3} />
-                    <Text style={styles.counterTxt}>
-                      {extra?.loaded
-                        ? `${extra.count} ${exame ? "candidato(s) enviado(s)" : "aluno(s) inscrito(s)"}`
-                        : (exame ? "Ver candidatos enviados" : "Ver alunos inscritos")}
-                    </Text>
-                    {extra?.loading && <ActivityIndicator size="small" color={KarateColors.ink3} />}
-                  </TouchableOpacity>
-                </View>
-
-                {extra?.expanded && !extra.loading && (
-                  <View style={styles.counterList}>
-                    {extra.rows.length === 0 ? (
-                      <Text style={styles.counterEmpty}>Nenhum ainda.</Text>
-                    ) : (
-                      extra.rows.map((r) => (
-                        <Text key={r.id} style={styles.counterItemTxt} numberOfLines={1}>• {r.student_name}</Text>
-                      ))
-                    )}
-                  </View>
-                )}
-
-                {!!result && (
-                  <ResultadoLoteCard
-                    successCount={result.successCount}
-                    successLabel={result.successLabel}
-                    skipped={result.skipped}
-                    onGoFederar={goFederar}
-                    onClose={() => setResults((prev) => { const next = { ...prev }; delete next[e.id]; return next; })}
-                  />
-                )}
-              </View>
-            );
-          })}
+          {!loading && !error && encerrados.length > 0 && (
+            <View style={styles.pastBlock}>
+              <TouchableOpacity
+                style={styles.pastHead}
+                onPress={() => setEncerradosOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: encerradosOpen }}
+              >
+                <Icon name={encerradosOpen ? "chevron_up" : "chevron_down"} size={14} color={KarateColors.ink3} />
+                <Text style={styles.pastHeadTxt}>Encerrados ({encerrados.length})</Text>
+              </TouchableOpacity>
+              {encerradosOpen && encerrados.map((e) => renderEvento(e, true))}
+            </View>
+          )}
         </>
       )}
 
@@ -340,6 +400,12 @@ const styles = StyleSheet.create({
   connectBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, backgroundColor: KarateColors.primarySoft, borderRadius: KarateRadius.sm, paddingVertical: 9, paddingHorizontal: 16 } as ViewStyle,
   connectBtnTxt: { fontSize: 13, fontWeight: "700", color: KarateColors.primary } as TextStyle,
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14, gap: 8 } as ViewStyle,
+  cardPast: { backgroundColor: KarateColors.bg2, opacity: 0.85 } as ViewStyle,
+  pastBlock: { gap: 12, marginTop: 4 } as ViewStyle,
+  pastHead: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingVertical: 6 } as ViewStyle,
+  pastHeadTxt: { fontSize: 12.5, fontWeight: "700", color: KarateColors.ink3 } as TextStyle,
+  evHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 } as ViewStyle,
+  pastTag: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: KarateColors.ink3, textTransform: "uppercase" } as TextStyle,
   evEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: KarateColors.primary, textTransform: "uppercase" } as TextStyle,
   evTipo: { fontSize: 15, fontWeight: "700", color: KarateColors.ink, marginBottom: 2 } as TextStyle,
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,

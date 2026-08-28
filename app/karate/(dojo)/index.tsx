@@ -233,6 +233,16 @@ export default function DojoPainel() {
   const birthdaysList = (birthdays?.students ?? []).slice(0, 5);
   const rankingList = (ranking?.students ?? []).slice(0, 5);
 
+  // QA véspera: "Ninguém em evasão" só é boa notícia se EXISTIR presença
+  // registrada. Num dojô recém-importado (nenhuma chamada feita ainda) a
+  // ausência de evasão não é dado, é falta de dado — celebrar ali engana.
+  // Heurística com o que o payload dá: ranking do mês vazio + ninguém em
+  // evasão = nenhum sinal de presença. schema_pending (migração de
+  // presença fora do ar) cai no mesmo caso.
+  const semPresencas = !!dashboard && (
+    dashboard.schema_pending || ((ranking?.count ?? 0) === 0 && (evasao?.count ?? 0) === 0)
+  );
+
   const go = (route: string) => router.push(route as any);
 
   return (
@@ -274,9 +284,12 @@ export default function DojoPainel() {
               <Text style={styles.cardErr}>Não foi possível carregar. <Text style={styles.cardErrLink} onPress={load}>Tentar de novo</Text></Text>
             ) : (
               <>
+                {/* QA véspera: o número GRANDE é o de ATIVOS — é o que o
+                    sensei gerencia. O total (que inclui inativos e, na
+                    Areikan, 484 importados) vira o secundário. */}
                 <View style={styles.bigRow}>
-                  <Text style={styles.bigNum}>{total}</Text>
-                  <Text style={styles.bigSub}>{ativos} ativo{ativos === 1 ? "" : "s"}{useOwn ? "" : " · na federação"}</Text>
+                  <Text style={styles.bigNum}>{ativos}</Text>
+                  <Text style={styles.bigSub}>ativo{ativos === 1 ? "" : "s"} · de {total} no total{useOwn ? "" : " na federação"}</Text>
                 </View>
                 {piramide.length > 0 && (
                   <View style={{ gap: 6, marginTop: 4 }}>
@@ -351,8 +364,8 @@ export default function DojoPainel() {
                 <Text style={styles.cardTitle}>Evasão · sem treinar há 30 dias</Text>
               </View>
               <View style={styles.bigRow}>
-                <Text style={styles.bigNum}>{evasao.count}</Text>
-                <Text style={styles.bigSub}>aluno{evasao.count === 1 ? "" : "s"} em risco</Text>
+                <Text style={styles.bigNum}>{semPresencas ? "—" : evasao.count}</Text>
+                <Text style={styles.bigSub}>{semPresencas ? "sem dados ainda" : `aluno${evasao.count === 1 ? "" : "s"} em risco`}</Text>
               </View>
               {evasaoList.length > 0 ? (
                 <View style={{ gap: 6, marginTop: 4 }}>
@@ -369,6 +382,8 @@ export default function DojoPainel() {
                     <Text style={styles.cardMore}>+{evasao.count - evasaoList.length} mais</Text>
                   )}
                 </View>
+              ) : semPresencas ? (
+                <Text style={styles.cardEmpty}>Sem registros de presença ainda — a evasão passa a ser calculada quando as chamadas começarem.</Text>
               ) : (
                 <Text style={styles.cardEmpty}>Ninguém em evasão — ótimo!</Text>
               )}
