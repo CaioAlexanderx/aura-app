@@ -5,7 +5,7 @@
 // Shoji da federação, decisão de produto; nada de design system novo):
 //   • web ≥768px: SIDEBAR espelhando o DNA visual do KarateShell da
 //     federação — marca Aura Karatê (selo 空 sobre oxblood + wordmark
-//     com "Karatê" vermelho), bloco da entidade (FpktLogo + eyebrow
+//     com "Karatê" vermelho), bloco da entidade (logo do DOJÔ + eyebrow
 //     "Aura Karatê · Dojô" + nome + código FPKT/contagem), nav-labels
 //     em maiúsculas com separadores vermelhos, chip de usuário com
 //     Sair no rodapé — e topbar oxblood fina só com o breadcrumb.
@@ -81,7 +81,8 @@ import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constan
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
 import { useDojoTrialBanner } from "@/components/karate/DojoBillingGate";
-import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { useShojiFonts } from "@/components/karate/shoji";
+import { DojoLogo } from "@/components/karate/DojoLogo";
 import { useAuthStore } from "@/stores/auth";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -250,7 +251,7 @@ function SidebarNav() {
   const router = useRouter();
   const path = usePathname();
   const { karateRole } = useKarateFederation();
-  const { dojoName, dojoCode, dojoMe, linked } = useKarateDojo();
+  const { dojoName, dojoCode, dojoMe, dojoLogoUrl, linked } = useKarateDojo();
 
   const user = useAuthStore((s) => s.user) as any;
   const logout = useAuthStore((s) => s.logout);
@@ -284,10 +285,14 @@ function SidebarNav() {
   };
 
   // Linha código FPKT + contagem (só quando o /dojo/me real respondeu).
+  // O campo é practitionerS_count (plural) — DojoMeInfo e o backend sempre
+  // usaram o plural; o singular aqui era o shape do portal Canal B e a
+  // contagem simplesmente nunca aparecia na sidebar.
+  const practitioners = dojoMe?.practitioners_count ?? null;
   const countLine = [
     dojoCode ? `FPKT ${dojoCode}` : null,
-    dojoMe?.practitioner_count != null
-      ? `${dojoMe.practitioner_count} praticante${dojoMe.practitioner_count === 1 ? "" : "s"}`
+    practitioners != null
+      ? `${practitioners} praticante${practitioners === 1 ? "" : "s"}`
       : null,
   ]
     .filter(Boolean)
@@ -307,11 +312,12 @@ function SidebarNav() {
         </View>
       </View>
 
-      {/* Bloco do dojô: FpktLogo + eyebrow + nome real (/dojo/me) */}
+      {/* Bloco do dojô: logo do PRÓPRIO dojô + eyebrow + nome real (/dojo/me).
+          Até 27/08/2026 aqui vinha a FpktLogo — a marca da FEDERAÇÃO em cima
+          do nome do dojô. A FPKT segue no shell dela (KarateShell); nesta
+          visão quem manda é o dojô. Sem logo, DojoLogo desenha o monograma. */}
       <View style={styles.orgSlug}>
-        <View style={styles.orgSlugFpktMark}>
-          <FpktLogo size={26} />
-        </View>
+        <DojoLogo name={dojoName} logoUrl={dojoLogoUrl} size={36} />
         <View style={styles.orgSlugMeta}>
           <Text style={styles.orgSlugLabel}>Aura Karatê · Dojô</Text>
           <Text
@@ -406,7 +412,7 @@ function BottomTabNav() {
 export function DojoShell() {
   useShojiFonts(); // mount point próprio de karatê — carrega as fontes Shoji
   const { width } = useWindowDimensions();
-  const { dojoName } = useKarateDojo();
+  const { dojoName, dojoLogoUrl } = useKarateDojo();
   const isWide = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
 
   // QA 09/08/2026 (item 2): estado do breadcrumb "declarado" (ver
@@ -438,9 +444,10 @@ export function DojoShell() {
   return (
     <DojoSectionLabelContext.Provider value={sectionCtx}>
       <SafeAreaView style={styles.mobileContainer}>
-        {/* Topbar mobile: logo + eyebrow Aura Karatê + nome do dojô */}
+        {/* Topbar mobile: logo do DOJÔ + eyebrow Aura Karatê + nome do dojô
+            (mesma troca da sidebar — era a FpktLogo da federação) */}
         <View style={styles.mobileTopbar}>
-          <FpktLogo size={26} style={{ marginRight: 9 }} />
+          <DojoLogo name={dojoName} logoUrl={dojoLogoUrl} size={32} style={{ marginRight: 9 }} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.mobileTopbarEyebrow}>Aura Karatê</Text>
             <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{dojoName}</Text>
@@ -613,17 +620,7 @@ const styles = StyleSheet.create({
     borderBottomColor: ShojiPalette.redLine,
     marginBottom: 16,
   } as ViewStyle,
-  orgSlugFpktMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: KarateColors.glass2,
-    borderWidth: 1,
-    borderColor: KarateColors.border2,
-    overflow: "hidden",
-  } as ViewStyle,
+  // (o quadro da marca virou responsabilidade do próprio DojoLogo)
   orgSlugMeta: {
     flex: 1,
     minWidth: 0,

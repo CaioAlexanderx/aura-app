@@ -8,6 +8,9 @@
 //                O fallback estático SENSEI_DOJO {name:"Dojô"} morreu
 //                na F1 — o shell não exibe mais placeholder fixo.
 //   • dojoCode — fpkt_affiliation_id (ou null enquanto carrega/faltar)
+//   • dojoLogoUrl — logo do PRÓPRIO dojô (QA 27/08/2026). null enquanto
+//                carrega ou quando o dojô não subiu logo: o shell desenha
+//                o monograma (DojoLogo), nunca um quadro vazio.
 //   • linked   — conexão do dojô à federação (Aura-backend#422, polish
 //                QA 25/07). FAIL-OPEN: true por padrão (loading/erro/
 //                backend antigo sem o campo nunca esconde nav nem
@@ -29,8 +32,18 @@ export interface KarateDojoContextValue {
   loading: boolean;
   error: boolean;
   reload: () => void;
+  /**
+   * Substitui o /dojo/me em memória com a resposta de um PATCH/upload.
+   * As rotas de escrita devolvem o shape COMPLETO do GET, então quem acabou
+   * de salvar já tem a verdade — um reload() aqui seria um GET a mais só
+   * para descobrir o que o servidor já respondeu, e a sidebar piscaria a
+   * logo antiga no intervalo.
+   */
+  applyDojoMe: (me: DojoMeInfo) => void;
   dojoName: string;
   dojoCode: string | null;
+  /** Logo do próprio dojô (null → o shell desenha o monograma). */
+  dojoLogoUrl: string | null;
   linked: boolean;
 }
 
@@ -39,8 +52,10 @@ const KarateDojoContext = createContext<KarateDojoContextValue>({
   loading: false,
   error: false,
   reload: () => {},
+  applyDojoMe: () => {},
   dojoName: "Dojô",
   dojoCode: null,
+  dojoLogoUrl: null,
   linked: true,
 });
 
@@ -71,13 +86,20 @@ export function KarateDojoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const applyDojoMe = useCallback((me: DojoMeInfo) => {
+    setDojoMe(me);
+    setError(false);
+  }, []);
+
   const value: KarateDojoContextValue = {
     dojoMe,
     loading,
     error,
     reload: load,
+    applyDojoMe,
     dojoName: dojoMe?.name || company?.name || "Dojô",
     dojoCode: dojoMe?.fpkt_affiliation_id ?? null,
+    dojoLogoUrl: dojoMe?.logo_url ?? null,
     // Fail-open: enquanto carrega ou se o campo não vier, assume conectado
     // (nunca esconde nav/gate por causa de loading ou de um backend antigo).
     linked: dojoMe?.linked ?? true,
