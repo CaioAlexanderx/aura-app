@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Dimensions, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -14,6 +14,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
 import { DateInput } from "@/components/inputs/DateInput";
 import { useLocalSearchParams } from "expo-router";
+import {
+  periodToRange, addMonths, spCurrentMonth,
+  PAGE_SIZE, MONTH_NAMES,
+  type PeriodKey, type MonthAnchor,
+} from "@/utils/vendasPeriodo";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -52,18 +57,26 @@ import { useLocalSearchParams } from "expo-router";
 // 02/08/2026: aba "Ranking" entre Vendas e Fechamentos, migrada da tela
 // de Folha. Ranking por vendedor e leitura de venda, nao de folha — e
 // assim fica visivel tambem pro Essencial (ver Aura-backend#454).
+//
+// 28/08/2026 (relato Eryca #2) — HISTORICO COMPLETO:
+// A tela pedia limit=100 numa tacada so, sem paginacao, com ORDER BY
+// created_at DESC. Numa loja de ~20 vendas/dia as 100 linhas acabavam por
+// volta do dia 15 e o resto do mes simplesmente nao existia na tela (nao era
+// "carregue mais": nao havia mais nada). Duas mudancas:
+//   1. Paginacao de 30 em 30 (PAGE_SIZE), com rodape Anterior/Proxima. Os KPIs
+//      continuam vindo do periodo inteiro — o backend conta separado da pagina.
+//   2. "Mes" virou seletor navegavel (< Agosto de 2026 >) sem limite pra tras,
+//      no lugar do par "Mes"/"Mes anterior" que so alcancava dois meses.
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
 
-type PeriodKey = "today" | "week" | "month" | "lastmonth" | "custom" | "all";
 type StatusKey = "all" | "active" | "cancelled";
 
 const PERIOD_OPTIONS: Array<{ key: PeriodKey; label: string }> = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
   { key: "month", label: "Mes" },
-  { key: "lastmonth", label: "Mes anterior" },
   { key: "custom", label: "Personalizado" },
   { key: "all", label: "Tudo" },
 ];
@@ -92,57 +105,6 @@ var fmtDate = function(iso: string) {
   } catch { return ""; }
 };
 
-function periodToRange(period: PeriodKey, customFromIso?: string | null, customToIso?: string | null): { from?: string; to?: string } {
-  if (period === "all") return {};
-  // SP = UTC-3 fixo (DST abolido em 2019). Subtrai 3h de "agora" e le
-  // a data em UTC — funciona independente do fuso do navegador.
-  // A abordagem anterior (new Date(y,m,d)) criava meia-noite no fuso
-  // LOCAL do browser, causando inclusao de vendas do dia anterior quando
-  // o browser estava em UTC (bug relatado por Maria/Encanto Presentes).
-  var now = new Date();
-  var spNow = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  var y = spNow.getUTCFullYear();
-  var m = spNow.getUTCMonth();
-  var d = spNow.getUTCDate();
-  // Meia-noite SP em UTC = mesmo dia SP, hora 03:00 UTC.
-  var spMidnightUTC = function(year: number, month: number, day: number): string {
-    return new Date(Date.UTC(year, month, day, 3, 0, 0)).toISOString();
-  };
-  if (period === "today") {
-    return { from: spMidnightUTC(y, m, d) };
-  }
-  if (period === "week") {
-    return { from: new Date(Date.UTC(y, m, d - 6, 3, 0, 0)).toISOString() };
-  }
-  if (period === "month") {
-    return { from: spMidnightUTC(y, m, 1) };
-  }
-  if (period === "lastmonth") {
-    // Mes-calendario anterior COMPLETO: 1o dia 00:00 SP -> ultimo instante do mes.
-    // Date.UTC normaliza m-1 (janeiro -> dezembro do ano anterior).
-    return {
-      from: spMidnightUTC(y, m - 1, 1),
-      to: new Date(Date.UTC(y, m, 1, 3, 0, 0) - 1).toISOString(),
-    };
-  }
-  if (period === "custom") {
-    // customFromIso / customToIso: "YYYY-MM-DD" (data SP) vindas do DateInput.
-    // from = meia-noite SP do dia inicial; to = ultimo instante SP do dia final
-    // (inclusivo: meia-noite SP do dia seguinte menos 1ms).
-    var out: { from?: string; to?: string } = {};
-    if (customFromIso) {
-      var pf = customFromIso.split("-");
-      out.from = spMidnightUTC(parseInt(pf[0], 10), parseInt(pf[1], 10) - 1, parseInt(pf[2], 10));
-    }
-    if (customToIso) {
-      var pt = customToIso.split("-");
-      out.to = new Date(Date.UTC(parseInt(pt[0], 10), parseInt(pt[1], 10) - 1, parseInt(pt[2], 10) + 1, 3, 0, 0) - 1).toISOString();
-    }
-    return out;
-  }
-  return {};
-}
-
 // MULTICNPJ Onda 2.4: tipo do item da lista. Em consolidated tem
 // company_id+company_name; em per-company eles sao undefined.
 type SaleListRow = SalesListItem & {
@@ -162,6 +124,10 @@ export default function VendasScreen() {
   const [search, setSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  // Mes que o seletor esta mostrando (so vale quando period === "month").
+  const [monthAnchor, setMonthAnchor] = useState<MonthAnchor>(spCurrentMonth);
+  // Pagina atual (0-based). 30 vendas por pagina.
+  const [page, setPage] = useState(0);
   // 09/05/2026: aba Fechamentos de Caixa (KPIs+lista) ao lado da listagem de Vendas
   // 02/08/2026: aba "Ranking" entra no meio (Vendas | Ranking | Fechamentos).
   // Veio da tela de Folha; ranking por vendedor e leitura de venda, nao de
@@ -172,17 +138,44 @@ export default function VendasScreen() {
     paramTab === "ranking" || paramTab === "fechamentos" ? paramTab : "vendas"
   );
 
-  const range = useMemo(function() { return periodToRange(period, customFromIso, customToIso); }, [period, customFromIso, customToIso]);
+  const range = useMemo(
+    function() { return periodToRange(period, customFromIso, customToIso, monthAnchor); },
+    [period, customFromIso, customToIso, monthAnchor.y, monthAnchor.m]
+  );
+
+  // Trocar filtro volta pra pagina 1 — senao a pessoa filtra "Hoje" estando na
+  // pagina 4 e cai numa pagina que nao existe mais (vazio parecendo "sem
+  // vendas"). Ajuste feito no proprio render (padrao "derivar estado de props"):
+  // usar effectivePage aqui evita disparar um fetch com o offset velho.
+  const filterSignature = [period, range.from || "", range.to || "", status, search.trim()].join("|");
+  const lastSignature = useRef(filterSignature);
+  const filtersChanged = lastSignature.current !== filterSignature;
+  if (filtersChanged) lastSignature.current = filterSignature;
+  const effectivePage = filtersChanged ? 0 : page;
+  if (filtersChanged && page !== 0) setPage(0);
 
   const filters: SalesFilters = {
     date_from: range.from,
     date_to: range.to,
     status: status,
     q: search.trim() || undefined,
-    limit: 100,
+    limit: PAGE_SIZE,
+    offset: effectivePage * PAGE_SIZE,
   };
 
   const { sales, stats, total, isLoading, isFetching, error, refetch, breakdown, companyCount } = useSalesList(filters as any);
+
+  // Seta "proximo mes" para no mes corrente: nao ha venda no futuro.
+  const nowMonth = spCurrentMonth();
+  const isCurrentMonth = monthAnchor.y === nowMonth.y && monthAnchor.m === nowMonth.m;
+
+  // `total` e o tamanho do filtro inteiro — o backend conta separado da pagina,
+  // entao os KPIs continuam falando do periodo, nao das 30 linhas visiveis.
+  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
+  const canPrev = effectivePage > 0;
+  const canNext = effectivePage + 1 < totalPages;
+  const firstOnPage = (sales?.length || 0) === 0 ? 0 : effectivePage * PAGE_SIZE + 1;
+  const lastOnPage = effectivePage * PAGE_SIZE + (sales?.length || 0);
 
   // MULTICNPJ Onda 2.4: badge da loja so quando o user tem 2+ empresas
   const showCompanyBadge = (companyCount || 1) > 1;
@@ -363,6 +356,37 @@ export default function VendasScreen() {
               );
             })}
           </View>
+          {/* Seletor de mes: e por aqui que se chega no historico antigo.
+              Sem limite pra tras; pra frente para no mes corrente. */}
+          {period === "month" && (
+            <View style={s.monthNav}>
+              <Pressable
+                onPress={function() { setMonthAnchor(addMonths(monthAnchor, -1)); }}
+                style={s.monthNavBtn}
+                accessibilityLabel="Mes anterior"
+              >
+                <Icon name="chevron_left" size={14} color={Colors.violet3} />
+              </Pressable>
+              <View style={s.monthNavLabelWrap}>
+                <Text style={s.monthNavLabel}>
+                  {MONTH_NAMES[monthAnchor.m]} de {monthAnchor.y}
+                </Text>
+                {!isCurrentMonth && (
+                  <Pressable onPress={function() { setMonthAnchor(spCurrentMonth()); }}>
+                    <Text style={s.monthNavToday}>Voltar pro mes atual</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Pressable
+                onPress={function() { if (!isCurrentMonth) setMonthAnchor(addMonths(monthAnchor, 1)); }}
+                disabled={isCurrentMonth}
+                style={[s.monthNavBtn, isCurrentMonth && s.monthNavBtnDisabled]}
+                accessibilityLabel="Proximo mes"
+              >
+                <Icon name="chevron_right" size={14} color={isCurrentMonth ? Colors.ink3 : Colors.violet3} />
+              </Pressable>
+            </View>
+          )}
           {period === "custom" && (
             <View style={s.customRow}>
               <View style={s.customField}>
@@ -435,14 +459,32 @@ export default function VendasScreen() {
         </View>
       )}
 
-      {!isLoading && !error && sales.length === 0 && (
+      {/* Pagina alem do fim (ex.: filtro encolheu a lista): oferecer a volta,
+          senao a tela mente dizendo que nao existe venda no periodo. */}
+      {!isLoading && !error && sales.length === 0 && effectivePage > 0 && (
+        <View style={s.pagerEmpty}>
+          <Text style={s.pagerEmptyText}>
+            Nao ha mais vendas depois da pagina {totalPages} neste periodo.
+          </Text>
+          <Pressable onPress={function() { setPage(0); }} style={s.pagerBtn}>
+            <Icon name="chevron_left" size={13} color={Colors.violet3} />
+            <Text style={s.pagerBtnText}>Voltar pra primeira pagina</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {!isLoading && !error && sales.length === 0 && effectivePage === 0 && (
         <EmptyState
           icon="cart"
           iconColor={Colors.violet3}
           title="Nenhuma venda encontrada"
           subtitle={
-            (period === "all" ? "" : "Nenhuma venda no periodo selecionado. ") +
-            "Vendas feitas no Caixa aparecem aqui pra conferencia."
+            period === "all"
+              ? "Vendas feitas no Caixa aparecem aqui pra conferencia."
+              : period === "month"
+              ? "Nenhuma venda em " + MONTH_NAMES[monthAnchor.m] + " de " + monthAnchor.y +
+                ". Use as setas do mes pra procurar em outro periodo."
+              : "Nenhuma venda no periodo selecionado. Vendas feitas no Caixa aparecem aqui pra conferencia."
           }
         />
       )}
@@ -525,11 +567,31 @@ export default function VendasScreen() {
               </Pressable>
             );
           })}
-          {total > sales.length && (
-            <View style={s.moreHint}>
-              <Text style={s.moreHintText}>
-                Mostrando {sales.length} de {total} vendas. Refine os filtros pra encontrar uma especifica.
-              </Text>
+          {/* PAGINACAO — 30 por pagina. Antes a tela pedia 100 de uma vez e
+              parava ali: numa loja movimentada o mes acabava no dia 15 e nao
+              havia como chegar no resto. */}
+          {total > PAGE_SIZE && (
+            <View style={s.pagerRow}>
+              <Pressable
+                onPress={function() { if (canPrev) setPage(effectivePage - 1); }}
+                disabled={!canPrev || isFetching}
+                style={[s.pagerBtn, (!canPrev || isFetching) && s.pagerBtnDisabled]}
+              >
+                <Icon name="chevron_left" size={13} color={canPrev ? Colors.violet3 : Colors.ink3} />
+                <Text style={[s.pagerBtnText, !canPrev && { color: Colors.ink3 }]}>Anterior</Text>
+              </Pressable>
+              <View style={s.pagerInfo}>
+                <Text style={s.pagerInfoMain}>Pagina {effectivePage + 1} de {totalPages}</Text>
+                <Text style={s.pagerInfoSub}>{firstOnPage}–{lastOnPage} de {total} vendas</Text>
+              </View>
+              <Pressable
+                onPress={function() { if (canNext) setPage(effectivePage + 1); }}
+                disabled={!canNext || isFetching}
+                style={[s.pagerBtn, (!canNext || isFetching) && s.pagerBtnDisabled]}
+              >
+                <Text style={[s.pagerBtnText, !canNext && { color: Colors.ink3 }]}>Proxima</Text>
+                <Icon name="chevron_right" size={13} color={canNext ? Colors.violet3 : Colors.ink3} />
+              </Pressable>
             </View>
           )}
         </View>
@@ -616,6 +678,14 @@ const s = StyleSheet.create({
   chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   chipText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   chipTextActive: { color: Colors.violet3, fontWeight: "700" },
+  // Seletor de mes (period === "month")
+  monthNav: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 6, paddingVertical: 6 },
+  monthNavBtn: { width: 32, height: 32, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  monthNavBtnDisabled: { backgroundColor: Colors.bg3, borderColor: Colors.border },
+  monthNavLabelWrap: { flex: 1, alignItems: "center" },
+  monthNavLabel: { fontSize: 12.5, color: Colors.ink, fontWeight: "700" },
+  monthNavToday: { fontSize: 10, color: Colors.violet3, fontWeight: "600", marginTop: 2 },
+
   customRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   customField: { flex: 1, gap: 4 },
   customLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
@@ -660,6 +730,17 @@ const s = StyleSheet.create({
 
   moreHint: { padding: 14, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4 },
   moreHintText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
+
+  // Paginacao (30 por pagina)
+  pagerRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4 },
+  pagerBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  pagerBtnDisabled: { backgroundColor: Colors.bg3, borderColor: Colors.border, opacity: 0.6 },
+  pagerBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  pagerInfo: { flex: 1, alignItems: "center" },
+  pagerInfoMain: { fontSize: 11.5, color: Colors.ink, fontWeight: "700" },
+  pagerInfoSub: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+  pagerEmpty: { alignItems: "center", gap: 10, padding: 24, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
+  pagerEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
   // 09/05/2026: tab bar Vendas/Fechamentos
   tabBar: { flexDirection: "row", gap: 4, marginTop: 4, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
