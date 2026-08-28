@@ -15,15 +15,16 @@ import { PAYMENTS } from "@/hooks/useCart";
 import { CouponInput } from "./CouponInput";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { SaleDetailsSection } from "./SaleDetailsSection";
+import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink";
 
 var isWeb = Platform.OS === "web";
 
-// Detecta se uma transaction veio do PDV (idempotency_key formato "pdv-sale-{uuid}").
-// Usado pra mostrar SaleDetailsSection (Item 1 Eryca) no modo edicao.
+// Detecta se uma transaction veio de uma venda (pra mostrar SaleDetailsSection
+// no modo edicao). A regra mora em @/utils/saleLink — ver o comentario de la:
+// desde 28/08/2026 ela cobre tambem o "A Receber" do crediario, que e o unico
+// lancamento de uma venda 100% fiada.
 function isPdvSaleTransaction(tx: Transaction | null | undefined): boolean {
-  if (!tx) return false;
-  const key = (tx as any).idempotency_key as string | undefined;
-  return typeof key === "string" && /^pdv-sale-/i.test(key);
+  return isSaleLinkedTransaction(tx as any);
 }
 
 // Mapeamento PAYMENTS legacy (do useCart) → keys do backend (validados pela whitelist).
@@ -116,6 +117,10 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 }) {
   var isEditing = !!editTransaction;
   var isLinkedToSale = isEditing && isPdvSaleTransaction(editTransaction);
+  // Lancamento "A Receber" do crediario: valor e categoria estao amarrados ao
+  // carne (credit_installments) e aos relatorios que filtram
+  // category ILIKE 'Crediario%A Receber%'. Editar na mao aqui dessincroniza.
+  var isCreditReceivable = isEditing && isCreditReceivableKey((editTransaction as any)?.idempotency_key);
   var [txType, setTxType] = useState<"income" | "expense" | "sale">("income");
   var [mode, setMode] = useState<"unit" | "batch">("unit");
   var [amount, setAmount] = useState("");
@@ -456,6 +461,16 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
           <Icon name="info" size={11} color={Colors.violet3} />
           <Text style={[s.dateHintText, { color: Colors.violet3 }]}>
             Mudancas em forma de pagamento e vendedor sao sincronizadas com a venda do PDV.
+          </Text>
+        </View>
+      )}
+      {isCreditReceivable && (
+        <View style={s.dateHint}>
+          <Icon name="alert" size={11} color="#fb923c" />
+          <Text style={[s.dateHintText, { color: "#fb923c" }]}>
+            Este e o "A Receber" do crediario. Mexer no valor ou na categoria aqui
+            NAO muda o carne do cliente e tira o lancamento dos relatorios de
+            crediario. Pra devolver produto, use a lista de mercadorias acima.
           </Text>
         </View>
       )}
