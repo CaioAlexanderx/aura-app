@@ -3,8 +3,9 @@
 // "Inscrever alunos" (eventos/cursos da FEDERAÇÃO) e "Enviar candidatos"
 // (exame de faixa da federação). Busca + seleção múltipla; SÓ aluno
 // FEDERADO pode ser selecionado nesses dois fluxos (regra de ouro da
-// fase) — não federado aparece desabilitado com dica + atalho para a
-// tela de Alunos (federar lá).
+// fase) — não federado aparece desabilitado com a dica "Não federado
+// ainda"; a partir de 3 não-federados, um aviso único no topo aponta o
+// envio em LOTE da tela Federação (/karate/(dojo)/conexao).
 //
 // F9 (curso/seminário PRÓPRIO do dojô): o mesmo seletor é reusado pela
 // tela "Meus eventos" (app/karate/(dojo)/eventos.tsx via
@@ -93,9 +94,20 @@ export function SelecionarAlunosModal({
     });
   };
 
-  const goToFicha = () => {
+  // QA véspera (dojô com centenas de alunos importados e nenhum federado):
+  // a dica por linha mandava abrir ficha por ficha. O caminho certo é o
+  // LOTE que já existe em Federação ("Enviar alunos para a federação
+  // validar", com Selecionar todos) — a linha passa a só informar o
+  // estado, e um aviso ÚNICO no topo leva pra lá. Conta sobre `students`
+  // (não sobre `filtered`) pra busca não alterar o aviso.
+  const naoFederados = useMemo(
+    () => (requireFederated ? students.filter((s) => !s.federated).length : 0),
+    [students, requireFederated]
+  );
+
+  const goToFederacao = () => {
     onClose();
-    router.push("/karate/(dojo)/alunos" as any);
+    router.push("/karate/(dojo)/conexao" as any);
   };
 
   return (
@@ -121,6 +133,21 @@ export function SelecionarAlunosModal({
             accessibilityLabel="Buscar aluno"
           />
 
+          {naoFederados >= 3 && (
+            <TouchableOpacity
+              style={st.loteBar}
+              onPress={goToFederacao}
+              accessibilityRole="link"
+              accessibilityLabel="Ir para Federação e enviar alunos para validar"
+            >
+              <Icon name="alert_circle" size={13} color={KarateColors.warn} />
+              <Text style={st.loteTxt} numberOfLines={2}>
+                {naoFederados} alunos ainda não são federados. Envie todos de uma vez em Federação → Enviar alunos para validar.
+              </Text>
+              <Icon name="arrow-forward" size={13} color={KarateColors.warn} />
+            </TouchableOpacity>
+          )}
+
           <ScrollView style={st.list}>
             {loading ? (
               <ActivityIndicator color={KarateColors.primary} style={{ marginVertical: 20 }} />
@@ -145,9 +172,7 @@ export function SelecionarAlunosModal({
                     <View style={{ flex: 1 }}>
                       <Text style={[st.rowName, disabled && st.rowNameDisabled]}>{s.full_name}</Text>
                       {disabled ? (
-                        <TouchableOpacity onPress={goToFicha} accessibilityRole="button">
-                          <Text style={st.rowHint}>Precisa ser federado — ver ficha</Text>
-                        </TouchableOpacity>
+                        <Text style={st.rowHint}>Não federado ainda</Text>
                       ) : (
                         !!s.belt_label && <Text style={st.rowSub}>{s.belt_label}</Text>
                       )}
@@ -198,7 +223,11 @@ const st = StyleSheet.create({
   rowName: { fontSize: 13, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   rowNameDisabled: { color: KarateColors.ink3 } as TextStyle,
   rowSub: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 1 } as TextStyle,
-  rowHint: { fontSize: 11.5, color: KarateColors.primary, fontWeight: "700", marginTop: 2 } as TextStyle,
+  // Deixou de ser link (o atalho em lote vive no aviso do topo): informa
+  // o estado sem chamar a atenção como ação.
+  rowHint: { fontSize: 11.5, color: KarateColors.ink3, fontWeight: "600", marginTop: 2 } as TextStyle,
+  loteBar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: KarateColors.warnSoft, borderRadius: KarateRadius.sm, paddingVertical: 8, paddingHorizontal: 10 } as ViewStyle,
+  loteTxt: { flex: 1, fontSize: 11.5, color: KarateColors.warn, fontWeight: "600", lineHeight: 16 } as TextStyle,
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: KarateColors.border } as ViewStyle,
   selCount: { fontSize: 12, color: KarateColors.ink3, fontWeight: "600" } as TextStyle,
   cancelBtn: { paddingVertical: 9, paddingHorizontal: 12 } as ViewStyle,
