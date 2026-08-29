@@ -33,7 +33,7 @@ export function ProfileBanner() {
     [!!cnpj, "CNPJ"],
     [!!email, "E-mail"],
     [!!phone, "Telefone"],
-    [!!address, "Endereco"],
+    [!!address, "Endereço"],
     [!!logo, "Logo"],
   ];
   const done = checks.filter(([ok]) => ok).length;
@@ -55,7 +55,7 @@ export function ProfileBanner() {
         <Text style={s.pct}>{pct}%</Text>
       </View>
       <View style={s.barBg}><View style={[s.barFill, { width: `${pct}%`, backgroundColor: barColor }]} /></View>
-      <View style={s.ctaRow}><Text style={s.ctaText}>Completar nas Configuracoes</Text><Icon name="chevron_right" size={14} color={Colors.violet3} /></View>
+      <View style={s.ctaRow}><Text style={s.ctaText}>Completar nas Configurações</Text><Icon name="chevron_right" size={14} color={Colors.violet3} /></View>
     </Pressable>
   );
 }

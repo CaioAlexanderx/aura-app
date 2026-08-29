@@ -151,9 +151,9 @@ export function OpenCloseCashModal({
 
   async function handleAbrir() {
     if (submittingOpen) return;
-    if (!selectedEmployee) { toast.error("Selecione o funcionario responsavel"); return; }
+    if (!selectedEmployee) { toast.error("Selecione o funcionario responsável"); return; }
     const troco = parseMoeda(trocoInput);
-    if (troco < 0) { toast.error("Troco invalido"); return; }
+    if (troco < 0) { toast.error("Troco inválido"); return; }
     setSubmittingOpen(true);
     try {
       await caixaApi.abrir(companyId, troco, isOwner ? selectedEmployee.id : null);
@@ -183,8 +183,8 @@ export function OpenCloseCashModal({
     const openedAtIso = sessaoEff?.opened_at || closeResult.closed_at || new Date().toISOString();
     const paymentMix: CashClosePaymentRow[] = [
       { label: "Pix", amount: toNum(closeResult.total_pix) },
-      { label: "Credito", amount: toNum(closeResult.total_cartao_credito) },
-      { label: "Debito", amount: toNum(closeResult.total_cartao_debito) },
+      { label: "Crédito", amount: toNum(closeResult.total_cartao_credito) },
+      { label: "Débito", amount: toNum(closeResult.total_cartao_debito) },
       { label: "Dinheiro", amount: toNum(closeResult.total_dinheiro) },
       { label: "Fiado", amount: toNum(closeResult.total_fiado) },
       { label: "Outros", amount: toNum(closeResult.total_outros) },
@@ -230,7 +230,7 @@ export function OpenCloseCashModal({
   const headerTitle = mode === "abrir" ? "Abrir caixa" : "Fechar caixa";
 
   const openLabels = ["FUNCIONARIO", "TROCO", "CONFIRMAR"];
-  const closeLabels = ["CONTAGEM", "OBSERVACAO", "REVISAR"];
+  const closeLabels = ["CONTAGEM", "OBSERVAÇÃO", "REVISAR"];
 
   const resultDiferenca = closeResult ? toNum(closeResult.diferenca) : 0;
   const resultGeral     = closeResult ? toNum(closeResult.total_geral) : 0;
@@ -291,8 +291,8 @@ export function OpenCloseCashModal({
         )}
         <Text style={s.helpTxt}>
           {isOwner
-            ? "Lista filtrada por permissao de acessar o PDV (plano Negocio+)."
-            : "Funcionarios abrem o caixa apenas em nome proprio. Proprietarios podem abrir como qualquer operador."}
+            ? "Lista filtrada por permissão de acessar o PDV (plano Negócio+)."
+            : "Funcionarios abrem o caixa apenas em nome próprio. Proprietarios podem abrir como qualquer operador."}
         </Text>
       </>
     );
@@ -396,7 +396,7 @@ export function OpenCloseCashModal({
           <View style={s.summaryRow}><Text style={s.summaryLab}>Vendas em dinheiro</Text><Text style={s.summaryVal}>{fmt(vendasEmDinheiro)}</Text></View>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Esperado em caixa</Text><Text style={[s.summaryVal, s.summaryValBold]}>{fmt(dinheiroEsperado)}</Text></View>
         </View>
-        <Text style={[s.sectionTitle, { marginTop: 12 }]}>Quanto contou no caixa fisico?</Text>
+        <Text style={[s.sectionTitle, { marginTop: 12 }]}>Quanto contou no caixa físico?</Text>
         <View style={s.moneyInput}>
           <Text style={s.moneyPrefix}>R$</Text>
           <TextInput style={s.moneyField as any} value={dinheiroInput} onChangeText={setDinheiroInput}
@@ -443,11 +443,11 @@ export function OpenCloseCashModal({
             </Text>
           </View>
         ) : null}
-        <Text style={[s.sectionTitle, { marginTop: diferenca !== 0 ? 12 : 0 }]}>Quer registrar uma observacao?</Text>
+        <Text style={[s.sectionTitle, { marginTop: diferenca !== 0 ? 12 : 0 }]}>Quer registrar uma observação?</Text>
         <TextInput style={s.textArea as any} value={obsInput} onChangeText={setObsInput}
           placeholder="Ex: troco dado a mais na venda #00009" placeholderTextColor={Colors.ink3}
           multiline numberOfLines={3} />
-        <Text style={s.helpTxt}>Quando ha divergencia, anotar o motivo ajuda a auditoria. Fica gravado no historico e no PDF.</Text>
+        <Text style={s.helpTxt}>Quando ha divergencia, anotar o motivo ajuda a auditoria. Fica gravado no histórico e no PDF.</Text>
       </>
     );
     footerNode = (
@@ -468,13 +468,13 @@ export function OpenCloseCashModal({
   if (mode === "fechar" && closeStep === 3 && sessaoEff) {
     bodyNode = (
       <>
-        <Text style={s.sectionTitle}>Conferencia de caixa</Text>
+        <Text style={s.sectionTitle}>Conferência de caixa</Text>
         <View style={s.summaryBox}>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Esperado em caixa</Text><Text style={s.summaryVal}>{fmt(dinheiroEsperado)}</Text></View>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Contado em caixa</Text><Text style={s.summaryVal}>{fmt(dinheiroContado)}</Text></View>
           {obsInput.trim() ? (
             <View style={s.summaryRow}>
-              <Text style={s.summaryLab}>Observacao</Text>
+              <Text style={s.summaryLab}>Observação</Text>
               <Text style={[s.summaryVal, { fontStyle: "italic", color: Colors.ink3 }]} numberOfLines={1}>{obsInput.trim()}</Text>
             </View>
           ) : null}

@@ -5,15 +5,15 @@ import type { Obligation } from "./types";
 type Props = { auraResolve: Obligation[]; voceFaz: Obligation[]; onSelect: (code: string) => void };
 
 const GROUPS = [
-  { key: "aura", label: "Automatico", desc: "A Aura cuida de tudo", color: Colors.green, bg: Colors.greenD },
-  { key: "voce", label: "Voce precisa agir", desc: "Passo a passo com apoio da Aura", color: Colors.amber, bg: Colors.amberD },
+  { key: "aura", label: "Automático", desc: "A Aura cuida de tudo", color: Colors.green, bg: Colors.greenD },
+  { key: "voce", label: "Você precisa agir", desc: "Passo a passo com apoio da Aura", color: Colors.amber, bg: Colors.amberD },
 ];
 
 export function GuidesList({ auraResolve, voceFaz, onSelect }: Props) {
   const data = [{ ...GROUPS[0], items: auraResolve }, { ...GROUPS[1], items: voceFaz }];
   return (
     <View>
-      <View style={s.instruction}><Text style={s.iIcon}>i</Text><Text style={s.iText}>Guias visuais para cada obrigacao. A Aura prepara os dados e te guia pelo processo.</Text></View>
+      <View style={s.instruction}><Text style={s.iIcon}>i</Text><Text style={s.iText}>Guias visuais para cada obrigação. A Aura prepara os dados e te guia pelo processo.</Text></View>
       {data.map(g => {
         if (g.items.length === 0) return null;
         return (

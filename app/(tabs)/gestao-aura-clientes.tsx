@@ -23,7 +23,7 @@ export default function GestaoAuraClientesScreen() {
           </View>
           <View>
             <Text style={s.title}>Clientes ativos</Text>
-            <Text style={s.subtitle}>Health score, planos e modulos</Text>
+            <Text style={s.subtitle}>Health score, planos e módulos</Text>
           </View>
         </View>
       </View>

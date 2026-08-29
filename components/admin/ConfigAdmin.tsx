@@ -11,8 +11,8 @@ import { IS_WIDE } from "@/constants/helpers";
 // (PLANS: essencial 89, negocio 169, expansao 269) e GET /billing/plans.
 const PLANS = [
   { key: "essencial", name: "Essencial", price: 89, features: 8 },
-  { key: "negocio", name: "Negocio", price: 169, features: 16 },
-  { key: "expansao", name: "Expansao", price: 269, features: 22 },
+  { key: "negocio", name: "Negócio", price: 169, features: 16 },
+  { key: "expansao", name: "Expansão", price: 269, features: 22 },
 ];
 
 const CODES = [
@@ -23,7 +23,7 @@ const CODES = [
 
 const INTEGRATIONS = [
   { name: "Asaas", status: "pendente", desc: "Gateway de pagamentos (aguardando CNPJ)" },
-  { name: "NFE.io", status: "pendente", desc: "Emissao de NF-e/NFS-e" },
+  { name: "NFE.io", status: "pendente", desc: "Emissão de NF-e/NFS-e" },
   { name: "WhatsApp", status: "pendente", desc: "Business API (conta criada)" },
   { name: "Cora", status: "pendente", desc: "Conta PJ (aguardando CNPJ)" },
   { name: "Sentry", status: "ativo", desc: "Monitoramento de erros" },
@@ -50,14 +50,14 @@ export function ConfigAdmin() {
         {/* 13/07/2026: nao existem mais add-ons de vertical. A vertical usa a
             precificacao do proprio plano (Studio = Negocio+). O texto antigo
             anunciava R$69/mes que o getTotalValue nunca cobrou. */}
-        <Text style={s.planHint}>Acesso extra de equipe: R$ 19/mes por acesso acima do limite do plano. Verticais nao tem add-on — usam a precificacao do proprio plano.</Text>
+        <Text style={s.planHint}>Acesso extra de equipe: R$ 19/mês por acesso acima do limite do plano. Verticais não tem add-on — usam a precificação do próprio plano.</Text>
       </HoverCard>
 
       {/* Access Codes */}
       <HoverCard style={s.card}>
         <View style={s.headerRow}>
-          <Text style={s.title}>Codigos de acesso</Text>
-          <Pressable style={s.addBtn}><Text style={s.addBtnT}>+ Criar codigo</Text></Pressable>
+          <Text style={s.title}>Códigos de acesso</Text>
+          <Pressable style={s.addBtn}><Text style={s.addBtnT}>+ Criar código</Text></Pressable>
         </View>
         {CODES.map((c, i) => (
           <View key={i} style={s.codeRow}>
@@ -74,7 +74,7 @@ export function ConfigAdmin() {
 
       {/* Integrations */}
       <HoverCard style={s.card}>
-        <Text style={s.title}>Integracoes</Text>
+        <Text style={s.title}>Integrações</Text>
         {INTEGRATIONS.map((ig, i) => (
           <View key={i} style={s.intRow}>
             <View style={[s.intDot, { backgroundColor: ig.status === "ativo" ? "#10B981" : "#F59E0B" }]} />

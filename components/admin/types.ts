@@ -15,8 +15,8 @@ export type AdminClient = {
 
 export const PLAN_C: Record<string, { color: string; label: string }> = {
   essencial: { color: Colors.ink3, label: "Essencial" },
-  negocio: { color: Colors.violet3, label: "Negocio" },
-  expansao: { color: Colors.green, label: "Expansao" },
+  negocio: { color: Colors.violet3, label: "Negócio" },
+  expansao: { color: Colors.green, label: "Expansão" },
 };
 
 export const STATUS_C: Record<string, { color: string; label: string }> = {

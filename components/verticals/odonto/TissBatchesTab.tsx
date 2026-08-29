@@ -35,7 +35,7 @@ export function TissBatchesTab({ cid, onCreate }: BatchesTabProps) {
 
   function downloadXml(b: Batch) {
     const url = `${process.env.EXPO_PUBLIC_API_URL}/companies/${cid}/dental/tiss/batches/${b.id}/xml`;
-    Linking.openURL(url).catch(() => Alert.alert('Erro', 'Nao foi possivel baixar o XML.'));
+    Linking.openURL(url).catch(() => Alert.alert('Erro', 'Não foi possível baixar o XML.'));
   }
 
   return (
@@ -53,7 +53,7 @@ export function TissBatchesTab({ cid, onCreate }: BatchesTabProps) {
           <View style={st.empty}>
             <Icon name="package" size={32} color="#475569" />
             <Text style={st.emptyTitle}>Nenhum lote criado</Text>
-            <Text style={st.emptySub}>Lotes agrupam varias guias do mesmo convenio pra envio mensal.</Text>
+            <Text style={st.emptySub}>Lotes agrupam várias guias do mesmo convênio pra envio mensal.</Text>
           </View>
         ) : items.map(b => (
           <View key={b.id} style={st.card}>
@@ -118,7 +118,7 @@ export function TissBatchFormModal({ visible, cid, onClose }: BatchFormProps) {
       Alert.alert('Lote criado', `Lote ${data.batch.batch_number} gerado com ${data.total_guias} guias.`);
       onClose();
     },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Nao foi possivel gerar o lote.'),
+    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível gerar o lote.'),
   });
 
   function toggle(id: string) {
@@ -141,19 +141,19 @@ export function TissBatchFormModal({ visible, cid, onClose }: BatchFormProps) {
           </View>
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 80 }}>
-          <Text style={st.label}>Convenio *</Text>
+          <Text style={st.label}>Convênio *</Text>
           {insurances.map(i => (
             <Pressable key={i.id} onPress={() => { setInsuranceId(i.id); setSelectedGuides(new Set()); }} style={[st.card, insuranceId === i.id && st.cardSelected]}>
               <Text style={st.cardTitle}>{i.name}</Text>
             </Pressable>
           ))}
-          <Text style={st.label}>Mes de referencia *</Text>
+          <Text style={st.label}>Mês de referência *</Text>
           <TextInput value={referenceMonth} onChangeText={setReferenceMonth} style={st.input} placeholder="YYYY-MM" placeholderTextColor="#475569" />
           {insuranceId && (
             <>
               <Text style={[st.label, { marginTop: 16 }]}>Guias disponiveis ({guides.length})</Text>
               {guides.length === 0 ? (
-                <Text style={st.emptySub}>Nenhuma guia disponivel para este convenio.</Text>
+                <Text style={st.emptySub}>Nenhuma guia disponível para este convênio.</Text>
               ) : guides.map(g => {
                 const checked = selectedGuides.has(g.id);
                 return (

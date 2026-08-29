@@ -501,7 +501,7 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
       <ActIco compact={compact}>
         <Icon name="repeat" size={compact ? 20 : 18} color={Colors.ink3} />
       </ActIco>
-      {!compact && <ActBody k="Trocar / Devolver" v="Iniciar troca ou devolucao" isEmpty />}
+      {!compact && <ActBody k="Trocar / Devolver" v="Iniciar troca ou devolução" isEmpty />}
       <Shortcut k="F5" compact={compact} />
     </ActCard>
   );

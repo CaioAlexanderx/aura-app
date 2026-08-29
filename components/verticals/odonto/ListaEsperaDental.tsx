@@ -41,7 +41,7 @@ export function ListaEsperaDental({ entries, onAdd, onNotify, onSchedule, onRemo
           </View>
         );
       })}
-      {entries.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum paciente na lista de espera. Quando um horario for cancelado, pacientes daqui serao notificados automaticamente.</Text></View>}
+      {entries.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum paciente na lista de espera. Quando um horário for cancelado, pacientes daqui serão notificados automaticamente.</Text></View>}
     </View>
   );
 }

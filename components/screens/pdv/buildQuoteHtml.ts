@@ -109,9 +109,9 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
     '<div style="margin-bottom:32px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">' +
       '<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Condicoes</div>' +
       '<div style="font-size:11px;color:#6b7280;line-height:18px">' +
-        'Este orcamento tem validade de ' + validDays + ' dias a partir da data de emissao.<br>' +
-        'Valores sujeitos a alteracao apos o vencimento.<br>' +
-        'Este documento nao possui valor fiscal.' +
+        'Este orçamento tem validade de ' + validDays + ' dias a partir da data de emissão.<br>' +
+        'Valores sujeitos a alteração após o vencimento.<br>' +
+        'Este documento não possui valor fiscal.' +
       '</div>' +
     '</div>' +
 

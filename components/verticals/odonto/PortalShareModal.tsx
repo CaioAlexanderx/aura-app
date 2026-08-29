@@ -198,7 +198,7 @@ export function PortalShareModal({
             {tokenMut.isError && !tokenMut.isPending && (
               <View style={s.center}>
                 <Icon name="alert" size={32} color="#EF4444" />
-                <Text style={s.errText}>Nao foi possivel gerar o link.</Text>
+                <Text style={s.errText}>Não foi possível gerar o link.</Text>
                 <Pressable
                   onPress={() => tokenMut.mutate(validity)}
                   style={[s.btn, s.btnPrimary, { marginTop: 12 }]}

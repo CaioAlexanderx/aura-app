@@ -102,7 +102,7 @@ var SECTIONS: Section[] = [
     key: "aura_notas",
     icon: "file_text",
     title: "Aura Notas",
-    description: "Gestao fiscal das empresas — engine propria, CSC, certificado A1 e status SEFAZ.",
+    description: "Gestão fiscal das empresas — engine própria, CSC, certificado A1 e status SEFAZ.",
     route: "/gestao-aura-notas",
     color: Colors.violet,
   },
@@ -196,7 +196,7 @@ export default function GestaoAuraScreen() {
 
       <View style={s.adminBadge}>
         <Icon name="star" size={12} color={Colors.amber} />
-        <Text style={s.adminBadgeText}>Gestao interna — equipe Aura</Text>
+        <Text style={s.adminBadgeText}>Gestão interna — equipe Aura</Text>
       </View>
 
       {/* Alertas de acao imediata */}

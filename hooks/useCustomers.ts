@@ -163,7 +163,7 @@ export function useCustomers() {
   const addMutation = useMutation({
     mutationFn: function (body: any) {
       if (!mutationCompanyId) {
-        return Promise.reject(new Error("Empresa nao identificada"));
+        return Promise.reject(new Error("Empresa não identificada"));
       }
       return companiesApi.createCustomer(mutationCompanyId, body);
     },
@@ -190,7 +190,7 @@ export function useCustomers() {
       // Backend customers.js owner-scoped permite editar de qualquer loja
       // do mesmo dono, mas usar o original e mais explicito.
       const targetCid = params.sourceCompanyId || mutationCompanyId;
-      if (!targetCid) return Promise.reject(new Error("Empresa nao identificada"));
+      if (!targetCid) return Promise.reject(new Error("Empresa não identificada"));
       return companiesApi.updateCustomer(targetCid, params.id, params.body);
     },
     onSuccess: function () {
@@ -205,7 +205,7 @@ export function useCustomers() {
   const deleteMutation = useMutation({
     mutationFn: function (params: { custId: string; sourceCompanyId?: string | null }) {
       const targetCid = params.sourceCompanyId || mutationCompanyId;
-      if (!targetCid) return Promise.reject(new Error("Empresa nao identificada"));
+      if (!targetCid) return Promise.reject(new Error("Empresa não identificada"));
       return companiesApi.deleteCustomer(targetCid, params.custId);
     },
     onSuccess: function () {
@@ -218,7 +218,7 @@ export function useCustomers() {
   });
 
   function addCustomer(c: Customer) {
-    if (!mutationCompanyId) { toast.error("Empresa nao identificada"); return; }
+    if (!mutationCompanyId) { toast.error("Empresa não identificada"); return; }
     if (isDemo) return;
     addMutation.mutate({
       name: c.name,

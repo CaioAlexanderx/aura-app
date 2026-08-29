@@ -16,7 +16,7 @@ import { DentalSectionHeader } from "@/components/dental/DentalSectionHeader";
 // PR16 (2026-04-27): KPI cards e section headers tokenizados
 // com DentalColors, padrao visual rico do shell negocio.
 // Item 4 (2026-04-27): Widget de aniversarios proximos 7 dias.
-// #18 (2026-05-09): KPI "Proximos 7 dias" usa query separada
+// #18 (2026-05-09): KPI "Próximos 7 dias" usa query separada
 //   amanha+6 para excluir hoje do contador.
 // ============================================================
 
@@ -26,10 +26,10 @@ const pct = (n: number) => `${n.toFixed(0)}%`;
 const STAGE_LABELS: Record<string, string> = {
   lead:                 "Lead",
   contacted:            "Contato",
-  evaluation_scheduled: "Avaliacao marcada",
-  evaluation_done:      "Avaliacao feita",
-  budget_sent:          "Orcamento enviado",
-  budget_approved:      "Orcamento aprovado",
+  evaluation_scheduled: "Avaliação marcada",
+  evaluation_done:      "Avaliação feita",
+  budget_sent:          "Orçamento enviado",
+  budget_approved:      "Orçamento aprovado",
   in_treatment:         "Em tratamento",
 };
 
@@ -107,7 +107,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     return (
       <View style={z.errorBox}>
         <Icon name="alert" size={16} color={DentalColors.red} />
-        <Text style={z.errorText}>Nao foi possivel carregar o dashboard odonto. Tente recarregar a pagina.</Text>
+        <Text style={z.errorText}>Não foi possível carregar o dashboard odonto. Tente recarregar a página.</Text>
       </View>
     );
   }
@@ -124,8 +124,8 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
           <DentalKpiCard value={String(hoje.faltas || 0)} label="Faltas" color={DentalColors.red} icon="alert" />
         </View>
         <View style={[z.row, { marginTop: 8 }]}>
-          <DentalKpiCard value={String(next7Count)} label="Proximos 7 dias" color={DentalColors.cyan} icon="calendar"
-            sublabel="amanha + 6 dias" />
+          <DentalKpiCard value={String(next7Count)} label="Próximos 7 dias" color={DentalColors.cyan} icon="calendar"
+            sublabel="amanhã + 6 dias" />
         </View>
       </Fragment>
     ),
@@ -133,7 +133,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
     birthdays: () => (
       birthdays.length > 0 ? (
         <Fragment>
-          <DentalSectionHeader title="Aniversarios" chip="Proximos 7 dias" />
+          <DentalSectionHeader title="Aniversários" chip="Próximos 7 dias" />
           <View style={z.glassCard}>
             {birthdays.map(p => {
               const today = p.days_until === 0;
@@ -166,7 +166,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
 
     financeiro: () => (
       <Fragment>
-        <DentalSectionHeader title="Financeiro do mes" chip={currentMonthChip()} />
+        <DentalSectionHeader title="Financeiro do mês" chip={currentMonthChip()} />
         <View style={z.row}>
           <DentalKpiCard value={fmt(fat.realizado)} label="Realizado" color={DentalColors.green} icon="wallet"
             sublabel="Atendimentos concluidos" />
@@ -180,7 +180,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
 
     cobranca: () => (
       <Fragment>
-        <DentalSectionHeader title="Cobranca" />
+        <DentalSectionHeader title="Cobrança" />
         <View style={z.row}>
           <DentalKpiCard value={fmt(parcVenc.valor)} label="Parcelas vencidas" color={DentalColors.red} icon="alert"
             sublabel={`${parcVenc.qtd} parcela${parcVenc.qtd !== 1 ? "s" : ""}`} />

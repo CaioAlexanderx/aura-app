@@ -88,7 +88,7 @@ export function AddItemPicker({
       : parseFloat(product.stock || product.stock_qty || 0);
 
     if (stockToCheck < parsedQty) {
-      toast.error("Estoque insuficiente: disponivel " + stockToCheck + " un");
+      toast.error("Estoque insuficiente: disponível " + stockToCheck + " un");
       return;
     }
 

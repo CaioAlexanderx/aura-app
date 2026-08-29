@@ -568,7 +568,7 @@ function HealthCard({
       </View>
 
       <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 16, gap: 12 }}>
-        <Text style={[styles.caption, { marginBottom: 4 }]}>O QUE INFLUENCIA A PONTUAÇÃO</Text>
+        <Text style={[styles.caption, { marginBottom: 4 }]}>O QUE INFLUÊNCIA A PONTUAÇÃO</Text>
         {drivers.map((d, i) => (
           <DriverRow key={i} driver={d} />
         ))}

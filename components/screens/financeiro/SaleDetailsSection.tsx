@@ -101,11 +101,11 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
         // "devolvido" aqui faria a lojista procurar uma saida que nao existe.
         const credito = result.credit_refund?.credit_generated || 0;
         toast.success(
-          "Devolucao feita: " + nome + ". " + valor + " abatido do crediario" +
-          (credito > 0 ? " · " + fmt(credito) + " viraram credito a favor do cliente." : ".")
+          "Devolução feita: " + nome + ". " + valor + " abatido do crediário" +
+          (credito > 0 ? " · " + fmt(credito) + " viraram crédito a favor do cliente." : ".")
         );
       } else {
-        toast.success("Devolucao feita: " + nome + ". " + valor + " devolvido.");
+        toast.success("Devolução feita: " + nome + ". " + valor + " devolvido.");
       }
       if (result.sale_cancelled && onClose) {
         // Venda inteira cancelada: fecha modal pra evitar estado inconsistente
@@ -248,8 +248,8 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
           {items.length > 0 && (
             <Text style={s.warnHint}>
               {isCredit
-                ? "Remover devolve a quantidade ao estoque e abate as ultimas parcelas em aberto. Sobra vira credito a favor do cliente."
-                : "Remover devolve a quantidade ao estoque e cria devolucao no financeiro. Adicionar decrementa o estoque e soma na venda."}
+                ? "Remover devolve a quantidade ao estoque e abate as últimas parcelas em aberto. Sobra vira crédito a favor do cliente."
+                : "Remover devolve a quantidade ao estoque e cria devolução no financeiro. Adicionar decrementa o estoque e soma na venda."}
             </Text>
           )}
           {items.map(function(item: SaleDetailsItem) {
@@ -275,7 +275,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
                 <Pressable
                   onPress={function() {
                     if (isCancelled) {
-                      toast.error("Venda ja cancelada — items nao podem ser removidos");
+                      toast.error("Venda ja cancelada — items não podem ser removidos");
                       return;
                     }
                     if (isReturned) {
@@ -352,11 +352,11 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
         title="Devolver este item?"
         message={
           isCredit
-            ? 'Voce vai devolver "' + pendingRemoveItemName + '" desta venda no crediario. ' +
-              'A quantidade volta pro estoque e o valor abate as ultimas parcelas em aberto ' +
-              '(o que sobrar vira credito a favor do cliente). Parcelas ja pagas nao sao tocadas.'
-            : 'Voce vai remover "' + pendingRemoveItemName + '" da venda. ' +
-              'A quantidade volta pro estoque, o total da venda diminui e um lancamento de devolucao eh criado no financeiro.'
+            ? 'Você vai devolver "' + pendingRemoveItemName + '" desta venda no crediário. ' +
+              'A quantidade volta pro estoque e o valor abate as últimas parcelas em aberto ' +
+              '(o que sobrar vira crédito a favor do cliente). Parcelas ja pagas não são tocadas.'
+            : 'Você vai remover "' + pendingRemoveItemName + '" da venda. ' +
+              'A quantidade volta pro estoque, o total da venda diminui e um lancamento de devolução eh criado no financeiro.'
         }
         confirmLabel="Sim, devolver"
         destructive

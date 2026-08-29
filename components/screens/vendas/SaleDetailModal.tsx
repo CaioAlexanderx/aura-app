@@ -28,7 +28,7 @@ import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 //
 // 02/06/2026 (c) — Polish: busca /nfce/config (lazy) pra (1) esconder o botao
 // Emitir quando a empresa nao tem NFC-e ativa, mostrando uma nota de config;
-// (2) marcar com badge "teste/homologacao" quando ambiente=homologacao (a
+// (2) marcar com badge "teste/homologação" quando ambiente=homologacao (a
 // nota sai como 'autorizada' fake, sem valor fiscal real).
 //
 // DESIGN-38 B5 (11/06/2026) — Botao "Recibo" em actionsRow (venda crediário):
@@ -65,13 +65,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   pix: "PIX",
   cash: "Dinheiro",
   dinheiro: "Dinheiro",
-  credit: "Cartao Credito",
-  credito: "Cartao Credito",
-  cartao: "Cartao Credito",
-  debit: "Cartao Debito",
-  debito: "Cartao Debito",
+  credit: "Cartão Crédito",
+  credito: "Cartão Crédito",
+  cartao: "Cartão Crédito",
+  debit: "Cartão Débito",
+  debito: "Cartão Débito",
   crediario: "Crediario",
-  crediario_credito: "Credito da troca",
+  crediario_credito: "Crédito da troca",
   voucher: "Voucher",
   vale: "Vale",
 };
@@ -157,7 +157,7 @@ export function SaleDetailModal({
         toast.success("Troca cancelada. Estoque dos dois lados revertido e financeiro ajustado.");
         const warns = (result as any)?.fiscal_warnings;
         if (Array.isArray(warns) && warns.length) {
-          toast.error("Atencao fiscal: " + warns[0]);
+          toast.error("Atenção fiscal: " + warns[0]);
         }
       } else {
         toast.success(
@@ -176,7 +176,7 @@ export function SaleDetailModal({
   function handleEditClick() {
     const txId = detail?.sale.transaction_id;
     if (!txId) {
-      toast.error("Esta venda nao tem lancamento financeiro vinculado");
+      toast.error("Esta venda não tem lancamento financeiro vinculado");
       return;
     }
     if (onEditTransaction) {
@@ -214,8 +214,8 @@ export function SaleDetailModal({
         const po = (r && r.fiscal && r.fiscal.per_origin) || [];
         const okAny = po.some(function(p: any) { return (p.status || "").toLowerCase().indexOf("autoriz") >= 0; });
         const errAny = po.find(function(p: any) { return p.error || (p.status || "").toLowerCase().indexOf("rejeit") >= 0; });
-        if (okAny) toast.success("NF-e de devolucao reprocessada com sucesso.");
-        else if (errAny) toast.error("Reprocessada com pendencia: " + (errAny.error || fiscalStatusLabel(errAny.status)));
+        if (okAny) toast.success("NF-e de devolução reprocessada com sucesso.");
+        else if (errAny) toast.error("Reprocessada com pendência: " + (errAny.error || fiscalStatusLabel(errAny.status)));
         else toast.success((r && r.message) || "Reprocessamento disparado.");
       } else {
         const body = {
@@ -315,7 +315,7 @@ export function SaleDetailModal({
   const relevantFiscal = fiscalList.filter(function(f) { return relTipos.indexOf(f.tipo) >= 0; });
   const authorizedEmission = relevantFiscal.find(function(f) { return f.status === "autorizada"; }) || null;
   const latestFiscal = relevantFiscal.length ? relevantFiscal[0] : null;
-  const fiscalDocLabel = isTroca ? "NF-e de devolucao" : "NFC-e";
+  const fiscalDocLabel = isTroca ? "NF-e de devolução" : "NFC-e";
   const fiscalBusy = isEmitting || isReemitting;
 
   // 02/06/2026 (c): config fiscal — habilita o botao + sinaliza homologacao.
@@ -454,17 +454,17 @@ export function SaleDetailModal({
                 )}
                 {/* Conciliacao financeiro */}
                 <View style={s.trocaSub}>
-                  <Text style={s.trocaSubLabel}>Conciliacao no Financeiro</Text>
+                  <Text style={s.trocaSubLabel}>Conciliação no Financeiro</Text>
                   <View style={s.trocaFinRow}>
                     <Text style={s.trocaFinLab}>Troca - Venda</Text>
                     <Text style={[s.trocaFinVal, { color: Colors.green }]}>+ {fmt(troca.new_value)}</Text>
                   </View>
                   <View style={s.trocaFinRow}>
-                    <Text style={s.trocaFinLab}>Troca - Devolucao</Text>
+                    <Text style={s.trocaFinLab}>Troca - Devolução</Text>
                     <Text style={[s.trocaFinVal, { color: Colors.red }]}>- {fmt(troca.returned_value)}</Text>
                   </View>
                   <View style={[s.trocaFinRow, s.trocaFinNet]}>
-                    <Text style={[s.trocaFinLab, { fontWeight: "800", color: Colors.ink }]}>Liquido</Text>
+                    <Text style={[s.trocaFinLab, { fontWeight: "800", color: Colors.ink }]}>Líquido</Text>
                     <Text style={[s.trocaFinVal, { color: TROCA_ORANGE, fontWeight: "800" }]}>+ {fmt(troca.net_amount)}</Text>
                   </View>
                 </View>
@@ -476,7 +476,7 @@ export function SaleDetailModal({
                 <Icon name="users" size={12} color={Colors.ink3} />
                 <Text style={s.personLabel}>Cliente</Text>
                 <Text style={s.personValue} numberOfLines={1}>
-                  {customer?.name || "Nao identificado"}
+                  {customer?.name || "Não identificado"}
                 </Text>
                 {customer?.phone && <Text style={s.personHint}>{customer.phone}</Text>}
               </View>
@@ -491,7 +491,7 @@ export function SaleDetailModal({
                 </View>
                 <Text style={s.personLabel}>Vendedora</Text>
                 <Text style={s.personValue} numberOfLines={1}>
-                  {seller?.name || "Nao informada"}
+                  {seller?.name || "Não informada"}
                 </Text>
               </View>
             </View>
@@ -499,7 +499,7 @@ export function SaleDetailModal({
             <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Mercadorias"}</Text>
             <View style={s.itemsBox}>
               {items.length === 0 && (
-                <Text style={s.noItems}>Esta venda nao possui itens.</Text>
+                <Text style={s.noItems}>Esta venda não possui itens.</Text>
               )}
               {items.map(function(item) {
                 return (
@@ -526,7 +526,7 @@ export function SaleDetailModal({
 
             {sale.notes && (
               <View style={s.notesBox}>
-                <Text style={s.notesLabel}>Observacoes</Text>
+                <Text style={s.notesLabel}>Observações</Text>
                 <Text style={s.notesText}>{sale.notes}</Text>
               </View>
             )}
@@ -538,7 +538,7 @@ export function SaleDetailModal({
                   <Text style={s.fiscalTitle}>Nota fiscal</Text>
                   {fiscalHomolog && (
                     <View style={s.fiscalHomologPill}>
-                      <Text style={s.fiscalHomologText}>Teste · homologacao</Text>
+                      <Text style={s.fiscalHomologText}>Teste · homologação</Text>
                     </View>
                   )}
                 </View>
@@ -582,7 +582,7 @@ export function SaleDetailModal({
                       </View>
                     ) : (
                       <Text style={s.fiscalNone}>
-                        {isTroca ? "A NF-e de devolucao desta troca ainda nao foi emitida." : "Esta venda ainda nao tem NFC-e emitida."}
+                        {isTroca ? "A NF-e de devolução desta troca ainda não foi emitida." : "Esta venda ainda não tem NFC-e emitida."}
                       </Text>
                     )}
                     {fiscalEnabled ? (
@@ -597,7 +597,7 @@ export function SaleDetailModal({
                           <>
                             <Icon name="info" size={13} color={Colors.violet3} />
                             <Text style={s.fiscalEmitText}>
-                              {isTroca ? "Reprocessar NF-e de devolucao" : "Emitir NFC-e"}
+                              {isTroca ? "Reprocessar NF-e de devolução" : "Emitir NFC-e"}
                             </Text>
                           </>
                         )}
@@ -688,8 +688,8 @@ export function SaleDetailModal({
             <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : "Cancelar venda?"}</Text>
             <Text style={s.confirmMsg}>
               {isTroca
-                ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transacoes da troca somem do financeiro e a NF-e de devolucao nao autorizada e removida. Acao irreversivel."
-                : "Os " + items.length + " item(s) voltam para o estoque e o valor sai da receita. Esta acao nao pode ser desfeita."}
+                ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transações da troca somem do financeiro e a NF-e de devolução não autorizada e removida. Ação irreversivel."
+                : "Os " + items.length + " item(s) voltam para o estoque e o valor sai da receita. Esta ação não pode ser desfeita."}
             </Text>
             <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
             <TextInput

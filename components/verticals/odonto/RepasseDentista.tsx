@@ -190,7 +190,7 @@ export function RepasseDentista() {
             {pending === 0 && (p.procedures || []).length > 0 && (
               <View style={z.allPaidBanner}>
                 <Icon name="check" size={12} color={Colors.green || "#10B981"} />
-                <Text style={z.allPaidText}>Todos os repasses deste dentista estao pagos</Text>
+                <Text style={z.allPaidText}>Todos os repasses deste dentista estão pagos</Text>
               </View>
             )}
           </View>
@@ -209,7 +209,7 @@ export function RepasseDentista() {
 
       {allPractitioners.length > 0 && (
         <View style={z.configSection}>
-          <Text style={z.configTitle}>Configuracao de repasse</Text>
+          <Text style={z.configTitle}>Configuração de repasse</Text>
           <Text style={z.configHint}>Percentual que cada dentista recebe sobre o valor do procedimento concluido.</Text>
           {allPractitioners.map((pr: any) => (
             <View key={pr.id} style={z.configRow}>

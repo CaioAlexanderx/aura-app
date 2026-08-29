@@ -31,7 +31,7 @@ export function TreatmentPlanFunnel({ data }: { data: FunnelData[] }) {
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>Funil de orcamentos</Text>
+      <Text style={s.title}>Funil de orçamentos</Text>
       <View style={s.barRow}>
         {sorted.map(d => {
           const info = STATUS_MAP[d.status] || STATUS_MAP.rascunho;

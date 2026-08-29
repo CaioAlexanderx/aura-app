@@ -40,7 +40,7 @@ export function TabConfig({ companyId }: { companyId: string }) {
 
   function submitCert() {
     if (!certFile) { toast.error("Selecione o certificado A1 (.pfx)"); return; }
-    if (!certPass) { toast.error("Senha do certificado obrigatoria"); return; }
+    if (!certPass) { toast.error("Senha do certificado obrigatória"); return; }
     certMut.mutate({ certificate: certFile, password: certPass });
   }
 
@@ -49,11 +49,11 @@ export function TabConfig({ companyId }: { companyId: string }) {
   return (
     <View>
       <View style={ns.formCard}>
-        <Text style={ns.formTitle}>Configuracao fiscal</Text>
+        <Text style={ns.formTitle}>Configuração fiscal</Text>
         <View style={ns.configItem}>
           <Icon name={hasCnpj ? "check" : "alert"} size={16} color={hasCnpj ? Colors.green : Colors.amber} />
           <Text style={ns.configLabel}>CNPJ cadastrado</Text>
-          <Text style={[ns.configValue, { color: hasCnpj ? Colors.green : Colors.amber }]}>{hasCnpj ? (company as any).cnpj : "Nao informado"}</Text>
+          <Text style={[ns.configValue, { color: hasCnpj ? Colors.green : Colors.amber }]}>{hasCnpj ? (company as any).cnpj : "Não informado"}</Text>
         </View>
         <View style={ns.divider} />
         <Text style={ns.fLabel}>1. Registrar empresa no provedor fiscal</Text>

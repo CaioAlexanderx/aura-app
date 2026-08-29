@@ -70,7 +70,7 @@ const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
 
 const NAV: NavSection[] = [
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
-  { s: "Contabil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
+  { s: "Contábil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
   // /vendas (15/05/2026) — modulo proprio "vendas"; nao herda mais do pdv.
   // Permite controlar visibilidade separadamente do Caixa (ex: Kaila/Vitoria).
   // /crediario (14/05/2026) — dashboard inadimplencia + regua de cobranca.
@@ -211,7 +211,7 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
   // /dental/(clinic)/hoje (decisao 2026-04-25, ver memory:
   // plano_aura_odonto_portal). Outras verticais continuam aqui.
   if (activeVertical && activeVertical !== "odonto") {
-    const meta = VERTICAL_NAV[activeVertical] || { label: "Modulo Vertical", icon: "star" };
+    const meta = VERTICAL_NAV[activeVertical] || { label: "Módulo Vertical", icon: "star" };
     const verticalSection: NavSection = {
       s: "Meu Segmento",
       i: [{ r: "/vertical", l: meta.label, ic: meta.icon }],
@@ -288,7 +288,7 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
   const planBorder = pl === "expansao" ? "rgba(52,211,153,0.24)" : "rgba(167,139,250,0.22)";
 
   // Tooltip do item: quando ha bloqueio, o `title` explica o selo — a
-  // sidebar nao tem largura pra escrever "Disponivel no plano Negocio"
+  // sidebar nao tem largura pra escrever "Disponível no plano Negócio"
   // inteiro ao lado do rotulo.
   const planoLabel = pl ? (PLAN_LABEL[pl] || pl) : null;
   const tituloItem = planoLabel ? l + " — disponível no plano " + planoLabel : l;

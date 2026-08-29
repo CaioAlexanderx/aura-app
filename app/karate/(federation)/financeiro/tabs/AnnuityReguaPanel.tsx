@@ -45,7 +45,7 @@ import {
 // não configurou nada (subject_template/body_template === null). Manter
 // os DOIS textos em sincronia é intencional: a prévia tem que mostrar a
 // verdade do que seria enviado hoje.
-const DEFAULT_SUBJECT = "Lembrete: anuidade {{competencia}} — {{valor}}";
+const DEFAULT_SUBJECT = "Lembrete: anuidade {{competência}} — {{valor}}";
 const DEFAULT_BODY =
   "Olá, {{nome}}!\n\n" +
   "A anuidade referente a {{competencia}}, no valor de {{valor}}, vence em {{vencimento}}.\n\n" +
@@ -55,7 +55,7 @@ const DEFAULT_OFFSETS = [-7, -1, 3, 15, 30];
 
 const VAR_LABEL: Record<KarateReminderVar, string> = {
   nome: "{{nome}}",
-  competencia: "{{competencia}}",
+  competencia: "{{competência}}",
   valor: "{{valor}}",
   vencimento: "{{vencimento}}",
   planos: "{{planos}}",

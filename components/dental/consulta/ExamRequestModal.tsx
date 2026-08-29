@@ -294,7 +294,7 @@ export function ExamRequestModal({ open, patientId, appointmentId, practitionerI
                       <TextInput
                         value={detail.indication}
                         onChangeText={(v) => setDetailField(t.id, "indication", v)}
-                        placeholder="Indicacao para este exame..."
+                        placeholder="Indicação para este exame..."
                         placeholderTextColor={DentalColors.ink3}
                         style={inputStyle}
                       />
@@ -363,7 +363,7 @@ export function ExamRequestModal({ open, patientId, appointmentId, practitionerI
                       <TextInput
                         value={detail.indication}
                         onChangeText={(v) => setDetailField(exam.id, "indication", v)}
-                        placeholder="Indicacao para este exame..."
+                        placeholder="Indicação para este exame..."
                         placeholderTextColor={DentalColors.ink3}
                         style={inputStyle}
                       />
@@ -417,15 +417,15 @@ export function ExamRequestModal({ open, patientId, appointmentId, practitionerI
             {/* Campos padrao (aplicados quando nao ha personalizacao individual) */}
             {totalSelected > 0 ? (
               <View style={{ marginTop: 10, padding: 12, backgroundColor: DentalColors.bg, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}>
-                <Text style={{ fontSize: 10, color: DentalColors.cyan, fontWeight: "700", marginBottom: 2 }}>INDICACAO PADRAO</Text>
-                <Text style={{ fontSize: 9, color: DentalColors.ink3, marginBottom: 6 }}>Aplicada a exames sem personalizacao individual</Text>
+                <Text style={{ fontSize: 10, color: DentalColors.cyan, fontWeight: "700", marginBottom: 2 }}>INDICAÇÃO PADRÃO</Text>
+                <Text style={{ fontSize: 9, color: DentalColors.ink3, marginBottom: 6 }}>Aplicada a exames sem personalização individual</Text>
                 <TextInput
                   value={indication} onChangeText={setIndication}
-                  placeholder="Ex: Avaliacao pre-cirurgia em 36"
+                  placeholder="Ex: Avaliação pre-cirurgia em 36"
                   placeholderTextColor={DentalColors.ink3}
                   style={inputStyle}
                 />
-                <Text style={{ fontSize: 10, color: DentalColors.ink3, fontWeight: "700", marginTop: 8, marginBottom: 6 }}>OBSERVACOES PADRAO</Text>
+                <Text style={{ fontSize: 10, color: DentalColors.ink3, fontWeight: "700", marginTop: 8, marginBottom: 6 }}>OBSERVAÇÕES PADRÃO</Text>
                 <TextInput
                   value={observations} onChangeText={setObservations}
                   placeholder="Notas adicionais..."

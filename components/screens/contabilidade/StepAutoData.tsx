@@ -31,7 +31,7 @@ var AUTO_STEP_MAP: Record<string, { step: number; label: string; endpoint: strin
     endpoint: "/obligations/das/auto-preview",
     formatter: function(d: any) {
       return { lines: [
-        { label: "Receita do mes", value: fmt(d.current_revenue || 0) },
+        { label: "Receita do mês", value: fmt(d.current_revenue || 0) },
         { label: "RBT12", value: fmt(d.revenue_12m || 0) },
         { label: "Aliquota efetiva", value: (d.das?.effective_rate_pct || 0) + "%" },
         { label: "DAS estimado", value: fmt(d.das?.estimated_das || 0) },
@@ -39,14 +39,14 @@ var AUTO_STEP_MAP: Record<string, { step: number; label: string; endpoint: strin
     },
   }],
   prolabore: [{
-    step: 0, label: "Calculo pro-labore",
+    step: 0, label: "Cálculo pro-labore",
     endpoint: "/prolabore/preview",
     formatter: function(d: any) {
       var s = d.suggested || {};
       return { lines: [
         { label: "Pro-labore sugerido", value: fmt(s.gross_prolabore || 0) },
         { label: "INSS retido", value: fmt(s.inss || 0) },
-        { label: "Liquido", value: fmt(s.net_prolabore || 0) },
+        { label: "Líquido", value: fmt(s.net_prolabore || 0) },
         { label: "Fator R", value: (d.fator_r?.with_suggested || 0) + "%" },
       ]};
     },

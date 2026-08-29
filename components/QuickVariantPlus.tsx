@@ -206,7 +206,7 @@ export function QuickVariantPlus({
           <View style={s.confirmBox}>
             <View style={s.confirmHeader}>
               <Icon name="alert" size={14} color={Colors.violet3} />
-              <Text style={s.confirmTitle}>Confirmar criacao de variantes</Text>
+              <Text style={s.confirmTitle}>Confirmar criação de variantes</Text>
             </View>
 
             <Text style={s.confirmIntro}>

@@ -29,16 +29,16 @@ export function ReferralCard() {
 
   async function generateCode() {
     if (!emailVerified) {
-      toast.error("Verifique seu e-mail antes de gerar um codigo de indicacao.");
+      toast.error("Verifique seu e-mail antes de gerar um código de indicação.");
       return;
     }
     setLoading(true);
     try {
       const data = await referralsApi.generate();
       setCode(data.code);
-      toast.success("Codigo de indicacao gerado!");
+      toast.success("Código de indicação gerado!");
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao gerar codigo");
+      toast.error(err?.message || "Erro ao gerar código");
     } finally {
       setLoading(false);
     }
@@ -48,16 +48,16 @@ export function ReferralCard() {
     if (!code) return;
     if (Platform.OS === "web" && typeof navigator !== "undefined") {
       navigator.clipboard.writeText(code);
-      toast.success("Codigo copiado!");
+      toast.success("Código copiado!");
     }
   }
 
   function shareWhatsApp() {
     if (!code) return;
     const msg = encodeURIComponent(
-      "Oi! Estou usando a Aura pra gerenciar meu negocio e esta sendo incrivel. " +
+      "Oi! Estou usando a Aura pra gerenciar meu negócio e esta sendo incrivel. " +
       "Vou te dar 20% de desconto no primeiro mes.\n\n" +
-      "Use o codigo " + code + " ou acesse:\n" +
+      "Use o código " + code + " ou acesse:\n" +
       "https://getaura.com.br/r/" + code
     );
     const url = "https://wa.me/?text=" + msg;
@@ -75,10 +75,10 @@ export function ReferralCard() {
           Ganhe 20% de desconto indicando amigos. Quem voce indicar tambem ganha 20% no primeiro mes.
         </Text>
         <View style={s.codeBox}>
-          <Text style={s.codeLabel}>Seu codigo</Text>
+          <Text style={s.codeLabel}>Seu código</Text>
           <Text style={s.codeValue}>REF-DEMO</Text>
         </View>
-        <Text style={s.demoNote}>Disponivel com conta real</Text>
+        <Text style={s.demoNote}>Disponível com conta real</Text>
       </View>
     );
   }
@@ -96,7 +96,7 @@ export function ReferralCard() {
       {code ? (
         <>
           <View style={s.codeBox}>
-            <Text style={s.codeLabel}>Seu codigo</Text>
+            <Text style={s.codeLabel}>Seu código</Text>
             <Text style={s.codeValue}>{code}</Text>
           </View>
           <View style={s.actions}>
@@ -122,11 +122,11 @@ export function ReferralCard() {
           {!emailVerified && (
             <View style={s.verifyNote}>
               <Icon name="alert" size={13} color={Colors.amber} />
-              <Text style={s.verifyNoteText}>Verifique seu e-mail para liberar as indicacoes.</Text>
+              <Text style={s.verifyNoteText}>Verifique seu e-mail para liberar as indicações.</Text>
             </View>
           )}
           <Pressable onPress={generateCode} style={[s.generateBtn, !emailVerified && { opacity: 0.6 }]} disabled={loading}>
-            <Text style={s.generateText}>{loading ? "Gerando..." : "Gerar meu codigo"}</Text>
+            <Text style={s.generateText}>{loading ? "Gerando..." : "Gerar meu código"}</Text>
           </Pressable>
         </>
       )}

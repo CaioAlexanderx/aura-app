@@ -26,7 +26,7 @@ export function PixPaymentCard({ qrBase64, pixPayload, amount, dueDate, title, o
     if (!pixPayload) return;
     if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(pixPayload).then(function() {
-        setCopied(true); toast.success("Codigo Pix copiado!");
+        setCopied(true); toast.success("Código Pix copiado!");
         setTimeout(function() { setCopied(false); }, 3000);
       }).catch(function() { toast.error("Erro ao copiar"); });
     } else {
@@ -64,7 +64,7 @@ export function PixPaymentCard({ qrBase64, pixPayload, amount, dueDate, title, o
         <Pressable onPress={copyPix} style={[s.copyBtn, copied && s.copyBtnDone]}>
           <Icon name={copied ? "check" : "copy"} size={14} color={copied ? Colors.green : Colors.violet3} />
           <Text style={[s.copyText, copied && { color: Colors.green }]}>
-            {copied ? "Copiado!" : "Copiar codigo Pix"}
+            {copied ? "Copiado!" : "Copiar código Pix"}
           </Text>
         </Pressable>
       )}

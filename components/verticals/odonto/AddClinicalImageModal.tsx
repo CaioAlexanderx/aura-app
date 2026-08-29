@@ -39,7 +39,7 @@ const IMAGE_TYPES = [
   { value: 'extraoral',   label: 'Extraoral',   hint: 'Rosto/perfil' },
   { value: 'radiografia', label: 'Radiografia', hint: 'RX panoramico, periapical, etc' },
   { value: 'modelo',      label: 'Modelo',      hint: 'Modelo gesso/digital' },
-  { value: 'outro',       label: 'Outro',       hint: 'Sem categoria especifica' },
+  { value: 'outro',       label: 'Outro',       hint: 'Sem categoria específica' },
 ] as const;
 
 type ImageTypeValue = typeof IMAGE_TYPES[number]['value'];
@@ -76,7 +76,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
 
       const a = result.assets[0];
       if (!a.base64) {
-        Alert.alert('Erro', 'Nao foi possivel ler a imagem. Tente outra foto.');
+        Alert.alert('Erro', 'Não foi possível ler a imagem. Tente outra foto.');
         return;
       }
 
@@ -89,7 +89,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
         fileSize: a.fileSize,
       });
     } catch (err: any) {
-      Alert.alert('Erro', err?.message || 'Nao foi possivel abrir a galeria.');
+      Alert.alert('Erro', err?.message || 'Não foi possível abrir a galeria.');
     }
   }
 
@@ -141,7 +141,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Nao foi possivel salvar a imagem.');
+      Alert.alert('Erro', err?.message || 'Não foi possível salvar a imagem.');
     },
     onSettled: () => {
       setUploading(false);
@@ -163,13 +163,13 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
 
   function handleSave() {
     if (!asset) {
-      Alert.alert('Atencao', 'Escolha uma foto antes de salvar.');
+      Alert.alert('Atenção', 'Escolha uma foto antes de salvar.');
       return;
     }
     if (toothNumber) {
       const n = parseInt(toothNumber);
       if (isNaN(n) || n < 11 || n > 85) {
-        Alert.alert('Dente invalido', 'Numero do dente deve estar entre 11 e 85 (sistema FDI).');
+        Alert.alert('Dente inválido', 'Número do dente deve estar entre 11 e 85 (sistema FDI).');
         return;
       }
     }
@@ -207,7 +207,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
             <Pressable onPress={handlePickImage} style={s.pickBtn}>
               <Text style={s.pickIcon}>{'\u{1F4F7}'}</Text>
               <Text style={s.pickLabel}>Escolher foto da galeria</Text>
-              <Text style={s.pickHint}>JPG, PNG ou WebP ate ~10 MB</Text>
+              <Text style={s.pickHint}>JPG, PNG ou WebP até ~10 MB</Text>
             </Pressable>
           )}
 

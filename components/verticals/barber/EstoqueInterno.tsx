@@ -14,10 +14,10 @@ export function EstoqueInterno({ materials, onLink, onUnlink }: Props) {
   return (
     <View style={s.container}>
       <View style={s.kpiRow}>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{materials.length}</Text><Text style={s.kpiLbl}>Vinculos</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{materials.length}</Text><Text style={s.kpiLbl}>Vínculos</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{lowStock.length}</Text><Text style={s.kpiLbl}>Estoque baixo</Text></View>
       </View>
-      <View style={s.header}><Text style={s.title}>Consumo por servico</Text>{onLink && <Pressable onPress={onLink} style={s.addBtn}><Text style={s.addBtnT}>+ Vincular</Text></Pressable>}</View>
+      <View style={s.header}><Text style={s.title}>Consumo por serviço</Text>{onLink && <Pressable onPress={onLink} style={s.addBtn}><Text style={s.addBtnT}>+ Vincular</Text></Pressable>}</View>
       {Object.entries(byService).map(([svcName, mats]) => (
         <View key={svcName} style={s.svcSection}>
           <Text style={s.svcName}>{svcName}</Text>
@@ -25,14 +25,14 @@ export function EstoqueInterno({ materials, onLink, onUnlink }: Props) {
             const isLow = m.current_stock < m.quantity_per_use * 5;
             return (
               <View key={m.product_id} style={s.matRow}>
-                <View style={{ flex: 1 }}><Text style={s.prodName}>{m.product_name}</Text><Text style={s.matInfo}>{m.quantity_per_use} {m.unit}/uso | Estoque: {m.current_stock} {m.unit}{m.auto_debit ? " | Auto-debito" : ""}</Text></View>
+                <View style={{ flex: 1 }}><Text style={s.prodName}>{m.product_name}</Text><Text style={s.matInfo}>{m.quantity_per_use} {m.unit}/uso | Estoque: {m.current_stock} {m.unit}{m.auto_debit ? " | Auto-débito" : ""}</Text></View>
                 {isLow && <View style={s.lowBadge}><Text style={s.lowText}>Baixo</Text></View>}
               </View>
             );
           })}
         </View>
       ))}
-      {materials.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum material vinculado a servicos. Vincule produtos para debito automatico do estoque.</Text></View>}
+      {materials.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum material vinculado a serviços. Vincule produtos para débito automático do estoque.</Text></View>}
     </View>
   );
 }

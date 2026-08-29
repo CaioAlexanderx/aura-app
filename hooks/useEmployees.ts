@@ -120,7 +120,7 @@ export function useEmployees() {
       toast.success("Funcionario apagado");
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
-        toast.error(err.message || "Funcionario tem historico. Use Suspender.");
+        toast.error(err.message || "Funcionario tem histórico. Use Suspender.");
       } else {
         toast.error(err.message || "Erro ao apagar");
       }

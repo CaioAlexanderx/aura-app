@@ -48,7 +48,7 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
         },
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ortho-treatments'] }); onCreated(); },
-    onError:   (e: any) => Alert.alert('Erro', e?.message || 'Nao foi possivel criar o tratamento.'),
+    onError:   (e: any) => Alert.alert('Erro', e?.message || 'Não foi possível criar o tratamento.'),
   });
 
   return (
@@ -88,7 +88,7 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
           <Text style={st.lbl}>Queixa principal</Text>
           <TextInput style={[st.input, { height: 72, textAlignVertical: 'top' }]} placeholder="Descreva a queixa do paciente..." placeholderTextColor="#475569" multiline value={chiefComplaint} onChangeText={setChiefComplaint} />
 
-          <Text style={st.lbl}>Data de inicio</Text>
+          <Text style={st.lbl}>Data de início</Text>
           <TextInput style={st.input} placeholder="DD/MM/AAAA" placeholderTextColor="#475569" keyboardType="numeric" value={startDate} onChangeText={setStartDate} />
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -97,7 +97,7 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
               <TextInput style={st.input} placeholder="18" placeholderTextColor="#475569" keyboardType="numeric" value={durationMonths} onChangeText={setDurationMonths} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={st.lbl}>Sessoes previstas</Text>
+              <Text style={st.lbl}>Sessões previstas</Text>
               <TextInput style={st.input} placeholder="18" placeholderTextColor="#475569" keyboardType="numeric" value={sessionsPlanned} onChangeText={setSessionsPlanned} />
             </View>
           </View>
@@ -105,8 +105,8 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
           <Text style={st.lbl}>Valor total (R$)</Text>
           <TextInput style={st.input} placeholder="Ex: 3800,00" placeholderTextColor="#475569" keyboardType="decimal-pad" value={totalValue} onChangeText={setTotalValue} />
 
-          <Text style={st.lbl}>Observacoes</Text>
-          <TextInput style={[st.input, { height: 72, textAlignVertical: 'top' }]} placeholder="Observacoes adicionais..." placeholderTextColor="#475569" multiline value={notes} onChangeText={setNotes} />
+          <Text style={st.lbl}>Observações</Text>
+          <TextInput style={[st.input, { height: 72, textAlignVertical: 'top' }]} placeholder="Observações adicionais..." placeholderTextColor="#475569" multiline value={notes} onChangeText={setNotes} />
 
           <TouchableOpacity
             onPress={() => mut.mutate()}

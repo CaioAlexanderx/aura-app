@@ -10,8 +10,8 @@ import { STATUS_MAP, fmt, calcPayroll, calcINSS, calcFerias, calc13 } from "./ty
 
 const PAYSLIP_TYPES: { key: PayslipType; label: string }[] = [
   { key: "mensal", label: "Mensal" },
-  { key: "ferias", label: "Ferias" },
-  { key: "decimo_terceiro", label: "13o Salario" },
+  { key: "ferias", label: "Férias" },
+  { key: "decimo_terceiro", label: "13o Salário" },
 ];
 
 function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: string, cnpj?: string) {
@@ -19,7 +19,7 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
   const ferias = calcFerias(emp);
   const decimo = calc13(emp);
   const period = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const typeLabels: Record<string, string> = { mensal: "Mensal", ferias: "Ferias", decimo_terceiro: "13o Salario" };
+  const typeLabels: Record<string, string> = { mensal: "Mensal", ferias: "Férias", decimo_terceiro: "13o Salário" };
   const f = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
 
   let proventosRows = "", descontosRows = "";
@@ -27,7 +27,7 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
 
   if (type === "mensal") {
     totalProv = emp.salary; totalDesc = mensal.inss + mensal.irrf; liquid = mensal.liquid;
-    proventosRows = `<tr><td>Salario base</td><td class="r">${f(emp.salary)}</td></tr>`;
+    proventosRows = `<tr><td>Salário base</td><td class="r">${f(emp.salary)}</td></tr>`;
     descontosRows = `<tr><td>INSS (${(mensal.inss/emp.salary*100).toFixed(1)}%)</td><td class="r red">${f(mensal.inss)}</td></tr>
       <tr><td>IRRF</td><td class="r ${mensal.irrf > 0 ? 'red' : ''}">${mensal.irrf > 0 ? f(mensal.irrf) : 'Isento'}</td></tr>`;
   } else if (type === "ferias") {
@@ -56,7 +56,7 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
     <div style="font-size:11px;color:#555;"><strong style="color:#1a1a2e;">Nome:</strong> ${emp.name}</div>
     <div style="font-size:11px;color:#555;"><strong style="color:#1a1a2e;">Cargo:</strong> ${emp.role || 'Colaborador'}</div>
     <div style="font-size:11px;color:#555;"><strong style="color:#1a1a2e;">CPF:</strong> ${emp.cpf || '—'}</div>
-    <div style="font-size:11px;color:#555;"><strong style="color:#1a1a2e;">Admissao:</strong> ${emp.admDate || '—'}</div>
+    <div style="font-size:11px;color:#555;"><strong style="color:#1a1a2e;">Admissão:</strong> ${emp.admDate || '—'}</div>
   </div>
   <div style="margin-bottom:16px;"><div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ede9fe;">Proventos</div>
     <table style="width:100%;border-collapse:collapse;">${proventosRows}<tr style="font-weight:700;border-top:1.5px solid #6d28d9;background:#ede9fe;"><td style="padding:7px 10px;font-size:12px;">Total proventos</td><td style="padding:7px 10px;font-size:12px;text-align:right;font-family:monospace;">${f(totalProv)}</td></tr></table>
@@ -66,11 +66,11 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
   </div>
   ${extras}
   <div style="background:linear-gradient(135deg,#6d28d9,#7c3aed);border-radius:12px;padding:20px;display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
-    <span style="color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;">${type === 'ferias' ? 'Liquido ferias' : type === 'decimo_terceiro' ? 'Liquido 13o' : 'Salario liquido'}</span>
+    <span style="color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;">${type === 'ferias' ? 'Líquido férias' : type === 'decimo_terceiro' ? 'Líquido 13o' : 'Salário líquido'}</span>
     <span style="color:#fff;font-size:26px;font-weight:800;">${f(liquid)}</span>
   </div>
   <div style="margin-top:24px;padding-top:10px;border-top:0.5px solid #ddd;font-size:9px;color:#aaa;display:flex;justify-content:space-between;">
-    <span>Aura. — Holerite estimado para apoio contabil</span><span>${period}</span>
+    <span>Aura. — Holerite estimado para apoio contábil</span><span>${period}</span>
   </div>
 </div>`;
 
@@ -107,10 +107,10 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
 
   async function handleSendEmail() {
     if (!emp.email) {
-      toast.error("Funcionario sem e-mail cadastrado. Adicione na edicao.");
+      toast.error("Funcionario sem e-mail cadastrado. Adicione na edição.");
       return;
     }
-    if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
+    if (!company?.id || !token) { toast.error("Sessão expirada"); return; }
 
     setSending(true);
     try {
@@ -138,13 +138,13 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
   }
 
   function handleSendWhatsApp() {
-    toast.info("Envio por WhatsApp sera integrado em breve.");
+    toast.info("Envio por WhatsApp será integrado em breve.");
     setShowSend(false);
   }
 
   function handleDownloadPdf() {
     if (Platform.OS !== "web" || typeof window === "undefined") {
-      toast.info("Impressao disponivel apenas na versao web");
+      toast.info("Impressão disponível apenas na versão web");
       return;
     }
     const { fullPageHtml } = generatePayslipHtml(emp, payslipType, company?.name || "Minha Empresa", (company as any)?.cnpj);
@@ -197,7 +197,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
         {payslipType === "mensal" && (
           <>
             <View style={s.sec}><Text style={s.secT}>Proventos</Text>
-              <View style={s.row}><Text style={s.rl}>Salario base</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(emp.salary)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>Salário base</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(emp.salary)}</Text></View>
               <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total proventos</Text><Text style={[s.rv, s.bold]}>{fmt(emp.salary)}</Text></View>
             </View>
             <View style={s.sec}><Text style={s.secT}>Descontos</Text>
@@ -205,7 +205,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
               <View style={s.row}><Text style={s.rl}>IRRF</Text><Text style={[s.rv, { color: mensal.irrf > 0 ? Colors.red : Colors.ink3 }]}>{mensal.irrf > 0 ? "-"+fmt(mensal.irrf) : "Isento"}</Text></View>
               <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(mensal.inss + mensal.irrf)}</Text></View>
             </View>
-            <View style={s.totalCard}><Text style={s.totalLabel}>Salario liquido</Text><Text style={s.totalValue}>{fmt(mensal.liquid)}</Text></View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Salário líquido</Text><Text style={s.totalValue}>{fmt(mensal.liquid)}</Text></View>
           </>
         )}
         {payslipType === "ferias" && (
@@ -221,7 +221,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
               <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(ferias.inss + ferias.irrf)}</Text></View>
             </View>
             <View style={s.infoCard}><Text style={s.infoText}>FGTS sobre ferias: {fmt(ferias.fgts)}</Text></View>
-            <View style={s.totalCard}><Text style={s.totalLabel}>Liquido ferias</Text><Text style={s.totalValue}>{fmt(ferias.liquid)}</Text></View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Líquido férias</Text><Text style={s.totalValue}>{fmt(ferias.liquid)}</Text></View>
           </>
         )}
         {payslipType === "decimo_terceiro" && (
@@ -236,7 +236,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
               <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total descontos</Text><Text style={[s.rv, s.bold, { color: Colors.red }]}>-{fmt(decimo.inss + decimo.irrf)}</Text></View>
             </View>
             <View style={s.infoCard}><Text style={s.infoText}>FGTS sobre 13o: {fmt(decimo.fgts)}</Text></View>
-            <View style={s.totalCard}><Text style={s.totalLabel}>Liquido 13o salario</Text><Text style={s.totalValue}>{fmt(decimo.liquid)}</Text></View>
+            <View style={s.totalCard}><Text style={s.totalLabel}>Líquido 13o salário</Text><Text style={s.totalValue}>{fmt(decimo.liquid)}</Text></View>
           </>
         )}
       </View>

@@ -54,7 +54,7 @@ const BARCODE_OPTS = {
 const BARCODE_PLACEHOLDERS = new Set([
   "", "...", "....", ".....", "-", "--", "---",
   "0", "00", "000", "N/A", "n/a", "NA", "na",
-  "sem codigo", "SEM CODIGO", "null", "undefined", "?", "??", "???",
+  "sem código", "SEM CÓDIGO", "null", "undefined", "?", "??", "???",
 ]);
 const BARCODE_MIN_LENGTH = 4;
 
@@ -75,11 +75,11 @@ export function validateLabelItems(items: Array<{ name: string; barcode: string 
   const invalid: InvalidCodeItem[] = [];
   items.forEach(function(item) {
     const code = String(item.barcode || "").trim();
-    if (!code) { invalid.push({ name: item.name, code: "(vazio)", reason: "Sem codigo cadastrado" }); return; }
-    if (code.length < BARCODE_MIN_LENGTH) { invalid.push({ name: item.name, code: code, reason: "Codigo muito curto (minimo " + BARCODE_MIN_LENGTH + " caracteres)" }); return; }
-    if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Codigo placeholder — substitua por SKU real" }); return; }
-    if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo invalido (so pontos/tracos)" }); return; }
-    if (/^(.)\1+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Codigo repetido (ex: 0000)" }); return; }
+    if (!code) { invalid.push({ name: item.name, code: "(vazio)", reason: "Sem código cadastrado" }); return; }
+    if (code.length < BARCODE_MIN_LENGTH) { invalid.push({ name: item.name, code: code, reason: "Código muito curto (mínimo " + BARCODE_MIN_LENGTH + " caracteres)" }); return; }
+    if (BARCODE_PLACEHOLDERS.has(code) || BARCODE_PLACEHOLDERS.has(code.toLowerCase())) { invalid.push({ name: item.name, code: code, reason: "Código placeholder — substitua por SKU real" }); return; }
+    if (/^[.\-\s_]+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Código inválido (so pontos/tracos)" }); return; }
+    if (/^(.)\1+$/.test(code)) { invalid.push({ name: item.name, code: code, reason: "Código repetido (ex: 0000)" }); return; }
   });
   return invalid;
 }

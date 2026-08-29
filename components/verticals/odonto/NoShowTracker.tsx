@@ -36,8 +36,8 @@ export function NoShowTracker({ patients, maxNoShows = 3, onContactPatient, onBl
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{totalNoShows}</Text><Text style={s.kpiLbl}>Faltas total</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{critical.length}</Text><Text style={s.kpiLbl}>Criticos ({maxNoShows}+ faltas)</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{warning.length}</Text><Text style={s.kpiLbl}>Atencao</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: Colors.ink || "#fff" }]}>{avgRate}%</Text><Text style={s.kpiLbl}>Taxa media</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{warning.length}</Text><Text style={s.kpiLbl}>Atenção</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: Colors.ink || "#fff" }]}>{avgRate}%</Text><Text style={s.kpiLbl}>Taxa média</Text></View>
       </View>
 
       {/* Policy note */}
@@ -63,7 +63,7 @@ export function NoShowTracker({ patients, maxNoShows = 3, onContactPatient, onBl
             </View>
             <View style={s.actions}>
               {onContactPatient && <Pressable onPress={() => onContactPatient(p.id)} style={s.actionBtn}><Text style={s.actionText}>Contatar</Text></Pressable>}
-              {onViewHistory && <Pressable onPress={() => onViewHistory(p.id)} style={s.actionBtn}><Text style={s.actionText}>Historico</Text></Pressable>}
+              {onViewHistory && <Pressable onPress={() => onViewHistory(p.id)} style={s.actionBtn}><Text style={s.actionText}>Histórico</Text></Pressable>}
             </View>
           </View>
         );

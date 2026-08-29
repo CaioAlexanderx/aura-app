@@ -142,7 +142,7 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
       return request(`/companies/${cid}/dental/tiss/guides`, { method: 'POST', body });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-guides', cid] }); Alert.alert('Guia criada', 'Guia salva como rascunho.'); onClose(); },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Nao foi possivel criar.'),
+    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível criar.'),
   });
 
   function addProcedure() { setProcedures([...procedures, { tuss_code:'', description:'', unit_value:'', quantity:'1' }]); }
@@ -177,9 +177,9 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
           </View>
 
           {/* Convenio */}
-          <Text style={st.label}>Convenio *</Text>
+          <Text style={st.label}>Convênio *</Text>
           {insurances.length===0
-            ? <Text style={[st.cardMeta,{color:'#F59E0B',marginBottom:8}]}>Cadastre um convenio primeiro.</Text>
+            ? <Text style={[st.cardMeta,{color:'#F59E0B',marginBottom:8}]}>Cadastre um convênio primeiro.</Text>
             : insurances.map(i=>(
               <Pressable key={i.id} onPress={()=>setInsuranceId(i.id)} style={[st.card, insuranceId===i.id && st.cardSelected]}>
                 <Text style={st.cardTitle}>{i.name}</Text>
@@ -213,9 +213,9 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
           <TextInput value={professionalCro} onChangeText={setProfessionalCro} style={st.input} placeholder="Ex: 12345" placeholderTextColor="#475569" />
           <Text style={st.label}>Data do atendimento *</Text>
           <TextInput value={serviceDate} onChangeText={setServiceDate} style={st.input} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
-          <Text style={st.label}>Numero de autorizacao</Text>
+          <Text style={st.label}>Número de autorização</Text>
           <TextInput value={authNumber} onChangeText={setAuthNumber} style={st.input} />
-          <Text style={st.label}>Senha de autorizacao</Text>
+          <Text style={st.label}>Senha de autorização</Text>
           <TextInput value={authPassword} onChangeText={setAuthPassword} style={st.input} />
 
           {/* Internacao */}
@@ -223,7 +223,7 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
             <>
               <Text style={st.label}>CID-10 *</Text>
               <TextInput value={cidCode} onChangeText={setCidCode} style={st.input} placeholder="Ex: K02.9" placeholderTextColor="#475569" />
-              <Text style={st.label}>Indicacao clinica *</Text>
+              <Text style={st.label}>Indicação clinica *</Text>
               <TextInput value={clinicalIndication} onChangeText={setClinicalIndication} style={[st.input,{minHeight:70}]} multiline />
             </>
           )}
@@ -236,8 +236,8 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
                 <Text style={st.cardSub}>Procedimento {idx+1}</Text>
                 {procedures.length>1 && <Pressable onPress={()=>removeProc(idx)} hitSlop={10}><Icon name="trash" size={14} color="#EF4444" /></Pressable>}
               </View>
-              <TextInput value={p.tuss_code}    onChangeText={v=>updateProc(idx,'tuss_code',v)}   style={st.input} placeholder="Codigo TUSS" placeholderTextColor="#475569" />
-              <TextInput value={p.description}  onChangeText={v=>updateProc(idx,'description',v)} style={st.input} placeholder="Descricao"   placeholderTextColor="#475569" />
+              <TextInput value={p.tuss_code}    onChangeText={v=>updateProc(idx,'tuss_code',v)}   style={st.input} placeholder="Código TUSS" placeholderTextColor="#475569" />
+              <TextInput value={p.description}  onChangeText={v=>updateProc(idx,'description',v)} style={st.input} placeholder="Descrição"   placeholderTextColor="#475569" />
               <View style={{ flexDirection:'row', gap:6 }}>
                 <TextInput value={p.unit_value} onChangeText={v=>updateProc(idx,'unit_value',v)} style={[st.input,{flex:1}]} placeholder="Valor unit." placeholderTextColor="#475569" keyboardType="decimal-pad" />
                 <TextInput value={p.quantity}   onChangeText={v=>updateProc(idx,'quantity',v)}   style={[st.input,{width:70}]} placeholder="Qtd" placeholderTextColor="#475569" keyboardType="numeric" />

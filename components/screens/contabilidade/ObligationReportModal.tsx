@@ -52,7 +52,7 @@ export function ObligationReportModal({ visible, obligationCode, obligationName,
         { method: "POST", body: {} }
       ),
     onSuccess: (data) => setReport(data.report),
-    onError: (err: any) => toast.error(err?.data?.error || "Erro ao gerar relatorio"),
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao gerar relatório"),
   });
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function ObligationReportModal({ visible, obligationCode, obligationName,
   function handleDownload() {
     if (!report) return;
     if (Platform.OS !== "web" || typeof document === "undefined") {
-      toast.info("Download disponivel apenas na web");
+      toast.info("Download disponível apenas na web");
       return;
     }
     try {
@@ -114,8 +114,8 @@ export function ObligationReportModal({ visible, obligationCode, obligationName,
         <View style={s.modal}>
           <View style={s.header}>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>{obligationName || obligationCode || "Relatorio"}</Text>
-              <Text style={s.subtitle}>Relatorio gerado pela Aura</Text>
+              <Text style={s.title}>{obligationName || obligationCode || "Relatório"}</Text>
+              <Text style={s.subtitle}>Relatório gerado pela Aura</Text>
             </View>
             <Pressable onPress={onClose} style={s.closeBtn}>
               <Icon name="x" size={18} color={Colors.ink3} />
@@ -125,12 +125,12 @@ export function ObligationReportModal({ visible, obligationCode, obligationName,
           {reportMut.isPending && !report ? (
             <View style={s.center}>
               <ActivityIndicator color={Colors.violet3} size="large" />
-              <Text style={s.hint}>Gerando relatorio com base nos seus dados...</Text>
+              <Text style={s.hint}>Gerando relatório com base nos seus dados...</Text>
             </View>
           ) : reportMut.isError ? (
             <View style={s.center}>
               <Icon name="alert" size={28} color={Colors.red} />
-              <Text style={s.errText}>Nao foi possivel gerar o relatorio.</Text>
+              <Text style={s.errText}>Não foi possível gerar o relatório.</Text>
               <Pressable onPress={() => reportMut.mutate()} style={s.btnRetry}>
                 <Text style={s.btnRetryText}>Tentar novamente</Text>
               </Pressable>
@@ -236,7 +236,7 @@ const s = StyleSheet.create({
 });
 
 // ============================================================
-// ObligationReportTrigger - botao "Gerar relatorio Aura" auto-contido
+// ObligationReportTrigger - botao "Gerar relatório Aura" auto-contido
 // Pode ser plugado em qualquer obligation row no Guide ou Timeline.
 // ============================================================
 export function ObligationReportTrigger({ obligationCode, obligationName }: { obligationCode: string; obligationName?: string }) {
@@ -253,7 +253,7 @@ export function ObligationReportTrigger({ obligationCode, obligationName }: { ob
         }}
       >
         <Text style={{ fontSize: 12 }}>✨</Text>
-        <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>Gerar relatorio Aura</Text>
+        <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>Gerar relatório Aura</Text>
       </Pressable>
       <ObligationReportModal
         visible={open}

@@ -48,7 +48,7 @@ function buildBriefItems(p: ConsultaPatient | null): BriefItem[] {
   if (p.conditions && p.conditions.trim()) {
     items.push({
       level: "warn",
-      title: "Condicao: " + p.conditions,
+      title: "Condição: " + p.conditions,
       desc: "Pode impactar protocolo de anestesia/medicacao.",
     });
   }
@@ -63,7 +63,7 @@ function buildBriefItems(p: ConsultaPatient | null): BriefItem[] {
     items.push({
       level: "info",
       title: "Sem alertas no prontuario",
-      desc: "Anamnese vazia ou nao documentada — confirme com o paciente.",
+      desc: "Anamnese vazia ou não documentada — confirme com o paciente.",
     });
   }
   return items;
@@ -142,7 +142,7 @@ export function ConsultaIntro({ patient, appointment, appointmentId, patientId, 
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: DentalColors.ink }}>
-                {patient?.name || "Paciente nao carregado"}
+                {patient?.name || "Paciente não carregado"}
               </Text>
               <Text style={{ fontSize: 11, color: DentalColors.ink3, marginTop: 2 }}>
                 {patient?.age != null ? patient.age + " anos" : "—"}
@@ -150,9 +150,9 @@ export function ConsultaIntro({ patient, appointment, appointmentId, patientId, 
               </Text>
             </View>
           </View>
-          <InfoRow label="Procedimento" value={appointment?.chief_complaint || "Nao especificado"} />
+          <InfoRow label="Procedimento" value={appointment?.chief_complaint || "Não especificado"} />
           <InfoRow label="Profissional" value={appointment?.professional_name || "—"} />
-          <InfoRow label="Duracao estimada" value={(appointment?.duration_min || 60) + " min"} />
+          <InfoRow label="Duração estimada" value={(appointment?.duration_min || 60) + " min"} />
         </View>
 
         <View style={cardStyle}>

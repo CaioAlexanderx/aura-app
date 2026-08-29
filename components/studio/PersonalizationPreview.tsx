@@ -91,7 +91,7 @@ function escapeXml(s: string): string {
     if (c === "<") return "&lt;";
     if (c === ">") return "&gt;";
     if (c === "&") return "&amp;";
-    if (c === "'") return "&apos;";
+    if (c === "'") return "&após;";
     return "&quot;";
   });
 }

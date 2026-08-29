@@ -92,10 +92,10 @@ const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
   endodontia:  { label: "Endodontia",     emoji: "🦷" },
   implante:    { label: "Implante",       emoji: "🔩" },
   ortodontia:  { label: "Ortodontia",     emoji: "🪞" },
-  estetica:    { label: "Estetica",       emoji: "✨" },
+  estetica:    { label: "Estética",       emoji: "✨" },
   periodontia: { label: "Periodontia",    emoji: "🌿" },
   protese:     { label: "Protese",        emoji: "👑" },
-  generico:    { label: "Generico",       emoji: "📋" },
+  generico:    { label: "Genérico",       emoji: "📋" },
   lgpd:        { label: "LGPD / Imagem",  emoji: "🛡️" },
 };
 
@@ -103,14 +103,14 @@ const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
 
 const PLACEHOLDER_LABELS: Record<string, { label: string; hint?: string; long?: boolean }> = {
   nome_paciente:    { label: "Nome do paciente",      hint: "Auto-preenchido do cadastro" },
-  nome_dentista:    { label: "Nome do dentista",      hint: "Profissional responsavel" },
-  cro:              { label: "CRO",                   hint: "Numero do registro" },
+  nome_dentista:    { label: "Nome do dentista",      hint: "Profissional responsável" },
+  cro:              { label: "CRO",                   hint: "Número do registro" },
   dente:            { label: "Dente(s)",              hint: "Ex: 36, ou 16 e 17" },
-  procedimento:     { label: "Procedimento",          hint: "Descricao curta" },
+  procedimento:     { label: "Procedimento",          hint: "Descrição curta" },
   data:             { label: "Data",                  hint: "Auto-preenchido (hoje)" },
-  riscos:           { label: "Riscos especificos",    long: true, hint: "Riscos do caso (opcional)" },
-  observacoes:      { label: "Observacoes",           long: true },
-  valor_estimado:   { label: "Valor estimado (R$)",   hint: "Apenas numeros, ex: 1500" },
+  riscos:           { label: "Riscos específicos",    long: true, hint: "Riscos do caso (opcional)" },
+  observacoes:      { label: "Observações",           long: true },
+  valor_estimado:   { label: "Valor estimado (R$)",   hint: "Apenas números, ex: 1500" },
   nome_clinica:     { label: "Nome da clinica",       hint: "Auto-preenchido se vazio" },
 };
 
@@ -352,7 +352,7 @@ export function ConsentCollectModal({
       return (
         <View style={s.center}>
           <Icon name="alert" size={32} color="#EF4444" />
-          <Text style={s.errText}>Nao foi possivel carregar os templates.</Text>
+          <Text style={s.errText}>Não foi possível carregar os templates.</Text>
           <Pressable onPress={() => tplQuery.refetch()} style={[s.btn, s.btnPrimary, { marginTop: 12 }]}>
             <Text style={s.btnPrimaryText}>Tentar novamente</Text>
           </Pressable>

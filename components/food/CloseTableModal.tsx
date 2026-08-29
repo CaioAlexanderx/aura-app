@@ -63,8 +63,8 @@ export type CloseResponse = {
 const METHODS: { key: ClosePayment["method"]; label: string; icon: string; color: string }[] = [
   { key: "dinheiro",  label: "Dinheiro", icon: "banknote",   color: FoodColors.green },
   { key: "pix",       label: "Pix",      icon: "qrcode",     color: FoodColors.cyan  },
-  { key: "debito",    label: "Debito",   icon: "card",       color: FoodColors.amber },
-  { key: "credito",   label: "Credito",  icon: "card",       color: FoodColors.violet},
+  { key: "debito",    label: "Débito",   icon: "card",       color: FoodColors.amber },
+  { key: "credito",   label: "Crédito",  icon: "card",       color: FoodColors.violet},
   { key: "crediario", label: "Fiado",    icon: "users",      color: FoodColors.rose  },
 ];
 
@@ -150,11 +150,11 @@ export function CloseTableModal({ table, comanda, onClose, onForceFree }: Props)
     lastClickRef.current = now;
 
     if (!company?.id || !primaryOrderId) {
-      toast.error("Pedido nao encontrado");
+      toast.error("Pedido não encontrado");
       return;
     }
     if (!fullyPaid) {
-      toast.error("Pagamento nao cobre o total");
+      toast.error("Pagamento não cobre o total");
       return;
     }
 
@@ -194,7 +194,7 @@ export function CloseTableModal({ table, comanda, onClose, onForceFree }: Props)
       toast.success("Mesa fechada • Sale #" + saleShort);
 
       if (resp.nfce && resp.nfce.status === "falhou") {
-        setNfceError(resp.nfce.error || "Erro desconhecido na emissao NFC-e");
+        setNfceError(resp.nfce.error || "Erro desconhecido na emissão NFC-e");
       }
       // permanece no passo confirm pra usuario poder imprimir / decidir
       setStep("confirm");
@@ -341,7 +341,7 @@ export function CloseTableModal({ table, comanda, onClose, onForceFree }: Props)
                   onForceFree && (
                     <Pressable onPress={() => {
                       if (typeof window !== "undefined" && Platform.OS === "web") {
-                        if (!window.confirm("Liberar mesa sem registrar venda? Pedidos abertos serao cancelados.")) return;
+                        if (!window.confirm("Liberar mesa sem registrar venda? Pedidos abertos serão cancelados.")) return;
                       }
                       onForceFree();
                     }} style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
@@ -480,7 +480,7 @@ function ReviewStep({
         <Row label="Subtotal" value={subtotal} />
         {discount > 0 && <Row label="Desconto" value={-discount} muted />}
         {includeServiceFee && serviceFeeAmount > 0 && (
-          <Row label={"Taxa servico (" + serviceFeePct + "%)"} value={serviceFeeAmount} muted />
+          <Row label={"Taxa serviço (" + serviceFeePct + "%)"} value={serviceFeeAmount} muted />
         )}
         <View style={{ height: 1, backgroundColor: FoodColors.border, marginVertical: 6 }} />
         <Row label="TOTAL A COBRAR" value={total} bold />
@@ -628,9 +628,9 @@ function NfceStep({
 }) {
   const blocked = !planAllowsNfce || !settingsAllowsNfce;
   const blockReason = !planAllowsNfce
-    ? "Disponivel a partir do plano Negocio"
+    ? "Disponível a partir do plano Negócio"
     : !settingsAllowsNfce
-      ? "Habilite NFC-e manual em Configuracoes > PDV > Restaurante"
+      ? "Habilite NFC-e manual em Configurações > PDV > Restaurante"
       : null;
 
   return (
@@ -645,7 +645,7 @@ function NfceStep({
             Emitir NFC-e
           </Text>
           <Text style={{ fontSize: 11, color: FoodColors.ink3, marginTop: 4, lineHeight: 16 }}>
-            {blockReason || "Gera cupom fiscal eletronico e libera impressao termica 80mm pro cliente."}
+            {blockReason || "Gera cupom fiscal eletrônico e libera impressão térmica 80mm pro cliente."}
           </Text>
         </View>
         <Switch
@@ -747,7 +747,7 @@ function ConfirmStep({
           <Pressable onPress={onPrintCupom} style={{
             backgroundColor: FoodColors.red, padding: 12, borderRadius: 8, alignItems: "center",
           }}>
-            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>🖨 Imprimir cupom termico</Text>
+            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>🖨 Imprimir cupom térmico</Text>
           </Pressable>
         </View>
       )}

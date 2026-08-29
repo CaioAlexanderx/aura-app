@@ -196,7 +196,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var parsedEnd = brDateToISO(customEndBR) || undefined;
 
   // FIX 24/08/2026 (QA Financeiro A2): nada validava a ordem das datas. Com
-  // "De 20/08 · Ate 01/01" o range saia invertido, a lista voltava vazia e o
+  // "De 20/08 · Até 01/01" o range saia invertido, a lista voltava vazia e o
   // check verde aparecia mesmo assim (so testava que as duas datas parsearam).
   // Agora o range so vale quando esta completo E em ordem — enquanto estiver
   // invertido a tela segue no periodo anterior e o usuario ve o aviso abaixo.

@@ -103,7 +103,7 @@ export function LeadsListView({
         <TextInput
           value={filters.search}
           onChangeText={(v) => setFilter("search", v)}
-          placeholder="Buscar nome, telefone, endereco..."
+          placeholder="Buscar nome, telefone, endereço..."
           placeholderTextColor={Colors.ink3}
           style={[cs.searchInput, { flex: 1 }]}
         />

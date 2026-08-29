@@ -72,7 +72,7 @@ export function MarketplaceDashboard({ connections, orders, stats, onConnect, on
       {/* KPIs */}
       <View style={s.kpiRow}>
         <HoverCard style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(totalGMV)}</Text><Text style={s.kpiLbl}>GMV Total</Text></HoverCard>
-        <HoverCard style={s.kpi}><Text style={[s.kpiVal, { color: Colors.violet3 }]}>{fmt(totalNet)}</Text><Text style={s.kpiLbl}>Receita liquida</Text></HoverCard>
+        <HoverCard style={s.kpi}><Text style={[s.kpiVal, { color: Colors.violet3 }]}>{fmt(totalNet)}</Text><Text style={s.kpiLbl}>Receita líquida</Text></HoverCard>
         <HoverCard style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(totalFees)}</Text><Text style={s.kpiLbl}>Taxas marketplace</Text></HoverCard>
         <HoverCard style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{totalOrders}</Text><Text style={s.kpiLbl}>Pedidos</Text></HoverCard>
       </View>

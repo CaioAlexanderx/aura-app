@@ -33,7 +33,7 @@ export const MOCK_DASHBOARD = {
   sparkNet: [6200, 7000, 8100, 7200, 9400, 9600, 10580],
   recentSales: [
     { id: "1", customer: "Maria Silva", amount: 156.80, time: "14:32", method: "Pix", type: "income" },
-    { id: "2", customer: "Pedro Costa", amount: 89.90, time: "13:15", method: "Cartao", type: "income" },
+    { id: "2", customer: "Pedro Costa", amount: 89.90, time: "13:15", method: "Cartão", type: "income" },
     { id: "3", customer: "Ana Oliveira", amount: 234.50, time: "11:47", method: "Dinheiro", type: "income" },
     { id: "4", customer: "Joao Santos", amount: 67.00, time: "10:20", method: "Pix", type: "income" },
   ],

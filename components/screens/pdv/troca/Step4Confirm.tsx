@@ -105,7 +105,7 @@ export function canConfirmStep4(args: {
     }
     const sum = refundSplits.reduce((s, r) => s + (r.amount || 0), 0);
     if (Math.abs(sum - Math.abs(netAmount)) > 0.01) {
-      return { ok: false, reason: "Soma dos estornos nao bate com o valor a devolver" };
+      return { ok: false, reason: "Soma dos estornos não bate com o valor a devolver" };
     }
   }
   return { ok: true };
@@ -123,16 +123,16 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
   switch (strategy) {
     case "cancel_reissue":
       return {
-        title: "NFC-e original sera cancelada",
-        sub: "Venda foi feita ha menos de 24h — cancelamos sem precisar emitir devolucao",
+        title: "NFC-e original será cancelada",
+        sub: "Venda foi feita ha menos de 24h — cancelamos sem precisar emitir devolução",
         color: "#6ee7b7",
         borderColor: "rgba(16,185,129,0.3)",
         iconBg: "#10b981",
       };
     case "devolucao_55":
       return {
-        title: "NF-e de devolucao sera emitida",
-        sub: "CFOP 1.202 · Natureza: Devolucao de venda · Serie 1",
+        title: "NF-e de devolução será emitida",
+        sub: "CFOP 1.202 · Natureza: Devolução de venda · Série 1",
         color: "#6ee7b7",
         borderColor: "rgba(16,185,129,0.3)",
         iconBg: "#10b981",
@@ -140,7 +140,7 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
     case "per_origin":
       return {
         title: "Fiscal por origem (misto)",
-        sub: "Vendas recentes serao canceladas; antigas terao NF-e de devolucao",
+        sub: "Vendas recentes serão canceladas; antigas terão NF-e de devolução",
         color: "#fde68a",
         borderColor: "rgba(251,191,36,0.3)",
         iconBg: "#d97706",
@@ -148,7 +148,7 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
     case "none":
     default:
       return {
-        title: "Sem emissao fiscal",
+        title: "Sem emissão fiscal",
         sub: "Nenhuma NFC-e foi emitida na venda original",
         color: Colors.ink3,
         borderColor: "rgba(255,255,255,0.1)",
@@ -160,15 +160,15 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
 const PAY_METHODS: Array<{ id: PaymentMethod; label: string; icon: string }> = [
   { id: "dinheiro",        label: "Dinheiro",       icon: "dollar-sign" },
   { id: "pix",             label: "Pix",            icon: "zap" },
-  { id: "cartao_debito",   label: "Cartao debito",  icon: "credit-card" },
-  { id: "cartao_credito",  label: "Cartao credito", icon: "credit-card" },
+  { id: "cartao_debito",   label: "Cartão débito",  icon: "credit-card" },
+  { id: "cartao_credito",  label: "Cartão crédito", icon: "credit-card" },
 ];
 
 const REFUND_METHODS: Array<{ id: RefundMethod; label: string; icon: string }> = [
   { id: "dinheiro",           label: "Dinheiro",      icon: "dollar-sign" },
   { id: "pix",                label: "Pix",           icon: "zap" },
-  { id: "cartao_estorno",     label: "Estorno cartao", icon: "credit-card" },
-  { id: "crediario_credito",  label: "Credito conta",  icon: "user" },
+  { id: "cartao_estorno",     label: "Estorno cartão", icon: "credit-card" },
+  { id: "crediario_credito",  label: "Crédito conta",  icon: "user" },
 ];
 
 export function Step4Confirm({
@@ -377,9 +377,9 @@ export function Step4Confirm({
 
           {showNfeDetails && fiscal.strategy !== "none" && (
             <View style={s.nfeDetails}>
-              <DetailRow label="Estrategia" value={fiscal.strategy === "cancel_reissue" ? "Cancelamento da NFC-e" : fiscal.strategy === "per_origin" ? "Por origem (misto)" : "Emissao de NF-e 55 (devolucao)"} />
-              <DetailRow label="CFOP" value="1.202 — Devolucao de venda" />
-              <DetailRow label="Natureza" value="Devolucao de venda" />
+              <DetailRow label="Estrategia" value={fiscal.strategy === "cancel_reissue" ? "Cancelamento da NFC-e" : fiscal.strategy === "per_origin" ? "Por origem (misto)" : "Emissão de NF-e 55 (devolução)"} />
+              <DetailRow label="CFOP" value="1.202 — Devolução de venda" />
+              <DetailRow label="Natureza" value="Devolução de venda" />
               <DetailRow label="CSOSN" value="102 (Simples Nacional)" />
               <DetailRow label="NF-e referenciada" value={selectedSales[0]?.id ? `...${String(selectedSales[0].id).slice(-12)}` : "—"} />
               <DetailRow label="Valor" value={fmtBRL(returnedValue)} />
@@ -441,7 +441,7 @@ export function Step4Confirm({
             <Text style={s.summaryRowValue}>{fmtBRL(newValue)}</Text>
           </View>
           <View style={s.summaryRow}>
-            <Text style={s.summaryRowLabel}>- Credito devolucao</Text>
+            <Text style={s.summaryRowLabel}>- Crédito devolução</Text>
             <Text style={[s.summaryRowValue, { color: "#60a5fa" }]}>- {fmtBRL(returnedValue)}</Text>
           </View>
 

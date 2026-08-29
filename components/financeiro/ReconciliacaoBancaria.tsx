@@ -70,7 +70,7 @@ export function ReconciliacaoBancaria({
       {/* KPIs */}
       <View style={s.kpiRow}>
         <HoverCard style={s.kpi}>
-          <Text style={s.kpiLabel}>Taxa de conciliacao</Text>
+          <Text style={s.kpiLabel}>Taxa de conciliação</Text>
           <Text style={[s.kpiValue, { color: conciliationRate >= 80 ? "#10B981" : conciliationRate >= 50 ? "#F59E0B" : "#EF4444" }]}>{conciliationRate}%</Text>
           <View style={s.rateBar}><View style={[s.rateFill, { width: conciliationRate + "%", backgroundColor: conciliationRate >= 80 ? "#10B981" : "#F59E0B" }]} /></View>
         </HoverCard>
@@ -85,7 +85,7 @@ export function ReconciliacaoBancaria({
           <Text style={s.kpiSub}>de {summary.total} lancamentos</Text>
         </HoverCard>
         <HoverCard style={s.kpi}>
-          <Text style={s.kpiLabel}>Movimentacao</Text>
+          <Text style={s.kpiLabel}>Movimentação</Text>
           <Text style={[s.kpiValue, { color: "#06B6D4", fontSize: 16 }]}>
             <Text style={{ color: "#10B981" }}>+{fmt(summary.total_credits)}</Text>
             {" / "}
@@ -121,7 +121,7 @@ export function ReconciliacaoBancaria({
         )}
         {selectedAccount && onAutoMatch && (
           <Pressable onPress={() => onAutoMatch(selectedAccount)} style={s.btnOutline}>
-            <Text style={s.btnOutlineText}>Conciliar automatico</Text>
+            <Text style={s.btnOutlineText}>Conciliar automático</Text>
           </Pressable>
         )}
         {onCreateRule && (
@@ -191,7 +191,7 @@ export function ReconciliacaoBancaria({
               </Pressable>
             );
           })}
-          {unmatchedTransactions.length === 0 && <Text style={s.emptyText}>Todos os lancamentos tem correspondencia.</Text>}
+          {unmatchedTransactions.length === 0 && <Text style={s.emptyText}>Todos os lancamentos tem correspondência.</Text>}
         </View>
       </View>
 

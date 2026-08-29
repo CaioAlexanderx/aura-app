@@ -100,7 +100,7 @@ export function GoalsView() {
       {/* Cadencias */}
       <View style={cs.section}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <Text style={cs.sectionTitle}>Cadencias</Text>
+          <Text style={cs.sectionTitle}>Cadências</Text>
           <Pressable onPress={() => setEditingCadence({})} style={[cs.actionBtn, { paddingHorizontal: 10, paddingVertical: 6 }]}>
             <Icon name="plus" size={12} color={Colors.violet3} />
             <Text style={[cs.actionBtnText, { color: Colors.violet3, fontSize: 11 }]}>Nova</Text>
@@ -110,7 +110,7 @@ export function GoalsView() {
         {cad.isLoading ? (
           <ActivityIndicator color={Colors.violet3} style={{ padding: 20 }} />
         ) : cad.cadences.length === 0 ? (
-          <Text style={cs.hintText}>Nenhuma cadencia ainda. Crie uma pra automatizar follow-ups.</Text>
+          <Text style={cs.hintText}>Nenhuma cadência ainda. Crie uma pra automatizar follow-ups.</Text>
         ) : (
           <View style={{ gap: 6 }}>
             {cad.cadences.map((c) => (
@@ -221,7 +221,7 @@ function GoalEditModal({ month, year, goal, onClose, onSave, onDelete }: {
           <Text style={cs.fieldLabel}>MRR esperado (R$)</Text>
           <TextInput value={mrr} onChangeText={setMrr} keyboardType="decimal-pad" placeholder="2000.00" placeholderTextColor={Colors.ink3} style={[cs.noteInput, { minHeight: 40 }]} />
 
-          <Text style={cs.fieldLabel}>Observacoes</Text>
+          <Text style={cs.fieldLabel}>Observações</Text>
           <TextInput value={notes} onChangeText={setNotes} multiline placeholder="Foco em quem nesse mes?" placeholderTextColor={Colors.ink3} style={cs.noteInput} />
 
           <View style={{ flexDirection: "row", gap: 8 }}>
@@ -284,14 +284,14 @@ function CadenceEditModal({ existing, onClose, onSave, onDelete }: {
       <Pressable style={cs.modalOverlay} onPress={onClose}>
         <Pressable style={[cs.modalBox, { maxWidth: 580, maxHeight: "90%" }]} onPress={(e: any) => e.stopPropagation?.()}>
           <Text style={cs.modalTitle}>
-            {existing ? "Editar cadencia" : "Nova cadencia"}
+            {existing ? "Editar cadência" : "Nova cadência"}
           </Text>
 
           <ScrollView style={{ maxHeight: 460 }}>
             <Text style={cs.fieldLabel}>Nome</Text>
-            <TextInput value={name} onChangeText={setName} placeholder="Ex: Padrao 7 dias" placeholderTextColor={Colors.ink3} style={[cs.noteInput, { minHeight: 40 }]} />
+            <TextInput value={name} onChangeText={setName} placeholder="Ex: Padrão 7 dias" placeholderTextColor={Colors.ink3} style={[cs.noteInput, { minHeight: 40 }]} />
 
-            <Text style={cs.fieldLabel}>Descricao</Text>
+            <Text style={cs.fieldLabel}>Descrição</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Quando usar?" placeholderTextColor={Colors.ink3} style={[cs.noteInput, { minHeight: 40 }]} />
 
             <Text style={cs.fieldLabel}>Passos (D0 = hoje)</Text>

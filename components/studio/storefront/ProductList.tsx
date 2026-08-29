@@ -96,7 +96,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       lista.map((e) => ({
         ...e,
         // Grupo usa o MENOR preco e a data do modelo mais recente: senao o
-        // cartao "Camisetas · 3 modelos" afundaria em "Menor preco" so
+        // cartao "Camisetas · 3 modelos" afundaria em "Menor preço" so
         // porque o primeiro modelo dele e caro.
         nome: e.kind === "category" ? e.category.name : e.product.name,
         preco: e.kind === "category" ? precoMinimo(e.products) : Number(e.product.price),

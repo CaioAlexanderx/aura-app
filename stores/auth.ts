@@ -144,7 +144,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       try {
         window.sessionStorage.setItem(
           "aura_session_expired_msg",
-          "Sua sessao expirou. Entre novamente."
+          "Sua sessão expirou. Entre novamente."
         );
       } catch {}
     }

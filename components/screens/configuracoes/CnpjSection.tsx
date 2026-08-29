@@ -132,7 +132,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
     <Card>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
         <Icon name="alert" size={14} color={Colors.amber} />
-        <Text style={{ fontSize: 12, color: Colors.amber, fontWeight: "600" }}>CNPJ nao informado</Text>
+        <Text style={{ fontSize: 12, color: Colors.amber, fontWeight: "600" }}>CNPJ não informado</Text>
       </View>
 
       <Text style={sh.fieldLabel}>Seu CNPJ</Text>
@@ -197,7 +197,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
       {lookupError && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
           <Icon name="info" size={13} color={Colors.ink3} />
-          <Text style={sh.fieldHint}>CNPJ nao encontrado na Receita Federal. Voce pode salvar mesmo assim.</Text>
+          <Text style={sh.fieldHint}>CNPJ não encontrado na Receita Federal. Você pode salvar mesmo assim.</Text>
         </View>
       )}
 

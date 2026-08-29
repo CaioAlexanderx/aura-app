@@ -19,7 +19,7 @@ export type DentalPersona = "dentista" | "recepcao" | "gestor";
 
 const PERSONA_LABELS: Record<DentalPersona, string> = {
   dentista: "Dentista",
-  recepcao: "Recepcao",
+  recepcao: "Recepção",
   gestor:   "Gestor",
 };
 

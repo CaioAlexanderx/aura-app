@@ -30,9 +30,9 @@ function paymentLabel(key: string): string {
 }
 
 function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
-  if (!token || !companyId) { toast.error("Sessao expirada"); return; }
+  if (!token || !companyId) { toast.error("Sessão expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
-    toast.info("Impressao disponivel apenas na versao web");
+    toast.info("Impressão disponível apenas na versão web");
     return;
   }
   // Fix 10/07 (relato Davi): janela abre SINCRONA no clique (printWindow) —

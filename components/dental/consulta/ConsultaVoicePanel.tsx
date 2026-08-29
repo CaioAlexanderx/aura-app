@@ -76,7 +76,7 @@ export function ConsultaVoicePanel({ transcript, onAppendSegment, onCommand }: P
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           {listening ? <RecordingDot /> : <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: DentalColors.ink3 }} />}
           <Text style={{ fontSize: 9, fontWeight: "700", color: listening ? DentalColors.red : DentalColors.ink3, letterSpacing: 0.5 }}>
-            {listening ? "🎙 Aura ouvindo" : supported ? "🎙 Microfone parado" : "Microfone nao suportado"}
+            {listening ? "🎙 Aura ouvindo" : supported ? "🎙 Microfone parado" : "Microfone não suportado"}
           </Text>
         </View>
         <Text style={{
@@ -101,7 +101,7 @@ export function ConsultaVoicePanel({ transcript, onAppendSegment, onCommand }: P
           <Text style={{ fontSize: 10, color: DentalColors.ink3, fontStyle: "italic" }}>
             {supported
               ? 'Aperte "Iniciar microfone" e diga frases naturais. Use "Aura, marcar/anotar/prescrever ..." pra comandos.'
-              : "Web Speech API nao disponivel neste navegador. Use Chrome ou Edge para captura por voz."}
+              : "Web Speech API não disponível neste navegador. Use Chrome ou Edge para captura por voz."}
           </Text>
         ) : (
           transcript.slice(-30).map((s) => (

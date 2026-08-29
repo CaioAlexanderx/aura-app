@@ -273,7 +273,7 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
         {/* #1: mostra ativos/total */}
         <Stat label="ATIVOS" value={`${stats.active}/${stats.total}`} delta="dos últimos 180 dias" accent="cyan" />
         <Stat label="SEM RETORNO" value={String(stats.semRetorno)} delta={stats.semRetorno > 0 ? "convidar" : null} accent="amber" />
-        <Stat label="ANIVERSARIANTES" value={String(stats.aniversariantes)} delta="proximos 7 dias" accent="violet" />
+        <Stat label="ANIVERSARIANTES" value={String(stats.aniversariantes)} delta="próximos 7 dias" accent="violet" />
         <Stat label="CONVÊNIOS" value={String(stats.comConvenio)} delta={`${stats.total > 0 ? Math.round((stats.comConvenio / stats.total) * 100) : 0}% da base`} accent="cyan" />
       </View>
 
@@ -300,7 +300,7 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
         {/* PR31: Convenio server-side */}
         <Pressable onPress={() => setFilterConvenio((v) => !v)} style={[s.chip, filterConvenio && s.chipActive]}>
           <Text style={[s.chipText, filterConvenio && s.chipTextActive]}>
-            {filterConvenio ? "Com convenio ✓" : "Convenio: Todos"}
+            {filterConvenio ? "Com convênio ✓" : "Convênio: Todos"}
           </Text>
         </Pressable>
 
@@ -318,7 +318,7 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
         {/* PR31: Ultima visita */}
         <Pressable onPress={() => setFilterInactive((v) => !v)} style={[s.chip, filterInactive && s.chipActive]}>
           <Text style={[s.chipText, filterInactive && s.chipTextActive]}>
-            {filterInactive ? "Inativos 100+d ✓" : "Ultima visita: Qualquer"}
+            {filterInactive ? "Inativos 100+d ✓" : "Última visita: Qualquer"}
           </Text>
         </Pressable>
 
@@ -394,7 +394,7 @@ export function PatientsList({ onOpenPatient, onNewPatient }: Props) {
               <Text style={[s.listHeaderText, { width: 44 }]}>#</Text>
               <Text style={[s.listHeaderText, { flex: 2 }]}>PACIENTE</Text>
               <Text style={[s.listHeaderText, { width: 140 }]}>TELEFONE</Text>
-              <Text style={[s.listHeaderText, { width: 110 }]}>ULTIMA VISITA</Text>
+              <Text style={[s.listHeaderText, { width: 110 }]}>ÚLTIMA VISITA</Text>
               <Text style={[s.listHeaderText, { width: 100 }]}>PLANO</Text>
             </View>
             {filtered.map((p, idx) => (
@@ -469,7 +469,7 @@ function PatientCard({ patient, index, selected, onToggleSelect, onOpen }: { pat
           <Text style={s.infoVal} numberOfLines={1}>{patient.phone || "—"}</Text>
         </View>
         <View style={s.infoRow}>
-          <Text style={s.infoLbl}>Ultima visita</Text>
+          <Text style={s.infoLbl}>Última visita</Text>
           <Text style={s.infoVal}>{lastVisitDays != null ? `${fmtDate(patient.last_visit_at)} (${lastVisitDays}d)` : "Nunca"}</Text>
         </View>
       </View>
@@ -477,7 +477,7 @@ function PatientCard({ patient, index, selected, onToggleSelect, onOpen }: { pat
       {patient.next_appointment_at ? (
         <View style={s.nextAppt}>
           <Text style={s.nextApptText}>
-            <Text style={{ color: DentalColors.cyan, fontWeight: "700" }}>Proximo: </Text>
+            <Text style={{ color: DentalColors.cyan, fontWeight: "700" }}>Próximo: </Text>
             {fmtDate(patient.next_appointment_at)}
           </Text>
         </View>
@@ -574,7 +574,7 @@ function ImportCsvModal({ visible, onClose }: { visible: boolean; onClose: () =>
           <View style={s.uploadZone}>
             <Text style={{ fontSize: 32, marginBottom: 8 }}>📂</Text>
             <Text style={{ fontSize: 13, color: DentalColors.ink, fontWeight: "600", textAlign: "center" }}>Arraste seu arquivo ou clique para selecionar</Text>
-            <Text style={{ fontSize: 10, color: DentalColors.ink3, marginTop: 4, textAlign: "center" }}>CSV/XLSX · ate 5MB · max 5.000 linhas</Text>
+            <Text style={{ fontSize: 10, color: DentalColors.ink3, marginTop: 4, textAlign: "center" }}>CSV/XLSX · até 5MB · max 5.000 linhas</Text>
           </View>
 
           <View style={{ marginTop: 14, padding: 12, backgroundColor: DentalColors.cyanDim, borderRadius: 10, borderWidth: 1, borderColor: DentalColors.cyanBorder }}>

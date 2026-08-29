@@ -34,7 +34,7 @@ export function GiftCard({ giftCards, onCreateCard, onRedeemCard }: Props) {
       {/* Redeem section */}
       {onRedeemCard && (
         <View style={s.redeemBox}>
-          <TextInput value={redeemCode} onChangeText={setRedeemCode} placeholder="Codigo (ex: AURA-A1B2C3D4)" placeholderTextColor={Colors.ink3 || "#888"} style={s.redeemInput} />
+          <TextInput value={redeemCode} onChangeText={setRedeemCode} placeholder="Código (ex: AURA-A1B2C3D4)" placeholderTextColor={Colors.ink3 || "#888"} style={s.redeemInput} />
           <TextInput value={redeemAmount} onChangeText={setRedeemAmount} placeholder="Valor" placeholderTextColor={Colors.ink3 || "#888"} keyboardType="numeric" style={[s.redeemInput, { width: 80 }]} />
           <Pressable onPress={() => { if (redeemCode && redeemAmount) onRedeemCard(redeemCode, parseFloat(redeemAmount)); }} style={s.redeemBtn}><Text style={s.redeemBtnT}>Resgatar</Text></Pressable>
         </View>

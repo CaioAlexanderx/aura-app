@@ -29,7 +29,7 @@ export const EMPTY_STATES = {
   estoque: {
     icon: "package",
     title: "Estoque vazio",
-    description: "Cadastre seus produtos para controlar entradas, saídas e saber exatamente o que tem disponivel.",
+    description: "Cadastre seus produtos para controlar entradas, saídas e saber exatamente o que tem disponível.",
     actionLabel: "Cadastrar primeiro produto",
     secondaryLabel: "Importar planilha",
   },
@@ -43,7 +43,7 @@ export const EMPTY_STATES = {
   contabilidade: {
     icon: "calculator",
     title: "Obrigações não configuradas",
-    description: "Complete o onboarding com seu CNPJ para que a Aura configure suas obrigacoes contábeis automaticamente.",
+    description: "Complete o onboarding com seu CNPJ para que a Aura configure suas obrigações contábeis automaticamente.",
     actionLabel: "Configurar empresa",
     actionRoute: "/onboarding",
   },

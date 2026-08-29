@@ -27,7 +27,7 @@ export function CadenceSelector({ currentCadence, currentDay, onApply, onClear, 
       <Pressable onPress={() => setOpen(true)} style={[cs.actionBtn, currentCadence && { borderColor: Colors.amber + "66", backgroundColor: Colors.amber + "14" }]}>
         <Icon name="users" size={14} color={currentCadence ? Colors.amber : Colors.ink3} />
         <Text style={[cs.actionBtnText, currentCadence && { color: Colors.amber }]}>
-          {currentCadence ? `Cadencia: ${currentCadence} (dia ${currentDay})` : "Aplicar cadencia"}
+          {currentCadence ? `Cadencia: ${currentCadence} (dia ${currentDay})` : "Aplicar cadência"}
         </Text>
         {isPending && <ActivityIndicator size="small" color={Colors.amber} />}
       </Pressable>
@@ -35,12 +35,12 @@ export function CadenceSelector({ currentCadence, currentDay, onApply, onClear, 
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={cs.modalOverlay} onPress={() => setOpen(false)}>
           <Pressable style={cs.modalBox} onPress={(e: any) => e.stopPropagation?.()}>
-            <Text style={cs.modalTitle}>Selecionar cadencia</Text>
+            <Text style={cs.modalTitle}>Selecionar cadência</Text>
 
             {isLoading ? (
               <ActivityIndicator color={Colors.violet3} style={{ padding: 20 }} />
             ) : cadences.filter((c) => c.is_active).length === 0 ? (
-              <Text style={cs.hintText}>Nenhuma cadencia ativa. Crie uma na tab "Metas".</Text>
+              <Text style={cs.hintText}>Nenhuma cadência ativa. Crie uma na tab "Metas".</Text>
             ) : (
               <ScrollView style={{ maxHeight: 380 }}>
                 <View style={{ gap: 8 }}>
@@ -86,7 +86,7 @@ export function CadenceSelector({ currentCadence, currentDay, onApply, onClear, 
                 onPress={() => { onClear(); setOpen(false); }}
                 style={[cs.actionBtn, { marginTop: 12, borderColor: Colors.red + "44", backgroundColor: Colors.red + "10" }]}
               >
-                <Text style={[cs.actionBtnText, { color: Colors.red }]}>Remover cadencia deste lead</Text>
+                <Text style={[cs.actionBtnText, { color: Colors.red }]}>Remover cadência deste lead</Text>
               </Pressable>
             )}
           </Pressable>

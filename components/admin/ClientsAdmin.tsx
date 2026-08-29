@@ -53,7 +53,7 @@ function relativeDays(iso: string | null): { label: string; expired: boolean } {
 
 var HEALTH_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   healthy:   { bg: Colors.greenD, text: Colors.green, label: "Saudavel" },
-  attention: { bg: Colors.amberD, text: Colors.amber, label: "Atencao" },
+  attention: { bg: Colors.amberD, text: Colors.amber, label: "Atenção" },
   at_risk:   { bg: Colors.redD,   text: Colors.red,   label: "Risco" },
   critical:  { bg: Colors.redD,   text: Colors.red,   label: "Critico" },
 };
@@ -69,8 +69,8 @@ var BILLING_LABELS: Record<string, { label: string; color: string }> = {
 var FILTERS = [
   { key: "all", label: "Todos" },
   { key: "at_risk", label: "Em risco" },
-  { key: "attention", label: "Atencao" },
-  { key: "healthy", label: "Saudaveis" },
+  { key: "attention", label: "Atenção" },
+  { key: "healthy", label: "Saudáveis" },
   { key: "trial", label: "Trial" },
 ];
 
@@ -84,7 +84,7 @@ var MODULE_CATALOG: Array<{ key: string; label: string; minPlan: string }> = [
   { key: "nfe",           label: "NF-e",            minPlan: "essencial" },
   { key: "contabilidade", label: "Contabilidade",   minPlan: "essencial" },
   { key: "suporte",       label: "Seu Analista",    minPlan: "essencial" },
-  { key: "configuracoes", label: "Configuracoes",   minPlan: "essencial" },
+  { key: "configuracoes", label: "Configurações",   minPlan: "essencial" },
   { key: "clientes",      label: "Clientes",        minPlan: "negocio" },
   { key: "folha",         label: "Folha",           minPlan: "negocio" },
   { key: "agendamento",   label: "Agenda",          minPlan: "negocio" },
@@ -93,7 +93,7 @@ var MODULE_CATALOG: Array<{ key: string; label: string; minPlan: string }> = [
   { key: "agentes",       label: "Agentes IA",      minPlan: "expansao" },
 ];
 
-var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: "Negocio+", expansao: "Expansao" };
+var PLAN_LABEL_MAP: Record<string, string> = { essencial: "Essencial", negocio: "Negócio+", expansao: "Expansão" };
 
 // 12/05/2026: seats inclusos por plano (espelho do src/services/memberSeats.js no backend).
 // Hardcoded aqui pra UI calcular "X de Y seats" sem precisar fetch extra. Se mudar no backend,
@@ -109,13 +109,13 @@ function seatsIncludedFor(plan: string, extra: number): number {
 
 // Catalogo de verticais — cor tematica, icone e se esta pronta ou em desenvolvimento.
 // 'ready=false' mostra badge "em breve" e ainda permite ativacao (mostra tela de
-// "modulo em desenvolvimento" pro cliente) pra sinalizar interesse.
+// "módulo em desenvolvimento" pro cliente) pra sinalizar interesse.
 type VerticalMeta = { key: VerticalKey; label: string; color: string; icon: string; ready: boolean };
 var VERTICAL_META: VerticalMeta[] = [
   { key: "odonto",   label: "Odontologia",   color: "#06b6d4", icon: "🩺", ready: true  }, // cyan 🦷
   { key: "barber",   label: "Barber / Salao", color: Colors.amber, icon: "✂️", ready: true  }, // amber ✂️
   { key: "food",     label: "Food Service",  color: "#fb7185", icon: "🍽️", ready: true  }, // coral 🍽️
-  { key: "estetica", label: "Estetica",      color: Colors.ink3, icon: "✨", ready: false }, // em dev ✨
+  { key: "estetica", label: "Estética",      color: Colors.ink3, icon: "✨", ready: false }, // em dev ✨
   { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "🐾", ready: false }, // em dev 🐾
   { key: "studio",   label: "Aura Studio",   color: "#1E3A8A", icon: "🎨", ready: true  }, // navy + magenta accent (vertical 25/05/2026)
   { key: "academia", label: "Academia",      color: Colors.ink3, icon: "🏋️", ready: false }, // em dev 🏋️
@@ -193,7 +193,7 @@ export function ClientsAdmin() {
       if (ownCompany?.id === variables.companyId) {
         useAuthStore.getState().updateCompany({ module_overrides: variables.overrides });
       }
-      toast.success("Modulos atualizados");
+      toast.success("Módulos atualizados");
     },
     onError: function() { toast.error("Erro ao atualizar"); },
   });
@@ -279,7 +279,7 @@ export function ClientsAdmin() {
       qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
       setExtraSeatsReason("");
       if (result?.changed === false) {
-        toast.info("Sem alteracao — count ja estava em " + result.extra_seats_granted);
+        toast.info("Sem alteração — count ja estava em " + result.extra_seats_granted);
       } else {
         toast.success("Acessos extras: " + result.extra_seats_granted);
       }
@@ -578,7 +578,7 @@ export function ClientsAdmin() {
         {/* Seletor de modulo vertical */}
         <View style={s.section}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <Text style={s.sectionTitle}>Modulo vertical</Text>
+            <Text style={s.sectionTitle}>Módulo vertical</Text>
             {verticalMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
           </View>
           <View style={s.verticalGrid}>
@@ -621,7 +621,7 @@ export function ClientsAdmin() {
           </View>
           <Text style={s.verticalHint}>
             Ativa uma tab dedicada no app do cliente com funcionalidades do segmento.
-            {sc.suggested_vertical ? " Sugestao baseada no CNAE: " + sc.suggested_vertical + "." : ""}
+            {sc.suggested_vertical ? " Sugestão baseada no CNAE: " + sc.suggested_vertical + "." : ""}
             {" "}A vertical usa a precificacao do proprio plano — nao ha add-on separado.
             {" "}O Aura Studio exige plano Negocio ou superior.
           </Text>
@@ -693,7 +693,7 @@ export function ClientsAdmin() {
             {[{ label: "Atividade", score: sc.activity_score, max: 25, icon: "clock" },
               { label: "Volume uso", score: sc.usage_score, max: 25, icon: "bar_chart" },
               { label: "Pagamento", score: sc.payment_score, max: 25, icon: "dollar" },
-              { label: "Adocao", score: sc.adoption_score, max: 25, icon: "star" },
+              { label: "Adoção", score: sc.adoption_score, max: 25, icon: "star" },
             ].map(function(dim) {
               var pct = Math.round((dim.score / dim.max) * 100);
               var color = pct >= 80 ? Colors.green : pct >= 40 ? Colors.amber : Colors.red;
@@ -718,7 +718,7 @@ export function ClientsAdmin() {
             <Text style={s.sectionTitle}>Uso da plataforma</Text>
             <View style={s.usageGrid}>
               <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_transactions}</Text><Text style={s.usageLabel}>Lancamentos</Text></View>
-              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.tx_30d}</Text><Text style={s.usageLabel}>Ultimos 30d</Text></View>
+              <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.tx_30d}</Text><Text style={s.usageLabel}>Últimos 30d</Text></View>
               <View style={s.usageStat}><Text style={s.usageVal}>{act.usage.total_sales}</Text><Text style={s.usageLabel}>Vendas PDV</Text></View>
               <View style={s.usageStat}><Text style={[s.usageVal, { color: Colors.green }]}>{fmtK(act.usage.total_revenue)}</Text><Text style={s.usageLabel}>Receita total</Text></View>
             </View>
@@ -741,7 +741,7 @@ export function ClientsAdmin() {
         {/* Ultimas transacoes */}
         {act && act.recent_transactions.length > 0 && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Ultimas transacoes</Text>
+            <Text style={s.sectionTitle}>Últimas transações</Text>
             {act.recent_transactions.map(function(tx: any) {
               var isIncome = tx.type === "income";
               return (
@@ -784,7 +784,7 @@ export function ClientsAdmin() {
           {loadingNotes ? (
             <ActivityIndicator color={Colors.violet3} style={{ padding: 16 }} />
           ) : notes.length === 0 ? (
-            <Text style={s.notesEmpty}>Nenhuma nota ainda. Use o campo acima pra registrar contato/observacao.</Text>
+            <Text style={s.notesEmpty}>Nenhuma nota ainda. Use o campo acima pra registrar contato/observação.</Text>
           ) : (
             <View style={{ marginTop: 12 }}>
               {notes.map(function(n) {
@@ -805,7 +805,7 @@ export function ClientsAdmin() {
         {/* Modulos — com logica REAL de visibilidade (override > plano) */}
         <View style={s.section}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Text style={s.sectionTitle}>Modulos</Text>
+            <Text style={s.sectionTitle}>Módulos</Text>
             {toggleMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
           </View>
           <Text style={s.modulesHint}>

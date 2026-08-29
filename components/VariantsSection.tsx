@@ -80,7 +80,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
   }
 
   async function handleSave() {
-    if (!company?.id) { toast.error('Sessao expirada'); return; }
+    if (!company?.id) { toast.error('Sessão expirada'); return; }
 
     // VALIDACAO: variante PRECISA ter pelo menos 1 atributo (cor, tamanho, etc).
     // Sem isso, no Caixa aparece como "V1, V2, V3..." indistinguiveis e o cliente
@@ -153,7 +153,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Variantes</Text>
-          <Text style={s.hint}>Cores, tamanhos ou qualquer variacao do produto</Text>
+          <Text style={s.hint}>Cores, tamanhos ou qualquer variação do produto</Text>
         </View>
         <View style={s.headerActions}>
           {/* Botao "+ em lote" — Tarefa A */}
@@ -238,7 +238,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
           {/* Price + Stock in one row */}
           <View style={s.formRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Preco desta variante</Text>
+              <Text style={s.label}>Preço desta variante</Text>
               <TextInput style={s.input} value={price} onChangeText={setPrice}
                 placeholder={basePrice.toFixed(2)} placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
               <Text style={s.fieldHint}>Deixe vazio para usar o preco base ({fmt(basePrice)})</Text>
@@ -252,7 +252,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
 
           {/* Attributes */}
           <Text style={[s.label, { marginTop: 12 }]}>Caracteristicas <Text style={s.req}>*</Text></Text>
-          <Text style={s.fieldHint}>Obrigatorio. Sem isso a variante fica indistinguivel no Caixa.</Text>
+          <Text style={s.fieldHint}>Obrigatório. Sem isso a variante fica indistinguivel no Caixa.</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ flexDirection: 'row', gap: 4, marginVertical: 8, paddingRight: 20 }}>
             {ATTR_PRESETS.map(p => (

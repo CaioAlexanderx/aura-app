@@ -145,7 +145,7 @@ export function DentalComplianceConfigCard() {
         <>
           {/* ALVARA */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>🛡️ ALVARA DA VIGILANCIA SANITARIA</Text>
+            <Text style={s.sectionTitle}>🛡️ ALVARÁ DA VIGILÂNCIA SANITARIA</Text>
             <View style={s.row}>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Validade (DD/MM/AAAA)</Text>
@@ -160,7 +160,7 @@ export function DentalComplianceConfigCard() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Numero do alvara</Text>
+                <Text style={s.label}>Número do alvará</Text>
                 <TextInput
                   value={alvaraNumber}
                   onChangeText={setAlvaraNumber}
@@ -186,7 +186,7 @@ export function DentalComplianceConfigCard() {
                   {alvaraDaysLeft < 0
                     ? `⚠ Alvara vencido ha ${Math.abs(alvaraDaysLeft)} dias`
                     : alvaraDaysLeft === 0
-                    ? "⚠ Alvara vence hoje!"
+                    ? "⚠ Alvará vence hoje!"
                     : alvaraDaysLeft <= 7
                     ? `⚠ Vence em ${alvaraDaysLeft} dia(s)`
                     : alvaraDaysLeft <= 30
@@ -246,9 +246,9 @@ export function DentalComplianceConfigCard() {
 
           {/* CNES */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>🏥 CNES - CADASTRO ESTABELECIMENTO SAUDE</Text>
+            <Text style={s.sectionTitle}>🏥 CNES - CADASTRO ESTABELECIMENTO SAÚDE</Text>
             <View>
-              <Text style={s.label}>Numero CNES</Text>
+              <Text style={s.label}>Número CNES</Text>
               <TextInput
                 value={cnesNumber}
                 onChangeText={setCnesNumber}

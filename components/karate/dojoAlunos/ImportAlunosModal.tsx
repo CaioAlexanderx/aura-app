@@ -162,7 +162,7 @@ const HEADER_MAP: Record<string, keyof DojoImportRow> = {
   "faixa": "belt_label",
   "graduacao": "belt_label",
   "graduacao kyu": "belt_label",
-  "graduacao atual": "belt_label",
+  "graduação atual": "belt_label",
   "kyu": "belt_label",
   "faixa atual": "belt_label",
   "grau": "belt_label",
@@ -190,21 +190,21 @@ const HEADER_MAP: Record<string, keyof DojoImportRow> = {
   "endereco": "address",
   "logradouro": "address",
   "rua": "address",
-  "endereco completo": "address",
+  "endereço completo": "address",
   "cep": "zip_code",
   "bairro": "neighborhood",
   "cidade": "city",
   "municipio": "city",
   // ── responsável (legado — o backend também DERIVA de mãe/pai) ──
   "responsavel": "guardian_name",
-  "nome do responsavel": "guardian_name",
-  "responsavel nome": "guardian_name",
-  "tel responsavel": "guardian_phone",
-  "tel do responsavel": "guardian_phone",
-  "telefone responsavel": "guardian_phone",
-  "telefone do responsavel": "guardian_phone",
-  "celular responsavel": "guardian_phone",
-  "celular do responsavel": "guardian_phone",
+  "nome do responsável": "guardian_name",
+  "responsável nome": "guardian_name",
+  "tel responsável": "guardian_phone",
+  "tel do responsável": "guardian_phone",
+  "telefone responsável": "guardian_phone",
+  "telefone do responsável": "guardian_phone",
+  "celular responsável": "guardian_phone",
+  "celular do responsável": "guardian_phone",
 };
 
 /** Rótulo pt-BR de cada campo — só para dizer na prévia o que foi reconhecido. */
@@ -483,7 +483,7 @@ export interface SheetPick {
  *
  * Aba sem coluna de NOME vale 0, mesmo reconhecendo outras colunas: a
  * "Planilha1" do Areikan é uma lista de validação de dados cujo cabeçalho é
- * "ATIVO / INATIVO ; Graduacao ; ACADEMIAS" — casa "situação" e "faixa" e,
+ * "ATIVO / INATIVO ; Graduação ; ACADEMIAS" — casa "situação" e "faixa" e,
  * sem esta regra, competiria com a aba dos 484 alunos.
  */
 export function scoreSheetHeader(firstRow: any[]): number {

@@ -222,7 +222,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome do produto"); return; }
-    if (!price.trim()) { toast.error("Preencha o preco de venda"); return; }
+    if (!price.trim()) { toast.error("Preencha o preço de venda"); return; }
     // NCM: vazio é OK; preenchido tem que ter exatamente 8 dígitos
     if (ncm && ncm.length !== 8) {
       toast.error("NCM deve ter 8 digitos numericos (ou ficar vazio)");
@@ -262,7 +262,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                       : s.ncmBadgeEmpty;
   const ncmFamilyText = (ncmSuggestionResult && ncm === ncmSuggestionResult.ncm)
     ? ncmSuggestionResult.family
-    : (ncmFamilyByCode(ncm) || 'NCM valido');
+    : (ncmFamilyByCode(ncm) || 'NCM válido');
   const ncmBadgeLabel = ncmStatus === 'valid' ? '✓ OK'
                       : ncmStatus === 'partial' ? `${ncm.length}/8`
                       : 'vazio';
@@ -273,7 +273,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <Text style={s.title}>{isEdit ? "Editar produto" : "Adicionar produto"}</Text>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>×</Text></Pressable>
       </View>
-      <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
+      <Text style={s.hint}>Campos com * são obrigatórios.</Text>
 
       <FormField label="Nome do produto" required>
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Pomada modeladora" placeholderTextColor={Colors.ink3} />
@@ -319,7 +319,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       {/* ===== Identificadores: Código + NCM lado a lado ===== */}
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FormField label="Codigo interno">
+          <FormField label="Código interno">
             <View style={{ flexDirection: "row", gap: 5 }}>
               <TextInput style={[s.input, { flex: 1 }]} value={code} onChangeText={setCode} placeholder="POM-001" placeholderTextColor={Colors.ink3} />
               <Pressable onPress={generateCode} style={s.miniBtn}><Text style={s.miniBtnText}>Gerar</Text></Pressable>
@@ -327,7 +327,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           </FormField>
         </View>
         <View style={{ flex: 1 }}>
-          <FormField label="NCM (codigo fiscal)">
+          <FormField label="NCM (código fiscal)">
             <View style={{ flexDirection: "row", gap: 5 }}>
               <View style={{ flex: 1, position: "relative" as any }}>
                 <TextInput
@@ -363,7 +363,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                     Pelo nome: <Text style={s.ncmHintStrong}>{ncmSuggestionResult.label}</Text>
                     {' '}· <Text style={s.ncmHintCode}>{formatNcmDisplay(ncmSuggestionResult.ncm)}</Text>. Toque em Gerar.
                   </Text>
-                : '8 digitos. Necessario pra emitir nota fiscal.')}
+                : '8 digitos. Necessário pra emitir nota fiscal.')}
               {ncmStatus === 'partial' && (
                 <Text style={{ color: Colors.red }}>Faltam {8 - ncm.length} digito{8 - ncm.length > 1 ? 's' : ''}.</Text>
               )}
@@ -451,7 +451,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
               onPress={() => navigateCategory("next")}
               disabled={!canNextCategory}
               style={[s.catArrow, !canNextCategory && s.catArrowDisabled]}
-              accessibilityLabel="Proxima categoria"
+              accessibilityLabel="Próxima categoria"
             >
               <Text style={[s.catArrowText, !canNextCategory && s.catArrowTextDisabled]}>›</Text>
             </Pressable>
@@ -472,7 +472,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       {/* Fix 7: campos de preço/custo com máscara de moeda */}
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <FormField label="Preco de venda" required>
+          <FormField label="Preço de venda" required>
             <TextInput
               style={s.input}
               value={price}
@@ -505,8 +505,8 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
               <Text style={s.stockToggleTitle}>Estoque {isEdit ? "" : "inicial (opcional)"}</Text>
               <Text style={s.stockToggleSub}>
                 {showStock
-                  ? "Informe a quantidade em maos e o nivel minimo para alertas."
-                  : "Voce pode dar entrada de estoque depois, a qualquer momento."}
+                  ? "Informe a quantidade em maos e o nível mínimo para alertas."
+                  : "Você pode dar entrada de estoque depois, a qualquer momento."}
               </Text>
             </View>
             <Icon name={showStock ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
@@ -515,7 +515,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
           {showStock && (
             <View style={s.row2}>
               <View style={{ flex: 1 }}><FormField label="Qtd. atual"><TextInput style={s.input} value={stock} onChangeText={setStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
-              <View style={{ flex: 1 }}><FormField label="Estoque minimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
+              <View style={{ flex: 1 }}><FormField label="Estoque mínimo"><TextInput style={s.input} value={minStock} onChangeText={setMinStock} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></FormField></View>
             </View>
           )}
         </>
@@ -585,7 +585,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         <View style={s.variantsHintBox}>
           <Icon name="layers" size={14} color={Colors.violet3} />
           <View style={{ flex: 1 }}>
-            <Text style={s.variantsHintTitle}>Cores e tamanhos com estoque proprio</Text>
+            <Text style={s.variantsHintTitle}>Cores e tamanhos com estoque próprio</Text>
             <Text style={s.variantsHintDesc}>Salve o produto para liberar o cadastro de variantes com estoque individual por cor/tamanho.</Text>
           </View>
         </View>
@@ -611,7 +611,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
       {/* O campo sempre existiu e sempre foi pra `products.description`,
           que a loja publica ja lia. Mas o rotulo nao dizia isso: na
           Finesse, 1 produto em 500 tem descricao. Quem preenche um campo
-          chamado so "Descricao (opcional)" no fim de um formulario longo
+          chamado so "Descrição (opcional)" no fim de um formulario longo
           nao sabe que aquilo vira texto de vitrine. */}
       <FormField label="Descrição — aparece na página do produto">
         <TextInput

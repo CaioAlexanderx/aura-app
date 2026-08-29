@@ -78,7 +78,7 @@ export function ProfileHero({ companyName, cnpj, taxRegime, profileFields, onLog
         <Text style={s.heroName} numberOfLines={1}>{companyName || "Minha Empresa"}</Text>
         {cnpj
           ? <Text style={s.heroSub}>{fmtCNPJ(cnpj)}{taxRegime ? " \u00b7 " + regimeLabel(taxRegime) : ""}</Text>
-          : <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ nao informado</Text>}
+          : <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ não informado</Text>}
         <View style={s.progressRow}>
           <View style={s.progressTrack}><View style={[s.progressFill, { width: completePct + "%" as any }]} /></View>
           <Text style={s.progressLabel}>{completePct}%</Text>

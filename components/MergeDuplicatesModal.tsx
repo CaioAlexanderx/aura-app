@@ -32,7 +32,7 @@ export function MergeDuplicatesModal({
 
   const [selectedGroupIdx, setSelectedGroupIdx] = useState<number | null>(null);
   const [primaryId, setPrimaryId] = useState<string | null>(null);
-  const [attributeName, setAttributeName] = useState<"Cor" | "Tamanho" | "Variacao">("Cor");
+  const [attributeName, setAttributeName] = useState<"Cor" | "Tamanho" | "Variação">("Cor");
   const [valueByProduct, setValueByProduct] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -47,7 +47,7 @@ export function MergeDuplicatesModal({
     // Detectar atributo: se todos tem cor -> Cor. Se todos tem size -> Tamanho.
     const hasColor = g.products.every((p: any) => !!p.color);
     const hasSize = g.products.every((p: any) => !!p.size);
-    const attr: "Cor" | "Tamanho" | "Variacao" = hasColor ? "Cor" : (hasSize ? "Tamanho" : "Variacao");
+    const attr: "Cor" | "Tamanho" | "Variação" = hasColor ? "Cor" : (hasSize ? "Tamanho" : "Variação");
     setAttributeName(attr);
     const mapVals: Record<string, string> = {};
     g.products.forEach((p: any, i: number) => {
@@ -65,7 +65,7 @@ export function MergeDuplicatesModal({
   }
 
   // Quando muda o atributo, re-sugerir valores
-  function changeAttribute(attr: "Cor" | "Tamanho" | "Variacao") {
+  function changeAttribute(attr: "Cor" | "Tamanho" | "Variação") {
     setAttributeName(attr);
     if (!currentGroup) return;
     const mapVals: Record<string, string> = { ...valueByProduct };
@@ -89,7 +89,7 @@ export function MergeDuplicatesModal({
     // Validar: valores unicos
     const vals = currentGroup.products.map((p: any) => valueByProduct[p.id].trim().toLowerCase());
     if (new Set(vals).size !== vals.length) {
-      toast.error("Os valores de " + attributeName + " nao podem se repetir");
+      toast.error("Os valores de " + attributeName + " não podem se repetir");
       return;
     }
 
@@ -186,7 +186,7 @@ export function MergeDuplicatesModal({
                 <View style={s.attrBlock}>
                   <Text style={s.sectionLabel}>O que diferencia?</Text>
                   <View style={{ flexDirection: "row", gap: 6 }}>
-                    {["Cor", "Tamanho", "Variacao"].map((a) => (
+                    {["Cor", "Tamanho", "Variação"].map((a) => (
                       <Pressable key={a}
                         onPress={() => changeAttribute(a as any)}
                         style={[s.attrChip, attributeName === a && s.attrChipActive]}>
@@ -220,7 +220,7 @@ export function MergeDuplicatesModal({
                             {p.color ? hexToName(p.color) : ""}
                             {p.color && p.size ? " \u00b7 " : ""}
                             {p.size ? "T " + p.size : ""}
-                            {!p.color && !p.size ? "Versao" : ""}
+                            {!p.color && !p.size ? "Versão" : ""}
                           </Text>
                         </View>
                         <Text style={s.prodMeta}>

@@ -28,15 +28,15 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     label: 'Ortodontia',
     icon:  '\u{1F9B7}',
     fields: [
-      'Classificacao de Angle', 'Overjet', 'Overbite',
-      'Tipo aparelho', 'Fase tratamento', 'Alinhador numero', 'Proxima troca',
+      'Classificação de Angle', 'Overjet', 'Overbite',
+      'Tipo aparelho', 'Fase tratamento', 'Alinhador número', 'Próxima troca',
     ],
   },
   endodontia: {
     label: 'Endodontia',
     icon:  '\u{1FA7A}',
     fields: [
-      'Dente', 'Numero canais', 'Comprimento trabalho',
+      'Dente', 'Número canais', 'Comprimento trabalho',
       'Limas utilizadas', 'Cone principal', 'Cimento', 'Obturacao',
     ],
   },
@@ -44,7 +44,7 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     label: 'Periodontia',
     icon:  '\u{1F9EC}',
     fields: [
-      'Classificacao doenca', 'Extensao', 'Estagio',
+      'Classificação doenca', 'Extensão', 'Estágio',
       'Grau', 'Sangramento', 'Plano tratamento perio',
     ],
   },
@@ -52,7 +52,7 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     label: 'Cirurgia',
     icon:  '\u{1FA78}',
     fields: [
-      'Tipo cirurgia', 'Anestesia', 'Tecnica',
+      'Tipo cirurgia', 'Anestesia', 'Técnica',
       'Complicacoes', 'Pontos', 'Retorno',
     ],
   },
@@ -60,8 +60,8 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     label: 'Implante',
     icon:  '\u{1F9F4}',
     fields: [
-      'Regiao', 'Marca implante', 'Diametro',
-      'Comprimento', 'Torque', 'Tipo conexao', 'Pilar',
+      'Região', 'Marca implante', 'Diametro',
+      'Comprimento', 'Torque', 'Tipo conexão', 'Pilar',
     ],
   },
   protese: {
@@ -69,7 +69,7 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     icon:  '\u{1F9B4}',
     fields: [
       'Tipo protese', 'Material', 'Cor',
-      'Moldagem', 'Prova', 'Cimentacao', 'Laboratorio',
+      'Moldagem', 'Prova', 'Cimentacao', 'Laboratório',
     ],
   },
 };
@@ -116,7 +116,7 @@ export function AddSpecialtyFormModal({
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Nao foi possivel salvar a ficha.');
+      Alert.alert('Erro', err?.message || 'Não foi possível salvar a ficha.');
     },
   });
 
@@ -128,7 +128,7 @@ export function AddSpecialtyFormModal({
 
   function handleSave() {
     if (!specialty) {
-      Alert.alert('Atencao', 'Escolha uma especialidade antes de salvar.');
+      Alert.alert('Atenção', 'Escolha uma especialidade antes de salvar.');
       return;
     }
     // Filtra so os campos preenchidos
@@ -140,7 +140,7 @@ export function AddSpecialtyFormModal({
     if (Object.keys(filled).length === 0 && !notes.trim()) {
       Alert.alert(
         'Ficha vazia',
-        'Preencha ao menos um campo ou observacao antes de salvar.'
+        'Preencha ao menos um campo ou observação antes de salvar.'
       );
       return;
     }
@@ -233,7 +233,7 @@ export function AddSpecialtyFormModal({
           ))}
 
           <View style={{ marginTop: 8, marginBottom: 12 }}>
-            <Text style={s.label}>Observacoes gerais</Text>
+            <Text style={s.label}>Observações gerais</Text>
             <TextInput
               style={[s.input, { minHeight: 80 }]}
               value={notes}

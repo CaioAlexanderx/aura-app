@@ -27,11 +27,11 @@ export function GoogleBooking({ config, onConfigure, onSync, onToggle }: Props) 
           <View style={s.setupSection}>
             <Text style={s.setupText}>Conecte seu Google Business Profile para que seus clientes possam agendar diretamente pela Busca do Google e Google Maps.</Text>
             <View style={s.steps}>
-              <Text style={s.step}>1. Tenha um perfil verificado no Google Meu Negocio</Text>
+              <Text style={s.step}>1. Tenha um perfil verificado no Google Meu Negócio</Text>
               <Text style={s.step}>2. Copie seu Place ID do Google</Text>
-              <Text style={s.step}>3. Configure aqui e ative a sincronizacao</Text>
+              <Text style={s.step}>3. Configure aqui e ative a sincronização</Text>
             </View>
-            {onConfigure && <Pressable onPress={onConfigure} style={s.configBtn}><Text style={s.configBtnT}>Configurar conexao</Text></Pressable>}
+            {onConfigure && <Pressable onPress={onConfigure} style={s.configBtn}><Text style={s.configBtnT}>Configurar conexão</Text></Pressable>}
           </View>
         )}
         {config && (
@@ -43,9 +43,9 @@ export function GoogleBooking({ config, onConfigure, onSync, onToggle }: Props) 
             {config.business_name && <Text style={s.bizName}>{config.business_name}</Text>}
             {config.google_place_id && <Text style={s.placeId}>Place ID: {config.google_place_id}</Text>}
             <View style={s.syncRow}>
-              <Text style={s.syncItem}>Servicos: {config.sync_services ? "Sincronizado" : "Nao"}</Text>
-              <Text style={s.syncItem}>Disponibilidade: {config.sync_availability ? "Sincronizado" : "Nao"}</Text>
-              <Text style={s.syncItem}>Auto-aceitar: {config.auto_accept ? "Sim" : "Nao"}</Text>
+              <Text style={s.syncItem}>Servicos: {config.sync_services ? "Sincronizado" : "Não"}</Text>
+              <Text style={s.syncItem}>Disponibilidade: {config.sync_availability ? "Sincronizado" : "Não"}</Text>
+              <Text style={s.syncItem}>Auto-aceitar: {config.auto_accept ? "Sim" : "Não"}</Text>
             </View>
             {config.last_sync && <Text style={s.lastSync}>Ultima sincronizacao: {new Date(config.last_sync).toLocaleString("pt-BR")}</Text>}
             <View style={s.actionsRow}>

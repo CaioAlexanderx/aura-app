@@ -16,7 +16,7 @@ type ConsultData = { total: number; total_hours: number; total_revenue: number; 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
 var STAGE_COLORS = [Colors.red, Colors.amber, Colors.amber, Colors.violet3, Colors.green];
 var STATUS_COLORS: Record<string, { bg: string; text: string }> = { scheduled: { bg: Colors.violetD, text: Colors.violet3 }, completed: { bg: Colors.greenD, text: Colors.green }, cancelled: { bg: Colors.redD, text: Colors.red } };
-var CATEGORY_LABELS: Record<string, string> = { setup: "Setup", training: "Treinamento", automation: "Automacao", integration: "Integracao", data_analysis: "Analise de dados" };
+var CATEGORY_LABELS: Record<string, string> = { setup: "Setup", training: "Treinamento", automation: "Automação", integration: "Integração", data_analysis: "Análise de dados" };
 
 export function OperacoesAdmin() {
   var [section, setSection] = useState("pipeline");
@@ -86,19 +86,19 @@ export function OperacoesAdmin() {
           </View>
           <View style={s.slaMetrics}>
             <View style={s.slaMetric}>
-              <Text style={s.slaMetricLabel}>Tempo medio 1a resposta</Text>
+              <Text style={s.slaMetricLabel}>Tempo médio 1a resposta</Text>
               <Text style={[s.slaMetricVal, sla.avg_first_response_hours !== null && sla.avg_first_response_hours > 4 && { color: Colors.red }]}>{sla.avg_first_response_hours !== null ? sla.avg_first_response_hours + "h" : "N/A"}</Text>
-              <Text style={s.slaMeta}>Meta: ate 4h</Text>
+              <Text style={s.slaMeta}>Meta: até 4h</Text>
             </View>
             <View style={s.slaMetric}>
-              <Text style={s.slaMetricLabel}>Tempo medio resolucao</Text>
+              <Text style={s.slaMetricLabel}>Tempo médio resolução</Text>
               <Text style={[s.slaMetricVal, sla.avg_resolution_hours !== null && sla.avg_resolution_hours > 48 && { color: Colors.red }]}>{sla.avg_resolution_hours !== null ? sla.avg_resolution_hours + "h" : "N/A"}</Text>
-              <Text style={s.slaMeta}>Meta: ate 48h</Text>
+              <Text style={s.slaMeta}>Meta: até 48h</Text>
             </View>
             <View style={s.slaMetric}>
               <Text style={s.slaMetricLabel}>SLA cumprido</Text>
               <View style={[s.slaBadge, { backgroundColor: sla.sla_met ? Colors.greenD : Colors.amberD }]}>
-                <Text style={[s.slaBadgeText, { color: sla.sla_met ? Colors.green : Colors.amber }]}>{sla.sla_met ? "Sim" : "Nao"}</Text>
+                <Text style={[s.slaBadgeText, { color: sla.sla_met ? Colors.green : Colors.amber }]}>{sla.sla_met ? "Sim" : "Não"}</Text>
               </View>
             </View>
           </View>

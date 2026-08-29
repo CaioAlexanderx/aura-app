@@ -90,7 +90,7 @@ export function VariantImageButton({
           })
           .catch(() => {
             setBusy(false);
-            toast.error("Nao foi possivel salvar a variante. Tente novamente em 1 segundo.");
+            toast.error("Não foi possível salvar a variante. Tente novamente em 1 segundo.");
           });
         return;
       }
@@ -141,7 +141,7 @@ export function VariantImageButton({
       // com mensagem mais explicativa.
       const msg = err?.data?.error || err?.message || "";
       if (msg.includes("nao encontrada") || /404/.test(String(err?.status || ""))) {
-        toast.error("Variante ainda nao foi salva no servidor. Aguarde 2s e tente novamente.");
+        toast.error("Variante ainda não foi salva no servidor. Aguarde 2s e tente novamente.");
       } else {
         toast.error(msg || "Erro ao salvar foto");
       }

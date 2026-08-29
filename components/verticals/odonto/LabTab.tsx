@@ -51,7 +51,7 @@ export function LabTab() {
     return (
       <View style={s.errorBox}>
         <Icon name="alert" size={16} color={Colors.red || "#EF4444"} />
-        <Text style={s.errorText}>Erro ao carregar pedidos de laboratorio. Tente recarregar.</Text>
+        <Text style={s.errorText}>Erro ao carregar pedidos de laboratório. Tente recarregar.</Text>
       </View>
     );
   }

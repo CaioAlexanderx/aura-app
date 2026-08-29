@@ -34,9 +34,9 @@ interface Props {
 }
 
 const QUICK_ACTIONS = [
-  { id: 'confirm',  label: 'Confirmar agenda de hoje', prompt: 'Como devo abordar a confirmacao das consultas de hoje? Quais sao os horarios e o status de cada uma?' },
-  { id: 'cobranca', label: 'Cobrar parcelas vencidas',  prompt: 'Tenho parcelas vencidas. Me ajude a montar uma regua de cobranca respeitosa, com tres mensagens em escalada.' },
-  { id: 'recall',   label: 'Recall de pacientes inativos', prompt: 'Quero fazer uma campanha de recall pra pacientes que nao voltam ha mais de 5 meses. Sugira mensagens e estrategia.' },
+  { id: 'confirm',  label: 'Confirmar agenda de hoje', prompt: 'Como devo abordar a confirmação das consultas de hoje? Quais são os horários e o status de cada uma?' },
+  { id: 'cobranca', label: 'Cobrar parcelas vencidas',  prompt: 'Tenho parcelas vencidas. Me ajude a montar uma regua de cobrança respeitosa, com três mensagens em escalada.' },
+  { id: 'recall',   label: 'Recall de pacientes inativos', prompt: 'Quero fazer uma campanha de recall pra pacientes que não voltam ha mais de 5 meses. Sugira mensagens e estrategia.' },
   { id: 'whats',    label: 'Sugerir mensagem WhatsApp',  prompt: 'Me ajude a escrever uma mensagem profissional pra mandar pelo WhatsApp.' },
 ];
 
@@ -57,7 +57,7 @@ export function DentalAiChatView({ conversation, messages, pendingMessage, input
           </Text>
           {conversation.patient_name && <Text style={st.headerSub}>Contexto: {conversation.patient_name}</Text>}
         </View>
-        <Pressable onPress={() => Alert.alert('Arquivar conversa?','A conversa sera ocultada da lista mas o historico sera mantido.',[{text:'Cancelar',style:'cancel'},{text:'Arquivar',style:'destructive',onPress:onArchive}])} hitSlop={10}>
+        <Pressable onPress={() => Alert.alert('Arquivar conversa?','A conversa será ocultada da lista mas o histórico será mantido.',[{text:'Cancelar',style:'cancel'},{text:'Arquivar',style:'destructive',onPress:onArchive}])} hitSlop={10}>
           <Icon name="archive" size={18} color="#94A3B8" />
         </Pressable>
       </View>
@@ -79,8 +79,8 @@ export function DentalAiChatView({ conversation, messages, pendingMessage, input
             </Text>
             <Text style={st.emptySub}>
               {conversation.patient_name
-                ? 'Anamnese, odontograma, planos e parcelas ja estao no contexto.'
-                : 'Pergunte sobre agenda, cobranca, recall ou peca scripts de WhatsApp.'}
+                ? 'Anamnese, odontograma, planos e parcelas ja estão no contexto.'
+                : 'Pergunte sobre agenda, cobrança, recall ou peca scripts de WhatsApp.'}
             </Text>
             <View style={st.quickActions}>
               {QUICK_ACTIONS.map(qa => (

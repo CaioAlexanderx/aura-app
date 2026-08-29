@@ -112,7 +112,7 @@ export function CategoryTreePicker({ value, onChange, productId }: Props) {
           {path.length > 0 && (
             <Pressable onPress={() => setPath(path.slice(0, -1))} style={s.backRow}>
               <Icon name="chevron_left" size={14} color={C.violet} />
-              <Text style={[s.backText, { color: C.violet }]}>{currentNode ? currentNode.name : "Inicio"}</Text>
+              <Text style={[s.backText, { color: C.violet }]}>{currentNode ? currentNode.name : "Início"}</Text>
             </Pressable>
           )}
           {isLoading && path.length === 0 && tree.length === 0 ? (
@@ -209,7 +209,7 @@ function CategoryRow({ category, breadcrumb, isPrimary, isAlso, onSelectPrimary,
 
       <View style={s.rowActions}>
         {isPrimary && <Icon name="star" size={14} color={C.violet} />}
-        <Pressable onPress={onToggleAlso} disabled={isPrimary} hitSlop={8} style={s.secondaryBtn} accessibilityLabel={"Tambem em " + category.name}>
+        <Pressable onPress={onToggleAlso} disabled={isPrimary} hitSlop={8} style={s.secondaryBtn} accessibilityLabel={"Também em " + category.name}>
           <Icon name={isAlso ? "check_circle" : "plus_circle"} size={16} color={isPrimary ? C.ink3 : isAlso ? C.green : C.ink3} />
         </Pressable>
         {onEnter && (

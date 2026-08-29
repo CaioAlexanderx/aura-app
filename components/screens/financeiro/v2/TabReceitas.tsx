@@ -279,7 +279,7 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
 
       {/* Analises que respondem perguntas mais raras — juntas num acordeao so,
           em vez de tres cards permanentes no fim da aba.
-          A "Evolucao 12m" NAO fica aqui: era o mesmo componente com a mesma
+          A "Evolução 12m" NAO fica aqui: era o mesmo componente com a mesma
           prop renderizado tambem em Despesas. A versao de la mostra receita e
           despesa lado a lado, entao responde as duas perguntas de uma vez. */}
       <CollapsibleSection

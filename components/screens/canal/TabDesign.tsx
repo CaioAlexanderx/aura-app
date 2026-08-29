@@ -396,7 +396,7 @@ export function TabDesign({
   function addServiceCard(card: ServiceCard) {
     setServiceCards((prev) => {
       if (prev.length >= 4) {
-        toast.info("Maximo de 4 cards");
+        toast.info("Máximo de 4 cards");
         return prev;
       }
       const next = [...prev, { ...card, enabled: true }];
@@ -485,7 +485,7 @@ export function TabDesign({
       <View style={cs.card}>
         {/* A loja dela, ao vivo. Antes a cor mudava so a bolinha
             selecionada e o efeito ficava numa OUTRA aba — dai a queixa de
-            que "a troca de cores nao faz muito". */}
+            que "a troca de cores não faz muito". */}
         <View style={{ marginBottom: 16, gap: 7 }}>
           <MiniLoja
             cor={primary}
@@ -503,7 +503,7 @@ export function TabDesign({
           </Text>
         </View>
 
-        {/* "Cor primaria" e "Cor de destaque" nao dizem nada pra quem nao
+        {/* "Cor primária" e "Cor de destaque" nao dizem nada pra quem nao
             e designer. O rotulo agora diz O QUE muda — e diz a verdade:
             a primaria governa 21 pontos da loja, a de destaque governa 4
             (o degrade do topo e a bolinha do carrinho). */}

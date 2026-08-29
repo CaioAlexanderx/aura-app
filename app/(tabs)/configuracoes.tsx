@@ -30,11 +30,11 @@ function EquipeGate() {
     <View style={g.wrap}>
       <View style={g.row}>
         <Icon name="users" size={16} color={Colors.ink3} />
-        <Text style={g.label}>Convide sua equipe e defina permissoes de acesso.</Text>
+        <Text style={g.label}>Convide sua equipe e defina permissões de acesso.</Text>
       </View>
       <Pressable onPress={() => router.push("/(tabs)/planos")} style={g.badge}>
         <Icon name="lock" size={11} color={Colors.ink3} />
-        <Text style={g.badgeText}>A partir do plano Negocio</Text>
+        <Text style={g.badgeText}>A partir do plano Negócio</Text>
       </Pressable>
     </View>
   );
@@ -61,7 +61,7 @@ function PerCompanyGate({ availableCompanies, switchToCompany }: {
       <View style={pcg.row}>
         <Icon name="bag" size={16} color="#a78bfa" />
         <View style={{ flex: 1 }}>
-          <Text style={pcg.title}>Configuracoes por empresa</Text>
+          <Text style={pcg.title}>Configurações por empresa</Text>
           <Text style={pcg.desc}>
             Identidade, dados registrais, equipe e politicas de venda sao especificas de cada CNPJ.
             Selecione uma empresa para configura-la.
@@ -83,7 +83,7 @@ function PerCompanyGate({ availableCompanies, switchToCompany }: {
                 {c.trade_name || c.legal_name || "Empresa"}
               </Text>
               <Text style={pcg.itemDesc} numberOfLines={1}>
-                {c.is_primary ? "Empresa principal" : "Empresa secundaria"}
+                {c.is_primary ? "Empresa principal" : "Empresa secundária"}
               </Text>
             </View>
             <Icon name="chevron_right" size={16} color={Colors.ink3} />
@@ -236,7 +236,7 @@ export default function ConfiguracoesScreen() {
         <View style={s.consolidatedHero}>
           <Icon name="bag" size={20} color="#a78bfa" />
           <View style={{ flex: 1 }}>
-            <Text style={s.consolidatedHeroTitle}>Configuracoes — Visao consolidada</Text>
+            <Text style={s.consolidatedHeroTitle}>Configurações — Visão consolidada</Text>
             <Text style={s.consolidatedHeroDesc}>
               {totalCompanies} empresa{totalCompanies !== 1 ? "s" : ""} ativa{totalCompanies !== 1 ? "s" : ""}.
               Configuracoes globais ficam aqui; especificas exigem entrar em uma empresa.
@@ -264,7 +264,7 @@ export default function ConfiguracoesScreen() {
               <Card>
                 <EditField label="Nome da empresa" value={profile.companyName} onChange={profile.setCompanyName} placeholder="Ex: Barbearia do Caio" />
                 <View style={sh.fieldDivider} />
-                <EditField label="Endereco" value={profile.address} onChange={profile.setAddress} placeholder="Rua, numero, cidade - UF" multiline />
+                <EditField label="Endereço" value={profile.address} onChange={profile.setAddress} placeholder="Rua, número, cidade - UF" multiline />
               </Card>
 
               {/* CONTATO */}
@@ -284,7 +284,7 @@ export default function ConfiguracoesScreen() {
                 {!profile.hasErrors && (
                   <View style={s.contactNote}>
                     <Icon name="info" size={13} color={Colors.ink3} />
-                    <Text style={s.contactNoteText}>Alteracoes entram em vigor apos salvar.</Text>
+                    <Text style={s.contactNoteText}>Alterações entram em vigor após salvar.</Text>
                   </View>
                 )}
               </Card>
@@ -295,11 +295,11 @@ export default function ConfiguracoesScreen() {
             </>
           )}
 
-          {/* Gate "Configuracoes por empresa" so em consolidated.
+          {/* Gate "Configurações por empresa" so em consolidated.
               Aparece no lugar das secoes per-company acima. */}
           {consolidatedView && availableCompanies && availableCompanies.length > 0 && (
             <>
-              <SectionTitle title="Configuracoes especificas" />
+              <SectionTitle title="Configurações específicas" />
               <PerCompanyGate
                 availableCompanies={availableCompanies}
                 switchToCompany={handleSwitchToCompany}
@@ -424,7 +424,7 @@ export default function ConfiguracoesScreen() {
                     <Text style={s.saveBtnText}>Salvo com sucesso!</Text>
                   </View>
                 ) : (
-                  <Text style={s.saveBtnText}>{profile.hasErrors ? "Corrija os erros acima" : "Salvar alteracoes"}</Text>
+                  <Text style={s.saveBtnText}>{profile.hasErrors ? "Corrija os erros acima" : "Salvar alterações"}</Text>
                 )}
               </Pressable>
             </View>
@@ -434,7 +434,7 @@ export default function ConfiguracoesScreen() {
 
           {isDemo && (
             <View style={s.demoBanner}>
-              <Text style={s.demoBannerText}>Modo demonstrativo - alteracoes nao sao persistidas</Text>
+              <Text style={s.demoBannerText}>Modo demonstrativo - alterações não são persistidas</Text>
             </View>
           )}
         </>

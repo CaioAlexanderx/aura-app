@@ -24,7 +24,7 @@ export function AgendaOnlineBarber({ config, requests, bookingUrl, onToggle, onC
         {config && (
           <View style={s.configGrid}>
             <Text style={s.configItem}>Horario: {config.start_hour}h - {config.end_hour}h</Text>
-            <Text style={s.configItem}>Escolher profissional: {config.allow_professional_choice ? "Sim" : "Nao"}</Text>
+            <Text style={s.configItem}>Escolher profissional: {config.allow_professional_choice ? "Sim" : "Não"}</Text>
             {config.deposit_required && <Text style={s.configItem}>Deposito: R$ {config.deposit_amount}</Text>}
           </View>
         )}
@@ -46,7 +46,7 @@ export function AgendaOnlineBarber({ config, requests, bookingUrl, onToggle, onC
           )}
         </View>
       ))}
-      {requests.length === 0 && <Text style={s.emptyT}>Nenhuma solicitacao recebida.</Text>}
+      {requests.length === 0 && <Text style={s.emptyT}>Nenhuma solicitação recebida.</Text>}
     </View>
   );
 }

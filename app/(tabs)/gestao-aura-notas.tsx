@@ -23,7 +23,7 @@ export default function GestaoAuraNotasScreen() {
           </View>
           <View>
             <Text style={s.title}>Aura Notas</Text>
-            <Text style={s.subtitle}>Gestao fiscal — engine propria, CSC, certificado A1 e status SEFAZ</Text>
+            <Text style={s.subtitle}>Gestão fiscal — engine própria, CSC, certificado A1 e status SEFAZ</Text>
           </View>
         </View>
       </View>

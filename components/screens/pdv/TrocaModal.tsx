@@ -309,7 +309,7 @@ export function TrocaModal({
       setStep(5);
       onSuccess?.(result);
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao registrar troca / devolucao");
+      toast.error(e?.message || "Erro ao registrar troca / devolução");
     } finally {
       setSubmitting(false);
     }
@@ -370,7 +370,7 @@ export function TrocaModal({
               <Text style={s.headerSub}>
                 {step === 1 && "Encontre a venda original — em qualquer filial do grupo"}
                 {step === 2 && "Marque o que o cliente esta devolvendo"}
-                {step === 3 && "Adicione itens novos ou pule para fazer so a devolucao"}
+                {step === 3 && "Adicione itens novos ou pule para fazer so a devolução"}
                 {step === 4 && "NF-e e estoque cuidados automaticamente"}
                 {step === 5 && "NF-e emitida · Estoque atualizado · Caixa registrado"}
               </Text>
@@ -509,7 +509,7 @@ export function TrocaModal({
                       <>
                         <Icon name="check" size={14} color="#fff" />
                         <Text style={s.btnPriTxt}>
-                          {newEntries.length === 0 ? "Confirmar devolucao" : "Confirmar troca"}
+                          {newEntries.length === 0 ? "Confirmar devolução" : "Confirmar troca"}
                         </Text>
                       </>
                     )}
@@ -524,7 +524,7 @@ export function TrocaModal({
       {showExitConfirm && (
         <View style={s.exitOverlay}>
           <View style={s.exitCard}>
-            <Text style={s.exitTitle}>Descartar esta operacao?</Text>
+            <Text style={s.exitTitle}>Descartar esta operação?</Text>
             <Text style={s.exitMsg}>
               Voce tem uma troca / devolucao em andamento. Se sair agora, os itens
               selecionados serao perdidos.

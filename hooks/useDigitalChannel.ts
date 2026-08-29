@@ -44,7 +44,7 @@ export function useDigitalChannel() {
     mutationFn: (body: any) => digitalChannelApi.save(cid!, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
-      toast.success('Configuracoes salvas');
+      toast.success('Configurações salvas');
     },
     onError: (err: any) => toast.error(err?.message || 'Erro ao salvar'),
   });
@@ -54,9 +54,9 @@ export function useDigitalChannel() {
       digitalChannelApi.requestDomain(cid!, domain, plan),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['digitalChannel', cid] });
-      toast.success('Solicitacao de dominio registrada!');
+      toast.success('Solicitação de domínio registrada!');
     },
-    onError: (err: any) => toast.error(err?.message || 'Erro ao solicitar dominio'),
+    onError: (err: any) => toast.error(err?.message || 'Erro ao solicitar domínio'),
   });
 
   const uploadImageMutation = useMutation({

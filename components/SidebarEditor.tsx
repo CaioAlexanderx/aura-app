@@ -123,7 +123,7 @@ export function SidebarEditor({ visible, onClose, baseNav }: Props) {
   async function handleReset() {
     try {
       await save(null);
-      toast.success("Menu restaurado ao padrao");
+      toast.success("Menu restaurado ao padrão");
       onClose();
     } catch (err: any) {
       toast.error(err?.data?.error || "Erro ao restaurar");
@@ -140,7 +140,7 @@ export function SidebarEditor({ visible, onClose, baseNav }: Props) {
           <View style={s.header}>
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Personalizar menu</Text>
-              <Text style={s.subtitle}>Reordene com as setas, esconda o que nao usa, ou mova entre secoes</Text>
+              <Text style={s.subtitle}>Reordene com as setas, esconda o que não usa, ou mova entre seções</Text>
             </View>
             <Pressable onPress={onClose} style={s.closeBtn}><Icon name="x" size={18} color={Colors.ink3} /></Pressable>
           </View>
@@ -185,11 +185,11 @@ export function SidebarEditor({ visible, onClose, baseNav }: Props) {
                           {meta.label}
                         </Text>
 
-                        {/* Botao "mover para outra secao" */}
+                        {/* Botao "mover para outra seção" */}
                         <Pressable
                           onPress={function() { setMoveTargetIdx(isMoving ? null : entry.globalIdx); }}
                           style={[s.actionBtn, isMoving && s.actionBtnActive]}
-                          {...(isWeb ? { title: "Mover para outra secao" } : {})}
+                          {...(isWeb ? { title: "Mover para outra seção" } : {})}
                         >
                           <Icon name="grid" size={12} color={isMoving ? Colors.violet3 : Colors.ink3} />
                         </Pressable>
@@ -208,7 +208,7 @@ export function SidebarEditor({ visible, onClose, baseNav }: Props) {
               );
             })}
 
-            {/* Popover de "mover para secao" — aparece quando moveTargetIdx != null */}
+            {/* Popover de "mover para seção" — aparece quando moveTargetIdx != null */}
             {moveTargetIdx !== null && items[moveTargetIdx] && (
               <View style={s.movePopover}>
                 <Text style={s.moveTitle}>Mover "{itemMeta.get(items[moveTargetIdx].key)?.label}" para:</Text>
@@ -236,7 +236,7 @@ export function SidebarEditor({ visible, onClose, baseNav }: Props) {
           <View style={s.footer}>
             <Pressable onPress={handleReset} disabled={isSaving} style={s.resetBtn}>
               <Icon name="refresh" size={12} color={Colors.ink3} />
-              <Text style={s.resetText}>Restaurar padrao</Text>
+              <Text style={s.resetText}>Restaurar padrão</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable onPress={onClose} disabled={isSaving} style={s.cancelBtn}>

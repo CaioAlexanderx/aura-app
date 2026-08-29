@@ -24,7 +24,7 @@ export function ImportExportBar({ onExport, onImport, exportLabel, importLabel, 
           <Text style={s.importText}>{importLabel || "Importar CSV"}</Text>
         </Pressable>
       )}
-      {!isWeb && <Text style={s.hint}>Disponivel na versao web</Text>}
+      {!isWeb && <Text style={s.hint}>Disponível na versão web</Text>}
     </View>
   );
 }

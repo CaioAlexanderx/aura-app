@@ -28,13 +28,13 @@ export function ConvenioManager({ insurances, selectedInsurance, procedures = []
       {selectedInsurance && (
         <View style={s.procSection}>
           <View style={s.procHeader}><Text style={s.procTitle}>Tabela: {selectedInsurance.name}</Text>{onAddProcedure && <Pressable onPress={() => onAddProcedure(selectedInsurance.id)} style={s.addProcBtn}><Text style={s.addProcBtnT}>+ Procedimento</Text></Pressable>}</View>
-          <View style={s.tableH}><Text style={[s.th, { width: 80 }]}>TUSS</Text><Text style={[s.th, { flex: 1 }]}>Descricao</Text><Text style={[s.th, { width: 80 }]}>Valor</Text><Text style={[s.th, { width: 50 }]}>Autoriz.</Text></View>
+          <View style={s.tableH}><Text style={[s.th, { width: 80 }]}>TUSS</Text><Text style={[s.th, { flex: 1 }]}>Descrição</Text><Text style={[s.th, { width: 80 }]}>Valor</Text><Text style={[s.th, { width: 50 }]}>Autoriz.</Text></View>
           {procedures.map(p => (
             <View key={p.id} style={s.tr}>
               <Text style={[s.td, { width: 80, fontFamily: "monospace" }]}>{p.tuss_code}</Text>
               <Text style={[s.td, { flex: 1 }]}>{p.tuss_description || p.tuss_code}</Text>
               <Text style={[s.td, { width: 80, textAlign: "right", fontWeight: "600" }]}>{fmt(p.covered_price)}</Text>
-              <Text style={[s.td, { width: 50, textAlign: "center" }]}>{p.requires_auth ? "Sim" : "Nao"}</Text>
+              <Text style={[s.td, { width: 50, textAlign: "center" }]}>{p.requires_auth ? "Sim" : "Não"}</Text>
             </View>
           ))}
           {procedures.length === 0 && <Text style={s.emptyT}>Nenhum procedimento cadastrado neste conv\u00eanio.</Text>}

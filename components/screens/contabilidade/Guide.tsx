@@ -45,7 +45,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
     try {
       const res = await request<{ qr_base64: string }>(`/companies/${company.id}/obligations/das-mei/qr`, { method: "POST" });
       setQrBase64(res.qr_base64);
-    } catch { setQrError("Nao foi possivel gerar o QR Code. Use o link abaixo para acessar o PGMEI manualmente."); }
+    } catch { setQrError("Não foi possível gerar o QR Code. Use o link abaixo para acessar o PGMEI manualmente."); }
     finally { setQrLoading(false); }
   }
 
@@ -56,9 +56,9 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
       const res = await request<{ paid: boolean }>(`/companies/${company.id}/obligations/das-mei/check-payment`);
       if (res.paid) {
         setPaymentFound(true); clearInterval(pollRef.current);
-        toast.success("Pagamento do DAS detectado! Obrigacao concluida.");
+        toast.success("Pagamento do DAS detectado! Obrigação concluida.");
         setTimeout(() => onComplete(o.code), 600);
-      } else { toast.info("Pagamento nao detectado ainda. Se ja pagou, registre no Financeiro ou marque manualmente."); }
+      } else { toast.info("Pagamento não detectado ainda. Se ja pagou, registre no Financeiro ou marque manualmente."); }
     } catch { toast.error("Erro ao verificar pagamento."); }
     finally { setCheckingPay(false); }
   }
@@ -91,7 +91,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
       <View style={s.hero}>
         <Text style={s.heroTitle}>{o.name}</Text>
         <View style={[s.actionBadge, { backgroundColor: isAutomatic ? Colors.greenD : Colors.amberD }]}>
-          <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automatico — Aura cuida de tudo" : "Voce precisa agir — siga o passo a passo"}</Text>
+          <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automático — Aura cuida de tudo" : "Você precisa agir — siga o passo a passo"}</Text>
         </View>
         <Text style={s.heroDesc}>{o.aura_action}</Text>
         {o.user_action && <Text style={s.heroUserAction}>{o.user_action}</Text>}
@@ -126,7 +126,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
                 <View style={[s.stepNum, d && s.stepNumDone]}><Text style={[s.stepNumText, d && { color: "#fff" }]}>{d ? "OK" : i + 1}</Text></View>
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[s.stepText, d && s.stepTextDone]}>{st.text}</Text>
-                  {!d && <View style={[s.stepBadge, { backgroundColor: st.auto ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 9, fontWeight: "600", color: st.auto ? Colors.green : Colors.amber }}>{st.auto ? "Automatico" : "Voce faz"}</Text></View>}
+                  {!d && <View style={[s.stepBadge, { backgroundColor: st.auto ? Colors.greenD : Colors.amberD }]}><Text style={{ fontSize: 9, fontWeight: "600", color: st.auto ? Colors.green : Colors.amber }}>{st.auto ? "Automático" : "Você faz"}</Text></View>}
                 </View>
               </View>
               {st.hint && !d && <Text style={s.stepHint}>{st.hint}</Text>}
@@ -159,7 +159,7 @@ export function Guide({ obligation: o, onBack, onComplete }: Props) {
 
       {allCompleted && !isDone && <View style={s.doneBanner}><View style={s.doneCircle}><Text style={{ fontSize: 14, color: "#fff", fontWeight: "800" }}>OK</Text></View><View><Text style={{ fontSize: 16, color: Colors.green, fontWeight: "700" }}>Concluido!</Text><Text style={{ fontSize: 12, color: Colors.ink3, marginTop: 2 }}>{o.name} esta em dia.</Text></View></View>}
 
-      <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio contabil informativo. Consulte o portal oficial.</Text></View>
+      <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>Estimativas para apoio contábil informativo. Consulte o portal oficial.</Text></View>
     </View>
   );
 }

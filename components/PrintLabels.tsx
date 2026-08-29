@@ -255,7 +255,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
       if (!w) { var w2 = window.open("", "_blank"); if (w2) { w2.document.write(html); w2.document.close(); } else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; } }
-      toast.success(totalLabels + " etiqueta(s) abertas para impressao");
+      toast.success(totalLabels + " etiqueta(s) abertas para impressão");
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
   }
 
@@ -343,10 +343,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       if (saves.length > 0) {
         try {
           await Promise.all(saves);
-          toast.success(saves.length + " codigo(s) gravado(s) no cadastro");
+          toast.success(saves.length + " código(s) gravado(s) no cadastro");
         } catch (err) {
           console.error("[PrintLabels] Falha ao salvar EAN-13 gerado:", err);
-          toast.error("Etiquetas geradas, mas falhou ao gravar o codigo no cadastro — o PDV pode nao reconhecer ao bipar.");
+          toast.error("Etiquetas geradas, mas falhou ao gravar o código no cadastro — o PDV pode não reconhecer ao bipar.");
         }
       }
     }
@@ -419,7 +419,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       </View>
 
       <ScrollView style={s.list} nestedScrollEnabled>
-        {filtered.length === 0 && (<Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com codigo cadastrado" : "Nenhum produto encontrado"}</Text>)}
+        {filtered.length === 0 && (<Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : "Nenhum produto encontrado"}</Text>)}
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
           var variants = variantCache[p.id] || [];
@@ -603,7 +603,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               return (
                 <View key={idx} style={s.ean13Row}>
                   <Text style={s.ean13ItemName} numberOfLines={1}>{entry.name}</Text>
-                  <Text style={s.ean13OldCode} numberOfLines={1}>{entry.originalCode || "(sem codigo)"}</Text>
+                  <Text style={s.ean13OldCode} numberOfLines={1}>{entry.originalCode || "(sem código)"}</Text>
                   <Text style={s.ean13Arrow}>{"→"}</Text>
                   <Text style={s.ean13NewCode}>{entry.generated}</Text>
                 </View>
@@ -616,7 +616,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             </Pressable>
             <Pressable onPress={handleConfirmEan13} style={s.ean13ConfirmBtn}>
               <Icon name="file_text" size={14} color="#fff" />
-              <Text style={s.ean13ConfirmText}>Usar estes codigos e Imprimir</Text>
+              <Text style={s.ean13ConfirmText}>Usar estes códigos e Imprimir</Text>
             </Pressable>
           </View>
         </View>

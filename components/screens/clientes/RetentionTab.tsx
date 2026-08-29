@@ -4,8 +4,8 @@ import { Colors } from "@/constants/colors";
 export function RetentionTab() {
   return (
     <View style={s.card}>
-      <Text style={s.title}>Composicao da base</Text>
-      <Text style={s.desc}>As estatisticas de retencao serao calculadas automaticamente conforme voce cadastrar clientes e registrar vendas.</Text>
+      <Text style={s.title}>Composição da base</Text>
+      <Text style={s.desc}>As estatísticas de retenção serão calculadas automaticamente conforme você cadastrar clientes e registrar vendas.</Text>
     </View>
   );
 }

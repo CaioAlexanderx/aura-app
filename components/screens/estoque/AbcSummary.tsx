@@ -18,7 +18,7 @@ export function AbcSummary({ products }: { products: Product[] }) {
   const totalRevenue = products.reduce((s, p) => s + p.price * p.sold30d, 0);
   const totalStockValue = products.reduce((s, p) => s + p.stock * p.cost, 0);
   const clrs = { A: Colors.green, B: Colors.amber, C: Colors.ink3 };
-  const labels = { A: "Alta rotatividade", B: "Rotatividade media", C: "Baixa rotatividade" };
+  const labels = { A: "Alta rotatividade", B: "Rotatividade média", C: "Baixa rotatividade" };
 
   // Use sales revenue if available, otherwise fall back to stock value
   const hasSalesData = totalRevenue > 0;

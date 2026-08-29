@@ -26,7 +26,7 @@ export function AutomationConfig() {
 
   var saveMut = useMutation({
     mutationFn: function(body: any) { return request("/companies/" + company!.id + "/dental/automation/config", { method: "PUT", body: body }); },
-    onSuccess: function() { qc.invalidateQueries({ queryKey: ["dental-auto-config"] }); toast.success("Configuracao salva!"); },
+    onSuccess: function() { qc.invalidateQueries({ queryKey: ["dental-auto-config"] }); toast.success("Configuração salva!"); },
   });
 
   var triggerMut = useMutation({
@@ -42,18 +42,18 @@ export function AutomationConfig() {
   }
 
   var TYPE_LABELS: Record<string, { label: string; color: string }> = {
-    confirm_24h: { label: "Confirmacao", color: "#06b6d4" },
+    confirm_24h: { label: "Confirmação", color: "#06b6d4" },
     remind_2h: { label: "Lembrete", color: Colors.violet3 },
     recall: { label: "Recall", color: Colors.amber },
     satisfaction: { label: "Satisfacao", color: Colors.green },
-    billing_reminder: { label: "Cobranca", color: Colors.red },
+    billing_reminder: { label: "Cobrança", color: Colors.red },
   };
 
   return (
     <View>
       <View style={z.tabRow}>
-        <Pressable onPress={function() { setTab('config'); }} style={[z.tabBtn, tab === 'config' && z.tabBtnActive]}><Text style={[z.tabText, tab === 'config' && z.tabTextActive]}>Configuracao</Text></Pressable>
-        <Pressable onPress={function() { setTab('log'); }} style={[z.tabBtn, tab === 'log' && z.tabBtnActive]}><Text style={[z.tabText, tab === 'log' && z.tabTextActive]}>Historico</Text></Pressable>
+        <Pressable onPress={function() { setTab('config'); }} style={[z.tabBtn, tab === 'config' && z.tabBtnActive]}><Text style={[z.tabText, tab === 'config' && z.tabTextActive]}>Configuração</Text></Pressable>
+        <Pressable onPress={function() { setTab('log'); }} style={[z.tabBtn, tab === 'log' && z.tabBtnActive]}><Text style={[z.tabText, tab === 'log' && z.tabTextActive]}>Histórico</Text></Pressable>
       </View>
 
       {tab === 'config' && (
@@ -63,7 +63,7 @@ export function AutomationConfig() {
             <>
               <View style={z.configItem}>
                 <View style={{ flex: 1 }}>
-                  <Text style={z.configLabel}>Confirmacao automatica</Text>
+                  <Text style={z.configLabel}>Confirmação automática</Text>
                   <Text style={z.configHint}>Envia WhatsApp {cfg.confirm_hours_before || 24}h antes da consulta</Text>
                 </View>
                 <Switch value={cfg.confirm_enabled !== false} onValueChange={function(v) { toggleField('confirm_enabled', v); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
@@ -71,13 +71,13 @@ export function AutomationConfig() {
               <View style={z.configItem}>
                 <View style={{ flex: 1 }}>
                   <Text style={z.configLabel}>Lembrete 2h antes</Text>
-                  <Text style={z.configHint}>Lembrete rapido antes da consulta</Text>
+                  <Text style={z.configHint}>Lembrete rápido antes da consulta</Text>
                 </View>
                 <Switch value={cfg.remind_enabled !== false} onValueChange={function(v) { toggleField('remind_enabled', v); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
               </View>
               <View style={z.configItem}>
                 <View style={{ flex: 1 }}>
-                  <Text style={z.configLabel}>Recall automatico</Text>
+                  <Text style={z.configLabel}>Recall automático</Text>
                   <Text style={z.configHint}>Lembrete apos {cfg.recall_days || 180} dias sem visita</Text>
                 </View>
                 <Switch value={cfg.recall_enabled !== false} onValueChange={function(v) { toggleField('recall_enabled', v); }} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
@@ -110,7 +110,7 @@ export function AutomationConfig() {
         <View style={z.logList}>
           {loadingLog && <ActivityIndicator color={Colors.violet3} style={{ padding: 20 }} />}
           {!loadingLog && ((logData as any)?.log || []).length === 0 && (
-            <View style={z.empty}><Icon name="mail" size={24} color={Colors.ink3} /><Text style={z.emptyText}>Nenhuma automacao disparada ainda</Text></View>
+            <View style={z.empty}><Icon name="mail" size={24} color={Colors.ink3} /><Text style={z.emptyText}>Nenhuma automação disparada ainda</Text></View>
           )}
           {!loadingLog && ((logData as any)?.log || []).map(function(l: any) {
             var t = TYPE_LABELS[l.type] || { label: l.type, color: Colors.ink3 };

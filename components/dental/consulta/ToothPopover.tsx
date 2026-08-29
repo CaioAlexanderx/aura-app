@@ -153,7 +153,7 @@ export function ToothPopover({ tooth, onClose, onSave }: Props) {
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="Observacao livre (opcional)..."
+            placeholder="Observação livre (opcional)..."
             placeholderTextColor={DentalColors.ink3}
             multiline
             style={{

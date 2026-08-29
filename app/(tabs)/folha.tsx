@@ -97,9 +97,9 @@ function UpgradeCard({ title, description, features }: {
         onPress={() => router.push("/(tabs)/planos")}
         style={u.cta}
       >
-        <Text style={u.ctaText}>Conhecer o plano Negocio</Text>
+        <Text style={u.ctaText}>Conhecer o plano Negócio</Text>
       </Pressable>
-      <Text style={u.hint}>A partir de R$ 169/mes -- ative quando quiser</Text>
+      <Text style={u.hint}>A partir de R$ 169/mês -- ative quando quiser</Text>
     </View>
   );
 }
@@ -179,15 +179,15 @@ function FolhaScreenInner() {
   // Negocio+: nome + salario + CPF (11 digitos) + data admissao (dd/mm/aaaa).
   function validate(): boolean {
     const e: Partial<FormData> = {};
-    if (!form.name.trim()) e.name = "Nome obrigatorio";
+    if (!form.name.trim()) e.name = "Nome obrigatório";
 
     if (!isEssencial) {
       // Validacoes de folha real (Negocio+)
-      if (!form.salary || parseFloat(form.salary.replace(",", ".")) <= 0) e.salary = "Salario obrigatorio";
+      if (!form.salary || parseFloat(form.salary.replace(",", ".")) <= 0) e.salary = "Salário obrigatório";
       const cpfDigits = form.cpf.replace(/\D/g, "");
       if (!cpfDigits || cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 digitos";
       const dateNorm = normalizeDate(form.admDate);
-      if (!form.admDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) e.admDate = "Data obrigatoria (dd/mm/aaaa)";
+      if (!form.admDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) e.admDate = "Data obrigatória (dd/mm/aaaa)";
     } else {
       // Essencial: se CPF foi preenchido, valida formato; senao, permite vazio.
       const cpfDigits = form.cpf.replace(/\D/g, "");
@@ -299,7 +299,7 @@ function FolhaScreenInner() {
                 ? `Limite do plano atingido (${planLimit} funcionarios ativos)`
                 : `Voce esta perto do limite (${active.length} / ${planLimit})`}
             </Text>
-            <Text style={s.nearLimitSub}>Toque para ver opcoes de upgrade</Text>
+            <Text style={s.nearLimitSub}>Toque para ver opções de upgrade</Text>
           </View>
           <Icon name="chevron_right" size={16} color={Colors.amber} />
         </Pressable>
@@ -339,7 +339,7 @@ function FolhaScreenInner() {
                 <FormField label="Nome" required error={errors.name}>
                   <TextInput style={[s.formInput, errors.name && s.formInputError]} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Nome completo" placeholderTextColor={Colors.ink3} />
                 </FormField>
-                <FormField label="Funcao" hint="Ex: Vendedor, Atendente, Caixa">
+                <FormField label="Função" hint="Ex: Vendedor, Atendente, Caixa">
                   <TextInput style={s.formInput} value={form.role} onChangeText={v => setForm(f => ({ ...f, role: v }))} placeholder="Ex: Vendedor" placeholderTextColor={Colors.ink3} />
                 </FormField>
               </View>
@@ -369,10 +369,10 @@ function FolhaScreenInner() {
                 </FormField>
               </View>
               <View style={s.formRow}>
-                <FormField label="Salario bruto (R$)" required error={errors.salary} hint="Valor mensal bruto">
+                <FormField label="Salário bruto (R$)" required error={errors.salary} hint="Valor mensal bruto">
                   <TextInput style={[s.formInput, errors.salary && s.formInputError]} value={form.salary} onChangeText={v => setForm(f => ({ ...f, salary: maskCurrency(v) }))} placeholder="1800,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
                 </FormField>
-                <FormField label="Data de admissao" required error={errors.admDate} hint="Formato: dd/mm/aaaa">
+                <FormField label="Data de admissão" required error={errors.admDate} hint="Formato: dd/mm/aaaa">
                   <TextInput style={[s.formInput, errors.admDate && s.formInputError]} value={form.admDate} onChangeText={v => setForm(f => ({ ...f, admDate: maskDate(v) }))} placeholder="01/04/2026" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
                 </FormField>
               </View>
@@ -457,8 +457,8 @@ function FolhaScreenInner() {
           title="Resumo da folha"
           description="Veja todos os encargos da folha em um painel consolidado."
           features={[
-            "Total bruto, INSS, IRRF e FGTS por mes",
-            "Liquido a pagar por funcionario",
+            "Total bruto, INSS, IRRF e FGTS por mês",
+            "Líquido a pagar por funcionario",
             "Comparativo mensal",
           ]}
         />
@@ -466,12 +466,12 @@ function FolhaScreenInner() {
 
       {tab === 2 && (isEssencial ? (
         <UpgradeCard
-          title="Historico de folha"
+          title="Histórico de folha"
           description="Acompanhe todos os pagamentos passados, com holerites individuais."
           features={[
             "Holerites mensais por funcionario",
-            "Envio automatico por e-mail",
-            "Exportacao para contador (PDF/XLSX)",
+            "Envio automático por e-mail",
+            "Exportação para contador (PDF/XLSX)",
           ]}
         />
       ) : <PayrollHistory />)}
@@ -487,7 +487,7 @@ function FolhaScreenInner() {
           description="Defina metas individuais e acompanhe o progresso em tempo real."
           features={[
             "Meta de receita ou unidades vendidas",
-            "Acompanhamento diario/semanal",
+            "Acompanhamento diário/semanal",
             "Alerta quando bate a meta",
           ]}
         />
@@ -495,12 +495,12 @@ function FolhaScreenInner() {
 
       {tab === 4 && (isEssencial ? (
         <UpgradeCard
-          title="Comissoes automaticas"
-          description="Configure regras de comissao por vendedor ou produto."
+          title="Comissões automáticas"
+          description="Configure regras de comissão por vendedor ou produto."
           features={[
-            "Comissao em % sobre venda",
-            "Calculo automatico ao fechar a venda",
-            "Relatorio mensal para fechamento",
+            "Comissão em % sobre venda",
+            "Cálculo automático ao fechar a venda",
+            "Relatório mensal para fechamento",
           ]}
         />
       ) : <TabComissoes />)}

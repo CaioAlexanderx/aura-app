@@ -173,7 +173,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
         color: r?.color || null,
       };
       if (!newCat.id) {
-        throw new Error("Backend nao retornou id da categoria");
+        throw new Error("Backend não retornou id da categoria");
       }
       setCategories((prev) => [...prev, newCat]);
       setCategoryName(trimmed);
@@ -182,7 +182,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       toast.success("Categoria criada");
     } catch (e: any) {
       console.error("[StudioNewProductWizard] Falha criar categoria", e);
-      toast.error(e?.message || "Nao foi possivel criar a categoria");
+      toast.error(e?.message || "Não foi possível criar a categoria");
     }
   }
 
@@ -212,7 +212,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
       });
       const productId = String(product?.id || product?.product?.id || "");
       if (!productId) {
-        throw new Error("Backend nao retornou id do produto");
+        throw new Error("Backend não retornou id do produto");
       }
       toast.success("Produto criado!");
       onCreated?.({ id: productId, name: name.trim(), price: priceNum });
@@ -306,7 +306,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     keyboardType="decimal-pad"
                   />
                   {price.length > 0 && !priceValid && (
-                    <Text style={styles.errorTxt}>Preco precisa ser maior que zero</Text>
+                    <Text style={styles.errorTxt}>Preço precisa ser maior que zero</Text>
                   )}
                 </View>
                 <View style={[styles.field, { flex: 1 }]}>
@@ -324,7 +324,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
 
               {/* Descricao */}
               <View style={styles.field}>
-                <Text style={styles.label}>Descricao</Text>
+                <Text style={styles.label}>Descrição</Text>
                 <TextInput
                   style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
                   placeholder="Detalhes que ajudam o cliente a decidir"
@@ -415,7 +415,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     )}
                   </Pressable>
                 </View>
-                <Text style={styles.hint}>Ou cole uma URL publica abaixo</Text>
+                <Text style={styles.hint}>Ou cole uma URL pública abaixo</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="https://..."
@@ -428,7 +428,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                 {!!imageUrl && /^https?:\/\//.test(imageUrl.trim()) && (
                   <View style={styles.imgPreview}>
                     <Image source={{ uri: imageUrl.trim() }} style={styles.imgPreviewImg} />
-                    <Text style={styles.imgPreviewCap}>Previa da foto</Text>
+                    <Text style={styles.imgPreviewCap}>Prévia da foto</Text>
                   </View>
                 )}
               </View>

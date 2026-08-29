@@ -54,7 +54,7 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
       {/* Resumo numerico */}
       <View style={s.cfSummary}>
         <View style={s.cfStat}>
-          <Text style={[s.cfStatLabel, { color: Colors.ink3 }]}>Saldo medio diario</Text>
+          <Text style={[s.cfStatLabel, { color: Colors.ink3 }]}>Saldo médio diário</Text>
           <Text style={[s.cfStatValue, { color: data.avg_daily_net >= 0 ? Colors.green : Colors.red }]}>
             {data.avg_daily_net >= 0 ? "+" : ""}{fmt(data.avg_daily_net)}
           </Text>
@@ -66,7 +66,7 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
       </View>
 
       {/* Histórico bars */}
-      <Text style={[s.cfSection, { color: Colors.ink3 }]}>HISTORICO · 30 DIAS</Text>
+      <Text style={[s.cfSection, { color: Colors.ink3 }]}>HISTÓRICO · 30 DIAS</Text>
       <View style={s.cfBars}>
         {data.history.map(function(d, i) {
           var hInc = Math.max(2, (d.income / maxDay) * 100);
@@ -115,7 +115,7 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
       <View style={s.cfProjList}>
         {data.projection.map(function(p) {
           var color = p.value >= 0 ? Colors.green : Colors.red;
-          var tipText = "+" + p.days_ahead + " dias · projecao " + (p.value >= 0 ? "+" : "") + fmt(p.value) + " · banda " + fmt(p.low) + " a " + fmt(p.high);
+          var tipText = "+" + p.days_ahead + " dias · projeção " + (p.value >= 0 ? "+" : "") + fmt(p.value) + " · banda " + fmt(p.low) + " a " + fmt(p.high);
           return (
             <View key={p.days_ahead} {...tip(tipText)} style={[s.cfProjRow, { borderBottomColor: Colors.border }]}>
               <Text style={[s.cfProjLabel, { color: Colors.ink2 }]}>+{p.days_ahead} dias</Text>
@@ -156,7 +156,7 @@ export function MonthlyEvolution({ items }: { items: MonthlyItem[] }) {
   if (!items || items.length === 0) {
     return (
       <View style={s.empty}>
-        <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem historico mensal</Text>
+        <Text style={[s.emptyText, { color: Colors.ink3 }]}>Sem histórico mensal</Text>
       </View>
     );
   }

@@ -33,18 +33,18 @@ import { ColorImageButton } from "@/components/ColorImageButton";
 //
 // 21/05/2026: barcode por variante.
 // - color/size rows: campo inline EAN / Cód. barras
-// - matrix mode: secao "Codigos de barras" abaixo da grade
+// - matrix mode: secao "Códigos de barras" abaixo da grade
 // - estado hidratado do GET barcodes map; persistido no PUT
 //
 // 21/05/2026 (tarde): AUTO-SAVE no blur. Substitui o botao
-// "Salvar variacoes" por debounce + indicador inline. Bug Eryca:
+// "Salvar variações" por debounce + indicador inline. Bug Eryca:
 // cliente editava estoque na matrix e clicava no botao principal
 // "Atualizar produto" do form (que so chama PATCH /products e
 // nao toca em variantes), entao mudancas nas variantes eram
 // perdidas. Agora qualquer mudanca (estoque, barcode, +/- cor,
 // +/- tamanho) dispara debounce 400ms e PUT /variations
 // automaticamente. Status mostrado em "Salvando…" / "✓ Salvo".
-// Toast flutuante "Informacoes salvas" com throttle 2.5s.
+// Toast flutuante "Informações salvas" com throttle 2.5s.
 //
 // 23/05/2026: FOTO POR VARIANTE.
 // - VariantImageButton no inicio de cada linha (color/size/
@@ -71,7 +71,7 @@ import { ColorImageButton } from "@/components/ColorImageButton";
 //   (c) Click em variante pendente dispara `flushSave()` (cancela
 //       debounce e PUT imediato); apos sucesso, abrimos o file picker.
 //   (d) Hint inline abaixo do stockLabel quando ha combos pendentes:
-//       "Aguarde — fotos liberam apos salvar".
+//       "Aguarde — fotos liberam após salvar".
 //
 // 27/06/2026 (frente 1 fix Davi — variant-photo-by-color):
 // UX radicalmente mais simples e mais segura, baseada na pesquisa
@@ -123,14 +123,14 @@ function AddColorPopover({ onAdd, onCancel, existingHexes }: {
       setHex(resolved);
       setCustomInput("");
     } else if (customInput.trim()) {
-      toast.error('Cor "' + customInput + '" nao reconhecida. Use o seletor.');
+      toast.error('Cor "' + customInput + '" não reconhecida. Use o seletor.');
     }
   }
 
   function confirm() {
     const normalizedHex = hex.toUpperCase();
     if (!/^#[0-9A-F]{6}$/.test(normalizedHex)) {
-      toast.error("Cor invalida");
+      toast.error("Cor inválida");
       return;
     }
     if (existingHexes.has(normalizedHex)) {
@@ -211,7 +211,7 @@ function AddSizePopover({ onAdd, onCancel, existingSizes }: {
     const trimmed = value.trim();
     if (!trimmed) { toast.error("Digite um tamanho"); return; }
     if (existingSizes.has(trimmed)) { toast.error("Tamanho ja adicionado"); return; }
-    if (trimmed.length > 30) { toast.error("Maximo 30 caracteres"); return; }
+    if (trimmed.length > 30) { toast.error("Máximo 30 caracteres"); return; }
     onAdd(trimmed);
   }
 
@@ -295,7 +295,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   // de `data` (pra nao sobrescrever o estado local logo apos um PUT bem-
   // sucedido que dispara invalidate).
   const skipNextHydrateRef = useRef(false);
-  // Throttle do toast "Informacoes salvas" — evita spam quando o user
+  // Throttle do toast "Informações salvas" — evita spam quando o user
   // edita varias celulas rapido (cada blur ~ 1 PUT ~ 1 toast).
   // Mostra toast no maximo 1x a cada 2.5s.
   const lastToastAtRef = useRef(0);
@@ -528,21 +528,21 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       // 27/06/2026: libera quem estava aguardando flush.
       resolveAllFlush();
 
-      // Toast flutuante "Informacoes salvas" — throttle de 2.5s pra nao
+      // Toast flutuante "Informações salvas" — throttle de 2.5s pra nao
       // inundar a tela se o user editar varias celulas em sequencia
       // (cada blur dispara um PUT, mas o toast aparece no maximo 1x a cada
       // 2.5s). Mensagem curta porque o user ja sabe O QUE salvou.
       const now = Date.now();
       if (now - lastToastAtRef.current > 2500) {
         lastToastAtRef.current = now;
-        toast.success("Informacoes salvas");
+        toast.success("Informações salvas");
       }
     },
     onError: (err: any) => {
       setSaveStatus('error');
       // 27/06/2026: rejeita pendentes — o botao mostra mensagem propria.
       rejectAllFlush(err);
-      toast.error(err?.data?.error || err?.message || "Erro ao salvar variacoes");
+      toast.error(err?.data?.error || err?.message || "Erro ao salvar variações");
     },
     onSettled: () => {
       inFlightRef.current = false;
@@ -732,7 +732,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
   }
 
   // 27/06/2026: ha pelo menos 1 cor do modo atual ainda nao persistida?
-  // Usado pra mostrar o hint inline "aguarde — fotos liberam apos salvar".
+  // Usado pra mostrar o hint inline "aguarde — fotos liberam após salvar".
   const hasUnpersistedColor = useMemo(() => {
     void persistedTick;
     if (mode === 'none' || mode === 'size') return false;
@@ -759,7 +759,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       <View style={s.container}>
         <View style={{ padding: 20, alignItems: "center" }}>
           <ActivityIndicator color={Colors.violet3} size="small" />
-          <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 8 }}>Carregando variacoes...</Text>
+          <Text style={{ fontSize: 11, color: Colors.ink3, marginTop: 8 }}>Carregando variações...</Text>
         </View>
       </View>
     );
@@ -774,13 +774,13 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Cores e Tamanhos</Text>
           <Text style={s.subtitle}>
-            {mode === 'none' && "Adicione cores ou tamanhos para cadastrar estoque por variacao."}
+            {mode === 'none' && "Adicione cores ou tamanhos para cadastrar estoque por variação."}
             {mode === 'color' && colors.length + " cor" + (colors.length === 1 ? "" : "es") + " · total " + totalStock + " un"}
             {mode === 'size' && sizes.length + " tamanho" + (sizes.length === 1 ? "" : "s") + " · total " + totalStock + " un"}
             {mode === 'matrix' && (colors.length * sizes.length) + " combinac" + ((colors.length * sizes.length) === 1 ? "ao" : "oes") + " · total " + totalStock + " un"}
           </Text>
         </View>
-        {/* Indicador inline de auto-save (substitui o botao "Salvar variacoes" antigo) */}
+        {/* Indicador inline de auto-save (substitui o botao "Salvar variações" antigo) */}
         <View style={s.saveStatusBadge}>
           {saveStatus === 'saving' && (
             <>
@@ -814,10 +814,10 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             <Text style={s.parentMergedTitle}>Migrando estoque do produto pai pra grade…</Text>
             <Text style={s.parentMergedDesc}>
               {parentColor && parentSize
-                ? "A combinacao " + (hexToName(parentColor) || parentColor) + " · " + parentSize + " (" + (parentStock || 0) + " un) veio do pai e sera salva como variante."
+                ? "A combinação " + (hexToName(parentColor) || parentColor) + " · " + parentSize + " (" + (parentStock || 0) + " un) veio do pai e será salva como variante."
                 : parentColor
-                  ? (hexToName(parentColor) || parentColor) + " (" + (parentStock || 0) + " un) veio do pai e sera salvo como variante."
-                  : (parentSize || "") + " (" + (parentStock || 0) + " un) veio do pai e sera salvo como variante."}
+                  ? (hexToName(parentColor) || parentColor) + " (" + (parentStock || 0) + " un) veio do pai e será salvo como variante."
+                  : (parentSize || "") + " (" + (parentStock || 0) + " un) veio do pai e será salvo como variante."}
             </Text>
           </View>
         </View>
@@ -897,7 +897,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
       {/* Grid de estoque */}
       {mode !== 'none' && (
         <View style={s.stockBlock}>
-          <Text style={s.stockLabel}>Estoque por variacao</Text>
+          <Text style={s.stockLabel}>Estoque por variação</Text>
 
           {/* 27/06/2026 (frente 1): hint quando ha cor recem-adicionada
               ainda nao salva. Substitui o hint generico anterior. */}
@@ -1077,7 +1077,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
               {/* Codigos de barras por combinacao (sem foto — agora eh
                   por cor, secao acima) */}
               <View style={s.matrixBarcodeSection}>
-                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Codigos de barras por combinacao</Text>
+                <Text style={[s.stockLabel, { marginBottom: 6 }]}>Códigos de barras por combinação</Text>
                 <View style={{ gap: 6 }}>
                   {colors.map(c => sizes.map(sz => (
                     <View key={matrixKey(c.hex, sz)} style={s.stockRow}>
