@@ -68,6 +68,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   // no painel — e ela leria uma politica e publicaria outra.
   const politicaPadrao = config.politica_troca_padrao || "";
   const [politica, setPolitica] = useState(config.politica_troca || "");
+
+  // Desconto no Pix (migration 309). Guardado como TEXTO enquanto ela
+  // digita: com number, apagar o campo vira NaN e o input trava.
+  const [pixPct, setPixPct] = useState(String(config.pix_discount_pct ?? 0));
   // O parcelamento so aparece na loja com cartao FUNCIONANDO. Sem isso a
   // lojista escolheria "ate 6x", salvaria, e nada apareceria — sem
   // explicacao nenhuma. Encontrado no QA: nenhuma loja tem MP hoje.
@@ -89,6 +93,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setCardEnabled(config.card_enabled !== false);
     setParcelas(config.card_max_installments ?? null);
     setPolitica(config.politica_troca || "");
+    setPixPct(String(config.pix_discount_pct ?? 0));
   }, [config.exists]);
 
   function pickImage(type: "logo" | "banner") {
@@ -146,6 +151,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       // em quem nunca escreveu nada proprio.
       politica_troca:
         politica.trim() && politica.trim() !== politicaPadrao.trim() ? politica.trim() : null,
+      // O backend apara também; aparar aqui é para ela ver o valor
+      // corrigido na hora, em vez de descobrir depois que salvou 30.
+      pix_discount_pct: Math.min(30, Math.max(0, Number(pixPct.replace(",", ".")) || 0)),
     });
   }
 
@@ -451,6 +459,31 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
         <Field label="Nome do recebedor" value={pixHolderName} onChange={setPixHolderName} placeholder="Nome que aparece pro cliente no app do banco" />
         <Field label="Cidade do recebedor" value={pixHolderCity} onChange={setPixHolderCity} placeholder="Sao Paulo" />
+
+        {/* Migration 309 — desconto no Pix.
+            Fica aqui, junto da chave, e não em Design: é decisão de
+            pagamento, não de visual. Só aceita número, e o teclado no
+            celular abre numérico. */}
+        <Field
+          label="Desconto para quem pagar no Pix (%)"
+          value={pixPct}
+          onChange={(v) => setPixPct(v.replace(/[^0-9.,]/g, "").slice(0, 5))}
+          placeholder="0"
+        />
+        <Text style={cs.hint}>
+          {Number(pixPct.replace(",", ".")) > 0
+            ? `Cada produto vai mostrar "ou R$ X no Pix" com ${Math.min(30, Number(pixPct.replace(",", ".")) || 0)}% a menos. Deixe 0 para não mostrar nada.`
+            : "Com 0, o preço no Pix não aparece. Preencha para mostrar o desconto em cada produto da loja."}
+        </Text>
+        {Number(pixPct.replace(",", ".")) > 30 ? (
+          <View style={cs.infoCard}>
+            <Icon name="alert" size={13} color={accent.primaryStrong} />
+            <Text style={cs.infoText}>
+              O máximo é 30%. Vamos salvar 30 — se você quis dizer R$ 30 de desconto,
+              este campo não é o lugar: ele trabalha em porcentagem.
+            </Text>
+          </View>
+        ) : null}
 
         {asaasConfigured && (
           <View style={cs.infoCard}>
