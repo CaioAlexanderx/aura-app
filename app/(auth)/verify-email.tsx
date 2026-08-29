@@ -31,6 +31,7 @@ import { authApi, ApiError } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { consumeVerifyLinkError, type VerifyLinkError } from "@/utils/verifyLinkStatus";
+import { useLgpdConsentInset } from "@/components/LGPDConsent";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
@@ -150,6 +151,9 @@ export default function VerifyEmailScreen() {
   const { user, logout } = useAuthStore();
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
+  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao
+  // esta na tela) — o banner nao pode cobrir conteudo interativo.
+  const consentInset = useLgpdConsentInset();
 
   const [status, setStatus] = useState<Status>("sending");
   const [linkError, setLinkError] = useState<VerifyLinkError | null>(null);
@@ -518,7 +522,7 @@ export default function VerifyEmailScreen() {
         <Particles count={24} />
 
         {isDesktop ? (
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1 } as any}>
+          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "60px 80px", position: "relative" } as any}>
               <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
               <div className="v2-hero" style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 2 } as any}>
@@ -548,7 +552,7 @@ export default function VerifyEmailScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative", zIndex: 2 } as any}>
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, paddingBottom: 20 + consentInset, boxSizing: "border-box", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
           </div>

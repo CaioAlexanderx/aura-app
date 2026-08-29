@@ -8,11 +8,15 @@ type Props = {
   ic: string; iconColor: string; label: string; value: string;
   delta?: string; deltaUp?: boolean; large?: boolean;
   spark?: number[]; onPress?: () => void;
+  /** Linha curta abaixo do valor dizendo o que o numero soma. 29/08/2026. */
+  hint?: string;
+  /** Texto longo do tooltip (web). Default: o proprio hint. */
+  hintLong?: string;
 };
 
 // Claude Design KPI: glass card, top accent stripe, icon chip with soft glow,
 // tight mono value + delta chip + mini sparkline. Bg/ink swap per theme.
-export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, spark, onPress }: Props) {
+export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, spark, onPress, hint, hintLong }: Props) {
   const webCard = webOnly({
     background: Glass.card,
     backdropFilter: "blur(12px)",
@@ -40,6 +44,10 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
     <Pressable
       style={[s.card, large && s.large, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}
       onPress={onPress}
+      // 29/08/2026: o mesmo rotulo aparecia com valores diferentes em telas
+      // diferentes. O tooltip diz o que ESTE numero soma.
+      {...(Platform.OS === "web" && (hintLong || hint) ? ({ title: hintLong || hint } as any) : null)}
+      accessibilityLabel={hint ? label + ". " + hint : label}
     >
       {Platform.OS === "web" && <span style={webAccent as any} />}
 
@@ -51,6 +59,8 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
       </View>
 
       <Text style={[s.val, large && { fontSize: 26 }]}>{value}</Text>
+
+      {!!hint && <Text style={s.hint}>{hint}</Text>}
 
       <View style={s.foot}>
         {delta ? (
@@ -86,6 +96,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   lb: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 1.1, fontWeight: "700", flex: 1 },
+  hint: { fontSize: 10, color: Colors.ink3, lineHeight: 14, marginTop: -4, marginBottom: 8 },
   val: { fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined), fontSize: 22, fontWeight: "700", color: Colors.ink, letterSpacing: -0.4, marginBottom: 10 },
   foot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 },
   delta: { fontSize: 11, fontWeight: "700", fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },

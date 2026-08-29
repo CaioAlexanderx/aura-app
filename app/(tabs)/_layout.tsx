@@ -10,7 +10,7 @@ import { ToastContainer } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
-import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
@@ -21,6 +21,37 @@ const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
+// ============================================================
+// Selo de plano na sidebar — 29/08/2026 (QA de coerencia).
+//
+// O selo era renderizado a partir de um campo estatico `plan` escrito a
+// mao em cada item do NAV, e aparecia SEMPRE que o campo existia. Duas
+// consequencias: (1) uma conta no Expansao — o plano mais alto — via
+// "NEG"/"EXP" pendurado em item que ela ja usa, o que le como upsell de
+// coisa comprada; (2) o campo estava velho: /clientes e /folha ainda
+// diziam "negocio" apesar de MODULE_PLAN_MAP te-los movido pro Essencial
+// (11 e 12/05/2026). Duas fontes de verdade, e a errada era a que
+// aparecia na tela.
+//
+// Agora o selo sai de MODULE_PLAN_MAP + PLAN_LEVEL — a MESMA fonte que
+// decide visibilidade em useVisibleModules — e so aparece quando o
+// modulo esta de fato acima do plano da empresa. Na pratica isso
+// significa: item liberado por `module_overrides` (acesso avulso
+// concedido a uma conta abaixo do plano exigido). Nos outros casos o
+// item so chega ate aqui se ja estiver liberado, entao nao ha selo.
+// ============================================================
+const PLAN_LABEL: Record<string, string> = { negocio: "Negócio", expansao: "Expansão" };
+
+function planoExigidoSeBloqueado(mod: string | undefined, planoAtual: string): string | null {
+  if (!mod) return null;
+  const exigido = MODULE_PLAN_MAP[mod];
+  if (!exigido) return null;
+  const nivelAtual = PLAN_LEVEL[planoAtual] ?? 0;
+  const nivelExigido = PLAN_LEVEL[exigido] ?? 0;
+  if (nivelAtual >= nivelExigido) return null;
+  return exigido;
+}
+
 // Labels e icones das verticais. Usados pra renderizar a seção "Meu Segmento"
 // dinamicamente quando company.vertical_active esta setado. Sem isso, a tela
 // /vertical existe mas fica orfa — sem link no menu = usuario nao vai ver.
@@ -30,9 +61,9 @@ type NavSection = { s: string; i: NavItem[] };
 // aparece nessa secao.
 const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
   odonto:   { label: "Odontologia",    icon: "tooth" },
-  barber:   { label: "Barber / Salao", icon: "scissors" },
+  barber:   { label: "Barber / Salão", icon: "scissors" },
   food:     { label: "Food Service",   icon: "utensils" },
-  estetica: { label: "Estetica",       icon: "sparkles" },
+  estetica: { label: "Estética",       icon: "sparkles" },
   pet:      { label: "Pet Shop",       icon: "paw" },
   academia: { label: "Academia",       icon: "dumbbell" },
 };
@@ -48,11 +79,14 @@ const NAV: NavSection[] = [
   // unica porta de entrada era uma aba dentro do Financeiro, que reimplementava
   // o mesmo CRUD. Cupom e ferramenta de venda (aplicada no Caixa), nao dado
   // financeiro — entra aqui, herdando a visibilidade do modulo pdv.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario", plan: "negocio" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
-  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", plan: "negocio", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", plan: "negocio", mod: "agendamento" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", plan: "negocio", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", plan: "negocio", mod: "canal" }]},
-  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", plan: "expansao", mod: "agentes" }]},
-  { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestao Aura", ic: "shield", staff: true }]},
+  // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
+  // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
+  // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
+  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
+  { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
+  { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
 ];
 
 
@@ -223,10 +257,13 @@ function BrandGlyph({ collapsed }: { collapsed: boolean }) {
 
 // ============================================================
 // NavItem (web) — item da sidebar no novo design. Tile + texto +
-// badge de plano. Active state com gradient + tile colorido.
+// selo de plano. Active state com gradient + tile colorido.
 // Hover/transitions tratados via CSS classes (aura-nav-item).
+//
+// `pl` = plano EXIGIDO pelo modulo quando ele esta acima do plano da
+// empresa (null quando liberado). Ver planoExigidoSeBloqueado.
 // ============================================================
-function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string; isDark: boolean }) {
+function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string | null; isDark: boolean }) {
   if (Platform.OS !== "web") {
     // Native fallback
     return (
@@ -250,10 +287,16 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
   const planFg = pl === "expansao" ? C.green : C.violet3;
   const planBorder = pl === "expansao" ? "rgba(52,211,153,0.24)" : "rgba(167,139,250,0.22)";
 
+  // Tooltip do item: quando ha bloqueio, o `title` explica o selo — a
+  // sidebar nao tem largura pra escrever "Disponivel no plano Negocio"
+  // inteiro ao lado do rotulo.
+  const planoLabel = pl ? (PLAN_LABEL[pl] || pl) : null;
+  const tituloItem = planoLabel ? l + " — disponível no plano " + planoLabel : l;
+
   return (
     <a
       onClick={(e: any) => { e.preventDefault(); if (!soon) onP(); }}
-      title={l}
+      title={tituloItem}
       className={"aura-nav-item" + (a ? " is-active" : "")}
       style={{
         display: "flex",
@@ -297,17 +340,22 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
       {!collapsed && soon && (
         <span style={{ background: C.bg4, borderRadius: 4, padding: "1px 5px", fontSize: 8, color: C.ink3, fontWeight: 600, letterSpacing: "0.3px" } as any}>Em breve</span>
       )}
-      {!collapsed && pl && (
-        <span style={{
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: "0.5px",
-          padding: "2px 6px",
-          borderRadius: 4,
-          background: planBg,
-          color: planFg,
-          border: "1px solid " + planBorder,
-        } as any}>{pl === "negocio" ? "NEG" : "EXP"}</span>
+      {!collapsed && planoLabel && (
+        <span
+          title={"Disponível no plano " + planoLabel}
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.3px",
+            padding: "2px 6px",
+            borderRadius: 4,
+            background: planBg,
+            color: planFg,
+            border: "1px solid " + planBorder,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          } as any}
+        >{planoLabel}</span>
       )}
     </a>
   );
@@ -385,7 +433,8 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const visibleMods = useVisibleModules();
   const { layout } = useSidebarLayout();
   const [editorOpen, setEditorOpen] = useState(false);
-  const pl = co?.plan === "negocio" ? "Negocio" : co?.plan === "expansao" ? "Expansao" : "Essencial";
+  const planoAtual = (co?.plan || "essencial") as string;
+  const pl = planoAtual === "negocio" ? "Negócio" : planoAtual === "expansao" ? "Expansão" : "Essencial";
   const sw = collapsed ? 64 : 280;
   const isStaff = (u as any)?.is_staff === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
@@ -548,7 +597,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               )}
               {collapsed && <div style={{ height: 1, background: C.border, margin: "8px 4px" } as any} />}
               {s.i.map(i => (
-                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={i.plan} isDark={isDark} />
+                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={planoExigidoSeBloqueado(i.mod, planoAtual)} isDark={isDark} />
               ))}
             </div>
           ))}
@@ -593,7 +642,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingTop: 8, borderTop: "1px solid " + C.border } as any}>
                 <FooterRow icon="edit" label="Personalizar menu" onPress={() => setEditorOpen(true)} collapsed={false} C={C} />
                 <FooterRow icon={isDark ? "sun" : "moon"} label={isDark ? "Modo claro" : "Modo escuro"} onPress={toggle} collapsed={false} C={C} />
-                <FooterRow icon="settings" label="Configuracoes" onPress={() => ro.push("/configuracoes" as any)} collapsed={false} C={C} />
+                <FooterRow icon="settings" label="Configurações" onPress={() => ro.push("/configuracoes" as any)} collapsed={false} C={C} />
                 <FooterRow icon="logout" label="Sair" onPress={logout} danger collapsed={false} C={C} />
               </div>
             </>
@@ -622,7 +671,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               </a>
               <FooterRow icon="edit" label="Personalizar menu" onPress={() => setEditorOpen(true)} collapsed={true} C={C} />
               <FooterRow icon={isDark ? "sun" : "moon"} label={isDark ? "Modo claro" : "Modo escuro"} onPress={toggle} collapsed={true} C={C} />
-              <FooterRow icon="settings" label="Configuracoes" onPress={() => ro.push("/configuracoes" as any)} collapsed={true} C={C} />
+              <FooterRow icon="settings" label="Configurações" onPress={() => ro.push("/configuracoes" as any)} collapsed={true} C={C} />
               <FooterRow icon="logout" label="Sair" onPress={logout} danger collapsed={true} C={C} />
             </>
           )}
@@ -674,7 +723,7 @@ function MBar() {
         if (!fixedTabKeys.has(item.r)) flat.push(item);
       }
     }
-    flat.push({ r: "/configuracoes", l: "Configuracoes", ic: "settings" });
+    flat.push({ r: "/configuracoes", l: "Configurações", ic: "settings" });
     return flat;
   }, [filteredNav]);
 
@@ -738,7 +787,16 @@ export default function TabsLayout() {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { token } = useAuthStore();
+  const refreshMe = useAuthStore(s => s.refreshMe);
   const themeKey = isDark ? "dark" : "light";
+
+  // Armadilha 1 do CLAUDE.md (plano stale no JWT): a sidebar decide
+  // visibilidade de modulo (useVisibleModules) e o selo de plano a partir de
+  // company.plan, que vem do JWT na hidratacao e nunca revalida sozinho. Sem
+  // este refetch, quem faz upgrade so ve os modulos novos depois de deslogar.
+  // O shell inteiro depende disso, entao o refetch mora aqui — uma vez por
+  // montagem do layout — e nao em cada tela. 29/08/2026.
+  useEffect(() => { if (token) refreshMe().catch(() => {}); }, [token, refreshMe]);
   const screenW = useScreenWidth();
   const w = Platform.OS === "web";
   const isNarrow = screenW <= 768;

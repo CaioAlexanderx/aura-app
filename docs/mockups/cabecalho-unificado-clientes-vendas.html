@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — cabeçalho unificado (Clientes e Vendas)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — QA de coerência 29/08/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+
+     O que está sendo proposto: o cabeçalho editorial de /estoque
+     (sobrancelha "AURA. · … · AO VIVO" + título serifado com ponto
+     violeta + linha de métricas em texto corrido + slot de ações)
+     vira componente compartilhado e passa a abrir /clientes e
+     /vendas. As abas das duas telas convergem para UM padrão:
+     pílula (o mesmo do Estoque e o que /clientes já usava).
+     ============================================================ */
+  :root {
+    --bg: #06081a;
+    --bg2: #0a0c1f;
+    --bg3: rgba(20,14,38,0.55);
+    --border: rgba(120,100,240,0.18);
+    --border2: rgba(167,139,250,0.30);
+    --ink: #f0edff;
+    --ink2: #cfc7ee;
+    --ink3: #9a93bb;
+    --violet: #7c3aed;
+    --violet3: #a78bfa;
+    --green: #34d399;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .page { max-width: 1100px; margin: 0 auto 64px; }
+  .nota {
+    max-width: 1100px; margin: 0 auto 28px; padding: 14px 16px;
+    border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.5;
+  }
+  .nota b { color: var(--violet3); }
+
+  /* ── Cabeçalho compartilhado (ScreenHero) ───────────────── */
+  .hero { padding: 16px 4px 18px; }
+  .hero-eyebrow {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .glyph { width: 14px; height: 14px; flex-shrink: 0; }
+  .pill-live {
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(124,58,237,0.12); color: var(--violet3);
+    font-size: 10px; letter-spacing: 0.08em;
+  }
+  .hero-row { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero-title {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 64px; line-height: 0.95; font-weight: 400;
+    letter-spacing: -0.025em; color: var(--ink); flex: 1; min-width: 0;
+  }
+  .hero-title span { color: var(--violet); }
+  .hero-actions { display: flex; gap: 8px; align-items: center; padding-bottom: 6px; }
+  .hero-sub { font-size: 14px; color: var(--ink3); margin-top: 10px; max-width: 720px; line-height: 1.5; }
+  .hero-sub .ok { color: var(--green); font-weight: 600; }
+  .hero-sub .warn { color: var(--amber); font-weight: 600; }
+
+  .btn {
+    border: 1px solid var(--border2); background: rgba(124,58,237,0.14);
+    color: var(--violet3); font-size: 12px; font-weight: 600;
+    padding: 9px 14px; border-radius: 10px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: inherit;
+  }
+  .btn-primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+
+  /* ── Abas: PÍLULA (padrão escolhido) ────────────────────── */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 4px 18px; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 16px; border-radius: 10px;
+    background: rgba(20,14,38,0.55); border: 1px solid var(--border);
+    color: var(--ink3); font-size: 13px; font-weight: 500; cursor: pointer;
+    font-family: inherit;
+  }
+  .tab.is-active { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .tab .lock { opacity: 0.7; font-size: 10px; }
+
+  /* ── Faixa de KPI (mesma linguagem do Estoque) ──────────── */
+  .kpis { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 14px; margin: 8px 4px 22px; }
+  .kpi {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 18px;
+    padding: 18px 20px 16px; position: relative; overflow: hidden;
+    backdrop-filter: blur(20px);
+  }
+  .kpi.primary { border-color: var(--border2); box-shadow: 0 18px 38px rgba(124,58,237,0.10); }
+  .kpi-label {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 6px; background: var(--violet); }
+  .dot.green { background: var(--green); }
+  .dot.amber { background: var(--amber); }
+  .kpi-value {
+    font-family: 'Instrument Serif', Georgia, serif; font-weight: 400;
+    font-size: 30px; line-height: 1; letter-spacing: -0.02em; color: var(--ink);
+  }
+  .kpi.primary .kpi-value { font-size: 50px; }
+  .kpi-sub { font-size: 12px; color: var(--ink3); margin-top: 6px; }
+  .kpi.primary .kpi-sub { margin-top: 10px; }
+
+  /* ── Conteúdo de exemplo abaixo do cabeçalho ────────────── */
+  .card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 16px; padding: 8px; margin: 0 4px;
+  }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px; border-radius: 8px;
+  }
+  .row + .row { border-top: 1px solid rgba(120,100,240,0.10); }
+  .row .nome { font-size: 13px; font-weight: 600; flex: 1; }
+  .row .meta { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip-meta {
+    background: rgba(255,255,255,0.05); color: var(--ink3);
+    font-size: 9.5px; padding: 2px 6px; border-radius: 4px;
+  }
+  .valor { font-size: 13px; font-weight: 700; color: var(--green); }
+
+  /* ── Estado vazio de Clientes (com saída) ───────────────── */
+  .vazio { text-align: center; padding: 48px 24px; }
+  .vazio-ico {
+    width: 72px; height: 72px; border-radius: 36px; margin: 0 auto 16px;
+    background: rgba(124,58,237,0.14); border: 1.5px solid rgba(167,139,250,0.22);
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  .vazio h3 { font-size: 18px; margin: 0 0 6px; }
+  .vazio p { font-size: 13px; color: var(--ink3); max-width: 380px; margin: 0 auto 16px; line-height: 1.55; }
+  .vazio .acoes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  .legenda {
+    max-width: 1100px; margin: 0 auto; padding: 18px 20px;
+    border-top: 1px solid var(--border); font-size: 12.5px;
+    color: var(--ink3); line-height: 1.6;
+  }
+  .legenda h4 { color: var(--ink); font-size: 13px; margin: 18px 0 6px; }
+  .legenda code { color: var(--violet3); font-family: 'DM Mono', monospace; font-size: 11.5px; }
+
+  @media (max-width: 880px) {
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .hero-title { font-size: 38px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="nota">
+  <b>Mockup — 29/08/2026.</b> Cabeçalho editorial de <code>/estoque</code> extraído para componente compartilhado
+  (<code>components/ScreenHero.tsx</code>) e aplicado em <b>Clientes</b> e <b>Vendas</b>.
+  Abas unificadas no padrão <b>pílula</b>. <code>/estoque</code> não é alterado nesta rodada.
+</div>
+
+<!-- ══════════════════ CLIENTES ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24">
+        <defs><radialGradient id="g1" cx="50%" cy="50%">
+          <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.85" />
+          <stop offset="100%" stop-color="#7c3aed" stop-opacity="0" />
+        </radialGradient></defs>
+        <circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" />
+        <circle cx="12" cy="12" r="10" fill="url(#g1)" />
+        <circle cx="12" cy="12" r="3.2" fill="#7c3aed" />
+      </svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Base de clientes</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Clientes<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">Importar CSV</button>
+        <button class="btn btn-primary">+ Adicionar cliente</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      248 clientes cadastrados · R$ 74.310,00 de faturamento acumulado ·
+      <span class="ok">32 compraram nos últimos 30 dias</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab is-active">Lista</button>
+    <button class="tab">Ranking <span class="lock">🔒</span></button>
+    <button class="tab">Retenção <span class="lock">🔒</span></button>
+    <button class="tab">Avaliações <span class="lock">🔒</span></button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi primary">
+      <div class="kpi-label"><span class="dot"></span>Faturamento acumulado</div>
+      <div class="kpi-value">R$ 74.310<span style="font-size:22px;color:var(--ink2)">,00</span></div>
+      <div class="kpi-sub">Soma do total gasto por todos os clientes</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot"></span>Cadastrados</div>
+      <div class="kpi-value">248<span style="font-size:16px;color:var(--ink3)"> / 5.000</span></div>
+      <div class="kpi-sub">Limite do plano Negócio</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot green"></span>Ativos (30 dias)</div>
+      <div class="kpi-value">32</div>
+      <div class="kpi-sub">Compraram no último mês</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot amber"></span>Ticket médio</div>
+      <div class="kpi-value">R$ 299</div>
+      <div class="kpi-sub">Por cliente com compra</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span class="nome">Ana Beatriz Moraes</span>
+      <div class="meta"><span class="chip-meta">12 visitas</span><span class="chip-meta">(11) 9····-4021</span></div>
+      <span class="valor">R$ 3.480,00</span></div>
+    <div class="row"><span class="nome">Carlos Eduardo Lima</span>
+      <div class="meta"><span class="chip-meta">1 visita</span><span class="chip-meta">(11) 9····-7788</span></div>
+      <span class="valor">R$ 179,90</span></div>
+  </div>
+</section>
+
+<!-- ══════════════════ CLIENTES — estado vazio ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Base de clientes</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Clientes<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">Importar CSV</button>
+        <button class="btn btn-primary">+ Adicionar cliente</button>
+      </div>
+    </div>
+    <div class="hero-sub">Nenhum cliente cadastrado ainda — comece cadastrando um ou importando sua lista.</div>
+  </div>
+
+  <div class="card">
+    <div class="vazio">
+      <div class="vazio-ico">👥</div>
+      <h3>Nenhum cliente cadastrado</h3>
+      <p>Cadastre o primeiro cliente ou traga sua lista de outro sistema por CSV. Clientes cadastrados aparecem no Caixa para vincular à venda.</p>
+      <div class="acoes">
+        <button class="btn btn-primary">Cadastrar primeiro cliente</button>
+        <button class="btn">Importar de CSV</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ VENDAS ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Conferência do caixa</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Vendas<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">↻ Atualizar</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      18 vendas em agosto de 2026 · R$ 639,50 de receita de vendas ·
+      <span class="ok">ticket médio de R$ 35,53</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab is-active">Vendas</button>
+    <button class="tab">Ranking</button>
+    <button class="tab">Fechamentos de caixa</button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi primary">
+      <div class="kpi-label"><span class="dot"></span>Receita de vendas</div>
+      <div class="kpi-value">R$ 639<span style="font-size:22px;color:var(--ink2)">,50</span></div>
+      <div class="kpi-sub">
+        Só vendas do Caixa no período, sem as canceladas. Não inclui pedidos do
+        Canal Digital nem lançamentos manuais — esses entram na Receita total do Painel.
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot"></span>Vendas</div>
+      <div class="kpi-value">18</div>
+      <div class="kpi-sub">1 cancelada</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot green"></span>Ticket médio</div>
+      <div class="kpi-value">R$ 35,53</div>
+      <div class="kpi-sub">Por venda ativa</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="dot amber"></span>Ativas</div>
+      <div class="kpi-value">17</div>
+      <div class="kpi-sub">Não canceladas</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span class="nome">Maria Silva</span>
+      <div class="meta"><span class="chip-meta">PIX</span><span class="chip-meta">1 item</span></div>
+      <span class="valor">R$ 156,80</span></div>
+    <div class="row"><span class="nome">Sem cliente</span>
+      <div class="meta"><span class="chip-meta">Dinheiro</span><span class="chip-meta">3 itens</span></div>
+      <span class="valor">R$ 89,90</span></div>
+  </div>
+</section>
+
+<div class="legenda">
+  <h4>Decisões que este mockup fixa</h4>
+  <p>
+    <b>1. Um cabeçalho só.</b> <code>ScreenHero</code> = sobrancelha (Aura. · contexto · ao vivo) +
+    título display serifado com ponto violeta + linha de métricas em texto corrido + slot de ações à direita.
+    Mesma altura, mesma escala tipográfica em Estoque, Clientes e Vendas.
+  </p>
+  <p>
+    <b>2. Abas em pílula.</b> Dos dois padrões existentes (pílula em Clientes/Estoque, sublinhado em Vendas),
+    fica a pílula: já é maioria, sobrevive melhor ao scroll horizontal no mobile e não cria uma segunda
+    linha de base competindo com o título editorial. Vendas troca o sublinhado pela pílula.
+  </p>
+  <p>
+    <b>3. "Receita" ganha sobrenome.</b> Em Vendas o rótulo é <b>Receita de vendas</b> (só vendas do Caixa,
+    sem canceladas) e traz nota de composição. No Painel o mesmo número vira <b>Receita total</b>
+    (todas as entradas confirmadas do mês — vendas, Canal Digital e lançamentos manuais), igual ao
+    "Entrou" do Financeiro.
+  </p>
+  <p>
+    <b>4. Estado vazio de Clientes tem saída.</b> Botão primário para cadastrar + atalho de importar CSV,
+    dentro do próprio estado vazio, e não só no topo da tela.
+  </p>
+</div>
+
+</body>
+</html>

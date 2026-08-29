@@ -10,6 +10,7 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { authApi } from "@/services/api";
+import { useLgpdConsentInset } from "@/components/LGPDConsent";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
@@ -116,6 +117,9 @@ function Particles({ count = 24 }: { count?: number }) {
 export default function ForgotPasswordScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
+  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao
+  // esta na tela) — o banner nao pode cobrir conteudo interativo.
+  const consentInset = useLgpdConsentInset();
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -131,7 +135,7 @@ export default function ForgotPasswordScreen() {
   }, []);
 
   async function handleSubmit() {
-    if (!email || !email.includes("@")) { toast.error("Informe um e-mail valido"); return; }
+    if (!email || !email.includes("@")) { toast.error("Informe um e-mail válido"); return; }
     setLoading(true);
     try {
       await authApi.forgotPassword(email.trim().toLowerCase());
@@ -156,19 +160,19 @@ export default function ForgotPasswordScreen() {
           <View style={s.field}>
             <Text style={s.label}>E-mail cadastrado</Text>
             <View style={s.inputWrap}>
-              <Icon name="message" size={16} color={Colors.ink3} />
+              <Icon name="mail" size={16} color={Colors.ink3} />
               <TextInput style={[s.input, inputOutline]} {...webInputProps} value={email} onChangeText={setEmail} placeholder="seu@email.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" autoComplete="email" onSubmitEditing={handleSubmit} />
             </View>
           </View>
           <Pressable style={[s.btn, loading && { opacity: 0.7 }]} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={handleSubmit} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Enviar link de redefinicao</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Enviar link de redefinição</Text>}
           </Pressable>
         </View>
       ) : (
         <View style={s.sentCard}>
           <View style={s.sentIcon}><Icon name="check" size={24} color={Colors.green} /></View>
           <Text style={s.sentTitle}>E-mail enviado!</Text>
-          <Text style={s.sentDesc}>Se este e-mail estiver cadastrado, voce recebera um link para redefinir sua senha. Verifique a caixa de entrada e a pasta de spam.</Text>
+          <Text style={s.sentDesc}>Se este e-mail estiver cadastrado, você receberá um link para redefinir sua senha. Verifique a caixa de entrada e a pasta de spam.</Text>
           <Pressable style={s.sentBtn} onPress={() => setSent(false)}><Text style={s.sentBtnText}>Enviar novamente</Text></Pressable>
         </View>
       )}
@@ -177,14 +181,18 @@ export default function ForgotPasswordScreen() {
         <Text style={s.footerText}>Lembrou a senha? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Fazer login</Text></Link>
       </View>
-      <Text style={s.footerTag}>Aura. - Tecnologia para Negocios</Text>
+      <Text style={s.footerTag}>Aura. - Tecnologia para Negócios</Text>
     </View>
   );
 
   if (isWeb) {
     return (
       <div style={{
-        minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden",
+        // 29/08/2026: overflowY auto (era `overflow: hidden`) — com o espaco
+        // reservado para o banner de LGPD, telas baixas precisam poder rolar
+        // em vez de cortar o cartao.
+        minHeight: "100vh", width: "100%", position: "relative",
+        overflowX: "hidden", overflowY: "auto",
         background: `
           radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
           radial-gradient(ellipse at 80% 70%, rgba(139,92,246,0.10) 0%, transparent 50%),
@@ -195,7 +203,7 @@ export default function ForgotPasswordScreen() {
         <Particles count={24} />
 
         {isDesktop ? (
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1 } as any}>
+          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "60px 80px", position: "relative" } as any}>
               <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
               <div className="v2-hero" style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 2 } as any}>
@@ -208,7 +216,7 @@ export default function ForgotPasswordScreen() {
                   Toda senha se <em style={{ fontStyle: "italic", color: Colors.violet3 }}>perde</em> um dia.
                 </div>
                 <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
-                  A gente envia um codigo pro seu e-mail e voce volta ao controle em minutos.
+                  A gente envia um código pro seu e-mail e você volta ao controle em minutos.
                 </div>
               </div>
               <div className="v2-hero" style={{ display: "flex", gap: 20, fontSize: 11, color: Colors.ink3, letterSpacing: 1, textTransform: "uppercase", position: "relative", zIndex: 2 } as any}>
@@ -225,7 +233,7 @@ export default function ForgotPasswordScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative", zIndex: 2 } as any}>
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, paddingBottom: 20 + consentInset, boxSizing: "border-box", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
           </div>

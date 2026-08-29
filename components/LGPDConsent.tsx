@@ -1,23 +1,63 @@
-import { useState, useEffect } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, Linking } from "react-native";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import { View, Text, Pressable, StyleSheet, Platform, Linking, type LayoutChangeEvent } from "react-native";
 import { Colors } from "@/constants/colors";
 
 const STORAGE_KEY = "aura_lgpd_consent";
 const PRIVACY_URL = "https://getaura.com.br/privacidade";
 
-function getConsent(): boolean {
+// 29/08/2026 — o banner passou a ter recusa. "all" = aceitou tudo (gravado como
+// "1", o valor historico: quem ja tinha aceitado nao ve o banner de novo).
+// "essential" = recusou os nao-essenciais (dados de uso/telemetria).
+export type LgpdConsent = "all" | "essential";
+
+export function getLgpdConsent(): LgpdConsent | null {
   try {
-    if (typeof localStorage === "undefined") return false;
-    return localStorage.getItem(STORAGE_KEY) === "1";
-  } catch { return false; }
+    if (typeof localStorage === "undefined") return null;
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v === "1" || v === "all") return "all";
+    if (v === "essential") return "essential";
+    return null;
+  } catch { return null; }
 }
 
-function saveConsent() {
+// 29/08/2026 — porta unica para qualquer coleta NAO-essencial (analytics,
+// telemetria, heatmap). Hoje ninguem consome: o app nao dispara telemetria
+// nenhuma. Quem ligar a primeira tem que checar isto antes de mandar evento.
+export function hasAnalyticsConsent(): boolean {
+  return getLgpdConsent() === "all";
+}
+
+function saveConsent(choice: LgpdConsent) {
   try {
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, "1");
+      localStorage.setItem(STORAGE_KEY, choice === "all" ? "1" : "essential");
     }
   } catch {}
+}
+
+// ── Espaco reservado para o banner ───────────────────────────
+// 29/08/2026 (QA da porta de entrada): o banner e ancorado no rodape e vinha
+// POR CIMA do conteudo — em 375px cobria metade do "Continuar" do cadastro e
+// escondia o divisor "ou" do login. Agora ele publica a propria altura e as
+// telas de auth reservam esse espaco (ver app/(auth)/_layout.tsx). Enquanto o
+// banner nao esta visivel a altura e 0, entao o desktop nao ganha vao nenhum.
+let insetHeight = 0;
+const insetSubs = new Set<() => void>();
+
+function publishInset(h: number) {
+  const next = Math.round(h);
+  if (next === insetHeight) return;
+  insetHeight = next;
+  insetSubs.forEach((fn) => fn());
+}
+
+function subscribeInset(fn: () => void) {
+  insetSubs.add(fn);
+  return () => { insetSubs.delete(fn); };
+}
+
+export function useLgpdConsentInset(): number {
+  return useSyncExternalStore(subscribeInset, () => insetHeight, () => 0);
 }
 
 export function LGPDConsent() {
@@ -28,14 +68,16 @@ export function LGPDConsent() {
     if (Platform.OS !== "web") return;
     // Pequeno delay para nao competir com splash
     const t = setTimeout(() => {
-      if (!getConsent()) setVisible(true);
+      if (!getLgpdConsent()) setVisible(true);
     }, 1200);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); publishInset(0); };
   }, []);
 
-  function handleAccept() {
-    saveConsent();
+  function decide(choice: LgpdConsent) {
+    saveConsent(choice);
     setVisible(false);
+    // Libera o espaco reservado assim que o banner sai da tela.
+    publishInset(0);
   }
 
   function handlePrivacy() {
@@ -45,7 +87,11 @@ export function LGPDConsent() {
   if (!visible) return null;
 
   return (
-    <View style={s.overlay} pointerEvents="box-none">
+    <View
+      style={s.overlay}
+      pointerEvents="box-none"
+      onLayout={(e: LayoutChangeEvent) => publishInset(e.nativeEvent.layout.height)}
+    >
       <View style={s.banner}>
         <View style={s.content}>
           <View style={s.iconWrap}>
@@ -54,17 +100,20 @@ export function LGPDConsent() {
           <View style={{ flex: 1 }}>
             <Text style={s.title}>Cookies e privacidade</Text>
             <Text style={s.text}>
-              Usamos cookies essenciais para o funcionamento do app e dados de uso para melhorar sua experiencia, conforme a{" "}
-              <Text style={s.link} onPress={handlePrivacy}>Lei Geral de Protecao de Dados (LGPD)</Text>
-              . Nenhum dado e vendido a terceiros.
+              Usamos cookies essenciais para o funcionamento do app e dados de uso para melhorar sua experiência, conforme a{" "}
+              <Text style={s.link} onPress={handlePrivacy}>Lei Geral de Proteção de Dados (LGPD)</Text>
+              . Nenhum dado é vendido a terceiros. Você pode ficar só com os essenciais.
             </Text>
           </View>
         </View>
         <View style={s.actions}>
-          <Pressable onPress={handlePrivacy} style={s.secondaryBtn}>
-            <Text style={s.secondaryBtnText}>Politica de privacidade</Text>
+          <Pressable onPress={handlePrivacy} style={s.ghostBtn} accessibilityRole="link">
+            <Text style={s.ghostBtnText}>Política de privacidade</Text>
           </Pressable>
-          <Pressable onPress={handleAccept} style={s.acceptBtn}>
+          <Pressable onPress={() => decide("essential")} style={s.secondaryBtn} accessibilityRole="button">
+            <Text style={s.secondaryBtnText}>Só os essenciais</Text>
+          </Pressable>
+          <Pressable onPress={() => decide("all")} style={s.acceptBtn} accessibilityRole="button">
             <Text style={s.acceptBtnText}>Entendi e aceito</Text>
           </Pressable>
         </View>
@@ -105,12 +154,16 @@ const s = StyleSheet.create({
   title:  { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
   text:   { fontSize: 11, color: Colors.ink3, lineHeight: 17 },
   link:   { color: Colors.violet3, fontWeight: "600" },
-  actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  // flexWrap: em 375px os tres botoes nao cabem na mesma linha — quebram em
+  // vez de estourar a largura do banner.
+  actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" },
+  ghostBtn: { paddingVertical: 9, paddingHorizontal: 6 },
+  ghostBtnText: { fontSize: 11, color: Colors.ink3, fontWeight: "500", textDecorationLine: "underline" },
   secondaryBtn: {
     paddingVertical: 9, paddingHorizontal: 14,
     borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
   },
-  secondaryBtnText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  secondaryBtnText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
   acceptBtn: {
     backgroundColor: Colors.violet, borderRadius: 10,
     paddingVertical: 9, paddingHorizontal: 18,

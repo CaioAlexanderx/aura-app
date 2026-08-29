@@ -23,8 +23,15 @@
 //   o painel tem altura limitada (desktop). No mobile (sem fill) o carrinho
 //   fica em altura natural e a página rola — senão o espaçador estica e cria
 //   um vazio gigante (report Davi no zoom 100% / janela estreita).
+//
+// 29/08/2026 (QA do Caixa):
+//   · `finalizeDisabled` virou prop. O caminho visual de bloqueio existia mas
+//     nunca era acionado — o pai não passava nada e o botão ficava com cara de
+//     clicável mesmo faltando cliente/vendedora/caixa aberto.
+//   · `requiredHints` deixou de ser texto morto: cada aviso pode carregar um
+//     `onPress` que abre o seletor correspondente.
 // ============================================================
-import { forwardRef, useMemo, useRef, useState } from "react";
+import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -41,6 +48,10 @@ export type CartDisplayItem = {
 };
 
 export type PayChip = { key: string; label: string; icon: string };
+
+/** Aviso de bloqueio do rodapé. Quando traz `onPress`, o aviso vira botão e
+ *  leva direto ao seletor que resolve a pendência (29/08/2026). */
+export type RequiredHint = { label: string; onPress?: () => void };
 
 // Mantido isolado de useCart pra evitar dep ciclica e permitir uso standalone.
 export type SplitEntry = { method: string; value: number; change?: number };
@@ -66,7 +77,10 @@ type Props = {
   showOrcamento?: boolean;
   discountLabel?: string | null;
   isProcessing?: boolean;
-  requiredHints?: string[];
+  /** Bloqueio "de requisito" (cliente/vendedora/caixa). Deixa o botão com
+   *  aparência inativa mas AINDA clicável — ver comentário em finalizeInactive. */
+  finalizeDisabled?: boolean;
+  requiredHints?: (string | RequiredHint)[];
   emptyCta?: string;
   headerSubtitle?: string | null;
   /** Densidade reduzida (carrinho estreito): CTAs em 2 linhas. */
@@ -99,7 +113,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
-    showOrcamento, discountLabel, isProcessing, requiredHints, emptyCta, headerSubtitle, compact, fill,
+    showOrcamento, discountLabel, isProcessing, finalizeDisabled, requiredHints,
+    emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
@@ -123,8 +138,25 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     cpfState === "invalid" ? "rgba(239,68,68,0.55)" :
     Glass.lineBorderCard;
 
-  // Se split está ativo e desbalanceado, bloqueia finalizar.
-  const finalizeDisabled = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
+  // ── Bloqueio do "Finalizar venda" em DOIS níveis (29/08/2026) ──────────────
+  // 1) HARD (`disabled` de verdade no Pressable): estados em que apertar não
+  //    tem resposta útil e ainda pode fazer estrago — venda em processamento
+  //    (duplo POST), carrinho vazio, split que não fecha com o total. O
+  //    handleFinalize do hook NÃO barra split desbalanceado sem crediário, então
+  //    tirar o `disabled` aqui deixaria passar venda com pagamento errado.
+  // 2) INATIVO (só aparência): bloqueio por requisito — cliente/vendedora/caixa
+  //    fechado, vindo de `finalizeDisabled`. Aqui o botão CONTINUA clicável de
+  //    propósito: handleFinalize mostra o toast explicando o que falta. Se
+  //    desabilitássemos o Pressable, o lojista clicaria e não aconteceria
+  //    absolutamente nada — pior do que o bug original.
+  const finalizeHardBlocked = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
+  const finalizeInactive = finalizeHardBlocked || !!finalizeDisabled;
+
+  // Avisos de bloqueio normalizados (aceita string pura por retrocompat).
+  const hints: RequiredHint[] = useMemo(
+    () => (requiredHints || []).map(h => (typeof h === "string" ? { label: h } : h)),
+    [requiredHints],
+  );
 
   return (
     <View
@@ -390,11 +422,36 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         ]}
       >
         {/* Required hints — fica no rodapé pra o motivo do bloqueio aparecer
-            ao lado do botão desabilitado (ex.: "Caixa fechado"). */}
-        {requiredHints && requiredHints.length > 0 && (
+            ao lado do botão inativo (ex.: "Caixa fechado").
+            29/08/2026: cada aviso com `onPress` vira botão e abre o seletor que
+            resolve a pendência. Nada de hover-reveal (CLAUDE.md #7): o chip já
+            nasce visível, com borda e seta, e é tocável direto no dedo. */}
+        {hints.length > 0 && (
           <View style={s.hintsBox}>
             <Icon name="alert" size={11} color={Colors.amber} />
-            <Text style={s.hintsTxt}>{requiredHints.join(" · ")}</Text>
+            <View style={s.hintsList}>
+              {hints.map((h, i) => (
+                <Fragment key={h.label}>
+                  {i > 0 && <Text style={s.hintsSep}>·</Text>}
+                  {h.onPress ? (
+                    <Pressable
+                      onPress={h.onPress}
+                      accessibilityRole="button"
+                      accessibilityLabel={h.label + " — tocar para resolver"}
+                      style={[
+                        s.hintChip,
+                        IS_WEB && (webOnly({ cursor: "pointer" }) as any),
+                      ] as any}
+                    >
+                      <Text style={s.hintChipTxt} numberOfLines={1}>{h.label}</Text>
+                      <Icon name="chevron_right" size={10} color={Colors.amber} />
+                    </Pressable>
+                  ) : (
+                    <Text style={s.hintsTxt} numberOfLines={1}>{h.label}</Text>
+                  )}
+                </Fragment>
+              ))}
+            </View>
           </View>
         )}
 
@@ -416,23 +473,32 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           const finalizeBtn = (
             <Pressable
               onPress={onFinalize}
-              disabled={finalizeDisabled}
+              disabled={finalizeHardBlocked}
+              aria-disabled={finalizeInactive}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: finalizeInactive, busy: !!isProcessing }}
               style={[
                 s.ctaPri,
                 compact ? s.ctaPriFull : s.ctaPriRow,
                 Platform.OS === "web"
                   ? ({
                       background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
-                      boxShadow:
-                        "0 8px 20px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
+                      boxShadow: finalizeInactive
+                        ? "none"
+                        : "0 8px 20px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)",
                       position: "relative",
                       overflow: "hidden",
+                      // Clicável (o toast explica o que falta) mas o cursor já
+                      // avisa que a venda não vai fechar assim.
+                      cursor: finalizeInactive ? "not-allowed" : "pointer",
                     } as any)
                   : { backgroundColor: Colors.violet },
-                finalizeDisabled && { opacity: 0.5 },
+                finalizeInactive && { opacity: 0.5 },
               ]}
             >
-              {IS_WEB && (
+              {/* Brilho animado só quando o botão está de fato liberado —
+                  botão inativo que pisca sugere ação que não vai acontecer. */}
+              {IS_WEB && !finalizeInactive && (
                 <span
                   aria-hidden
                   style={{
@@ -755,7 +821,10 @@ const s = StyleSheet.create({
   head: { flexShrink: 0, padding: 18, paddingHorizontal: 20, position: "relative", overflow: "hidden" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headLabel: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIM, letterSpacing: 1.5, textTransform: "uppercase" },
-  headOrd: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", color: "#e9d5ff", fontSize: 10, letterSpacing: 0.6 },
+  // 29/08/2026: não é mais um número de venda (a venda ainda nem existe no
+  // backend) — é um rótulo de estado. Saiu do monospace pra não ser lido como
+  // número fiscal.
+  headOrd: { color: "#e9d5ff", fontSize: 9, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },
   totalRow: { flexDirection: "row", alignItems: "baseline", marginTop: 10, marginBottom: 6 },
   cur: { fontSize: 20, color: HEAD_INK, opacity: 0.75, marginRight: 6, lineHeight: 40, fontWeight: "400" },
   totalInt: { fontSize: 40, color: HEAD_INK, fontWeight: "700", letterSpacing: -1, lineHeight: 42 },
@@ -916,8 +985,20 @@ const s = StyleSheet.create({
     fontSize: 10, color: "#ef4444", fontWeight: "600",
     marginTop: 4, marginLeft: 4,
   },
-  hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
-  hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600", flex: 1 },
+  hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
+  hintsList: { flex: 1, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4 },
+  hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600" },
+  hintsSep: { fontSize: 10, color: Colors.amber, opacity: 0.5 },
+  // Chip tocável: borda + seta deixam claro que resolve ali mesmo, sem hover.
+  // Altura mínima de 28 pra ter alvo de toque decente no tablet do balcão.
+  hintChip: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    minHeight: 28, paddingVertical: 4, paddingHorizontal: 8,
+    borderRadius: 7,
+    backgroundColor: "rgba(251,191,36,0.12)",
+    borderWidth: 1, borderColor: "rgba(251,191,36,0.45)",
+  },
+  hintChipTxt: { fontSize: 10, color: Colors.amber, fontWeight: "700" },
   ctaRow: { flexDirection: "row", gap: 8 },
   ctaRowTop: { flexDirection: "row", gap: 8 },
   ctaPriRow: { flex: 1.7 },

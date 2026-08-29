@@ -15,8 +15,15 @@
 //          pdv.tsx quebra cards em 2 linhas automaticamente — não precisa
 //          mais colapsar pro modo compact. Caso Davi 13/14".
 // 13/06 · ActTroca: label "Trocar" → "Trocar / Devolver".
+// 29/08 · ActPerson vira forwardRef e expõe `open()` (PersonPickerHandle) —
+//          é o mesmo popover de sempre, só com um jeito do rodapé do carrinho
+//          pedir a abertura. Sem isso os avisos "Cliente obrigatório" /
+//          "Vendedora obrigatória" continuariam sendo texto morto.
+// 29/08 · ActPerson ganha `recentCount`: com a busca vazia, os N primeiros
+//          options entram sob "Atendidos recentemente" e o resto sob
+//          "Todos os clientes". A ordenação em si vem pronta do usePdvState.
 // ============================================================
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle, Fragment } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -206,10 +213,10 @@ export function ActBarcode({
 // ═══════════ 2) Person picker (vendedora OR cliente) ═══════════
 type PersonKind = "vendedora" | "cliente";
 
-export function ActPerson({
-  kind, shortcut, value, onChange, options,
-  onAddNew, fallbackText, searchable, addable, disabled, disabledHint,
-}: {
+/** Handle imperativo mínimo — só o que o rodapé do carrinho precisa. */
+export type PersonPickerHandle = { open: () => void };
+
+type ActPersonProps = {
   kind: PersonKind;
   shortcut: string;
   value: { id: string; name: string; subtitle?: string } | null;
@@ -221,19 +228,40 @@ export function ActPerson({
   addable?: boolean;
   disabled?: boolean;
   disabledHint?: string;
-}) {
+  /** Quantos dos primeiros `options` são "recentes" (só vale com busca vazia). */
+  recentCount?: number;
+};
+
+export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function ActPerson({
+  kind, shortcut, value, onChange, options,
+  onAddNew, fallbackText, searchable, addable, disabled, disabledHint, recentCount,
+}, handleRef) {
   const compact = useCompactMode();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [freeText, setFreeText] = useState("");
-  const ref = useRef<any>(null);
+  const wrapRef = useRef<any>(null);
   const label = kind === "vendedora" ? "Vendedora" : "Cliente";
   const placeholder = kind === "vendedora" ? "Selecionar vendedora" : "Vincular cliente";
+
+  // Mesma porta que o atalho de teclado já usava — só exposta pra fora.
+  useImperativeHandle(handleRef, () => ({
+    open: () => {
+      if (disabled) return;
+      setOpen(true);
+      // No mobile o carrinho fica bem abaixo da toolbar: abrir o popover sem
+      // trazer o card pra tela deixaria o lojista sem ver onde clicar.
+      const el: any = wrapRef.current;
+      if (IS_WEB && el && typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+  }), [disabled]);
 
   useEffect(() => {
     if (!IS_WEB) return;
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -253,14 +281,19 @@ export function ActPerson({
   }, [shortcut, disabled]);
 
   const active = !!value;
-  const filtered = searchable && query.trim().length >= 1
+  // 29/08/2026: com busca vazia a lista NÃO é alfabética — o pai manda os
+  // recentes primeiro. `nRecent` marca onde termina esse bloco pra desenhar
+  // os dois cabeçalhos. Digitou algo, volta a ser busca pura.
+  const searching = !!searchable && query.trim().length >= 1;
+  const nRecent = searching ? 0 : Math.min(recentCount || 0, options.length);
+  const filtered = searching
     ? options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
-    : options.slice(0, 10);
+    : options.slice(0, nRecent + 10);
 
   const wrapStyle: any = { position: "relative", opacity: disabled ? 0.5 : 1, zIndex: open ? 500 : 1 };
 
   return (
-    <View style={wrapStyle} ref={ref as any}>
+    <View style={wrapStyle} ref={wrapRef as any}>
       <ActCard active={active} empty={!active} compact={compact}
         onClick={() => { if (disabled) return; setOpen(o => !o); }}>
         <ActIco active={active} compact={compact}>
@@ -290,22 +323,30 @@ export function ActPerson({
                 {options.length === 0 ? "Nenhum registro disponível" : "Nenhum resultado"}
               </Text>
             )}
-            {filtered.map(opt => {
+            {filtered.map((opt, i) => {
               const selected = value && value.id === opt.id;
               return (
-                <Pressable key={opt.id}
-                  onPress={() => { onChange({ id: opt.id, name: opt.name, subtitle: opt.subtitle }); setOpen(false); setQuery(""); }}
-                  style={[popS.item, selected && popS.itemActive]}>
-                  <View style={popS.avatar}>
-                    <Text style={popS.avatarTxt}>
-                      {opt.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={popS.itemName} numberOfLines={1}>{opt.name}</Text>
-                    {opt.subtitle ? <Text style={popS.itemSub} numberOfLines={1}>{opt.subtitle}</Text> : null}
-                  </View>
-                </Pressable>
+                <Fragment key={opt.id}>
+                  {nRecent > 0 && i === 0 && (
+                    <Text style={popS.section}>Atendidos recentemente</Text>
+                  )}
+                  {nRecent > 0 && i === nRecent && (
+                    <Text style={popS.section}>Todos os clientes</Text>
+                  )}
+                  <Pressable
+                    onPress={() => { onChange({ id: opt.id, name: opt.name, subtitle: opt.subtitle }); setOpen(false); setQuery(""); }}
+                    style={[popS.item, selected && popS.itemActive]}>
+                    <View style={popS.avatar}>
+                      <Text style={popS.avatarTxt}>
+                        {opt.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={popS.itemName} numberOfLines={1}>{opt.name}</Text>
+                      {opt.subtitle ? <Text style={popS.itemSub} numberOfLines={1}>{opt.subtitle}</Text> : null}
+                    </View>
+                  </Pressable>
+                </Fragment>
               );
             })}
           </View>
@@ -353,7 +394,7 @@ export function ActPerson({
       )}
     </View>
   );
-}
+});
 
 // ═══════════ 3) Coupon input card ═══════════
 export function ActCoupon({
@@ -571,6 +612,11 @@ const popS = StyleSheet.create({
   closeBtn: { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.06)" },
   manualHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 12 },
   title: { fontSize: 10, fontWeight: "700", color: Colors.ink3, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 0 },
+  section: {
+    fontSize: 9, fontWeight: "700", color: Colors.violet3,
+    letterSpacing: 1, textTransform: "uppercase",
+    marginTop: 8, marginBottom: 2, paddingHorizontal: 10,
+  },
   input: {
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8,
     backgroundColor: Glass.bgInput, borderWidth: 1, borderColor: Glass.bgInputBorder,

@@ -4,6 +4,8 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { webOnly } from "./types";
+// 29/08/2026: helper compartilhado de plural — o ranking mostrava "1 vendas".
+import { pluralize } from "@/utils/plural";
 
 type RankedEmployee = {
   position: number; full_name: string; job_role: string;
@@ -44,11 +46,11 @@ export function TopSellersCard({ onSeeAll }: Props) {
       <View style={s.headerRow}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={s.bar} />
-          <Text style={s.title}>Top vendedores do mes</Text>
+          <Text style={s.title}>Top vendedores do mês</Text>
         </View>
         {onSeeAll && (
           <Pressable onPress={onSeeAll}>
-            <Text style={s.seeAll}>Ver ranking  -  </Text>
+            <Text style={s.seeAll}>Ver ranking  ›</Text>
           </Pressable>
         )}
       </View>
@@ -62,7 +64,7 @@ export function TopSellersCard({ onSeeAll }: Props) {
             <Text style={s.medal}>{emoji}</Text>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.name} numberOfLines={1}>{emp.full_name}</Text>
-              <Text style={s.role}>{emp.total_sales} vendas</Text>
+              <Text style={s.role}>{pluralize(emp.total_sales, "venda", "vendas")}</Text>
             </View>
             <View style={s.right}>
               <Text style={s.revenue}>{fmt(emp.total_revenue)}</Text>

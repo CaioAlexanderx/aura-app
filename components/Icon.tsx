@@ -320,8 +320,10 @@ const ALIASES: Record<string, string> = {
   // location variants
   "location-outline":         "location",
   "pin":                      "location",
-  // mail / chat → message
-  "mail":                     "message",
+  // chat → message. QA 29/08/2026: NAO criar alias "mail" aqui — existe um
+  // glifo real `mail` (envelope) no mapa de paths e o alias o sobrescrevia,
+  // fazendo todo <Icon name="mail"> do app desenhar um balão de conversa
+  // (resolveName é de passo único: ALIASES vence o path real).
   "mail-outline":             "mail",
   "chatbubble-ellipses":      "message",
   "chatbubble-ellipses-outline": "message",
