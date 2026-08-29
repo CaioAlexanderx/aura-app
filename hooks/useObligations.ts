@@ -29,7 +29,7 @@ function regimeLabelOf(r: FiscalRegime): string {
     case 'simples': return 'Simples Nacional';
     case 'lucro_presumido': return 'Lucro Presumido';
     case 'lucro_real': return 'Lucro Real';
-    case 'pessoa_fisica': return 'Pessoa Fisica (Autonomo)';
+    case 'pessoa_fisica': return 'Pessoa Física (Autonomo)';
   }
 }
 
@@ -116,7 +116,7 @@ export function useObligations() {
       saveCompleted(next);
       return next;
     });
-    toast.success("Obrigacao concluida!");
+    toast.success("Obrigação concluida!");
     if (companyId && !isDemo) {
       companiesApi.completeCheckpoint?.(companyId, oblCode)
         .then(() => qc.invalidateQueries({ queryKey: ["obligations-calendar", companyId] }))

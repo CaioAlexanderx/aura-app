@@ -1,6 +1,6 @@
 // ============================================================
 // PR40 Sprint B (2026-04-28)
-// Card "Retencoes TISS no mes" pra contabilidade odonto.
+// Card "Retencoes TISS no mês" pra contabilidade odonto.
 //
 // Mostra:
 // - Soma IRRF retido por convenios (deduzir do IRPJ devido = compensacao)

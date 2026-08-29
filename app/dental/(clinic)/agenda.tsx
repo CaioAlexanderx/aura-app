@@ -7,7 +7,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 // Agenda — operacao da agenda interna + canal de agendamento online.
 
 const TABS = [
-  { id: "agenda-dia",    label: "Hoje e proximos",    Component: AgendaTab },
+  { id: "agenda-dia",    label: "Hoje e próximos",    Component: AgendaTab },
   { id: "agenda-online", label: "Agendamento online", Component: AgendaOnlineTab },
 ];
 
@@ -17,9 +17,9 @@ export default function AgendaScreen() {
   return (
     <View>
       <View style={{ marginBottom: 14 }}>
-        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>OPERACAO</Text>
+        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>OPERAÇÃO</Text>
         <Text style={{ fontSize: 26, color: DentalColors.ink, fontWeight: "700", letterSpacing: -0.5 }}>Agenda</Text>
-        <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>Visao da agenda da clinica + canal publico de agendamento.</Text>
+        <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>Visão da agenda da clinica + canal público de agendamento.</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
         {TABS.map((t) => (

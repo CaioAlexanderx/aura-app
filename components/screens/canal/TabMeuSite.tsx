@@ -73,7 +73,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   // digita: com number, apagar o campo vira NaN e o input trava.
   const [pixPct, setPixPct] = useState(String(config.pix_discount_pct ?? 0));
   // O parcelamento so aparece na loja com cartao FUNCIONANDO. Sem isso a
-  // lojista escolheria "ate 6x", salvaria, e nada apareceria — sem
+  // lojista escolheria "até 6x", salvaria, e nada apareceria — sem
   // explicacao nenhuma. Encontrado no QA: nenhuma loja tem MP hoje.
   const { mpGateway } = usePaymentGateways();
   const mpConfigurado = !!mpGateway;
@@ -159,12 +159,12 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
   async function handleRequestDomain() {
     const d = domainInput.trim().toLowerCase();
-    if (!d || !d.includes(".")) { toast.error("Informe um dominio valido (ex: meunegocio.com.br)"); return; }
+    if (!d || !d.includes(".")) { toast.error("Informe um domínio válido (ex: meunegocio.com.br)"); return; }
     await requestDomain({ domain: d, plan: domainPlan }); setDomainInput("");
   }
 
   async function handleSetupPix() {
-    if (!pixName.trim()) { toast.error("Informe o nome ou razao social"); return; }
+    if (!pixName.trim()) { toast.error("Informe o nome ou razão social"); return; }
     if (!pixEmail.trim()) { toast.error("Informe o e-mail"); return; }
     if (!pixCpfCnpj.trim()) { toast.error("Informe o CPF ou CNPJ"); return; }
     if (!pixPhone.trim()) { toast.error("Informe o celular"); return; }
@@ -213,13 +213,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     { value: "CNPJ", label: "CNPJ" },
     { value: "EMAIL", label: "E-mail" },
     { value: "PHONE", label: "Celular" },
-    { value: "RANDOM", label: "Aleatoria" },
+    { value: "RANDOM", label: "Aleatória" },
   ];
 
   const PIX_TYPES: { value: "MEI" | "LTDA" | "INDIVIDUAL"; label: string }[] = [
     { value: "MEI", label: "MEI" },
     { value: "LTDA", label: "Empresa (LTDA/SA)" },
-    { value: "INDIVIDUAL", label: "Pessoa Fisica" },
+    { value: "INDIVIDUAL", label: "Pessoa Física" },
   ];
 
   function copyStorefrontUrl() {
@@ -254,7 +254,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 </View>
               )}
             </View>
-            <Text style={s.mockupBrand} numberOfLines={1}>{siteName || "Meu Negocio"}</Text>
+            <Text style={s.mockupBrand} numberOfLines={1}>{siteName || "Meu Negócio"}</Text>
             <View style={[s.mockupStatus, { backgroundColor: published ? Colors.greenD : Colors.bg4 }]}>
               <View style={[s.mockupStatusDot, { backgroundColor: published ? Colors.green : Colors.ink3 }]} />
               <Text style={[s.mockupStatusText, { color: published ? Colors.green : Colors.ink3 }]}>
@@ -298,21 +298,21 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         </View>
       </View>
 
-      <SectionTitle title="Informacoes do negocio" />
+      <SectionTitle title="Informações do negócio" />
       <View style={cs.card}>
         <View style={cs.switchRow}>
           <View style={{ flex: 1 }}><Text style={cs.switchLabel}>Site publicado</Text><Text style={cs.switchHint}>{published ? "Visivel para clientes" : "Site oculto"}</Text></View>
           <Switch value={published} onValueChange={setPublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
         <View style={cs.divider} />
-        <Field label="Nome do negocio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
+        <Field label="Nome do negócio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
         <Field label="Slogan (opcional)" value={tagline} onChange={setTagline} placeholder="Qualidade que fala por si" />
-        <Field label="Descricao" value={description} onChange={setDescription} placeholder="Conte sobre seu negocio..." multiline />
+        <Field label="Descrição" value={description} onChange={setDescription} placeholder="Conte sobre seu negócio..." multiline />
         <Field label="WhatsApp" value={whatsapp} onChange={(v) => setWhatsapp(maskPhone(v))} placeholder="(12) 99999-0000" />
         <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegocio" />
         <Field label="Telefone" value={phone} onChange={(v) => setPhone(maskPhone(v))} placeholder="(12) 3333-0000" />
-        <Field label="Endereco" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
-        <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configuracoes"}</Text></Pressable>
+        <Field label="Endereço" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
+        <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configurações"}</Text></Pressable>
       </View>
 
       {/* Logo (cor principal e capa/banner foram movidas pra Tab Design — Rec #1) */}
@@ -352,7 +352,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       {/* Pagamentos — chave Pix manual + entrega */}
       <SectionTitle title="Pagamentos" />
       <View style={cs.card}>
-        <Text style={cs.hint}>Como voce quer receber dos clientes? Pode marcar mais de uma opcao.</Text>
+        <Text style={cs.hint}>Como você quer receber dos clientes? Pode marcar mais de uma opção.</Text>
 
         {/* Migration 121: toggle independente das credenciais MP.
             Default true. Quando false, has_card vira false mesmo com credenciais. */}
@@ -397,10 +397,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             </View>
             <Text style={cs.hint}>
               {!mpConfigurado
-                ? "Conecte o Mercado Pago abaixo para o parcelamento aparecer na loja. Sem cartao funcionando, anunciar parcela seria promessa que a loja nao cumpre."
+                ? "Conecte o Mercado Pago abaixo para o parcelamento aparecer na loja. Sem cartão funcionando, anunciar parcela seria promessa que a loja não cumpre."
                 : parcelas
                   ? `A pagina do produto passa a mostrar "ou ${parcelas}x de ...". Parcela minima de R$ 5 — produto barato mostra menos vezes.`
-                  : "A loja mostra so o preco a vista."}
+                  : "A loja mostra so o preço a vista."}
             </Text>
           </View>
         ) : null}
@@ -411,7 +411,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <View style={cs.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={cs.switchLabel}>Aceitar pagamento na entrega</Text>
-            <Text style={cs.switchHint}>Cliente paga em dinheiro/cartao no momento da entrega ou retirada</Text>
+            <Text style={cs.switchHint}>Cliente paga em dinheiro/cartão no momento da entrega ou retirada</Text>
           </View>
           <Switch value={payOnDelivery} onValueChange={setPayOnDelivery} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
@@ -458,7 +458,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         />
 
         <Field label="Nome do recebedor" value={pixHolderName} onChange={setPixHolderName} placeholder="Nome que aparece pro cliente no app do banco" />
-        <Field label="Cidade do recebedor" value={pixHolderCity} onChange={setPixHolderCity} placeholder="Sao Paulo" />
+        <Field label="Cidade do recebedor" value={pixHolderCity} onChange={setPixHolderCity} placeholder="São Paulo" />
 
         {/* Migration 309 — desconto no Pix.
             Fica aqui, junto da chave, e não em Design: é decisão de
@@ -509,7 +509,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           superior — entao o campo ja nasce com o padrao dentro, editavel.
           Ele fica logo abaixo de Pagamentos porque as duas coisas respondem
           a mesma pergunta do cliente: da pra confiar em comprar aqui. */}
-      <SectionTitle title="Trocas e devolucoes" />
+      <SectionTitle title="Trocas e devoluções" />
       <View style={cs.card}>
         <Text style={cs.hint}>
           Esse texto aparece no rodape da sua loja. Ja deixamos preenchido com o prazo
@@ -520,7 +520,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <View style={{ height: 10 }} />
 
         <Field
-          label="O que voce oferece em troca ou devolucao"
+          label="O que você oferece em troca ou devolução"
           value={politica || politicaPadrao}
           onChange={setPolitica}
           placeholder={politicaPadrao}
@@ -548,17 +548,17 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         </Pressable>
       </View>
 
-      <SectionTitle title="Dominio personalizado" />
+      <SectionTitle title="Domínio personalizado" />
       <View style={cs.card}>
         {hasDomain ? (
           <View>
             <View style={s.domainRow}><Icon name="globe" size={16} color={accent.primaryStrong} /><Text style={s.domainName}>{config.custom_domain}</Text><StatusBadge status={config.custom_domain_status} /></View>
-            {config.custom_domain_status === "pending_dns" && <View style={cs.infoCard}><Icon name="alert" size={13} color={Colors.amber} /><Text style={cs.infoText}>A equipe Aura vai configurar seu dominio em ate 48h uteis.</Text></View>}
+            {config.custom_domain_status === "pending_dns" && <View style={cs.infoCard}><Icon name="alert" size={13} color={Colors.amber} /><Text style={cs.infoText}>A equipe Aura vai configurar seu domínio em até 48h úteis.</Text></View>}
           </View>
         ) : (
           <View>
-            <Text style={s.domainDesc}>Registre um dominio .com.br exclusivo. Configurado pela equipe Aura.</Text>
-            <Text style={cs.fieldLabel}>Duracao</Text>
+            <Text style={s.domainDesc}>Registre um domínio .com.br exclusivo. Configurado pela equipe Aura.</Text>
+            <Text style={cs.fieldLabel}>Duração</Text>
             <View style={s.planRow}>
               <Pressable onPress={() => setDomainPlan("1year")} style={[s.planBtn, domainPlan === "1year" && s.planBtnActive]}>
                 <Text style={[s.planBtnLabel, domainPlan === "1year" && s.planBtnLabelActive]}>1 ano</Text>
@@ -569,12 +569,12 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: Colors.green }}>(-5%)</Text></Text>
               </Pressable>
             </View>
-            <Text style={[cs.fieldLabel, { marginTop: 12 }]}>Dominio desejado</Text>
+            <Text style={[cs.fieldLabel, { marginTop: 12 }]}>Domínio desejado</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TextInput style={[cs.input, { flex: 1 }]} value={domainInput} onChangeText={setDomainInput} placeholder="meunegocio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" autoCorrect={false} />
               <Pressable onPress={handleRequestDomain} disabled={isRequestingDomain} style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}><Text style={s.domainBtnText}>{isRequestingDomain ? "..." : "Solicitar"}</Text></Pressable>
             </View>
-            <View style={cs.infoCard}><Icon name="alert" size={13} color={accent.primaryStrong} /><Text style={cs.infoText}>Apos solicitar, a equipe Aura confirma e configura em ate 48h uteis.</Text></View>
+            <View style={cs.infoCard}><Icon name="alert" size={13} color={accent.primaryStrong} /><Text style={cs.infoText}>Após solicitar, a equipe Aura confirma e configura em até 48h úteis.</Text></View>
           </View>
         )}
       </View>

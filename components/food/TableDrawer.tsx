@@ -26,7 +26,7 @@ import { printThermalUrl, buildCupomUrl } from "@/utils/printThermal";
 // setStatus("free") como escape hatch (link discreto "Fechar sem
 // registrar" dentro do modal) e fallback automatico quando mesa esta
 // vazia (0 pedidos). Apos fechamento c/ NFC-e emitida, drawer mostra
-// botao "Reimprimir cupom termico" enquanto o ultimo sale_id persistir
+// botao "Reimprimir cupom térmico" enquanto o ultimo sale_id persistir
 // na mesa (via GET /food/tables/:id/last-closed-nfce).
 //
 // 2026-05-21 (F7 do polish pre-Fase 7): window.confirm trocado por
@@ -269,7 +269,7 @@ export function TableDrawer({ table, onClose }: Props) {
                     )}
                     {data.service_fee_pct > 0 && (
                       <TotalRow
-                        label={"Taxa de servico (" + data.service_fee_pct + "%)"}
+                        label={"Taxa de serviço (" + data.service_fee_pct + "%)"}
                         value={data.service_fee_amount}
                         muted
                       />

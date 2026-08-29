@@ -28,7 +28,7 @@ export default function ConsultaRoute() {
   if (!params.appointmentId || typeof params.appointmentId !== "string") {
     return (
       <View style={{ flex: 1, backgroundColor: DentalColors.bg, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: DentalColors.ink, fontSize: 14 }}>Atendimento nao encontrado</Text>
+        <Text style={{ color: DentalColors.ink, fontSize: 14 }}>Atendimento não encontrado</Text>
       </View>
     );
   }

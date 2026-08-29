@@ -88,13 +88,13 @@ export function CategoriesModal({
 
   const itemLabel = type === "service" ? "servico" : "produto";
   const itemLabelPlural = type === "service" ? "servicos" : "produtos";
-  const titleText = type === "service" ? "Categorias de servicos" : "Categorias de produtos";
+  const titleText = type === "service" ? "Categorias de serviços" : "Categorias de produtos";
   const subtitleText = type === "service"
-    ? "Organize seus servicos em grupos (ex: Corte, Coloracao, Estetica)."
+    ? "Organize seus serviços em grupos (ex: Corte, Coloracao, Estética)."
     : "Organize seus produtos em grupos.";
   const createPlaceholder = type === "service"
     ? "Ex: Corte, Coloracao, Manicure..."
-    : "Ex: Bebidas, Vestuario...";
+    : "Ex: Bebidas, Vestuário...";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -253,8 +253,8 @@ export function CategoriesModal({
               ? "Esta categoria tem " + deleteTarget.cat.product_count + " " + (deleteTarget.cat.product_count === 1 ? itemLabel : itemLabelPlural) + "."
                 + (deleteMoveTo
                     ? " Eles serao movidos para \"" + deleteMoveTo + "\"."
-                    : " Se voce nao escolher um destino, os itens ficarao sem categoria cadastrada.")
-              : "Esta acao nao pode ser desfeita."
+                    : " Se você não escolher um destino, os itens ficarao sem categoria cadastrada.")
+              : "Esta ação não pode ser desfeita."
           }
           confirmLabel={isDeleting ? "Removendo..." : "Excluir"}
           destructive

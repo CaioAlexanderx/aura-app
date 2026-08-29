@@ -169,7 +169,7 @@ export default function StudioConfiguracoes() {
         setRequireDeposit(Boolean(ss.require_deposit_for_production));
       }
     } catch (e: any) {
-      console.warn("[studio/configuracoes] health falhou:", e?.message);
+      console.warn("[studio/configurações] health falhou:", e?.message);
       toast.error(e?.message || "Não consegui carregar — usando padrões");
     } finally {
       setLoading(false);

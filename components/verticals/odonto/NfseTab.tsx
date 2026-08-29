@@ -26,7 +26,7 @@ export function NfseTab() {
         <View style={s.heroIcon}>
           <Icon name="file_text" size={36} color="#a78bfa" />
         </View>
-        <Text style={s.title}>Notas Fiscais de Servico</Text>
+        <Text style={s.title}>Notas Fiscais de Serviço</Text>
         <Text style={s.subtitle}>
           Emita NFS-e diretamente pelo Aura. Provider integrado, calculo
           automatico de ISS, PDF/XML pra entregar ao cliente.
@@ -39,7 +39,7 @@ export function NfseTab() {
           </View>
           <View style={s.featureRow}>
             <Icon name="check" size={14} color="#10B981" />
-            <Text style={s.featureText}>Calculo automatico de ISS conforme aliquota local</Text>
+            <Text style={s.featureText}>Cálculo automático de ISS conforme aliquota local</Text>
           </View>
           <View style={s.featureRow}>
             <Icon name="check" size={14} color="#10B981" />
@@ -55,13 +55,13 @@ export function NfseTab() {
           </View>
           <View style={s.featureRow}>
             <Icon name="check" size={14} color="#10B981" />
-            <Text style={s.featureText}>Modo homologacao gratuito pra testar</Text>
+            <Text style={s.featureText}>Modo homologação gratuito pra testar</Text>
           </View>
         </View>
 
         <Pressable onPress={() => setOpen(true)} style={s.btnPrimary}>
           <Icon name="arrow_right" size={14} color="#fff" />
-          <Text style={s.btnPrimaryText}>Abrir gestao NFS-e</Text>
+          <Text style={s.btnPrimaryText}>Abrir gestão NFS-e</Text>
         </Pressable>
 
         <Text style={s.help}>

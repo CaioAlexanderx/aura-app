@@ -6,11 +6,11 @@ import { HoverCard } from "@/components/HoverCard";
 // VER-03c: Support inbox (chat with clients)
 
 const MOCK_TICKETS = [
-  { id: "1", client: "Barbearia do Marcos", subject: "Duvida sobre comissoes", status: "aberto", priority: "normal", createdAt: "Hoje 09:30", lastMessage: "Como configuro comissao diferente por servico?", unread: true },
-  { id: "2", client: "Clinica Sorriso", subject: "Modulo odonto nao aparece", status: "aberto", priority: "alta", createdAt: "Hoje 08:15", lastMessage: "Ativei o modulo mas nao aparece na sidebar", unread: true },
-  { id: "3", client: "Pet Love Jacarei", subject: "Emissao NF-e", status: "respondido", priority: "normal", createdAt: "Ontem 16:00", lastMessage: "Obrigado, funcionou!", unread: false },
-  { id: "4", client: "Loja Moda Bella", subject: "Upgrade para Negocio", status: "respondido", priority: "baixa", createdAt: "02/04 14:20", lastMessage: "Vou pensar e volto a falar", unread: false },
-  { id: "5", client: "Restaurante Sabor", subject: "Pagamento atrasado", status: "aberto", priority: "alta", createdAt: "01/04 11:00", lastMessage: "Boleto nao chegou", unread: false },
+  { id: "1", client: "Barbearia do Marcos", subject: "Dúvida sobre comissões", status: "aberto", priority: "normal", createdAt: "Hoje 09:30", lastMessage: "Como configuro comissão diferente por serviço?", unread: true },
+  { id: "2", client: "Clinica Sorriso", subject: "Módulo odonto não aparece", status: "aberto", priority: "alta", createdAt: "Hoje 08:15", lastMessage: "Ativei o módulo mas não aparece na sidebar", unread: true },
+  { id: "3", client: "Pet Love Jacarei", subject: "Emissão NF-e", status: "respondido", priority: "normal", createdAt: "Ontem 16:00", lastMessage: "Obrigado, funcionou!", unread: false },
+  { id: "4", client: "Loja Moda Bella", subject: "Upgrade para Negócio", status: "respondido", priority: "baixa", createdAt: "02/04 14:20", lastMessage: "Vou pensar e volto a falar", unread: false },
+  { id: "5", client: "Restaurante Sabor", subject: "Pagamento atrasado", status: "aberto", priority: "alta", createdAt: "01/04 11:00", lastMessage: "Boleto não chegou", unread: false },
 ];
 
 const PRIORITY: Record<string, { bg: string; color: string }> = {
@@ -29,7 +29,7 @@ export function SuporteAdmin() {
     <View style={s.container}>
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{open}</Text><Text style={s.kpiLbl}>Abertos</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{unread}</Text><Text style={s.kpiLbl}>Nao lidos</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{unread}</Text><Text style={s.kpiLbl}>Não lidos</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{MOCK_TICKETS.length - open}</Text><Text style={s.kpiLbl}>Respondidos</Text></View>
       </View>
 

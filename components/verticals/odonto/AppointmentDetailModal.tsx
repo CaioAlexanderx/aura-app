@@ -29,7 +29,7 @@ interface Props {
 const STATUS_LABELS: Record<string, string> = {
   agendado:             "Agendado",
   confirmado:           "Confirmado",
-  avaliacao:            "Em avaliacao",
+  avaliacao:            "Em avaliação",
   aprovado:             "Aprovado",
   em_atendimento:       "Em atendimento",
   concluido:            "Concluido",
@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 // Chips de status disponíveis para seleção rápida (FIX-21)
 const STATUS_CHIPS: Array<{ value: string; label: string; color: string }> = [
-  { value: "agendado",             label: "Nao confirmada",        color: "#06B6D4" },
+  { value: "agendado",             label: "Não confirmada",        color: "#06B6D4" },
   { value: "confirmado",           label: "Confirmada",            color: "#F97316" },
   { value: "paciente_consultorio", label: "Paciente no consult.",  color: "#A78BFA" },
   { value: "falta_justificada",    label: "Falta justificada",     color: "#F59E0B" },
@@ -167,16 +167,16 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
             </View>
           ) : !appt ? (
             <View style={{ padding: 40, alignItems: "center" }}>
-              <Text style={s.hint}>Agendamento nao encontrado</Text>
+              <Text style={s.hint}>Agendamento não encontrado</Text>
             </View>
           ) : (
             <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
               <Row label="Paciente" value={appt.patient_name || "—"} />
               <Row label="Telefone" value={appt.patient_phone || "—"} />
               <Row label="Data / hora" value={formatDateTime(appt.scheduled_at)} />
-              <Row label="Duracao" value={`${appt.duration_min || 60} min`} />
+              <Row label="Duração" value={`${appt.duration_min || 60} min`} />
               {appt.chief_complaint && <Row label="Queixa" value={appt.chief_complaint} />}
-              {appt.insurance_name && <Row label="Convenio" value={appt.insurance_name} />}
+              {appt.insurance_name && <Row label="Convênio" value={appt.insurance_name} />}
               {appt.allergies && <Row label="Alergias" value={appt.allergies} highlight />}
               {(appt.procedures || []).length > 0 && (
                 <View style={{ marginTop: 8 }}>
@@ -201,7 +201,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
               {canTransitionTo("concluido") && (
                 <View style={s.concludeNote}>
                   <Icon name="edit" size={12} color={Colors.ink3} />
-                  <Text style={s.concludeNoteText}>A assinatura do paciente sera coletada ao concluir</Text>
+                  <Text style={s.concludeNoteText}>A assinatura do paciente será coletada ao concluir</Text>
                 </View>
               )}
               {/* Atalho pro prontuario do paciente */}

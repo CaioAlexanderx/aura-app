@@ -40,7 +40,7 @@ export function TissDashboard({ visible, onClose, initialPatientId, initialPatie
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={st.headerTitle}>TISS</Text>
-              <Text style={st.headerSub}>Faturamento de convenios</Text>
+              <Text style={st.headerSub}>Faturamento de convênios</Text>
             </View>
           </View>
 

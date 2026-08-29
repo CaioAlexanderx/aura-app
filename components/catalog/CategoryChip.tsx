@@ -3,7 +3,7 @@ import { useColors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 
 // Puro, sem chamada de rede -- recebe dados por prop (briefing 5.4).
-// "tambem aparece em", com remocao. `onRemove` ausente = chip nao
+// "também aparece em", com remocao. `onRemove` ausente = chip nao
 // removivel (uso em contextos so-leitura).
 type Props = {
   label: string;

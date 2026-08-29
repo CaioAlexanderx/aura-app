@@ -29,7 +29,7 @@
 // 02/06/2026 (fix cupom da troca):
 //   - openReceipt ficou de fora da correcao de auth de 29/05 e ainda fazia
 //     window.open(url) direto -> a rota /print/receipt exige auth e devolvia
-//     {"error":"Token nao fornecido"}. Agora busca o HTML via fetch com
+//     {"error":"Token não fornecido"}. Agora busca o HTML via fetch com
 //     Authorization (rota /preview, autoprint) e escreve numa nova janela,
 //     mesmo padrao do SaleComplete (venda normal).
 // ============================================================
@@ -70,7 +70,7 @@ function fiscalOriginStatus(item: any): { label: string; color: string } {
     return { label: "Falhou — emitir manualmente", color: "#f87171" };
   }
   if (item.status === "pendente") {
-    return { label: "Pendente de emissao", color: "#fbbf24" };
+    return { label: "Pendente de emissão", color: "#fbbf24" };
   }
   if (item.status === "none") {
     return { label: "Sem nota fiscal", color: "#94a3b8" };
@@ -161,7 +161,7 @@ export function Step5Success({
   };
 
   // 02/06/2026: cupom da troca. A rota /print/receipt exige auth — window.open
-  // direto devolvia {"error":"Token nao fornecido"}. Busca o HTML via fetch com
+  // direto devolvia {"error":"Token não fornecido"}. Busca o HTML via fetch com
   // Authorization (variante /preview, autoprint) e escreve numa nova janela
   // (mesmo padrao de SaleComplete/openDanfe). Sem token na URL.
   async function openReceipt() {
@@ -178,7 +178,7 @@ export function Step5Success({
     openPrintWindow(async () => {
       const resp = await fetch(previewUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!resp.ok) {
-        let msg = "Nao foi possivel gerar o cupom da troca.";
+        let msg = "Não foi possível gerar o cupom da troca.";
         try { const j = await resp.json(); if (j?.error) msg = j.error; } catch {}
         return { ok: false as const, error: msg };
       }
@@ -208,7 +208,7 @@ export function Step5Success({
     openPrintWindow(async () => {
       const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!resp.ok) {
-        let msg = "Nao foi possivel gerar o DANFE da devolucao.";
+        let msg = "Não foi possível gerar o DANFE da devolução.";
         try {
           const j = await resp.json();
           if (j?.error) msg = j.error;
@@ -265,7 +265,7 @@ export function Step5Success({
             // Fallback para backend sem per_origin (versao anterior)
             <>
               {nfceStrategy === "devolucao_55" && (
-                <SummaryRow label="NF-e devolucao" value="Emitida" valueColor="#6ee7b7" />
+                <SummaryRow label="NF-e devolução" value="Emitida" valueColor="#6ee7b7" />
               )}
               {nfceStrategy === "cancel_reissue" && (
                 <SummaryRow label="NFC-e original" value="Cancelada" valueColor="#6ee7b7" />
@@ -360,7 +360,7 @@ function buildSubTitle(perOrigin: any[], nfceStrategy: string): string {
   }
   // Fallback
   if (nfceStrategy === "cancel_reissue") return "NFC-e original cancelada e estoque atualizado";
-  if (nfceStrategy === "devolucao_55") return "NF-e de devolucao emitida e estoque atualizado";
+  if (nfceStrategy === "devolucao_55") return "NF-e de devolução emitida e estoque atualizado";
   return "Estoque atualizado e caixa registrado";
 }
 

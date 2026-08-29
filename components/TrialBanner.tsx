@@ -6,8 +6,8 @@ import { Icon } from "@/components/Icon";
 
 var PLAN_LABELS: Record<string, string> = {
   essencial: "Essencial",
-  negocio:   "Negocio",
-  expansao:  "Expansao",
+  negocio:   "Negócio",
+  expansao:  "Expansão",
 };
 
 export function TrialBanner() {

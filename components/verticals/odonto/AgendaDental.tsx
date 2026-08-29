@@ -491,7 +491,7 @@ function DayView({
                   },
                 },
                   createElement("span", { style: { fontSize: 11, color: Colors.ink3 || "#888", fontWeight: 600, width: 38 } }, hour),
-                  createElement("span", { style: { fontSize: 11, color: Colors.ink3 || "#888", fontStyle: "italic" } }, "Horario livre")
+                  createElement("span", { style: { fontSize: 11, color: Colors.ink3 || "#888", fontStyle: "italic" } }, "Horário livre")
                 );
               }
 
@@ -502,7 +502,7 @@ function DayView({
                   style={[s.slot, s.slotEmpty]}
                 >
                   <Text style={s.slotTime}>{hour}</Text>
-                  <Text style={s.slotEmptyText}>Horario livre</Text>
+                  <Text style={s.slotEmptyText}>Horário livre</Text>
                 </Pressable>
               );
             })}

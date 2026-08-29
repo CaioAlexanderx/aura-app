@@ -57,7 +57,7 @@ export function TabComissoes() {
         <View style={s.totalCard}>
           <View style={s.totalRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.totalLabel}>COMISSAO TOTAL</Text>
+              <Text style={s.totalLabel}>COMISSÃO TOTAL</Text>
               <Text style={[s.totalValue, { color: Colors.green }]}>{fmt(totals.commission_total)}</Text>
             </View>
             <View style={{ flex: 1 }}>
@@ -99,7 +99,7 @@ export function TabComissoes() {
             {commEnabled && (
               <View>
                 <View style={s.rateRow}>
-                  <Text style={s.rateLabel}>Taxa de comissao</Text>
+                  <Text style={s.rateLabel}>Taxa de comissão</Text>
                   <View style={s.rateInputRow}>
                     <TextInput
                       style={s.rateInput}
@@ -128,14 +128,14 @@ export function TabComissoes() {
                   </View>
                   <View style={[s.empStat, { backgroundColor: Colors.greenD }]}>
                     <Text style={[s.empStatValue, { color: Colors.green }]}>{fmt(commAmount)}</Text>
-                    <Text style={s.empStatLabel}>Comissao</Text>
+                    <Text style={s.empStatLabel}>Comissão</Text>
                   </View>
                 </View>
               </View>
             )}
 
             {!commEnabled && (
-              <Text style={s.disabledHint}>Comissao desativada para este vendedor</Text>
+              <Text style={s.disabledHint}>Comissão desativada para este vendedor</Text>
             )}
           </View>
         );
@@ -143,7 +143,7 @@ export function TabComissoes() {
 
       <View style={s.infoCard}>
         <Icon name="info" size={12} color={Colors.violet3} />
-        <Text style={s.infoText}>Comissoes calculadas sobre vendas confirmadas no periodo. Ative o toggle e defina a taxa % para cada vendedor.</Text>
+        <Text style={s.infoText}>Comissões calculadas sobre vendas confirmadas no período. Ative o toggle e defina a taxa % para cada vendedor.</Text>
       </View>
     </View>
   );

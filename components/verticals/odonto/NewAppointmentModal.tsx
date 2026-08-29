@@ -136,7 +136,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
   function handleSubmit() {
     setError(null);
     if (!patientId) return setError("Selecione um paciente");
-    if (!date || !time) return setError("Data e horario sao obrigatorios");
+    if (!date || !time) return setError("Data e horário são obrigatórios");
     createMut.mutate();
   }
 
@@ -234,7 +234,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
               )}
 
               {/* Data/hora/duracao */}
-              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Data e horario *</Text>
+              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Data e horário *</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <NativeDateInput label="Data" value={date} onChange={setDate} style={{ flex: 2 }} />
                 <NativeTimeInput label="Hora" value={time} onChange={setTime} style={{ flex: 1 }} />

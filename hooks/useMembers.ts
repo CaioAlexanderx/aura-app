@@ -102,7 +102,7 @@ export function useMembers() {
     onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ["members-unified", cid] });
       qc.invalidateQueries({ queryKey: ["member-audit", cid, vars.mid] });
-      toast.success("Permissoes atualizadas");
+      toast.success("Permissões atualizadas");
     },
     onError: (err: any) => toast.error(err?.message || "Erro ao atualizar"),
   });

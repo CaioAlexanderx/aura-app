@@ -123,7 +123,7 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
 
       <View style={s.searchBox}>
         <Icon name="search" size={14} color={Colors.ink3} />
-        <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder="Buscar por descricao, categoria ou valor..." placeholderTextColor={Colors.ink3} />
+        <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder="Buscar por descrição, categoria ou valor..." placeholderTextColor={Colors.ink3} />
         {search.length > 0 && <Pressable onPress={function() { setSearch(""); }}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
       </View>
 
@@ -133,7 +133,7 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
             <Pressable key={tf} onPress={function() { setTypeFilter(tf); }}
               style={[s.typeBtn, typeFilter === tf && s.typeBtnActive, isWeb && { transition: "all 0.15s ease" } as any]}>
               <Text style={[s.typeText, typeFilter === tf && s.typeTextActive]}>
-                {tf === "all" ? "Todos" : tf === "income" ? "Entradas" : "Saidas"}
+                {tf === "all" ? "Todos" : tf === "income" ? "Entradas" : "Saídas"}
               </Text>
               <View style={[s.typeBadge, tf === "income" && { backgroundColor: Colors.greenD }, tf === "expense" && { backgroundColor: Colors.redD }]}>
                 <Text style={[s.typeBadgeText, tf === "income" && { color: Colors.green }, tf === "expense" && { color: Colors.red }]}>
@@ -161,7 +161,7 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       {displayTransactions.length > 0 && (typeFilter !== "all" || catFilter || search.length >= 2) && (
         <View style={s.filteredTotals}>
           <View style={s.ftItem}><Text style={s.ftLabel}>Entradas</Text><Text style={[s.ftValue, { color: Colors.green }]}>+{fmt(filteredIncome)}</Text></View>
-          <View style={[s.ftItem, { borderLeftWidth: 1, borderLeftColor: Colors.border }]}><Text style={s.ftLabel}>Saidas</Text><Text style={[s.ftValue, { color: Colors.red }]}>-{fmt(filteredExpense)}</Text></View>
+          <View style={[s.ftItem, { borderLeftWidth: 1, borderLeftColor: Colors.border }]}><Text style={s.ftLabel}>Saídas</Text><Text style={[s.ftValue, { color: Colors.red }]}>-{fmt(filteredExpense)}</Text></View>
           <View style={[s.ftItem, { borderLeftWidth: 1, borderLeftColor: Colors.border }]}><Text style={s.ftLabel}>Saldo</Text><Text style={[s.ftValue, { color: filteredIncome - filteredExpense >= 0 ? Colors.green : Colors.red }]}>{fmt(filteredIncome - filteredExpense)}</Text></View>
         </View>
       )}

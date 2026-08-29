@@ -387,7 +387,7 @@ export function RelacaoFaixasCard({
     karateNetworkHealthApi
       .getRelacaoFaixas(federationId, status)
       .then((res) => { if (!cancelled) setLocalData(res); })
-      .catch((err) => { console.error("[saude-rede] relacao-faixas filtro:", err); })
+      .catch((err) => { console.error("[saúde-rede] relação-faixas filtro:", err); })
       .finally(() => { if (!cancelled) setLocalLoading(false); });
     return () => { cancelled = true; };
   }, [federationId, status, hasFiltered]);

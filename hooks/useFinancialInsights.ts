@@ -127,16 +127,16 @@ function computeClientSide(args: Args): FinancialInsights {
   );
   score = Math.max(0, Math.min(100, score));
 
-  var label: "Saudavel" | "Atencao" | "Critico" | "Inicial" =
+  var label: "Saudavel" | "Atenção" | "Critico" | "Inicial" =
     args.transactions.length < 10 ? "Inicial" :
     score >= 75 ? "Saudavel" :
-    score >= 50 ? "Atencao" :
+    score >= 50 ? "Atenção" :
     "Critico";
 
   var drivers: HealthDriver[] = [
     {
       id: "margem",
-      label: "Margem liquida",
+      label: "Margem líquida",
       current: fmtPct(margem),
       target: ">= " + HEALTH_TARGETS.margin_pct + "%",
       status: margem >= HEALTH_TARGETS.margin_pct ? "ok" : margem >= HEALTH_TARGETS.margin_pct * 0.7 ? "warn" : "bad",
@@ -154,7 +154,7 @@ function computeClientSide(args: Args): FinancialInsights {
       status: runwayDays >= HEALTH_TARGETS.runway_days ? "ok" : runwayDays >= 30 ? "warn" : "bad",
       gap:
         runwayDays >= 999
-          ? "sem despesas no periodo"
+          ? "sem despesas no período"
           : runwayDays >= HEALTH_TARGETS.runway_days
           ? "+" + (runwayDays - HEALTH_TARGETS.runway_days) + " dias acima"
           : (HEALTH_TARGETS.runway_days - runwayDays) + " dias abaixo",
@@ -176,7 +176,7 @@ function computeClientSide(args: Args): FinancialInsights {
     },
     {
       id: "ticket",
-      label: "Ticket medio",
+      label: "Ticket médio",
       current:
         args.transactions.length > 0 && summary.income > 0
           ? fmtBRL(summary.income / Math.max(1, args.transactions.filter(function(t) { return t.type === "income"; }).length))
@@ -195,7 +195,7 @@ function computeClientSide(args: Args): FinancialInsights {
     growthPct: growth,
     txCount: args.transactions.length,
     // `margem` e forcada a 0 quando nao ha receita (linha acima), entao sem
-    // esta flag a narrativa nao distingue "sobrou 0%" de "nao entrou nada".
+    // esta flag a narrativa nao distingue "sobrou 0%" de "não entrou nada".
     hasIncome: summary.income > 0,
   });
 
@@ -290,7 +290,7 @@ export function useFinancialInsights(args: Args): FinancialInsights {
       expense_breakdown: (server as any).expense_breakdown,
       // FIX 24/08/2026 (QA Financeiro C1): estes dois campos da Onda 3 nao eram
       // copiados do server aqui — e nao ha calculo client-side pra eles. Os cards
-      // "Evolucao Mensal · 12 meses" (Receitas e Despesas) e "Ranking de
+      // "Evolução Mensal · 12 meses" (Receitas e Despesas) e "Ranking de
       // Profissionais" liam sempre `undefined` e renderizavam empty state
       // permanente, mesmo com o backend devolvendo os dados.
       monthly_evolution: (server as any).monthly_evolution,

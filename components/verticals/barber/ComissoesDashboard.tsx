@@ -60,7 +60,7 @@ export function ComissoesDashboard({
       {/* KPIs */}
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{fmt(calcRevenue)}</Text><Text style={s.kpiLbl}>Receita bruta</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(calcCommissions)}</Text><Text style={s.kpiLbl}>Comissoes</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(calcCommissions)}</Text><Text style={s.kpiLbl}>Comissões</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(calcSalon)}</Text><Text style={s.kpiLbl}>Cota salao</Text></View>
         {calcTips > 0 && (
           <View style={s.kpi}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{fmt(calcTips)}</Text><Text style={s.kpiLbl}>Gorjetas</Text></View>
@@ -77,7 +77,7 @@ export function ComissoesDashboard({
         <Text style={[s.th, { width: 45, textAlign: "right" }]}>Atend.</Text>
         <Text style={[s.th, { width: 70, textAlign: "right" }]}>Receita</Text>
         <Text style={[s.th, { width: 35, textAlign: "right" }]}>%</Text>
-        <Text style={[s.th, { width: 70, textAlign: "right" }]}>Comissao</Text>
+        <Text style={[s.th, { width: 70, textAlign: "right" }]}>Comissão</Text>
       </View>
 
       {/* Rows */}
@@ -115,7 +115,7 @@ export function ComissoesDashboard({
             <Text style={s.bestInitial}>{best.name.charAt(0)}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.bestTitle}>Profissional do mes</Text>
+            <Text style={s.bestTitle}>Profissional do mês</Text>
             <Text style={s.bestName}>{best.name}</Text>
             <Text style={s.bestStats}>
               {best.appointments_count} atendimentos \u2014 {fmt(best.revenue)} receita

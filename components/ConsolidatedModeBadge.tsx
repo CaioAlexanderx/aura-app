@@ -19,7 +19,7 @@ export function ConsolidatedModeBadge({ onPress, compact }: { onPress?: () => vo
     >
       <Text style={s.icon}>{"\uD83C\uDF10"}</Text>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={s.label}>{compact ? "Consolidado" : "Visao consolidada"}</Text>
+        <Text style={s.label}>{compact ? "Consolidado" : "Visão consolidada"}</Text>
         {!compact && (
           <Text style={s.sub}>{companyCount} empresa{companyCount !== 1 ? "s" : ""}</Text>
         )}

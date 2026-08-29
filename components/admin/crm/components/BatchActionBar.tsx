@@ -47,7 +47,7 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
           <View style={{ flexDirection: "row", gap: 6 }}>
             <BarBtn icon="edit"  label="Status"   onPress={() => setOpen("status")} />
             <BarBtn icon="tag"   label="Plano"    onPress={() => setOpen("plan")} />
-            <BarBtn icon="users" label="Cadencia" onPress={() => setOpen("cadence")} disabled={!cadences.length} />
+            <BarBtn icon="users" label="Cadência" onPress={() => setOpen("cadence")} disabled={!cadences.length} />
             <BarBtn icon="clock" label="Follow-up" onPress={() => setOpen("followup")} />
             <BarBtn icon="alert" label="Rotten" onPress={() => doAction("mark_rotten")} />
             <BarBtn icon="check" label="Despertar"  onPress={() => doAction("unmark_rotten")} />
@@ -110,7 +110,7 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
               <>
                 <Text style={cs.modalTitle}>Aplicar cadencia em {selectedCount} lead(s)</Text>
                 {cadences.length === 0 ? (
-                  <Text style={cs.hintText}>Nenhuma cadencia ativa. Crie uma em "Metas".</Text>
+                  <Text style={cs.hintText}>Nenhuma cadência ativa. Crie uma em "Metas".</Text>
                 ) : (
                   <ScrollView style={{ maxHeight: 320 }}>
                     <View style={{ gap: 8 }}>

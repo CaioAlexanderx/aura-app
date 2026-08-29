@@ -30,11 +30,11 @@ export type RankingItem = { empId: string; name: string; role: string; sales: nu
 // vendedor e leitura de VENDA, nao de folha — e assim fica visivel tambem
 // pro plano Essencial, que nao tem folha. Componente movido para
 // components/screens/vendas/SalesRanking.tsx.
-export const TABS = ["Funcionarios", "Resumo mensal", "Historico", "Metas", "Comissoes"];
+export const TABS = ["Funcionarios", "Resumo mensal", "Histórico", "Metas", "Comissões"];
 
 export const STATUS_MAP: Record<string, { l: string; c: string }> = {
   active: { l: "Ativo", c: Colors.green },
-  vacation: { l: "Ferias", c: Colors.amber },
+  vacation: { l: "Férias", c: Colors.amber },
   dismissed: { l: "Desligado", c: Colors.red },
   license: { l: "Licenca", c: Colors.blue || "#3b82f6" },
 };

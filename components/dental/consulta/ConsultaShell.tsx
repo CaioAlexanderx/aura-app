@@ -355,7 +355,7 @@ export function ConsultaShell({ appointmentId }: Props) {
               <TextInput
                 value={state.evolutionDraft || ""}
                 onChangeText={(t) => dispatch({ type: "set_draft", text: t })}
-                placeholder="Anotacoes de evolucao... (salvo com Salvar evolucao)"
+                placeholder="Anotacoes de evolução... (salvo com Salvar evolução)"
                 placeholderTextColor={DentalColors.ink3}
                 multiline
                 style={{
@@ -410,7 +410,7 @@ export function ConsultaShell({ appointmentId }: Props) {
             <TextInput
               value={state.evolutionDraft || ""}
               onChangeText={(t) => dispatch({ type: "set_draft", text: t })}
-              placeholder="Anotacoes de evolucao..."
+              placeholder="Anotacoes de evolução..."
               placeholderTextColor={DentalColors.ink3}
               multiline
               style={{ fontSize: 11, color: DentalColors.ink, backgroundColor: DentalColors.bg, borderRadius: 6, padding: 6, minHeight: 50, textAlignVertical: "top" as const, borderWidth: 1, borderColor: DentalColors.border }}
@@ -456,13 +456,13 @@ export function ConsultaShell({ appointmentId }: Props) {
           setShowCheckout(true);
         }}
       />
-      <WebcamCapture visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onIntraoralCapture} title="Camera intraoral" hint="Aproxime o foco da regiao a documentar" facing="environment" />
+      <WebcamCapture visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onIntraoralCapture} title="Camera intraoral" hint="Aproxime o foco da região a documentar" facing="environment" />
       <VoiceTranscription
         visible={showVoiceTranscript}
         onClose={() => setShowVoiceTranscript(false)}
         onTranscript={onVoiceTranscript}
         title="Anotar via voz"
-        hint={patient?.name ? `Atendimento de ${patient.name} - fale sua observacao` : "Fale sua observacao"}
+        hint={patient?.name ? `Atendimento de ${patient.name} - fale sua observacao` : "Fale sua observação"}
       />
       {/* #12: checkout pos-consulta */}
       <ConsultaCheckoutModal

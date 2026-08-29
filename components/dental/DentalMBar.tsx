@@ -9,11 +9,11 @@ import { DentalColors } from "@/constants/dental-tokens";
 // para telas estreitas (mobile web e native).
 //
 // 4 tabs fixas (Geral/Agenda/Pacientes/Atendimento) escolhidas
-// pelo criterio "operacao do dia-a-dia". As outras 5 areas vivem
+// pelo criterio "operação do dia-a-dia". As outras 5 areas vivem
 // no overlay "Mais".
 //
 // FONTE UNICA: modulos genericos do Aura nao aparecem aqui. O
-// atalho "Aura Negocio" no overlay leva pro shell generico
+// atalho "Aura Negócio" no overlay leva pro shell generico
 // quando o usuario precisa de algo nao-dental.
 //
 // Limitacao: overlay "Mais" so funciona no web (usa position

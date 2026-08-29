@@ -115,7 +115,7 @@ export function ColorImageButton({
           await onRequestFlush();
           outcome = await attemptUpload(base64, ctype);
         } catch (e: any) {
-          toast.error("Nao foi possivel salvar a cor. Tente novamente em 1 segundo.");
+          toast.error("Não foi possível salvar a cor. Tente novamente em 1 segundo.");
         }
       } else if (outcome === "retry-after-flush") {
         toast.error("Aguarde — cor ainda sendo salva. Tente novamente em ~1s.");

@@ -57,7 +57,7 @@ export function OrcamentoFunnel({ plans, onPlanPress, onStatusChange }: Props) {
     <View style={s.container}>
       {/* KPIs */}
       <View style={s.kpiRow}>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{plans.length}</Text><Text style={s.kpiLbl}>Total orcamentos</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{plans.length}</Text><Text style={s.kpiLbl}>Total orçamentos</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{fmt(totalValue)}</Text><Text style={s.kpiLbl}>Valor total</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(approvedValue)}</Text><Text style={s.kpiLbl}>Valor aprovado</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{conversionRate}%</Text><Text style={s.kpiLbl}>Conversao</Text></View>
@@ -101,7 +101,7 @@ export function OrcamentoFunnel({ plans, onPlanPress, onStatusChange }: Props) {
       ))}
 
       {plans.length === 0 && (
-        <View style={s.empty}><Text style={s.emptyText}>Nenhum orcamento criado ainda.</Text></View>
+        <View style={s.empty}><Text style={s.emptyText}>Nenhum orçamento criado ainda.</Text></View>
       )}
     </View>
   );

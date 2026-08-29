@@ -64,7 +64,7 @@ export function CampaignResultSummary({ result }: { result: AnnuityCampaignResul
         <View style={styles.note}>
           <Text style={styles.noteText}>
             {result.created.length > 0
-              ? "Erro parcial não invalida o lote: as cobranças criadas acima já estão lançadas normalmente. Reveja os itens com erro abaixo e tente novamente só para eles."
+              ? "Erro parcial não inválida o lote: as cobranças criadas acima já estão lançadas normalmente. Reveja os itens com erro abaixo e tente novamente só para eles."
               : "Nenhuma cobrança foi criada — reveja os itens com erro abaixo antes de tentar novamente."}
           </Text>
         </View>

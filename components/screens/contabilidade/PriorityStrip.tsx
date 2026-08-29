@@ -9,7 +9,7 @@ export function PriorityStrip({ items, onSelect }: Props) {
   if (items.length === 0) return null;
   return (
     <View style={s.container}>
-      <Text style={s.title}>Exige sua atencao</Text>
+      <Text style={s.title}>Exige sua atenção</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row", gap: 8 }}>
         {items.map(item => {
           const alertColor = item.alert_level === "overdue" ? Colors.red : item.alert_level === "critical" ? Colors.red : Colors.amber;

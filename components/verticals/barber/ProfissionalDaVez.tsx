@@ -6,12 +6,12 @@ import { Colors } from "@/constants/colors";
 interface Props { professional: { id: string; name: string; color: string; current_appointments: number; queue_count: number } | null; }
 
 export function ProfissionalDaVez({ professional }: Props) {
-  if (!professional) return <View style={s.card}><Text style={s.empty}>Nenhum profissional disponivel no momento.</Text></View>;
+  if (!professional) return <View style={s.card}><Text style={s.empty}>Nenhum profissional disponível no momento.</Text></View>;
   return (
     <View style={s.card}>
       <View style={[s.avatar, { backgroundColor: professional.color }]}><Text style={s.avatarT}>{professional.name.charAt(0)}</Text></View>
       <View style={{ flex: 1 }}>
-        <Text style={s.label}>Proximo disponivel</Text>
+        <Text style={s.label}>Próximo disponível</Text>
         <Text style={s.name}>{professional.name}</Text>
         <Text style={s.info}>{professional.queue_count} na fila | {professional.current_appointments} atendendo</Text>
       </View>

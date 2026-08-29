@@ -59,7 +59,7 @@ export function DentalAiConvList({ conversations, isLoading, onSelect, onNewConv
       {!isLoading && conversations.map(c => (
         <Pressable key={c.id} onPress={() => onSelect(c.id)} style={st.card}>
           <View style={{ flex: 1 }}>
-            <Text style={st.cardTitle} numberOfLines={1}>{c.title || 'Conversa sem titulo'}</Text>
+            <Text style={st.cardTitle} numberOfLines={1}>{c.title || 'Conversa sem título'}</Text>
             {c.patient_name && (
               <View style={st.patientPill}>
                 <Icon name="user" size={10} color="#06B6D4" />

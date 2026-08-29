@@ -19,7 +19,7 @@ export function PacoteCard({ packages, purchases = [], onCreatePackage, onSellPa
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{activePurchases.length}</Text><Text style={s.kpiLbl}>Vendidos ativos</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{fmt(purchases.reduce((s, p) => s + Number(p.amount_paid), 0))}</Text><Text style={s.kpiLbl}>Receita pacotes</Text></View>
       </View>
-      <View style={s.header}><Text style={s.title}>Pacotes de servico</Text>{onCreatePackage && <Pressable onPress={onCreatePackage} style={s.addBtn}><Text style={s.addBtnT}>+ Criar pacote</Text></Pressable>}</View>
+      <View style={s.header}><Text style={s.title}>Pacotes de serviço</Text>{onCreatePackage && <Pressable onPress={onCreatePackage} style={s.addBtn}><Text style={s.addBtnT}>+ Criar pacote</Text></Pressable>}</View>
       {packages.map(pkg => {
         const discount = pkg.original_price ? Math.round((1 - pkg.price / pkg.original_price) * 100) : 0;
         return (

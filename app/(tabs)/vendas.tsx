@@ -158,7 +158,7 @@ export default function VendasScreen() {
 
   // Trocar filtro volta pra pagina 1 — senao a pessoa filtra "Hoje" estando na
   // pagina 4 e cai numa pagina que nao existe mais (vazio parecendo "sem
-  // vendas"). Ajuste feito no proprio render (padrao "derivar estado de props"):
+  // vendas"). Ajuste feito no próprio render (padrão "derivar estado de props"):
   // usar effectivePage aqui evita disparar um fetch com o offset velho.
   const filterSignature = [period, range.from || "", range.to || "", status, search.trim()].join("|");
   const lastSignature = useRef(filterSignature);
@@ -178,7 +178,7 @@ export default function VendasScreen() {
 
   const { sales, stats, total, isLoading, isFetching, error, refetch, breakdown, companyCount } = useSalesList(filters as any);
 
-  // Seta "proximo mes" para no mes corrente: nao ha venda no futuro.
+  // Seta "próximo mes" para no mes corrente: nao ha venda no futuro.
   const nowMonth = spCurrentMonth();
   const isCurrentMonth = monthAnchor.y === nowMonth.y && monthAnchor.m === nowMonth.m;
 

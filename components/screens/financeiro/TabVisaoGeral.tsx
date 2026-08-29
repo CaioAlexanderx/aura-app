@@ -18,7 +18,7 @@ import { ComparativeSection } from "./v2/ComparativeSection";
 import type { ComparativePeriod } from "@/hooks/useFinancialComparative";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 // Multi-CNPJ: precisa saber se esta em modo consolidado pra ajustar comportamento
-// dos cards v2 (legendas, hints "abra a empresa especifica", etc).
+// dos cards v2 (legendas, hints "abra a empresa específica", etc).
 import { useAuthStore } from "@/stores/auth";
 
 var isWeb = Platform.OS === "web";
@@ -120,12 +120,12 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
       />
 
       {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand ===
-          REDESIGN 19/05/2026: removidas as secoes "Receitas - analise detalhada" e
-          "Despesas - analise detalhada" daqui. Elas duplicavam quase 1:1 o conteudo
+          REDESIGN 19/05/2026: removidas as secoes "Receitas - análise detalhada" e
+          "Despesas - análise detalhada" daqui. Elas duplicavam quase 1:1 o conteudo
           das abas Receitas/Despesas. Quem quer detalhe clica na aba dedicada.
 
           F3: "Fluxo de caixa" e o RunwayCard viraram uma secao so — os dois
-          respondiam a mesma pergunta ("meu caixa aguenta ate quando?") com
+          respondiam a mesma pergunta ("meu caixa aguenta até quando?") com
           vocabulario diferente. O subtitulo agora entrega a resposta sem abrir. */}
       <CollapsibleSection
         id="folego-caixa"

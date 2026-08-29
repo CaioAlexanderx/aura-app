@@ -44,7 +44,7 @@ var METHOD_LABELS_PT: Record<string, string> = {
   credit: "Crédito",
   credit_card: "Crédito",
   credito: "Crédito",
-  "credito (a vista)": "Crédito",
+  "crédito (a vista)": "Crédito",
   debit: "Débito",
   debit_card: "Débito",
   debito: "Débito",

@@ -23,22 +23,22 @@ export function EmitNfseForm({ companyId }: { companyId: string }) {
   });
 
   function handleEmit() {
-    if (!description.trim()) { toast.error("Descricao do servico obrigatoria"); return; }
-    if (!value.trim() || parseFloat(value) <= 0) { toast.error("Valor obrigatorio"); return; }
+    if (!description.trim()) { toast.error("Descrição do serviço obrigatória"); return; }
+    if (!value.trim() || parseFloat(value) <= 0) { toast.error("Valor obrigatório"); return; }
     emitMut.mutate({ recipient_name: recipientName.trim() || undefined, recipient_cnpj: recipientDoc.replace(/\D/g, "").length === 14 ? recipientDoc.replace(/\D/g, "") : undefined, recipient_cpf: recipientDoc.replace(/\D/g, "").length === 11 ? recipientDoc.replace(/\D/g, "") : undefined, recipient_email: recipientEmail.trim() || undefined, description: description.trim(), service_code: serviceCode.trim() || undefined, value: parseFloat(value.replace(",", ".")), iss_rate: parseFloat(issRate.replace(",", ".")) || 2 });
   }
 
   return (
     <View style={ns.formCard}>
       <Text style={ns.formTitle}>Emitir NFS-e (Nota de Servico)</Text>
-      <Text style={ns.formHint}>Preencha os dados do servico prestado. O tomador e opcional.</Text>
+      <Text style={ns.formHint}>Preencha os dados do serviço prestado. O tomador e opcional.</Text>
       <View style={ns.formRow}>
-        <View style={{ flex: 1 }}><Text style={ns.fLabel}>Nome do tomador</Text><TextInput style={ns.fInput} value={recipientName} onChangeText={setRecipientName} placeholder="Razao social ou nome" placeholderTextColor={Colors.ink3} /></View>
+        <View style={{ flex: 1 }}><Text style={ns.fLabel}>Nome do tomador</Text><TextInput style={ns.fInput} value={recipientName} onChangeText={setRecipientName} placeholder="Razão social ou nome" placeholderTextColor={Colors.ink3} /></View>
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>CNPJ/CPF do tomador</Text><TextInput style={ns.fInput} value={recipientDoc} onChangeText={setRecipientDoc} placeholder="00.000.000/0001-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
       </View>
-      <View style={ns.formRow}><View style={{ flex: 2 }}><Text style={ns.fLabel}>Descricao do servico *</Text><TextInput style={[ns.fInput, { minHeight: 60 }]} value={description} onChangeText={setDescription} placeholder="Descreva o servico prestado..." placeholderTextColor={Colors.ink3} multiline /></View></View>
+      <View style={ns.formRow}><View style={{ flex: 2 }}><Text style={ns.fLabel}>Descrição do serviço *</Text><TextInput style={[ns.fInput, { minHeight: 60 }]} value={description} onChangeText={setDescription} placeholder="Descreva o serviço prestado..." placeholderTextColor={Colors.ink3} multiline /></View></View>
       <View style={ns.formRow}>
-        <View style={{ flex: 1 }}><Text style={ns.fLabel}>Codigo do servico</Text><TextInput style={ns.fInput} value={serviceCode} onChangeText={setServiceCode} placeholder="Ex: 1.05" placeholderTextColor={Colors.ink3} /></View>
+        <View style={{ flex: 1 }}><Text style={ns.fLabel}>Código do serviço</Text><TextInput style={ns.fInput} value={serviceCode} onChangeText={setServiceCode} placeholder="Ex: 1.05" placeholderTextColor={Colors.ink3} /></View>
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>Valor (R$) *</Text><TextInput style={ns.fInput} value={value} onChangeText={setValue} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></View>
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>ISS (%)</Text><TextInput style={ns.fInput} value={issRate} onChangeText={setIssRate} placeholder="2" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></View>
       </View>

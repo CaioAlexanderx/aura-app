@@ -78,7 +78,7 @@ export function buildQuoteHtml(data: QuoteData): string {
 '<html lang="pt-BR">' +
 '<head>' +
 '<meta charset="UTF-8" />' +
-'<title>Orcamento ' + quoteNumber + '</title>' +
+'<title>Orçamento ' + quoteNumber + '</title>' +
 '<style>' +
 '  * { box-sizing: border-box; margin: 0; padding: 0; }' +
 '  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a2e; padding: 32px; max-width: 800px; margin: 0 auto; background: #fff; }' +
@@ -170,7 +170,7 @@ export function openQuotePdf(data: QuoteData) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     var win = window.open("", "_blank");
     if (!win) {
-      alert("Habilite popups pra gerar o orcamento.");
+      alert("Habilite popups pra gerar o orçamento.");
       return;
     }
     win.document.write(html);

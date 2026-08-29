@@ -203,7 +203,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     (data.devolucoes && data.devolucoes > 0
       ? ", ja descontados " + fmt(data.devolucoes) + " devolvidos ao cliente em trocas"
       : "") +
-    ". Trocas e crediario fazem os dois numeros diferirem — isso nao e falta no caixa." +
+    ". Trocas e crediário fazem os dois números diferirem — isso não e falta no caixa." +
     "</div>" +
     '<div class="s-title">Conferencia de caixa</div>' +
     '<div class="summary">' +
@@ -232,7 +232,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     "</div>" +
     '<div class="foot">' +
     '<span>Gerado por <span class="brand">Aura</span> - getaura.com.br</span>' +
-    "<span>" + fmtDateTime(data.closedAtIso) + (data.sessaoLabel ? " - sessao " + escapeHtml(data.sessaoLabel) : "") + "</span>" +
+    "<span>" + fmtDateTime(data.closedAtIso) + (data.sessaoLabel ? " - sessão " + escapeHtml(data.sessaoLabel) : "") + "</span>" +
     "</div>" +
     "</body>" +
     "</html>"
@@ -245,7 +245,7 @@ export function openCashClosePdf(data: CashCloseData) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const win = window.open("", "_blank");
     if (!win) {
-      alert("Habilite popups para gerar o relatorio de fechamento.");
+      alert("Habilite popups para gerar o relatório de fechamento.");
       return;
     }
     win.document.write(html);

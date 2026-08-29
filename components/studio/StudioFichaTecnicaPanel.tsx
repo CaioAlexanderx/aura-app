@@ -205,7 +205,7 @@ export default function StudioFichaTecnicaPanel({
       const message = e?.message;
       const data = e?.data || {};
       console.error("[StudioFichaTecnicaPanel.load]", { status, code, message, data });
-      toast.error("[" + (status || "?") + "] " + (data.error || message || "Erro ao carregar ficha tecnica"));
+      toast.error("[" + (status || "?") + "] " + (data.error || message || "Erro ao carregar ficha técnica"));
     } finally {
       setLoading(false);
     }
@@ -325,7 +325,7 @@ export default function StudioFichaTecnicaPanel({
         return;
       }
       if (variants.length === 0) {
-        toast.error("Produto sem variantes. Cadastre options em Personalizacao");
+        toast.error("Produto sem variantes. Cadastre options em Personalização");
         return;
       }
       const chosen = variants[0];
@@ -402,7 +402,7 @@ export default function StudioFichaTecnicaPanel({
         notes,
         items: payloadItems,
       });
-      toast.success("Ficha tecnica salva");
+      toast.success("Ficha técnica salva");
       if (res?.summary && onSaved) {
         onSaved(res.summary);
       }
@@ -441,7 +441,7 @@ export default function StudioFichaTecnicaPanel({
         <StudioEmpty
           icon="package"
           title="Cadastre insumos primeiro"
-          desc="Voce precisa ter pelo menos 1 insumo na lista pra montar a ficha tecnica."
+          desc="Você precisa ter pelo menos 1 insumo na lista pra montar a ficha técnica."
           primaryCta={{
             label: "Ir pra Insumos",
             onPress: () => router.push("/studio/insumos"),
@@ -480,7 +480,7 @@ export default function StudioFichaTecnicaPanel({
             <Text style={styles.headerTitle} numberOfLines={1}>
               {safeProductName}
             </Text>
-            <Text style={styles.headerSubtitle}>Ficha tecnica</Text>
+            <Text style={styles.headerSubtitle}>Ficha técnica</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: t.bgSoft }]}>
             <Icon name="layers" size={12} color={t.ink2} />
@@ -492,11 +492,11 @@ export default function StudioFichaTecnicaPanel({
 
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Custo medio</Text>
+            <Text style={styles.kpiLabel}>Custo médio</Text>
             <Text style={[styles.kpiValue, { color: t.ink }]}>{formatBRL(totalCost)}</Text>
           </View>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Preco de venda</Text>
+            <Text style={styles.kpiLabel}>Preço de venda</Text>
             <Text style={[styles.kpiValue, { color: t.ink }]}>{formatBRL(safeProductPrice)}</Text>
           </View>
           {/* Margem: só exibe se a ficha tem itens reais; caso contrário mostra callout */}
@@ -656,7 +656,7 @@ export default function StudioFichaTecnicaPanel({
                   </View>
                   <View style={styles.metricBox}>
                     <Text style={styles.metricLabel}>
-                      {isVariantMode ? "Subtotal medio" : "Subtotal"}
+                      {isVariantMode ? "Subtotal médio" : "Subtotal"}
                     </Text>
                     <Text style={[styles.metricValue, { color: t.ink, fontWeight: "700" }]}>
                       {formatBRL(subtotalAvg)}
@@ -689,7 +689,7 @@ export default function StudioFichaTecnicaPanel({
                     <Pressable
                       onPress={() => {
                         if (!hasVariants) {
-                          toast.error("Produto sem variantes. Cadastre options em Personalizacao");
+                          toast.error("Produto sem variantes. Cadastre options em Personalização");
                           return;
                         }
                         toggleVariantMode(idx, true);
@@ -870,11 +870,11 @@ export default function StudioFichaTecnicaPanel({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Observacoes</Text>
+        <Text style={styles.sectionTitle}>Observações</Text>
         <TextInput
           value={notes}
           onChangeText={setNotes}
-          placeholder="Anotacoes sobre a ficha tecnica (opcional)"
+          placeholder="Anotacoes sobre a ficha técnica (opcional)"
           placeholderTextColor={t.ink3}
           style={styles.notesInput}
           multiline
@@ -893,7 +893,7 @@ export default function StudioFichaTecnicaPanel({
           ) : (
             <>
               <Icon name="save" size={16} color="#fff" />
-              <Text style={styles.saveBtnText}>Salvar ficha tecnica</Text>
+              <Text style={styles.saveBtnText}>Salvar ficha técnica</Text>
             </>
           )}
         </Pressable>

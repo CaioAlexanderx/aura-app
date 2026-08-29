@@ -2,7 +2,7 @@
 // AURA. — Crediário · aba "Prontos pra comprar" (Fase 2)
 //
 // O arquivo/componente continua CreditoLivre* de proposito: renomear
-// quebraria imports em 3 telas sem ganho nenhum. "Credito livre" era o nome
+// quebraria imports em 3 telas sem ganho nenhum. "Crédito livre" era o nome
 // interno da feature; "Prontos pra comprar" e o rotulo que o lojista le.
 //
 // Clientes que já compraram no fiado e hoje estão zerados. Todo o resto

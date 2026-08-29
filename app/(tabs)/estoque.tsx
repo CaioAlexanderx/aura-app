@@ -516,7 +516,7 @@ export default function EstoqueScreen() {
     <>
       <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
         <Icon name="star" size={14} color={Colors.violet3} />
-        {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Servico</Text>}
+        {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Serviço</Text>}
       </Pressable>
       {!isDemo && (
         <Pressable onPress={() => setShowBatchModal(true)} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}>
@@ -538,7 +538,7 @@ export default function EstoqueScreen() {
         >
           <Icon name="check" size={14} color={bulkMode ? "#fff" : Colors.violet3} />
           {!isMobileNarrow && <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
-            {bulkMode ? "Sair da selecao" : "Selecionar"}
+            {bulkMode ? "Sair da seleção" : "Selecionar"}
           </Text>}
         </Pressable>
       )}
@@ -562,7 +562,7 @@ export default function EstoqueScreen() {
         </Text>
         <Pressable onPress={handleSelectAll} style={s.bulkAction} disabled={filtered.length === 0}>
           <Text style={s.bulkActionText}>
-            {allSelected ? "Limpar selecao" : "Selecionar todos"}
+            {allSelected ? "Limpar seleção" : "Selecionar todos"}
           </Text>
         </Pressable>
         <Pressable
@@ -646,10 +646,10 @@ export default function EstoqueScreen() {
 
         {!isLoading && products.length === 0 && !isDemo && (
           <View>
-            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou servico, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole varios produtos de uma vez e cadastre em segundos</Text></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole vários produtos de uma vez e cadastre em segundos</Text></View>
               <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
                 <Text style={s.batchBtnSmallText}>Abrir</Text>
               </Pressable>
@@ -808,8 +808,8 @@ export default function EstoqueScreen() {
       </ScrollView>
 
       {/* === Modais e overlays — fora do ScrollView para renderizar fixos na viewport === */}
-      <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta acao nao pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
-      <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta acao nao pode ser desfeita. Todos os produtos selecionados serao removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
+      <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
+      <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta ação não pode ser desfeita. Todos os produtos selecionados serão removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
       <MergeDuplicatesModal visible={showMergeModal} onClose={() => { setShowMergeModal(false); clearMergeSuggestion(); }} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); clearMergeSuggestion(); }} />
       <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
       {company?.id && (

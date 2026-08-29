@@ -78,7 +78,7 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
           </ScrollView>
 
           {/* Observacao */}
-          <Text style={cs.fieldLabel}>Observacao *</Text>
+          <Text style={cs.fieldLabel}>Observação *</Text>
           <TextInput
             value={body}
             onChangeText={setBody}
@@ -119,7 +119,7 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
           {lead.cadence_name && (
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>Avancar cadencia</Text>
+                <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>Avancar cadência</Text>
                 <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 2 }}>
                   Cadencia atual: {lead.cadence_name} (dia {lead.cadence_day})
                 </Text>

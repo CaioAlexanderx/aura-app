@@ -27,7 +27,7 @@ export function useConfigProfile() {
     { label: "CNPJ",     ok: !!cnpj },
     { label: "E-mail",   ok: !!email && !emailError },
     { label: "Telefone", ok: !!phone && !phoneError },
-    { label: "Endereco", ok: !!address },
+    { label: "Endereço", ok: !!address },
     { label: "Logo",     ok: !!companyLogo },
   ];
 

@@ -90,7 +90,7 @@ export function ProductRow({
         <View style={s.right}>
           {isService ? (
             <View style={s.serviceTag}>
-              <Text style={s.serviceTagText}>Servico</Text>
+              <Text style={s.serviceTagText}>Serviço</Text>
             </View>
           ) : (
             <View style={s.stockRow}>
@@ -108,14 +108,14 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque minimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque mínimo", product.minStock + " " + product.unit]].map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
                 )}
               </View>
             </View>
           ) : (
             <View style={s.detailGrid}>
-              {[["Preco", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]].map(([l, v]) =>
+              {[["Preço", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]].map(([l, v]) =>
                 <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
               )}
             </View>
@@ -139,10 +139,10 @@ export function ProductRow({
               ) : null}
             </View>
           )}
-          {!isService && product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Codigo de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
+          {!isService && product.barcode ? <View style={s.barcodeRow}><Text style={s.barcodeLabel}>Código de barras:</Text><Text style={s.barcodeValue}>{product.barcode}</Text></View> : null}
           {product.notes ? <Text style={s.notesText}>{product.notes}</Text> : null}
           <View style={s.actionsRow}>
-            {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>{isService ? "Editar servico" : "Editar produto"}</Text></Pressable>}
+            {onEdit && <Pressable onPress={() => onEdit(product)} style={s.editBtn}><Text style={s.editBtnText}>{isService ? "Editar serviço" : "Editar produto"}</Text></Pressable>}
             {showLinkBtn && (
               <Pressable onPress={() => onLink!(product)} style={s.linkBtn}>
                 <Text style={s.linkBtnText}>{"🔗 Vincular CNPJ"}</Text>

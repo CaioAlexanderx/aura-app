@@ -40,7 +40,7 @@ var CONTEXT_LABELS: Record<string, string> = {
   financeiro: "Financeiro",
   estoque: "Estoque",
   crm: "Clientes",
-  contabil: "Contabil",
+  contabil: "Contábil",
   marketing: "Marketing",
   odonto: "Odontologia",
 };

@@ -29,7 +29,7 @@ export default function InvitePage() {
 
   useEffect(function() {
     if (!navReady || handled) return;
-    if (!token) { setStatus("error"); setErrorMsg("Link de convite invalido."); return; }
+    if (!token) { setStatus("error"); setErrorMsg("Link de convite inválido."); return; }
 
     setHandled(true);
 

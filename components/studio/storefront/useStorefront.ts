@@ -391,13 +391,13 @@ export function useStorefront(slug: string) {
         "?cep=" + cep + "&subtotal=" + cartSubtotal;
       const res = await fetch(url);
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Nao foi possivel calcular o frete");
+      if (!res.ok) throw new Error(data?.error || "Não foi possível calcular o frete");
       setShippingQuote(data);
       // fee null com error e "fora da area": nao e falha, e resposta.
       setShippingError(data?.fee == null && data?.error ? data.error : null);
     } catch (e: any) {
       setShippingQuote(null);
-      setShippingError(e?.message || "Nao foi possivel calcular o frete");
+      setShippingError(e?.message || "Não foi possível calcular o frete");
     } finally {
       setQuotingShipping(false);
     }
@@ -624,7 +624,7 @@ export function useStorefront(slug: string) {
 
   async function submitOrder() {
     if (!customerName.trim() || !customerPhone.trim()) {
-      setError("Nome e telefone obrigatorios");
+      setError("Nome e telefone obrigatórios");
       return;
     }
     if (cart.length === 0) {
@@ -632,7 +632,7 @@ export function useStorefront(slug: string) {
       return;
     }
     if (deliveryType === "delivery" && !addressStreet.trim()) {
-      setError("Informe o endereco de entrega");
+      setError("Informe o endereço de entrega");
       return;
     }
     // Cotacao ja feita e o CEP esta fora da area: barrar aqui poupa o
@@ -653,7 +653,7 @@ export function useStorefront(slug: string) {
         return;
       }
       if (!normalizePlate(courierPlate)) {
-        setError("Placa invalida. Use o formato ABC1234 ou ABC1D23");
+        setError("Placa inválida. Use o formato ABC1234 ou ABC1D23");
         return;
       }
     }

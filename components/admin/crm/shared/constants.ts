@@ -18,8 +18,8 @@ export const CHANNELS: LeadChannel[] = ["whatsapp", "ligacao", "email", "visita"
 
 export const PLANS: { key: ExpectedPlan; label: string; price: number }[] = [
   { key: "essencial", label: "Essencial", price: 89 },
-  { key: "negocio",   label: "Negocio",   price: 169.90 },
-  { key: "expansao",  label: "Expansao",  price: 269.90 },
+  { key: "negocio",   label: "Negócio",   price: 169.90 },
+  { key: "expansao",  label: "Expansão",  price: 269.90 },
 ];
 
 export const WA_TEMPLATE_DEFAULT = `Ola, {nome}! Tudo bem? 😄

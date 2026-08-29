@@ -221,9 +221,9 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
 
   function handleSubmit() {
     setError(null);
-    if (!fullName.trim()) return setError("Nome e obrigatorio");
-    if (cpf.trim() && !isValidCpf(cpf)) return setError("CPF invalido");
-    if (birthDateBR.trim() && !brDateToISO(birthDateBR)) return setError("Data de nascimento invalida (use DD/MM/AAAA)");
+    if (!fullName.trim()) return setError("Nome e obrigatório");
+    if (cpf.trim() && !isValidCpf(cpf)) return setError("CPF inválido");
+    if (birthDateBR.trim() && !brDateToISO(birthDateBR)) return setError("Data de nascimento inválida (use DD/MM/AAAA)");
     saveMut.mutate();
   }
   function handleClose() {

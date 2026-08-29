@@ -84,7 +84,7 @@ export function FilaEspera({
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{entry.customer_name}</Text>
               <Text style={s.meta}>
-                {entry.service_name || "Servico"} \u2014 {wait}min na fila
+                {entry.service_name || "Serviço"} \u2014 {wait}min na fila
                 {entry.professional_name ? ` \u2014 ${entry.professional_name}` : ""}
               </Text>
             </View>
@@ -120,7 +120,7 @@ export function FilaEspera({
         <View style={s.empty}>
           <Text style={s.emptyIcon}>\u2702\uFE0F</Text>
           <Text style={s.emptyTitle}>Fila vazia</Text>
-          <Text style={s.emptyText}>Ninguem na fila no momento.</Text>
+          <Text style={s.emptyText}>Ninguém na fila no momento.</Text>
         </View>
       )}
 

@@ -88,7 +88,7 @@ export default function AgentesScreen() {
   // Map API data to display format
   const activityData = (apiActivity?.activity || []).map((a: any) => ({
     id: a.id, agent: a.agent || "Geral",
-    action: a.action || "Acao", detail: a.detail || "",
+    action: a.action || "Ação", detail: a.detail || "",
     time: a.created_at ? new Date(a.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "---",
     status: a.status || "done",
   }));
@@ -109,7 +109,7 @@ export default function AgentesScreen() {
   const CONTEXTS = ["geral", "financeiro", "estoque", "crm", "contabil", "marketing", "odonto"];
   const CTX_LABEL: Record<string, string> = {
     geral: "Geral", financeiro: "Financeiro", estoque: "Estoque",
-    crm: "CRM", contabil: "Contabil", marketing: "Marketing", odonto: "Odontologia",
+    crm: "CRM", contabil: "Contábil", marketing: "Marketing", odonto: "Odontologia",
   };
 
   return (
@@ -121,7 +121,7 @@ export default function AgentesScreen() {
       <View style={z.kpiRow}>
         <View style={z.kpi}>
           <Text style={z.kpiValue}>{totalActions}</Text>
-          <Text style={z.kpiLabel}>Acoes este mes</Text>
+          <Text style={z.kpiLabel}>Ações este mês</Text>
         </View>
         <View style={z.kpi}>
           <Text style={[z.kpiValue, { color: Colors.green }]}>{totalSaved}h</Text>
@@ -172,7 +172,7 @@ export default function AgentesScreen() {
           icon="star"
           iconColor={Colors.violet3}
           title="Nenhuma atividade ainda"
-          subtitle="Os agentes vao registrar acoes aqui conforme analisam seus dados. Comece conversando com um agente abaixo."
+          subtitle="Os agentes vao registrar ações aqui conforme analisam seus dados. Comece conversando com um agente abaixo."
         />
       )}
 
@@ -215,7 +215,7 @@ export default function AgentesScreen() {
 
       <View style={z.infoCard}>
         <Icon name="star" size={14} color={Colors.violet3} />
-        <Text style={z.infoText}>Os agentes analisam seus dados em tempo real e executam acoes automaticamente. Insights proativos aparecem no topo de cada aba.</Text>
+        <Text style={z.infoText}>Os agentes analisam seus dados em tempo real e executam ações automaticamente. Insights proativos aparecem no topo de cada aba.</Text>
       </View>
     </ScrollView>
   );

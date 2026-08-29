@@ -191,7 +191,7 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     active: { label: "Ativo", bg: Colors.greenD, color: Colors.green },
     pending_dns: { label: "Aguardando DNS", bg: Colors.amberD, color: Colors.amber },
-    none: { label: "Sem dominio", bg: Colors.bg4, color: Colors.ink3 },
+    none: { label: "Sem domínio", bg: Colors.bg4, color: Colors.ink3 },
   };
   const st = map[status] || map.none;
   return <View style={[cs.badge, { backgroundColor: st.bg }]}><Text style={[cs.badgeText, { color: st.color }]}>{st.label}</Text></View>;

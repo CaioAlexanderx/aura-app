@@ -2,7 +2,7 @@
 // StudioPageHeader — header canonico de telas do Aura Studio.
 //
 // Fase 0 UX overhaul (25/05/2026).
-// Padroniza o "eyebrow magenta + titulo navy" que aparece em quase
+// Padroniza o "eyebrow magenta + título navy" que aparece em quase
 // todas as telas. Antes cada arquivo duplicava ~30 linhas de styles.
 //
 // Uso minimal (eyebrow derivado automaticamente da rota):

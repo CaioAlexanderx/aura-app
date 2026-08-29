@@ -19,7 +19,7 @@ export function GoalsCard({ data, isLoading, onEdit }: Props) {
   if (isLoading || !data) {
     return (
       <View style={cs.section}>
-        <Text style={cs.sectionTitle}>Meta do mes</Text>
+        <Text style={cs.sectionTitle}>Meta do mês</Text>
         <Text style={cs.hintText}>{isLoading ? "Carregando..." : "Sem meta definida."}</Text>
       </View>
     );
@@ -36,7 +36,7 @@ export function GoalsCard({ data, isLoading, onEdit }: Props) {
     return (
       <View style={cs.section}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <Text style={cs.sectionTitle}>Meta do mes</Text>
+          <Text style={cs.sectionTitle}>Meta do mês</Text>
           {onEdit && (
             <Pressable onPress={onEdit} style={[cs.actionBtn, { paddingVertical: 6, paddingHorizontal: 10 }]}>
               <Icon name="plus" size={12} color={Colors.violet3} />
@@ -48,7 +48,7 @@ export function GoalsCard({ data, isLoading, onEdit }: Props) {
           Sem meta para este mes. Defina contatos/conversoes/MRR pra acompanhar ritmo.
         </Text>
         <View style={s.row}>
-          <Stat label="Contatos no mes"  value={String(actual_contacts)}  color={Colors.violet3} />
+          <Stat label="Contatos no mês"  value={String(actual_contacts)}  color={Colors.violet3} />
           <Stat label="Convertidos"      value={String(actual_converted)} color={Colors.green} />
           <Stat label="MRR fechado"      value={fmtMoney(actual_mrr)}     color={Colors.green} />
         </View>
@@ -59,7 +59,7 @@ export function GoalsCard({ data, isLoading, onEdit }: Props) {
   return (
     <View style={cs.section}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-        <Text style={cs.sectionTitle}>Meta do mes</Text>
+        <Text style={cs.sectionTitle}>Meta do mês</Text>
         <Text style={{ fontSize: 10, color: Colors.ink3 }}>{month_progress}% do mes decorrido</Text>
       </View>
 

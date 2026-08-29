@@ -72,7 +72,7 @@ export function CorteHistorico({ history, customerName, onAddEntry, onPhotoPress
         <View style={s.empty}>
           <Text style={s.emptyIcon}>\u2702\uFE0F</Text>
           <Text style={s.emptyTitle}>Nenhum corte registrado</Text>
-          <Text style={s.emptyText}>O historico de cortes aparecera aqui apos o primeiro atendimento.</Text>
+          <Text style={s.emptyText}>O histórico de cortes aparecera aqui após o primeiro atendimento.</Text>
         </View>
       )}
     </View>

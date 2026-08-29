@@ -37,7 +37,7 @@ export const HOME_SECTION: Section = {
   label: 'Painel',
   icon: '\uD83D\uDCCA',
   tabs: [
-    { id: 'dashboard', label: 'Visao geral', component: OdontoDashboard },
+    { id: 'dashboard', label: 'Visão geral', component: OdontoDashboard },
   ],
 };
 
@@ -47,7 +47,7 @@ export const SECTIONS: Section[] = [
     label: 'Agenda',
     icon: '\uD83D\uDCC5',
     tabs: [
-      { id: 'agenda-dia',    label: 'Hoje e proximos',    component: AgendaTab },
+      { id: 'agenda-dia',    label: 'Hoje e próximos',    component: AgendaTab },
       { id: 'agenda-online', label: 'Agendamento online', component: AgendaOnlineTab, badge: 'novo' },
     ],
   },
@@ -78,13 +78,13 @@ export const SECTIONS: Section[] = [
     label: 'Financeiro',
     icon: '\uD83D\uDCB0',
     tabs: [
-      { id: 'orcamentos',  label: 'Orcamentos',         component: OrçamentosTab },
-      { id: 'cobrancas',   label: 'Cobrancas',          component: BillingDashboard },
+      { id: 'orcamentos',  label: 'Orçamentos',         component: OrçamentosTab },
+      { id: 'cobrancas',   label: 'Cobranças',          component: BillingDashboard },
       { id: 'nfse',        label: 'NFS-e',              component: NfseTab, badge: 'novo' },
       { id: 'tiss',        label: 'TISS',               component: TissTab, badge: 'novo' },
       { id: 'repasses',    label: 'Repasses',           component: RepasseDentista },
-      { id: 'convenios',   label: 'Convenios (legado)', component: ConvêniosTab },
-      { id: 'laboratorio', label: 'Laboratorio',        component: LabTab },
+      { id: 'convenios',   label: 'Convênios (legado)', component: ConvêniosTab },
+      { id: 'laboratorio', label: 'Laboratório',        component: LabTab },
     ],
   },
   {
@@ -92,13 +92,13 @@ export const SECTIONS: Section[] = [
     label: 'Engajamento',
     icon: '\uD83D\uDCAC',
     tabs: [
-      { id: 'automacoes', label: 'Automacoes',      component: AutomationConfig },
+      { id: 'automacoes', label: 'Automações',      component: AutomationConfig },
       { id: 'retorno',    label: 'Retorno e recall', component: RetornoTab, badge: 'novo' },
     ],
   },
   {
     id: 'config',
-    label: 'Configuracoes',
+    label: 'Configurações',
     icon: '\u2699\uFE0F',
     tabs: [
       { id: 'clinica-config', label: 'Clinica e cadeiras', component: DentalSettings },

@@ -69,7 +69,7 @@ export function FilterPanel({ filters, setFilter, meta, activeCount, onClear }: 
       </ScrollView>
 
       {/* Nota minima Google */}
-      <Text style={cs.fieldLabel}>Nota Google minima</Text>
+      <Text style={cs.fieldLabel}>Nota Google mínima</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}>
         <View style={{ flexDirection: "row", gap: 6 }}>
           {["", "3", "3.5", "4", "4.5"].map((v) => (
@@ -85,7 +85,7 @@ export function FilterPanel({ filters, setFilter, meta, activeCount, onClear }: 
       </ScrollView>
 
       {/* Score minimo (NOVO Fase 1) */}
-      <Text style={cs.fieldLabel}>Score minimo</Text>
+      <Text style={cs.fieldLabel}>Score mínimo</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}>
         <View style={{ flexDirection: "row", gap: 6 }}>
           {[

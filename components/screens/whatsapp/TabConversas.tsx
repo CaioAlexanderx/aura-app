@@ -14,7 +14,7 @@ export function TabConversas({ conversations, messages, onSend }: Props) {
   const [replyText, setReplyText] = useState("");
   const selected = conversations.find(c => c.id === selectedId);
   const filters = ["all", "open", "auto", "resolved"] as const;
-  const filterLabels = { all: "Todas", open: "Abertas", auto: "Automaticas", resolved: "Resolvidas" };
+  const filterLabels = { all: "Todas", open: "Abertas", auto: "Automáticas", resolved: "Resolvidas" };
   const filtered = filter === "all" ? conversations : conversations.filter(c => c.status === filter);
 
   return (
@@ -47,7 +47,7 @@ export function TabConversas({ conversations, messages, onSend }: Props) {
           <View style={s.messagesArea}>
             {messages.map(msg => (
               <View key={msg.id} style={[s.msgBubble, msg.from === "client" ? s.msgClient : s.msgUser, msg.auto && s.msgAuto]}>
-                {msg.auto && <Text style={s.msgAutoLabel}>Resposta automatica</Text>}
+                {msg.auto && <Text style={s.msgAutoLabel}>Resposta automática</Text>}
                 <Text style={s.msgText}>{msg.text}</Text>
                 <Text style={s.msgTime}>{msg.time}</Text>
               </View>

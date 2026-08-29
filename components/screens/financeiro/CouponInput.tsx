@@ -16,7 +16,7 @@ export function CouponInput({ value, onChange, labelStyle, inputStyle }: Props) 
         style={inputStyle}
         value={value}
         onChangeText={onChange}
-        placeholder="Codigo do cupom"
+        placeholder="Código do cupom"
         placeholderTextColor={Colors.ink3}
         autoCapitalize="characters"
       />

@@ -367,7 +367,7 @@ export async function createMugViewer(
         const stream = anyCanvas.captureStream(30);
         const MR = (window as any).MediaRecorder;
         let mime = "video/webm;codecs=vp9";
-        if (MR.isTypeSupported && !MR.isTypeSupported(mime)) mime = "video/webm";
+        if (MR.isTypeSupported && !MR.isTypeSupported(mime)) mime = "vídeo/webm";
         try {
           rec = new MR(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
         } catch (_e) {
@@ -378,7 +378,7 @@ export async function createMugViewer(
       }
       const chunks: BlobPart[] = [];
       rec.ondataavailable = (e: any) => { if (e.data && e.data.size) chunks.push(e.data); };
-      rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || "video/webm" }));
+      rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || "vídeo/webm" }));
       rec.onerror = () => resolve(null);
       rec.start();
 

@@ -56,7 +56,7 @@ export type ParTipografico = {
  * REESCRITO em 23/08/2026. Antes TRES dos quatro eram serifados —
  * Instrument Serif, Fraunces e Playfair — e o quarto era DM Sans, que ja
  * era o CORPO do "classic". Num cartao de 19px ninguem distinguia: o
- * feedback foi literal, "nao consigo diferenciá-las".
+ * feedback foi literal, "não consigo diferenciá-las".
  *
  * Agora cada par e um TIPO DE LOJA diferente, e a diferenca aparece no
  * thumbnail:

@@ -11,7 +11,7 @@ function countdownLabel(days: number | null): string {
   if (days === null) return "";
   if (days < 0) return Math.abs(days) + "d atrasado";
   if (days === 0) return "Hoje!";
-  if (days === 1) return "Amanha";
+  if (days === 1) return "Amanhã";
   return days + " dias";
 }
 
@@ -37,7 +37,7 @@ export function UpcomingAlerts({ obligations, onGuide }: Props) {
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>Proximos vencimentos</Text>
+      <Text style={s.title}>Próximos vencimentos</Text>
       <View style={s.list}>
         {upcoming.map(function(o) {
           var color = urgencyColor(o.alert_level);
@@ -51,7 +51,7 @@ export function UpcomingAlerts({ obligations, onGuide }: Props) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.itemName} numberOfLines={1}>{o.name}</Text>
-                <Text style={s.itemAction} numberOfLines={1}>{o.filter_label === "aura_resolve" ? "Aura resolve" : "Voce faz"}</Text>
+                <Text style={s.itemAction} numberOfLines={1}>{o.filter_label === "aura_resolve" ? "Aura resolve" : "Você faz"}</Text>
               </View>
               {o.estimated_amount != null && o.estimated_amount > 0 && (
                 <Text style={s.itemAmount}>R$ {o.estimated_amount.toFixed(2).replace(".", ",")}</Text>

@@ -162,7 +162,7 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
                         backgroundColor: t.company_id ? DentalColors.cyanDim : DentalColors.surface,
                         paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
                       }}>
-                        {t.company_id ? "Meu" : "Padrao"}
+                        {t.company_id ? "Meu" : "Padrão"}
                       </Text>
                     </View>
                     <Text style={{ fontSize: 10, color: DentalColors.ink3, marginTop: 4 }} numberOfLines={2}>
@@ -211,7 +211,7 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
               </View>
               <TextInput
                 value={newName} onChangeText={setNewName}
-                placeholder='Nome (ex: "Pos-extracao padrao")'
+                placeholder='Nome (ex: "Pos-extração padrão")'
                 placeholderTextColor={DentalColors.ink3}
                 style={inputStyle}
               />

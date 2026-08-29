@@ -213,7 +213,7 @@ export function useTransactionsApi(period?: PeriodKey, customStart?: string, cus
   var createMutation = useMutation({
     mutationFn: function(body: any) {
       if (consolidatedView) {
-        return Promise.reject(new Error("Selecione uma empresa especifica para criar lancamentos"));
+        return Promise.reject(new Error("Selecione uma empresa específica para criar lancamentos"));
       }
       return companiesApi.createTransaction(companyId!, body);
     },
@@ -229,7 +229,7 @@ export function useTransactionsApi(period?: PeriodKey, customStart?: string, cus
   var deleteMutation = useMutation({
     mutationFn: function(txId: string) {
       if (consolidatedView) {
-        return Promise.reject(new Error("Selecione uma empresa especifica para excluir lancamentos"));
+        return Promise.reject(new Error("Selecione uma empresa específica para excluir lancamentos"));
       }
       return companiesApi.deleteTransaction(companyId!, txId);
     },
@@ -258,17 +258,17 @@ export function useTransactionsApi(period?: PeriodKey, customStart?: string, cus
 
   function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string; payment_method?: string; employee_id?: string }) {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para criar lancamentos");
+      toast.error("Selecione uma empresa específica para criar lancamentos");
       return;
     }
-    if (!companyId) { toast.error("Empresa nao identificada"); return; }
+    if (!companyId) { toast.error("Empresa não identificada"); return; }
     if (isDemo) return;
     createMutation.mutate(body);
   }
 
   function deleteTransaction(id: string) {
     if (consolidatedView) {
-      toast.error("Selecione uma empresa especifica para excluir lancamentos");
+      toast.error("Selecione uma empresa específica para excluir lancamentos");
       return;
     }
     if (companyId && !isDemo) deleteMutation.mutate(id);

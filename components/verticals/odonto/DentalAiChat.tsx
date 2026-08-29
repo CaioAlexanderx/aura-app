@@ -80,7 +80,7 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
     onSuccess: (data) => { qc.invalidateQueries({ queryKey: ['dental-ai-conv-list', cid] }); setActiveCvid(data.conversation.id); },
     onError: (err: any) => {
       if (err?.status === 403) { setGated({ error: err.body?.error || 'Acesso negado', hint: err.body?.upgrade_hint }); }
-      else { Alert.alert('Erro', err?.body?.error || 'Nao foi possivel criar a conversa.'); }
+      else { Alert.alert('Erro', err?.body?.error || 'Não foi possível criar a conversa.'); }
     },
   });
 
@@ -88,7 +88,7 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
     mutationFn: (text: string) =>
       request<{ message: Message }>(`/companies/${cid}/dental/ai/conversations/${activeCvid}/messages`, { method: 'POST', body: { message: text }, retry: 0 }),
     onSuccess: () => { setPendingMessage(null); qc.invalidateQueries({ queryKey: ['dental-ai-conv', activeCvid] }); qc.invalidateQueries({ queryKey: ['dental-ai-conv-list', cid] }); },
-    onError: (err: any) => { setPendingMessage(null); Alert.alert('Erro', err?.body?.error || 'A IA nao respondeu. Tente novamente.'); },
+    onError: (err: any) => { setPendingMessage(null); Alert.alert('Erro', err?.body?.error || 'A IA não respondeu. Tente novamente.'); },
   });
 
   const archiveMut = useMutation({
@@ -132,8 +132,8 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
             <Text style={st.gatedMsg}>{gated.error}</Text>
             {gated.hint && <Text style={st.gatedHint}>{gated.hint}</Text>}
             <View style={st.gatedFeatures}>
-              <Text style={st.gatedFeatureTitle}>Com a IA Odonto voce pode:</Text>
-              {['Conversar com IA que conhece cada paciente','Receber alertas de alergias automaticamente','Gerar scripts personalizados de WhatsApp','Analisar funil, recall e cobranca em uma conversa'].map(f => (
+              <Text style={st.gatedFeatureTitle}>Com a IA Odonto você pode:</Text>
+              {['Conversar com IA que conhece cada paciente','Receber alertas de alergias automaticamente','Gerar scripts personalizados de WhatsApp','Analisar funil, recall e cobrança em uma conversa'].map(f => (
                 <Text key={f} style={st.gatedFeatureItem}>• {f}</Text>
               ))}
             </View>

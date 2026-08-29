@@ -8,7 +8,7 @@
 //
 // O backend ainda re-checa tudo no DB; este hook apenas decide
 // se o frontend mostra o painel IA real, o placeholder gated, ou
-// o card "ative nas configuracoes".
+// o card "ative nas configurações".
 //
 // Doc: PLANO_IA_PLANO_EXPANSAO.md
 // ============================================================

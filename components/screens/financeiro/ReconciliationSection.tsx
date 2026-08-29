@@ -62,7 +62,7 @@ export function ReconciliationSection() {
       <View style={s.card}>
         <View style={s.headerRow}>
           <Icon name="file_text" size={16} color={Colors.violet3} />
-          <Text style={s.title}>Conciliacao bancaria</Text>
+          <Text style={s.title}>Conciliação bancaria</Text>
         </View>
         <Text style={s.hint}>Envie o extrato do seu banco (OFX ou CSV) e a Aura confere sozinha contra seus lançamentos.</Text>
         {isWeb && (
@@ -87,7 +87,7 @@ export function ReconciliationSection() {
       <View style={s.headerRow}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
           <Icon name="file_text" size={16} color={Colors.violet3} />
-          <Text style={s.title}>Conciliacao bancaria</Text>
+          <Text style={s.title}>Conciliação bancaria</Text>
         </View>
         {isWeb && (
           <Pressable onPress={handleImportOFX} disabled={uploading} style={s.smallImportBtn}>

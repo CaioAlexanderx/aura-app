@@ -21,7 +21,7 @@ import BarberScreen from '@/components/verticals/BarberScreen';
 //
 // Studio (hotfix 2026-05-25): mesmo padrao. Porta dedicada em
 // /studio/(estudio). Caso Sheid Mania — sem o redirect aqui, deep-link
-// em /(tabs)/vertical caía no fallback "Modulo Vertical" generico.
+// em /(tabs)/vertical caía no fallback "Módulo Vertical" generico.
 // ============================================================
 
 const VERTICAL_NAMES: Record<string, string> = {
@@ -29,7 +29,7 @@ const VERTICAL_NAMES: Record<string, string> = {
   barber: 'Barbearia / Salao',
   food: 'Food Service',
   studio: 'Aura Studio',
-  estetica: 'Estetica',
+  estetica: 'Estética',
   pet: 'Pet Shop',
   academia: 'Academia',
 };
@@ -60,8 +60,8 @@ export default function VerticalTab() {
   return (
     <ScrollView style={s.scroll} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
       <PageHeader
-        title={activeVertical ? VERTICAL_NAMES[activeVertical] || 'Modulo Vertical' : 'Modulo Vertical'}
-        subtitle={activeVertical ? 'Funcionalidades especializadas do seu segmento' : 'Ative um modulo vertical pela equipe Aura'}
+        title={activeVertical ? VERTICAL_NAMES[activeVertical] || 'Módulo Vertical' : 'Módulo Vertical'}
+        subtitle={activeVertical ? 'Funcionalidades especializadas do seu segmento' : 'Ative um módulo vertical pela equipe Aura'}
       />
 
       {activeVertical === 'barber' && <BarberScreen />}
@@ -69,16 +69,16 @@ export default function VerticalTab() {
       {!activeVertical && (
         <View style={s.noVertical}>
           <Text style={s.noIcon}>🔒</Text>
-          <Text style={s.noTitle}>Nenhum modulo vertical ativo</Text>
-          <Text style={s.noText}>Modulos verticais sao ativados pela equipe Aura no setup do seu negocio. Disponiveis: Odontologia, Barbearia/Salao, Food Service, Estetica, Pet Shop e Academia.</Text>
-          <Text style={s.noContact}>Entre em contato com seu Analista de Negocios para ativar.</Text>
+          <Text style={s.noTitle}>Nenhum módulo vertical ativo</Text>
+          <Text style={s.noText}>Módulos verticais são ativados pela equipe Aura no setup do seu negócio. Disponíveis: Odontologia, Barbearia/Salao, Food Service, Estética, Pet Shop e Academia.</Text>
+          <Text style={s.noContact}>Entre em contato com seu Analista de Negócios para ativar.</Text>
         </View>
       )}
 
       {activeVertical && !READY_VERTICALS.includes(activeVertical) && activeVertical !== 'odonto' && activeVertical !== 'food' && activeVertical !== 'studio' && (
         <View style={s.noVertical}>
           <Text style={s.noIcon}>🚧</Text>
-          <Text style={s.noTitle}>Modulo em desenvolvimento</Text>
+          <Text style={s.noTitle}>Módulo em desenvolvimento</Text>
           <Text style={s.noText}>O modulo {VERTICAL_NAMES[activeVertical] || activeVertical} esta sendo preparado. Em breve estara disponivel para uso.</Text>
         </View>
       )}

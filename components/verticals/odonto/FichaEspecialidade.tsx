@@ -4,12 +4,12 @@ import { Colors } from "@/constants/colors";
 // D-18: FichaEspecialidade — Specialty-specific clinical forms
 
 const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[] }> = {
-  ortodontia: { label: "Ortodontia", icon: "\u{1F9B7}", fields: ["Classificacao de Angle","Overjet","Overbite","Tipo aparelho","Fase tratamento","Alinhador numero","Proxima troca"] },
-  endodontia: { label: "Endodontia", icon: "\u{1FA7A}", fields: ["Dente","Numero canais","Comprimento trabalho","Limas utilizadas","Cone principal","Cimento","Obturacao"] },
-  periodontia: { label: "Periodontia", icon: "\u{1F9EC}", fields: ["Classificacao doenca","Extensao","Estagio","Grau","Sangramento","Plano tratamento perio"] },
-  cirurgia: { label: "Cirurgia", icon: "\u{1FA78}", fields: ["Tipo cirurgia","Anestesia","Tecnica","Complicacoes","Pontos","Retorno"] },
-  implante: { label: "Implante", icon: "\u{1F9F4}", fields: ["Regiao","Marca implante","Diametro","Comprimento","Torque","Tipo conexao","Pilar"] },
-  protese: { label: "Protese", icon: "\u{1F9B4}", fields: ["Tipo protese","Material","Cor","Moldagem","Prova","Cimentacao","Laboratorio"] },
+  ortodontia: { label: "Ortodontia", icon: "\u{1F9B7}", fields: ["Classificação de Angle","Overjet","Overbite","Tipo aparelho","Fase tratamento","Alinhador número","Próxima troca"] },
+  endodontia: { label: "Endodontia", icon: "\u{1FA7A}", fields: ["Dente","Número canais","Comprimento trabalho","Limas utilizadas","Cone principal","Cimento","Obturacao"] },
+  periodontia: { label: "Periodontia", icon: "\u{1F9EC}", fields: ["Classificação doenca","Extensão","Estágio","Grau","Sangramento","Plano tratamento perio"] },
+  cirurgia: { label: "Cirurgia", icon: "\u{1FA78}", fields: ["Tipo cirurgia","Anestesia","Técnica","Complicacoes","Pontos","Retorno"] },
+  implante: { label: "Implante", icon: "\u{1F9F4}", fields: ["Região","Marca implante","Diametro","Comprimento","Torque","Tipo conexão","Pilar"] },
+  protese: { label: "Protese", icon: "\u{1F9B4}", fields: ["Tipo protese","Material","Cor","Moldagem","Prova","Cimentacao","Laboratório"] },
 };
 
 export interface SpecialtyForm { id: string; patient_id: string; specialty: string; form_data: Record<string, any>; professional_id?: string; notes?: string; created_at: string; }

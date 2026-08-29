@@ -139,7 +139,7 @@ export function ComparativeSection({ period, customStart, customEnd }: Props) {
             />
           </View>
           <View style={s.customField}>
-            <Text style={s.customLabel}>Ate</Text>
+            <Text style={s.customLabel}>Até</Text>
             <TextInput
               style={s.customInput}
               value={compareEndBR}

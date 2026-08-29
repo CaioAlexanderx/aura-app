@@ -56,10 +56,10 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
   }, [chipList, category]);
 
   function handleSave() {
-    if (!name.trim()) { toast.error("Preencha o nome do servico"); return; }
-    if (!price.trim()) { toast.error("Preencha o preco do servico"); return; }
+    if (!name.trim()) { toast.error("Preencha o nome do serviço"); return; }
+    if (!price.trim()) { toast.error("Preencha o preço do serviço"); return; }
     var desc = notes.trim();
-    if (duration.trim()) desc = (desc ? desc + " | " : "") + "Duracao: " + duration.trim();
+    if (duration.trim()) desc = (desc ? desc + " | " : "") + "Duração: " + duration.trim();
 
     var finalCategory = showNewCat && newCategory.trim() ? newCategory.trim() : (category || "Servicos");
 
@@ -88,20 +88,20 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
       <View style={s.header}>
         <View style={s.headerLeft}>
           <View style={s.iconWrap}><Icon name="star" size={16} color={Colors.violet3} /></View>
-          <Text style={s.title}>Novo servico</Text>
+          <Text style={s.title}>Novo serviço</Text>
         </View>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
       </View>
-      <Text style={s.hint}>Servicos nao possuem estoque e sao vendidos diretamente no Caixa.</Text>
+      <Text style={s.hint}>Serviços não possuem estoque e são vendidos diretamente no Caixa.</Text>
 
       <View style={{ marginBottom: 16 }}>
-        <Text style={s.label}>Nome do servico <Text style={{ color: Colors.red }}>*</Text></Text>
+        <Text style={s.label}>Nome do serviço <Text style={{ color: Colors.red }}>*</Text></Text>
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Corte feminino, Manicure, Consultoria..." placeholderTextColor={Colors.ink3} autoFocus />
       </View>
 
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
-          <Text style={s.label}>Preco <Text style={{ color: Colors.red }}>*</Text></Text>
+          <Text style={s.label}>Preço <Text style={{ color: Colors.red }}>*</Text></Text>
           <TextInput style={s.input} value={price} onChangeText={setPrice} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
         </View>
         <View style={{ flex: 1 }}>
@@ -157,14 +157,14 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
 
       <View style={{ marginBottom: 16 }}>
         <Text style={s.label}>Descricao (opcional)</Text>
-        <TextInput style={[s.input, { minHeight: 60, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes do servico..." placeholderTextColor={Colors.ink3} multiline numberOfLines={2} />
+        <TextInput style={[s.input, { minHeight: 60, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes do serviço..." placeholderTextColor={Colors.ink3} multiline numberOfLines={2} />
       </View>
 
       <View style={s.footer}>
         <Pressable onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
         <Pressable onPress={handleSave} style={s.saveBtn}>
           <Icon name="check" size={14} color="#fff" />
-          <Text style={s.saveText}>Salvar servico</Text>
+          <Text style={s.saveText}>Salvar serviço</Text>
         </Pressable>
       </View>
     </View>

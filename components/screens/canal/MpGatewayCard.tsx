@@ -1,6 +1,6 @@
 // ============================================================
 // MP Fase 0 — Card de configuracao do Mercado Pago
-// Exibe estado "nao configurado" ou "configurado" com tokens mascarados.
+// Exibe estado "não configurado" ou "configurado" com tokens mascarados.
 // Permite salvar novas credenciais e remover o gateway.
 //
 // Patch (21/05/2026): validação de prefix do token cruzada com toggle

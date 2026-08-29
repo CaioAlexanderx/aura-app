@@ -163,7 +163,7 @@ export function AcoesCard({ transactions, insights, consolidated, onGoToLancamen
   // FIX 24/08/2026 (QA no app rodando): enquanto os insights do server nao
   // chegam, o calculo client-side so enxerga o periodo selecionado. Numa conta
   // com contas vencidas ha 80 dias (fora do mes) isso fazia o card afirmar
-  // "Nada precisa da sua atencao agora" — bem ao lado de um banner dizendo
+  // "Nada precisa da sua atenção agora" — bem ao lado de um banner dizendo
   // "3 contas a receber vencidas" — e se corrigir sozinho segundos depois.
   // Melhor nao afirmar nada do que afirmar o oposto do verdadeiro.
   if (actions.length === 0 && insights.insights_pending) {

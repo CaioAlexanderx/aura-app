@@ -258,7 +258,7 @@ export default function DashboardScreen() {
                 via /me/sales/analytics (useSalesAnalytics ramifica internamente).
                 TopSellersCard e BirthdaysCard ainda per-company (escondidos em
                 consolidated por ora — proxima onda de polish, se houver demanda).
-                06/05/2026: "Ver analise completa" deep-linka pra Curva ABC dentro
+                06/05/2026: "Ver análise completa" deep-linka pra Curva ABC dentro
                 da aba Receitas (foco abc -> auto-scroll na tela de Financeiro). */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro?tab=receitas&focus=abc"); }} />}
             {/* 02/08/2026: ranking completo migrou de /folha pra aba propria em

@@ -29,100 +29,100 @@ const PLANS = [
       "Cupom fiscal e cancelamento de venda",
       "Troca de produtos e descontos por cupom",
       // Estoque
-      "Estoque com codigo de barras e scanner",
+      "Estoque com código de barras e scanner",
       "Variantes (cor, tamanho, sabor, voltagem)",
-      "Importacao em massa via CSV (ate 1.000)",
-      "Etiquetas para impressao com codigo de barras",
+      "Importação em massa via CSV (até 1.000)",
+      "Etiquetas para impressão com código de barras",
       // Fiscal
-      "NF-e e NFC-e (ate 50 emissoes/mes)",
-      "Importacao de NF-e via XML",
+      "NF-e e NFC-e (até 50 emissões/mês)",
+      "Importação de NF-e via XML",
       // Clientes (PLAN-01)
-      "Clientes (ate 1.000 cadastros)",
-      "Historico de compras por cliente",
+      "Clientes (até 1.000 cadastros)",
+      "Histórico de compras por cliente",
       // Equipe (PLAN-02)
-      "Equipe (ate 3 vendedores)",
+      "Equipe (até 3 vendedores)",
       "Atribuicao de vendas por vendedor no caixa",
       // Financeiro
       "Financeiro completo (contas a pagar e receber)",
-      "Conciliacao bancaria (OFX)",
-      "DRE basica e categorizacao automatica",
+      "Conciliação bancaria (OFX)",
+      "DRE básica e categorização automática",
       "Lancamentos recorrentes",
       "Recebimento por Pix com QR Code",
       // Contabil
-      "Apoio contabil guiado (MEI e Simples Nacional)",
-      "Calculo de DAS-MEI e guias fiscais",
+      "Apoio contábil guiado (MEI e Simples Nacional)",
+      "Cálculo de DAS-MEI e guias fiscais",
       // Suporte
-      "1 acesso de usuario",
-      "Suporte via chat com Analista de Negocios",
+      "1 acesso de usuário",
+      "Suporte via chat com Analista de Negócios",
     ],
   },
   {
-    key: "negocio", name: "Negocio", subtitle: "Para crescer", popular: true,
+    key: "negocio", name: "Negócio", subtitle: "Para crescer", popular: true,
     monthly: 169, features: [
       "Tudo do Essencial, e mais:",
       // Clientes
-      "Clientes (ate 5.000 cadastros)",
+      "Clientes (até 5.000 cadastros)",
       "CRM avancado: ranking de clientes por LTV",
-      "Retencao: clientes em risco e perdidos",
-      "Aniversariantes com cupom automatico",
-      "Avaliacoes de clientes pos-venda",
-      "Crediario (fiado) por cliente",
+      "Retenção: clientes em risco e perdidos",
+      "Aniversariantes com cupom automático",
+      "Avaliações de clientes pos-venda",
+      "Crediário (fiado) por cliente",
       // Equipe
-      "Equipe (ate 50 funcionarios)",
+      "Equipe (até 50 funcionarios)",
       "Folha de pagamento (INSS, IRRF, FGTS)",
       "Holerite individual por e-mail",
       "Ranking de vendas por vendedor",
-      "Comissoes automaticas por venda",
+      "Comissões automáticas por venda",
       // Fiscal
       "NF-e e NFC-e ilimitadas",
-      "NFS-e (servicos) ilimitada",
+      "NFS-e (serviços) ilimitada",
       // Operacao
-      "Agenda online para servicos",
-      "Estoque com baixa automatica via PDV",
+      "Agenda online para serviços",
+      "Estoque com baixa automática via PDV",
       // Canais
       "Canal Digital: loja online inclusa",
-      "Dominio personalizado .com.br opcional",
+      "Domínio personalizado .com.br opcional",
       "WhatsApp Business com templates",
       // Verticais
-      "Modulo Vertical incluso: Odonto, Beauty, Food ou Pet",
+      "Módulo Vertical incluso: Odonto, Beauty, Food ou Pet",
       // Acessos e gestao
-      "Ate 3 usuarios com login e permissoes",
-      "Gestao de equipe com perfis de acesso",
+      "Até 3 usuários com login e permissões",
+      "Gestão de equipe com perfis de acesso",
       // Financeiro avancado
       "Fluxo de caixa projetado",
-      "Categorizacao com IA",
+      "Categorização com IA",
       // Suporte
-      "Suporte prioritario com Analista de Negocios",
+      "Suporte prioritario com Analista de Negócios",
     ],
   },
   {
-    key: "expansao", name: "Expansao", subtitle: "Para escalar",
+    key: "expansao", name: "Expansão", subtitle: "Para escalar",
     monthly: 269, features: [
-      "Tudo do Negocio, e mais:",
+      "Tudo do Negócio, e mais:",
       // Limites
       "Clientes e funcionarios ilimitados",
-      "Usuarios com login ilimitados",
+      "Usuários com login ilimitados",
       // Multi-CNPJ
-      "Multi-CNPJ: gerencie varios negocios",
-      "Visao consolidada de todas as suas empresas",
-      "Lista unica de clientes entre os CNPJs",
+      "Multi-CNPJ: gerencie vários negócios",
+      "Visão consolidada de todas as suas empresas",
+      "Lista única de clientes entre os CNPJs",
       // IA avancada
       "5 agentes de IA: vendas, estoque, fiscal, marketing, financeiro",
       "Insights prescritivos por IA",
       "Alertas inteligentes (anomalias de despesa)",
       // Financeiro premium
-      "Projecao de fluxo de caixa com cenarios",
+      "Projeção de fluxo de caixa com cenarios",
       "DRE Simples para o contador",
       "Metas de vendas por vendedor com acompanhamento",
-      "Reativacao automatica de clientes inativos",
+      "Reativação automática de clientes inativos",
       "Margem por produto e ranking de lucratividade",
       // Verticais
-      "Todos os modulos verticais inclusos (Odonto, Beauty, Food, Pet, e mais)",
+      "Todos os módulos verticais inclusos (Odonto, Beauty, Food, Pet, e mais)",
       // Integracoes
       "Gateway de pagamento personalizado (use sua maquininha)",
       "Multi-gateway: Asaas, Stone, Cielo, etc.",
-      "API completa para integracoes",
-      "HUB Social: Instagram e WhatsApp em automacao",
+      "API completa para integrações",
+      "HUB Social: Instagram e WhatsApp em automação",
       // Atendimento
       "Customer Success dedicado",
       "Onboarding personalizado",
@@ -131,9 +131,9 @@ const PLANS = [
 ];
 
 const ADDONS = [
-  { name: "Usuario adicional", price: "R$ 19/mes", desc: "Para cada pessoa a mais com login no app, por mes" },
-  { name: "Modulo vertical extra", price: "R$ 39/mes", desc: "A partir do Negocio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) alem do incluso no seu plano" },
-  { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuracao, treinamento, automacoes e integracoes personalizadas para o seu negocio", cta: true },
+  { name: "Usuário adicional", price: "R$ 19/mês", desc: "Para cada pessoa a mais com login no app, por mês" },
+  { name: "Módulo vertical extra", price: "R$ 39/mês", desc: "A partir do Negócio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) além do incluso no seu plano" },
+  { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuração, treinamento, automações e integrações personalizadas para o seu negócio", cta: true },
 ];
 
 const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -167,7 +167,7 @@ export default function PlanosScreen() {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: IS ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" }}>
       <Text style={s.title}>Planos da Aura.</Text>
-      <Text style={s.subtitle}>Escolha o plano ideal para o seu negocio</Text>
+      <Text style={s.subtitle}>Escolha o plano ideal para o seu negócio</Text>
 
       {trialActive && <View style={s.trialBanner}><Text style={s.trialText}>Periodo de teste - {trialDays} dias restantes</Text></View>}
 

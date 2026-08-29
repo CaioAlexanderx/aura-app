@@ -48,7 +48,7 @@ export function CategorizeButton({ descriptions, onApply }: Props) {
               </View>
             </View>
           ))}
-          <Text style={s.note}>Sugestoes geradas por IA — revise antes de confirmar</Text>
+          <Text style={s.note}>Sugestões geradas por IA — revise antes de confirmar</Text>
         </View>
       )}
     </View>

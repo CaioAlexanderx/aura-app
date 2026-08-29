@@ -41,7 +41,7 @@ export function FidelidadePontos({ config, balance = 0, totalEarned = 0, totalRe
             {onEarn && <Pressable onPress={onEarn} style={[s.actBtn, { borderColor: "#10B981" }]}><Text style={[s.actBtnT, { color: "#10B981" }]}>+ Creditar pontos</Text></Pressable>}
             {onRedeem && balance > 0 && <Pressable onPress={onRedeem} style={[s.actBtn, { borderColor: "#F59E0B" }]}><Text style={[s.actBtnT, { color: "#F59E0B" }]}>Resgatar</Text></Pressable>}
           </View>
-          {history.length > 0 && <Text style={s.subTitle}>Historico</Text>}
+          {history.length > 0 && <Text style={s.subTitle}>Histórico</Text>}
           {history.map(e => (
             <View key={e.id} style={s.histRow}>
               <View style={[s.histDot, { backgroundColor: TYPE_COLORS[e.type] || "#888" }]} />

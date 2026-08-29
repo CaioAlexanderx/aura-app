@@ -115,7 +115,7 @@ export function SaveViewModal({
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Ex: Reativacao Q3"
+              placeholder="Ex: Reativação Q3"
               placeholderTextColor={Colors.ink3}
               style={s.input}
               editable={!isSystem}
@@ -174,7 +174,7 @@ export function SaveViewModal({
             <View style={[s.row, { marginTop: 14 }]}>
               <View style={{ flex: 1 }}>
                 <Text style={s.toggleLabel}>Fixar no topo</Text>
-                <Text style={s.toggleHint}>Aparece como chip rapido na lista</Text>
+                <Text style={s.toggleHint}>Aparece como chip rápido na lista</Text>
               </View>
               <Switch
                 value={isPinned}

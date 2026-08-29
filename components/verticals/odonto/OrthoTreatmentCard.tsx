@@ -25,7 +25,7 @@ export const APPLIANCE_ICON: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  planning:'Planejamento', active:'Ativo', retention:'Retencao',
+  planning:'Planejamento', active:'Ativo', retention:'Retenção',
   completed:'Concluido', abandoned:'Abandonado',
 };
 const STATUS_COLOR: Record<string, string> = {
@@ -118,11 +118,11 @@ export function OrthoTreatmentCard({ t, companyId }: Props) {
 
           {!showAddSession ? (
             <TouchableOpacity onPress={() => setShowAddSession(true)} style={st.addSessionBtn}>
-              <Text style={st.addSessionBtnTxt}>+ Adicionar sessao</Text>
+              <Text style={st.addSessionBtnTxt}>+ Adicionar sessão</Text>
             </TouchableOpacity>
           ) : (
             <View style={{ marginTop: 8, gap: 4 }}>
-              <Text style={st.blockLabel}>Tipo de sessao</Text>
+              <Text style={st.blockLabel}>Tipo de sessão</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {SESSION_TYPE_OPTIONS.map(opt => (
                   <TouchableOpacity

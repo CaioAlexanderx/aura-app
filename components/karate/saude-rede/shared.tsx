@@ -123,7 +123,7 @@ export async function downloadCsv(federationId: string, indicator: string): Prom
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
   } catch (err) {
-    console.error("[saude-rede] downloadCsv error:", err);
+    console.error("[saúde-rede] downloadCsv error:", err);
   }
 }
 

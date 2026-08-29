@@ -11,7 +11,7 @@ type GeoData = { by_city: any[]; by_regime: { regime: string; count: number }[];
 type VerticalData = { verticals: { vertical: string; count: number }[]; by_plan: { plan: string; count: number }[] };
 
 var MODULE_LABELS: Record<string, string> = { financeiro: "Financeiro", pdv: "PDV", estoque: "Estoque", crm: "CRM", folha: "Folha", contabilidade: "Contabilidade", nfe: "NF-e", canal: "Canal Digital", ia: "Agentes IA", agendamento: "Agendamento" };
-var VERTICAL_LABELS: Record<string, string> = { sem_vertical: "Sem vertical", barbearia: "Barbearia", dental: "Dental", food: "Food", salao: "Salao", estetica: "Estetica", pet: "Pet" };
+var VERTICAL_LABELS: Record<string, string> = { sem_vertical: "Sem vertical", barbearia: "Barbearia", dental: "Dental", food: "Food", salao: "Salao", estetica: "Estética", pet: "Pet" };
 var FUNNEL_COLORS = [Colors.ink3, Colors.amber, Colors.violet3, Colors.green];
 var PLAN_COLORS: Record<string, string> = { essencial: Colors.blue || "#3b82f6", negocio: Colors.violet3, expansao: Colors.green, personalizado: Colors.amber };
 
@@ -28,7 +28,7 @@ export function CrescimentoAdmin() {
       {/* Funil de aquisicao */}
       {funnel && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Funil de aquisicao</Text>
+          <Text style={s.sectionTitle}>Funil de aquisição</Text>
           <View style={s.funnelList}>
             {funnel.funnel.map(function(stage, i) {
               var color = FUNNEL_COLORS[i] || Colors.ink3;
@@ -57,7 +57,7 @@ export function CrescimentoAdmin() {
       {/* Feature Adoption */}
       {adoption && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Adocao de features</Text>
+          <Text style={s.sectionTitle}>Adoção de features</Text>
           {adoption.by_module.map(function(mod) {
             var label = MODULE_LABELS[mod.module] || mod.module;
             var color = mod.adoption_pct >= 50 ? Colors.green : mod.adoption_pct >= 25 ? Colors.amber : Colors.red;
@@ -78,7 +78,7 @@ export function CrescimentoAdmin() {
       {/* Distribuicao por plano */}
       {verticals && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Distribuicao por plano</Text>
+          <Text style={s.sectionTitle}>Distribuição por plano</Text>
           <View style={s.planRow}>
             {verticals.by_plan.map(function(p) {
               var color = PLAN_COLORS[p.plan] || Colors.ink3;
@@ -115,7 +115,7 @@ export function CrescimentoAdmin() {
       {/* Geografia */}
       {geo && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Distribuicao por regime</Text>
+          <Text style={s.sectionTitle}>Distribuição por regime</Text>
           <View style={s.geoRow}>
             {geo.by_regime.map(function(r) {
               return (

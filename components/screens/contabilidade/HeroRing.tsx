@@ -44,7 +44,7 @@ export function HeroRing({ obls }: { obls?: Obl[] }) {
         <View style={hr.badges}>
           <View style={hr.regBadge}><Text style={hr.regText}>Simples Nacional</Text></View>
         </View>
-        <Text style={hr.heroTitle}>{done === total ? "Tudo em dia!" : done >= total / 2 ? "Voce esta quase la." : "Vamos resolver suas pendencias."}</Text>
+        <Text style={hr.heroTitle}>{done === total ? "Tudo em dia!" : done >= total / 2 ? "Você esta quase la." : "Vamos resolver suas pendências."}</Text>
         <Text style={hr.heroSub}>{pending} {pending === 1 ? "item pendente" : "itens pendentes"}. {nextDue ? `Proximo vencimento em ${nextDue.dl} dias.` : ""}</Text>
         <View style={hr.miniStats}>
           <View style={hr.miniStat}><Text style={[hr.miniVal, { color: Colors.green }]}>{done}</Text><Text style={hr.miniLbl}>Concluidos</Text></View>

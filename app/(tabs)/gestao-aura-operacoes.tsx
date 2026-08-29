@@ -22,7 +22,7 @@ export default function GestaoAuraOperacoesScreen() {
             <Icon name="settings" size={18} color="#f472b6" />
           </View>
           <View>
-            <Text style={s.title}>Operacoes</Text>
+            <Text style={s.title}>Operações</Text>
             <Text style={s.subtitle}>Onboarding, SLA e consultorias</Text>
           </View>
         </View>

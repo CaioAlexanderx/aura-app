@@ -56,9 +56,9 @@ function mapCategoryError(err: any): string {
     const p = err?.data?.product_count;
     return "Essa categoria tem " + (p ?? "") + " produto(s). Mova-os antes de remover.";
   }
-  if (code === "CATEGORY_DUPLICATE") return "Ja existe uma categoria com esse nome nesse nivel.";
-  if (code === "CATEGORY_MAX_DEPTH") return "Profundidade maxima atingida (3 niveis).";
-  if (code === "CATEGORY_CYCLE") return "Nao e possivel mover uma categoria para dentro dela mesma.";
+  if (code === "CATEGORY_DUPLICATE") return "Ja existe uma categoria com esse nome nesse nível.";
+  if (code === "CATEGORY_MAX_DEPTH") return "Profundidade máxima atingida (3 níveis).";
+  if (code === "CATEGORY_CYCLE") return "Não e possível mover uma categoria para dentro dela mesma.";
   if (code === "CATEGORY_CROSS_TENANT") return "Erro ao vincular categoria e produto.";
   return err?.message || "Erro ao processar categoria.";
 }
