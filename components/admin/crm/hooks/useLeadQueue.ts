@@ -69,7 +69,7 @@ export function priorityReasonDescription(r: PriorityReason): string {
     case "followup_overdue": return "Esse lead tinha um follow-up agendado que ja venceu";
     case "funnel_stalled":   return "Em demo ou interessado, mas sem atividade ha 3+ dias";
     case "hot_cold":         return "Score alto (50+) sem contato ha 7+ dias";
-    case "new_lead":         return "Importado nas ultimas 24h, ainda sem primeiro contato";
+    case "new_lead":         return "Importado nas últimas 24h, ainda sem primeiro contato";
     default:                 return "";
   }
 }

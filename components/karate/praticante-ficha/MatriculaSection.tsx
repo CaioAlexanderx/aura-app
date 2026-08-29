@@ -5,12 +5,12 @@
 // ambos os modos. A tentativa anterior de torna-lo opcional (Aura-app #589 +
 // Aura-backend #393) foi revertida — o PR de backend foi fechado sem merge,
 // entao o `main` do backend segue exigindo o numero: 422 FPKT_NUMBER_REQUIRED
-// no POST sem numero, 422 "A matricula nao pode ficar vazia." no PATCH com
+// no POST sem numero, 422 "A matricula não pode ficar vazia." no PATCH com
 // matricula vazia. O frontend precisa estar coerente com isso.
 //
 // O numero e emitido pela FEDERACAO, fora do sistema — aqui o app apenas
 // registra o que ja foi emitido. NUNCA geramos numero automaticamente (por
-// isso o seletor "Gerar automatico" x "Informar manualmente" foi removido —
+// isso o seletor "Gerar automático" x "Informar manualmente" foi removido —
 // ele prometia um comportamento que o backend nunca teve).
 //
 // Quem NAO tem o numero em maos usa o fluxo de SOLICITACAO de praticante

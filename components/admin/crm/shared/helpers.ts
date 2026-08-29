@@ -63,7 +63,7 @@ export function copyToClipboard(text: string, successMsg = "Copiado!"): void {
 
 // ── Excel import ─────────────────────────────────────────────────────────────
 
-/** Extrai "Sao Paulo" de "Av X, 123 - Centro, Sao Paulo - SP, 01000-000". */
+/** Extrai "São Paulo" de "Av X, 123 - Centro, São Paulo - SP, 01000-000". */
 export function extractCity(address: string): string {
   if (!address) return "";
   const match = address.match(/,\s*([^,\-]+?)\s*-\s*[A-Z]{2},/);

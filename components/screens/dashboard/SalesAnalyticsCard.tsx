@@ -103,7 +103,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
         )}
 
         <Pressable onPress={onPress} style={s.footer}>
-          <Text style={s.footerText}>Ver analise completa  -  </Text>
+          <Text style={s.footerText}>Ver análise completa  -  </Text>
         </Pressable>
       </View>
     </View>

@@ -37,8 +37,8 @@ export default function CanalDigitalScreen() {
         <View style={s.lockBox}>
           <Icon name="globe" size={36} color={Colors.ink3} />
           <Text style={s.lockTitle}>Canal Digital</Text>
-          <Text style={s.lockDesc}>Crie sua loja online em minutos. Vitrine de produtos, dominio personalizado e mais.</Text>
-          <View style={s.lockBadge}><Text style={s.lockBadgeText}>Disponivel no plano Negocio</Text></View>
+          <Text style={s.lockDesc}>Crie sua loja online em minutos. Vitrine de produtos, domínio personalizado e mais.</Text>
+          <View style={s.lockBadge}><Text style={s.lockBadgeText}>Disponível no plano Negócio</Text></View>
           <Pressable style={s.upgradeBtn}><Text style={s.upgradeBtnText}>Ver planos</Text></Pressable>
         </View>
       </ScrollView>

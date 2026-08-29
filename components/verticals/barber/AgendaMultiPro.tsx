@@ -151,7 +151,7 @@ export function AgendaMultiPro({
                   return (
                     <Pressable key={hour} onPress={() => onSlotPress?.(pro.id, hour)} style={[s.slot, s.slotEmpty, { borderLeftColor: pro.color }]}>
                       <Text style={s.slotTime}>{hour}</Text>
-                      <Text style={s.slotEmptyText}>Horario livre</Text>
+                      <Text style={s.slotEmptyText}>Horário livre</Text>
                     </Pressable>
                   );
                 })}

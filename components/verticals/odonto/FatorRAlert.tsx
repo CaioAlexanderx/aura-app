@@ -71,7 +71,7 @@ export function FatorRAlert({ faturamentoMensal, folhaMensal, regime = "simples"
         )}
       </View>
 
-      <Text style={s.disclaimer}>Estimativa informativa. Consulte seu contador para confirmacao oficial.</Text>
+      <Text style={s.disclaimer}>Estimativa informativa. Consulte seu contador para confirmação oficial.</Text>
     </View>
   );
 }

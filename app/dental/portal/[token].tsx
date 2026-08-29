@@ -47,7 +47,7 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string }> 
   em_atendimento: { label: "Em atendimento", color: "#F59E0B", bg: "rgba(245,158,11,0.14)" },
   concluido:      { label: "Concluida",      color: "#10B981", bg: "rgba(16,185,129,0.14)" },
   cancelado:      { label: "Cancelada",      color: "#9CA3AF", bg: "rgba(156,163,175,0.14)" },
-  faltou:         { label: "Nao compareceu", color: "#EF4444", bg: "rgba(239,68,68,0.14)" },
+  faltou:         { label: "Não compareceu", color: "#EF4444", bg: "rgba(239,68,68,0.14)" },
 };
 
 function formatDateTime(iso: string) {
@@ -122,11 +122,11 @@ export default function PatientPortalPage() {
       <View style={s.container}>
         <View style={s.errorBox}>
           <Text style={s.errorIcon}>{isExpired ? "\u23F0" : "\u26A0\uFE0F"}</Text>
-          <Text style={s.errorTitle}>{isExpired ? "Link expirado" : "Link invalido"}</Text>
+          <Text style={s.errorTitle}>{isExpired ? "Link expirado" : "Link inválido"}</Text>
           <Text style={s.errorText}>
             {isExpired
               ? "Este link do portal expirou. Entre em contato com a clinica para receber um novo."
-              : "Este link nao e valido. Verifique se voce copiou o endereco corretamente ou solicite um novo a clinica."}
+              : "Este link não e válido. Verifique se você copiou o endereço corretamente ou solicite um novo a clinica."}
           </Text>
         </View>
       </View>
@@ -137,7 +137,7 @@ export default function PatientPortalPage() {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.clinicName}>{clinic.name || "Clinica Odontologica"}</Text>
+        <Text style={s.clinicName}>{clinic.name || "Clinica Odontológica"}</Text>
         <Text style={s.patientName}>Ola, {patient.name || "paciente"}</Text>
         <Text style={s.patientContact}>
           Este e o seu portal. Acompanhe suas consultas, tratamentos e documentos.
@@ -147,7 +147,7 @@ export default function PatientPortalPage() {
       {/* Consultas */}
       <Text style={s.sectionTitle}>Suas consultas</Text>
       {appointments.length === 0 && (
-        <View style={s.emptyCard}><Text style={s.emptyText}>Voce nao tem consultas agendadas.</Text></View>
+        <View style={s.emptyCard}><Text style={s.emptyText}>Você não tem consultas agendadas.</Text></View>
       )}
       {appointments.map((a: any) => {
         const meta = STATUS_META[a.status] || STATUS_META.agendado;
@@ -174,7 +174,7 @@ export default function PatientPortalPage() {
               >
                 {isConfirming
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={s.confirmBtnText}>Confirmar minha presenca</Text>}
+                  : <Text style={s.confirmBtnText}>Confirmar minha presença</Text>}
               </Pressable>
             )}
           </View>

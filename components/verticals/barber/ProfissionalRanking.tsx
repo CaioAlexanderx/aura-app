@@ -82,7 +82,7 @@ export function ProfissionalRanking({ professionals, period, onProfessionalPress
 
       {professionals.length === 0 && (
         <View style={s.empty}>
-          <Text style={s.emptyText}>Nenhum profissional com atendimentos no periodo.</Text>
+          <Text style={s.emptyText}>Nenhum profissional com atendimentos no período.</Text>
         </View>
       )}
     </View>

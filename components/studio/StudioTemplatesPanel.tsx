@@ -351,11 +351,11 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
                 <View style={{ paddingTop: 12 }}>
                   <StudioEmpty
                     icon="image"
-                    title="Nenhum template disponivel"
+                    title="Nenhum template disponível"
                     desc={
                       pickerCategory
                         ? "Nenhum template nessa categoria. Tente outra ou cadastre novos."
-                        : "Todos os templates ja estao vinculados ou a galeria esta vazia."
+                        : "Todos os templates ja estão vinculados ou a galeria esta vazia."
                     }
                     compact
                   />

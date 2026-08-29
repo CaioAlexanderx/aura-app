@@ -27,7 +27,7 @@ export default function TratamentosScreen() {
   return (
     <View>
       <View style={{ marginBottom: 14 }}>
-        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>OPERACAO</Text>
+        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>OPERAÇÃO</Text>
         <Text style={{ fontSize: 26, color: DentalColors.ink, fontWeight: "700", letterSpacing: -0.5 }}>Tratamentos</Text>
         <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>Orçamentos e funil de captação. Workflows clínicos detalhados (Implantes, Ortodontia, Anamnese) vivem dentro de cada paciente.</Text>
       </View>

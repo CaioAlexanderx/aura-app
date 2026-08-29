@@ -5,7 +5,7 @@
 // Migrou do Estoque (era decorativa, sempre 'C') pro Financeiro/Receitas.
 // Consome useProductsRanking — backend ranqueia por revenue e atribui A/B/C.
 //
-// Entry point pro usuario: Painel → "Vendas" → "Ver analise completa".
+// Entry point pro usuario: Painel → "Vendas" → "Ver análise completa".
 // Esse botao navega pra /financeiro?tab=receitas&focus=abc; o financeiro.tsx
 // auto-rola ate aqui via getElementById("abc-curve-card") quando focus=abc.
 //

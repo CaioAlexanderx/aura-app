@@ -78,7 +78,7 @@ export function TreatmentPlanCard({
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <View style={s.headerRow}>
-            <Text style={s.planNumber}>{plan.plan_number || "Novo orcamento"}</Text>
+            <Text style={s.planNumber}>{plan.plan_number || "Novo orçamento"}</Text>
             <View style={[s.badge, { backgroundColor: statusInfo.bg }]}>
               <Text style={[s.badgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
             </View>
@@ -228,7 +228,7 @@ export function TreatmentPlanFunnel({ data }: { data: FunnelData[] }) {
 
   return (
     <View style={s.funnelContainer}>
-      <Text style={s.funnelTitle}>Funil de orcamentos</Text>
+      <Text style={s.funnelTitle}>Funil de orçamentos</Text>
       <View style={s.funnelBarRow}>
         {sorted.map(d => {
           const info = STATUS_MAP[d.status] || STATUS_MAP.rascunho;

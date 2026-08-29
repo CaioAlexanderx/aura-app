@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { webOnly } from "./types";
 
-const LABELS: Record<string, string> = { expansao: "Expansao", negocio: "Negocio", essencial: "Essencial", personalizado: "Personalizado" };
+const LABELS: Record<string, string> = { expansao: "Expansão", negocio: "Negócio", essencial: "Essencial", personalizado: "Personalizado" };
 
 export function PlanBadge({ plan }: { plan: string }) {
   const webBg = webOnly({

@@ -13,8 +13,8 @@ var API = "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 var CAT_LABELS: Record<string, { label: string; icon: string; color: string }> = {
   suporte: { label: "Suporte", icon: "help", color: Colors.violet3 },
-  dominio: { label: "Dominio", icon: "link", color: "#06B6D4" },
-  modulo: { label: "Modulo", icon: "grid", color: "#F59E0B" },
+  dominio: { label: "Domínio", icon: "link", color: "#06B6D4" },
+  modulo: { label: "Módulo", icon: "grid", color: "#F59E0B" },
   consultoria: { label: "Consultoria", icon: "calendar", color: "#10B981" },
   bug: { label: "Bug", icon: "alert", color: "#EF4444" },
   outro: { label: "Outro", icon: "dots", color: Colors.ink3 },
@@ -106,7 +106,7 @@ export function SolicitacoesAdmin() {
         <Pressable style={s.kpi} onPress={function() { setFilterStatus(filterStatus === 'aberto' ? '' : 'aberto'); }}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{summary.aberto}</Text><Text style={s.kpiLbl}>Abertos</Text></Pressable>
         <Pressable style={s.kpi} onPress={function() { setFilterStatus(filterStatus === 'em_andamento' ? '' : 'em_andamento'); }}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{summary.em_andamento}</Text><Text style={s.kpiLbl}>Em andamento</Text></Pressable>
         <Pressable style={s.kpi} onPress={function() { setFilterStatus(filterStatus === 'respondido' ? '' : 'respondido'); }}><Text style={[s.kpiVal, { color: "#10B981" }]}>{summary.respondido}</Text><Text style={s.kpiLbl}>Respondidos</Text></Pressable>
-        {domainPending > 0 && <View style={[s.kpi, { borderColor: '#06B6D4' }]}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{domainPending}</Text><Text style={s.kpiLbl}>Dominios</Text></View>}
+        {domainPending > 0 && <View style={[s.kpi, { borderColor: '#06B6D4' }]}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{domainPending}</Text><Text style={s.kpiLbl}>Domínios</Text></View>}
       </View>
 
       {/* Filters */}

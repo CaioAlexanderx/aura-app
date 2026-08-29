@@ -90,8 +90,8 @@ function CreateCouponForm({ onSave, onCancel }: { onSave: (data: any) => void; o
   const [expiresIn, setExpiresIn] = useState(""); // days from now
 
   function handleSave() {
-    if (!code.trim()) { toast.error("Codigo obrigatorio"); return; }
-    if (!discountValue.trim() || parseFloat(discountValue) <= 0) { toast.error("Valor do desconto obrigatorio"); return; }
+    if (!code.trim()) { toast.error("Código obrigatório"); return; }
+    if (!discountValue.trim() || parseFloat(discountValue) <= 0) { toast.error("Valor do desconto obrigatório"); return; }
     if (discountType === "percent" && parseFloat(discountValue) > 100) { toast.error("Desconto percentual max 100%"); return; }
     const data: any = {
       code: code.trim().toUpperCase(),
@@ -113,11 +113,11 @@ function CreateCouponForm({ onSave, onCancel }: { onSave: (data: any) => void; o
       <Text style={z.formTitle}>Novo cupom</Text>
       <View style={z.formRow}>
         <View style={{ flex: 1 }}>
-          <Text style={z.formLabel}>Codigo *</Text>
+          <Text style={z.formLabel}>Código *</Text>
           <TextInput style={z.formInput} value={code} onChangeText={v => setCode(v.toUpperCase())} placeholder="DESCONTO10" placeholderTextColor={Colors.ink3} autoCapitalize="characters" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={z.formLabel}>Descricao</Text>
+          <Text style={z.formLabel}>Descrição</Text>
           <TextInput style={z.formInput} value={description} onChangeText={setDescription} placeholder="Lancamento..." placeholderTextColor={Colors.ink3} />
         </View>
       </View>
@@ -258,7 +258,7 @@ export default function CuponsScreen() {
       <ConfirmDialog
         visible={!!deleteTarget}
         title="Excluir cupom?"
-        message="Esta acao nao pode ser desfeita. O cupom sera removido permanentemente."
+        message="Esta ação não pode ser desfeita. O cupom será removido permanentemente."
         confirmLabel="Excluir"
         destructive
         onConfirm={() => { if (deleteTarget) { deleteMut.mutate(deleteTarget); setDeleteTarget(null); } }}

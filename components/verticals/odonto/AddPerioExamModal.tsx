@@ -65,7 +65,7 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Nao foi possivel salvar o exame.');
+      Alert.alert('Erro', err?.message || 'Não foi possível salvar o exame.');
     },
   });
 
@@ -83,7 +83,7 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
     const bi = parseInt(bleedingIdx) || 0;
     const pi = parseInt(plaqueIdx) || 0;
     if (bi < 0 || bi > 100 || pi < 0 || pi > 100) {
-      Alert.alert('Valor invalido', 'Indices devem estar entre 0 e 100%.');
+      Alert.alert('Valor inválido', 'Índices devem estar entre 0 e 100%.');
       return;
     }
     saveMut.mutate();
@@ -120,7 +120,7 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
           </Field>
 
           <View style={s.row}>
-            <Field label="Indice de sangramento %" style={{ flex: 1 }}>
+            <Field label="Índice de sangramento %" style={{ flex: 1 }}>
               <TextInput
                 style={[s.input, indexColor(bleedingIdx, 20)]}
                 value={bleedingIdx}
@@ -132,7 +132,7 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
               <Text style={s.hint}>&gt;20% indica doenca ativa</Text>
             </Field>
 
-            <Field label="Indice de placa %" style={{ flex: 1 }}>
+            <Field label="Índice de placa %" style={{ flex: 1 }}>
               <TextInput
                 style={[s.input, indexColor(plaqueIdx, 30)]}
                 value={plaqueIdx}
@@ -174,12 +174,12 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
               value={diagnosis}
               onChangeText={setDiagnosis}
               multiline
-              placeholder="Ex: Periodontite estagio III grau B"
+              placeholder="Ex: Periodontite estágio III grau B"
               placeholderTextColor="#64748B"
             />
           </Field>
 
-          <Field label="Observacoes">
+          <Field label="Observações">
             <TextInput
               style={[s.input, { minHeight: 80 }]}
               value={notes}

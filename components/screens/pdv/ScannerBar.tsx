@@ -8,7 +8,7 @@ export function ScannerBar({ onScan }: { onScan: (code: string) => void }) {
   return (
     <ScannerInput
       onScan={(result) => onScan(result.code)}
-      placeholder="Escanear codigo de barras ou QR Code..."
+      placeholder="Escanear código de barras ou QR Code..."
     />
   );
 }

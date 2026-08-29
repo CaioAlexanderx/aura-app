@@ -28,7 +28,7 @@ export function isThermalPrintSupported(): boolean {
 export function printThermalUrl(url: string, opts?: { silent?: boolean }): void {
   if (!isThermalPrintSupported()) {
     if (!opts?.silent) {
-      toast.info("Impressao termica disponivel apenas no navegador desktop");
+      toast.info("Impressão térmica disponível apenas no navegador desktop");
     }
     return;
   }
@@ -58,11 +58,11 @@ export function printThermalUrl(url: string, opts?: { silent?: boolean }): void 
         }
       } catch {
         // cross-origin: o backend deve servir mesmo origin/CORS adequado.
-        if (!opts?.silent) toast.error("Falha ao acionar impressao (origem)");
+        if (!opts?.silent) toast.error("Falha ao acionar impressão (origem)");
       }
     };
     iframe.onerror = () => {
-      if (!opts?.silent) toast.error("Falha ao carregar pagina de impressao");
+      if (!opts?.silent) toast.error("Falha ao carregar página de impressão");
     };
 
     document.body.appendChild(iframe);
@@ -72,7 +72,7 @@ export function printThermalUrl(url: string, opts?: { silent?: boolean }): void 
       try { iframe.parentNode?.removeChild(iframe); } catch {}
     }, 8000);
   } catch (err) {
-    if (!opts?.silent) toast.error("Erro ao iniciar impressao termica");
+    if (!opts?.silent) toast.error("Erro ao iniciar impressão térmica");
   }
 }
 

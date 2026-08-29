@@ -33,7 +33,7 @@ interface Props {
 const STATUS: Record<string, { bg: string; color: string; label: string; next?: string }> = {
   pendente:  { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF", label: "Pendente",  next: "enviado" },
   enviado:   { bg: "rgba(6,182,212,0.12)",   color: "#06B6D4", label: "Enviado",   next: "producao" },
-  producao:  { bg: "rgba(245,158,11,0.12)",  color: "#F59E0B", label: "Producao",  next: "pronto" },
+  producao:  { bg: "rgba(245,158,11,0.12)",  color: "#F59E0B", label: "Produção",  next: "pronto" },
   pronto:    { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Pronto",    next: "entregue" },
   entregue:  { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Entregue" },
   refeito:   { bg: "rgba(239,68,68,0.12)",   color: "#EF4444", label: "Refeito" },
@@ -51,13 +51,13 @@ export function LabOrderTracker({ orders, summary, onNewOrder, onOrderPress, onS
     <View style={s.container}>
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#9CA3AF" }]}>{s_pending}</Text><Text style={s.kpiLbl}>Pendentes</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{s_prod}</Text><Text style={s.kpiLbl}>Em producao</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{s_prod}</Text><Text style={s.kpiLbl}>Em produção</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{s_ready}</Text><Text style={s.kpiLbl}>Prontos</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#06B6D4" }]}>{fmt(s_cost)}</Text><Text style={s.kpiLbl}>Custo total</Text></View>
       </View>
 
       <View style={s.header}>
-        <Text style={s.title}>Pedidos de laboratorio</Text>
+        <Text style={s.title}>Pedidos de laboratório</Text>
         {onNewOrder && <Pressable onPress={onNewOrder} style={s.addBtn}><Text style={s.addBtnT}>+ Novo pedido</Text></Pressable>}
       </View>
 
@@ -83,7 +83,7 @@ export function LabOrderTracker({ orders, summary, onNewOrder, onOrderPress, onS
           </Pressable>
         );
       })}
-      {orders.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum pedido de laboratorio.</Text></View>}
+      {orders.length === 0 && <View style={s.empty}><Text style={s.emptyT}>Nenhum pedido de laboratório.</Text></View>}
     </View>
   );
 }

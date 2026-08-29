@@ -47,7 +47,7 @@ export function BillingDashboard() {
 
   return (
     <View>
-      <Text style={z.title}>Cobrancas</Text>
+      <Text style={z.title}>Cobranças</Text>
 
       {isLoading && <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>}
 
@@ -109,7 +109,7 @@ export function BillingDashboard() {
         <View style={z.empty}>
           <Icon name="check" size={28} color={Colors.green} />
           <Text style={z.emptyText}>Nenhuma parcela vencida</Text>
-          <Text style={z.emptyHint}>Todos os pagamentos estao em dia.</Text>
+          <Text style={z.emptyHint}>Todos os pagamentos estão em dia.</Text>
         </View>
       )}
 

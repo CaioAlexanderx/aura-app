@@ -130,9 +130,9 @@ export function useLeadMutations(selectedLeadId?: string | null) {
       crmApi.leads.applyCadence(p.id, p.cadence_name, p.start_day),
     onSuccess: () => {
       invalidateAll();
-      toast.success("Cadencia aplicada");
+      toast.success("Cadência aplicada");
     },
-    onError: (err: any) => toast.error(err?.data?.error || "Erro ao aplicar cadencia"),
+    onError: (err: any) => toast.error(err?.data?.error || "Erro ao aplicar cadência"),
   });
 
   // ── Recomputar scores em massa ─────────────────────────────────────────────

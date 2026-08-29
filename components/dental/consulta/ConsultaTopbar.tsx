@@ -1,7 +1,7 @@
 // ============================================================
 // ConsultaTopbar — header da consulta ativa.
 //
-// PR44 #19 (2026-04-29): adicionado botao "Salvar evolucao" entre
+// PR44 #19 (2026-04-29): adicionado botao "Salvar evolução" entre
 // Minimizar e Encerrar. Permite o dentista salvar progresso parcial
 // (clinical_notes) sem encerrar a consulta. Antes, o unico save
 // existente era via ConsultaEndModal que forcava status=concluido.

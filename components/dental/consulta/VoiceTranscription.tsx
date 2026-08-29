@@ -73,7 +73,7 @@ export function VoiceTranscription({ visible, onClose, onTranscript, title, hint
     const SR = getSR();
     if (!SR) {
       setSupported(false);
-      setError("Seu navegador nao suporta reconhecimento de voz. Use Chrome, Edge ou Safari.");
+      setError("Seu navegador não suporta reconhecimento de voz. Use Chrome, Edge ou Safari.");
       return;
     }
     setSupported(true);
@@ -92,7 +92,7 @@ export function VoiceTranscription({ visible, onClose, onTranscript, title, hint
   function startRecording() {
     const SR = getSR();
     if (!SR) {
-      setError("Reconhecimento de voz nao suportado neste navegador.");
+      setError("Reconhecimento de voz não suportado neste navegador.");
       return;
     }
     try {
@@ -121,11 +121,11 @@ export function VoiceTranscription({ visible, onClose, onTranscript, title, hint
 
       r.onerror = (e: any) => {
         if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          setError("Permissao do microfone negada. Habilite nas configuracoes do navegador.");
+          setError("Permissão do microfone negada. Habilite nas configurações do navegador.");
         } else if (e.error === "no-speech") {
           // ignora silencios curtos - nao mostra erro
         } else if (e.error === "audio-capture") {
-          setError("Microfone nao detectado.");
+          setError("Microfone não detectado.");
         } else {
           setError("Erro: " + e.error);
         }
@@ -206,7 +206,7 @@ export function VoiceTranscription({ visible, onClose, onTranscript, title, hint
             <View style={s.errorBox}>
               <Text style={{ fontSize: 28, marginBottom: 8 }}>🎙</Text>
               <Text style={s.errorText}>{error}</Text>
-              <Text style={s.fallbackHint}>Voce pode digitar manualmente abaixo:</Text>
+              <Text style={s.fallbackHint}>Você pode digitar manualmente abaixo:</Text>
               <TextInput
                 style={[s.transcriptBox, { minHeight: 120 }]}
                 value={finalText}

@@ -561,7 +561,7 @@ function ProductRow({
           {product.is_personalizable && (
             <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
               <Icon name="sparkles" size={10} color={t.primary} />
-              <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizavel</Text>
+              <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
             </View>
           )}
           {(product.template_count || 0) > 0 && (
@@ -715,14 +715,14 @@ function ProductExpanded({
             </Text>
             <Text style={s.rowDot}>·</Text>
             <Text style={s.expandedQty}>
-              {product.stock_qty != null ? `${product.stock_qty} un em estoque` : "Estoque nao informado"}
+              {product.stock_qty != null ? `${product.stock_qty} un em estoque` : "Estoque não informado"}
             </Text>
           </View>
           <View style={s.expandedChipsRow}>
             {personalizableChip && (
               <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
                 <Icon name="sparkles" size={10} color={t.primary} />
-                <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizavel</Text>
+                <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
               </View>
             )}
             {templateChipQty > 0 && (
@@ -846,7 +846,7 @@ function BasicoForm({
     const trimmed = name.trim();
     if (trimmed.length < 2) { toast.error("Nome precisa ter ao menos 2 caracteres"); return; }
     const priceNum = parseFloat(price.replace(",", "."));
-    if (!Number.isFinite(priceNum) || priceNum <= 0) { toast.error("Preco invalido"); return; }
+    if (!Number.isFinite(priceNum) || priceNum <= 0) { toast.error("Preço inválido"); return; }
     const body: Record<string, any> = {
       name: trimmed,
       price: priceNum,
@@ -857,7 +857,7 @@ function BasicoForm({
       if (Number.isFinite(qNum)) body.stock_qty = qNum;
     }
     setSaving(true);
-    console.log("[StudioEstoque.basico.save]", { productId: product.id, body });
+    console.log("[StudioEstoque.básico.save]", { productId: product.id, body });
     try {
       await request<any>(`/companies/${companyId}/products/${product.id}`, {
         method: "PATCH",
@@ -865,7 +865,7 @@ function BasicoForm({
         retry: 0,
         timeout: 12000,
       });
-      toast.success("Alteracoes salvas");
+      toast.success("Alterações salvas");
       onPatched({
         name: trimmed,
         price: priceNum,
@@ -873,7 +873,7 @@ function BasicoForm({
         description: body.description,
       });
     } catch (e: any) {
-      console.error("[StudioEstoque.basico.save error]", {
+      console.error("[StudioEstoque.básico.save error]", {
         status: e?.status, code: e?.code, message: e?.message, data: e?.data,
       });
       const status = e?.status ? `[${e.status}] ` : "";
@@ -930,7 +930,7 @@ function BasicoForm({
       </View>
 
       <View style={s.field}>
-        <Text style={s.fieldLabel}>Descricao</Text>
+        <Text style={s.fieldLabel}>Descrição</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -969,7 +969,7 @@ function BasicoForm({
         ) : (
           <>
             <Icon name="check" size={14} color="#fff" />
-            <Text style={s.btnPriTxt}>Salvar alteracoes</Text>
+            <Text style={s.btnPriTxt}>Salvar alterações</Text>
           </>
         )}
       </Pressable>

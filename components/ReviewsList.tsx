@@ -87,8 +87,8 @@ export function ReviewsList() {
         {reviews.length === 0 && !isLoading && (
           <View style={s.empty}>
             <Text style={{ fontSize: 28, marginBottom: 6 }}>⭐</Text>
-            <Text style={s.emptyTitle}>Nenhuma avaliacao ainda</Text>
-            <Text style={s.emptyDesc}>Avaliacoes aparecerao aqui quando clientes responderem.</Text>
+            <Text style={s.emptyTitle}>Nenhuma avaliação ainda</Text>
+            <Text style={s.emptyDesc}>Avaliações aparecerão aqui quando clientes responderem.</Text>
           </View>
         )}
       </View>

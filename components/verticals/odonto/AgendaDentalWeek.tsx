@@ -276,7 +276,7 @@ export function AgendaDentalWeek({ appointments, anchorDate, onAppointmentPress,
       {/* Hint sobre drag-drop (web only) */}
       {IS_WEB ? (
         <View style={s.hintBar}>
-          <Text style={s.hintText}>💡 Dica: arraste um agendamento pra outro horario pra remarcar.</Text>
+          <Text style={s.hintText}>💡 Dica: arraste um agendamento pra outro horário pra remarcar.</Text>
         </View>
       ) : null}
     </View>

@@ -189,7 +189,7 @@ export function SignatureRequestModal({
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Assinatura digital</Text>
               <Text style={s.sub}>
-                {patientName ? `Paciente: ${patientName}` : "Confirmacao do atendimento"}
+                {patientName ? `Paciente: ${patientName}` : "Confirmação do atendimento"}
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={10}>
@@ -210,7 +210,7 @@ export function SignatureRequestModal({
             {tokenMut.isError && (
               <View style={s.center}>
                 <Icon name="alert" size={32} color="#EF4444" />
-                <Text style={s.errText}>Nao foi possivel gerar o link.</Text>
+                <Text style={s.errText}>Não foi possível gerar o link.</Text>
                 <Pressable onPress={() => tokenMut.mutate()} style={[s.btn, s.btnPrimary, { marginTop: 12 }]}>
                   <Text style={s.btnPrimaryText}>Tentar novamente</Text>
                 </Pressable>

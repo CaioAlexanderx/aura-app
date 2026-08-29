@@ -30,7 +30,7 @@ export function useCadences(activeOnly?: boolean) {
       crmApi.cadences.create(body),
     onSuccess: () => {
       invalidate();
-      toast.success("Cadencia criada");
+      toast.success("Cadência criada");
     },
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao criar"),
   });
@@ -40,7 +40,7 @@ export function useCadences(activeOnly?: boolean) {
       crmApi.cadences.update(p.id, p.body),
     onSuccess: () => {
       invalidate();
-      toast.success("Cadencia atualizada");
+      toast.success("Cadência atualizada");
     },
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao atualizar"),
   });
@@ -49,7 +49,7 @@ export function useCadences(activeOnly?: boolean) {
     mutationFn: (id: string) => crmApi.cadences.remove(id),
     onSuccess: (r) => {
       invalidate();
-      toast.success(r.soft_deleted ? "Cadencia desativada (em uso)" : "Cadencia removida");
+      toast.success(r.soft_deleted ? "Cadência desativada (em uso)" : "Cadência removida");
     },
     onError: () => toast.error("Erro ao remover"),
   });

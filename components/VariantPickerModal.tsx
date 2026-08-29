@@ -4,7 +4,7 @@
 // Usado no PDV (Fase C) e na Venda retroativa (TransactionModal).
 // FIX: herda cor/tamanho do produto pai quando variante nao tem atributos
 // 08/05/2026: opcao "vender pai" mostra cor+tamanho do pai em vez de
-// "Sem variante especifica · generico" — quando ha atributos no pai.
+// "Sem variante específica · genérico" — quando ha atributos no pai.
 // 01/06/2026: prop opcional `blockOutOfStock` — quando true, variantes
 // (e a opcao pai) com estoque <= 0 ficam DESABILITADAS e marcadas como
 // "Esgotado", impedindo selecao. Usado na Troca (Step3) pra nao deixar
@@ -74,7 +74,7 @@ function getColor(v: any, parentColor?: string): string | null {
 }
 
 // Rotulo da opcao "vender o pai diretamente" — preferimos os atributos do
-// proprio pai (cor + tamanho) em vez de um generico "Sem variante especifica".
+// proprio pai (cor + tamanho) em vez de um generico "Sem variante específica".
 function buildParentLabel(parentColor?: string, parentSize?: string): { label: string; sub: string } {
   var parts: string[] = [];
   if (parentColor) {
@@ -85,7 +85,7 @@ function buildParentLabel(parentColor?: string, parentSize?: string): { label: s
   if (parts.length > 0) {
     return { label: parts.join(" · "), sub: "estoque do produto pai" };
   }
-  return { label: "Sem variante especifica", sub: "genérico" };
+  return { label: "Sem variante específica", sub: "genérico" };
 }
 
 export function VariantPickerModal({ visible, product, onSelect, onClose, blockOutOfStock = false }: {

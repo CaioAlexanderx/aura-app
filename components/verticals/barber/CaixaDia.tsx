@@ -50,9 +50,9 @@ const TYPE_MAP: Record<string, { bg: string; color: string; label: string; sign:
 
 const PAY_MAP: Record<string, { bg: string; color: string; label: string }> = {
   pix:      { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Pix" },
-  cartao:   { bg: "rgba(124,58,237,0.12)",  color: "#7C3AED", label: "Cartao" },
+  cartao:   { bg: "rgba(124,58,237,0.12)",  color: "#7C3AED", label: "Cartão" },
   dinheiro: { bg: "rgba(245,158,11,0.12)",  color: "#F59E0B", label: "Dinheiro" },
-  debito:   { bg: "rgba(6,182,212,0.12)",   color: "#06B6D4", label: "Debito" },
+  debito:   { bg: "rgba(6,182,212,0.12)",   color: "#06B6D4", label: "Débito" },
 };
 
 function fmt(v: number): string {
@@ -70,7 +70,7 @@ export function CaixaDia({ register, movements, summary, onOpenCash, onCloseCash
       {/* KPIs */}
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(totalIn)}</Text><Text style={s.kpiLbl}>Entradas</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(totalOut)}</Text><Text style={s.kpiLbl}>Saidas</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(totalOut)}</Text><Text style={s.kpiLbl}>Saídas</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{fmt(summary?.tips || 0)}</Text><Text style={s.kpiLbl}>Gorjetas</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { fontWeight: "700" }]}>{fmt(balance)}</Text><Text style={s.kpiLbl}>Saldo</Text></View>
       </View>
@@ -92,7 +92,7 @@ export function CaixaDia({ register, movements, summary, onOpenCash, onCloseCash
       {/* Movements timeline */}
       {movements.length > 0 && (
         <View style={s.movList}>
-          <Text style={s.movHeader}>Ultimas movimentacoes</Text>
+          <Text style={s.movHeader}>Últimas movimentações</Text>
           {movements.slice(0, 20).map(m => {
             const typeInfo = TYPE_MAP[m.type] || TYPE_MAP.ajuste;
             const payInfo = m.payment_method ? (PAY_MAP[m.payment_method] || PAY_MAP.dinheiro) : null;
@@ -121,7 +121,7 @@ export function CaixaDia({ register, movements, summary, onOpenCash, onCloseCash
 
       {!isOpen && movements.length === 0 && (
         <View style={s.empty}>
-          <Text style={s.emptyText}>Caixa fechado. Abra para registrar movimentacoes.</Text>
+          <Text style={s.emptyText}>Caixa fechado. Abra para registrar movimentações.</Text>
         </View>
       )}
     </View>

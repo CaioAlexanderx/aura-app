@@ -12,9 +12,9 @@ var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minim
 var STAGES = [
   { key: "lead", label: "Lead", color: Colors.ink3 },
   { key: "contacted", label: "Contatado", color: "#6366f1" },
-  { key: "evaluation_scheduled", label: "Avaliacao", color: Colors.violet3 },
+  { key: "evaluation_scheduled", label: "Avaliação", color: Colors.violet3 },
   { key: "evaluation_done", label: "Avaliado", color: "#8b5cf6" },
-  { key: "budget_sent", label: "Orcamento", color: Colors.amber },
+  { key: "budget_sent", label: "Orçamento", color: Colors.amber },
   { key: "budget_approved", label: "Aprovado", color: Colors.green },
   { key: "in_treatment", label: "Tratamento", color: "#06b6d4" },
   { key: "completed", label: "Concluido", color: Colors.green },

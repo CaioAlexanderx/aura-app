@@ -49,7 +49,7 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
 
         <View style={s.divider} />
 
-        <Text style={s.docTitle}>CONTRATO DE PRESTACAO DE SERVICOS ODONTOLOGICOS</Text>
+        <Text style={s.docTitle}>CONTRATO DE PRESTAÇÃO DE SERVIÇOS ODONTOLÓGICOS</Text>
         <Text style={s.docNum}>Referente ao Orcamento {c.planNumber}</Text>
 
         {/* Parties */}
@@ -66,7 +66,7 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
 
         {/* Services */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>SERVICOS CONTRATADOS</Text>
+          <Text style={s.sectionTitle}>SERVIÇOS CONTRATADOS</Text>
           {c.items.map((item, i) => (
             <View key={i} style={s.itemRow}>
               <Text style={s.itemNum}>{i + 1}.</Text>
@@ -94,8 +94,8 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
         <View style={s.section}>
           <Text style={s.sectionTitle}>CLAUSULAS</Text>
           <Text style={s.clause}>1. O contratante autoriza a realizacao dos procedimentos listados acima.</Text>
-          <Text style={s.clause}>2. O tratamento pode sofrer alteracoes conforme evolucao clinica, mediante acordo entre as partes.</Text>
-          <Text style={s.clause}>3. Faltas sem aviso previo de 24h poderao ser cobradas.</Text>
+          <Text style={s.clause}>2. O tratamento pode sofrer alterações conforme evolução clinica, mediante acordo entre as partes.</Text>
+          <Text style={s.clause}>3. Faltas sem aviso prévio de 24h poderão ser cobradas.</Text>
           <Text style={s.clause}>4. Validade deste orcamento: {c.validUntil ? new Date(c.validUntil).toLocaleDateString("pt-BR") : "30 dias"}.</Text>
         </View>
 

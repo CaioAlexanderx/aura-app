@@ -23,7 +23,7 @@ export function RankingTab({ customers }: { customers: Customer[] }) {
       <View style={s.toggleRow}>
         {(["ltv", "visits"] as const).map(m => (
           <Pressable key={m} onPress={() => setMetric(m)} style={[s.toggle, metric === m && s.toggleActive]}>
-            <Text style={[s.toggleText, metric === m && s.toggleTextActive]}>{m === "ltv" ? "Por faturamento" : "Por frequencia"}</Text>
+            <Text style={[s.toggleText, metric === m && s.toggleTextActive]}>{m === "ltv" ? "Por faturamento" : "Por frequência"}</Text>
           </Pressable>
         ))}
       </View>

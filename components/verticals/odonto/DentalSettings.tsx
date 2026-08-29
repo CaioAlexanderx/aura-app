@@ -52,7 +52,7 @@ function PractitionerForm({
   const [phone, setPhone] = useState(initial?.phone || '');
 
   function handleSubmit() {
-    if (!name.trim()) { toast.error('Nome eh obrigatorio'); return; }
+    if (!name.trim()) { toast.error('Nome eh obrigatório'); return; }
     onSave({
       name: name.trim(),
       cro: cro.trim() || undefined,
@@ -150,7 +150,7 @@ export function DentalSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['dental-settings'] });
       qc.invalidateQueries({ queryKey: ['dental-agenda'] });
-      toast.success('Configuracoes salvas');
+      toast.success('Configurações salvas');
     },
     onError: (err: any) => toast.error(err?.message || 'Erro ao salvar'),
   });
@@ -326,7 +326,7 @@ export function DentalSettings() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={s.practName}>{p.name}</Text>
-                  {p.is_owner && <View style={s.ownerBadge}><Text style={s.ownerBadgeText}>RESPONSAVEL</Text></View>}
+                  {p.is_owner && <View style={s.ownerBadge}><Text style={s.ownerBadgeText}>RESPONSÁVEL</Text></View>}
                 </View>
                 <Text style={s.practMeta}>
                   {p.cro || 'Sem CRO'}{p.specialty ? ' · ' + p.specialty : ''}

@@ -60,7 +60,7 @@ function TimelineItem({ obligation: o, onGuide, isLast }: { obligation: Obligati
         <View style={s.metaRow}>
           {dueLabel && <View style={s.dateBadge}><Text style={s.dateText}>{dueLabel}</Text></View>}
           <View style={[s.actionBadge, { backgroundColor: isAutomatic ? Colors.greenD : Colors.amberD }]}>
-            <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automatico" : "Voce precisa agir"}</Text>
+            <Text style={[s.actionText, { color: isAutomatic ? Colors.green : Colors.amber }]}>{isAutomatic ? "Automático" : "Você precisa agir"}</Text>
           </View>
         </View>
 

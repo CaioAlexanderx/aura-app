@@ -107,7 +107,7 @@ export const fmtBRL = (v: number): string =>
 
 export const STEP_LABELS: Record<Step, string> = {
   1: "Localizar venda",
-  2: "Devolucao",
+  2: "Devolução",
   3: "Novos itens",
   4: "Confirmar",
 };

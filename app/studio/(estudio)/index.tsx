@@ -14,7 +14,7 @@
 // gracioso com toast + UI degradada quando 4xx/5xx.
 //
 // 26/05/2026 (Painel v2): KPI "Lucro Bruto . mes" virou
-// "Lucro Liquido . mes" (Receita - Despesa, fonte transactions).
+// "Lucro Líquido . mes" (Receita - Despesa, fonte transactions).
 // Sub-label espelha Receita / Despesa em pt-BR. Faixa colorida do
 // card vira danger quando value < 0 (prejuizo) e o valor aparece
 // com sinal "-" em cor danger. Acompanha refactor do backend.
@@ -245,7 +245,7 @@ export default function StudioPainel() {
         </View>
 
         {/* ═══════ Erro de carregamento (QA item 11) ═══════
-            Distinto do "sem vendas no periodo": deixa claro que os zeros
+            Distinto do "sem vendas no período": deixa claro que os zeros
             abaixo são falha de rede, não um dia real sem vendas. */}
         {!painelLoading && painelError && (
           <View style={s.painelErrorBanner}>
@@ -279,16 +279,16 @@ export default function StudioPainel() {
               <KpiCard
                 t={t}
                 variant="accent"
-                label={"Ticket medio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
+                label={"Ticket médio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
                 value={kpiTicket.value}
                 format="currency"
                 deltaPct={kpiTicket.delta_pct}
-                subLabel={kpiTicket.sub_label || "Periodo selecionado"}
+                subLabel={kpiTicket.sub_label || "Período selecionado"}
               />
               <KpiCard
                 t={t}
                 variant={isLoss ? "danger" : "success"}
-                label="Lucro Liquido . mes"
+                label="Lucro Líquido . mes"
                 value={kpiLucro.value}
                 format="currency"
                 deltaPct={kpiLucro.delta_pct}
@@ -484,7 +484,7 @@ function FaturamentoChart({ data, t }: { data: PainelSeriePoint[]; t: StudioPale
   if (!data || data.length === 0) {
     return (
       <View style={{ height: 220, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem dados no periodo</Text>
+        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem dados no período</Text>
       </View>
     );
   }
@@ -705,7 +705,7 @@ function TopProdutosList({
   if (!data || data.length === 0) {
     return (
       <View style={{ paddingVertical: 30, alignItems: "center" }}>
-        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem vendas no periodo</Text>
+        <Text style={{ fontSize: 12, color: t.ink4 }}>Sem vendas no período</Text>
       </View>
     );
   }
@@ -804,7 +804,7 @@ function FunilAprovacao({
   const stages = [
     { key: "pendentes",  label: "Pendentes",  color: t.warning, count: data.pendentes.count,  pct: data.pendentes.pct },
     { key: "aprovados",  label: "Aprovados",  color: t.success, count: data.aprovados.count,  pct: data.aprovados.pct },
-    { key: "alteracoes", label: "Alteracoes", color: t.info,    count: data.alteracoes.count, pct: data.alteracoes.pct },
+    { key: "alteracoes", label: "Alterações", color: t.info,    count: data.alteracoes.count, pct: data.alteracoes.pct },
     { key: "expirados",  label: "Expirados",  color: t.ink4,    count: data.expirados.count,  pct: data.expirados.pct },
   ];
 
@@ -827,7 +827,7 @@ function FunilAprovacao({
     <View>
       {empty && (
         <View style={{ paddingVertical: 20, alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: t.ink4 }}>Nenhum link de aprovacao enviado no periodo</Text>
+          <Text style={{ fontSize: 12, color: t.ink4 }}>Nenhum link de aprovação enviado no período</Text>
         </View>
       )}
       {!empty && (

@@ -105,7 +105,7 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   }
 
   async function handleSave() {
-    if (!canSave || !company?.id) { toast.error('Preencha os campos obrigatorios'); return; }
+    if (!canSave || !company?.id) { toast.error('Preencha os campos obrigatórios'); return; }
 
     // Limpa aviso anterior antes de nova checagem
     setDupWarning(null);
@@ -124,7 +124,7 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
       <Pressable style={s.backdrop} onPress={onClose} />
       <View style={s.modal}>
         <View style={s.header}>
-          <Text style={s.title}>Cadastro rapido de cliente</Text>
+          <Text style={s.title}>Cadastro rápido de cliente</Text>
           <Pressable onPress={onClose} style={s.closeBtn}><Icon name="x" size={16} color={Colors.ink3} /></Pressable>
         </View>
 

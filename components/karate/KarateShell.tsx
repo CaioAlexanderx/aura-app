@@ -182,7 +182,7 @@ const SECTION_LABEL: Record<string, string> = (() => {
 // breadcrumb mostra "Detalhe" em vez do nome real da página.
 // Chave: `${secao}/${subrota}` → rótulo exibido no breadcrumb.
 const NAMED_SUBROUTE_LABEL: Record<string, string> = {
-  "competicoes/ranking": "Ranking",
+  "competições/ranking": "Ranking",
 };
 
 // Deriva, a partir da pathname, a seção atual e se estamos num detalhe.

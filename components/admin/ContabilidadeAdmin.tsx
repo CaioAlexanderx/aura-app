@@ -10,7 +10,7 @@ const MOCK_OBLIGATIONS = [
   { client: "Clinica Sorriso", type: "PGDAS-D", due: "20/04/2026", status: "pendente", amount: 1250, daysLeft: 17 },
   { client: "Pet Love Jacarei", type: "DAS-MEI", due: "20/04/2026", status: "pago", amount: 75.90, daysLeft: 17 },
   { client: "Loja Moda Bella", type: "DAS-MEI", due: "20/04/2026", status: "pendente", amount: 75.90, daysLeft: 17 },
-  { client: "Studio Bella Estetica", type: "PGDAS-D", due: "20/04/2026", status: "atrasado", amount: 890, daysLeft: -3 },
+  { client: "Studio Bella Estética", type: "PGDAS-D", due: "20/04/2026", status: "atrasado", amount: 890, daysLeft: -3 },
   { client: "Barbearia do Marcos", type: "DASN-SIMEI", due: "31/05/2026", status: "pendente", amount: 0, daysLeft: 58 },
   { client: "Clinica Sorriso", type: "DEFIS", due: "31/03/2026", status: "pago", amount: 0, daysLeft: -3 },
 ];
@@ -37,7 +37,7 @@ export function ContabilidadeAdmin() {
         <Text style={s.title}>Calendario fiscal — Todos os clientes</Text>
         <View style={s.tableH}>
           <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
-          <Text style={[s.th, { width: 80 }]}>Obrigacao</Text>
+          <Text style={[s.th, { width: 80 }]}>Obrigação</Text>
           <Text style={[s.th, { width: 80 }]}>Vencimento</Text>
           <Text style={[s.th, { width: 70, textAlign: "right" }]}>Valor</Text>
           <Text style={[s.th, { width: 70 }]}>Status</Text>

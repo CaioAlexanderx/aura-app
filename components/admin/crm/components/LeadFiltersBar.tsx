@@ -49,7 +49,7 @@ export function LeadFiltersBar({
   views, onApplyView, onSaveAsView,
   showExport = true,
   hideStatusChips = false,
-  searchPlaceholder = "Buscar nome, telefone, endereco...",
+  searchPlaceholder = "Buscar nome, telefone, endereço...",
 }: Props) {
   const filters            = useLeadFiltersStore((s) => s.filters);
   const setFilter          = useLeadFiltersStore((s) => s.setFilter);

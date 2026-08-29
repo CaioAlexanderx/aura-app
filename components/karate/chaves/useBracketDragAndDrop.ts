@@ -16,7 +16,7 @@
 // `draggable`/`onDragStart` pro DOM via props — por isso refs + DOM nativo.
 //
 // Fallback mobile: espelha a decisão do Kanban (useDragAndDrop.ts + KanbanView
-// "Arrastar-e-soltar so funciona na versao web") — em mobile o drag fica
+// "Arrastar-e-soltar so funciona na versão web") — em mobile o drag fica
 // DESABILITADO por completo (isWeb=false ⇒ hooks são no-op); a tela cobre
 // esse caso com um aviso e mantém disponível o clique-para-vencedor (modo
 // normal), que funciona em qualquer plataforma.

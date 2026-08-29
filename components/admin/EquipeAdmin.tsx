@@ -60,7 +60,7 @@ export function EquipeAdmin() {
             </View>
           );
         })}
-        <Text style={s.hint}>Adicione analistas conforme a base de clientes crescer. Cada analista gerencia ate 30 clientes.</Text>
+        <Text style={s.hint}>Adicione analistas conforme a base de clientes crescer. Cada analista gerencia até 30 clientes.</Text>
       </HoverCard>
     </View>
   );

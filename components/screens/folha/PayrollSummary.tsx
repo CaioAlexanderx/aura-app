@@ -18,7 +18,7 @@ export function PayrollSummary({ employees, totals, totalBruto }: Props) {
           <View style={s.item}><Text style={s.label}>Total bruto</Text><Text style={s.value}>{fmt(totalBruto)}</Text></View>
           <View style={s.item}><Text style={s.label}>INSS total</Text><Text style={[s.value, { color: Colors.red }]}>-{fmt(totals.inss)}</Text></View>
           <View style={s.item}><Text style={s.label}>IRRF total</Text><Text style={[s.value, { color: totals.irrf > 0 ? Colors.red : Colors.ink3 }]}>{totals.irrf > 0 ? "-"+fmt(totals.irrf) : "Isento"}</Text></View>
-          <View style={s.item}><Text style={s.label}>Total liquido</Text><Text style={[s.value, { color: Colors.green, fontSize: 18 }]}>{fmt(totals.liquid)}</Text></View>
+          <View style={s.item}><Text style={s.label}>Total líquido</Text><Text style={[s.value, { color: Colors.green, fontSize: 18 }]}>{fmt(totals.liquid)}</Text></View>
           <View style={s.item}><Text style={s.label}>FGTS a depositar</Text><Text style={s.value}>{fmt(totals.fgts)}</Text></View>
         </View>
         <View style={s.costRow}><Text style={s.costLabel}>Custo total para a empresa</Text><Text style={s.costValue}>{fmt(totalBruto + totals.fgts)}</Text></View>

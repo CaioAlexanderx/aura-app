@@ -3,7 +3,7 @@
 //
 // Duas seções numa aba (as duas "listas humanas" do evento):
 //
-//  1) ESCALA — o que a "DISTRIBUIÇÃO DE ÁRBITROS & MESÁRIOS" faz em
+//  1) ESCALA — o que a "DISTRIBUIÇÃO DE ÁRBITROS & MÊSÁRIOS" faz em
 //     papel: convoca do cadastro da federação, o oficial confirma, é
 //     escalado num koto (com o chefe/shuchin marcado) e tem presença
 //     registrada; ausência não justificada abre campo de multa.
@@ -263,7 +263,7 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
         <View style={s.newRow}>
           <TextInput
             style={s.newInput} value={newName} onChangeText={setNewName}
-            placeholder="Nome do árbitro/mesário" placeholderTextColor={C.ink4}
+            placeholder="Nome do árbitro/mêsário" placeholderTextColor={C.ink4}
           />
           <View style={{ flexDirection: "row", gap: 4 }}>
             {(["arbitro", "mesario", "staff"] as OfficialRole[]).map((r) => (

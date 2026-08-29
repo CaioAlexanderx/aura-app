@@ -119,7 +119,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var isLinkedToSale = isEditing && isPdvSaleTransaction(editTransaction);
   // Lancamento "A Receber" do crediario: valor e categoria estao amarrados ao
   // carne (credit_installments) e aos relatorios que filtram
-  // category ILIKE 'Crediario%A Receber%'. Editar na mao aqui dessincroniza.
+  // category ILIKE 'Crediário%A Receber%'. Editar na mao aqui dessincroniza.
   var isCreditReceivable = isEditing && isCreditReceivableKey((editTransaction as any)?.idempotency_key);
   var [txType, setTxType] = useState<"income" | "expense" | "sale">("income");
   var [mode, setMode] = useState<"unit" | "batch">("unit");
@@ -212,10 +212,10 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
   async function handleSaveUnit() {
     var val = parseAmount(amount);
-    if (!val || val <= 0) { toast.error("Informe um valor valido"); return; }
-    if (!desc.trim()) { toast.error("Informe uma descricao"); return; }
+    if (!val || val <= 0) { toast.error("Informe um valor válido"); return; }
+    if (!desc.trim()) { toast.error("Informe uma descrição"); return; }
     var dueDate: string | undefined;
-    if (dateStr.trim()) { var iso = dateToISO(dateStr); if (!iso) { toast.error("Data invalida. Use DD/MM/AAAA"); return; } dueDate = iso; }
+    if (dateStr.trim()) { var iso = dateToISO(dateStr); if (!iso) { toast.error("Data inválida. Use DD/MM/AAAA"); return; } dueDate = iso; }
 
     if (isEditing && company?.id) {
       setSaving(true);
@@ -284,7 +284,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       onSave({ type: txType, amount: val, description: parts[0], category: parts[2] || cats[0], due_date: batchDate });
       count++;
     }
-    if (count === 0) { toast.error("Formato invalido. Use: descricao;valor;categoria;data"); return; }
+    if (count === 0) { toast.error("Formato inválido. Use: descrição;valor;categoria;data"); return; }
     toast.success(count + " lancamentos adicionados");
     reset(); onClose();
   }
@@ -353,7 +353,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
   async function handleSaveSale() {
     if (saleItems.length === 0) { toast.error("Adicione pelo menos um produto"); return; }
-    var iso = dateToISO(dateStr); if (!iso) { toast.error("Data invalida. Use DD/MM/AAAA"); return; }
+    var iso = dateToISO(dateStr); if (!iso) { toast.error("Data inválida. Use DD/MM/AAAA"); return; }
     if (!company?.id) return; setSaleSaving(true);
     try {
       await pdvApi.createSale(company.id, { items: saleItems.map(function(i) { return { product_id: i.productId, variant_id: i.variantId || undefined, quantity: i.qty, unit_price: i.price, product_name_snapshot: i.name }; }), payment_method: salePayment, sale_date: iso, customer_id: custId || undefined, employee_id: empId || undefined, coupon_code: saleCoupon || undefined });
@@ -399,7 +399,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={s.input} value={amount} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
         <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
       </View>
-      <Text style={s.label}>Descricao</Text>
+      <Text style={s.label}>Descrição</Text>
       <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
       <Text style={s.label}>Categoria</Text>
       <View style={s.catGrid}>{cats.map(function(cat) { return <Pressable key={cat} onPress={function() { setCategory(cat); }} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>; })}</View>
@@ -455,7 +455,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       </View>
 
       {!isEditing && <RecurrenceSelector value={recurrence} onChange={setRecurrence} labelStyle={s.label} gridStyle={s.catGrid} btnStyle={s.catBtn} btnActiveStyle={s.catBtnActive} textStyle={s.catText} textActiveStyle={s.catTextActive} />}
-      {!isEditing && <View style={s.dateHint}><Icon name="info" size={11} color={Colors.ink3} /><Text style={s.dateHintText}>Altere a data para lancar retroativamente. Padrao: hoje.</Text></View>}
+      {!isEditing && <View style={s.dateHint}><Icon name="info" size={11} color={Colors.ink3} /><Text style={s.dateHintText}>Altere a data para lancar retroativamente. Padrão: hoje.</Text></View>}
       {isLinkedToSale && (
         <View style={s.dateHint}>
           <Icon name="info" size={11} color={Colors.violet3} />
@@ -475,7 +475,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         </View>
       )}
       <Pressable onPress={handleSaveUnit} disabled={saving} style={[s.saveBtn, { backgroundColor: isEditing ? Colors.violet : (isIncome ? Colors.green : Colors.red), opacity: saving ? 0.6 : 1 }]}>
-        {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alteracoes" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
+        {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>{isEditing ? "Salvar alterações" : (isIncome ? "Lancar receita" : "Lancar despesa")}</Text>}
       </Pressable>
     </>
   );

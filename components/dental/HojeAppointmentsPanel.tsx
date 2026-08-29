@@ -36,7 +36,7 @@ interface DentalAppointment {
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   agendado:       { label: "Agendado",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
   confirmado:     { label: "Confirmado",      color: "#F97316", bg: "rgba(249,115,22,0.14)"  },
-  avaliacao:      { label: "Avaliacao",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
+  avaliacao:      { label: "Avaliação",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
   aprovado:       { label: "Aprovado",        color: "#A78BFA", bg: "rgba(167,139,250,0.14)" },
   em_atendimento: { label: "Em atendimento",  color: "#F59E0B", bg: "rgba(245,158,11,0.14)"  },
   concluido:      { label: "Concluido",       color: "#10B981", bg: "rgba(16,185,129,0.14)"  },
@@ -64,9 +64,9 @@ function formatTime(iso: string): string {
 
 function emptyMessage(): { title: string; sub: string } {
   const h = new Date().getHours();
-  if (h < 12) return { title: "Manha livre",    sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clinica em ordem." };
-  if (h < 18) return { title: "Tarde tranquila", sub: "Sem proximos atendimentos no dia. Aproveite pra revisar pacientes em recall." };
-  return              { title: "Dia encerrado",   sub: "Sem atendimentos restantes hoje. Confira a agenda de amanha pra se preparar." };
+  if (h < 12) return { title: "Manhã livre",    sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clinica em ordem." };
+  if (h < 18) return { title: "Tarde tranquila", sub: "Sem próximos atendimentos no dia. Aproveite pra revisar pacientes em recall." };
+  return              { title: "Dia encerrado",   sub: "Sem atendimentos restantes hoje. Confira a agenda de amanhã pra se preparar." };
 }
 
 export function HojeAppointmentsPanel() {
@@ -140,7 +140,7 @@ export function HojeAppointmentsPanel() {
       {!isLoading && error && (
         <View style={{ flexDirection: "row", gap: 10, alignItems: "center", padding: 12, backgroundColor: "rgba(239,68,68,0.06)", borderWidth: 1, borderColor: "rgba(239,68,68,0.25)", borderRadius: 10 }}>
           <Icon name="alert" size={14} color={DentalColors.red} />
-          <Text style={{ fontSize: 12, color: DentalColors.ink2, flex: 1 }}>Nao foi possivel carregar a agenda do dia.</Text>
+          <Text style={{ fontSize: 12, color: DentalColors.ink2, flex: 1 }}>Não foi possível carregar a agenda do dia.</Text>
         </View>
       )}
 
@@ -245,7 +245,7 @@ export function HojeAppointmentsPanel() {
                       onPress={() => setCancelConfirm(null)}
                       style={{ backgroundColor: DentalColors.surface, borderWidth: 1, borderColor: DentalColors.border, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 }}
                     >
-                      <Text style={{ fontSize: 12, color: DentalColors.ink2, fontWeight: "600" }}>Nao</Text>
+                      <Text style={{ fontSize: 12, color: DentalColors.ink2, fontWeight: "600" }}>Não</Text>
                     </Pressable>
                   </View>
                 )}

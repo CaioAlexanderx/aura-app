@@ -25,11 +25,11 @@ var CODE_REGEX = /^[A-Z0-9-]{3,20}$/;
 function copyToClipboard(text: string) {
   if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) {
     navigator.clipboard.writeText(text).then(
-      function() { toast.success("Codigo copiado: " + text); },
-      function() { toast.error("Nao foi possivel copiar"); }
+      function() { toast.success("Código copiado: " + text); },
+      function() { toast.error("Não foi possível copiar"); }
     );
   } else {
-    toast.info("Codigo: " + text);
+    toast.info("Código: " + text);
   }
 }
 
@@ -96,7 +96,7 @@ export function AccessCodesCard() {
   var createMutation = useMutation({
     mutationFn: function(body: CreateAccessCodeBody) { return adminApi.accessCodes.create(body); },
     onSuccess: function(result) {
-      toast.success("Codigo " + result.code.code + " criado");
+      toast.success("Código " + result.code.code + " criado");
       qc.invalidateQueries({ queryKey: ["admin-access-codes"] });
       // Reset form
       setFormCode("");
@@ -106,7 +106,7 @@ export function AccessCodesCard() {
       setFormExpires("");
     },
     onError: function(err: any) {
-      toast.error(err?.data?.error || err?.message || "Erro ao criar codigo");
+      toast.error(err?.data?.error || err?.message || "Erro ao criar código");
     },
   });
 
@@ -116,7 +116,7 @@ export function AccessCodesCard() {
       return adminApi.accessCodes.toggle(args.id, args.is_active);
     },
     onSuccess: function(result) {
-      toast.success(result.code.is_active ? "Codigo ativado" : "Codigo desativado");
+      toast.success(result.code.is_active ? "Código ativado" : "Código desativado");
       qc.invalidateQueries({ queryKey: ["admin-access-codes"] });
     },
     onError: function() { toast.error("Erro ao alterar status"); },
@@ -124,7 +124,7 @@ export function AccessCodesCard() {
 
   function handleCreate() {
     if (!codeValid) {
-      toast.error("Codigo invalido");
+      toast.error("Código inválido");
       return;
     }
     var trialDays = parseInt(formTrialDays, 10) || 0;
@@ -166,7 +166,7 @@ export function AccessCodesCard() {
             <Icon name="key" size={14} color={Colors.violet3} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.title}>Codigos de acesso</Text>
+            <Text style={s.title}>Códigos de acesso</Text>
             <Text style={s.subtitle}>
               {data ? data.codes.length + " codigo" + (data.codes.length !== 1 ? "s" : "") : "Carregando..."}
               {" · "}
@@ -181,12 +181,12 @@ export function AccessCodesCard() {
         <>
           {/* ── FORM ───────────────────────────────── */}
           <View style={s.formSection}>
-            <Text style={s.sectionLabel}>Criar novo codigo</Text>
+            <Text style={s.sectionLabel}>Criar novo código</Text>
 
             {/* Linha 1: code + type */}
             <View style={s.row}>
               <View style={{ flex: 2 }}>
-                <Text style={s.fieldLabel}>Codigo</Text>
+                <Text style={s.fieldLabel}>Código</Text>
                 <TextInput
                   value={formCode}
                   onChangeText={function(t) { setFormCode(t.toUpperCase()); }}
@@ -214,8 +214,8 @@ export function AccessCodesCard() {
                 <Text style={s.fieldLabel}>Plano de acesso</Text>
                 <View style={s.chipRow}>
                   <Chip label="Essencial" active={formPlan === "essencial"} onPress={function() { setFormPlan("essencial"); }} />
-                  <Chip label="Negocio" active={formPlan === "negocio"} onPress={function() { setFormPlan("negocio"); }} />
-                  <Chip label="Expansao" active={formPlan === "expansao"} onPress={function() { setFormPlan("expansao"); }} />
+                  <Chip label="Negócio" active={formPlan === "negocio"} onPress={function() { setFormPlan("negocio"); }} />
+                  <Chip label="Expansão" active={formPlan === "expansao"} onPress={function() { setFormPlan("expansao"); }} />
                 </View>
               </View>
               <View style={{ flex: 1 }}>
@@ -290,7 +290,7 @@ export function AccessCodesCard() {
               <TextInput
                 value={search}
                 onChangeText={function(t) { setSearch(t.toUpperCase()); }}
-                placeholder="Buscar por codigo..."
+                placeholder="Buscar por código..."
                 placeholderTextColor={Colors.ink3}
                 style={[s.input, { flex: 2 }]}
               />
@@ -311,7 +311,7 @@ export function AccessCodesCard() {
             {isLoading && <ActivityIndicator color={Colors.violet3} style={{ marginTop: 16 }} />}
             {!isLoading && filteredCodes.length === 0 && (
               <View style={s.emptyState}>
-                <Text style={s.emptyText}>Nenhum codigo encontrado com esses filtros.</Text>
+                <Text style={s.emptyText}>Nenhum código encontrado com esses filtros.</Text>
               </View>
             )}
 

@@ -15,8 +15,8 @@ var AURA_WA = "5512991234567"; // WhatsApp Aura
 var AURA_EMAIL = "suporte@getaura.com.br";
 
 var CATEGORIES = [
-  { key: "suporte", label: "Duvida ou ajuda", icon: "help", desc: "Tire duvidas sobre o uso da plataforma" },
-  { key: "dominio", label: "Solicitar dominio", icon: "link", desc: "Solicite um dominio personalizado para seu Canal Digital" },
+  { key: "suporte", label: "Dúvida ou ajuda", icon: "help", desc: "Tire dúvidas sobre o uso da plataforma" },
+  { key: "dominio", label: "Solicitar domínio", icon: "link", desc: "Solicite um domínio personalizado para seu Canal Digital" },
   { key: "consultoria", label: "Agendar consultoria", icon: "calendar", desc: "Agende uma consultoria com nosso analista" },
   { key: "bug", label: "Reportar problema", icon: "alert", desc: "Encontrou um erro? Nos avise" },
 ];
@@ -77,7 +77,7 @@ export default function SuporteScreen() {
     },
     onSuccess: function(data: any) {
       qc.invalidateQueries({ queryKey: ["support-tickets"] });
-      toast.success("Solicitacao enviada!");
+      toast.success("Solicitação enviada!");
       setNewSubject(''); setNewMessage(''); setSelectedTicket(data.ticket.id); setView('chat');
     },
     onError: function() { toast.error("Erro ao enviar"); },
@@ -109,7 +109,7 @@ export default function SuporteScreen() {
   if (view === 'home') {
     return (
       <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
-        <ScreenHeader title="Seu Analista de Negocios" />
+        <ScreenHeader title="Seu Analista de Negócios" />
 
         {/* Welcome card */}
         <HoverCard style={s.welcomeCard}>
@@ -117,13 +117,13 @@ export default function SuporteScreen() {
             <View style={s.analystAvatar}><Text style={s.analystAvatarT}>A</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={s.welcomeTitle}>Ola, {user?.full_name?.split(' ')[0] || 'voce'}!</Text>
-              <Text style={s.welcomeDesc}>{isNegocio ? 'Seu analista de negocios esta disponivel para ajudar com configuracao, leitura de dados, duvidas e suporte.' : 'Precisa de ajuda? Nossa equipe de suporte esta pronta para atender.'}</Text>
+              <Text style={s.welcomeDesc}>{isNegocio ? 'Seu analista de negócios esta disponível para ajudar com configuração, leitura de dados, dúvidas e suporte.' : 'Precisa de ajuda? Nossa equipe de suporte esta pronta para atender.'}</Text>
             </View>
           </View>
           <View style={s.contactRow}>
             <Pressable style={s.contactBtn} onPress={function() { Linking.openURL('mailto:' + AURA_EMAIL); }}><Icon name="mail" size={14} color={Colors.violet3} /><Text style={s.contactBtnT}>Email</Text></Pressable>
             <Pressable style={s.contactBtn} onPress={function() { Linking.openURL('https://wa.me/' + AURA_WA); }}><Icon name="phone" size={14} color="#10B981" /><Text style={s.contactBtnT}>WhatsApp</Text></Pressable>
-            <Pressable style={[s.contactBtn, { backgroundColor: Colors.violet }]} onPress={function() { setView('new'); }}><Icon name="chat" size={14} color="#fff" /><Text style={[s.contactBtnT, { color: '#fff' }]}>Nova solicitacao</Text></Pressable>
+            <Pressable style={[s.contactBtn, { backgroundColor: Colors.violet }]} onPress={function() { setView('new'); }}><Icon name="chat" size={14} color="#fff" /><Text style={[s.contactBtnT, { color: '#fff' }]}>Nova solicitação</Text></Pressable>
           </View>
         </HoverCard>
 
@@ -144,7 +144,7 @@ export default function SuporteScreen() {
         {/* Ticket history */}
         {tickets.length > 0 && (
           <View>
-            <Text style={s.sectionTitle}>Minhas solicitacoes</Text>
+            <Text style={s.sectionTitle}>Minhas solicitações</Text>
             {tickets.map(function(t: any) {
               var st = STATUS_LABELS[t.status] || STATUS_LABELS.aberto;
               return (
@@ -175,7 +175,7 @@ export default function SuporteScreen() {
       <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <Pressable onPress={function() { setView('home'); }}><Icon name="arrow_left" size={20} color={Colors.ink} /></Pressable>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.ink }}>Nova solicitacao</Text>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.ink }}>Nova solicitação</Text>
         </View>
 
         <HoverCard style={s.formCard}>
@@ -183,7 +183,7 @@ export default function SuporteScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
             {CATEGORIES.map(function(c) {
               var active = newCategory === c.key;
-              return <Pressable key={c.key} onPress={function() { setNewCategory(c.key); if (c.key === 'dominio') setNewSubject('Solicitar dominio personalizado'); }} style={[s.catChip, active && s.catChipActive]}><Text style={[s.catChipT, active && s.catChipTActive]}>{c.label}</Text></Pressable>;
+              return <Pressable key={c.key} onPress={function() { setNewCategory(c.key); if (c.key === 'dominio') setNewSubject('Solicitar domínio personalizado'); }} style={[s.catChip, active && s.catChipActive]}><Text style={[s.catChipT, active && s.catChipTActive]}>{c.label}</Text></Pressable>;
             })}
           </ScrollView>
 
@@ -191,17 +191,17 @@ export default function SuporteScreen() {
           <TextInput value={newSubject} onChangeText={setNewSubject} placeholder={newCategory === 'dominio' ? 'Ex: meudominio.com.br' : 'Descreva brevemente'} placeholderTextColor={Colors.ink3} style={s.formInput} />
 
           <Text style={s.formLabel}>Mensagem</Text>
-          <TextInput value={newMessage} onChangeText={setNewMessage} placeholder={newCategory === 'dominio' ? 'Qual dominio deseja? Ja possui registro?' : 'Descreva sua duvida ou solicitacao...'} placeholderTextColor={Colors.ink3} multiline style={[s.formInput, { minHeight: 100, textAlignVertical: 'top' }]} />
+          <TextInput value={newMessage} onChangeText={setNewMessage} placeholder={newCategory === 'dominio' ? 'Qual domínio deseja? Ja possui registro?' : 'Descreva sua dúvida ou solicitação...'} placeholderTextColor={Colors.ink3} multiline style={[s.formInput, { minHeight: 100, textAlignVertical: 'top' }]} />
 
           {newCategory === 'dominio' && (
             <View style={s.domainInfo}>
               <Icon name="info" size={14} color="#06B6D4" />
-              <Text style={s.domainInfoT}>Dominio personalizado: R$ 80/ano ou R$ 152/2 anos. Voce pode trazer um dominio existente ou registraremos um novo.</Text>
+              <Text style={s.domainInfoT}>Domínio personalizado: R$ 80/ano ou R$ 152/2 anos. Você pode trazer um domínio existente ou registraremos um novo.</Text>
             </View>
           )}
 
           <Pressable style={[s.submitBtn, (!newSubject.trim() || !newMessage.trim()) && { opacity: 0.5 }]} onPress={function() { if (newSubject.trim() && newMessage.trim()) createMut.mutate(); }} disabled={!newSubject.trim() || !newMessage.trim() || createMut.isPending}>
-            <Text style={s.submitBtnT}>{createMut.isPending ? 'Enviando...' : 'Enviar solicitacao'}</Text>
+            <Text style={s.submitBtnT}>{createMut.isPending ? 'Enviando...' : 'Enviar solicitação'}</Text>
           </Pressable>
         </HoverCard>
       </ScrollView>
@@ -244,7 +244,7 @@ export default function SuporteScreen() {
               </Pressable>
             </View>
           )}
-          {ticket?.status === 'fechado' && <View style={s.closedBanner}><Text style={s.closedBannerT}>Esta solicitacao foi encerrada.</Text></View>}
+          {ticket?.status === 'fechado' && <View style={s.closedBanner}><Text style={s.closedBannerT}>Esta solicitação foi encerrada.</Text></View>}
         </View>
       )}
     </ScrollView>

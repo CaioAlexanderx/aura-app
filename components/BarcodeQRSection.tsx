@@ -44,7 +44,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
     onCodeChange(cleaned);
     setShowPreview(true);
     closeScan();
-    toast.success('Codigo capturado: ' + cleaned);
+    toast.success('Código capturado: ' + cleaned);
   }
 
   function handleGenerate() {
@@ -56,7 +56,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
     const newCode = generateEAN13(seed);
     onCodeChange(newCode);
     setShowPreview(true);
-    toast.success('Codigo gerado: ' + newCode);
+    toast.success('Código gerado: ' + newCode);
   }
 
   function handleFormatToggle(f: 'barcode' | 'qr') {
@@ -78,12 +78,12 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>Codigo de barras / QR Code</Text>
+      <Text style={s.title}>Código de barras / QR Code</Text>
 
       {/* Format toggle */}
       <View style={s.toggleRow}>
         <Pressable onPress={() => handleFormatToggle('barcode')} style={[s.toggleBtn, format === 'barcode' && s.toggleActive]}>
-          <Text style={[s.toggleText, format === 'barcode' && s.toggleTextActive]}>Codigo de barras</Text>
+          <Text style={[s.toggleText, format === 'barcode' && s.toggleTextActive]}>Código de barras</Text>
         </Pressable>
         <Pressable onPress={() => handleFormatToggle('qr')} style={[s.toggleBtn, format === 'qr' && s.toggleActive]}>
           <Text style={[s.toggleText, format === 'qr' && s.toggleTextActive]}>QR Code</Text>
@@ -96,13 +96,13 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
           style={s.input}
           value={code}
           onChangeText={(v) => { onCodeChange(v); if (v) setShowPreview(true); }}
-          placeholder="Bipe, digite ou gere o codigo"
+          placeholder="Bipe, digite ou gere o código"
           placeholderTextColor={Colors.ink3}
         />
         <Pressable
           onPress={() => setScanOpen(true)}
           style={[s.scanBtn, scanOpen && s.scanBtnActive]}
-          accessibilityLabel="Bipar codigo de barras"
+          accessibilityLabel="Bipar código de barras"
         >
           <Icon name="barcode" size={16} color={scanOpen ? '#fff' : Colors.violet3} />
         </Pressable>
@@ -117,7 +117,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
         <Pressable style={s.scanBackdrop} onPress={closeScan}>
           <Pressable style={s.scanModalCard} onPress={(e) => e?.stopPropagation?.()}>
             <View style={s.scanModalHeader}>
-              <Text style={s.scanModalTitle}>Bipar / digitar codigo</Text>
+              <Text style={s.scanModalTitle}>Bipar / digitar código</Text>
               <Pressable onPress={closeScan} style={s.scanModalClose}>
                 <Text style={s.scanModalCloseText}>×</Text>
               </Pressable>
@@ -127,7 +127,7 @@ export function BarcodeQRSection({ code, productName, price, onCodeChange, onFor
               <TextInput
                 ref={scanInputRef}
                 style={s.scanInput}
-                placeholder="Bipe ou digite o codigo..."
+                placeholder="Bipe ou digite o código..."
                 placeholderTextColor={Colors.ink3}
                 value={scanText}
                 onChangeText={setScanText}

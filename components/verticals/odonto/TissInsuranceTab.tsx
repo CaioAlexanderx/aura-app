@@ -1,5 +1,5 @@
 // AURA. — TissInsuranceTab
-// Tab "Convenios" + CatalogPickerModal + InsuranceFormModal.
+// Tab "Convênios" + CatalogPickerModal + InsuranceFormModal.
 // Extraido de TissDashboard.tsx (decomposicao).
 
 import { useState } from 'react';
@@ -40,7 +40,7 @@ export function TissInsuranceTab({ cid, onAddFromCatalog, onEdit }: InsuranceTab
       ) : items.length === 0 ? (
         <View style={st.empty}>
           <Icon name="briefcase" size={32} color="#475569" />
-          <Text style={st.emptyTitle}>Nenhum convenio cadastrado</Text>
+          <Text style={st.emptyTitle}>Nenhum convênio cadastrado</Text>
           <Text style={st.emptySub}>Adicione do catalogo Aura (Bradesco, Amil, SulAmerica, Unimed) ou crie manualmente.</Text>
         </View>
       ) : items.map(i => (
@@ -80,10 +80,10 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] });
-      Alert.alert('Convenio adicionado', `${selected!.name} foi adicionado.`);
+      Alert.alert('Convênio adicionado', `${selected!.name} foi adicionado.`);
       reset();
     },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Nao foi possivel adicionar.'),
+    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível adicionar.'),
   });
 
   function reset() { setSelected(null); setProviderCode(''); setContractNumber(''); onClose(); }
@@ -93,7 +93,7 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
       <View style={st.backdrop}>
         <View style={st.sheet}>
           <View style={st.sheetHeader}>
-            <Text style={st.sheetTitle}>{selected ? selected.name : 'Catalogo de convenios'}</Text>
+            <Text style={st.sheetTitle}>{selected ? selected.name : 'Catalogo de convênios'}</Text>
             <Pressable onPress={reset} hitSlop={10}><Icon name="x" size={18} color="#94A3B8" /></Pressable>
           </View>
           <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ padding: 14 }}>
@@ -110,7 +110,7 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
               ))
             ) : (
               <>
-                <Text style={st.label}>Codigo do prestador *</Text>
+                <Text style={st.label}>Código do prestador *</Text>
                 <TextInput value={providerCode} onChangeText={setProviderCode} style={st.input} placeholder="Ex: 12345678000190" placeholderTextColor="#475569" />
                 <Text style={st.label}>Numero do contrato (opcional)</Text>
                 <TextInput value={contractNumber} onChangeText={setContractNumber} style={st.input} placeholder="Ex: 0001234" placeholderTextColor="#475569" />
@@ -143,8 +143,8 @@ export function TissInsuranceFormModal({ visible, cid, insurance, onClose }: Ins
       method: 'PATCH',
       body: { provider_code: providerCode, contract_number: contractNumber, payment_deadline_days: parseInt(paymentDays) || 30 },
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] }); Alert.alert('Salvo', 'Convenio atualizado.'); onClose(); },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Nao foi possivel salvar.'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] }); Alert.alert('Salvo', 'Convênio atualizado.'); onClose(); },
+    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível salvar.'),
   });
 
   if (!insurance) return null;
@@ -161,7 +161,7 @@ export function TissInsuranceFormModal({ visible, cid, insurance, onClose }: Ins
             {insurance.upload_portal_url && (
               <Pressable onPress={() => Linking.openURL(insurance.upload_portal_url!)} style={[st.card, { backgroundColor: 'rgba(6,182,212,0.1)', borderColor: 'rgba(6,182,212,0.3)' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[st.cardTitle, { color: '#06B6D4' }]}>Portal do convenio</Text>
+                  <Text style={[st.cardTitle, { color: '#06B6D4' }]}>Portal do convênio</Text>
                   <Text style={[st.cardMeta, { color: '#06B6D4' }]} numberOfLines={1}>{insurance.upload_portal_url}</Text>
                 </View>
                 <Icon name="external_link" size={14} color="#06B6D4" />
@@ -172,9 +172,9 @@ export function TissInsuranceFormModal({ visible, cid, insurance, onClose }: Ins
                 <Text style={[st.cardMeta, { color: '#F59E0B' }]}>{insurance.notes_billing}</Text>
               </View>
             )}
-            <Text style={st.label}>Codigo do prestador</Text>
+            <Text style={st.label}>Código do prestador</Text>
             <TextInput value={providerCode} onChangeText={setProviderCode} style={st.input} />
-            <Text style={st.label}>Numero do contrato</Text>
+            <Text style={st.label}>Número do contrato</Text>
             <TextInput value={contractNumber} onChangeText={setContractNumber} style={st.input} />
             <Text style={st.label}>Prazo de pagamento (dias)</Text>
             <TextInput value={paymentDays} onChangeText={setPaymentDays} style={st.input} keyboardType="numeric" />

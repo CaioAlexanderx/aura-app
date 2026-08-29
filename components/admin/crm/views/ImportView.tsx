@@ -125,7 +125,7 @@ export function ImportView({ waTemplate, setWaTemplate, onImport, isImporting, i
           onPress={() => setWaTemplate(WA_TEMPLATE_DEFAULT)}
           style={[cs.actionBtn, { marginTop: 8, alignSelf: "flex-start" }]}
         >
-          <Text style={cs.actionBtnText}>Restaurar padrao</Text>
+          <Text style={cs.actionBtnText}>Restaurar padrão</Text>
         </Pressable>
       </View>
     </View>

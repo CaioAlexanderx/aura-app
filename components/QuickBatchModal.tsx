@@ -113,7 +113,7 @@ export function QuickBatchModal({
   }
 
   async function handleSubmit() {
-    if (!company?.id) { toast.error("Sessao expirada"); return; }
+    if (!company?.id) { toast.error("Sessão expirada"); return; }
     if (parsedValues.length === 0) {
       toast.error("Digite pelo menos um valor");
       return;

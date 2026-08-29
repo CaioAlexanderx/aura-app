@@ -11,7 +11,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 
 export const SESSION_TYPE_LABEL: Record<string, string> = {
-  avaliacao:'Avaliacao', instalacao:'Instalacao', adjustment:'Ajuste',
+  avaliacao:'Avaliação', instalacao:'Instalação', adjustment:'Ajuste',
   wire_change:'Troca de fio', bracket_repair:'Reparo bracket',
   retainer_check:'Checar retentor', removal:'Remocao',
   photos:'Fotos', xray:'Raio-X', other:'Outro',
@@ -114,7 +114,7 @@ export function OrthoSessionTimeline({ sessions, totalPlanned, treatmentId, comp
                   <TextInput style={st.inp} placeholder="Ex: 0.014 NiTi" placeholderTextColor="#475569" value={wireU} onChangeText={setWireU} />
                   <Text style={st.lbl}>Fio inferior</Text>
                   <TextInput style={st.inp} placeholder="Ex: 0.019x0.025 SS" placeholderTextColor="#475569" value={wireL} onChangeText={setWireL} />
-                  <Text style={st.lbl}>Evolucao</Text>
+                  <Text style={st.lbl}>Evolução</Text>
                   <TextInput style={[st.inp, { height: 72, textAlignVertical: 'top' }]} placeholder="Descreva o que foi feito..." placeholderTextColor="#475569" multiline value={evol} onChangeText={setEvol} />
                 </>
               )}

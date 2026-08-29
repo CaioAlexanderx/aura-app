@@ -113,7 +113,7 @@ export type RankingItem = {
 export type FinancialInsights = {
   health: {
     score: number;
-    label: "Saudavel" | "Atencao" | "Critico" | "Inicial";
+    label: "Saudavel" | "Atenção" | "Critico" | "Inicial";
     drivers: HealthDriver[];
     narrative: { headline: string; subline: string };
   };
@@ -170,7 +170,7 @@ export function scoreVsTarget(actual: number, target: number, clampMin = 0): num
 //
 // Esta frase e o texto mais visivel do Financeiro: e a primeira coisa que se
 // le no ResumoHero, no lugar do donut de score. Antes falava a lingua de um
-// CFO ("runway de caixa pede atencao", "indicadores dentro da meta", "maior
+// CFO ("runway de caixa pede atenção", "indicadores dentro da meta", "maior
 // alavanca") pra um publico de MEI, salao e loja.
 //
 // Agora cada frase diz um FATO sobre o dinheiro do usuario, com o numero
@@ -181,7 +181,7 @@ export function buildNarrative(args: {
   runwayDays: number;
   growthPct: number;
   txCount: number;
-  // Sem isto nao da pra distinguir "sobrou 0%" de "nao entrou nada": a margem
+  // Sem isto nao da pra distinguir "sobrou 0%" de "não entrou nada": a margem
   // e forcada a 0 nos dois casos. Opcional pra nao quebrar quem ja chama.
   hasIncome?: boolean;
 }): { headline: string; subline: string } {

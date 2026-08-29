@@ -26,7 +26,7 @@ export function ComissaoProduto({ sales, period, totalRevenue, totalCommissions 
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{sales.length}</Text><Text style={s.kpiLbl}>Vendas</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(rev)}</Text><Text style={s.kpiLbl}>Receita</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{fmt(comm)}</Text><Text style={s.kpiLbl}>Comissoes</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{fmt(comm)}</Text><Text style={s.kpiLbl}>Comissões</Text></View>
       </View>
       <Text style={s.title}>Comissao sobre produtos{period ? " \u2014 " + period : ""}</Text>
       {/* By professional */}
@@ -48,7 +48,7 @@ export function ComissaoProduto({ sales, period, totalRevenue, totalCommissions 
           <Text style={s.saleComm}>{fmt(sale.commission_amount)}</Text>
         </View>
       ))}
-      {sales.length === 0 && <Text style={s.emptyT}>Nenhuma venda de produto com comissao registrada.</Text>}
+      {sales.length === 0 && <Text style={s.emptyT}>Nenhuma venda de produto com comissão registrada.</Text>}
     </View>
   );
 }

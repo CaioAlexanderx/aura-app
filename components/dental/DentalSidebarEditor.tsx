@@ -105,7 +105,7 @@ export function DentalSidebarEditor({ visible, onClose, baseNav }: Props) {
     setSaving(true);
     try {
       await save(null);
-      toast.success("Menu restaurado ao padrao");
+      toast.success("Menu restaurado ao padrão");
       onClose();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao restaurar");
@@ -123,7 +123,7 @@ export function DentalSidebarEditor({ visible, onClose, baseNav }: Props) {
           <View style={s.header}>
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Personalizar menu</Text>
-              <Text style={s.subtitle}>Reordene com as setas, esconda o que nao usa, ou mova entre secoes</Text>
+              <Text style={s.subtitle}>Reordene com as setas, esconda o que não usa, ou mova entre seções</Text>
             </View>
             <Pressable onPress={onClose} style={s.closeBtn}><Icon name="x" size={18} color={DentalColors.ink3} /></Pressable>
           </View>
@@ -158,7 +158,7 @@ export function DentalSidebarEditor({ visible, onClose, baseNav }: Props) {
                         <Pressable
                           onPress={() => setMoveTargetIdx(isMoving ? null : entry.globalIdx)}
                           style={[s.actionBtn, isMoving && s.actionBtnActive]}
-                          {...(isWeb ? { title: "Mover para outra secao" } : {})}
+                          {...(isWeb ? { title: "Mover para outra seção" } : {})}
                         >
                           <Icon name="grid" size={12} color={isMoving ? DentalColors.cyan : DentalColors.ink3} />
                         </Pressable>
@@ -201,7 +201,7 @@ export function DentalSidebarEditor({ visible, onClose, baseNav }: Props) {
           <View style={s.footer}>
             <Pressable onPress={handleReset} disabled={saving} style={s.resetBtn}>
               <Icon name="refresh" size={12} color={DentalColors.ink3} />
-              <Text style={s.resetText}>Restaurar padrao</Text>
+              <Text style={s.resetText}>Restaurar padrão</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable onPress={onClose} disabled={saving} style={s.cancelBtn}>

@@ -53,7 +53,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
         <Text style={s.title}>{isEdit ? "Editar cliente" : "Adicionar cliente"}</Text>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
       </View>
-      <Text style={s.hint}>Campos com * sao obrigatorios.</Text>
+      <Text style={s.hint}>Campos com * são obrigatórios.</Text>
 
       <Text style={s.label}>Nome completo *</Text>
       <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Ex: Maria da Silva" placeholderTextColor={Colors.ink3} />
@@ -85,13 +85,13 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
         </View>
       </View>
 
-      <Text style={s.label}>Observacoes</Text>
-      <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Preferencias, alergias..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
+      <Text style={s.label}>Observações</Text>
+      <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Preferências, alergias..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />
 
       <View style={s.footer}>
         <Pressable onPress={onCancel} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
         <Pressable onPress={handleSave} style={s.saveBtn}>
-          <Text style={s.saveText}>{isEdit ? "Salvar alteracoes" : "Salvar cliente"}</Text>
+          <Text style={s.saveText}>{isEdit ? "Salvar alterações" : "Salvar cliente"}</Text>
         </Pressable>
       </View>
     </View>

@@ -2,9 +2,9 @@ import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 
 export const PLANS: Record<string, { label: string; price: string }> = {
-  essencial:     { label: "Essencial",     price: "R$ 89/mes"    },
-  negocio:       { label: "Negocio",       price: "R$ 169/mes"   },
-  expansao:      { label: "Expansao",      price: "R$ 269/mes"   },
+  essencial:     { label: "Essencial",     price: "R$ 89/mês"    },
+  negocio:       { label: "Negócio",       price: "R$ 169/mês"   },
+  expansao:      { label: "Expansão",      price: "R$ 269/mês"   },
   personalizado: { label: "Personalizado", price: "Sob consulta" },
 };
 
@@ -29,15 +29,15 @@ export function fmtCNPJ(raw: string): string {
 }
 
 export function validateEmail(v: string): string | null {
-  if (!v.trim()) return "E-mail e obrigatorio";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) return "Formato invalido";
+  if (!v.trim()) return "E-mail e obrigatório";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) return "Formato inválido";
   return null;
 }
 
 export function validatePhone(v: string): string | null {
   if (!v.trim()) return null;
   const nums = v.replace(/\D/g, "");
-  if (nums.length < 10 || nums.length > 11) return "Telefone invalido";
+  if (nums.length < 10 || nums.length > 11) return "Telefone inválido";
   return null;
 }
 

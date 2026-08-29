@@ -19,8 +19,8 @@ export function ImageUploadSection({ productId, currentImageUrl, onImageChange }
   const isWeb = Platform.OS === "web";
 
   async function handlePickImage() {
-    if (!isWeb || typeof document === "undefined") { toast.info("Upload disponivel na versao web"); return; }
-    if (!company?.id || !token) { toast.error("Sessao expirada"); return; }
+    if (!isWeb || typeof document === "undefined") { toast.info("Upload disponível na versão web"); return; }
+    if (!company?.id || !token) { toast.error("Sessão expirada"); return; }
 
     const input = document.createElement("input");
     input.type = "file";
@@ -32,7 +32,7 @@ export function ImageUploadSection({ productId, currentImageUrl, onImageChange }
       const file = e.target?.files?.[0];
       document.body.removeChild(input);
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) { toast.error("Imagem deve ter no maximo 5MB"); return; }
+      if (file.size > 5 * 1024 * 1024) { toast.error("Imagem deve ter no máximo 5MB"); return; }
 
       setUploading(true);
       try {

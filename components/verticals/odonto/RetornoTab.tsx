@@ -143,7 +143,7 @@ export function RetornoTab() {
           {noShowsErr && (
             <View style={s.errorBox}>
               <Icon name="alert" size={16} color={Colors.red || "#EF4444"} />
-              <Text style={s.errorText}>Erro ao carregar historico de faltas.</Text>
+              <Text style={s.errorText}>Erro ao carregar histórico de faltas.</Text>
             </View>
           )}
           {!loadNoShows && !noShowsErr && (

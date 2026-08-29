@@ -714,7 +714,7 @@ export function StudioPersonalizacaoPanel({
       // digitado: a normalização pode ter renomeado ids e preenchido
       // config, e esconder isso faria o painel divergir do banco.
       setConfig(cfg);
-      toast.success("Configuracao salva!");
+      toast.success("Configuração salva!");
       onSaved?.(cfg);
     } catch (e: any) {
       console.error("[StudioPersonalizacao] save error", {

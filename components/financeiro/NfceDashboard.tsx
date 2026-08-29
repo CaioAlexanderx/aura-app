@@ -40,7 +40,7 @@ const ST: Record<string, { bg: string; color: string; label: string }> = {
 };
 
 const PAY: Record<string, string> = {
-  dinheiro: "Dinheiro", pix: "Pix", credito: "Credito", debito: "Debito", vale: "Vale",
+  dinheiro: "Dinheiro", pix: "Pix", credito: "Crédito", debito: "Débito", vale: "Vale",
 };
 
 export function NfceDashboard({ emissions, stats, isConfigured, ambiente, onEmit, onCancel, onConfigure, onPrint }: Props) {
@@ -48,8 +48,8 @@ export function NfceDashboard({ emissions, stats, isConfigured, ambiente, onEmit
     <View style={s.container}>
       {!isConfigured && (
         <View style={s.alertBox}>
-          <Text style={s.alertTitle}>NFC-e nao configurada</Text>
-          <Text style={s.alertText}>Configure o certificado digital, CSC e inscricao estadual para emitir cupons fiscais.</Text>
+          <Text style={s.alertTitle}>NFC-e não configurada</Text>
+          <Text style={s.alertText}>Configure o certificado digital, CSC e inscrição estadual para emitir cupons fiscais.</Text>
           {onConfigure && <Pressable onPress={onConfigure} style={s.configBtn}><Text style={s.configBtnT}>Configurar NFC-e</Text></Pressable>}
         </View>
       )}
@@ -74,12 +74,12 @@ export function NfceDashboard({ emissions, stats, isConfigured, ambiente, onEmit
 
       {/* Table */}
       <View style={s.tableH}>
-        <Text style={[s.th, { width: 55 }]}>Numero</Text>
+        <Text style={[s.th, { width: 55 }]}>Número</Text>
         <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
         <Text style={[s.th, { width: 70 }]}>Pagamento</Text>
         <Text style={[s.th, { width: 80, textAlign: "right" }]}>Valor</Text>
         <Text style={[s.th, { width: 70 }]}>Status</Text>
-        <Text style={[s.th, { width: 60 }]}>Acoes</Text>
+        <Text style={[s.th, { width: 60 }]}>Ações</Text>
       </View>
 
       {emissions.map(nf => {

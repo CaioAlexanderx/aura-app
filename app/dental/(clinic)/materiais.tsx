@@ -9,7 +9,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 
 const TABS = [
   { id: "insumos",     label: "Insumos clinicos", Component: SuppliesTab },
-  { id: "laboratorio", label: "Laboratorio",      Component: LabTab },
+  { id: "laboratorio", label: "Laboratório",      Component: LabTab },
 ];
 
 export default function MateriaisScreen() {
@@ -18,9 +18,9 @@ export default function MateriaisScreen() {
   return (
     <View>
       <View style={{ marginBottom: 14 }}>
-        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>NEGOCIO</Text>
+        <Text style={{ fontSize: 11, color: DentalColors.ink3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: "600" }}>NEGÓCIO</Text>
         <Text style={{ fontSize: 26, color: DentalColors.ink, fontWeight: "700", letterSpacing: -0.5 }}>Materiais</Text>
-        <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>Insumos clinicos consumiveis e ordens de laboratorio.</Text>
+        <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>Insumos clinicos consumíveis e ordens de laboratório.</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
         {TABS.map((t) => (

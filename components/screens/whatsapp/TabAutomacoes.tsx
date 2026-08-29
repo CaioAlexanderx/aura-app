@@ -65,10 +65,10 @@ export function TabAutomacoes({ automations, activeCount, totalSent, onToggle }:
       </View>
 
       <View style={s.supportCard}>
-        <Text style={s.supportTitle}>Automacao personalizada</Text>
-        <Text style={s.supportDesc}>Precisa de uma automacao diferente? Nosso time cria fluxos sob medida para o seu negocio.</Text>
-        <Pressable onPress={() => toast.success("Redirecionando para o suporte Aura...")} style={s.supportBtn}><Text style={s.supportBtnText}>Falar com meu Analista de Negocios</Text></Pressable>
-        <Text style={s.supportHint}>Resposta em ate 2h uteis</Text>
+        <Text style={s.supportTitle}>Automação personalizada</Text>
+        <Text style={s.supportDesc}>Precisa de uma automação diferente? Nosso time cria fluxos sob medida para o seu negócio.</Text>
+        <Pressable onPress={() => toast.success("Redirecionando para o suporte Aura...")} style={s.supportBtn}><Text style={s.supportBtnText}>Falar com meu Analista de Negócios</Text></Pressable>
+        <Text style={s.supportHint}>Resposta em até 2h úteis</Text>
       </View>
     </View>
   );

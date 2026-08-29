@@ -175,7 +175,7 @@ function useMesaTokenBootstrap(): string | null {
 function useMesaWebChrome(competitionName: string | null) {
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    document.title = competitionName ? `Mesa · ${competitionName}` : "Mesa do Mesário · Aura Karatê";
+    document.title = competitionName ? `Mesa · ${competitionName}` : "Mesa do Mêsário · Aura Karatê";
   }, [competitionName]);
 }
 

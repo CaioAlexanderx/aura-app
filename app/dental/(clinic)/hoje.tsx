@@ -34,7 +34,7 @@ const ORDERS: Record<DentalPersona, SectionKey[]> = {
 
 const PERSONA_TAGLINE: Record<DentalPersona, string> = {
   dentista: "Sua agenda, pacientes e atendimentos do dia.",
-  recepcao: "Confirmacoes, check-ins, cobrancas e recall.",
+  recepcao: "Confirmacoes, check-ins, cobranças e recall.",
   gestor:   "Faturamento, conversao e indicadores da clinica.",
 };
 
@@ -93,7 +93,7 @@ export default function HojeScreen() {
 
     if (persona === "gestor") {
       return {
-        eyebrow: "FATURAMENTO REALIZADO · MES",
+        eyebrow: "FATURAMENTO REALIZADO · MÊS",
         value: Number(fat.realizado || 0),
         format: "brl" as const,
         spark: fakeSpark(Number(fat.realizado || 0)),

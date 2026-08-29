@@ -19,7 +19,7 @@ function Tag({ tag }: { tag: string }) {
 }
 
 function Stars({ r }: { r: number | null }) {
-  if (r == null) return <Text style={{ fontSize: 10, color: Colors.ink3 }}>Sem avaliacao</Text>;
+  if (r == null) return <Text style={{ fontSize: 10, color: Colors.ink3 }}>Sem avaliação</Text>;
   return <View style={{ flexDirection: "row", gap: 2 }}>{[1, 2, 3, 4, 5].map(i => <Text key={i} style={{ fontSize: 12, color: i <= r ? Colors.amber : Colors.ink3 }}>*</Text>)}</View>;
 }
 
@@ -57,11 +57,11 @@ export function CustomerRow({
     // foi cadastrado (que e onde o saldo existe), nao a current.
     const targetCompanyId = c.company_id || company?.id;
     if (!targetCompanyId) {
-      toast.error("Empresa do cliente nao identificada");
+      toast.error("Empresa do cliente não identificada");
       return;
     }
     if (typeof window === "undefined" || typeof window.prompt !== "function") {
-      toast.error("Receber pagamento disponivel apenas no navegador");
+      toast.error("Receber pagamento disponível apenas no navegador");
       return;
     }
     const raw = window.prompt(
@@ -74,7 +74,7 @@ export function CustomerRow({
     const cleaned = String(raw).replace(",", ".").replace(/[^\d.]/g, "");
     const amount = parseFloat(cleaned);
     if (!isFinite(amount) || amount <= 0) {
-      toast.error("Valor invalido");
+      toast.error("Valor inválido");
       return;
     }
     if (amount > c.creditBalance + 0.01) {
@@ -142,10 +142,10 @@ export function CustomerRow({
       {expanded && !onSelect && (
         <View style={s.detail}>
           <View style={s.detailGrid}>
-            {[["E-mail", c.email], ["Telefone", c.phone], ["Aniversario", c.birthday], ["Instagram", c.instagram || "---"], ["Primeira visita", c.firstVisit], ["Ultima compra", c.lastPurchase], ["Total gasto", fmt(c.totalSpent)], ["Visitas", String(c.visits)]].map(([l, v]) =>
+            {[["E-mail", c.email], ["Telefone", c.phone], ["Aniversário", c.birthday], ["Instagram", c.instagram || "---"], ["Primeira visita", c.firstVisit], ["Última compra", c.lastPurchase], ["Total gasto", fmt(c.totalSpent)], ["Visitas", String(c.visits)]].map(([l, v]) =>
               <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Total gasto" && { color: Colors.green }, l === "Instagram" && { color: Colors.violet3 }]}>{v}</Text></View>
             )}
-            <View style={s.detailItem}><Text style={s.detailLabel}>Avaliacao</Text><Stars r={c.rating} /></View>
+            <View style={s.detailItem}><Text style={s.detailLabel}>Avaliação</Text><Stars r={c.rating} /></View>
             {/* MULTICNPJ Onda 2.3: empresa onde foi cadastrado (so se multi-CNPJ) */}
             {showBadge && (
               <View style={s.detailItem}>
@@ -175,7 +175,7 @@ export function CustomerRow({
                 </Text>
               </Pressable>
             )}
-            {["Enviar WhatsApp", "Pedir avaliacao", "Ver historico"].map(a =>
+            {["Enviar WhatsApp", "Pedir avaliação", "Ver histórico"].map(a =>
               <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
             )}
             {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}

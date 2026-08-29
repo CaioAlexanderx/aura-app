@@ -75,7 +75,7 @@ export function DashboardAdmin() {
   }
 
   if (loadingOv) return <ListSkeleton rows={4} showCards />;
-  if (!overview) return <Text style={{ color: Colors.ink3, textAlign: "center", padding: 20 }}>Erro ao carregar metricas</Text>;
+  if (!overview) return <Text style={{ color: Colors.ink3, textAlign: "center", padding: 20 }}>Erro ao carregar métricas</Text>;
 
   var o = overview;
   var alerts = alertsData?.alerts || [];

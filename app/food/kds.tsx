@@ -215,7 +215,7 @@ export default function KdsScreen() {
             {/* Fase 7: indicador visual de impressao automatica ativa */}
             {settings?.food_comanda_print_enabled === true && isWeb && (
               <View style={[iconBtnStyle, { backgroundColor: FoodColors.green + "22", borderColor: FoodColors.green + "55" }]}
-                {...(isWeb ? ({ title: "Impressao automatica de comanda ativa" } as any) : {})}>
+                {...(isWeb ? ({ title: "Impressão automática de comanda ativa" } as any) : {})}>
                 <Text style={{ fontSize: 14 }}>🖨</Text>
               </View>
             )}

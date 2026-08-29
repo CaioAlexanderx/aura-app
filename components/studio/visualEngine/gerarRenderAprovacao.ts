@@ -77,7 +77,7 @@ export async function gerarRenderDoPedido(
     if (!blob || !blob.size) {
       throw new Error("Navegador sem suporte à gravação de vídeo — envie um snapshot ou mockup manual.");
     }
-    const contentType = blob.type && blob.type.indexOf("video/") === 0 ? blob.type.split(";")[0] : "video/webm";
+    const contentType = blob.type && blob.type.indexOf("video/") === 0 ? blob.type.split(";")[0] : "vídeo/webm";
     const b64 = await blobToBase64(blob);
     const up = await uploadStudioMockup(companyId, {
       content_base64: b64,

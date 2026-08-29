@@ -34,11 +34,11 @@ export function ReceitaAdmin() {
     <View>
       {/* MRR Waterfall */}
       <View style={s.card}>
-        <Text style={s.sectionTitle}>MRR waterfall — este mes</Text>
+        <Text style={s.sectionTitle}>MRR waterfall — este mês</Text>
         <View style={s.waterfallRow}>
           <WaterfallItem label="MRR anterior" value={w.previous_mrr} color={Colors.ink3} />
           <WaterfallItem label="+ Novo" value={w.new_mrr} color={Colors.green} sign="+" />
-          <WaterfallItem label="+ Expansao" value={w.expansion_mrr} color={Colors.violet3} sign="+" />
+          <WaterfallItem label="+ Expansão" value={w.expansion_mrr} color={Colors.violet3} sign="+" />
           <WaterfallItem label="- Churn" value={w.churn_mrr} color={Colors.red} sign="-" />
           <WaterfallItem label="= MRR atual" value={w.current_mrr} color={Colors.ink} bold />
         </View>
@@ -54,14 +54,14 @@ export function ReceitaAdmin() {
         <View style={s.econGrid}>
           <EconCard label="ARPU" value={fmt(u.arpu)} sub="por cliente" />
           <EconCard label="LTV" value={fmtK(u.ltv.value)} sub={u.ltv.months + " meses"} />
-          <EconCard label="CAC" value={u.cac.value > 0 ? fmt(u.cac.value) : "N/A"} sub={u.cac.value > 0 ? "por aquisicao" : "Sem marketing"} />
+          <EconCard label="CAC" value={u.cac.value > 0 ? fmt(u.cac.value) : "N/A"} sub={u.cac.value > 0 ? "por aquisição" : "Sem marketing"} />
           <EconCard label="LTV/CAC" value={u.ltv_cac_ratio ? u.ltv_cac_ratio + "x" : "N/A"} sub={u.ltv_cac_ratio && u.ltv_cac_ratio >= 3 ? "Saudavel" : u.ltv_cac_ratio ? "Abaixo de 3x" : ""} color={u.ltv_cac_ratio && u.ltv_cac_ratio >= 3 ? Colors.green : Colors.amber} />
         </View>
       </View>
 
       {/* Custos */}
       <View style={s.card}>
-        <Text style={s.sectionTitle}>Custos operacionais — este mes</Text>
+        <Text style={s.sectionTitle}>Custos operacionais — este mês</Text>
         <View style={s.costsRow}>
           <View style={s.costTotal}>
             <Text style={s.costTotalLabel}>Total custos</Text>
@@ -93,13 +93,13 @@ export function ReceitaAdmin() {
             })}
           </View>
         )}
-        {u.costs.breakdown.length === 0 && <Text style={s.noCosts}>Nenhum custo registrado este mes. Use POST /admin/costs para registrar.</Text>}
+        {u.costs.breakdown.length === 0 && <Text style={s.noCosts}>Nenhum custo registrado este mês. Use POST /admin/costs para registrar.</Text>}
       </View>
 
       {/* MRR Trend */}
       {trend.length > 1 && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Evolucao MRR</Text>
+          <Text style={s.sectionTitle}>Evolução MRR</Text>
           <View style={s.trendList}>
             {trend.map(function(t, i) {
               var prev = i > 0 ? trend[i-1].mrr_total : 0;
@@ -121,7 +121,7 @@ export function ReceitaAdmin() {
       {/* Forecast */}
       {f && (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Projecao de crescimento</Text>
+          <Text style={s.sectionTitle}>Projeção de crescimento</Text>
           <Text style={s.forecastGrowth}>Taxa de crescimento estimada: <Text style={{ color: Colors.violet3, fontWeight: "800" }}>{f.growth_rate_pct}% ao mes</Text></Text>
           <View style={s.forecastGrid}>
             {[3, 6, 12].map(function(m) {
@@ -144,7 +144,7 @@ export function ReceitaAdmin() {
               {f.milestones.mrr_10k && <Text style={s.milestoneItem}>R$ 10k MRR em ~{f.milestones.mrr_10k} meses</Text>}
             </View>
           )}
-          <Text style={s.disclaimer}>Projecao baseada em taxa historica. Resultados reais podem variar.</Text>
+          <Text style={s.disclaimer}>Projeção baseada em taxa histórica. Resultados reais podem variar.</Text>
         </View>
       )}
     </View>

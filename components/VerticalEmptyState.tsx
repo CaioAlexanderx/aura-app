@@ -17,24 +17,24 @@ interface Props {
 
 const EMPTY_STATES: Record<string, { icon: string; title: string; message: string }> = {
   // Core screens
-  dashboard:      { icon: "\u2B50", title: "Bem-vindo ao Painel",     message: "Seus KPIs aparecerao aqui conforme voce registra vendas e lancamentos." },
+  dashboard:      { icon: "\u2B50", title: "Bem-vindo ao Painel",     message: "Seus KPIs aparecerão aqui conforme você registra vendas e lancamentos." },
   financeiro:     { icon: "\uD83D\uDCB0", title: "Nenhum lancamento",     message: "Registre receitas e despesas para acompanhar seu financeiro." },
   pdv:            { icon: "\uD83D\uDED2", title: "Nenhuma venda hoje",    message: "Adicione produtos e faca sua primeira venda." },
   estoque:        { icon: "\uD83D\uDCE6", title: "Estoque vazio",         message: "Cadastre seus produtos para controlar o estoque." },
-  clientes:       { icon: "\uD83D\uDC65", title: "Nenhum cliente",        message: "Seus clientes aparecerao aqui apos a primeira venda." },
-  contabilidade:  { icon: "\uD83D\uDCC5", title: "Calendario limpo",      message: "Suas obrigacoes fiscais aparecerao conforme o regime tributario." },
-  nfe:            { icon: "\uD83D\uDCC4", title: "Nenhuma nota emitida",  message: "Notas fiscais serao listadas aqui apos emissao." },
+  clientes:       { icon: "\uD83D\uDC65", title: "Nenhum cliente",        message: "Seus clientes aparecerão aqui após a primeira venda." },
+  contabilidade:  { icon: "\uD83D\uDCC5", title: "Calendario limpo",      message: "Suas obrigações fiscais aparecerão conforme o regime tributário." },
+  nfe:            { icon: "\uD83D\uDCC4", title: "Nenhuma nota emitida",  message: "Notas fiscais serão listadas aqui após emissão." },
 
   // Dental
   "odonto-agenda":      { icon: "\uD83E\uDE77", title: "Nenhum agendamento",  message: "Agende a primeira consulta do dia." },
   "odonto-pacientes":   { icon: "\uD83E\uDE77", title: "Nenhum paciente",     message: "Cadastre seu primeiro paciente para comecar." },
   "odonto-odontograma": { icon: "\uD83E\uDE77", title: "Selecione um paciente", message: "Escolha um paciente para visualizar o odontograma." },
-  "odonto-orcamento":   { icon: "\uD83E\uDE77", title: "Nenhum orcamento",    message: "Crie um plano de tratamento para gerar orcamentos." },
+  "odonto-orcamento":   { icon: "\uD83E\uDE77", title: "Nenhum orçamento",    message: "Crie um plano de tratamento para gerar orçamentos." },
 
   // Barber
   "barber-agenda":      { icon: "\u2702\uFE0F", title: "Agenda livre",         message: "Nenhum agendamento para hoje. Adicione um cliente ou abra a fila." },
-  "barber-fila":        { icon: "\u2702\uFE0F", title: "Fila vazia",           message: "Ninguem na fila no momento." },
-  "barber-comissoes":   { icon: "\u2702\uFE0F", title: "Sem comissoes",        message: "Comissoes aparecerao apos o primeiro atendimento do mes." },
+  "barber-fila":        { icon: "\u2702\uFE0F", title: "Fila vazia",           message: "Ninguém na fila no momento." },
+  "barber-comissoes":   { icon: "\u2702\uFE0F", title: "Sem comissões",        message: "Comissões aparecerão após o primeiro atendimento do mês." },
   "barber-pacotes":     { icon: "\u2702\uFE0F", title: "Nenhum pacote",        message: "Crie pacotes e clubes de assinatura para fidelizar clientes." },
 };
 
@@ -45,7 +45,7 @@ export function VerticalEmptyState({ screen, title, message, moduleKey }: Props)
   const preset = EMPTY_STATES[key] || EMPTY_STATES[screen] || {
     icon: "\uD83D\uDCCA",
     title: "Nenhum dado",
-    message: "Os dados aparecerao aqui conforme voce utiliza o sistema.",
+    message: "Os dados aparecerão aqui conforme você utiliza o sistema.",
   };
 
   const displayTitle = title || preset.title;

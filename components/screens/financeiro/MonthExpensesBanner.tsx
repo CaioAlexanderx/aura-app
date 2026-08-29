@@ -43,7 +43,7 @@ export function MonthExpensesBanner({ count, total, onSwitchToMonth }: Props) {
         </Text>
       </View>
       <Pressable onPress={onSwitchToMonth} style={[s.btn, { backgroundColor: amber }]} hitSlop={4}>
-        <Text style={s.btnText}>Ver mes atual</Text>
+        <Text style={s.btnText}>Ver mês atual</Text>
       </Pressable>
     </View>
   );

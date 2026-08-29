@@ -52,7 +52,7 @@ export function useWhatsApp() {
 
   const toggleAutomation = useCallback((id: string) => {
     // Future: PATCH /companies/:id/whatsapp/automations/:aid
-    toast.success("Automacao atualizada");
+    toast.success("Automação atualizada");
   }, []);
 
   const sendMessage = useCallback((conversationId: string, text: string) => {

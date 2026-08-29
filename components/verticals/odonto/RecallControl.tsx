@@ -58,7 +58,7 @@ export function RecallControl({ patients, onSendRecall, onSchedule, onDismiss }:
 
       {thisMonth.length > 0 && (
         <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: "#06B6D4" }]}>Retorno este mes</Text>
+          <Text style={[s.sectionTitle, { color: "#06B6D4" }]}>Retorno este mês</Text>
           {thisMonth.map(p => (
             <PatientRecallCard key={p.id} patient={p} urgency="upcoming" onSendRecall={onSendRecall} onSchedule={onSchedule} />
           ))}

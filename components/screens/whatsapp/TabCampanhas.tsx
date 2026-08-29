@@ -48,7 +48,7 @@ export function TabCampanhas({ campaigns }: Props) {
         <Text style={s.newTitle}>Criar nova campanha</Text>
         <Text style={s.newDesc}>Envie mensagens personalizadas para grupos de clientes.</Text>
         <View style={s.templates}>
-          {[{ label: "Promocao", color: Colors.green }, { label: "Novidade", color: Colors.amber }, { label: "Reativacao", color: Colors.violet3 }, { label: "Evento", color: Colors.red }].map(t => (
+          {[{ label: "Promoção", color: Colors.green }, { label: "Novidade", color: Colors.amber }, { label: "Reativação", color: Colors.violet3 }, { label: "Evento", color: Colors.red }].map(t => (
             <Pressable key={t.label} onPress={() => toast.info(`Template: ${t.label}`)} style={s.template}><View style={[s.templateDot, { backgroundColor: t.color }]} /><Text style={s.templateText}>{t.label}</Text></Pressable>
           ))}
         </View>

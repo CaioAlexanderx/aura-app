@@ -22,11 +22,11 @@ export function RetentionCard() {
 
   return (
     <View style={s.card}>
-      <Text style={s.title}>Retencao de clientes</Text>
+      <Text style={s.title}>Retenção de clientes</Text>
       <View style={s.row}>
         <View style={s.metric}>
           <Text style={[s.value, { color: rateColor }]}>{retention_rate?.toFixed(0) || 0}%</Text>
-          <Text style={s.label}>Retencao</Text>
+          <Text style={s.label}>Retenção</Text>
         </View>
         <View style={s.divider} />
         <View style={s.metric}>

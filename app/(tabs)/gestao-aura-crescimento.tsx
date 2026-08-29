@@ -23,7 +23,7 @@ export default function GestaoAuraCrescimentoScreen() {
           </View>
           <View>
             <Text style={s.title}>Crescimento</Text>
-            <Text style={s.subtitle}>Funil, adocao de features e geografia</Text>
+            <Text style={s.subtitle}>Funil, adoção de features e geografia</Text>
           </View>
         </View>
       </View>

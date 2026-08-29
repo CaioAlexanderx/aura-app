@@ -669,7 +669,7 @@ function MemberRow(props: {
       <ConfirmDialog
         visible={confirmDelete}
         title="Remover membro?"
-        message="O acesso e o cadastro deste membro serao apagados definitivamente. Esta acao nao pode ser desfeita."
+        message="O acesso e o cadastro deste membro serão apagados definitivamente. Esta ação não pode ser desfeita."
         confirmLabel="Remover"
         destructive
         onConfirm={() => { setConfirmDelete(false); onDelete(); }}

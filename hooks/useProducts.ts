@@ -145,7 +145,7 @@ export function useProducts() {
   // continua identico ao de antes.
   async function addProduct(product: Product): Promise<any | null> {
     // FIX(9): mensagem clara para conta de funcionario sem empresa associada
-    if (!companyId) { toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador."); return null; }
+    if (!companyId) { toast.error("Sua conta não esta associada a uma empresa. Contate o administrador."); return null; }
     if (isDemo) return null;
     try {
       return await addMutation.mutateAsync(buildBody(product));

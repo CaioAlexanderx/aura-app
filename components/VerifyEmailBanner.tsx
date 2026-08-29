@@ -21,10 +21,10 @@ export function VerifyEmailBanner() {
         useAuthStore.setState({ user: { ...user!, email_verified: true } as any });
         toast.success("E-mail ja verificado!");
       } else {
-        toast.success("Codigo enviado! Verifique seu e-mail.");
+        toast.success("Código enviado! Verifique seu e-mail.");
       }
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao enviar codigo");
+      toast.error(err?.message || "Erro ao enviar código");
     } finally { setSending(false); }
   }
 
@@ -32,7 +32,7 @@ export function VerifyEmailBanner() {
     <View style={s.banner}>
       <Icon name="alert" size={16} color={Colors.amber} />
       <View style={s.bannerContent}>
-        <Text style={s.bannerTitle}>E-mail nao verificado</Text>
+        <Text style={s.bannerTitle}>E-mail não verificado</Text>
         <Text style={s.bannerDesc}>Verifique seu e-mail para liberar todas as funcionalidades.</Text>
       </View>
       <Pressable onPress={handleSend} style={s.bannerBtn} disabled={sending}>

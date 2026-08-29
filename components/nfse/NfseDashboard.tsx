@@ -153,7 +153,7 @@ export function NfseDashboard({ visible, onClose, initialRecipient, initialServi
       <View style={s.modal}>
         <Header
           title={mode === 'emit' ? 'Emitir NFS-e' : mode === 'config' ? 'Config NFS-e' : 'Notas Fiscais'}
-          subtitle={mode === 'list' ? 'Gestao de NFS-e' : undefined}
+          subtitle={mode === 'list' ? 'Gestão de NFS-e' : undefined}
           onBack={mode !== 'list' ? () => setMode('list') : undefined}
           onClose={onClose}
         />
@@ -248,20 +248,20 @@ function ListMode({ cid, onEmit, onConfig }: {
       qc.invalidateQueries({ queryKey: ['nfse-list', cid] });
       Alert.alert('Cancelada', 'NFS-e cancelada com sucesso.');
     },
-    onError: (err: any) => Alert.alert('Erro', err?.body?.error || 'Nao foi possivel cancelar.'),
+    onError: (err: any) => Alert.alert('Erro', err?.body?.error || 'Não foi possível cancelar.'),
   });
 
   function handleCancel(nfse: Nfse) {
     Alert.prompt(
       'Cancelar NFS-e',
-      'Digite o motivo do cancelamento (minimo 15 caracteres):',
+      'Digite o motivo do cancelamento (mínimo 15 caracteres):',
       [
         { text: 'Voltar', style: 'cancel' },
         {
           text: 'Cancelar nota', style: 'destructive',
           onPress: (reason) => {
             if (!reason || reason.length < 15) {
-              Alert.alert('Erro', 'Motivo precisa ter no minimo 15 caracteres.');
+              Alert.alert('Erro', 'Motivo precisa ter no mínimo 15 caracteres.');
               return;
             }
             cancelMut.mutate({ nid: nfse.id, reason });
@@ -291,7 +291,7 @@ function ListMode({ cid, onEmit, onConfig }: {
           </View>
           <View style={s.featureRow}>
             <Icon name="check" size={14} color="#10B981" />
-            <Text style={s.featureText}>Modo homologacao gratuito pra testar</Text>
+            <Text style={s.featureText}>Modo homologação gratuito pra testar</Text>
           </View>
           <View style={s.featureRow}>
             <Icon name="check" size={14} color="#10B981" />
@@ -485,7 +485,7 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
       onSuccess();
     },
     onError: (err: any) => {
-      const msg = err?.body?.error || 'Nao foi possivel emitir.';
+      const msg = err?.body?.error || 'Não foi possível emitir.';
       Alert.alert('Erro ao emitir', msg);
     },
   });
@@ -510,7 +510,7 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
           <View style={s.infoBanner}>
             <Icon name="info" size={12} color="#a78bfa" />
             <Text style={s.infoBannerText}>
-              {PROVIDER_LABELS[config.provider]} \u2022 {config.ambiente === 'producao' ? 'Producao' : 'Homologacao'}
+              {PROVIDER_LABELS[config.provider]} \u2022 {config.ambiente === 'producao' ? 'Produção' : 'Homologação'}
             </Text>
             <Pressable onPress={onConfig} hitSlop={10}>
               <Icon name="settings" size={12} color="#a78bfa" />
@@ -530,18 +530,18 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
               style={[s.chip, recipientType === t && s.chipActive]}
             >
               <Text style={[s.chipText, recipientType === t && s.chipTextActive]}>
-                {t === 'pf' ? 'Pessoa Fisica' : 'Pessoa Juridica'}
+                {t === 'pf' ? 'Pessoa Física' : 'Pessoa Jurídica'}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        <Text style={s.label}>Nome / Razao Social *</Text>
+        <Text style={s.label}>Nome / Razão Social *</Text>
         <TextInput
           value={recipientName}
           onChangeText={setRecipientName}
           style={s.input}
-          placeholder={recipientType === 'pf' ? 'Nome completo' : 'Razao social'}
+          placeholder={recipientType === 'pf' ? 'Nome completo' : 'Razão social'}
           placeholderTextColor="#475569"
         />
 
@@ -572,14 +572,14 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
         />
 
         {/* SERVICO */}
-        <Text style={s.section}>Servico</Text>
+        <Text style={s.section}>Serviço</Text>
 
-        <Text style={s.label}>Descricao do servico *</Text>
+        <Text style={s.label}>Descrição do serviço *</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
           style={[s.input, { minHeight: 70 }]}
-          placeholder="Ex: Consulta odontologica de avaliacao + radiografia panoramica"
+          placeholder="Ex: Consulta odontológica de avaliação + radiografia panoramica"
           placeholderTextColor="#475569"
           multiline
         />
@@ -599,7 +599,7 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
           <View style={s.summaryBox}>
             <Text style={s.summaryTitle}>Resumo</Text>
             <View style={s.summaryRow}>
-              <Text style={s.summaryLabel}>Valor do servico</Text>
+              <Text style={s.summaryLabel}>Valor do serviço</Text>
               <Text style={s.summaryValue}>R$ {formatBRL(finalAmount)}</Text>
             </View>
             <View style={s.summaryRow}>
@@ -613,7 +613,7 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
               </View>
             )}
             <View style={[s.summaryRow, { borderTopWidth: 0.5, borderTopColor: '#334155', paddingTop: 6, marginTop: 4 }]}>
-              <Text style={[s.summaryLabel, { fontWeight: '700', color: '#E2E8F0' }]}>Liquido</Text>
+              <Text style={[s.summaryLabel, { fontWeight: '700', color: '#E2E8F0' }]}>Líquido</Text>
               <Text style={[s.summaryValue, { fontWeight: '700', color: '#10B981' }]}>
                 R$ {formatBRL(issRetained ? finalAmount - issValue : finalAmount)}
               </Text>
@@ -708,7 +708,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
       Alert.alert('Salvo', 'Config NFS-e atualizada.');
       onDone();
     },
-    onError: (err: any) => Alert.alert('Erro', err?.body?.error || 'Nao foi possivel salvar.'),
+    onError: (err: any) => Alert.alert('Erro', err?.body?.error || 'Não foi possível salvar.'),
   });
 
   if (isLoading) {
@@ -750,7 +750,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
             style={[s.chip, ambiente === a && s.chipActive]}
           >
             <Text style={[s.chipText, ambiente === a && s.chipTextActive]}>
-              {a === 'homologacao' ? 'Homologacao' : 'Producao'}
+              {a === 'homologacao' ? 'Homologação' : 'Produção'}
             </Text>
           </Pressable>
         ))}
@@ -780,7 +780,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
       {/* Dados fiscais */}
       <Text style={s.section}>Dados fiscais</Text>
 
-      <Text style={s.label}>Inscricao Municipal *</Text>
+      <Text style={s.label}>Inscrição Municipal *</Text>
       <TextInput
         value={im}
         onChangeText={setIm}
@@ -792,7 +792,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
         IM da prefeitura onde a clinica esta cadastrada. Sem IM, nao da pra emitir.
       </Text>
 
-      <Text style={s.label}>Codigo de servico padrao</Text>
+      <Text style={s.label}>Código de serviço padrão</Text>
       <TextInput
         value={serviceCode}
         onChangeText={setServiceCode}
@@ -847,7 +847,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
         ) : (
           <>
             <Icon name="check" size={14} color="#fff" />
-            <Text style={s.btnPrimaryText}>Salvar configuracao</Text>
+            <Text style={s.btnPrimaryText}>Salvar configuração</Text>
           </>
         )}
       </Pressable>

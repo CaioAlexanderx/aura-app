@@ -169,7 +169,7 @@ export function LeadDetailView({
         ) : (
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
             <Text style={{ fontSize: 16, fontWeight: "700", color: lead.expected_plan ? Colors.violet3 : Colors.ink3 }}>
-              {lead.expected_plan ? PLANS.find((p) => p.key === lead.expected_plan)?.label || lead.expected_plan : "Nao definido"}
+              {lead.expected_plan ? PLANS.find((p) => p.key === lead.expected_plan)?.label || lead.expected_plan : "Não definido"}
             </Text>
             <Text style={{ fontSize: 14, fontWeight: "800", color: Colors.green }}>
               {lead.expected_mrr ? fmtMoney(lead.expected_mrr) + "/mes" : ""}
@@ -183,12 +183,12 @@ export function LeadDetailView({
         <Text style={cs.sectionTitle}>Dados</Text>
         {[
           ["Telefone", fmtPhone(lead.phone)],
-          ["Endereco", lead.address],
+          ["Endereço", lead.address],
           ["Site", lead.website],
           ["Nota Google", lead.google_rating ? `${lead.google_rating} (${lead.google_reviews || 0} av.)` : null],
-          ["Ultimo contato", fmtDate(lead.last_contact_at)],
-          ["Ultima atividade", fmtDate(lead.last_activity_at)],
-          ["Proximo follow-up", lead.next_followup_at ? fmtDate(lead.next_followup_at) + (lead.followup_overdue ? " ⚠" : "") : null],
+          ["Último contato", fmtDate(lead.last_contact_at)],
+          ["Última atividade", fmtDate(lead.last_activity_at)],
+          ["Próximo follow-up", lead.next_followup_at ? fmtDate(lead.next_followup_at) + (lead.followup_overdue ? " ⚠" : "") : null],
           ["Cadastrado", fmtDate(lead.created_at)],
         ].map(([label, val]) => {
           if (!val || val === "-") return null;

@@ -36,15 +36,15 @@ export const GUIDE_TYPE_LABELS: Record<string, string> = {
   consulta:   'Consulta',
   sp_sadt:    'SP/SADT (procedimentos)',
   honorario:  'Honorario individual',
-  internacao: 'Solicitacao de internacao',
+  internacao: 'Solicitação de internacao',
 };
 
 export const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   rascunho:           { bg: 'rgba(148,163,184,0.15)', fg: '#94A3B8', label: 'Rascunho' },
-  pendente_auth:      { bg: 'rgba(245,158,11,0.15)',  fg: '#F59E0B', label: 'Aguardando autorizacao' },
+  pendente_auth:      { bg: 'rgba(245,158,11,0.15)',  fg: '#F59E0B', label: 'Aguardando autorização' },
   autorizada:         { bg: 'rgba(6,182,212,0.15)',   fg: '#06B6D4', label: 'Autorizada' },
   enviada:            { bg: 'rgba(99,102,241,0.15)',  fg: '#6366F1', label: 'Enviada' },
-  em_analise:         { bg: 'rgba(245,158,11,0.15)',  fg: '#F59E0B', label: 'Em analise' },
+  em_analise:         { bg: 'rgba(245,158,11,0.15)',  fg: '#F59E0B', label: 'Em análise' },
   paga:               { bg: 'rgba(16,185,129,0.15)',  fg: '#10B981', label: 'Paga' },
   paga_parcial:       { bg: 'rgba(245,158,11,0.15)',  fg: '#F59E0B', label: 'Paga parcial' },
   glosada:            { bg: 'rgba(239,68,68,0.15)',   fg: '#EF4444', label: 'Glosada' },

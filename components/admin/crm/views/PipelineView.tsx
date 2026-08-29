@@ -69,7 +69,7 @@ export function PipelineView({ stats, metaStats, pipeline, onStatusClick }: Prop
               </View>
               <View style={s_funnel.mrrBox}>
                 <Text style={[s_funnel.mrrVal, { color: Colors.ink }]}>{stats.avg_score}</Text>
-                <Text style={s_funnel.mrrLabel}>Score medio</Text>
+                <Text style={s_funnel.mrrLabel}>Score médio</Text>
               </View>
             </View>
           ) : null}

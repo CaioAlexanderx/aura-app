@@ -1,7 +1,7 @@
 // ============================================================
 // ConsultaEndModal — Encerramento da consulta com edicao livre.
 // PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
-// FIX-7 (2026-05-09): removido texto "Tudo aqui e editavel...";
+// FIX-7 (2026-05-09): removido texto "Tudo aqui e editável...";
 //   layout mais limpo com instrucao minima.
 // ============================================================
 
@@ -32,14 +32,14 @@ interface Props {
 }
 
 function buildToothChangesText(changes: ToothChange[]): string {
-  if (changes.length === 0) return "Sem alteracoes no odontograma nesta sessao.";
+  if (changes.length === 0) return "Sem alterações no odontograma nesta sessão.";
   return changes
     .map((c) => `• Dente ${c.tooth_number}: ${c.prev_status || "—"} → ${c.status}${c.notes ? " (" + c.notes + ")" : ""}`)
     .join("\n");
 }
 
 function buildTranscriptSummary(segments: VoiceSegment[]): string {
-  if (segments.length === 0) return "Sem transcricao por voz nesta sessao.";
+  if (segments.length === 0) return "Sem transcricao por voz nesta sessão.";
   const recent = segments.slice(-10).map((s) => s.text).join(" ");
   return recent.slice(0, 600) + (recent.length > 600 ? "..." : "");
 }
@@ -109,10 +109,10 @@ export function ConsultaEndModal({
       qc.invalidateQueries({ queryKey: ["dental-hoje-appointments"] });
       qc.invalidateQueries({ queryKey: ["dental-agenda-window"] });
       qc.invalidateQueries({ queryKey: ["dental-chart"] });
-      toast.success("Evolucao salva, consulta concluida");
+      toast.success("Evolução salva, consulta concluida");
       onDone();
     },
-    onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar evolucao"),
+    onError: (e: any) => toast.error(e?.data?.error || "Erro ao salvar evolução"),
   });
 
   return (
@@ -225,7 +225,7 @@ export function ConsultaEndModal({
               }}>
               {saveMut.isPending ? <ActivityIndicator color="#fff" size="small" /> : null}
               <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>
-                {saveMut.isPending ? "Salvando..." : "Salvar evolucao · Encerrar"}
+                {saveMut.isPending ? "Salvando..." : "Salvar evolução · Encerrar"}
               </Text>
             </Pressable>
           </View>

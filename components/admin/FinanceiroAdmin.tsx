@@ -30,7 +30,7 @@ export function FinanceiroAdmin() {
         <HoverCard style={[s.card, { flex: 1 }]}>
           <Text style={s.ct}>Custos operacionais</Text>
           <Text style={[s.big, { color: Colors.amber }]}>{fmt(totalCosts)}</Text>
-          <Text style={s.hint}>Total de custos no mes atual</Text>
+          <Text style={s.hint}>Total de custos no mês atual</Text>
         </HoverCard>
         <HoverCard style={[s.card, { flex: 1 }]}>
           <Text style={s.ct}>Margem bruta</Text>
@@ -39,7 +39,7 @@ export function FinanceiroAdmin() {
         </HoverCard>
       </View>
       <HoverCard style={s.card}>
-        <Text style={s.ct}>Projecao anual</Text>
+        <Text style={s.ct}>Projeção anual</Text>
         <Text style={[s.big, { color: Colors.violet3 }]}>{fmt(mrrEstimated * 12)}</Text>
         <Text style={s.hint}>Baseado no MRR atual de {fmt(mrrEstimated)}</Text>
       </HoverCard>

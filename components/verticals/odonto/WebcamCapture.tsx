@@ -58,7 +58,7 @@ export function WebcamCapture({ visible, onClose, onCapture, title, hint, facing
 
     async function initCamera() {
       if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        setError("Webcam nao suportada neste navegador");
+        setError("Webcam não suportada neste navegador");
         setStage("error");
         return;
       }
@@ -80,11 +80,11 @@ export function WebcamCapture({ visible, onClose, onCapture, title, hint, facing
       } catch (e: any) {
         const msg = e?.message || "";
         if (e?.name === "NotAllowedError" || msg.includes("Permission")) {
-          setError("Permissao da camera negada. Habilite nas configuracoes do navegador.");
+          setError("Permissão da camera negada. Habilite nas configurações do navegador.");
         } else if (e?.name === "NotFoundError") {
           setError("Nenhuma camera encontrada neste dispositivo.");
         } else {
-          setError("Nao foi possivel acessar a camera: " + msg);
+          setError("Não foi possível acessar a camera: " + msg);
         }
         setStage("error");
       }
@@ -177,7 +177,7 @@ export function WebcamCapture({ visible, onClose, onCapture, title, hint, facing
         setStage("preview");
         stopStream();
       } else {
-        toast.error("Arquivo invalido");
+        toast.error("Arquivo inválido");
       }
     };
     reader.readAsDataURL(file);

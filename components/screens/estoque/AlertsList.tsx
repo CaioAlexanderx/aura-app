@@ -22,14 +22,14 @@ export function AlertsList({ products }: { products: Product[] }) {
   const lowStock = products.filter(p => p.stock <= p.minStock).sort((a, b) => (a.stock / (a.minStock || 1)) - (b.stock / (b.minStock || 1)));
 
   if (lowStock.length === 0) return (
-    <View style={s.allGood}><Text style={s.allGoodIcon}>OK</Text><Text style={s.allGoodTitle}>Estoque em dia!</Text><Text style={s.allGoodSub}>Nenhum produto abaixo do estoque minimo.</Text></View>
+    <View style={s.allGood}><Text style={s.allGoodIcon}>OK</Text><Text style={s.allGoodTitle}>Estoque em dia!</Text><Text style={s.allGoodSub}>Nenhum produto abaixo do estoque mínimo.</Text></View>
   );
 
   return (
     <View>
       <View style={s.alertHeader}><Text style={s.alertHeaderText}>{lowStock.length} produto{lowStock.length > 1 ? "s" : ""} abaixo do estoque minimo</Text></View>
       <View style={s.listCard}>{lowStock.map(p => <AlertRow key={p.id} product={p} />)}</View>
-      <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposicao</Text><Text style={s.reorderValue}>{fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque minimo</Text></View>
+      <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposição</Text><Text style={s.reorderValue}>{fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque mínimo</Text></View>
     </View>
   );
 }

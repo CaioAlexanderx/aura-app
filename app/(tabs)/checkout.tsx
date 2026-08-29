@@ -12,9 +12,9 @@ import { toast } from "@/components/Toast";
 var isWeb = Platform.OS === "web";
 
 var PLANS = [
-  { key: "essencial", label: "Essencial", monthly: 89, desc: "Base para comecar", features: ["PDV + cupom fiscal", "Cadastro e gestao de produtos", "Financeiro completo", "Relatorios contabeis basicos", "1 usuario"] },
-  { key: "negocio", label: "Negocio", monthly: 169, desc: "Operacao completa", popular: true, features: ["Tudo do Essencial", "Estoque completo com baixa automatica e etiquetas", "Emissao de NF-e, NFC-e e NFS-e", "Sua loja online inclusa", "Financeiro completo (DRE + fluxo de caixa)", "Folha salarial", "Relatorios contabeis completos", "Suporte prioritario"] },
-  { key: "expansao", label: "Expansao", monthly: 269, desc: "Escala e automacao", features: ["Tudo do Negocio", "Gateway personalizado (use sua maquininha)", "API + integracoes ilimitadas", "Hub social (Instagram e WhatsApp)", "Automacoes avancadas conectadas nas redes sociais", "IA avancada dentro de cada modulo", "Usuarios ilimitados", "Multi CNPJ", "Emissao de NFS-e ilimitadas"] },
+  { key: "essencial", label: "Essencial", monthly: 89, desc: "Base para comecar", features: ["PDV + cupom fiscal", "Cadastro e gestão de produtos", "Financeiro completo", "Relatórios contábeis básicos", "1 usuário"] },
+  { key: "negocio", label: "Negócio", monthly: 169, desc: "Operação completa", popular: true, features: ["Tudo do Essencial", "Estoque completo com baixa automática e etiquetas", "Emissão de NF-e, NFC-e e NFS-e", "Sua loja online inclusa", "Financeiro completo (DRE + fluxo de caixa)", "Folha salarial", "Relatórios contábeis completos", "Suporte prioritario"] },
+  { key: "expansao", label: "Expansão", monthly: 269, desc: "Escala e automação", features: ["Tudo do Negócio", "Gateway personalizado (use sua maquininha)", "API + integrações ilimitadas", "Hub social (Instagram e WhatsApp)", "Automações avancadas conectadas nas redes sociais", "IA avancada dentro de cada módulo", "Usuários ilimitados", "Multi CNPJ", "Emissão de NFS-e ilimitadas"] },
 ];
 
 var ANNUAL_DISCOUNT = 1 / 6; // 2 meses grátis
@@ -74,7 +74,7 @@ function addMonthsIso(base: Date, months: number) {
   return d.toISOString().slice(0, 10);
 }
 
-// 13/07/2026: o checkout abria SEMPRE em "Negocio / mensal", ignorando o que a
+// 13/07/2026: o checkout abria SEMPRE em "Negócio / mensal", ignorando o que a
 // empresa ja assina. Cliente que cai no checkout pra refazer a assinatura (cartao
 // recusado, cobranca reemitida) tinha que lembrar de trocar plano E ciclo na mao —
 // caso Encanto: Essencial anual (R$93,17 c/ 1 acesso extra) viraria Negocio mensal
@@ -208,7 +208,7 @@ export default function CheckoutScreen() {
         toast.success(res.trial_days ? res.trial_days + " dias gratis aplicados!" : "Cupom de " + res.discount_pct + "% aplicado!");
       } else {
         setCouponApplied(null);
-        setCouponError(res.error || "Cupom invalido");
+        setCouponError(res.error || "Cupom inválido");
       }
     } catch (err: any) {
       setCouponApplied(null);
@@ -233,7 +233,7 @@ export default function CheckoutScreen() {
       .then(function (res) {
         if (cancelled) return;
         if (res.valid) setCouponApplied(res);
-        else { setCouponApplied(null); setCouponError(res.error || "Cupom invalido"); }
+        else { setCouponApplied(null); setCouponError(res.error || "Cupom inválido"); }
       })
       .catch(function () { });
     return function () { cancelled = true; };
@@ -298,7 +298,7 @@ export default function CheckoutScreen() {
       await hydrate();
       setTimeout(function () { router.replace("/(tabs)/" as any); }, 2000);
     } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartao");
+      toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartão");
     } finally { setTokenizing(false); }
   }
 
@@ -367,7 +367,7 @@ export default function CheckoutScreen() {
   function copyPix() {
     if (!pixCopyPaste) return;
     if (isWeb && typeof navigator !== "undefined" && navigator.clipboard) navigator.clipboard.writeText(pixCopyPaste);
-    toast.success("Codigo Pix copiado!");
+    toast.success("Código Pix copiado!");
   }
 
   // 2026-06-18: gate para usuário multi-CNPJ em modo consolidado (company=null).

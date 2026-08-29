@@ -49,7 +49,7 @@ export function ConsultaProntuarioPanel({ patient, planItems, timeline }: Props)
       <View style={card}>
         <Text style={cardEyebrow("cyan")}>ANAMNESE</Text>
         <Row label="Alergias" value={patient?.allergies || "—"} valueColor={patient?.allergies ? DentalColors.red : undefined} bold={!!patient?.allergies} />
-        <Row label="Condicoes" value={patient?.conditions || "—"} valueColor={patient?.conditions ? DentalColors.amber : undefined} bold={!!patient?.conditions} />
+        <Row label="Condições" value={patient?.conditions || "—"} valueColor={patient?.conditions ? DentalColors.amber : undefined} bold={!!patient?.conditions} />
         <Row label="Medicamentos" value={patient?.medications || "—"} />
       </View>
 
@@ -88,7 +88,7 @@ export function ConsultaProntuarioPanel({ patient, planItems, timeline }: Props)
 
       {timeline && timeline.length > 0 ? (
         <View style={{ marginTop: 8 }}>
-          <Text style={[sectionLabel, { marginBottom: 8 }]}>HISTORICO</Text>
+          <Text style={[sectionLabel, { marginBottom: 8 }]}>HISTÓRICO</Text>
           {timeline.slice(0, 8).map((t) => (
             <View key={t.id} style={{ flexDirection: "row", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
               <Text style={{ fontSize: 9, color: DentalColors.ink3, width: 42, fontWeight: "600" }}>{shortDate(t.date)}</Text>

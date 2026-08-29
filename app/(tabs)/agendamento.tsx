@@ -9,7 +9,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAppointments } from "@/hooks/useAppointments";
 
-const TABS = ["Agenda", "Horarios", "Configuracoes"];
+const TABS = ["Agenda", "Horários", "Configurações"];
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
 
@@ -108,7 +108,7 @@ function DayView({ appointments, onConfirm, onCancel }: { appointments: any[]; o
         <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
           <Text style={{ fontSize: 28 }}>📅</Text>
           <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.ink }}>Nenhum agendamento</Text>
-          <Text style={{ fontSize: 12, color: Colors.ink3 }}>Os agendamentos aparecerao aqui quando forem criados.</Text>
+          <Text style={{ fontSize: 12, color: Colors.ink3 }}>Os agendamentos aparecerão aqui quando forem criados.</Text>
         </View>
       )}
       {grouped.map(([date, apts]) => (
@@ -136,8 +136,8 @@ function TimeSlots() {
   const [selectedDay, setSelectedDay] = useState(0);
   return (
     <View>
-      <Text style={ts.title}>Horarios disponiveis</Text>
-      <Text style={ts.sub}>Selecione o dia para ver os horarios livres</Text>
+      <Text style={ts.title}>Horários disponíveis</Text>
+      <Text style={ts.sub}>Selecione o dia para ver os horários livres</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
         {DAYS.map((d, i) => <Pressable key={d} onPress={() => setSelectedDay(i)} style={[ts.dayChip, selectedDay === i && ts.dayChipActive]}><Text style={[ts.dayText, selectedDay === i && ts.dayTextActive]}>{d}</Text></Pressable>)}
       </ScrollView>
@@ -147,7 +147,7 @@ function TimeSlots() {
         <View style={ts.grid}>
           {HOURS.map(h => {
             const busy = Math.random() > 0.5;
-            return <Pressable key={h} onPress={() => !busy && toast.success("Horario " + h + " selecionado!")} style={[ts.slot, busy && ts.slotBusy]}><Text style={[ts.slotText, busy && ts.slotTextBusy]}>{h}</Text><Text style={[ts.slotLabel, busy && { color: Colors.red }]}>{busy ? "Ocupado" : "Livre"}</Text></Pressable>;
+            return <Pressable key={h} onPress={() => !busy && toast.success("Horário " + h + " selecionado!")} style={[ts.slot, busy && ts.slotBusy]}><Text style={[ts.slotText, busy && ts.slotTextBusy]}>{h}</Text><Text style={[ts.slotLabel, busy && { color: Colors.red }]}>{busy ? "Ocupado" : "Livre"}</Text></Pressable>;
           })}
         </View>
       )}
@@ -175,16 +175,16 @@ function ScheduleConfig() {
   return (
     <View>
       <HoverCard style={cfg.card}>
-        <Text style={cfg.title}>Horario de funcionamento</Text>
+        <Text style={cfg.title}>Horário de funcionamento</Text>
         <View style={cfg.row}><Text style={cfg.label}>Abertura</Text><Text style={cfg.value}>{WORK_HOURS.start}</Text></View>
         <View style={cfg.row}><Text style={cfg.label}>Fechamento</Text><Text style={cfg.value}>{WORK_HOURS.end}</Text></View>
-        <View style={cfg.row}><Text style={cfg.label}>Intervalo minimo</Text><Text style={cfg.value}>{WORK_HOURS.interval} min</Text></View>
+        <View style={cfg.row}><Text style={cfg.label}>Intervalo mínimo</Text><Text style={cfg.value}>{WORK_HOURS.interval} min</Text></View>
         <View style={cfg.row}><Text style={cfg.label}>Dia de folga</Text><Text style={cfg.value}>Domingo</Text></View>
       </HoverCard>
       <HoverCard style={cfg.card}>
-        <Text style={cfg.title}>Notificacoes</Text>
+        <Text style={cfg.title}>Notificações</Text>
         <View style={cfg.row}><Text style={cfg.label}>Lembrete para o cliente</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo - 24h antes</Text></View>
-        <View style={cfg.row}><Text style={cfg.label}>Confirmacao automatica</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo via WhatsApp</Text></View>
+        <View style={cfg.row}><Text style={cfg.label}>Confirmação automática</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo via WhatsApp</Text></View>
         <View style={cfg.row}><Text style={cfg.label}>Aviso de cancelamento</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo</Text></View>
       </HoverCard>
     </View>

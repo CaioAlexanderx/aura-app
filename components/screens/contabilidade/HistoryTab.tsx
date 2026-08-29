@@ -73,7 +73,7 @@ export function HistoryTab() {
   }
 
   if (completed.length === 0) {
-    return <EmptyState icon="check" iconColor={Colors.green} title="Historico fiscal" subtitle="Suas obrigacoes concluidas aparecerao aqui. Complete sua primeira obrigacao na aba Guias." />;
+    return <EmptyState icon="check" iconColor={Colors.green} title="Histórico fiscal" subtitle="Suas obrigações concluidas aparecerão aqui. Complete sua primeira obrigação na aba Guias." />;
   }
 
   return (
@@ -96,13 +96,13 @@ export function HistoryTab() {
 
       {totalPago > 0 && (
         <View style={s.totalCard}>
-          <Text style={s.totalLabel}>Total estimado pago em obrigacoes</Text>
+          <Text style={s.totalLabel}>Total estimado pago em obrigações</Text>
           <Text style={s.totalVal}>{fmt(totalPago)}</Text>
         </View>
       )}
 
       {/* Lista */}
-      <Text style={s.listTitle}>Obrigacoes concluidas</Text>
+      <Text style={s.listTitle}>Obrigações concluidas</Text>
       <View style={s.listCard}>
         {completed.slice(0, 20).map(function(o) {
           return (

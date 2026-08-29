@@ -73,11 +73,11 @@ export function ServerImport({ entity, onComplete }: Props) {
   async function handleImport() {
     // FIX(9): erros explicitos em vez de retorno silencioso
     if (!isWeb) {
-      toast.error("Importacao via CSV disponivel apenas no navegador (web)");
+      toast.error("Importação via CSV disponível apenas no navegador (web)");
       return;
     }
     if (!company?.id) {
-      toast.error("Sua conta nao esta associada a uma empresa. Contate o administrador.");
+      toast.error("Sua conta não esta associada a uma empresa. Contate o administrador.");
       return;
     }
     if (!token) return;
@@ -97,7 +97,7 @@ export function ServerImport({ entity, onComplete }: Props) {
         const rows = parseCSV(text);
 
         if (rows.length === 0) {
-          toast.error('Arquivo vazio ou formato invalido. Use CSV com cabecalho.');
+          toast.error('Arquivo vazio ou formato inválido. Use CSV com cabecalho.');
           return;
         }
 

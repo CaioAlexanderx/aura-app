@@ -117,7 +117,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
             )}
           </View>
 
-          <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>ou copie o codigo Pix</Texto>
+          <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>ou copie o código Pix</Texto>
           <Texto
             style={{
               fontSize: 11, color: T.ink,
@@ -140,7 +140,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
             }}
           >
             <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
-              {copied ? "✓ Codigo copiado" : "Copiar codigo Pix"}
+              {copied ? "✓ Código copiado" : "Copiar código Pix"}
             </Texto>
           </Pressable>
         </View>

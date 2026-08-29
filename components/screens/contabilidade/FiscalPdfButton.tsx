@@ -18,11 +18,11 @@ type Props = {
 var PDF_CONFIG: Record<string, { path: string; label: string; icon: string; step: number }[]> = {
   das_mei:    [{ path: "/obligations/das-mei/pdf", label: "Baixar resumo DAS-MEI", icon: "file_text", step: 0 }],
   das_sn:     [{ path: "/obligations/das-sn/pdf", label: "Baixar demonstrativo DAS", icon: "file_text", step: 2 }],
-  dasn_simei: [{ path: "/obligations/dasn/report", label: "Baixar relatorio anual", icon: "file_text", step: 0 }],
+  dasn_simei: [{ path: "/obligations/dasn/report", label: "Baixar relatório anual", icon: "file_text", step: 0 }],
   pgdas_d:    [{ path: "/obligations/das-sn/pdf", label: "Baixar demonstrativo DAS", icon: "file_text", step: 0 }],
   // Fase 2
   prolabore:  [{ path: "/obligations/gps/pdf", label: "Baixar guia GPS/DARF", icon: "file_text", step: 1 }],
-  defis:      [{ path: "/obligations/defis/report", label: "Baixar relatorio anual DEFIS", icon: "file_text", step: 0 }],
+  defis:      [{ path: "/obligations/defis/report", label: "Baixar relatório anual DEFIS", icon: "file_text", step: 0 }],
   esocial:    [{ path: "/obligations/esocial/summary", label: "Baixar resumo da folha", icon: "file_text", step: 0 }],
   fgts:       [{ path: "/obligations/fgts/pdf", label: "Baixar guia FGTS", icon: "file_text", step: 0 }],
 };
@@ -38,7 +38,7 @@ export function FiscalPdfButton({ obligationCode, stepIndex, completed }: Props)
   if (!config || completed) return null;
 
   function handleOpen() {
-    if (!company?.id || !token || !config) { toast.error("Sessao expirada"); return; }
+    if (!company?.id || !token || !config) { toast.error("Sessão expirada"); return; }
     setLoading(true);
     var url = BASE_URL + "/companies/" + company.id + config.path;
 

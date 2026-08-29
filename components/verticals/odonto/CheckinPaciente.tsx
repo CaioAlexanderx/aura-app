@@ -36,7 +36,7 @@ export function CheckinPaciente({ checkins, stats, qrCodeUrl, onCheckin, onCall,
         <Text style={s.title}>Check-in de pacientes</Text>
         {onCheckin && <Pressable onPress={onCheckin} style={s.addBtn}><Text style={s.addBtnT}>+ Check-in manual</Text></Pressable>}
       </View>
-      {qrCodeUrl && <View style={s.qrBox}><Text style={s.qrLabel}>QR Code para check-in na recepcao:</Text><Text style={s.qrUrl}>{qrCodeUrl}</Text></View>}
+      {qrCodeUrl && <View style={s.qrBox}><Text style={s.qrLabel}>QR Code para check-in na recepção:</Text><Text style={s.qrUrl}>{qrCodeUrl}</Text></View>}
       {/* Waiting */}
       {waiting.length > 0 && <Text style={s.sectionTitle}>Aguardando ({waiting.length})</Text>}
       {waiting.map(c => { const st = ST[c.status]; return (

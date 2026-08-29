@@ -181,7 +181,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
           <Text style={s.emptyTitle}>
             {leads.length === 0
               ? (filterCount > 0 ? "Nenhum lead nesses filtros" : "Tudo em dia!")
-              : "Voce zerou a fila"}
+              : "Você zerou a fila"}
           </Text>
           <Text style={s.emptyMsg}>
             {leads.length === 0
@@ -231,7 +231,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
         </View>
         <View style={s.statBox}>
           <Text style={s.statValue}>{currentIndex + 1}</Text>
-          <Text style={s.statLabel}>Posicao</Text>
+          <Text style={s.statLabel}>Posição</Text>
         </View>
         {isFetching && (
           <View style={[s.statBox, { backgroundColor: "transparent", borderColor: "transparent" }]}>

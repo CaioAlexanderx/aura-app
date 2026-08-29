@@ -137,7 +137,7 @@ export function TabMetas() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[s.teamValue, { color: Colors.green }]}>{fmt(team.total_commission || 0)}</Text>
-              <Text style={s.teamSub}>comissao total</Text>
+              <Text style={s.teamSub}>comissão total</Text>
             </View>
           </View>
           <ProgressBar pct={team.pct || 0} color={(team.pct || 0) >= 100 ? Colors.green : (team.pct || 0) >= 75 ? Colors.violet : Colors.amber} />
@@ -200,7 +200,7 @@ export function TabMetas() {
               <View style={s.empStat}><Text style={s.empStatValue}>{fmt(e.actual_revenue)}</Text><Text style={s.empStatLabel}>Realizado</Text></View>
               <View style={s.empStat}><Text style={[s.empStatValue, { color: Colors.violet3 }]}>{e.pct_revenue}%</Text><Text style={s.empStatLabel}>Atingimento</Text></View>
               <View style={s.empStat}><Text style={s.empStatValue}>{e.actual_units}</Text><Text style={s.empStatLabel}>Vendas</Text></View>
-              <View style={s.empStat}><Text style={[s.empStatValue, { color: Colors.green }]}>{fmt(e.commission_amount || 0)}</Text><Text style={s.empStatLabel}>Comissao</Text></View>
+              <View style={s.empStat}><Text style={[s.empStatValue, { color: Colors.green }]}>{fmt(e.commission_amount || 0)}</Text><Text style={s.empStatLabel}>Comissão</Text></View>
             </View>
             <ProgressBar pct={e.pct_revenue} color={e.pct_revenue >= 100 ? Colors.green : e.pct_revenue >= 75 ? Colors.violet : Colors.amber} />
             <View style={s.empFooter}>
@@ -225,7 +225,7 @@ export function TabMetas() {
       <ConfirmDialog
         visible={!!deleteTarget}
         title="Excluir meta?"
-        message={deleteTarget ? "Remover a meta de " + deleteTarget.name + " para " + monthLabel + "? Esta acao nao pode ser desfeita." : ""}
+        message={deleteTarget ? "Remover a meta de " + deleteTarget.name + " para " + monthLabel + "? Esta ação não pode ser desfeita." : ""}
         confirmLabel="Excluir"
         destructive
         onConfirm={function() { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}

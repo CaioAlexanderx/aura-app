@@ -45,7 +45,7 @@ export const TOOLTIPS: TooltipDef[] = [
   {
     id: "dashboard_welcome",
     title: "Bem-vindo ao Painel!",
-    message: "Aqui voce acompanha seus KPIs em tempo real. Os dados atualizam automaticamente.",
+    message: "Aqui você acompanha seus KPIs em tempo real. Os dados atualizam automaticamente.",
     screen: "dashboard",
     position: "top",
     delay: 500,
@@ -61,8 +61,8 @@ export const TOOLTIPS: TooltipDef[] = [
   // PDV
   {
     id: "pdv_busca",
-    title: "Busca rapida",
-    message: "Digite o nome ou codigo do produto para adicionar ao carrinho. Use Ctrl+N no desktop.",
+    title: "Busca rápida",
+    message: "Digite o nome ou código do produto para adicionar ao carrinho. Use Ctrl+N no desktop.",
     screen: "pdv",
     position: "top",
   },
@@ -70,7 +70,7 @@ export const TOOLTIPS: TooltipDef[] = [
   {
     id: "estoque_novo",
     title: "Adicionar produto",
-    message: "Clique em '+ Novo produto' ou use Ctrl+N para cadastrar. Preencha pelo menos nome e preco.",
+    message: "Clique em '+ Novo produto' ou use Ctrl+N para cadastrar. Preencha pelo menos nome e preço.",
     screen: "estoque",
     position: "top",
   },
@@ -78,7 +78,7 @@ export const TOOLTIPS: TooltipDef[] = [
   {
     id: "clientes_ranking",
     title: "Ranking de clientes",
-    message: "Seus clientes sao ordenados por LTV (valor total gasto). Clique para ver o historico.",
+    message: "Seus clientes são ordenados por LTV (valor total gasto). Clique para ver o histórico.",
     screen: "clientes",
     position: "top",
   },
@@ -86,14 +86,14 @@ export const TOOLTIPS: TooltipDef[] = [
   {
     id: "contabil_alertas",
     title: "Calendario fiscal",
-    message: "A Aura calcula estimativas e lembra dos prazos. As obrigacoes variam conforme seu regime.",
+    message: "A Aura calcula estimativas e lembra dos prazos. As obrigações variam conforme seu regime.",
     screen: "contabilidade",
     position: "top",
   },
   // NF-e
   {
     id: "nfe_emissao",
-    title: "Emissao de notas",
+    title: "Emissão de notas",
     message: "Notas podem ser emitidas automaticamente em cada venda PJ ou manualmente aqui.",
     screen: "nfe",
     position: "top",

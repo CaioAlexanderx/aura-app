@@ -129,7 +129,7 @@ export function SalesRanking() {
             />
           </View>
           <View style={s.customField}>
-            <Text style={s.customLabel}>Ate</Text>
+            <Text style={s.customLabel}>Até</Text>
             <DateInput
               value={customToBr}
               onChangeText={setCustomToBr}
@@ -151,15 +151,15 @@ export function SalesRanking() {
         <EmptyState
           icon="trophy"
           iconColor={Colors.amber}
-          title="Escolha o periodo"
-          subtitle="Preencha as datas de inicio e fim (dd/mm/aaaa) para montar o ranking do intervalo."
+          title="Escolha o período"
+          subtitle="Preencha as datas de início e fim (dd/mm/aaaa) para montar o ranking do intervalo."
         />
       )}
 
       {isLoading && <ListSkeleton rows={3} showCards />}
 
       {!isLoading && !hasData && canQuery && (
-        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda registrada" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : isCustom ? " no periodo escolhido" : " este mes") + ". Ao registrar uma venda no PDV, selecione o vendedor responsavel."} />
+        <EmptyState icon="trophy" iconColor={Colors.amber} title="Ranking de desempenho" subtitle={"Nenhuma venda registrada" + (period === "week" ? " esta semana" : period === "year" ? " este ano" : isCustom ? " no período escolhido" : " este mês") + ". Ao registrar uma venda no PDV, selecione o vendedor responsável."} />
       )}
 
       {!isLoading && hasData && data && (
@@ -175,7 +175,7 @@ export function SalesRanking() {
               <Text style={[s.kpiVal, { color: Colors.green }]}>{fmtK(totalRevenue)}</Text>
             </View>
             <View style={s.kpiCard}>
-              <Text style={s.kpiLabel}>Ticket medio</Text>
+              <Text style={s.kpiLabel}>Ticket médio</Text>
               <Text style={s.kpiVal}>{totalSales > 0 ? fmt(totalRevenue / totalSales) : "R$ 0"}</Text>
             </View>
           </View>
@@ -243,7 +243,7 @@ export function SalesRanking() {
                 <Text style={[s.tablePos, { color: Colors.ink3 }]}>-</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.tableName, { color: Colors.ink3 }]}>Sem vendedor</Text>
-                  <Text style={s.tableRole}>Vendas nao atribuidas</Text>
+                  <Text style={s.tableRole}>Vendas não atribuidas</Text>
                 </View>
                 <View style={s.tableRight}>
                   <Text style={[s.tableRevenue, { color: Colors.ink3 }]}>{fmtK(unassigned.total_revenue)}</Text>

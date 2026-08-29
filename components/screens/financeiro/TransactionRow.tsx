@@ -33,8 +33,8 @@ function extractPayment(desc: string): string | null {
   if (match) {
     var m = match[1].toLowerCase();
     if (m === "pix") return "Pix";
-    if (m === "cartao" || m === "credito") return "Cartao";
-    if (m === "debito") return "Debito";
+    if (m === "cartao" || m === "credito") return "Cartão";
+    if (m === "debito") return "Débito";
     if (m === "dinheiro") return "Dinheiro";
   }
   return null;
@@ -44,8 +44,8 @@ function extractPayment(desc: string): string | null {
 var PAYMENT_LABELS: Record<string, { label: string; bg: string; text: string }> = {
   pix:      { label: "PIX",      bg: "#00968822",   text: "#009688" },
   cash:     { label: "Dinheiro", bg: Colors.greenD, text: Colors.green },
-  credit:   { label: "Cartao",   bg: Colors.violetD, text: Colors.violet3 },
-  debit:    { label: "Debito",   bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
+  credit:   { label: "Cartão",   bg: Colors.violetD, text: Colors.violet3 },
+  debit:    { label: "Débito",   bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
   voucher:  { label: "Voucher",  bg: Colors.bg4,    text: Colors.ink3 },
   transfer: { label: "Transf.",  bg: Colors.bg4,    text: Colors.ink3 },
   boleto:   { label: "Boleto",   bg: Colors.bg4,    text: Colors.ink3 },
@@ -54,8 +54,8 @@ var PAYMENT_LABELS: Record<string, { label: string; bg: string; text: string }> 
 // Fallback colors pra extractPayment (legado)
 var paymentColors: Record<string, { bg: string; text: string }> = {
   "Pix": { bg: "#00968822", text: "#009688" },
-  "Cartao": { bg: Colors.violetD, text: Colors.violet3 },
-  "Debito": { bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
+  "Cartão": { bg: Colors.violetD, text: Colors.violet3 },
+  "Débito": { bg: Colors.amberD || "#f59e0b22", text: Colors.amber || "#f59e0b" },
   "Dinheiro": { bg: Colors.greenD, text: Colors.green },
 };
 

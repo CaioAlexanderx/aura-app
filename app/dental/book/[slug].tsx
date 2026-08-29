@@ -178,7 +178,7 @@ export default function BookPage() {
       <View style={s.page}>
         <View style={s.centerWrap}>
           <Text style={s.errorIcon}>{'\u{1F50D}'}</Text>
-          <Text style={s.errorTitle}>Agenda nao disponivel</Text>
+          <Text style={s.errorTitle}>Agenda não disponível</Text>
           <Text style={s.errorText}>
             Esta clinica ainda nao ativou o agendamento online ou o link
             esta incorreto. Confira o endereco com a clinica.
@@ -194,7 +194,7 @@ export default function BookPage() {
       <View style={s.page}>
         <View style={s.centerWrap}>
           <Text style={s.successIcon}>{'\u2705'}</Text>
-          <Text style={s.successTitle}>Solicitacao enviada!</Text>
+          <Text style={s.successTitle}>Solicitação enviada!</Text>
           <Text style={s.successText}>
             A {config.company_name} recebeu sua solicitacao para
             {' '}{ymd(selectedDate!).split('-').reverse().join('/')} as {selectedTime}.
@@ -250,7 +250,7 @@ export default function BookPage() {
         {/* Step 2: Escolher horario */}
         {selectedDate && (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>2. Escolha o horario</Text>
+            <Text style={s.sectionTitle}>2. Escolha o horário</Text>
             <View style={s.slotsGrid}>
               {slots.map((s2) => (
                 <Pressable
@@ -333,7 +333,7 @@ export default function BookPage() {
                 style={[s.input, { minHeight: 70 }]}
                 value={reason}
                 onChangeText={setReason}
-                placeholder="Ex: limpeza, dor de dente, avaliacao"
+                placeholder="Ex: limpeza, dor de dente, avaliação"
                 placeholderTextColor="#94A3B8"
                 multiline
               />

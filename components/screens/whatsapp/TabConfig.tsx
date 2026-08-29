@@ -14,7 +14,7 @@ export function TabConfig({ isConnected: initialConnected }: Props) {
         <View style={[s.statusDot, { backgroundColor: connected ? Colors.green : Colors.red }]} />
         <View style={s.statusInfo}>
           <Text style={s.statusTitle}>{connected ? "WhatsApp Business conectado" : "WhatsApp desconectado"}</Text>
-          <Text style={s.statusDesc}>{connected ? "Numero: (12) 99999-0000" : "Conecte para habilitar mensagens automaticas"}</Text>
+          <Text style={s.statusDesc}>{connected ? "Número: (12) 99999-0000" : "Conecte para habilitar mensagens automáticas"}</Text>
         </View>
         <Pressable onPress={() => { setConnected(!connected); toast.success(connected ? "Desconectado" : "Conectado"); }} style={[s.statusBtn, { borderColor: connected ? Colors.red + "44" : Colors.green + "44" }]}>
           <Text style={[s.statusBtnText, { color: connected ? Colors.red : Colors.green }]}>{connected ? "Desconectar" : "Conectar"}</Text>
@@ -22,33 +22,33 @@ export function TabConfig({ isConnected: initialConnected }: Props) {
       </View>
 
       <View style={s.section}>
-        <Text style={s.sectionTitle}>Horario de atendimento</Text>
+        <Text style={s.sectionTitle}>Horário de atendimento</Text>
         <View style={s.card}>
           <View style={s.settingRow}>
-            <View style={{ flex: 1 }}><Text style={s.settingLabel}>Respostas automaticas fora do horario</Text><Text style={s.settingHint}>Envia mensagem personalizada fora do expediente</Text></View>
+            <View style={{ flex: 1 }}><Text style={s.settingLabel}>Respostas automáticas fora do horário</Text><Text style={s.settingHint}>Envia mensagem personalizada fora do expediente</Text></View>
             <Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} />
           </View>
           <View style={s.msgPreview}>
-            <Text style={s.msgPreviewLabel}>Mensagem fora do horario:</Text>
-            <View style={s.msgBubble}><Text style={s.msgBubbleText}>Ola! Obrigado pela mensagem. Nosso horario de atendimento e de segunda a sabado, das 8h as 18h. Retornaremos assim que possivel!</Text></View>
+            <Text style={s.msgPreviewLabel}>Mensagem fora do horário:</Text>
+            <View style={s.msgBubble}><Text style={s.msgBubbleText}>Ola! Obrigado pela mensagem. Nosso horário de atendimento e de segunda a sabado, das 8h as 18h. Retornaremos assim que possível!</Text></View>
             <Pressable onPress={() => toast.info("Editar mensagem")} style={s.editBtn}><Text style={s.editBtnText}>Editar mensagem</Text></Pressable>
           </View>
           <View style={s.settingRow}>
-            <View style={{ flex: 1 }}><Text style={s.settingLabel}>Horario de atendimento</Text><Text style={s.settingHint}>Segunda a sabado, 8h as 18h</Text></View>
-            <Pressable onPress={() => toast.info("Editar horario")} style={s.editBtn}><Text style={s.editBtnText}>Editar</Text></Pressable>
+            <View style={{ flex: 1 }}><Text style={s.settingLabel}>Horário de atendimento</Text><Text style={s.settingHint}>Segunda a sabado, 8h as 18h</Text></View>
+            <Pressable onPress={() => toast.info("Editar horário")} style={s.editBtn}><Text style={s.editBtnText}>Editar</Text></Pressable>
           </View>
         </View>
       </View>
 
       <View style={s.section}>
-        <Text style={s.sectionTitle}>Notificacoes</Text>
+        <Text style={s.sectionTitle}>Notificações</Text>
         <View style={s.card}>
-          <View style={s.settingRow}><View style={{ flex: 1 }}><Text style={s.settingLabel}>Resumo diario</Text><Text style={s.settingHint}>Receba um resumo das conversas as 20h</Text></View><Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} /></View>
-          <View style={s.settingRow}><View style={{ flex: 1 }}><Text style={s.settingLabel}>Alerta de mensagem nao respondida</Text><Text style={s.settingHint}>Notifica apos 30 min sem resposta</Text></View><Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} /></View>
+          <View style={s.settingRow}><View style={{ flex: 1 }}><Text style={s.settingLabel}>Resumo diário</Text><Text style={s.settingHint}>Receba um resumo das conversas as 20h</Text></View><Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} /></View>
+          <View style={s.settingRow}><View style={{ flex: 1 }}><Text style={s.settingLabel}>Alerta de mensagem não respondida</Text><Text style={s.settingHint}>Notifica após 30 min sem resposta</Text></View><Switch value={true} trackColor={{ true: Colors.green, false: Colors.bg4 }} /></View>
         </View>
       </View>
 
-      <View style={s.infoCard}><Text style={s.infoIcon}>!</Text><Text style={s.infoText}>A integracao com WhatsApp Business API requer configuracao no Meta Business Manager. A Aura cuida da conexao no setup do seu plano.</Text></View>
+      <View style={s.infoCard}><Text style={s.infoIcon}>!</Text><Text style={s.infoText}>A integração com WhatsApp Business API requer configuração no Meta Business Manager. A Aura cuida da conexão no setup do seu plano.</Text></View>
     </View>
   );
 }

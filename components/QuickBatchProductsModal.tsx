@@ -31,7 +31,7 @@ import { nameToHex, hexToName } from "@/utils/colorNames";
 //    Camiseta | 49,90 | {P,M,G,GG} | preto | 5
 //
 // 5) MARKUP GLOBAL DO LOTE (D-M01, 18/05/2026):
-//    Campo "Markup automatico" no topo aceita 2x / 2.5x / +100% / 200%.
+//    Campo "Markup automático" no topo aceita 2x / 2.5x / +100% / 200%.
 //    Quando preenchido, a 2a coluna posicional (ou header 'custo') vira CUSTO
 //    e o preco de venda eh calculado: preco = custo * markup.
 //    Override por linha: usar header com 'custo' E 'preco' juntos -- markup
@@ -420,11 +420,11 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
 
   function handleSubmit() {
     if (validRows.length === 0) {
-      toast.error("Digite pelo menos um produto (nome obrigatorio)");
+      toast.error("Digite pelo menos um produto (nome obrigatório)");
       return;
     }
     if (exceedsMax) {
-      toast.error("Maximo de " + MAX_ROWS + " produtos por lote. Voce tem " + validRows.length + ".");
+      toast.error("Máximo de " + MAX_ROWS + " produtos por lote. Você tem " + validRows.length + ".");
       return;
     }
     mut.mutate();
@@ -467,7 +467,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
   function saveEditing() {
     if (!editingLine) return;
     if (!editFields.name.trim()) {
-      toast.error("Nome eh obrigatorio");
+      toast.error("Nome eh obrigatório");
       return;
     }
     const sep = detectSeparator(text);
@@ -515,7 +515,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
   }, [visible, validRows.length, exceedsMax, mut.isPending]);
 
   const placeholder = "Cole ou digite aqui...\n\nFormato simples:\n" + EXAMPLE_POSITIONAL;
-  const priceLabelInExample = markup ? "Custo" : "Preco";
+  const priceLabelInExample = markup ? "Custo" : "Preço";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -525,7 +525,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
           <View style={s.header}>
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Adicionar produtos em lote</Text>
-              <Text style={s.subtitle}>Cole ou digite varios produtos de uma vez</Text>
+              <Text style={s.subtitle}>Cole ou digite vários produtos de uma vez</Text>
             </View>
             <Pressable onPress={handleClose} style={s.closeBtn} hitSlop={8}>
               <Icon name="x" size={16} color={Colors.ink3} />
@@ -537,7 +537,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
             <View style={s.helpTabs}>
               <Pressable onPress={function() { setActiveHelp('basic'); }}
                 style={[s.helpTab, activeHelp === 'basic' && s.helpTabActive]}>
-                <Text style={[s.helpTabText, activeHelp === 'basic' && s.helpTabTextActive]}>Basico</Text>
+                <Text style={[s.helpTabText, activeHelp === 'basic' && s.helpTabTextActive]}>Básico</Text>
               </Pressable>
               <Pressable onPress={function() { setActiveHelp('expansion'); }}
                 style={[s.helpTab, activeHelp === 'expansion' && s.helpTabActive]}>
@@ -559,7 +559,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
               <View style={{ flex: 1 }}>
                 {activeHelp === 'basic' && (
                   <>
-                    <Text style={s.infoTitle}>Nome | Preco | Tamanho | Cor | Estoque</Text>
+                    <Text style={s.infoTitle}>Nome | Preço | Tamanho | Cor | Estoque</Text>
                     <Text style={s.infoText}>
                       So o nome eh obrigatorio. Use "|", TAB ou ";" como separador.
                       {Platform.OS === 'web' ? " A tecla Tab insere separador (Shift+Tab muda foco)." : ""}
@@ -592,7 +592,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                     <Text style={s.infoTitle}>Agrupar por categoria: [Categoria]</Text>
                     <Text style={s.infoText}>
                       Coloque [Categoria] em uma linha sozinha. Itens abaixo herdam ate o proximo marcador.
-                      Tambem aceita primeira linha como cabecalho (ex: "# nome ; preco ; estoque").
+                      Tambem aceita primeira linha como cabecalho (ex: "# nome ; preço ; estoque").
                     </Text>
                     <View style={s.exampleBox}>
                       <Text style={s.exampleText}>{EXAMPLE_SECTIONS}</Text>
@@ -604,7 +604,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                 )}
                 {activeHelp === 'markup' && (
                   <>
-                    <Text style={s.infoTitle}>Markup automatico: digite custo, vendemos calculado</Text>
+                    <Text style={s.infoTitle}>Markup automático: digite custo, vendemos calculado</Text>
                     <Text style={s.infoText}>
                       Preencha o campo Markup acima (ex: 2x, 2.5x, +100%) e digite o CUSTO no
                       lugar do preco. O preco de venda eh calculado automaticamente.
@@ -612,7 +612,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                     <View style={s.exampleBox}>
                       <Text style={s.exampleText}>{"Markup: 2x\n\n" + EXAMPLE_MARKUP + "\n\n-> Camiseta R$ 50,00 (custo 25)\n-> Bermuda R$ 70,00 (custo 35)"}</Text>
                     </View>
-                    <Text style={s.infoTextSmall}>Aceita "2x", "2.5x", "+100%", "200%". Linhas com header "custo" + "preco" juntos ignoram o markup.</Text>
+                    <Text style={s.infoTextSmall}>Aceita "2x", "2.5x", "+100%", "200%". Linhas com header "custo" + "preço" juntos ignoram o markup.</Text>
                     <Pressable onPress={function() { loadExample('markup'); }} style={s.exampleLoadBtn}>
                       <Text style={s.exampleLoadText}>Carregar exemplo com markup 2x</Text>
                     </Pressable>
@@ -640,7 +640,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                 </View>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Categoria padrao</Text>
+                <Text style={s.label}>Categoria padrão</Text>
                 <Pressable onPress={function() { setShowCatPicker(!showCatPicker); }} style={s.catPicker}>
                   <Icon name="tag" size={13} color={Colors.violet3} />
                   <Text style={s.catPickerText} numberOfLines={1}>{category}</Text>
@@ -764,7 +764,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                               style={[s.editInput, { flex: 1 }]}
                               value={editFields.price}
                               onChangeText={function(v) { setEditFields(Object.assign({}, editFields, { price: v })); }}
-                              placeholder={markup ? "Custo" : "Preco"}
+                              placeholder={markup ? "Custo" : "Preço"}
                               placeholderTextColor={Colors.ink3}
                               keyboardType="decimal-pad"
                             />

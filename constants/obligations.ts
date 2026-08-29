@@ -30,31 +30,31 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   cnpj_config: {
     id: "cnpj_config", name: "CNPJ e regime configurados", icon: "#",
     category: "aura_resolve", frequency: "initial",
-    description: "Regime tributário detectado via Receita Federal. Obrigacoes carregadas automaticamente.",
+    description: "Regime tributário detectado via Receita Federal. Obrigações carregadas automaticamente.",
     dueDay: null, dueMonth: null, hasAmount: false,
     steps: [
-      { text: "Aura detecta seu regime tributario", auto: true, media: null, hint: "Via consulta ao CNPJ" },
-      { text: "Obrigacoes carregadas automaticamente", auto: true, media: null, hint: "Baseado no seu regime" },
+      { text: "Aura detecta seu regime tributário", auto: true, media: null, hint: "Via consulta ao CNPJ" },
+      { text: "Obrigações carregadas automaticamente", auto: true, media: null, hint: "Baseado no seu regime" },
     ],
   },
   alerts_config: {
     id: "alerts_config", name: "Alertas de vencimento ativos", icon: "!",
     category: "aura_resolve", frequency: "always",
-    description: "Notificacoes configuradas: 15 dias, 7 dias e 3 dias antes do vencimento.",
+    description: "Notificações configuradas: 15 dias, 7 dias e 3 dias antes do vencimento.",
     dueDay: null, dueMonth: null, hasAmount: false,
     steps: [
       { text: "Aura configura os alertas", auto: true, media: null, hint: "15d, 7d e 3d antes" },
-      { text: "Voce recebe notificacao no app", auto: true, media: null, hint: "Push + email" },
+      { text: "Você recebe notificação no app", auto: true, media: null, hint: "Push + email" },
     ],
   },
   monthly_summary: {
-    id: "monthly_summary", name: "Resumo gerencial do mes", icon: "$",
+    id: "monthly_summary", name: "Resumo gerencial do mês", icon: "$",
     category: "aura_resolve", frequency: "monthly",
     description: "Resumo financeiro mensal gerado automaticamente com base nos lancamentos.",
     dueDay: null, dueMonth: null, hasAmount: false,
     steps: [
-      { text: "Aura compila os dados do mes", auto: true, media: null, hint: "Receitas, despesas, lucro" },
-      { text: "Relatorio disponivel no Financeiro", auto: true, media: null, hint: "Aba Resumo" },
+      { text: "Aura compila os dados do mês", auto: true, media: null, hint: "Receitas, despesas, lucro" },
+      { text: "Relatório disponível no Financeiro", auto: true, media: null, hint: "Aba Resumo" },
     ],
   },
 
@@ -62,22 +62,22 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   das_mei: {
     id: "das_mei", name: "DAS-MEI", icon: "$",
     category: "aura_resolve", frequency: "monthly",
-    description: "Guia mensal que reune INSS, ISS e ICMS em um unico pagamento. Valor fixo definido pelo governo.",
+    description: "Guia mensal que reune INSS, ISS e ICMS em um único pagamento. Valor fixo definido pelo governo.",
     dueDay: 20, dueMonth: null, hasAmount: true,
     steps: [
       { text: "Aura calcula o valor do DAS", auto: true, media: null, hint: "INSS + ISS + ICMS" },
       { text: "QR Code Pix gerado", auto: true, media: null, hint: "Escaneie com app bancario" },
-      { text: "Aura confirma o pagamento", auto: true, media: null, hint: "Notificacao automatica" },
+      { text: "Aura confirma o pagamento", auto: true, media: null, hint: "Notificação automática" },
     ],
   },
   dasn_simei: {
     id: "dasn_simei", name: "DASN-SIMEI", icon: "D",
     category: "aura_facilita", frequency: "annual",
-    description: "Declaracao anual que resume o faturamento do ano anterior. Prazo ate 31 de maio.",
+    description: "Declaração anual que resume o faturamento do ano anterior. Prazo até 31 de maio.",
     dueDay: 31, dueMonth: 5, hasAmount: false,
     steps: [
       { text: "Aura consolida faturamento anual", auto: true, media: null, hint: "Soma de todas as notas" },
-      { text: "Aura pre-preenche declaracao", auto: true, media: null, hint: "Revise antes" },
+      { text: "Aura pre-preenche declaração", auto: true, media: null, hint: "Revise antes" },
       { text: "Acesse portal Simples Nacional", auto: false, media: null, hint: "receita.fazenda.gov.br" },
       { text: "Confira e clique Transmitir", auto: false, media: null, hint: "Compare valores" },
     ],
@@ -97,7 +97,7 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   pgdas_d: {
     id: "pgdas_d", name: "PGDAS-D", icon: "P",
     category: "aura_facilita", frequency: "monthly",
-    description: "Apuracao mensal da receita bruta para calculo do DAS no Simples Nacional.",
+    description: "Apuracao mensal da receita bruta para cálculo do DAS no Simples Nacional.",
     dueDay: 20, dueMonth: null, hasAmount: true,
     steps: [
       { text: "Aura apura receita bruta", auto: true, media: null, hint: "Baseado nas notas" },
@@ -110,7 +110,7 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   defis: {
     id: "defis", name: "DEFIS", icon: "D",
     category: "aura_facilita", frequency: "annual",
-    description: "Declaracao de Informacoes Socioeconomicas e Fiscais do Simples Nacional.",
+    description: "Declaração de Informações Socioeconomicas e Fiscais do Simples Nacional.",
     dueDay: 31, dueMonth: 3, hasAmount: false,
     steps: [
       { text: "Aura consolida dados do ano", auto: true, media: null, hint: "Receitas, despesas, folha" },
@@ -124,20 +124,20 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
   fgts: {
     id: "fgts", name: "FGTS", icon: "F",
     category: "aura_resolve", frequency: "monthly",
-    description: "Fundo de Garantia para funcionarios. 8% sobre salario. Obrigatorio todo mes.",
+    description: "Fundo de Garantia para funcionarios. 8% sobre salário. Obrigatório todo mês.",
     dueDay: 7, dueMonth: null, hasAmount: true,
     steps: [
-      { text: "Aura calcula com base na folha", auto: true, media: null, hint: "8% sobre salario" },
+      { text: "Aura calcula com base na folha", auto: true, media: null, hint: "8% sobre salário" },
       { text: "Guia gerada automaticamente", auto: true, media: null, hint: "Pronta para pagar" },
     ],
   },
   esocial: {
     id: "esocial", name: "eSocial", icon: "e",
     category: "aura_facilita", frequency: "monthly",
-    description: "Envio digital de informacoes sobre funcionarios ao governo. Aura gera o XML, voce envia.",
+    description: "Envio digital de informações sobre funcionarios ao governo. Aura gera o XML, você envia.",
     dueDay: 15, dueMonth: null, hasAmount: false,
     steps: [
-      { text: "Aura prepara os dados e gera o XML", auto: true, media: null, hint: "Arquivo na secao Documentos" },
+      { text: "Aura prepara os dados e gera o XML", auto: true, media: null, hint: "Arquivo na seção Documentos" },
       { text: "Acesse gov.br/esocial", auto: false, media: null, hint: "Use seu navegador" },
       { text: "Faca login com Gov.br", auto: false, media: null, hint: "CPF e senha" },
       { text: "Clique em Enviar arquivo", auto: false, media: null, hint: "Menu lateral" },
@@ -148,12 +148,12 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
 
   // === NFe (commerce/services) ===
   nfe_emission: {
-    id: "nfe_emission", name: "NF-e automatica", icon: "N",
+    id: "nfe_emission", name: "NF-e automática", icon: "N",
     category: "aura_resolve", frequency: "always",
-    description: "Emissao automatica de NF-e/NFS-e em toda venda PJ. Integrado com NFE.io.",
+    description: "Emissão automática de NF-e/NFS-e em toda venda PJ. Integrado com NFE.io.",
     dueDay: null, dueMonth: null, hasAmount: false,
     steps: [
-      { text: "Aura emite nota automaticamente", auto: true, media: null, hint: "Apos cada venda PJ" },
+      { text: "Aura emite nota automaticamente", auto: true, media: null, hint: "Após cada venda PJ" },
       { text: "XML armazenado por 5 anos", auto: true, media: null, hint: "Cloudflare R2" },
     ],
   },
@@ -165,12 +165,12 @@ export const OBLIGATION_TEMPLATES: Record<string, ObligationTemplate> = {
 export const CNAE_PROFILES: Record<string, CnaeProfile> = {
   // === MEI profiles ===
   mei_comercio: {
-    label: "MEI - Comercio",
+    label: "MEI - Comércio",
     regime: "mei",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "das_mei", "dasn_simei", "mei_faturamento", "nfe_emission"],
   },
   mei_servicos: {
-    label: "MEI - Servicos",
+    label: "MEI - Serviços",
     regime: "mei",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "das_mei", "dasn_simei", "mei_faturamento", "nfe_emission"],
   },
@@ -182,12 +182,12 @@ export const CNAE_PROFILES: Record<string, CnaeProfile> = {
 
   // === ME Simples Nacional ===
   me_comercio: {
-    label: "ME - Comercio (Simples)",
+    label: "ME - Comércio (Simples)",
     regime: "simples",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "pgdas_d", "defis", "nfe_emission"],
   },
   me_servicos: {
-    label: "ME - Servicos (Simples)",
+    label: "ME - Serviços (Simples)",
     regime: "simples",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "pgdas_d", "defis", "nfe_emission"],
   },
@@ -224,7 +224,7 @@ export const CNAE_PROFILES: Record<string, CnaeProfile> = {
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "pgdas_d", "defis", "nfe_emission"],
   },
   estetica: {
-    label: "Estetica / Bem-estar",
+    label: "Estética / Bem-estar",
     regime: "mei",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "das_mei", "dasn_simei", "mei_faturamento", "nfe_emission"],
   },

@@ -8,7 +8,7 @@ import { fmt } from "./types";
 type Props = {
   transactions: Transaction[];
   // F6/QA (24/08/2026): quando renderizado dentro de /financeiro/retirada, a
-  // ROTA ja escreve "Quanto posso retirar este mes?" e o subtitulo. Sem isto,
+  // ROTA ja escreve "Quanto posso retirar este mês?" e o subtitulo. Sem isto,
   // a tela abria com a mesma pergunta duas vezes seguidas, uma embaixo da
   // outra, e dois subtitulos dizendo a mesma coisa.
   hideHeading?: boolean;
@@ -123,7 +123,7 @@ export function TabRetirada({ transactions, hideHeading }: Props) {
           </View>
 
           <View style={s.impactCard}><Text style={s.impactTitle}>Se você retirar o valor seguro:</Text>
-            <View style={s.impactRow}><Text style={s.impactLabel}>Caixa apos retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
+            <View style={s.impactRow}><Text style={s.impactLabel}>Caixa após retirada</Text><Text style={[s.impactValue, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{fmt(caixaApos)}</Text></View>
             <View style={s.impactRow}><Text style={s.impactLabel}>Reserva tributaria ({regime === "mei" ? "DAS fixo" : "DAS 6%"})</Text><Text style={[s.impactValue, { color: Colors.amber }]}>{fmt(das)}</Text></View>
             {proLaboreEnabled && regime === "simples" && proLabore > 0 && <View style={s.impactRow}><Text style={s.impactLabel}>Pro-labore + INSS</Text><Text style={s.impactValue}>{fmt(r2(proLabore + inss))}</Text></View>}
             <View style={[s.impactRow, { borderBottomWidth: 0 }]}><Text style={s.impactLabel}>Status</Text><View style={[s.impactBadge, { backgroundColor: caixaApos >= 0 ? Colors.greenD : Colors.redD }]}><Text style={[s.impactBadgeText, { color: caixaApos >= 0 ? Colors.green : Colors.red }]}>{caixaApos >= 0 ? "Saudavel" : "Risco"}</Text></View></View>
@@ -132,7 +132,7 @@ export function TabRetirada({ transactions, hideHeading }: Props) {
           <View style={s.messageCard}><Text style={s.messageText}>{seguraRetirada > 0 ? "Hoje você pode retirar " + fmt(seguraRetirada) + " com seguranca. Acima de " + fmt(maxRetirada) + ", sua folga de caixa comeca a ficar apertada." : "Com o cenário atual não dá pra retirar: suas despesas e obrigações consomem tudo que entra."}</Text></View>
 
           <View style={s.waterfall}><Text style={s.wfTitle}>Como calculamos</Text>
-            <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negocio</Text></View>
+            <View style={s.wfSection}><Text style={s.wfSectionLabel}>Resultado do negócio</Text></View>
             <WRow label="(+) Receita bruta" value={rev} color={Colors.green} />
             {exp > 0 && <WRow label="(-) Despesas operacionais" value={exp} color={Colors.red} />}
             <WRow label={regime === "mei" ? "(-) DAS fixo mensal" : "(-) DAS estimado (" + (cfg.dasRate*100).toFixed(0) + "%)"}  value={das} color={Colors.red} />
@@ -146,11 +146,11 @@ export function TabRetirada({ transactions, hideHeading }: Props) {
             <View style={s.fatorCard}><View style={s.fatorTop}><View><Text style={s.fatorTitle}>Monitor Fator R</Text><Text style={s.fatorValue}>{fatorR}%</Text></View><View style={[s.fatorBadge, { backgroundColor: fatorR >= 28 ? Colors.greenD : Colors.redD }]}><Text style={[s.fatorBadgeText, { color: fatorR >= 28 ? Colors.green : Colors.red }]}>{fatorR >= 28 ? "Anexo III" : "Risco Anexo V"}</Text></View></View>
               <View style={s.fatorBar}><View style={[s.fatorFill, { width: Math.min(fatorR, 100) + "%", backgroundColor: fatorR >= 28 ? Colors.green : Colors.red }]} /><View style={s.fatorMark} /></View>
               <View style={s.fatorLabels}><Text style={s.fatorLabelLeft}>0%</Text><Text style={s.fatorLabel28}>28%</Text><Text style={s.fatorLabelRight}>100%</Text></View>
-              <Text style={s.fatorHint}>{fatorR >= 28 ? "Pro-labore " + (fatorR - 28) + " pontos acima do minimo. Folga para Anexo III." : "Pro-labore " + (28 - fatorR) + " pontos abaixo do minimo. Considere aumentar para evitar Anexo V."}</Text>
+              <Text style={s.fatorHint}>{fatorR >= 28 ? "Pro-labore " + (fatorR - 28) + " pontos acima do mínimo. Folga para Anexo III." : "Pro-labore " + (28 - fatorR) + " pontos abaixo do mínimo. Considere aumentar para evitar Anexo V."}</Text>
             </View>
           )}
 
-          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informacoes importantes</Text><Text style={s.meiInfoText}>{"•"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"•"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"•"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
+          {regime === "mei" && <View style={s.meiInfo}><Text style={s.meiInfoTitle}>MEI - Informações importantes</Text><Text style={s.meiInfoText}>{"•"} DAS fixo de R$ 75,90/mes (INSS + ISS/ICMS)</Text><Text style={s.meiInfoText}>{"•"} Limite: R$ 81.000/ano ({fmt(r2(81000/12))})/mes</Text><Text style={s.meiInfoText}>{"•"} Receita anual estimada: {fmt(r2(rev * 12))} {rev * 12 > 81000 ? "(ACIMA DO LIMITE!)" : "(dentro do limite)"}</Text></View>}
 
           <View style={s.disclaimer}><Text style={s.disclaimerIcon}>!</Text><Text style={s.disclaimerText}>São estimativas para te ajudar a decidir, calculadas sobre os lançamentos registrados e o pró-labore informado. Não substituem seu contador.</Text></View>
         </View>

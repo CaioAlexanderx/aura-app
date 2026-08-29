@@ -40,7 +40,7 @@ export function LogsAdmin() {
       <TextInput
         value={filter}
         onChangeText={setFilter}
-        placeholder="Filtrar por acao ou detalhe..."
+        placeholder="Filtrar por ação ou detalhe..."
         placeholderTextColor={Colors.ink3}
         style={s.search}
       />
@@ -50,7 +50,7 @@ export function LogsAdmin() {
         <View style={s.tableH}>
           <Text style={[s.th, { width: 100 }]}>Hora</Text>
           <Text style={[s.th, { width: 60 }]}>User</Text>
-          <Text style={[s.th, { width: 120 }]}>Acao</Text>
+          <Text style={[s.th, { width: 120 }]}>Ação</Text>
           <Text style={[s.th, { flex: 1 }]}>Detalhe</Text>
           <Text style={[s.th, { width: 80 }]}>IP</Text>
         </View>

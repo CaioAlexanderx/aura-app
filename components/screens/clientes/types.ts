@@ -20,7 +20,7 @@ export type Customer = {
   creditBalance: number;
 };
 
-export const TABS = ["Clientes", "Ranking", "Retencao", "Avaliacoes"];
+export const TABS = ["Clientes", "Ranking", "Retenção", "Avaliações"];
 
 export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 

@@ -28,8 +28,8 @@ export function EmployeeCard({ emp, onCalc, onEdit, onDelete, onSuspend, onReact
         <View style={[s.statusBadge, { backgroundColor: st.c + "18" }]}><Text style={[s.statusText, { color: st.c }]}>{st.l}</Text></View>
       </View>
       <View style={s.details}>
-        <View style={s.detail}><Text style={s.detailLabel}>Salario bruto</Text><Text style={s.detailValue}>{fmt(emp.salary)}</Text></View>
-        <View style={s.detail}><Text style={s.detailLabel}>Admissao</Text><Text style={s.detailValue}>{emp.admDate || "---"}</Text></View>
+        <View style={s.detail}><Text style={s.detailLabel}>Salário bruto</Text><Text style={s.detailValue}>{fmt(emp.salary)}</Text></View>
+        <View style={s.detail}><Text style={s.detailLabel}>Admissão</Text><Text style={s.detailValue}>{emp.admDate || "---"}</Text></View>
       </View>
       <View style={s.actions}>
         {onCalc && (

@@ -67,7 +67,7 @@ export function goalColor(
 }
 
 // Frase curta de status usada abaixo da barra. Fala do resultado, nao do
-// indicador: "sobra" e o que o dono do negocio entende, nao "margem liquida".
+// indicador: "sobra" e o que o dono do negocio entende, nao "margem líquida".
 export function goalCaption(expenseRatioPct: number, goalPct: number): string {
   if (!isFinite(expenseRatioPct) || expenseRatioPct <= 0) return "Sem despesas no período.";
   var diff = Math.round(goalPct - expenseRatioPct);

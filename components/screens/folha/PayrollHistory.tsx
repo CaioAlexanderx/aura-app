@@ -8,8 +8,8 @@ export function PayrollHistory() {
   return (
     <View style={s.empty}>
       <Text style={{ fontSize: 32, marginBottom: 8 }}>📊</Text>
-      <Text style={s.emptyTitle}>Historico de folha</Text>
-      <Text style={s.emptyDesc}>O historico sera gerado automaticamente a partir da primeira folha processada.</Text>
+      <Text style={s.emptyTitle}>Histórico de folha</Text>
+      <Text style={s.emptyDesc}>O histórico será gerado automaticamente a partir da primeira folha processada.</Text>
     </View>
   );
 }
