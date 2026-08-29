@@ -13,6 +13,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { useLgpdConsentInset } from "@/components/LGPDConsent";
 import { maskCnpj, maskPhone } from "@/utils/masks";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
@@ -234,6 +235,9 @@ export default function RegisterScreen() {
   const isInviteFlow = !!invite_token;
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
+  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao esta
+  // na tela) — sem isso ele cobria metade do "Continuar" em 375px.
+  const consentInset = useLgpdConsentInset();
 
   const [step, setStep] = useState(0);
   const [nome, setNome] = useState("");
@@ -291,7 +295,7 @@ export default function RegisterScreen() {
       // um clique. Continua visivel e trocavel se aparecerem outras.
       if (list.length === 1) setFederationId(list[0].id);
     } catch {
-      setFedError("Nao foi possivel carregar as federacoes.");
+      setFedError("Não foi possível carregar as federações.");
     } finally {
       setFedLoading(false);
     }
@@ -316,9 +320,9 @@ export default function RegisterScreen() {
       const timer = controller ? setTimeout(() => controller!.abort(), 10000) : null;
       const res = await fetch(API_BASE + "/onboarding/cnpj-lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cnpj: nums }), signal: controller?.signal });
       if (timer) clearTimeout(timer);
-      if (res.status === 404) { setCnpjError("CNPJ nao encontrado na Receita Federal."); return; }
+      if (res.status === 404) { setCnpjError("CNPJ não encontrado na Receita Federal."); return; }
       if (res.status === 429) { setCnpjError("Muitas consultas. Aguarde e tente novamente."); return; }
-      if (res.status === 422) { const err = await res.json().catch(() => ({})); setCnpjError(err.error || "CNPJ com situacao irregular."); return; }
+      if (res.status === 422) { const err = await res.json().catch(() => ({})); setCnpjError(err.error || "CNPJ com situação irregular."); return; }
       if (!res.ok) { const err2 = await res.json().catch(() => ({})); setCnpjError(err2.error || "Erro na consulta (" + res.status + ")."); return; }
       const data = await res.json();
       const companyName = data.legal_name || data.trade_name || data.razao_social || data.nome_fantasia || "";
@@ -328,7 +332,7 @@ export default function RegisterScreen() {
       saveCnpjData(data);
       saveDetectedRegime(data.is_mei || data.suggested_regime === "mei" ? "mei" : data.suggested_regime || "simples");
     } catch (err: any) {
-      setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : "Erro de conexao ao consultar CNPJ.");
+      setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : "Erro de conexão ao consultar CNPJ.");
     } finally { setCnpjLoading(false); }
   }
 
@@ -337,8 +341,8 @@ export default function RegisterScreen() {
   async function handleCodeBlur() {
     const code = codigo.trim(); if (!code) { setCodeValid(null); return; }
     setCodeChecking(true);
-    try { const r = await authApi.validateCode(code); setCodeValid(r.valid); if (r.valid) toast.success("Codigo valido!"); else toast.error(r.error || "Codigo invalido"); }
-    catch { setCodeValid(false); toast.error("Codigo invalido"); }
+    try { const r = await authApi.validateCode(code); setCodeValid(r.valid); if (r.valid) toast.success("Código válido!"); else toast.error(r.error || "Código inválido"); }
+    catch { setCodeValid(false); toast.error("Código inválido"); }
     finally { setCodeChecking(false); }
   }
 
@@ -359,10 +363,10 @@ export default function RegisterScreen() {
   const federationValid = !isDojo || !!federationId;
   const step2Valid = empresa.length > 0 && contatoValid && cnpjValid && federationValid;
 
-  function nextStep() { if (!step1Valid) { toast.error(!termsAccepted ? "Voce precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; } setStep(1); }
+  function nextStep() { if (!step1Valid) { toast.error(!termsAccepted ? "Você precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; } setStep(1); }
 
   async function handleInviteRegister() {
-    if (!step1Valid) { toast.error(!termsAccepted ? "Voce precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; }
+    if (!step1Valid) { toast.error(!termsAccepted ? "Você precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; }
     try {
       await register({ name: nome.trim(), email: email.trim().toLowerCase(), password: senha, terms_accepted: true, terms_version: TERMS_VERSION });
       if (invite_token) {
@@ -379,10 +383,10 @@ export default function RegisterScreen() {
   }
 
   async function handleRegister() {
-    if (!cnpjValid) { toast.error("CNPJ obrigatorio. Insira um CNPJ valido."); return; }
+    if (!cnpjValid) { toast.error("CNPJ obrigatório. Insira um CNPJ válido."); return; }
     if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
     if (!empresa) { toast.error(isDojo ? "Preencha o nome do dojo" : "Preencha o nome da empresa"); return; }
-    if (isDojo && !federationId) { toast.error("Escolha a federacao do seu dojo"); return; }
+    if (isDojo && !federationId) { toast.error("Escolha a federação do seu dojo"); return; }
     try {
       await register({
         name: nome.trim(),
@@ -424,19 +428,19 @@ export default function RegisterScreen() {
   // ── F11: bloco de ramo + federacao (so no passo 2, fora do convite) ──
   const branchBlock = (
     <View style={s.field}>
-      <Text style={s.label}>Ramo do seu negocio *</Text>
+      <Text style={s.label}>Ramo do seu negócio *</Text>
       <View style={s.branchRow}>
         <BranchCard
           active={!isDojo}
           icon="shopping_bag"
-          title="Comercio / Servicos"
-          desc="Loja, salao, clinica, estudio..."
+          title="Comércio / Serviços"
+          desc="Loja, salão, clínica, estúdio..."
           onPress={() => selectBranch("varejo")}
         />
         <BranchCard
           active={isDojo}
           icon="ribbon"
-          title="Dojo de karate"
+          title="Dojo de karatê"
           desc="Alunos, mensalidades, faixas"
           onPress={() => selectBranch("dojo")}
         />
@@ -444,12 +448,12 @@ export default function RegisterScreen() {
 
       {isDojo && (
         <View style={s.fedBlock}>
-          <Text style={s.fedLabel}>Federacao *</Text>
+          <Text style={s.fedLabel}>Federação *</Text>
 
           {fedLoading && (
             <View style={s.fedLoadingRow}>
               <ActivityIndicator size="small" color={Colors.violet3} />
-              <Text style={s.fedLoadingText}>Carregando federacoes...</Text>
+              <Text style={s.fedLoadingText}>Carregando federações...</Text>
             </View>
           )}
 
@@ -464,7 +468,7 @@ export default function RegisterScreen() {
 
           {!fedLoading && !fedError && federations.length === 0 && (
             <Text style={s.fedEmpty}>
-              Nenhuma federacao disponivel no momento. Fale com a equipe Aura.
+              Nenhuma federação disponível no momento. Fale com a equipe Aura.
             </Text>
           )}
 
@@ -493,8 +497,8 @@ export default function RegisterScreen() {
           <View style={s.fedNoteWrap}>
             <Icon name="info" size={13} color={Colors.violet3} />
             <Text style={s.fedNote}>
-              Escolher a federacao aqui nao filia seu dojo. Depois de criar a conta,
-              voce envia o pedido de filiacao e a federacao aprova.
+              Escolher a federação aqui não filia seu dojo. Depois de criar a conta,
+              você envia o pedido de filiação e a federação aprova.
             </Text>
           </View>
         </View>
@@ -512,7 +516,7 @@ export default function RegisterScreen() {
       {isInviteFlow && (
         <View style={s.inviteBanner}>
           <Icon name="users" size={14} color={Colors.violet3} />
-          <Text style={s.inviteBannerText}>Voce foi convidado para entrar numa equipe Aura</Text>
+          <Text style={s.inviteBannerText}>Você foi convidado para entrar numa equipe Aura</Text>
         </View>
       )}
 
@@ -549,16 +553,16 @@ export default function RegisterScreen() {
                 <Text style={{ color: Colors.violet3, fontWeight: "700" }} onPress={() => router.replace("/(auth)/login")}>Entrar com ele →</Text>
               </Text>
             )}
-            {isInviteFlow && invite_email && <Text style={{ fontSize: 10, color: Colors.violet3, marginTop: 4 }}>Sugestao do convite: {invite_email}</Text>}
+            {isInviteFlow && invite_email && <Text style={{ fontSize: 10, color: Colors.violet3, marginTop: 4 }}>Sugestão do convite: {invite_email}</Text>}
           </View>
           <View style={s.field}>
             <Text style={s.label}>Senha *</Text>
             <View style={s.inputWrap}>
               <Icon name="lock" size={16} color={Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={senha} onChangeText={setSenha} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={senha} onChangeText={setSenha} placeholder="Mínimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
               <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}><Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text></Pressable>
             </View>
-            {senha.length > 0 && <View style={s.passReqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiuscula" /><Req ok={passNumber} text="1 numero" /></View>}
+            {senha.length > 0 && <View style={s.passReqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiúscula" /><Req ok={passNumber} text="1 número" /></View>}
           </View>
 
           {/* Aceite dos Termos de Uso — obrigatorio (feat/terms-acceptance) */}
@@ -586,23 +590,23 @@ export default function RegisterScreen() {
             </View>
             {cnpjFound && <View style={s.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={s.cnpjOkText}>{cnpjFound}</Text></View>}
             {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
-            {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serao preenchidos automaticamente.</Text>}
+            {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serão preenchidos automaticamente.</Text>}
           </View>
           <View style={s.field}><Text style={s.label}>{isDojo ? "Nome do dojo *" : "Nome da empresa *"}</Text><View style={s.inputWrap}><Icon name={isDojo ? "building" : "briefcase"} size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder={isDojo ? "Dojo Shotokan Centro" : "Minha Empresa Ltda"} placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>{isDojo ? "Telefone do dojo" : "Telefone da empresa"}</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>Seu telefone para contato *</Text><View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View><Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato.</Text></View>
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <Text style={s.label}>Codigo de acesso</Text>
+              <Text style={s.label}>Código de acesso</Text>
               {codeChecking && <ActivityIndicator size="small" color={Colors.violet3} />}
               {codeValid === true && <Text style={{ fontSize: 10, color: Colors.green, fontWeight: "600" }}>Validado</Text>}
-              {codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Invalido</Text>}
+              {codeValid === false && <Text style={{ fontSize: 10, color: Colors.red, fontWeight: "600" }}>Inválido</Text>}
             </View>
             <View style={[s.inputWrap, codeValid === true && { borderColor: Colors.green }, codeValid === false && { borderColor: Colors.red }]}>
               <Icon name="star" size={16} color={codeValid === true ? Colors.green : codeValid === false ? Colors.red : Colors.ink3} />
               <TextInput style={[s.input, inputOutline]} {...webInputProps} value={codigo} onChangeText={(v) => { setCodigo(v.toUpperCase()); setCodeValid(null); }} onBlur={handleCodeBlur} placeholder="BETA01, TRIAL-XXXX..." placeholderTextColor={Colors.ink3} autoCapitalize="characters" maxLength={20} />
             </View>
-            <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um codigo (parceiro ou indicacao)? Insira para ativar seu plano. Sem codigo, voce comeca com 7 dias gratis no plano Negocio.</Text>
+            <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" }}>Recebeu um código (parceiro ou indicação)? Insira para ativar seu plano. Sem código, você começa com 7 dias grátis no plano Negócio.</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable style={s.backBtn} onPress={() => setStep(0)}><Text style={s.backBtnText}>Voltar</Text></Pressable>
@@ -610,16 +614,16 @@ export default function RegisterScreen() {
               {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{isDojo ? "Criar conta do dojo" : "Criar conta"}</Text>}
             </Pressable>
           </View>
-          {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validacao do CNPJ para liberar o cadastro.</Text>}
-          {!step2Valid && isDojo && !federationId && !fedLoading && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Escolha a federacao para liberar o cadastro.</Text>}
+          {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validação do CNPJ para liberar o cadastro.</Text>}
+          {!step2Valid && isDojo && !federationId && !fedLoading && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Escolha a federação para liberar o cadastro.</Text>}
         </View>
       )}
 
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Ja tem conta? </Text>
+        <Text style={s.footerText}>Já tem conta? </Text>
         <Link href="/(auth)/login"><Text style={s.link}>Entrar</Text></Link>
       </View>
-      <Text style={s.footerTag}>Aura. - Tecnologia para Negocios</Text>
+      <Text style={s.footerTag}>Aura. - Tecnologia para Negócios</Text>
     </View>
   );
 
@@ -638,7 +642,7 @@ export default function RegisterScreen() {
         <Particles count={24} />
 
         {isDesktop ? (
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1 } as any}>
+          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "60px 80px", position: "relative" } as any}>
               <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
               <div className="v2-hero" style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 2 } as any}>
@@ -648,7 +652,7 @@ export default function RegisterScreen() {
               <div className="v2-hero" style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative", zIndex: 2 } as any}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3.5, textTransform: "uppercase", color: Colors.violet3 }}>Comece em minutos</div>
                 <div style={{ fontFamily: Fonts.heading, fontSize: 56, lineHeight: 1.08, color: Colors.ink, letterSpacing: -2, maxWidth: 480 }}>
-                  Da <em style={{ fontStyle: "italic", color: Colors.violet3 }}>planilha</em> ao piloto automatico.
+                  Da <em style={{ fontStyle: "italic", color: Colors.violet3 }}>planilha</em> ao piloto automático.
                 </div>
                 <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
                   Crie sua conta, conecte seu CNPJ e deixe a Aura cuidar de nota, caixa e imposto.
@@ -657,7 +661,7 @@ export default function RegisterScreen() {
               <div className="v2-hero" style={{ display: "flex", gap: 20, fontSize: 11, color: Colors.ink3, letterSpacing: 1, textTransform: "uppercase", position: "relative", zIndex: 2 } as any}>
                 <span>7 dias grátis</span>
                 <span style={{ opacity: 0.4 }}>·</span>
-                <span>Sem cartao</span>
+                <span>Sem cartão</span>
                 <span style={{ opacity: 0.4 }}>·</span>
                 <span>LGPD</span>
               </div>
@@ -668,7 +672,7 @@ export default function RegisterScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "60px 20px 60px", position: "relative", zIndex: 2 } as any}>
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", paddingTop: 60, paddingLeft: 20, paddingRight: 20, paddingBottom: 60 + consentInset, boxSizing: "border-box", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
           </div>

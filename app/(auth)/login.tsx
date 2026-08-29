@@ -12,6 +12,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { useLgpdConsentInset } from "@/components/LGPDConsent";
 import { useKarateIntro } from "@/stores/karateIntro";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
@@ -135,6 +136,9 @@ export default function LoginScreen() {
   const isInviteFlow = !!invite_token;
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
+  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao esta
+  // na tela) — sem isso ele cobria o divisor "ou" e o rodape em 375px.
+  const consentInset = useLgpdConsentInset();
 
   const [email, setEmail] = useState(typeof emailParam === "string" ? emailParam : "");
   const [password, setPassword] = useState("");
@@ -158,9 +162,9 @@ export default function LoginScreen() {
       if (isInviteFlow && invite_token) {
         try {
           await inviteApi.accept(invite_token);
-          toast.success("Login efetuado e convite aceito! Bem-vindo a equipe.");
+          toast.success("Login efetuado e convite aceito! Bem-vindo à equipe.");
         } catch (err: any) {
-          toast.error(err?.message || "Nao foi possivel aceitar o convite. Tente abrir o link novamente.");
+          toast.error(err?.message || "Não foi possível aceitar o convite. Tente abrir o link novamente.");
         }
       } else {
         toast.success("Login efetuado!");
@@ -190,7 +194,7 @@ export default function LoginScreen() {
       {isInviteFlow && (
         <View style={s.inviteBanner}>
           <Icon name="users" size={14} color={Colors.violet3} />
-          <Text style={s.inviteBannerText}>Faca login para aceitar o convite e entrar na equipe</Text>
+          <Text style={s.inviteBannerText}>Faça login para aceitar o convite e entrar na equipe</Text>
         </View>
       )}
 
@@ -200,7 +204,7 @@ export default function LoginScreen() {
       <View style={s.field}>
         <Text style={s.label}>E-mail</Text>
         <View style={s.inputWrap}>
-          <Icon name="message" size={16} color={Colors.ink3} />
+          <Icon name="mail" size={16} color={Colors.ink3} />
           <TextInput
             style={[s.input, isWeb && { outlineWidth: 0 } as any]}
             {...(isWeb ? { className: "v2-input" } as any : {})}
@@ -215,7 +219,7 @@ export default function LoginScreen() {
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
         <View style={s.inputWrap}>
-          <Icon name="settings" size={16} color={Colors.ink3} />
+          <Icon name="lock" size={16} color={Colors.ink3} />
           <TextInput
             style={[s.input, isWeb && { outlineWidth: 0 } as any]}
             {...(isWeb ? { className: "v2-input" } as any : {})}
@@ -252,13 +256,13 @@ export default function LoginScreen() {
       </View>
 
       <View style={s.footerRow}>
-        <Text style={s.footerText}>Nao tem conta? </Text>
+        <Text style={s.footerText}>Não tem conta? </Text>
         <Link href={isInviteFlow ? `/(auth)/register?invite_token=${invite_token}` : "/(auth)/register"}>
-          <Text style={s.link}>Criar conta gratis</Text>
+          <Text style={s.link}>Criar conta grátis</Text>
         </Link>
       </View>
 
-      <Text style={s.footerTag}>Aura. - Tecnologia para Negocios</Text>
+      <Text style={s.footerTag}>Aura. - Tecnologia para Negócios</Text>
     </View>
   );
 
@@ -266,7 +270,11 @@ export default function LoginScreen() {
   if (isWeb) {
     return (
       <div style={{
-        minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden",
+        // 29/08/2026: overflowY auto (era `overflow: hidden`) — com o espaco
+        // reservado para o banner de LGPD, telas baixas precisam poder rolar
+        // em vez de cortar o cartao.
+        minHeight: "100vh", width: "100%", position: "relative",
+        overflowX: "hidden", overflowY: "auto",
         background: `
           radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
           radial-gradient(ellipse at 80% 70%, rgba(139,92,246,0.10) 0%, transparent 50%),
@@ -278,7 +286,7 @@ export default function LoginScreen() {
 
         {isDesktop ? (
           // DESKTOP: split hero + form
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1 } as any}>
+          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
             {/* Hero side */}
             <div style={{
               flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between",
@@ -300,13 +308,13 @@ export default function LoginScreen() {
               {/* Hero text block */}
               <div className="v2-hero" style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative", zIndex: 2 } as any}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3.5, textTransform: "uppercase", color: Colors.violet3 }}>
-                  Gestao Inteligente
+                  Gestão Inteligente
                 </div>
                 <div style={{ fontFamily: Fonts.heading, fontSize: 56, lineHeight: 1.08, color: Colors.ink, letterSpacing: -2, maxWidth: 480 }}>
-                  Seu <em style={{ fontStyle: "italic", color: Colors.violet3 }}>negocio</em> inteiro na palma da mao.
+                  Seu <em style={{ fontStyle: "italic", color: Colors.violet3 }}>negócio</em> inteiro na palma da mão.
                 </div>
                 <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
-                  Vender, controlar estoque e emitir nota sem dor de cabeca.
+                  Vender, controlar estoque e emitir nota sem dor de cabeça.
                 </div>
               </div>
 
@@ -327,7 +335,8 @@ export default function LoginScreen() {
           // WEB MOBILE/TABLET: centered
           <div style={{
             minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 20, position: "relative", zIndex: 2,
+            padding: 20, paddingBottom: 20 + consentInset, boxSizing: "border-box",
+            position: "relative", zIndex: 2,
           } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}>
               <AuraRings />

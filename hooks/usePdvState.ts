@@ -27,6 +27,15 @@
 //          chama applyUnify com sale_id = lastSale.id.
 //      Esta abordagem é segura: lastSale só muda no onSuccess de finalizeSale,
 //      e o ref é limpo imediatamente após o dispatch.
+//
+// 29/08/2026 (QA do Caixa):
+//   · cartProps passa `finalizeDisabled` — o caminho de bloqueio do botão
+//     "Finalizar venda" existia no CartPanel mas nunca era acionado.
+//   · requiredHints deixou de ser string[] e virou RequiredHint[] com onPress,
+//     apontando pros seletores da ActionToolbar (refs abaixo).
+//   · orderSuffix (número de venda aleatório, recalculado a cada render)
+//     removido — ver comentário em orderLabel.
+//   · customerOptions não abre mais em ordem alfabética.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -50,7 +59,8 @@ import { creditApi } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
 import { IS_WEB, fmtCurrency } from "@/components/screens/pdv/types";
-import type { CartDisplayItem, PayChip } from "@/components/screens/pdv/CartPanel";
+import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
+import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
 import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
@@ -58,6 +68,18 @@ import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 
 const PAGE_SIZE = 12;
+
+// Quantos clientes entram no bloco "Atendidos recentemente" do seletor.
+const MAX_RECENT_CUSTOMERS = 8;
+
+/** "DD/MM/AAAA" (formato que useCustomers já entrega em Customer.lastPurchase)
+ *  → timestamp. Retorna 0 pra "---" / vazio / formato inesperado. */
+function parsePtBrDate(v?: string | null): number {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((v || "").trim());
+  if (!m) return 0;
+  const t = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])).getTime();
+  return isNaN(t) ? 0 : t;
+}
 
 function getProductStock(p: any): number {
   const v = p?.stock ?? p?.stock_qty ?? 0;
@@ -186,6 +208,14 @@ export function usePdvState() {
 
   // ── Ref do CartPanel (flyToCart) ────────────────────────────────────────────────
   const cartHeadRef = useRef<any>(null);
+
+  // ── Refs dos seletores da ActionToolbar (29/08/2026) ───────────────────────
+  // Os popovers de vendedora/cliente são estado interno do ActPerson. Em vez de
+  // duplicar esse controle, o componente expõe um handle `open()` e o rodapé do
+  // carrinho usa ele pra transformar os avisos de bloqueio em atalho.
+  // Só um layout (wide OU mobile) monta por vez, então um ref por seletor basta.
+  const sellerPickerRef   = useRef<PersonPickerHandle | null>(null);
+  const customerPickerRef = useRef<PersonPickerHandle | null>(null);
 
   // ── Filtros / busca ──────────────────────────────────────────────────────────
   const [query,          setQuery]          = useState("");
@@ -563,10 +593,26 @@ export function usePdvState() {
       ? discountType === "%" ? (discountValue + "%") : "manual"
       : null;
 
-  const requiredHints: string[] = [];
-  if (pdvSettings.require_customer && !selectedCustomerId) requiredHints.push("Cliente obrigatório");
-  if (pdvSettings.require_seller && !selectedEmployeeId && !(sellerName || "").trim()) requiredHints.push("Vendedora obrigatória");
-  if (caixaEnabled && !isAberto) requiredHints.push("Caixa fechado");
+  // 29/08/2026: cada aviso leva ao seletor que resolve a pendência. Antes era
+  // texto puro — dizia o que faltava e deixava o lojista procurar sozinho.
+  // "Cliente obrigatório" só vira botão quando o módulo Clientes está liberado
+  // (com o gate de plano ativo o ActPerson está disabled e não abriria nada).
+  const requiredHints: RequiredHint[] = [];
+  if (pdvSettings.require_customer && !selectedCustomerId) {
+    requiredHints.push({
+      label: "Cliente obrigatório",
+      onPress: clientesEnabled ? () => customerPickerRef.current?.open() : undefined,
+    });
+  }
+  if (pdvSettings.require_seller && !selectedEmployeeId && !(sellerName || "").trim()) {
+    requiredHints.push({
+      label: "Vendedora obrigatória",
+      onPress: () => sellerPickerRef.current?.open(),
+    });
+  }
+  if (caixaEnabled && !isAberto) {
+    requiredHints.push({ label: "Caixa fechado", onPress: () => setShowCaixaModal(true) });
+  }
 
   const activeSellerValue = selectedEmployeeId
     ? { id: selectedEmployeeId, name: selectedEmployeeName || "Vendedora" }
@@ -582,14 +628,45 @@ export function usePdvState() {
       }
     : null;
 
-  const customerOptions = customers.map(c => ({
-    id: c.id, name: c.name, subtitle: c.phone || c.email,
-  }));
+  // 29/08/2026: a lista abria em ordem alfabética (Abbey, Abdel, Adamo…), a
+  // ordenação menos útil possível com o cliente na frente do balcão. O backend
+  // já devolve last_purchase/last_purchase_at e visit_count — useCustomers
+  // mapeia pra Customer.lastPurchase ("DD/MM/AAAA") e Customer.visits. Então
+  // usamos dado real: recência primeiro, frequência como desempate. Quem nunca
+  // comprou continua no alfabético, logo abaixo. Busca digitada não passa por
+  // aqui (o ActPerson filtra a lista inteira).
+  const { customerOptions, customerRecentCount } = useMemo(() => {
+    const recent = customers
+      .filter(c => parsePtBrDate(c.lastPurchase) > 0 || (c.visits || 0) > 0)
+      .sort((a, b) => {
+        const d = parsePtBrDate(b.lastPurchase) - parsePtBrDate(a.lastPurchase);
+        if (d !== 0) return d;
+        return (b.visits || 0) - (a.visits || 0);
+      })
+      .slice(0, MAX_RECENT_CUSTOMERS);
 
-  const orderSuffix = "#" + ((Date.now() % 100000).toString().padStart(5, "0"));
+    const recentIds = new Set(recent.map(c => c.id));
+    const rest = customers
+      .filter(c => !recentIds.has(c.id))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
+
+    return {
+      customerOptions: [...recent, ...rest].map(c => ({
+        id: c.id, name: c.name, subtitle: c.phone || c.email,
+      })),
+      customerRecentCount: recent.length,
+    };
+  }, [customers]);
+
+  // 29/08/2026: aqui existia um `orderSuffix` = Date.now() % 100000, recalculado
+  // A CADA RENDER — o cabeçalho trocava de "número da venda" várias vezes
+  // durante uma única venda. Como a venda ainda é rascunho (não existe no
+  // backend), não há número real: mostramos um rótulo de estado. Um contador
+  // local persistido seria igualmente falso e divergiria do backend.
+  const orderLabel = "Nova venda";
 
   const cartProps = {
-    orderNumber:       orderSuffix,
+    orderNumber:       orderLabel,
     items:             displayItems,
     subtotal,
     discountAmount,
@@ -609,6 +686,10 @@ export function usePdvState() {
     showOrcamento:     true,
     discountLabel,
     isProcessing,
+    // Bloqueio por requisito. O CartPanel usa isso só pra APARÊNCIA (opacidade
+    // + sem brilho + aria-disabled) e mantém o Pressable ativo, porque é o
+    // handleFinalize que explica no toast o que está faltando.
+    finalizeDisabled:  requiredHints.length > 0,
     requiredHints,
     cpfNaNota,
     onCpfNaNotaChange: setCpfNaNota,
@@ -664,7 +745,8 @@ export function usePdvState() {
     showNewCustomer,
     openNewCustomer:  () => setShowNewCustomer(true),
     closeNewCustomer: () => setShowNewCustomer(false),
-    customers, customerOptions,
+    customers, customerOptions, customerRecentCount,
+    sellerPickerRef, customerPickerRef,
     showTroca,
     openTroca:  () => setShowTroca(true),
     closeTroca: () => setShowTroca(false),
@@ -673,7 +755,7 @@ export function usePdvState() {
     handleValidateCoupon, handleGenerateQuote,
     pickCustomerWithPhone,
     // Dados derivados
-    cartHeadRef, cartProps, orderSuffix,
+    cartHeadRef, cartProps, orderLabel,
     subtotal, discountAmount, totalFinal, discountLabel,
     requiredHints, activeSellerValue, activeCustomerValue, displayItems,
   };

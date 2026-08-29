@@ -19,6 +19,10 @@ import {
   PAGE_SIZE, MONTH_NAMES,
   type PeriodKey, type MonthAnchor,
 } from "@/utils/vendasPeriodo";
+// 29/08/2026: cabecalho e abas compartilhados com /clientes (padrao do /estoque).
+import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
+// 29/08/2026: a listagem mostrava "1 item(s)" e "1 cancelada(s)".
+import { pluralize } from "@/utils/plural";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -67,6 +71,15 @@ import {
 //      continuam vindo do periodo inteiro — o backend conta separado da pagina.
 //   2. "Mes" virou seletor navegavel (< Agosto de 2026 >) sem limite pra tras,
 //      no lugar do par "Mes"/"Mes anterior" que so alcancava dois meses.
+//
+// 29/08/2026 (QA de coerencia entre telas):
+//   · Cabecalho editorial compartilhado (ScreenHero) — era o terceiro padrao
+//     de titulo do app; agora e o mesmo de /estoque e /clientes.
+//   · Abas viraram pilula (ScreenTabs). O sublinhado daqui era o unico do app.
+//   · "Receita" virou "Receita de vendas": o Painel usava a MESMA palavra pra
+//     um numero maior (819,40 x 639,50 no mesmo mes) porque la entram tambem
+//     pedidos do Canal Digital e lancamentos manuais. Mesmo peso tipografico,
+//     dois valores, nenhuma nota — agora cada rotulo diz o seu escopo.
 // ============================================================
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
@@ -76,7 +89,7 @@ type StatusKey = "all" | "active" | "cancelled";
 const PERIOD_OPTIONS: Array<{ key: PeriodKey; label: string }> = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
-  { key: "month", label: "Mes" },
+  { key: "month", label: "Mês" },
   { key: "custom", label: "Personalizado" },
   { key: "all", label: "Tudo" },
 ];
@@ -89,8 +102,8 @@ const STATUS_OPTIONS: Array<{ key: StatusKey; label: string }> = [
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: "PIX", cash: "Dinheiro", dinheiro: "Dinheiro",
-  credit: "Credito", credito: "Credito",
-  debit: "Debito", debito: "Debito", voucher: "Voucher",
+  credit: "Crédito", credito: "Crédito",
+  debit: "Débito", debito: "Débito", voucher: "Voucher",
 };
 
 var fmt = function(n: number) { return "R$ " + Number(n != null ? n : 0).toFixed(2).replace(".", ","); };
@@ -202,51 +215,63 @@ export default function VendasScreen() {
     setEditingTxId(txId);
   }
 
+  // Como o periodo aparece escrito na linha de metricas do cabecalho.
+  const periodoLabel = period === "today" ? "hoje"
+    : period === "week" ? "nesta semana"
+    : period === "month" ? MONTH_NAMES[monthAnchor.m].toLowerCase() + " de " + monthAnchor.y
+    : period === "all" ? "no histórico"
+    : "no período";
+
+  const TABS_VENDAS: ScreenTabItem[] = [
+    { key: "vendas", label: "Vendas" },
+    { key: "ranking", label: "Ranking" },
+    { key: "fechamentos", label: "Fechamentos de caixa" },
+  ];
+
+  // Linha de metricas do cabecalho. Na aba Vendas ela carrega o numero e ja
+  // diz o escopo dele ("receita de vendas"), pra nao repetir a palavra solta
+  // "receita" que o Painel usa pra outra conta.
+  const heroSub = activeTab === "vendas"
+    ? (stats ? (
+        <>
+          {pluralize(stats.total_sales, "venda", "vendas")} em {periodoLabel} ·{" "}
+          <Text style={s.heroStrong}>{fmt(stats.revenue)}</Text> de receita de vendas · ticket médio de {fmt(stats.avg_ticket)}
+        </>
+      ) : "Conferência das vendas do Caixa: detalhe, lançamento financeiro e cancelamento.")
+    : activeTab === "ranking"
+    ? "Quem vendeu mais no período: pódio, receita, ticket médio e evolução por vendedor."
+    : "Fechamentos de caixa: totais do mês, filtros por empresa e por divergência, detalhe no drawer.";
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      <View style={s.titleRow}>
-        <Text style={s.title}>Vendas</Text>
-        <Pressable onPress={function() { refetch(); }} style={s.refreshBtn} disabled={isFetching}>
-          {isFetching ? (
-            <ActivityIndicator size="small" color={Colors.violet3} />
-          ) : (
-            <>
-              <Icon name="refresh" size={13} color={Colors.violet3} />
-              <Text style={s.refreshText}>Atualizar</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
-      <Text style={s.subtitle}>
-        {activeTab === "vendas"
-          ? "Conferencia das vendas do Caixa. Veja detalhes, edite o lancamento financeiro ou cancele uma venda inteira."
-          : activeTab === "ranking"
-          ? "Quem vendeu mais no periodo: podio, receita, ticket medio e evolucao por vendedor."
-          : "Acompanhamento dos fechamentos de caixa: hero com totais do mes, filtros por empresa e por divergencia, drawer com detalhe."}
-      </Text>
+      {/* 29/08/2026: mesmo cabecalho editorial de /estoque e /clientes. */}
+      <ScreenHero
+        eyebrow="Conferência do caixa"
+        title="Vendas"
+        live={activeTab === "vendas"}
+        subtitle={heroSub}
+        actions={
+          <Pressable onPress={function() { refetch(); }} style={s.refreshBtn} disabled={isFetching}>
+            {isFetching ? (
+              <ActivityIndicator size="small" color={Colors.violet3} />
+            ) : (
+              <>
+                <Icon name="refresh" size={13} color={Colors.violet3} />
+                <Text style={s.refreshText}>Atualizar</Text>
+              </>
+            )}
+          </Pressable>
+        }
+      />
 
       {/* 09/05/2026: tabs Vendas / Fechamentos de Caixa
-          02/08/2026: "Ranking" entre as duas (migrada de Folha) */}
-      <View style={s.tabBar}>
-        <Pressable
-          onPress={function() { setActiveTab("vendas"); }}
-          style={[s.tabBtn, activeTab === "vendas" && s.tabBtnActive]}
-        >
-          <Text style={[s.tabBtnText, activeTab === "vendas" && s.tabBtnTextActive]}>Vendas</Text>
-        </Pressable>
-        <Pressable
-          onPress={function() { setActiveTab("ranking"); }}
-          style={[s.tabBtn, activeTab === "ranking" && s.tabBtnActive]}
-        >
-          <Text style={[s.tabBtnText, activeTab === "ranking" && s.tabBtnTextActive]}>Ranking</Text>
-        </Pressable>
-        <Pressable
-          onPress={function() { setActiveTab("fechamentos"); }}
-          style={[s.tabBtn, activeTab === "fechamentos" && s.tabBtnActive]}
-        >
-          <Text style={[s.tabBtnText, activeTab === "fechamentos" && s.tabBtnTextActive]}>Fechamentos de Caixa</Text>
-        </Pressable>
-      </View>
+          02/08/2026: "Ranking" entre as duas (migrada de Folha)
+          29/08/2026: sublinhado -> pilula (ScreenTabs), igual /clientes e /estoque */}
+      <ScreenTabs
+        tabs={TABS_VENDAS}
+        active={activeTab}
+        onSelect={function(k: string) { setActiveTab(k as "vendas" | "ranking" | "fechamentos"); }}
+      />
 
       {/* Ranking depende de um CNPJ especifico (o endpoint e
           /companies/:id/employees/ranking e o vinculo vendedor->empresa e por
@@ -256,9 +281,9 @@ export default function VendasScreen() {
         <View style={s.consolidatedBanner}>
           <Icon name="cart" size={14} color="#a78bfa" />
           <View style={{ flex: 1 }}>
-            <Text style={s.consolidatedTitle}>Ranking disponivel por empresa</Text>
+            <Text style={s.consolidatedTitle}>Ranking disponível por empresa</Text>
             <Text style={s.consolidatedSub}>
-              O ranking de vendedores e calculado por CNPJ. Escolha uma empresa especifica no seletor para ver o podio.
+              O ranking de vendedores é calculado por CNPJ. Escolha uma empresa específica no seletor para ver o pódio.
             </Text>
           </View>
         </View>
@@ -276,12 +301,12 @@ export default function VendasScreen() {
             <Text style={s.consolidatedTitle}>
               {consolidatedView
                 ? `Vendas consolidadas · ${companyCount} empresas`
-                : `Visualizando vendas desta empresa`}
+                : `Visualizando as vendas desta empresa`}
             </Text>
             <Text style={s.consolidatedSub}>
               {consolidatedView
-                ? "Cada linha mostra a loja onde a venda foi feita. Para editar o lancamento financeiro, troque pra empresa especifica."
-                : "Para ver vendas de todas as suas empresas juntas, troque pra \"Todas as empresas\" no seletor."}
+                ? "Cada linha mostra a loja onde a venda foi feita. Para editar o lançamento financeiro, troque pra empresa específica."
+                : "Para ver as vendas de todas as suas empresas juntas, troque pra \"Todas as empresas\" no seletor."}
             </Text>
           </View>
         </View>
@@ -293,17 +318,23 @@ export default function VendasScreen() {
           <Text style={s.statLabel}>Vendas</Text>
           <Text style={s.statValue}>{stats?.total_sales ?? "-"}</Text>
           {stats && stats.cancelled_sales > 0 && (
-            <Text style={s.statHint}>{stats.cancelled_sales} cancelada(s)</Text>
+            <Text style={s.statHint}>{pluralize(stats.cancelled_sales, "cancelada", "canceladas")}</Text>
           )}
         </View>
-        <View style={s.statCard}>
-          <Text style={s.statLabel}>Receita</Text>
+        {/* 29/08/2026 — o rotulo era so "Receita", igual ao do Painel, com valor
+            menor. O Painel soma TODAS as entradas confirmadas do mes (vendas,
+            Canal Digital, lancamentos manuais); aqui so entra o que passou pelo
+            Caixa. Rotulo + nota explicam a diferenca em vez de deixar o lojista
+            achando que um dos dois esta errado. */}
+        <View style={[s.statCard, s.statCardWide]} {...(Platform.OS === "web" ? ({ title: "Soma das vendas do Caixa no período, sem as canceladas. Não inclui pedidos do Canal Digital nem lançamentos manuais — esses entram na Receita total do Painel e no \"Entrou\" do Financeiro." } as any) : null)}>
+          <Text style={s.statLabel}>Receita de vendas</Text>
           <Text style={[s.statValue, { color: Colors.green }]}>{stats ? fmt(stats.revenue) : "-"}</Text>
-          <Text style={s.statHint}>liquido (sem canceladas)</Text>
+          <Text style={s.statHint}>Só o Caixa, sem canceladas. Pedidos do Canal Digital e lançamentos manuais entram na Receita total do Painel.</Text>
         </View>
         <View style={s.statCard}>
-          <Text style={s.statLabel}>Ticket medio</Text>
+          <Text style={s.statLabel}>Ticket médio</Text>
           <Text style={s.statValue}>{stats ? fmt(stats.avg_ticket) : "-"}</Text>
+          <Text style={s.statHint}>Receita de vendas ÷ vendas ativas</Text>
         </View>
         <View style={s.statCard}>
           <Text style={s.statLabel}>Ativas</Text>
@@ -329,8 +360,8 @@ export default function VendasScreen() {
                       )}
                     </View>
                     <Text style={s.breakdownMeta}>
-                      {b.total_sales} venda{b.total_sales !== 1 ? "s" : ""}
-                      {b.cancelled_sales > 0 ? ` · ${b.cancelled_sales} cancelada${b.cancelled_sales !== 1 ? "s" : ""}` : ""}
+                      {pluralize(b.total_sales, "venda", "vendas")}
+                      {b.cancelled_sales > 0 ? " · " + pluralize(b.cancelled_sales, "cancelada", "canceladas") : ""}
                       {" · ticket " + fmt(b.avg_ticket)}
                     </Text>
                   </View>
@@ -345,7 +376,7 @@ export default function VendasScreen() {
       {/* FILTROS */}
       <View style={s.filtersWrap}>
         <View style={s.filterGroup}>
-          <Text style={s.filterLabel}>Periodo</Text>
+          <Text style={s.filterLabel}>Período</Text>
           <View style={s.chipRow}>
             {PERIOD_OPTIONS.map(function(opt) {
               const active = period === opt.key;
@@ -363,7 +394,7 @@ export default function VendasScreen() {
               <Pressable
                 onPress={function() { setMonthAnchor(addMonths(monthAnchor, -1)); }}
                 style={s.monthNavBtn}
-                accessibilityLabel="Mes anterior"
+                accessibilityLabel="Mês anterior"
               >
                 <Icon name="chevron_left" size={14} color={Colors.violet3} />
               </Pressable>
@@ -373,7 +404,7 @@ export default function VendasScreen() {
                 </Text>
                 {!isCurrentMonth && (
                   <Pressable onPress={function() { setMonthAnchor(spCurrentMonth()); }}>
-                    <Text style={s.monthNavToday}>Voltar pro mes atual</Text>
+                    <Text style={s.monthNavToday}>Voltar pro mês atual</Text>
                   </Pressable>
                 )}
               </View>
@@ -381,7 +412,7 @@ export default function VendasScreen() {
                 onPress={function() { if (!isCurrentMonth) setMonthAnchor(addMonths(monthAnchor, 1)); }}
                 disabled={isCurrentMonth}
                 style={[s.monthNavBtn, isCurrentMonth && s.monthNavBtnDisabled]}
-                accessibilityLabel="Proximo mes"
+                accessibilityLabel="Próximo mês"
               >
                 <Icon name="chevron_right" size={14} color={isCurrentMonth ? Colors.ink3 : Colors.violet3} />
               </Pressable>
@@ -399,7 +430,7 @@ export default function VendasScreen() {
                 />
               </View>
               <View style={s.customField}>
-                <Text style={s.customLabel}>Ate</Text>
+                <Text style={s.customLabel}>Até</Text>
                 <DateInput
                   value={customToBr}
                   onChangeText={setCustomToBr}
@@ -431,7 +462,7 @@ export default function VendasScreen() {
             style={s.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Buscar cliente ou vendedora..."
+            placeholder="Buscar cliente ou vendedora…"
             placeholderTextColor={Colors.ink3}
           />
           {search.length > 0 && (
@@ -446,7 +477,7 @@ export default function VendasScreen() {
       {isLoading && (
         <View style={s.loadingBox}>
           <ActivityIndicator color={Colors.violet3} />
-          <Text style={s.loadingText}>Carregando vendas...</Text>
+          <Text style={s.loadingText}>Carregando vendas…</Text>
         </View>
       )}
 
@@ -464,11 +495,11 @@ export default function VendasScreen() {
       {!isLoading && !error && sales.length === 0 && effectivePage > 0 && (
         <View style={s.pagerEmpty}>
           <Text style={s.pagerEmptyText}>
-            Nao ha mais vendas depois da pagina {totalPages} neste periodo.
+            Não há mais vendas depois da página {totalPages} neste período.
           </Text>
           <Pressable onPress={function() { setPage(0); }} style={s.pagerBtn}>
             <Icon name="chevron_left" size={13} color={Colors.violet3} />
-            <Text style={s.pagerBtnText}>Voltar pra primeira pagina</Text>
+            <Text style={s.pagerBtnText}>Voltar pra primeira página</Text>
           </Pressable>
         </View>
       )}
@@ -480,11 +511,11 @@ export default function VendasScreen() {
           title="Nenhuma venda encontrada"
           subtitle={
             period === "all"
-              ? "Vendas feitas no Caixa aparecem aqui pra conferencia."
+              ? "Vendas feitas no Caixa aparecem aqui pra conferência."
               : period === "month"
               ? "Nenhuma venda em " + MONTH_NAMES[monthAnchor.m] + " de " + monthAnchor.y +
-                ". Use as setas do mes pra procurar em outro periodo."
-              : "Nenhuma venda no periodo selecionado. Vendas feitas no Caixa aparecem aqui pra conferencia."
+                ". Use as setas do mês pra procurar em outro período."
+              : "Nenhuma venda no período selecionado. Vendas feitas no Caixa aparecem aqui pra conferência."
           }
         />
       )}
@@ -532,7 +563,7 @@ export default function VendasScreen() {
                       </View>
                     )}
                     <View style={s.rowMetaPill}>
-                      <Text style={s.rowMetaPillText}>{sale.items_count} item(s)</Text>
+                      <Text style={s.rowMetaPillText}>{pluralize(sale.items_count, "item", "itens")}</Text>
                     </View>
                     {/* MULTICNPJ Onda 2.4: badge da loja */}
                     {showCompanyBadge && sale.company_name && (
@@ -549,7 +580,7 @@ export default function VendasScreen() {
                         {(trocaNet >= 0 ? "+ " : "- ") + fmt(Math.abs(trocaNet))}
                       </Text>
                       <Text style={s.rowTrocaSub} numberOfLines={1}>
-                        liquido · <Text style={s.rowTrocaStrike}>{fmt(sale.total_amount)}</Text>
+                        líquido · <Text style={s.rowTrocaStrike}>{fmt(sale.total_amount)}</Text>
                       </Text>
                     </View>
                   ) : (
@@ -581,15 +612,15 @@ export default function VendasScreen() {
                 <Text style={[s.pagerBtnText, !canPrev && { color: Colors.ink3 }]}>Anterior</Text>
               </Pressable>
               <View style={s.pagerInfo}>
-                <Text style={s.pagerInfoMain}>Pagina {effectivePage + 1} de {totalPages}</Text>
-                <Text style={s.pagerInfoSub}>{firstOnPage}–{lastOnPage} de {total} vendas</Text>
+                <Text style={s.pagerInfoMain}>Página {effectivePage + 1} de {totalPages}</Text>
+                <Text style={s.pagerInfoSub}>{firstOnPage}–{lastOnPage} de {pluralize(total, "venda", "vendas")}</Text>
               </View>
               <Pressable
                 onPress={function() { if (canNext) setPage(effectivePage + 1); }}
                 disabled={!canNext || isFetching}
                 style={[s.pagerBtn, (!canNext || isFetching) && s.pagerBtnDisabled]}
               >
-                <Text style={[s.pagerBtnText, !canNext && { color: Colors.ink3 }]}>Proxima</Text>
+                <Text style={[s.pagerBtnText, !canNext && { color: Colors.ink3 }]}>Próxima</Text>
                 <Icon name="chevron_right" size={13} color={canNext ? Colors.violet3 : Colors.ink3} />
               </Pressable>
             </View>
@@ -628,11 +659,8 @@ const s = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 16, paddingBottom: 48, maxWidth: 1100, alignSelf: "center", width: "100%" },
 
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
-  title: { fontSize: 22, color: Colors.ink, fontWeight: "700", flex: 1 },
   refreshBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.violetD, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, minWidth: 90, justifyContent: "center" },
   refreshText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  subtitle: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 18 },
 
   // MULTICNPJ Onda 2.4: banner
   consolidatedBanner: {
@@ -655,7 +683,11 @@ const s = StyleSheet.create({
   statCard: { flex: 1, minWidth: 130, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
   statLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   statValue: { fontSize: 20, color: Colors.ink, fontWeight: "800", marginTop: 6 },
-  statHint: { fontSize: 9.5, color: Colors.ink3, marginTop: 3 },
+  statHint: { fontSize: 9.5, color: Colors.ink3, marginTop: 3, lineHeight: 13 },
+  // 29/08/2026: o card da receita carrega a nota de composicao, entao precisa
+  // de mais largura que os irmaos pra nota nao virar cinco linhas.
+  statCardWide: { minWidth: IS_WIDE ? 260 : 130, flexGrow: 2 },
+  heroStrong: { color: Colors.green, fontWeight: "700" },
 
   // MULTICNPJ Onda 2.4: breakdown por empresa
   breakdownCard: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
@@ -741,11 +773,7 @@ const s = StyleSheet.create({
   pagerInfoSub: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
   pagerEmpty: { alignItems: "center", gap: 10, padding: 24, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
   pagerEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center" },
-  // 09/05/2026: tab bar Vendas/Fechamentos
-  tabBar: { flexDirection: "row", gap: 4, marginTop: 4, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  tabBtnActive: { borderBottomColor: Colors.violet },
-  tabBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabBtnTextActive: { color: Colors.violet3, fontWeight: "700" },
+  // 29/08/2026: os estilos da tab bar sublinhada sairam daqui — as abas agora
+  // vem do ScreenTabs (pilula), compartilhado com /clientes.
 
 });

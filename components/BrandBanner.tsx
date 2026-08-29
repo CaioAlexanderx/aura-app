@@ -5,9 +5,9 @@
 // sao suportadas automaticamente via CSS `width: auto + objectFit`.
 // Sem medicao manual de aspect ratio.
 // ============================================================
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { View, Text, Image, StyleSheet, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
 var isWeb = Platform.OS === "web";
@@ -22,10 +22,11 @@ type Props = {
 // (pro web: height + width:auto). Fallback usa lado quadrado do `fallbackSize`.
 // 24/04: bumped header/block sizes — pedido do Caio (logo ficou muito pequena
 // no header do Painel e no banner do Caixa).
+// 29/08/2026: `platePad` / `plateRadius` — moldura da logo (ver LogoPlate).
 var SIZES = {
-  header:  { imageHeight: 72,  maxImageWidth: 300, fallbackSize: 62  },
-  block:   { imageHeight: 120, maxImageWidth: 620, fallbackSize: 128 },
-  compact: { imageHeight: 42,  maxImageWidth: 160, fallbackSize: 40  },
+  header:  { imageHeight: 72,  maxImageWidth: 300, fallbackSize: 62,  platePad: 6,  plateRadius: 12 },
+  block:   { imageHeight: 120, maxImageWidth: 620, fallbackSize: 128, platePad: 12, plateRadius: 16 },
+  compact: { imageHeight: 42,  maxImageWidth: 160, fallbackSize: 40,  platePad: 6,  plateRadius: 10 },
 } as const;
 
 function getInitials(name: string) {
@@ -62,6 +63,34 @@ function LogoFallback({ name, size }: { name: string; size: number }) {
   );
 }
 
+// Placa neutra atrás da logo enviada pelo lojista.
+// 29/08/2026: a imagem era renderizada crua. Como a maioria das logos vem com
+// fundo escuro chapado, no tema claro ela virava um retângulo preto colado no
+// cabeçalho do Painel. A placa dá fundo neutro do tema + raio de canto +
+// padding discreto, então logo clara e logo escura ficam legíveis nos dois
+// temas (no claro, branco sólido; no escuro, um véu claro sobre o fundo).
+// Cores saem do tema (useColors/useThemeStore), nada de hex fixo.
+function LogoPlate({ sizes, children }: { sizes: typeof SIZES[Mode]; children: ReactNode }) {
+  var C = useColors();
+  var isDark = useThemeStore(function(st) { return st.isDark; });
+
+  return (
+    <View style={{
+      backgroundColor: isDark ? C.ink + "2E" : C.bg3,
+      borderRadius: sizes.plateRadius,
+      borderWidth: 1,
+      borderColor: isDark ? C.border : C.border2,
+      padding: sizes.platePad,
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "center",
+      overflow: "hidden",
+    }}>
+      {children}
+    </View>
+  );
+}
+
 function LogoImage({ src, sizes, fallbackName }: {
   src: string;
   sizes: typeof SIZES[Mode];
@@ -82,30 +111,34 @@ function LogoImage({ src, sizes, fallbackName }: {
   // sem configuracao manual.
   if (isWeb) {
     return (
-      <img
-        src={src}
-        alt="Logo da empresa"
-        style={{
-          height: sizes.imageHeight,
-          width: "auto",
-          maxWidth: sizes.maxImageWidth,
-          objectFit: "contain" as any,
-          display: "block",
-        } as any}
-        onError={function() { setError(true); }}
-      />
+      <LogoPlate sizes={sizes}>
+        <img
+          src={src}
+          alt="Logo da empresa"
+          style={{
+            height: sizes.imageHeight,
+            width: "auto",
+            maxWidth: sizes.maxImageWidth,
+            objectFit: "contain" as any,
+            display: "block",
+          } as any}
+          onError={function() { setError(true); }}
+        />
+      </LogoPlate>
     );
   }
 
   // Native: sem auto-width nativo, assume horizontal e usa resizeMode contain.
   // Se a logo for quadrada, vai ficar centralizada dentro do container retangular.
   return (
-    <Image
-      source={{ uri: src }}
-      style={{ width: sizes.maxImageWidth, height: sizes.imageHeight }}
-      resizeMode="contain"
-      onError={function() { setError(true); }}
-    />
+    <LogoPlate sizes={sizes}>
+      <Image
+        source={{ uri: src }}
+        style={{ width: sizes.maxImageWidth, height: sizes.imageHeight }}
+        resizeMode="contain"
+        onError={function() { setError(true); }}
+      />
+    </LogoPlate>
   );
 }
 

@@ -10,6 +10,7 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { authApi } from "@/services/api";
+import { useLgpdConsentInset } from "@/components/LGPDConsent";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
@@ -125,6 +126,9 @@ export default function ResetPasswordScreen() {
   const params = useLocalSearchParams<{ token?: string }>();
   const { width } = useWindowDimensions();
   const isDesktop = isWeb && width >= 960;
+  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao
+  // esta na tela) — o banner nao pode cobrir conteudo interativo.
+  const consentInset = useLgpdConsentInset();
 
   const [token, setToken] = useState(params.token || "");
   const [password, setPassword] = useState("");
@@ -149,15 +153,15 @@ export default function ResetPasswordScreen() {
   const passMatch = password === confirm && confirm.length > 0;
 
   async function handleReset() {
-    if (!token) { toast.error("Token invalido. Use o link do e-mail."); return; }
-    if (!passValid) { toast.error("Senha deve ter 8+ caracteres, 1 maiuscula e 1 numero"); return; }
-    if (!passMatch) { toast.error("As senhas nao conferem"); return; }
+    if (!token) { toast.error("Token inválido. Use o link do e-mail."); return; }
+    if (!passValid) { toast.error("Senha deve ter 8+ caracteres, 1 maiúscula e 1 número"); return; }
+    if (!passMatch) { toast.error("As senhas não conferem"); return; }
     setLoading(true);
     try {
       await authApi.resetPassword(token, password);
       setSuccess(true);
       toast.success("Senha alterada com sucesso!");
-    } catch (err: any) { toast.error(err?.message || "Token invalido ou expirado"); }
+    } catch (err: any) { toast.error(err?.message || "Token inválido ou expirado"); }
     finally { setLoading(false); }
   }
 
@@ -176,11 +180,11 @@ export default function ResetPasswordScreen() {
           <View style={s.field}>
             <Text style={s.label}>Nova senha</Text>
             <View style={s.inputWrap}>
-              <Icon name="settings" size={16} color={Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={password} onChangeText={setPassword} placeholder="Minimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
+              <Icon name="lock" size={16} color={Colors.ink3} />
+              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={password} onChangeText={setPassword} placeholder="Mínimo 8 caracteres" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" />
               <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}><Text style={s.eye}>{showPass ? "Ocultar" : "Ver"}</Text></Pressable>
             </View>
-            {password.length > 0 && <View style={s.reqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiuscula" /><Req ok={passNumber} text="1 numero" /></View>}
+            {password.length > 0 && <View style={s.reqs}><Req ok={passLength} text="8+ caracteres" /><Req ok={passUpper} text="1 maiúscula" /><Req ok={passNumber} text="1 número" /></View>}
           </View>
 
           <View style={s.field}>
@@ -189,7 +193,7 @@ export default function ResetPasswordScreen() {
               <Icon name="check" size={16} color={confirm.length > 0 ? (passMatch ? Colors.green : Colors.red) : Colors.ink3} />
               <TextInput style={[s.input, inputOutline]} {...webInputProps} value={confirm} onChangeText={setConfirm} placeholder="Repita a senha" placeholderTextColor={Colors.ink3} secureTextEntry={!showPass} autoComplete="new-password" onSubmitEditing={handleReset} />
             </View>
-            {confirm.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas nao conferem</Text>}
+            {confirm.length > 0 && !passMatch && <Text style={{ fontSize: 10, color: Colors.red, marginTop: 4 }}>As senhas não conferem</Text>}
           </View>
 
           <Pressable style={[s.btn, (loading || !passValid || !passMatch) && { opacity: 0.6 }]} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={handleReset} disabled={loading || !passValid || !passMatch}>
@@ -200,7 +204,7 @@ export default function ResetPasswordScreen() {
         <View style={s.successCard}>
           <View style={s.successIcon}><Icon name="check" size={28} color={Colors.green} /></View>
           <Text style={s.successTitle}>Senha alterada!</Text>
-          <Text style={s.successDesc}>Sua senha foi redefinida com sucesso. Faca login com a nova senha para continuar.</Text>
+          <Text style={s.successDesc}>Sua senha foi redefinida com sucesso. Faça login com a nova senha para continuar.</Text>
           <Pressable style={s.btn} {...(isWeb ? { className: "v2-btn" } as any : {})} onPress={() => router.replace("/(auth)/login")}><Text style={s.btnText}>Ir para login</Text></Pressable>
         </View>
       )}
@@ -208,14 +212,18 @@ export default function ResetPasswordScreen() {
       <View style={s.footerRow}>
         <Link href="/(auth)/login"><Text style={s.link}>Voltar para login</Text></Link>
       </View>
-      <Text style={s.footerTag}>Aura. - Tecnologia para Negocios</Text>
+      <Text style={s.footerTag}>Aura. - Tecnologia para Negócios</Text>
     </View>
   );
 
   if (isWeb) {
     return (
       <div style={{
-        minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden",
+        // 29/08/2026: overflowY auto (era `overflow: hidden`) — com o espaco
+        // reservado para o banner de LGPD, telas baixas precisam poder rolar
+        // em vez de cortar o cartao.
+        minHeight: "100vh", width: "100%", position: "relative",
+        overflowX: "hidden", overflowY: "auto",
         background: `
           radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
           radial-gradient(ellipse at 80% 70%, rgba(139,92,246,0.10) 0%, transparent 50%),
@@ -226,7 +234,7 @@ export default function ResetPasswordScreen() {
         <Particles count={24} />
 
         {isDesktop ? (
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1 } as any}>
+          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "60px 80px", position: "relative" } as any}>
               <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
               <div className="v2-hero" style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 2 } as any}>
@@ -239,15 +247,15 @@ export default function ResetPasswordScreen() {
                   Uma <em style={{ fontStyle: "italic", color: Colors.violet3 }}>chave</em> nova, pronta pra usar.
                 </div>
                 <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
-                  Escolha uma senha forte e retome de onde parou. Sem friccao.
+                  Escolha uma senha forte e retome de onde parou. Sem fricção.
                 </div>
               </div>
               <div className="v2-hero" style={{ display: "flex", gap: 20, fontSize: 11, color: Colors.ink3, letterSpacing: 1, textTransform: "uppercase", position: "relative", zIndex: 2 } as any}>
                 <span>8+ caracteres</span>
                 <span style={{ opacity: 0.4 }}>·</span>
-                <span>1 maiuscula</span>
+                <span>1 maiúscula</span>
                 <span style={{ opacity: 0.4 }}>·</span>
-                <span>1 numero</span>
+                <span>1 número</span>
               </div>
             </div>
 
@@ -256,7 +264,7 @@ export default function ResetPasswordScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative", zIndex: 2 } as any}>
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, paddingBottom: 20 + consentInset, boxSizing: "border-box", position: "relative", zIndex: 2 } as any}>
             <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}><AuraRings /></div>
             {card}
           </div>

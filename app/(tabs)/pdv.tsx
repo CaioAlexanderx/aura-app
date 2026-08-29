@@ -71,10 +71,11 @@ function CaixaScreenInner() {
   const { categories, outOfStockCount, paginated, page, totalPages, filteredTotal, goTo, qtyById } = st;
   const { selectedCustomerId, selectedCustomerName, crediarioEnabled } = st;
   const { couponApplied, setCouponApplied, clearCoupon } = st;
-  const { activeSellerValue, activeCustomerValue, customerOptions, pickCustomerWithPhone } = st;
+  const { activeSellerValue, activeCustomerValue, customerOptions, customerRecentCount, pickCustomerWithPhone } = st;
+  const { sellerPickerRef, customerPickerRef } = st;
   const { handleScan, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
   const { selectEmployee, setSellerName } = st;
-  const { cartProps, cartHeadRef, orderSuffix } = st;
+  const { cartProps, cartHeadRef, orderLabel } = st;
 
   // 16/06/2026: grid de produtos fluido + crediário só como modalidade de
   // pagamento (card removido da toolbar). Gateamos o chip por crediarioEnabled.
@@ -217,7 +218,10 @@ function CaixaScreenInner() {
                       } as any} />
                     )}
                     <Text style={s.titleSubTxt}>
-                      {(company?.name || "Sua loja") + " · venda " + orderSuffix}
+                      {/* 29/08/2026: era "· venda #12345" com um numero
+                          aleatorio que trocava a cada render. Enquanto a venda
+                          e rascunho nao ha numero real pra mostrar. */}
+                      {(company?.name || "Sua loja") + " · " + orderLabel}
                       {autoEmitNfce ? " · NFC-e auto" : ""}
                     </Text>
                   </View>
@@ -241,6 +245,7 @@ function CaixaScreenInner() {
               } as any)]}>
                 <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
                 <ActPerson
+                  ref={sellerPickerRef}
                   kind="vendedora" shortcut="F2"
                   value={activeSellerValue}
                   onChange={v => {
@@ -252,10 +257,12 @@ function CaixaScreenInner() {
                   searchable={employees.length > 5}
                 />
                 <ActPerson
+                  ref={customerPickerRef}
                   kind="cliente" shortcut="F3"
                   value={activeCustomerValue}
                   onChange={pickCustomerWithPhone}
                   options={customerOptions}
+                  recentCount={customerRecentCount}
                   searchable
                   addable={clientesEnabled}
                   onAddNew={st.openNewCustomer}
@@ -346,6 +353,7 @@ function CaixaScreenInner() {
         ]}>
           <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
           <ActPerson
+            ref={sellerPickerRef}
             kind="vendedora" shortcut="F2"
             value={activeSellerValue}
             onChange={v => {
@@ -357,10 +365,12 @@ function CaixaScreenInner() {
             searchable={employees.length > 5}
           />
           <ActPerson
+            ref={customerPickerRef}
             kind="cliente" shortcut="F3"
             value={activeCustomerValue}
             onChange={pickCustomerWithPhone}
             options={customerOptions}
+            recentCount={customerRecentCount}
             searchable
             addable={clientesEnabled}
             onAddNew={st.openNewCustomer}

@@ -99,7 +99,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
         <View style={{ flex: 1.2, minWidth: 0 }}>
           <View style={[s.labelRow, Platform.OS === "web" ? (webLabel as any) : null]}>
             <View style={s.labelBar} />
-            <Text style={s.label}>Saldo liquido - este mes</Text>
+            <Text style={s.label}>Saldo líquido · este mês</Text>
           </View>
 
           <View style={s.valueRow}>
@@ -111,7 +111,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
           {typeof netDelta === "number" && Math.abs(netDelta) > 0.0001 && (
             <View style={[s.deltaChip, { backgroundColor: netDelta >= 0 ? "rgba(52,211,153,0.2)" : "rgba(255,180,180,0.22)", borderColor: netDelta >= 0 ? "rgba(52,211,153,0.4)" : "rgba(255,180,180,0.45)" }]}>
               <Text style={{ color: netDelta >= 0 ? "#b9f6ca" : "#ffb4b4", fontSize: 11, fontWeight: "700" }}>
-                {netDelta >= 0 ? "+" : ""}{netDelta.toFixed(1)}% vs. mes anterior
+                {netDelta >= 0 ? "+" : ""}{netDelta.toFixed(1)}% vs. mês anterior
               </Text>
             </View>
           )}
@@ -119,7 +119,9 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
           <View style={s.metaRow}>
             {typeof revenue === "number" && (
               <View style={s.metaItem}>
-                <Text style={s.metaK}>Receita</Text>
+                {/* 29/08/2026 — QA de coerencia: era so "Receita", mesmo rotulo
+                    que /vendas usa pra outro numero. Aqui e tudo que entrou. */}
+                <Text style={s.metaK}>Receita total</Text>
                 <Text style={s.metaV}>{fmt(revenue)}</Text>
               </View>
             )}
@@ -131,11 +133,19 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
             )}
             {typeof projection === "number" && projection > 0 && (
               <View style={s.metaItem}>
-                <Text style={s.metaK}>Projecao fim do mes</Text>
+                <Text style={s.metaK}>Projeção fim do mês</Text>
                 <Text style={[s.metaV, { color: "#e9d5ff" }]}>{fmt(projection)}</Text>
               </View>
             )}
           </View>
+
+          {/* Nota de composicao — sem ela o lojista compara "Receita" daqui com
+              "Receita" de /vendas e ve dois valores sem explicacao. */}
+          {typeof revenue === "number" && (
+            <Text style={s.nota}>
+              Receita total = tudo que entrou no mês: vendas do Caixa, pedidos do Canal Digital e lançamentos manuais (o mesmo “Entrou” do Financeiro). Em Vendas você vê só a parte do Caixa.
+            </Text>
+          )}
         </View>
 
         {sparkNet && sparkNet.length >= 2 && (
@@ -177,5 +187,6 @@ const s = StyleSheet.create({
   metaItem: { gap: 3 },
   metaK: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.7)", letterSpacing: 1.2, textTransform: "uppercase" },
   metaV: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  nota: { fontSize: 10.5, color: "rgba(255,255,255,0.72)", lineHeight: 15, marginTop: 14, maxWidth: 520 },
   sparkWrap: { flex: 1, alignItems: IS_WIDE ? "flex-end" : "flex-start", justifyContent: "center" },
 });

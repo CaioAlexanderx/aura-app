@@ -15,6 +15,8 @@ import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+// 29/08/2026: helper compartilhado de plural (o ranking mostrava "1 vendas").
+import { pluralize } from "@/utils/plural";
 
 import { IS_WIDE, IS_WEB, MOCK_DASHBOARD, EMPTY_DATA, greeting, currentMonth, webOnly, fmt } from "@/components/screens/dashboard/types";
 import { Avatar } from "@/components/screens/dashboard/Avatar";
@@ -163,10 +165,10 @@ export default function DashboardScreen() {
     projection = Math.round(d.net * (daysInMonth / Math.max(dom, 1)));
   }
 
-  var firstName = user?.name?.split(" ")[0] ?? "usuario";
+  var firstName = user?.name?.split(" ")[0] ?? "usuário";
   // MULTICNPJ Sessao 2: header reflete o modo (consolidado vs empresa especifica)
   var companyLabel = consolidatedView
-    ? "Visão consolidada · " + companyCount + " empresa" + (companyCount !== 1 ? "s" : "")
+    ? "Visão consolidada · " + pluralize(companyCount, "empresa", "empresas")
     : (tradeName || company?.name || "---");
 
   // Breakdown so existe quando consolidated
@@ -200,7 +202,7 @@ export default function DashboardScreen() {
                 <View style={s.liveDot} />
                 <Text style={s.gh}>{greeting()}, {firstName}</Text>
               </View>
-              <Text style={s.cn} numberOfLines={1}>{companyLabel}  -  ao vivo</Text>
+              <Text style={s.cn} numberOfLines={1}>{companyLabel}  ·  ao vivo</Text>
             </View>
           </View>
           <BrandBanner mode="header" />
@@ -290,7 +292,7 @@ export default function DashboardScreen() {
                   <View style={s.secBar} />
                   <Text style={s.secTitle}>Obrigações contábeis</Text>
                   <View style={[s.secCount, { backgroundColor: "rgba(251,191,36,0.14)", borderColor: "rgba(251,191,36,0.28)", borderWidth: 1 }]}>
-                    <Text style={[s.secCountText, { color: Colors.amber, fontWeight: "700" }]}>{d.obligations.length} aberta{d.obligations.length > 1 ? "s" : ""}</Text>
+                    <Text style={[s.secCountText, { color: Colors.amber, fontWeight: "700" }]}>{pluralize(d.obligations.length, "aberta", "abertas")}</Text>
                   </View>
                 </View>
                 <View style={s.panel}>
@@ -301,7 +303,7 @@ export default function DashboardScreen() {
                       : o.name;
                     return <ObligationRow key={o.id} name={nameWithCompany} due={o.due} amount={o.amount} status={o.status} category={o.category} />;
                   })}
-                  <View style={s.panelFoot}><Text style={s.panelFootText}>Apoio contábil informativo  -  estimativa</Text></View>
+                  <View style={s.panelFoot}><Text style={s.panelFootText}>Apoio contábil informativo  ·  estimativa</Text></View>
                 </View>
               </>
             )}
@@ -313,7 +315,7 @@ export default function DashboardScreen() {
                   <View style={s.secBar} />
                   <Text style={s.secTitle}>Últimas transações</Text>
                   <TouchableOpacity onPress={function() { go("/financeiro"); }} style={{ marginLeft: "auto" }}>
-                    <Text style={s.secCta}>Ver todas  -  </Text>
+                    <Text style={s.secCta}>Ver todas  ›</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={s.panel}>
@@ -331,7 +333,7 @@ export default function DashboardScreen() {
         )}
 
         {isDemo && (
-          <View style={s.dm}><Text style={s.dmt}>Modo demonstrativo - dados ilustrativos</Text></View>
+          <View style={s.dm}><Text style={s.dmt}>Modo demonstrativo · dados ilustrativos</Text></View>
         )}
       </ScrollView>
     </View>

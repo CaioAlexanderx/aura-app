@@ -4,12 +4,19 @@
 // 25/05/2026 — Refatorado: bloco de emissão NFC-e extraído pra
 // <NfceActions/> (componente reutilizado também no Step5Success da
 // Troca). Zero mudança de UX — mesma tela, mesmos botoes.
+//
+// 29/08/2026 — Acabamento pós-QA: UUID cru virou "Código da venda"
+// (8 caracteres, copiável), check de sucesso virou ícone de verdade,
+// plural com concordância e rótulo neutro "Quem vendeu".
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
 import { toast } from "@/components/Toast";
+import { Icon } from "@/components/Icon";
+import { copyText } from "@/utils/clipboard";
+import { pluralize } from "@/utils/plural";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
@@ -67,6 +74,20 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
     unit_price: i.price,
   }));
 
+  const totalItens = sale.items.reduce((acc, i) => acc + i.qty, 0);
+
+  // 29/08/2026 — a API de venda não devolve nenhum sequencial legível (só o
+  // UUID). Encurtamos como já é feito no CloseTableModal do Food; maiúsculas
+  // pra facilitar ditar no balcão. Quando o backend expuser um número de
+  // venda, é aqui que ele entra.
+  const shortSaleId = String(sale.id || "").slice(0, 8).toUpperCase();
+
+  function handleCopyId() {
+    // Copia o UUID INTEIRO (e não os 8 caracteres exibidos): o código curto
+    // serve pra ditar/anotar no balcão, o completo é o que o suporte precisa.
+    copyText(sale.id, "Código completo copiado");
+  }
+
   function handlePrint() {
     if (!company?.id) return;
     openPrintReceipt(company.id, sale.id, token);
@@ -75,9 +96,12 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   return (
     <View style={s.container}>
       <View style={s.card}>
-        <View style={s.checkCircle}><Text style={s.checkIcon}>OK</Text></View>
+        <View style={s.checkCircle}><Icon name="check" size={32} color={Colors.green} /></View>
         <Text style={s.title}>Venda registrada!</Text>
-        <Text style={s.saleId}>#{sale.id}</Text>
+        <Pressable onPress={handleCopyId} style={s.saleIdBox}>
+          <Text style={s.saleIdLabel}>Código da venda</Text>
+          <Text style={s.saleId}>#{shortSaleId}</Text>
+        </Pressable>
 
         {hasCoupon && (
           <View style={s.couponRow}>
@@ -116,7 +140,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
         )}
         <View style={s.row}>
           <Text style={s.label}>Itens</Text>
-          <Text style={s.meta}>{sale.items.reduce((s, i) => s + i.qty, 0)} produtos</Text>
+          <Text style={s.meta}>{pluralize(totalItens, "produto")}</Text>
         </View>
         {sale.customerName && (
           <View style={s.row}>
@@ -132,7 +156,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
         )}
         {sale.employeeName && (
           <View style={s.row}>
-            <Text style={s.label}>Vendedor</Text>
+            <Text style={s.label}>Quem vendeu</Text>
             <Text style={s.meta}>{sale.employeeName}</Text>
           </View>
         )}
@@ -171,9 +195,10 @@ const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   card: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, maxWidth: 460, width: "100%" },
   checkCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2, borderColor: Colors.green },
-  checkIcon: { fontSize: 20, color: Colors.green, fontWeight: "800" },
   title: { fontSize: 20, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
-  saleId: { fontSize: 12, color: Colors.ink3, marginBottom: 20 },
+  saleIdBox: { alignItems: "center", gap: 2, marginBottom: 20, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.bg4 },
+  saleIdLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  saleId: { fontSize: 14, color: Colors.ink, fontWeight: "700", letterSpacing: 1 },
   row: { flexDirection: "row", justifyContent: "space-between", width: "100%", paddingVertical: 8 },
   label: { fontSize: 13, color: Colors.ink3 },
   value: { fontSize: 18, color: Colors.green, fontWeight: "800" },
