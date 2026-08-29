@@ -185,6 +185,11 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
     normalizeHours(config.business_hours)
   );
 
+  // "Aberta 24 horas" e um estado proprio, nao uma grade preenchida de
+  // 00:00 as 23:59 nos sete dias. Ver migration 310 no backend: dizer 24h
+  // por horario deixava a loja Fechada no ultimo minuto de cada dia.
+  const [alwaysOpen, setAlwaysOpen] = useState<boolean>(config.always_open === true);
+
   // --- Sync com config externo ---------------------------------
   useEffect(() => { setPickupEnabled(config.pickup_enabled !== false); }, [config.pickup_enabled]);
   useEffect(() => { setDeliveryEnabled(!!config.delivery_enabled); }, [config.delivery_enabled]);
@@ -205,6 +210,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   useEffect(() => {
     setBusinessHours(normalizeHours(config.business_hours));
   }, [JSON.stringify(config.business_hours)]);
+  useEffect(() => { setAlwaysOpen(config.always_open === true); }, [config.always_open]);
 
   // --- Save debounce 800ms -------------------------------------
   const saveTimer = useRef<any>(null);
@@ -227,6 +233,13 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   function handleDeliveryToggle(v: boolean) {
     setDeliveryEnabled(v);
     scheduleSave({ delivery_enabled: v });
+  }
+  // Nao apaga business_hours ao ligar: se a lojista desligar depois, a
+  // grade que ela preencheu continua la. O backend ignora enquanto
+  // always_open estiver ligado.
+  function handleAlwaysOpenToggle(v: boolean) {
+    setAlwaysOpen(v);
+    scheduleSave({ always_open: v });
   }
 
   // --- Handlers de campos texto livres -------------------------
@@ -650,14 +663,34 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
             <Text style={s.emoji}>🕒</Text> Horário de funcionamento
           </Text>
           <Text style={s.cardHeadHint}>
-            Cliente vê "Aberta / Fechada" no topo da loja
+            {alwaysOpen
+              ? 'Cliente vê "Aberta" no topo da loja, sempre'
+              : 'Cliente vê "Aberta / Fechada" no topo da loja'}
           </Text>
         </View>
+        <View style={s.always24Row}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={s.always24Title}>Aberta 24 horas</Text>
+            <Text style={s.always24Hint}>
+              A loja nunca aparece como fechada. Não precisa preencher os dias.
+            </Text>
+          </View>
+          <Switch
+            testID="toggle-24h"
+            value={alwaysOpen}
+            onValueChange={handleAlwaysOpenToggle}
+            trackColor={{ false: accent.border, true: accent.primary }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {alwaysOpen ? null : (
+        <>
         <Text style={s.helper}>
           Use o mesmo horário pra retirada e entrega — ou deixe um dia em branco pra marcar como fechado.
         </Text>
 
-        <View style={{ marginTop: 10 }}>
+        <View testID="grade-de-horarios" style={{ marginTop: 10 }}>
           {DAYS.map(({ key, label }) => {
             const day = businessHours[key];
             const isClosed = !day.open && !day.close;
@@ -714,6 +747,8 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
             );
           })}
         </View>
+        </>
+        )}
       </View>
 
       {/* ---------------- Preview do checkout ---------------- */}
@@ -1036,6 +1071,19 @@ function buildStyles(accent: AccentTokens) {
   },
 
   // Horário
+  //
+  // A linha do "Aberta 24 horas" fica ACIMA da grade e a substitui quando
+  // ligada: são dois jeitos de dizer a mesma coisa, e mostrar os dois ao
+  // mesmo tempo faria a lojista achar que precisa preencher os dois.
+  always24Row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    marginTop: 2,
+  },
+  always24Title: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  always24Hint: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 2 },
+
   hourRow: {
     flexDirection: "row",
     alignItems: "center",
