@@ -8,6 +8,8 @@ import { useAuthStore } from "@/stores/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
+import { HubView } from "@/components/screens/hub/HubView";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 
 const AGENT_META: Record<string, { icon: string; color: string }> = {
   Financeiro:   { icon: "wallet", color: Colors.green },
@@ -47,6 +49,13 @@ function ActivityRow({ item }: { item: any }) {
 
 export default function AgentesScreen() {
   const { isDemo, company, token } = useAuthStore();
+
+  // Hub social (Aurinha) — módulo próprio (hub_social) vendável como
+  // add-on; sem ele a aba mostra só as Análises (comportamento antigo).
+  const visibleMods = useVisibleModules();
+  const hubVisible = visibleMods.has("hub_social");
+  const [view, setView] = useState<"atendimento" | "analises">("atendimento");
+  const activeView = hubVisible ? view : "analises";
 
   // Fetch real activity from API
   const { data: apiActivity, isLoading } = useQuery({
@@ -112,9 +121,37 @@ export default function AgentesScreen() {
     crm: "CRM", contabil: "Contábil", marketing: "Marketing", odonto: "Odontologia",
   };
 
+  const viewTabs = hubVisible ? (
+    <View style={z.viewTabs}>
+      {(["atendimento", "analises"] as const).map((v) => (
+        <Pressable key={v} onPress={() => setView(v)}
+          style={[z.viewTab, activeView === v && z.viewTabOn]}>
+          <Text style={[z.viewTabText, activeView === v && z.viewTabTextOn]}>
+            {v === "atendimento" ? "Atendimento" : "Análises"}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  ) : null;
+
+  // Atendimento (hub social): container próprio — o HubView tem os seus
+  // ScrollViews internos (lista + thread), não pode aninhar no ScrollView da aba.
+  if (activeView === "atendimento") {
+    return (
+      <View style={z.screen}>
+        <View style={[z.content, { flex: 1 }]}>
+          <PageHeader title="Agentes" />
+          {viewTabs}
+          <HubView />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
       <PageHeader title="Agentes" />
+      {viewTabs}
       <Text style={z.subtitle}>Painel de atividade dos seus agentes de IA</Text>
 
       {/* Summary KPIs */}
@@ -223,6 +260,11 @@ export default function AgentesScreen() {
 
 const z = StyleSheet.create({
   screen: { flex: 1 },
+  viewTabs: { flexDirection: "row", gap: 8, marginBottom: 18 },
+  viewTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  viewTabOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  viewTabText: { fontSize: 13, fontWeight: "600", color: Colors.ink2 },
+  viewTabTextOn: { color: "#fff" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
   subtitle: { fontSize: 13, color: Colors.ink3, marginBottom: 20, marginTop: -8 },
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
