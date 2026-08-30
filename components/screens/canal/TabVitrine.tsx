@@ -33,6 +33,7 @@ import { View, Text, StyleSheet, Pressable, TextInput, Switch, Platform, Activit
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { DeixarLojaPronta } from "./DeixarLojaPronta";
 import { HoverRow } from "@/components/HoverRow";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
@@ -269,6 +270,11 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
 
   return (
     <View>
+      {/* O que falta nas PECAS. Vem antes do modo auto/curadoria: nao
+          adianta escolher quais aparecem se as que aparecem estao pela
+          metade. O checklist da aba Design cuida do nivel da LOJA. */}
+      <DeixarLojaPronta />
+
       {/* Banner dual-mode (auto vs curadoria) */}
       {isAutoMode ? (
         <View style={[s.modeBanner, s.modeBannerAuto]}>
