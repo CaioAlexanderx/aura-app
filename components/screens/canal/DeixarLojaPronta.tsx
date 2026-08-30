@@ -211,7 +211,7 @@ function Editor({
             style={[s.entrada, { flex: 1 }]}
             value={valorParaTodos}
             onChangeText={setValorParaTodos}
-            placeholder={`Mesmo ${ajuda.rotulo.toLowerCase()} para todas`}
+            placeholder={ajuda.emMassa}
             placeholderTextColor={Colors.ink3}
             maxLength={ajuda.max}
           />
@@ -270,7 +270,7 @@ function Editor({
         ) : (
           <Text style={s.botaoTexto}>
             {aSubir === 0
-              ? "Preencha ao menos uma"
+              ? "Salvar"
               : aSubir === 1 ? "Salvar 1 peça" : `Salvar ${aSubir} peças`}
           </Text>
         )}

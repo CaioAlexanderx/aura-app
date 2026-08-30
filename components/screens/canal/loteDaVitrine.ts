@@ -79,22 +79,30 @@ export function aplicarEmTodos(ids: string[], valor: string, rascunho: Rascunho)
 }
 
 /** Texto do campo, na voz de quem vai preencher. */
-export const AJUDA: Record<CampoEditavel, { rotulo: string; dica: string; multilinha: boolean; max: number }> = {
+/**
+ * O texto de cada campo. `emMassa` e escrito por extenso, e nao montado
+ * com `Mesmo ${rotulo}`: em portugues o adjetivo concorda com o genero
+ * do substantivo, e o template produzia "Mesmo marca para todas".
+ */
+export const AJUDA: Record<CampoEditavel, { rotulo: string; dica: string; emMassa: string; multilinha: boolean; max: number }> = {
   descricao: {
     rotulo: "Descrição",
     dica: "Diga o que a cliente não vê na foto: caimento, tecido, comprimento.",
+    emMassa: "Mesma descrição para todas",
     multilinha: true,
     max: 1200,
   },
   tamanho: {
     rotulo: "Tamanho",
     dica: "Sem tamanho, a peça não aparece quando a cliente filtra por tamanho.",
+    emMassa: "Mesmo tamanho para todas",
     multilinha: false,
     max: 24,
   },
   marca: {
     rotulo: "Marca",
     dica: "Aparece no cartão da peça. Se for tudo da sua marca, use “aplicar em todas”.",
+    emMassa: "Mesma marca para todas",
     multilinha: false,
     max: 80,
   },
