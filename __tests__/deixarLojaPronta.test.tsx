@@ -102,6 +102,17 @@ describe("campo de upload não vira campo de texto", () => {
     expect(ehEditavel("qualquer")).toBe(false);
   });
 
+  test("o texto de 'aplicar em todas' concorda em gênero", () => {
+    // Era montado com `Mesmo ${rotulo}` e saía "Mesmo marca para todas".
+    // Em português o adjetivo concorda com o substantivo; template que
+    // junta pedaços de frase não sabe disso.
+    expect(AJUDA.marca.emMassa).toBe("Mesma marca para todas");
+    expect(AJUDA.tamanho.emMassa).toBe("Mesmo tamanho para todas");
+    for (const campo of ["descricao", "tamanho", "marca"] as const) {
+      expect(AJUDA[campo].emMassa).not.toContain("${");
+    }
+  });
+
   test("descrição é o único multilinha", () => {
     expect(AJUDA.descricao.multilinha).toBe(true);
     expect(AJUDA.tamanho.multilinha).toBe(false);
@@ -201,6 +212,21 @@ describe("a tela", () => {
 
     expect(mockSalvar).toHaveBeenCalledTimes(1);
     expect(mockSalvar).toHaveBeenCalledWith([{ id: "p1", size: "M" }]);
+  });
+
+  test("o botão vazio diz só 'Salvar' — sem instruir a lojista", async () => {
+    // "Preencha ao menos uma" lia como cobrança. O estado desabilitado já
+    // diz que não dá pra salvar ainda; a frase sobrava.
+    mockResumo = {
+      total: 10, publicadas: 10,
+      campos: [{ chave: "marca", titulo: "Marca", editavel: true, faltando: 1 }],
+    };
+    mockLista = { produtos: [{ id: "p1", name: "Vestido", image_url: null }] };
+    const r = montar();
+    act(() => { r.root.findAllByProps({ testID: "pendencia-marca" })[0].props.onPress(); });
+    const t = textos(r.toJSON());
+    expect(t).toContain("Salvar");
+    expect(t).not.toContain("Preencha ao menos uma");
   });
 
   test("sem nada preenchido, o botão não chama a API", async () => {
