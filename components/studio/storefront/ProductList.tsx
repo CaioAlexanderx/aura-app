@@ -18,6 +18,7 @@ import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 import { wash } from "./theme";
 
 import { AncoraWhatsApp } from "./AncoraWhatsApp";
+import { RodapeInstitucional } from "./RodapeInstitucional";
 import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
 import { Texto } from "./TipografiaVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
@@ -381,6 +382,17 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
           </View>
           )
         )}
+
+        {/* Como pagar e o que acontece se a peca nao servir. Vem DENTRO
+            do scroll, depois dos produtos: e o fim da leitura, nao uma
+            barra fixa competindo com o carrinho. O conteudo chega pronto
+            do backend — ver o comentario do componente. */}
+        <RodapeInstitucional
+          rodape={(store as any).rodape_institucional}
+          corDoTexto={T.ink}
+          corFraca={T.ink3}
+          corDaLinha={T.border}
+        />
       </ScrollView>
 
       <AncoraWhatsApp
