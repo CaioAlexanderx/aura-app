@@ -73,13 +73,6 @@ export default function OsListScreen() {
 
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
-      <View style={st.headerRow}>
-        <Pressable onPress={() => router.back()} style={st.backBtn} testID="os-back">
-          <Icon name="chevron_left" size={16} color={Colors.violet3} />
-          <Text style={st.backText}>Voltar</Text>
-        </Pressable>
-      </View>
-
       <View style={st.titleRow}>
         <View style={{ flex: 1 }}>
           <Text style={st.pageTitle}>Ordens de Serviço</Text>
