@@ -103,6 +103,11 @@ export type PdvSettings = {
   // faz merge, entao pode salvar so { label_offset_mm } sem resetar o resto.
   label_offset_mm?: number;
   label_cols?: number;
+  // 31/08/2026 (Ordem de Servico, migration 313): opt-in — nem toda loja
+  // emite OS. Desligado, o modulo inteiro some (menu, tela, botao no PDV).
+  // O backend bloqueia so a ESCRITA quando desligado; leitura e impressao
+  // continuam, pra loja nao perder de vista os aparelhos ja no balcao.
+  os_enabled?: boolean;
 };
 
 export var authApi = {

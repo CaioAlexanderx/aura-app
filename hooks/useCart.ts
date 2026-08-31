@@ -22,6 +22,9 @@ export type SaleResult = {
   payments?: PaymentEntry[]; // populado quando splitMode foi usado (length >= 1)
   items: CartItem[];
   date: string;
+  // 31/08/2026 (OS): id do cliente vinculado. SaleComplete usa pra buscar
+  // as OS "pronta" dele e oferecer entrega+vinculo na tela de sucesso.
+  customerId?: string;
   customerName?: string;
   customerPhone?: string;   // pra wa.me share da NFC-e
   employeeName?: string;
@@ -340,6 +343,7 @@ export function useCart() {
         payments: paymentsSnapshot,
         items: cartSnapshot,
         date: new Date().toLocaleString("pt-BR"),
+        customerId: selectedCustomerId || undefined,
         customerName: selectedCustomerName || undefined,
         customerPhone: selectedCustomerPhone || undefined,
         employeeName: selectedEmployeeName || undefined,

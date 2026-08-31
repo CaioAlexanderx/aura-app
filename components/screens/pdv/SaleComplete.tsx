@@ -20,6 +20,7 @@ import { pluralize } from "@/utils/plural";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
+import { OsActions } from "./OsActions";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
@@ -176,6 +177,13 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
             payments={payments}
             autoEmit={autoEmit}
           />
+        )}
+
+        {/* 31/08/2026 (OS): fecha o ciclo da OS na tela de sucesso — lista
+            as OS PRONTAS do cliente e entrega vinculando esta venda. Nao
+            renderiza nada sem toggle/cliente/OS pronta. */}
+        {company?.id && (
+          <OsActions companyId={company.id} saleId={sale.id} customerId={sale.customerId} />
         )}
 
         <View style={[s.actions, { marginTop: 14 }]}>
