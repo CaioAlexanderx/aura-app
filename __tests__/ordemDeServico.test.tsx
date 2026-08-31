@@ -70,7 +70,7 @@ jest.mock("@/services/serviceOrdersApi", () => {
 });
 
 import { OsActions } from "@/components/screens/pdv/OsActions";
-import OsListScreen from "@/app/os/index";
+import OsListScreen from "@/app/(tabs)/os/index";
 
 function nos(arvore: any): any[] {
   const out: any[] = [];

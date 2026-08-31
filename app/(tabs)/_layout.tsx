@@ -11,6 +11,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useModules } from "@/hooks/useModules";
 import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
@@ -18,7 +19,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-
 import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 // ============================================================
@@ -82,7 +83,7 @@ const NAV: NavSection[] = [
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "pdv", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
@@ -198,11 +199,15 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
       if (item.staff && !isStaff) return false;
+      // 31/08/2026 — Ordem de Servico e opt-in por toggle (pdv_settings.
+      // os_enabled), nao por modulo/plano: a loja liga deliberadamente em
+      // Configuracoes e so entao o item aparece no menu.
+      if (item.osToggle && osEnabled !== true) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
   })).filter(section => section.i.length > 0);
@@ -437,13 +442,16 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pl = planoAtual === "negocio" ? "Negócio" : planoAtual === "expansao" ? "Expansão" : "Essencial";
   const sw = collapsed ? 64 : 280;
   const isStaff = (u as any)?.is_staff === true;
+  // Ordem de Servico no menu so quando o toggle da loja esta ligado.
+  const { settings: pdvSettingsNav } = usePdvSettings();
+  const osEnabled = pdvSettingsNav.os_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical),
-    [visibleMods, isStaff, activeVertical]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -692,6 +700,9 @@ function MBar() {
   const [showMore, setShowMore] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const isStaff = (u as any)?.is_staff === true;
+  // Ordem de Servico no menu so quando o toggle da loja esta ligado.
+  const { settings: pdvSettingsNav } = usePdvSettings();
+  const osEnabled = pdvSettingsNav.os_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
@@ -705,8 +716,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical),
-    [visibleMods, isStaff, activeVertical]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled]
   );
 
   // filteredNav: aplica layout custom do cliente.

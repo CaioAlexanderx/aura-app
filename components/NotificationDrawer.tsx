@@ -33,11 +33,25 @@ function fmt(v?: number) {
   return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// 31/08/2026: o fallback era 'Studio' pra QUALQUER source desconhecido —
+// venda de balcao (source 'pdv') aparecia como "Studio — Pedido" no shell
+// Negocio. Cada source tem nome proprio; o desconhecido vira "Pedido",
+// nunca o nome de um modulo que a loja talvez nem tenha.
+const SOURCE_LABEL: Record<string, string> = {
+  canal_digital: 'Canal Digital',
+  studio: 'Studio',
+  pdv: 'Caixa',
+};
+const SOURCE_DOT: Record<string, string> = {
+  canal_digital: '#7c3aed',
+  studio: '#d946ef',
+  pdv: '#22c55e',
+};
 function sourceLabel(s: string) {
-  return s === 'canal_digital' ? 'Canal Digital' : 'Studio';
+  return SOURCE_LABEL[s] || 'Pedido';
 }
 function sourceDot(s: string) {
-  return s === 'canal_digital' ? '#7c3aed' : '#d946ef';
+  return SOURCE_DOT[s] || '#7c3aed';
 }
 
 function relTime(iso: string) {
