@@ -195,6 +195,35 @@ export function PdvSettingsCard() {
 
       <View style={s.divider} />
 
+      {/* 31/08/2026: Ordem de Servico (migration 313). Opt-in deliberado —
+          nem toda loja emite OS; desligado, o modulo inteiro fica invisivel.
+          A OS nasce na ENTRADA do equipamento (antes da venda) e so encosta
+          numa venda ao ser entregue — ver CONTRACT_ORDEM_DE_SERVICO.md. */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Ordem de Serviço</Text>
+          <Text style={s.rowDesc}>Registre a entrada de equipamentos para conserto: defeito, orçamento, prazo e garantia, com impressão em A4 com a sua marca</Text>
+        </View>
+        <Switch
+          value={display.os_enabled === true}
+          onValueChange={function(v) { toggle("os_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.os_enabled === true ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      {/* Link para a lista de OS — visivel apenas quando habilitado */}
+      {display.os_enabled === true && (
+        <Pressable onPress={function() { router.push("/os" as any); }} style={s.caixaLink}>
+          <Icon name="tool" size={14} color={Colors.violet3} />
+          <Text style={s.caixaLinkText}>Ver ordens de serviço</Text>
+          <Icon name="chevron_right" size={14} color={Colors.ink3} />
+        </Pressable>
+      )}
+
+      <View style={s.divider} />
+
       {/* 17/08/2026: Taxa da maquininha.
           NAO e gated por vertical de proposito — vale pro shell Negocio e
           pro shell Studio. Ligada, toda venda no cartao lanca sozinha a
