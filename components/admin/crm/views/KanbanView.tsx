@@ -75,7 +75,7 @@ export function KanbanView({
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
             <Icon name="alert" size={14} color={Colors.amber} />
             <Text style={{ fontSize: 11, color: Colors.amber, fontWeight: "600", flex: 1 }}>
-              Arrastar-e-soltar so funciona na versao web. Use a tab "Lista" no mobile.
+              Arrastar-e-soltar so funciona na versão web. Use a tab "Lista" no mobile.
             </Text>
           </View>
         </View>

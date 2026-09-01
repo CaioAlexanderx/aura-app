@@ -333,7 +333,7 @@ export default function StudioPainel() {
             <HoverLift style={s.chartCardFull}>
               <View style={s.chartHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.chartEyebrow}>APROVACAO DE ARTE (wa.me)</Text>
+                  <Text style={s.chartEyebrow}>APROVAÇÃO DE ARTE (wa.me)</Text>
                   <Text style={s.chartTitle}>
                     Funil de aprovacao . {periodLabel(period).toLowerCase()}
                   </Text>

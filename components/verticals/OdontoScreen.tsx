@@ -24,7 +24,7 @@ const CONFIG: VerticalConfig = {
   name: 'Odontologia',
   icon: '\uD83E\uDDB7',
   accent: '#06B6D4',
-  establishment: 'Minha Clinica',
+  establishment: 'Minha Clínica',
   professional: 'Dr. Nome \u2014 CRO-SP 00000',
 };
 

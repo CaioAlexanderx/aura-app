@@ -36,6 +36,13 @@
 //   · orderSuffix (número de venda aleatório, recalculado a cada render)
 //     removido — ver comentário em orderLabel.
 //   · customerOptions não abre mais em ordem alfabética.
+//
+// 01/09/2026 (QA onda 2): a ordenação por recência do seletor de cliente era
+// client-side sobre a PÁGINA que tinha chegado — o topo era "o mais recente
+// entre os primeiros alfabeticamente", não o mais recente da base. Agora o
+// hook pede useCustomers({ sort: "recent" }) e o servidor ordena por
+// last_purchase_at DESC NULLS LAST, name ASC. Sobrou só a contagem de quantos
+// clientes do topo entram no bloco "Atendidos recentemente".
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -72,13 +79,12 @@ const PAGE_SIZE = 12;
 // Quantos clientes entram no bloco "Atendidos recentemente" do seletor.
 const MAX_RECENT_CUSTOMERS = 8;
 
-/** "DD/MM/AAAA" (formato que useCustomers já entrega em Customer.lastPurchase)
- *  → timestamp. Retorna 0 pra "---" / vazio / formato inesperado. */
-function parsePtBrDate(v?: string | null): number {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((v || "").trim());
-  if (!m) return 0;
-  const t = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])).getTime();
-  return isNaN(t) ? 0 : t;
+/** Já comprou alguma vez? useCustomers mapeia last_purchase_at pra
+ *  Customer.lastPurchase e usa "---" quando o cliente nunca comprou —
+ *  que é exatamente o grupo do NULLS LAST do `?sort=recent`. */
+function jaComprou(c: { lastPurchase?: string | null }): boolean {
+  const v = (c.lastPurchase || "").trim();
+  return v.length > 0 && v !== "---";
 }
 
 function getProductStock(p: any): number {
@@ -111,7 +117,8 @@ export function usePdvState() {
   const { products } = useProducts();
   // D2 (F0): arvore para expandir o filtro de categoria na subarvore.
   const { flattened: categoriasFlat } = useCategories();
-  const { customers } = useCustomers();
+  // ?sort=recent: o seletor de cliente do balcão abre pelo último atendido.
+  const { customers } = useCustomers({ sort: "recent" });
   const { settings: pdvSettings } = usePdvSettings();
 
   // ── Plano / módulos ─────────────────────────────────────────────────────────
@@ -628,33 +635,26 @@ export function usePdvState() {
       }
     : null;
 
-  // 29/08/2026: a lista abria em ordem alfabética (Abbey, Abdel, Adamo…), a
-  // ordenação menos útil possível com o cliente na frente do balcão. O backend
-  // já devolve last_purchase/last_purchase_at e visit_count — useCustomers
-  // mapeia pra Customer.lastPurchase ("DD/MM/AAAA") e Customer.visits. Então
-  // usamos dado real: recência primeiro, frequência como desempate. Quem nunca
-  // comprou continua no alfabético, logo abaixo. Busca digitada não passa por
-  // aqui (o ActPerson filtra a lista inteira).
+  // 01/09/2026: a lista já chega ordenada do servidor (?sort=recent =
+  // last_purchase_at DESC NULLS LAST, name ASC). Não reordenamos nada aqui —
+  // a ordenação local só sabia reordenar a página carregada e mentia sobre
+  // quem era o "mais recente". Só medimos onde termina o bloco de recentes:
+  // como os que nunca compraram vêm todos DEPOIS (NULLS LAST), basta contar
+  // os primeiros que já compraram, até o teto do bloco. Busca digitada não
+  // passa por aqui (o ActPerson filtra a lista inteira).
   const { customerOptions, customerRecentCount } = useMemo(() => {
-    const recent = customers
-      .filter(c => parsePtBrDate(c.lastPurchase) > 0 || (c.visits || 0) > 0)
-      .sort((a, b) => {
-        const d = parsePtBrDate(b.lastPurchase) - parsePtBrDate(a.lastPurchase);
-        if (d !== 0) return d;
-        return (b.visits || 0) - (a.visits || 0);
-      })
-      .slice(0, MAX_RECENT_CUSTOMERS);
-
-    const recentIds = new Set(recent.map(c => c.id));
-    const rest = customers
-      .filter(c => !recentIds.has(c.id))
-      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
+    let recentCount = 0;
+    while (
+      recentCount < customers.length &&
+      recentCount < MAX_RECENT_CUSTOMERS &&
+      jaComprou(customers[recentCount])
+    ) recentCount++;
 
     return {
-      customerOptions: [...recent, ...rest].map(c => ({
+      customerOptions: customers.map(c => ({
         id: c.id, name: c.name, subtitle: c.phone || c.email,
       })),
-      customerRecentCount: recent.length,
+      customerRecentCount: recentCount,
     };
   }, [customers]);
 

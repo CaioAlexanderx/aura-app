@@ -17,11 +17,11 @@ export function CotaParte({ invoices, summary, onGenerate, onUpdateNfse }: Props
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(summary.total_gross)}</Text><Text style={s.kpiLbl}>Receita bruta</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{fmt(summary.total_partner)}</Text><Text style={s.kpiLbl}>Cota parceiro</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: Colors.violet3 }]}>{fmt(summary.total_salon)}</Text><Text style={s.kpiLbl}>Cota salao</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: Colors.violet3 }]}>{fmt(summary.total_salon)}</Text><Text style={s.kpiLbl}>Cota salão</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: summary.pending_nfse > 0 ? "#EF4444" : "#10B981" }]}>{summary.pending_nfse}</Text><Text style={s.kpiLbl}>NFS-e pendentes</Text></View>
       </View>
-      <View style={s.header}><Text style={s.title}>Cota-parte (Lei do Salao 13.352)</Text>{onGenerate && <Pressable onPress={onGenerate} style={s.addBtn}><Text style={s.addBtnT}>+ Gerar fatura</Text></Pressable>}</View>
-      <View style={s.infoBox}><Text style={s.infoText}>A Lei do Salao exige que o parceiro MEI emita NFS-e para o salao, discriminando a cota-parte de cada um. A Aura calcula automaticamente e controla a emissão.</Text></View>
+      <View style={s.header}><Text style={s.title}>Cota-parte (Lei do Salão 13.352)</Text>{onGenerate && <Pressable onPress={onGenerate} style={s.addBtn}><Text style={s.addBtnT}>+ Gerar fatura</Text></Pressable>}</View>
+      <View style={s.infoBox}><Text style={s.infoText}>A Lei do Salão exige que o parceiro MEI emita NFS-e para o salão, discriminando a cota-parte de cada um. A Aura calcula automaticamente e controla a emissão.</Text></View>
       {invoices.map(inv => (
         <View key={inv.id} style={s.card}>
           <View style={{ flex: 1, gap: 4 }}>

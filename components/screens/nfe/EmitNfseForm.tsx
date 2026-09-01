@@ -30,7 +30,7 @@ export function EmitNfseForm({ companyId }: { companyId: string }) {
 
   return (
     <View style={ns.formCard}>
-      <Text style={ns.formTitle}>Emitir NFS-e (Nota de Servico)</Text>
+      <Text style={ns.formTitle}>Emitir NFS-e (Nota de Serviço)</Text>
       <Text style={ns.formHint}>Preencha os dados do serviço prestado. O tomador e opcional.</Text>
       <View style={ns.formRow}>
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>Nome do tomador</Text><TextInput style={ns.fInput} value={recipientName} onChangeText={setRecipientName} placeholder="Razão social ou nome" placeholderTextColor={Colors.ink3} /></View>
@@ -42,7 +42,7 @@ export function EmitNfseForm({ companyId }: { companyId: string }) {
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>Valor (R$) *</Text><TextInput style={ns.fInput} value={value} onChangeText={setValue} placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></View>
         <View style={{ flex: 1 }}><Text style={ns.fLabel}>ISS (%)</Text><TextInput style={ns.fInput} value={issRate} onChangeText={setIssRate} placeholder="2" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" /></View>
       </View>
-      <View style={ns.formRow}><View style={{ flex: 1 }}><Text style={ns.fLabel}>E-mail do tomador (envio automatico)</Text><TextInput style={ns.fInput} value={recipientEmail} onChangeText={setRecipientEmail} placeholder="cliente@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" /></View></View>
+      <View style={ns.formRow}><View style={{ flex: 1 }}><Text style={ns.fLabel}>E-mail do tomador (envio automático)</Text><TextInput style={ns.fInput} value={recipientEmail} onChangeText={setRecipientEmail} placeholder="cliente@empresa.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" /></View></View>
       <Pressable onPress={handleEmit} disabled={emitMut.isPending} style={[ns.emitBtn, emitMut.isPending && { opacity: 0.6 }]}>{emitMut.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ns.emitBtnText}>Emitir NFS-e</Text>}</Pressable>
     </View>
   );

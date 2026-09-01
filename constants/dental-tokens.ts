@@ -145,7 +145,7 @@ export const DentalForm = IS_DARK_MODE ? {
 // ============================================================
 export const DentalCopy = {
   brand:    "Aura Odonto",
-  tagline:  "Sua clinica em ordem, seu paciente seguro.",
+  tagline:  "Sua clínica em ordem, seu paciente seguro.",
   hero:     "Cada paciente, um histórico vivo.",
   subhero:  "Prontuario, odontograma e agenda em uma so tela.",
 } as const;

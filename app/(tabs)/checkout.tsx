@@ -205,7 +205,7 @@ export default function CheckoutScreen() {
       if (res.valid) {
         setCouponApplied(res);
         setCouponError(null);
-        toast.success(res.trial_days ? res.trial_days + " dias gratis aplicados!" : "Cupom de " + res.discount_pct + "% aplicado!");
+        toast.success(res.trial_days ? res.trial_days + " dias grátis aplicados!" : "Cupom de " + res.discount_pct + "% aplicado!");
       } else {
         setCouponApplied(null);
         setCouponError(res.error || "Cupom inválido");
@@ -247,7 +247,7 @@ export default function CheckoutScreen() {
       // Cupom de dias gratis no Pix: nao ha o que pagar hoje, entao nao vem QR.
       if (couponApplied?.trial_days) {
         setSuccess(true);
-        toast.success(res.message || couponApplied.trial_days + " dias gratis ativados!");
+        toast.success(res.message || couponApplied.trial_days + " dias grátis ativados!");
         await hydrate();
         setTimeout(function () { router.replace("/(tabs)/" as any); }, 2000);
         return;

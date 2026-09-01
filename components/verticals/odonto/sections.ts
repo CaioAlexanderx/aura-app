@@ -64,7 +64,7 @@ export const SECTIONS: Section[] = [
   },
   {
     id: 'clinica',
-    label: 'Clinica',
+    label: 'Clínica',
     icon: '\uD83E\uDDB7',
     tabs: [
       { id: 'odontograma', label: 'Odontograma', component: OdontogramaTab },
@@ -101,7 +101,7 @@ export const SECTIONS: Section[] = [
     label: 'Configurações',
     icon: '\u2699\uFE0F',
     tabs: [
-      { id: 'clinica-config', label: 'Clinica e cadeiras', component: DentalSettings },
+      { id: 'clinica-config', label: 'Clínica e cadeiras', component: DentalSettings },
     ],
   },
 ];

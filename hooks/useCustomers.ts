@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { companiesApi, ApiError } from "@/services/api";
+import { companiesApi, ApiError, request } from "@/services/api";
 import { meAggregatesApi } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { pluralize } from "@/utils/plural";
 import type { Customer } from "@/components/screens/clientes/types";
 
 // MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
@@ -31,6 +32,21 @@ import type { Customer } from "@/components/screens/clientes/types";
 // Bug B: campos opcionais usavam || undefined -> JSON omitia -> nao era
 // possivel limpar email/telefone/notas/instagram. Fix: usa null, que o
 // backend processa como SET field = NULL.
+//
+// 01/09/2026 -- duas correcoes vindas do QA:
+// (a) ?sort=recent: o backend passou a aceitar sort=recent em
+//     GET /companies/:id/customers e GET /me/customers
+//     (last_purchase_at DESC NULLS LAST, name ASC). Quem precisa da lista
+//     por recencia -- o seletor de cliente do PDV -- pede useCustomers({ sort:
+//     "recent" }); sem o parametro nada muda (alfabetico, default do backend).
+//     companiesApi.customers/meAggregatesApi.customers nao aceitam query e
+//     pertencem a outra frente, por isso a variante ordenada usa `request`
+//     direto. O `sort` entra na queryKey: sao listas com ORDENS diferentes,
+//     misturar os caches faria a tela de Clientes herdar a ordem do PDV.
+// (b) erro de rede: o hook engolia a falha e devolvia [] -- indistinguivel de
+//     base vazia (dois QAs independentes cairam nisso). Agora expoe
+//     isError/error/refetch. 403 continua saindo por planBlocked e NAO conta
+//     como isError, senao a tela mostraria erro de rede num bloqueio de plano.
 
 // Processa deletes em lotes para nao sobrecarregar o servidor
 async function deleteBatched(
@@ -110,7 +126,12 @@ function limitUpgradeMessage(plan: string, body: any): string {
   }
 }
 
-export function useCustomers() {
+/** `sort: "recent"` = mais recentes primeiro (last_purchase_at DESC NULLS LAST,
+ *  name ASC). Omitido = alfabetico, o default inalterado do backend. */
+export type UseCustomersOptions = { sort?: "recent" };
+
+export function useCustomers(options?: UseCustomersOptions) {
+  const sort = options?.sort;
   const { company, token, isDemo, consolidatedView, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
@@ -125,13 +146,18 @@ export function useCustomers() {
     return primary?.id || (availableCompanies?.[0]?.id ?? null);
   }, [consolidatedView, companyId, availableCompanies]);
 
-  const { data: apiData, isLoading, error: fetchError } = useQuery({
-    queryKey: consolidatedView ? ["customers", "me"] : ["customers", companyId],
+  const { data: apiData, isLoading, error: fetchError, isError: queryIsError, refetch } = useQuery({
+    queryKey: ["customers", consolidatedView ? "me" : companyId, sort || "name"],
     queryFn: function () {
+      const qs = sort ? "?sort=" + encodeURIComponent(sort) : "";
       if (consolidatedView) {
-        return meAggregatesApi.customers();
+        return qs
+          ? request<any>("/me/customers" + qs, { retry: 1 })
+          : meAggregatesApi.customers();
       }
-      return companiesApi.customers(companyId!);
+      return qs
+        ? request<any>("/companies/" + companyId + "/customers" + qs, { retry: 1 })
+        : companiesApi.customers(companyId!);
     },
     enabled: (consolidatedView || !!companyId) && !!token && !isDemo,
     retry: 1,
@@ -142,6 +168,8 @@ export function useCustomers() {
   // private.js). Mantenho a flag por seguranca caso volte algum gate
   // futuro (ex: trial expirado bloqueando tudo).
   const planBlocked = (fetchError as any)?.status === 403;
+  // 403 tem tela propria (planBlocked) -- fora dele, falha e falha de verdade.
+  const isError = !!queryIsError && !planBlocked;
 
   const customers: Customer[] = useMemo(function () {
     if (isDemo || planBlocked) return [];
@@ -210,7 +238,7 @@ export function useCustomers() {
     },
     onSuccess: function () {
       invalidateCustomers();
-      toast.success("Cliente excluido");
+      toast.success("Cliente excluído");
     },
     onError: function (err: any) {
       toast.error(err?.message || "Erro ao excluir cliente");
@@ -265,7 +293,7 @@ export function useCustomers() {
   async function bulkDeleteCustomers(ids: string[]) {
     if (!mutationCompanyId || isDemo || ids.length === 0) return;
     setBulkDeleting(true);
-    if (ids.length > 20) toast.info(`Excluindo ${ids.length} clientes...`);
+    if (ids.length > 20) toast.info(`Excluindo ${pluralize(ids.length, "cliente")}…`);
     try {
       // Pra cada id, resolve sourceCompanyId do customer.
       // Como o helper deleteBatched recebe so um deleteFn(id), encapsulamos.
@@ -281,10 +309,12 @@ export function useCustomers() {
       );
       invalidateCustomers();
       if (failed === 0) {
-        toast.success(`${succeeded} cliente${succeeded !== 1 ? "s" : ""} excluido${succeeded !== 1 ? "s" : ""}`);
+        // 01/09/2026: concordancia via pluralize (o "excluido(s)" manual
+        // ainda por cima vinha sem acento).
+        toast.success(`${pluralize(succeeded, "cliente")} ${succeeded === 1 ? "excluído" : "excluídos"}`);
       } else {
-        toast.warning?.(`${succeeded} excluidos, ${failed} com erro`);
-        if (!toast.warning) toast.error(`${failed} cliente${failed !== 1 ? "s" : ""} com erro ao excluir`);
+        toast.warning?.(`${succeeded} ${succeeded === 1 ? "excluído" : "excluídos"}, ${failed} com erro`);
+        if (!toast.warning) toast.error(`${pluralize(failed, "cliente")} com erro ao excluir`);
       }
     } catch (err: any) {
       toast.error(err?.message || "Erro ao excluir clientes selecionados");
@@ -298,6 +328,10 @@ export function useCustomers() {
     isLoading: isLoading && !isDemo,
     isDemo,
     planBlocked,
+    // 01/09/2026: sem isto a tela nao distinguia "falhou" de "base vazia".
+    isError,
+    error: fetchError,
+    refetch,
     bulkDeleting,
     addCustomer,
     updateCustomer,

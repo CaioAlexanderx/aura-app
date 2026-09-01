@@ -7,12 +7,12 @@ import { Icon } from "@/components/Icon";
 
 const MOCK_OBLIGATIONS = [
   { client: "Barbearia do Marcos", type: "DAS-MEI", due: "20/04/2026", status: "pendente", amount: 75.90, daysLeft: 17 },
-  { client: "Clinica Sorriso", type: "PGDAS-D", due: "20/04/2026", status: "pendente", amount: 1250, daysLeft: 17 },
+  { client: "Clínica Sorriso", type: "PGDAS-D", due: "20/04/2026", status: "pendente", amount: 1250, daysLeft: 17 },
   { client: "Pet Love Jacarei", type: "DAS-MEI", due: "20/04/2026", status: "pago", amount: 75.90, daysLeft: 17 },
   { client: "Loja Moda Bella", type: "DAS-MEI", due: "20/04/2026", status: "pendente", amount: 75.90, daysLeft: 17 },
   { client: "Studio Bella Estética", type: "PGDAS-D", due: "20/04/2026", status: "atrasado", amount: 890, daysLeft: -3 },
   { client: "Barbearia do Marcos", type: "DASN-SIMEI", due: "31/05/2026", status: "pendente", amount: 0, daysLeft: 58 },
-  { client: "Clinica Sorriso", type: "DEFIS", due: "31/03/2026", status: "pago", amount: 0, daysLeft: -3 },
+  { client: "Clínica Sorriso", type: "DEFIS", due: "31/03/2026", status: "pago", amount: 0, daysLeft: -3 },
 ];
 
 const ST: Record<string, { bg: string; color: string; label: string }> = {

@@ -225,7 +225,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
     if (!price.trim()) { toast.error("Preencha o preço de venda"); return; }
     // NCM: vazio é OK; preenchido tem que ter exatamente 8 dígitos
     if (ncm && ncm.length !== 8) {
-      toast.error("NCM deve ter 8 digitos numericos (ou ficar vazio)");
+      toast.error("NCM deve ter 8 dígitos numericos (ou ficar vazio)");
       return;
     }
     // Se o lojista escolheu na arvore, o NOME do no vira o texto legado --
@@ -363,7 +363,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
                     Pelo nome: <Text style={s.ncmHintStrong}>{ncmSuggestionResult.label}</Text>
                     {' '}· <Text style={s.ncmHintCode}>{formatNcmDisplay(ncmSuggestionResult.ncm)}</Text>. Toque em Gerar.
                   </Text>
-                : '8 digitos. Necessário pra emitir nota fiscal.')}
+                : '8 dígitos. Necessário pra emitir nota fiscal.')}
               {ncmStatus === 'partial' && (
                 <Text style={{ color: Colors.red }}>Faltam {8 - ncm.length} digito{8 - ncm.length > 1 ? 's' : ''}.</Text>
               )}
@@ -462,7 +462,7 @@ export function AddProductForm({ categories, onSave, onCancel, editProduct }: {
         )}
         <Text style={s.categoryHint}>
           {temArvore
-            ? "Organize a arvore em Catalogo > Organizar catalogo."
+            ? "Organize a arvore em Catálogo > Organizar catálogo."
             : "Gerencie suas categorias pelo botao \"Categorias\" na tela de Estoque."}
         </Text>
       </FormField>

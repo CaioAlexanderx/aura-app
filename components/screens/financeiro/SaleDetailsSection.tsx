@@ -300,7 +300,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
 
           {items.length === 0 && (
             <Text style={s.emptyItemsText}>
-              Esta venda nao possui mais items (todos foram removidos).
+              Esta venda não possui mais items (todos foram removidos).
             </Text>
           )}
 
@@ -321,7 +321,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
             <View style={s.creditHint}>
               <Icon name="info" size={11} color={Colors.violet3} />
               <Text style={s.creditHintText}>
-                Venda no crediario: as parcelas ja foram geradas, entao nao da pra
+                Venda no crediário: as parcelas ja foram geradas, entao não da pra
                 incluir produto aqui. Pra vender mais, lance uma venda nova.
               </Text>
             </View>
@@ -340,7 +340,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
             <View style={s.cancelledHint}>
               <Icon name="info" size={11} color={Colors.red} />
               <Text style={s.cancelledHintText}>
-                Venda cancelada — items nao podem ser modificados.
+                Venda cancelada — items não podem ser modificados.
               </Text>
             </View>
           )}

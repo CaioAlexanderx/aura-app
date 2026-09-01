@@ -101,7 +101,7 @@ export function ConsultaProntuarioPanel({ patient, planItems, timeline }: Props)
         </View>
       ) : (
         <Text style={{ fontSize: 10, color: DentalColors.ink3, marginTop: 12, textAlign: "center" }}>
-          Sem historico anterior registrado.
+          Sem histórico anterior registrado.
         </Text>
       )}
     </ScrollView>

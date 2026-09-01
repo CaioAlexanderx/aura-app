@@ -137,7 +137,7 @@ export default function PatientPortalPage() {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.clinicName}>{clinic.name || "Clinica Odontológica"}</Text>
+        <Text style={s.clinicName}>{clinic.name || "Clínica Odontológica"}</Text>
         <Text style={s.patientName}>Ola, {patient.name || "paciente"}</Text>
         <Text style={s.patientContact}>
           Este e o seu portal. Acompanhe suas consultas, tratamentos e documentos.
@@ -256,7 +256,7 @@ export default function PatientPortalPage() {
       <View style={s.footer}>
         <Text style={s.footerText}>Portal do paciente \u2022 Aura.</Text>
         <Text style={s.footerTextSmall}>
-          Em caso de duvidas, entre em contato diretamente com a clinica.
+          Em caso de dúvidas, entre em contato diretamente com a clínica.
         </Text>
       </View>
     </ScrollView>

@@ -59,7 +59,7 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
         </View>
 
         <View style={s.section}>
-          <Text style={s.sectionTitle}>CONTRATADA (Clinica)</Text>
+          <Text style={s.sectionTitle}>CONTRATADA (Clínica)</Text>
           <Text style={s.fieldVal}>{c.clinicName} \u2014 Dr(a). {c.professionalName}</Text>
           {c.croNumber && <Text style={s.fieldVal}>CRO-{c.croState || "SP"} {c.croNumber}</Text>}
         </View>
@@ -94,7 +94,7 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
         <View style={s.section}>
           <Text style={s.sectionTitle}>CLAUSULAS</Text>
           <Text style={s.clause}>1. O contratante autoriza a realizacao dos procedimentos listados acima.</Text>
-          <Text style={s.clause}>2. O tratamento pode sofrer alterações conforme evolução clinica, mediante acordo entre as partes.</Text>
+          <Text style={s.clause}>2. O tratamento pode sofrer alterações conforme evolução clínica, mediante acordo entre as partes.</Text>
           <Text style={s.clause}>3. Faltas sem aviso prévio de 24h poderão ser cobradas.</Text>
           <Text style={s.clause}>4. Validade deste orcamento: {c.validUntil ? new Date(c.validUntil).toLocaleDateString("pt-BR") : "30 dias"}.</Text>
         </View>

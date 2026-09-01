@@ -14,6 +14,13 @@
 // tone="onDark" a moldura vira vidro translúcido e o ícone/glow ficam
 // brancos. `tone` é OPCIONAL e o default reproduz byte a byte o visual
 // antigo, então nenhum ponto de uso existente muda.
+//
+// 01/09/2026 — a gaveta virou feed de eventos da loja (`loja_*`) e ganhou
+// preferências por tipo. O sino agora entrega `feed` (já agrupado) em vez de
+// `orders`, e busca as preferências na PRIMEIRA abertura (ensurePrefs), não a
+// cada poll. O glow continua exatamente com a regra de 17/06.
+// O keyframe respeita prefers-reduced-motion: quem pediu menos movimento
+// recebe o sino em estado aceso fixo, sem pulsar.
 // ============================================================
 import { useState, useCallback, useEffect } from 'react';
 import { Pressable, View, Text, Platform, StyleSheet } from 'react-native';
@@ -37,7 +44,10 @@ function ensureGlowStyle() {
     '50%{box-shadow:0 0 0 4px rgba(124,58,237,0.16),0 0 12px 2px rgba(124,58,237,0.34)}}' +
     '@keyframes auraBellGlowOnDark{' +
     '0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}' +
-    '50%{box-shadow:0 0 0 4px rgba(255,255,255,0.20),0 0 12px 2px rgba(255,255,255,0.30)}}';
+    '50%{box-shadow:0 0 0 4px rgba(255,255,255,0.20),0 0 12px 2px rgba(255,255,255,0.30)}}' +
+    '@media (prefers-reduced-motion: reduce){' +
+    '@keyframes auraBellGlow{0%,100%{box-shadow:0 0 0 3px rgba(124,58,237,0.20)}}' +
+    '@keyframes auraBellGlowOnDark{0%,100%{box-shadow:0 0 0 3px rgba(255,255,255,0.24)}}}';
   document.head.appendChild(el);
 }
 
@@ -71,8 +81,10 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
   useEffect(() => { ensureGlowStyle(); }, []);
 
   // Abrir o sino = visualizar => marca como visto (para de alertar, persistido).
+  // Aproveita a abertura pra carregar as preferências (só na primeira vez).
   const handleOpen  = useCallback(() => {
     notifs.markSeen();
+    notifs.ensurePrefs();
     setOpen(true);
   }, [notifs]);
   const handleClose = useCallback(() => setOpen(false), []);
@@ -80,7 +92,7 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
   if (Platform.OS !== 'web') {
     return (
       <>
-        <Pressable onPress={handleOpen} style={styles.nativeBell}>
+        <Pressable onPress={handleOpen} style={styles.nativeBell} accessibilityRole="button" accessibilityLabel="Notificações">
           <Text style={{ fontSize: 20 }}>🔔</Text>
           {count > 0 && (
             <View style={[styles.badge, { backgroundColor: '#7c3aed' }]}>
@@ -91,10 +103,14 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
         {open && (
           <NotificationDrawer
             banners={notifs.banners}
-            orders={notifs.orders}
+            feed={notifs.feed}
             onClose={handleClose}
             markBannerRead={notifs.markBannerRead}
+            markEventRead={notifs.markEventRead}
             markAllRead={notifs.markAllRead}
+            prefs={notifs.prefs}
+            prefsAllMuted={notifs.prefsAllMuted}
+            savePrefs={notifs.savePrefs}
           />
         )}
       </>
@@ -105,6 +121,10 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
     <>
       <div
         onClick={handleOpen}
+        role="button"
+        tabIndex={0}
+        aria-label={count > 0 ? `Notificações — ${count} não vistas` : 'Notificações'}
+        onKeyDown={(e: any) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(); } }}
         title="Notificações"
         style={{
           position:       'relative',
@@ -149,10 +169,14 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
       {open && (
         <NotificationDrawer
           banners={notifs.banners}
-          orders={notifs.orders}
+          feed={notifs.feed}
           onClose={handleClose}
           markBannerRead={notifs.markBannerRead}
+          markEventRead={notifs.markEventRead}
           markAllRead={notifs.markAllRead}
+          prefs={notifs.prefs}
+          prefsAllMuted={notifs.prefsAllMuted}
+          savePrefs={notifs.savePrefs}
         />
       )}
     </>
@@ -161,8 +185,8 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
 
 const styles = StyleSheet.create({
   nativeBell: {
-    width:           40,
-    height:          40,
+    width:           44,
+    height:          44,
     alignItems:      'center',
     justifyContent:  'center',
     position:        'relative',

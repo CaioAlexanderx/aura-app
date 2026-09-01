@@ -123,7 +123,7 @@ export function DentalMBar() {
                   <Icon name="grid" size={18} color={DentalColors.ink3} />
                 </div>
                 <span style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "600", textAlign: "center" } as any}>
-                  Aura Negocio
+                  Aura Negócio
                 </span>
               </div>
             </div>

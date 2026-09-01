@@ -93,7 +93,7 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <View style={{ flex: 1 }}>
-              <Text style={st.lbl}>Duracao (meses)</Text>
+              <Text style={st.lbl}>Duração (meses)</Text>
               <TextInput style={st.input} placeholder="18" placeholderTextColor="#475569" keyboardType="numeric" value={durationMonths} onChangeText={setDurationMonths} />
             </View>
             <View style={{ flex: 1 }}>

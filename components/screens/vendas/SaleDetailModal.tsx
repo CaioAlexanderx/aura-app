@@ -604,7 +604,7 @@ export function SaleDetailModal({
                       </Pressable>
                     ) : (
                       <Text style={s.fiscalConfigNote}>
-                        Emissao de nota fiscal nao configurada. Ative em Configuracoes › Nota Fiscal.
+                        Emissão de nota fiscal não configurada. Ative em Configurações › Nota Fiscal.
                       </Text>
                     )}
                   </>

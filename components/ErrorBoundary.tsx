@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
           <Text style={s.title}>Algo deu errado</Text>
           <Text style={s.sub}>
-            Ocorreu um erro inesperado. Seus dados estao seguros.
+            Ocorreu um erro inesperado. Seus dados estão seguros.
           </Text>
 
           {__DEV__ && this.state.error && (

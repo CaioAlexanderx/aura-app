@@ -253,7 +253,7 @@ export default function KdsScreen() {
               Clique pra ativar o som
             </Text>
             <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 6, textAlign: "center", maxWidth: 360, lineHeight: 19 }}>
-              O iPad bloqueia audio ate voce tocar a tela uma vez. Sem isso o KDS nao consegue avisar com beep quando um pedido novo chega da cozinha.
+              O iPad bloqueia áudio até você tocar a tela uma vez. Sem isso o KDS não consegue avisar com beep quando um pedido novo chega da cozinha.
             </Text>
             <View style={{ marginTop: 20, backgroundColor: FoodColors.red, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 10 }}>
               <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Ativar som e comecar</Text>

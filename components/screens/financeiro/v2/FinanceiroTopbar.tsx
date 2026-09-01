@@ -43,7 +43,8 @@ type Props = {
 var TOPBAR_PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
-  { key: "month", label: "Mes" },
+  // `key` e valor (vai pra query da API) e nao muda; `label` e o que a lojista le.
+  { key: "month", label: "Mês" },
 ];
 
 export function FinanceiroTopbar({ companyName, consolidated, companyCount, period, onPeriodChange, onExport, onNew, embedded }: Props) {

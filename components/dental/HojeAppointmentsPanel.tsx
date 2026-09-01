@@ -64,7 +64,7 @@ function formatTime(iso: string): string {
 
 function emptyMessage(): { title: string; sub: string } {
   const h = new Date().getHours();
-  if (h < 12) return { title: "Manhã livre",    sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clinica em ordem." };
+  if (h < 12) return { title: "Manhã livre",    sub: "Nenhum atendimento agendado para hoje. Bom momento pra colocar a clínica em ordem." };
   if (h < 18) return { title: "Tarde tranquila", sub: "Sem próximos atendimentos no dia. Aproveite pra revisar pacientes em recall." };
   return              { title: "Dia encerrado",   sub: "Sem atendimentos restantes hoje. Confira a agenda de amanhã pra se preparar." };
 }
@@ -121,7 +121,7 @@ export function HojeAppointmentsPanel() {
             HOJE
           </Text>
           <Text style={{ fontSize: 16, color: DentalColors.ink, fontWeight: "700", letterSpacing: -0.3 }}>
-            Proximos atendimentos
+            Próximos atendimentos
           </Text>
         </View>
         {!isLoading && upcoming.length > 0 && (

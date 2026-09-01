@@ -8,6 +8,12 @@
 // 29/08/2026 — Acabamento pós-QA: UUID cru virou "Código da venda"
 // (8 caracteres, copiável), check de sucesso virou ícone de verdade,
 // plural com concordância e rótulo neutro "Quem vendeu".
+//
+// 01/09/2026 — O backend passou a devolver `sale.sale_number` (sequencial
+// por empresa, começa em 1). O recibo agora mostra "Nº 170" sob o rótulo
+// "Número da venda"; o UUID encurtado ficou só como fallback pra venda
+// sem número (ambiente não migrado). O toque continua copiando o UUID
+// inteiro — é o que o suporte pede.
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -77,15 +83,19 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
 
   const totalItens = sale.items.reduce((acc, i) => acc + i.qty, 0);
 
-  // 29/08/2026 — a API de venda não devolve nenhum sequencial legível (só o
-  // UUID). Encurtamos como já é feito no CloseTableModal do Food; maiúsculas
-  // pra facilitar ditar no balcão. Quando o backend expuser um número de
-  // venda, é aqui que ele entra.
+  // 01/09/2026 — número de venda de verdade. Vem sequencial POR EMPRESA, então
+  // é o que o lojista dita no balcão. Quando vier null (venda de ambiente não
+  // migrado) caímos no UUID encurtado, que era o comportamento anterior.
+  const hasSaleNumber = typeof sale.saleNumber === "number" && sale.saleNumber > 0;
   const shortSaleId = String(sale.id || "").slice(0, 8).toUpperCase();
+  const saleIdLabel = hasSaleNumber ? "Número da venda" : "Código da venda";
+  const saleIdValue = hasSaleNumber
+    ? `Nº ${sale.saleNumber!.toLocaleString("pt-BR")}`
+    : `#${shortSaleId}`;
 
   function handleCopyId() {
-    // Copia o UUID INTEIRO (e não os 8 caracteres exibidos): o código curto
-    // serve pra ditar/anotar no balcão, o completo é o que o suporte precisa.
+    // Copia o UUID INTEIRO (e não o número/código exibido): o número curto
+    // serve pra ditar/anotar no balcão, o UUID é o que o suporte precisa.
     copyText(sale.id, "Código completo copiado");
   }
 
@@ -100,8 +110,8 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
         <View style={s.checkCircle}><Icon name="check" size={32} color={Colors.green} /></View>
         <Text style={s.title}>Venda registrada!</Text>
         <Pressable onPress={handleCopyId} style={s.saleIdBox}>
-          <Text style={s.saleIdLabel}>Código da venda</Text>
-          <Text style={s.saleId}>#{shortSaleId}</Text>
+          <Text style={s.saleIdLabel}>{saleIdLabel}</Text>
+          <Text style={s.saleId}>{saleIdValue}</Text>
         </Pressable>
 
         {hasCoupon && (

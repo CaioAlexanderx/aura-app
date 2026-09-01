@@ -135,7 +135,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
       return meta;
     },
     onSuccess: () => {
-      Alert.alert('Imagem salva', 'Foto clinica registrada com sucesso.');
+      Alert.alert('Imagem salva', 'Foto clínica registrada com sucesso.');
       onSaved?.();
       reset();
       onClose();
@@ -186,7 +186,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
       <View style={s.modal}>
         <View style={s.header}>
           <View style={{ flex: 1 }}>
-            <Text style={s.title}>Nova imagem clinica</Text>
+            <Text style={s.title}>Nova imagem clínica</Text>
             {patientName && <Text style={s.subtitle}>{patientName}</Text>}
           </View>
           <Pressable onPress={handleClose} style={s.closeBtn} disabled={uploading}>
@@ -245,11 +245,11 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
                   maxLength={2}
                   editable={!uploading}
                 />
-                <Text style={s.hint}>Numero de 11 a 85 (quadrante + posicao)</Text>
+                <Text style={s.hint}>Número de 11 a 85 (quadrante + posição)</Text>
               </View>
 
               <View style={{ marginTop: 14 }}>
-                <Text style={s.label}>Descricao (opcional)</Text>
+                <Text style={s.label}>Descrição (opcional)</Text>
                 <TextInput
                   style={[s.input, { minHeight: 70 }]}
                   value={description}
@@ -263,8 +263,8 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
 
               <View style={s.infoBox}>
                 <Text style={s.infoText}>
-                  A imagem sera armazenada no R2 (Cloudflare) com acesso
-                  restrito a esta empresa. LGPD Art.11: dado de saude
+                  A imagem será armazenada no R2 (Cloudflare) com acesso
+                  restrito a esta empresa. LGPD Art.11: dado de saúde
                   sensivel, retido por 5 anos ou conforme legislacao.
                 </Text>
               </View>

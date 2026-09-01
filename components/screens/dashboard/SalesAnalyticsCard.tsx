@@ -5,10 +5,12 @@ import { useSalesAnalytics, useProductsRanking } from "@/hooks/useSalesAnalytics
 import { fmtK, fmt, webOnly } from "./types";
 
 const PERIODS = [
-  { key: "yesterday", label: "Ontem" },
-  { key: "today", label: "Hoje" },
-  { key: "week", label: "Semana" },
-  { key: "month", label: "Mes" },
+  // `empty` completa a frase "Nenhuma venda ___" — sem ela o card dizia
+  // "Nenhuma venda mes" e "Nenhuma venda semana" (QA 01/09/2026).
+  { key: "yesterday", label: "Ontem", empty: "ontem" },
+  { key: "today", label: "Hoje", empty: "hoje ainda" },
+  { key: "week", label: "Semana", empty: "nesta semana" },
+  { key: "month", label: "Mês", empty: "neste mês" },
 ] as const;
 
 type PeriodKey = typeof PERIODS[number]["key"];
@@ -26,7 +28,9 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
   const topProducts = ranking?.products?.slice(0, 3) || data?.top_products?.slice(0, 3) || [];
   const totalProductsSold = ranking?.summary?.total_sold || topProducts.reduce((s: number, p: any) => s + (p.total_qty || p.qty_sold || 0), 0) || totalSales;
 
-  const periodLabel = PERIODS.find(p => p.key === period)?.label || "Hoje";
+  const periodOption = PERIODS.filter(p => p.key === period)[0];
+  const periodLabel = periodOption?.label || "Hoje";
+  const periodEmpty = periodOption?.empty || "hoje ainda";
 
   if (!isLoading && totalSales === 0 && totalRevenue === 0 && period === "month" && !topProducts.length) return null;
 
@@ -43,7 +47,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
           <View style={s.titleBar} />
           <View>
             <Text style={s.title}>Vendas</Text>
-            <Text style={s.sub}>Tempo real - auto-categorizado</Text>
+            <Text style={s.sub}>Tempo real · auto-categorizado</Text>
           </View>
         </View>
         <View style={s.periodBar}>
@@ -82,7 +86,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
 
         {!isLoading && totalSales === 0 && (
           <View style={s.emptyPeriod}>
-            <Text style={s.emptyText}>Nenhuma venda {periodLabel.toLowerCase() === "hoje" ? "hoje ainda" : periodLabel.toLowerCase()}</Text>
+            <Text style={s.emptyText}>Nenhuma venda {periodEmpty}</Text>
           </View>
         )}
 
@@ -103,7 +107,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
         )}
 
         <Pressable onPress={onPress} style={s.footer}>
-          <Text style={s.footerText}>Ver análise completa  -  </Text>
+          <Text style={s.footerText}>Ver análise completa  ›</Text>
         </Pressable>
       </View>
     </View>

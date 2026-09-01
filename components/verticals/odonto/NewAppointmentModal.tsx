@@ -228,7 +228,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
               {chairOptions.length === 0 && (
                 <View style={s.warnBox}>
                   <Text style={s.warnText}>
-                    Nenhuma cadeira configurada. Acesse Configuracoes do modulo odonto para ativar cadeiras e alocar dentistas.
+                    Nenhuma cadeira configurada. Acesse Configurações do módulo odonto para ativar cadeiras e alocar dentistas.
                   </Text>
                 </View>
               )}

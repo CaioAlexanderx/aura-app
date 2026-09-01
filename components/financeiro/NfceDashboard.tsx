@@ -56,7 +56,7 @@ export function NfceDashboard({ emissions, stats, isConfigured, ambiente, onEmit
 
       {isConfigured && ambiente === "homologacao" && (
         <View style={[s.envBadge, { backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.2)" }]}>
-          <Text style={{ fontSize: 11, color: "#F59E0B", fontWeight: "600" }}>Ambiente: HOMOLOGACAO (testes)</Text>
+          <Text style={{ fontSize: 11, color: "#F59E0B", fontWeight: "600" }}>Ambiente: HOMOLOGAÇÃO (testes)</Text>
         </View>
       )}
 

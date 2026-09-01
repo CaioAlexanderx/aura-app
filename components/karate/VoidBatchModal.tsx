@@ -106,7 +106,7 @@ export function VoidBatchModal({ visible, federationId, targets, onClose, onDone
                 {result.errors.length > 0 && (
                   <View style={st.note}>
                     <Text style={st.noteText}>
-                      Erro parcial não invalida o lote — as retiradas concluídas acima já valeram normalmente. Reveja os itens com erro e tente de novo só para eles.
+                      Erro parcial não inválida o lote — as retiradas concluídas acima já valeram normalmente. Reveja os itens com erro e tente de novo só para eles.
                     </Text>
                   </View>
                 )}

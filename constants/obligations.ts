@@ -204,12 +204,12 @@ export const CNAE_PROFILES: Record<string, CnaeProfile> = {
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "pgdas_d", "defis", "fgts", "esocial", "nfe_emission"],
   },
   barbearia_salao: {
-    label: "Barbearia / Salao",
+    label: "Barbearia / Salão",
     regime: "mei",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "das_mei", "dasn_simei", "mei_faturamento", "nfe_emission"],
   },
   barbearia_salao_func: {
-    label: "Barbearia / Salao com funcionarios",
+    label: "Barbearia / Salão com funcionarios",
     regime: "mei",
     obligations: ["cnpj_config", "alerts_config", "monthly_summary", "das_mei", "dasn_simei", "mei_faturamento", "fgts", "esocial", "nfe_emission"],
   },

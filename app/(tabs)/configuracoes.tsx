@@ -63,7 +63,7 @@ function PerCompanyGate({ availableCompanies, switchToCompany }: {
         <View style={{ flex: 1 }}>
           <Text style={pcg.title}>Configurações por empresa</Text>
           <Text style={pcg.desc}>
-            Identidade, dados registrais, equipe e politicas de venda sao especificas de cada CNPJ.
+            Identidade, dados registrais, equipe e políticas de venda são específicas de cada CNPJ.
             Selecione uma empresa para configura-la.
           </Text>
         </View>

@@ -9,7 +9,7 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
   periodontia: { label: "Periodontia", icon: "\u{1F9EC}", fields: ["Classificação doenca","Extensão","Estágio","Grau","Sangramento","Plano tratamento perio"] },
   cirurgia: { label: "Cirurgia", icon: "\u{1FA78}", fields: ["Tipo cirurgia","Anestesia","Técnica","Complicacoes","Pontos","Retorno"] },
   implante: { label: "Implante", icon: "\u{1F9F4}", fields: ["Região","Marca implante","Diametro","Comprimento","Torque","Tipo conexão","Pilar"] },
-  protese: { label: "Protese", icon: "\u{1F9B4}", fields: ["Tipo protese","Material","Cor","Moldagem","Prova","Cimentacao","Laboratório"] },
+  protese: { label: "Prótese", icon: "\u{1F9B4}", fields: ["Tipo prótese","Material","Cor","Moldagem","Prova","Cimentacao","Laboratório"] },
 };
 
 export interface SpecialtyForm { id: string; patient_id: string; specialty: string; form_data: Record<string, any>; professional_id?: string; notes?: string; created_at: string; }

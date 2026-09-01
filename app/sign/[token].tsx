@@ -39,11 +39,11 @@ export default function SignRedirect() {
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: "#f5f5f5" }}>
       <ActivityIndicator color="#06B6D4" size="large" />
       <Text style={{ marginTop: 12, fontSize: 14, color: "#444" }}>
-        Abrindo pagina de assinatura...
+        Abrindo página de assinatura...
       </Text>
       {!token && (
         <Text style={{ marginTop: 8, fontSize: 12, color: "#e74c3c" }}>
-          Token invalido. Solicite um novo link ao seu dentista.
+          Token inválido. Solicite um novo link ao seu dentista.
         </Text>
       )}
     </View>

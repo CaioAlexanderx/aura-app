@@ -66,7 +66,7 @@ export function OrthoWorkflow({ patient }: Props) {
           <View style={st.empty}>
             <Text style={st.emptyTitle}>🦷 Nenhum tratamento</Text>
             <Text style={st.emptyMsg}>
-              Crie o primeiro tratamento ortodontico para acompanhar sessoes mensais e evolucao.
+              Crie o primeiro tratamento ortodontico para acompanhar sessões mensais e evolução.
             </Text>
             <TouchableOpacity onPress={() => setShowForm(true)} style={st.addBtn}>
               <Text style={st.addBtnTxt}>Criar Tratamento</Text>

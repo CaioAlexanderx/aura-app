@@ -192,8 +192,8 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
 
           <View style={s.infoBox}>
             <Text style={s.infoText}>
-              Versao simplificada pra MVP. Input completo dente-a-dente
-              (6 medicoes por elemento, 32 dentes) sera liberado em breve.
+              Versão simplificada pra MVP. Input completo dente-a-dente
+              (6 medicoes por elemento, 32 dentes) será liberado em breve.
             </Text>
           </View>
         </ScrollView>

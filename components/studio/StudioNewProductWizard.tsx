@@ -257,10 +257,10 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
           >
             <View style={styles.headerRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.headerEyebrow}>Catalogo Studio</Text>
+                <Text style={styles.headerEyebrow}>Catálogo Studio</Text>
                 <Text style={styles.headerTitle} numberOfLines={1}>Novo produto</Text>
                 <Text style={styles.headerSub}>
-                  So nome e preco sao obrigatorios. Personalizacao, ficha tecnica e templates
+                  So nome e preço são obrigatórios. Personalização, ficha técnica e templates
                   ficam a 1 clique depois de criar.
                 </Text>
               </View>
@@ -296,7 +296,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
               {/* Preco + Estoque */}
               <View style={styles.row2}>
                 <View style={[styles.field, { flex: 1 }]}>
-                  <Text style={styles.label}>Preco (R$) *</Text>
+                  <Text style={styles.label}>Preço (R$) *</Text>
                   <TextInput
                     style={[styles.input, !priceValid && price.length > 0 && styles.inputError]}
                     placeholder="0,00"

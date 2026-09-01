@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { couponsApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import { PageHeader } from "@/components/PageHeader";
+import { ScreenHero } from "@/components/ScreenHero";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "@/components/Toast";
+import { pluralize } from "@/utils/plural";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const fmt = (n: number) => `R$ ${Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -140,7 +141,7 @@ function CreateCouponForm({ onSave, onCancel }: { onSave: (data: any) => void; o
       </View>
       <View style={z.formRow}>
         <View style={{ flex: 1 }}>
-          <Text style={z.formLabel}>Pedido minimo (R$)</Text>
+          <Text style={z.formLabel}>Pedido mínimo (R$)</Text>
           <TextInput style={z.formInput} value={minOrder} onChangeText={setMinOrder} placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
         </View>
         <View style={{ flex: 1 }}>
@@ -187,7 +188,7 @@ export default function CuponsScreen() {
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => couponsApi.remove(company!.id, id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["coupons", company?.id] }); toast.success("Cupom excluido"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["coupons", company?.id] }); toast.success("Cupom excluído"); },
     onError: (err: any) => toast.error(err?.message || "Erro ao excluir"),
   });
 
@@ -197,8 +198,35 @@ export default function CuponsScreen() {
 
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
-      <PageHeader title="Cupons" />
-      <Text style={z.subtitle}>Gerencie cupons de desconto para o PDV</Text>
+      {/* 01/09/2026 (QA onda 2 — cabeçalho unificado): PageHeader + subtítulo
+          viraram o ScreenHero das outras onze abas. Métricas do subtítulo:
+          quantos cupons existem · quantos estão valendo AGORA · quantas vezes
+          foram usados. "Valendo agora" é o que a lojista precisa saber antes
+          de criar mais um — a lista mostra o resto. */}
+      <ScreenHero
+        eyebrow="Descontos do caixa"
+        title="Cupons"
+        live
+        subtitle={
+          coupons.length === 0
+            ? "Nenhum cupom criado ainda — crie o primeiro e ele fica disponível no caixa."
+            : (
+              <>
+                {pluralize(coupons.length, "cupom criado", "cupons criados")} ·{" "}
+                <Text style={{ color: Colors.green, fontWeight: "600" }}>
+                  {active.length === 0 ? "nenhum valendo agora" : active.length + " valendo agora"}
+                </Text>{" "}
+                · {totalUses === 1 ? "usado 1 vez" : "usados " + totalUses + " vezes"}
+              </>
+            )
+        }
+        actions={!showForm ? (
+          <Pressable onPress={() => setShowForm(true)} style={z.addBtn}>
+            <Icon name="plus" size={14} color="#fff" />
+            <Text style={z.addBtnText}>Criar cupom</Text>
+          </Pressable>
+        ) : undefined}
+      />
 
       {/* KPIs */}
       <View style={z.kpiRow}>
@@ -215,13 +243,6 @@ export default function CuponsScreen() {
           <Text style={z.kpiLabel}>Usos totais</Text>
         </View>
       </View>
-
-      {!showForm && (
-        <Pressable onPress={() => setShowForm(true)} style={z.addBtn}>
-          <Icon name="plus" size={14} color="#fff" />
-          <Text style={z.addBtnText}>Criar cupom</Text>
-        </Pressable>
-      )}
 
       {showForm && <CreateCouponForm onSave={d => createMut.mutate(d)} onCancel={() => setShowForm(false)} />}
 
@@ -271,12 +292,11 @@ export default function CuponsScreen() {
 const z = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 720, alignSelf: "center", width: "100%" },
-  subtitle: { fontSize: 13, color: Colors.ink3, marginBottom: 20, marginTop: -8 },
   kpiRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
   kpiValue: { fontSize: 24, fontWeight: "800", color: Colors.ink },
   kpiLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, marginBottom: 16 },
+  addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   // Coupon card
   couponCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border },

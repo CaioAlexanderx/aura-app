@@ -70,9 +70,9 @@ export function useCategoryMigration() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["categories", companyId] });
       qc.invalidateQueries({ queryKey: ["products", companyId] });
-      toast.success("Migracao aplicada");
+      toast.success("Migração aplicada");
     },
-    onError: (err: any) => toast.error(err?.message || "Erro ao aplicar migracao"),
+    onError: (err: any) => toast.error(err?.message || "Erro ao aplicar migração"),
   });
 
   const applyBrandMutation = useMutation({

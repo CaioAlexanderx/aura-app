@@ -217,7 +217,7 @@ export function PortalShareModal({
                     <Image source={{ uri: qrSrc }} style={s.qr} resizeMode="contain" />
                   ) : null}
                   <Text style={s.qrCaption}>
-                    Aponte a camera do paciente para o codigo
+                    Aponte a camera do paciente para o código
                   </Text>
                 </View>
 
@@ -251,7 +251,7 @@ export function PortalShareModal({
                 </View>
 
                 <Text style={s.note}>
-                  No portal o paciente ve proximas consultas, planos
+                  No portal o paciente ve próximas consultas, planos
                   de tratamento, parcelas em aberto e documentos.
                 </Text>
               </>

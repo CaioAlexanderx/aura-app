@@ -274,7 +274,7 @@ export function StudioTemplatesPanel({ productId, companyId, productName, onChan
           <View style={{ flex: 1 }}>
             <Text style={styles.hintTitle}>Nenhum template vinculado especificamente</Text>
             <Text style={styles.hintDesc}>
-              Templates da loja aparecem por padrao. Vincule um especifico pra este produto se quiser destacar.
+              Templates da loja aparecem por padrão. Vincule um específico pra este produto se quiser destacar.
             </Text>
           </View>
           <Pressable onPress={openPicker} style={styles.btnSecSm}>

@@ -223,7 +223,7 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
             <>
               <Text style={st.label}>CID-10 *</Text>
               <TextInput value={cidCode} onChangeText={setCidCode} style={st.input} placeholder="Ex: K02.9" placeholderTextColor="#475569" />
-              <Text style={st.label}>Indicação clinica *</Text>
+              <Text style={st.label}>Indicação clínica *</Text>
               <TextInput value={clinicalIndication} onChangeText={setClinicalIndication} style={[st.input,{minHeight:70}]} multiline />
             </>
           )}

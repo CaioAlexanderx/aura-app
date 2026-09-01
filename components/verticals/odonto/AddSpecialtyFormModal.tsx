@@ -65,10 +65,10 @@ const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[
     ],
   },
   protese: {
-    label: 'Protese',
+    label: 'Prótese',
     icon:  '\u{1F9B4}',
     fields: [
-      'Tipo protese', 'Material', 'Cor',
+      'Tipo prótese', 'Material', 'Cor',
       'Moldagem', 'Prova', 'Cimentacao', 'Laboratório',
     ],
   },
@@ -246,7 +246,7 @@ export function AddSpecialtyFormModal({
 
           <View style={s.infoBox}>
             <Text style={s.infoText}>
-              Todos os campos sao opcionais. Preencha somente o que se aplica
+              Todos os campos são opcionais. Preencha somente o que se aplica
               ao atendimento atual. A ficha pode ser atualizada criando uma
               nova entrada da mesma especialidade.
             </Text>

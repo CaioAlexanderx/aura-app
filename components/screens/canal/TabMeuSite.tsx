@@ -301,7 +301,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <SectionTitle title="Informações do negócio" />
       <View style={cs.card}>
         <View style={cs.switchRow}>
-          <View style={{ flex: 1 }}><Text style={cs.switchLabel}>Site publicado</Text><Text style={cs.switchHint}>{published ? "Visivel para clientes" : "Site oculto"}</Text></View>
+          <View style={{ flex: 1 }}><Text style={cs.switchLabel}>Site publicado</Text><Text style={cs.switchHint}>{published ? "Visível para clientes" : "Site oculto"}</Text></View>
           <Switch value={published} onValueChange={setPublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
         <View style={cs.divider} />
@@ -420,7 +420,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         {/* Form chave Pix manual */}
         <Text style={[cs.fieldLabel, { marginBottom: 4 }]}>Chave Pix (recebimento online)</Text>
         <Text style={[cs.hint, { marginTop: 0, marginBottom: 12 }]}>
-          Cliente paga via Pix copia-e-cola, anexa o comprovante e voce aprova manualmente em Pedidos.
+          Cliente paga via Pix copia-e-cola, anexa o comprovante e você aprova manualmente em Pedidos.
         </Text>
 
         <Text style={cs.fieldLabel}>Tipo da chave</Text>
@@ -513,8 +513,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <View style={cs.card}>
         <Text style={cs.hint}>
           Esse texto aparece no rodape da sua loja. Ja deixamos preenchido com o prazo
-          que a lei garante ao cliente. Se voce troca em mais dias ou tem alguma regra
-          propria, reescreva do seu jeito.
+          que a lei garante ao cliente. Se você troca em mais dias ou tem alguma regra
+          própria, reescreva do seu jeito.
         </Text>
 
         <View style={{ height: 10 }} />
@@ -538,13 +538,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <View style={cs.infoCard}>
           <Icon name="alert" size={13} color={accent.primaryStrong} />
           <Text style={cs.infoText}>
-            Prometa so o que voce consegue cumprir: o que estiver escrito aqui vale
+            Prometa so o que você consegue cumprir: o que estiver escrito aqui vale
             para o cliente.
           </Text>
         </View>
 
         <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }, { marginTop: 12 }]}>
-          <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar politica"}</Text>
+          <Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar política"}</Text>
         </Pressable>
       </View>
 

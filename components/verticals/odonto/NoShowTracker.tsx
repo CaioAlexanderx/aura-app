@@ -42,7 +42,7 @@ export function NoShowTracker({ patients, maxNoShows = 3, onContactPatient, onBl
 
       {/* Policy note */}
       <View style={s.policyCard}>
-        <Text style={s.policyTitle}>Politica de faltas</Text>
+        <Text style={s.policyTitle}>Política de faltas</Text>
         <Text style={s.policyText}>Pacientes com {maxNoShows}+ faltas sao sinalizados automaticamente. Considere exigir deposito antecipado ou entrar em contato antes da consulta.</Text>
       </View>
 

@@ -180,8 +180,8 @@ export default function BookPage() {
           <Text style={s.errorIcon}>{'\u{1F50D}'}</Text>
           <Text style={s.errorTitle}>Agenda não disponível</Text>
           <Text style={s.errorText}>
-            Esta clinica ainda nao ativou o agendamento online ou o link
-            esta incorreto. Confira o endereco com a clinica.
+            Esta clínica ainda não ativou o agendamento online ou o link
+            está incorreto. Confira o endereço com a clínica.
           </Text>
         </View>
       </View>
@@ -200,7 +200,7 @@ export default function BookPage() {
             {' '}{ymd(selectedDate!).split('-').reverse().join('/')} as {selectedTime}.
           </Text>
           <Text style={s.successText}>
-            Entraremos em contato em breve para confirmar o horario.
+            Entraremos em contato em breve para confirmar o horário.
           </Text>
           <View style={s.successFooter}>
             <Text style={s.poweredBy}>Agendamento online por</Text>
@@ -277,7 +277,7 @@ export default function BookPage() {
             </View>
             {slots.every((s2) => !s2.available) && (
               <Text style={s.noSlotsText}>
-                Sem horarios disponiveis neste dia. Escolha outra data.
+                Sem horários disponíveis neste dia. Escolha outra data.
               </Text>
             )}
           </View>

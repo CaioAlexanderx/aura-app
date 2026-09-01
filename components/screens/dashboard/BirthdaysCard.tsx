@@ -7,6 +7,8 @@ import { companiesApi, birthdayApi, type BirthdayCustomer } from "@/services/api
 import { useAuthStore } from "@/stores/auth";
 import { BirthdayCouponModal } from "@/components/BirthdayCouponModal";
 import { normalizeBrPhone } from "@/services/messaging";
+// 01/09/2026: helper compartilhado de plural — a linha dizia "em 1 dias".
+import { pluralize } from "@/utils/plural";
 
 type Tab = "today" | "week";
 
@@ -177,7 +179,7 @@ function BirthdayRow({ customer, alreadySent, onAction }: RowProps) {
     ? "Hoje 🎂"
     : customer.days_until === 1
       ? "Amanhã"
-      : `em ${customer.days_until} dias`;
+      : "em " + pluralize(customer.days_until, "dia");
 
   return (
     <View style={s.row}>

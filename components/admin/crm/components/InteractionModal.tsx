@@ -106,7 +106,7 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
           </ScrollView>
 
           {/* Proximo follow-up */}
-          <Text style={cs.fieldLabel}>Proximo follow-up (YYYY-MM-DD)</Text>
+          <Text style={cs.fieldLabel}>Próximo follow-up (YYYY-MM-DD)</Text>
           <TextInput
             value={followup}
             onChangeText={setFollowup}

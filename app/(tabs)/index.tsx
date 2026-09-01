@@ -18,7 +18,7 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 // 29/08/2026: helper compartilhado de plural (o ranking mostrava "1 vendas").
 import { pluralize } from "@/utils/plural";
 
-import { IS_WIDE, IS_WEB, MOCK_DASHBOARD, EMPTY_DATA, greeting, currentMonth, webOnly, fmt } from "@/components/screens/dashboard/types";
+import { IS_WIDE, IS_WEB, MOCK_DASHBOARD, EMPTY_DATA, greeting, brToday, monthNameBR, daysInMonth, webOnly, fmt } from "@/components/screens/dashboard/types";
 import { Avatar } from "@/components/screens/dashboard/Avatar";
 import { PlanBadge } from "@/components/screens/dashboard/PlanBadge";
 import { HeroCard } from "@/components/screens/dashboard/HeroCard";
@@ -29,7 +29,7 @@ import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
 import { TopSellersCard } from "@/components/screens/dashboard/TopSellersCard";
 import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
-import { EmptyDashboard } from "@/components/screens/dashboard/EmptyDashboard";
+import { DashboardEmptyState } from "@/components/screens/dashboard/DashboardEmptyState";
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 import { CalendarioComercialCard } from "@/components/screens/dashboard/CalendarioComercialCard";
 
@@ -61,6 +61,44 @@ function AuraDesignStyle() {
     }
     @keyframes auraFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes auraRingExpand { 0% { r: 6; opacity: 0.8; } 100% { r: 18; opacity: 0; } }
+
+    /* 01/09/2026 — QA de tato. A sidebar respondia ao mouse; os cards de KPI
+       e os de Acesso rápido, não: elementos clicáveis que não pareciam
+       clicáveis. A regra abaixo só REALÇA o que já está na tela (elevação
+       de 2px + sombra + borda). Nada é revelado por hover, então em touch,
+       onde hover não existe, não se perde nenhuma informação nem nenhuma
+       ação — CLAUDE.md item 7. */
+    [data-aura-hover="card"] {
+      transition: transform 0.16s cubic-bezier(0.3, 0, 0.2, 1),
+                  box-shadow 0.16s cubic-bezier(0.3, 0, 0.2, 1),
+                  border-color 0.16s cubic-bezier(0.3, 0, 0.2, 1);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      [data-aura-hover="card"]:hover {
+        transform: translateY(-2px);
+        border-color: rgba(124,58,237,0.45) !important;
+        box-shadow: 0 12px 26px -14px rgba(124,58,237,0.55), 0 2px 6px rgba(15,10,40,0.10);
+      }
+    }
+    /* Teclado: o foco precisa ser tão visível quanto o hover. */
+    [data-aura-hover="card"]:focus-visible {
+      outline: 2px solid #a78bfa;
+      outline-offset: 3px;
+      border-color: rgba(124,58,237,0.45) !important;
+    }
+    /* Touch e mouse: o realce do toque não depende de hover nenhum. */
+    [data-aura-hover="card"]:active {
+      transform: translateY(0);
+      border-color: rgba(124,58,237,0.45) !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      [data-aura-hover="card"] {
+        transition: box-shadow 0.16s linear, border-color 0.16s linear;
+      }
+      [data-aura-hover="card"]:hover,
+      [data-aura-hover="card"]:active { transform: none; }
+      .aura-orb { animation: none !important; }
+    }
   `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
@@ -85,9 +123,11 @@ function AuraBackdrop() {
   return (
     <div style={style}>
       <div style={grid} />
-      <div style={{ ...orb, width: 520, height: 520, top: -120, left: -80, background: "radial-gradient(circle, #6d28d9, transparent 70%)" }} />
-      <div style={{ ...orb, width: 460, height: 460, bottom: -80, right: -60, background: "radial-gradient(circle, #4f5bd5, transparent 70%)", animationDelay: "-6s", animationDuration: "22s" }} />
-      <div style={{ ...orb, width: 380, height: 380, top: "40%", left: "50%", background: "radial-gradient(circle, #8b5cf6, transparent 70%)", opacity: 0.28, animationDelay: "-12s", animationDuration: "26s" }} />
+      {/* className só existe pro @media (prefers-reduced-motion) desligar
+          a animação — o estilo continua inline. */}
+      <div className="aura-orb" style={{ ...orb, width: 520, height: 520, top: -120, left: -80, background: "radial-gradient(circle, #6d28d9, transparent 70%)" }} />
+      <div className="aura-orb" style={{ ...orb, width: 460, height: 460, bottom: -80, right: -60, background: "radial-gradient(circle, #4f5bd5, transparent 70%)", animationDelay: "-6s", animationDuration: "22s" }} />
+      <div className="aura-orb" style={{ ...orb, width: 380, height: 380, top: "40%", left: "50%", background: "radial-gradient(circle, #8b5cf6, transparent 70%)", opacity: 0.28, animationDelay: "-12s", animationDuration: "26s" }} />
     </div>
   );
 }
@@ -98,7 +138,6 @@ export default function DashboardScreen() {
   var { user, company, token, isDemo, logout, consolidatedView, companyCount } = useAuthStore();
   var router = useRouter();
   var queryClient = useQueryClient();
-  var [emailVerified, setEmailVerified] = useState((user as any)?.email_verified ?? false);
   var visibleMods = useVisibleModules();
   var { tradeName } = useCompanyProfile();
   var [redirecting, setRedirecting] = useState(false);
@@ -134,7 +173,6 @@ export default function DashboardScreen() {
   }, [visibleMods]);
 
   useEffect(function() { if (isError && !isDemo) toast.error("Erro ao carregar dashboard."); }, [isError]);
-  useEffect(function() { if ((user as any)?.email_verified !== undefined) setEmailVerified((user as any).email_verified); }, [(user as any)?.email_verified]);
 
   function onRefresh() {
     setRefreshing(true);
@@ -153,16 +191,23 @@ export default function DashboardScreen() {
   }
 
   var d = isDemo ? MOCK_DASHBOARD : (data || EMPTY_DATA);
+  // 01/09/2026: "mês atual zerado" continua sendo o gatilho do estado
+  // vazio, mas quem decide o TEXTO agora é o DashboardEmptyState — conta
+  // nova e mês novo são coisas diferentes.
   var isEmpty = !isDemo && !isLoading && !isError && d.revenue === 0 && d.expenses === 0 && d.salesToday === 0;
   var go = function(p: string) { router.push(p as any); };
+
+  // 01/09/2026: dia/mês/ano sempre no fuso do Brasil. Com new Date() em
+  // UTC a virada acontece às 21h do dia 31 — o Painel mudava de mês três
+  // horas antes e a projeção dividia pelo tamanho do mês errado.
+  var brNow = brToday();
 
   // Projection fim-do-mes
   var projection = (d as any).projection;
   if (!projection && d.revenue) {
-    var today = new Date();
-    var dom = today.getDate();
-    var daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    projection = Math.round(d.net * (daysInMonth / Math.max(dom, 1)));
+    var dom = brNow.day;
+    var dim = daysInMonth(brNow.year, brNow.month);
+    projection = Math.round(d.net * (dim / Math.max(dom, 1)));
   }
 
   var firstName = user?.name?.split(" ")[0] ?? "usuário";
@@ -219,10 +264,10 @@ export default function DashboardScreen() {
         </View>
 
         {!consolidatedView && <ProfileBanner />}
-        {!isDemo && !consolidatedView && <VerifyEmailBanner emailVerified={emailVerified} onVerified={function() { setEmailVerified(true); }} />}
+        {!isDemo && !consolidatedView && <VerifyEmailBanner />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
-        {isEmpty && <EmptyDashboard name={firstName} onPress={go} />}
+        {isEmpty && <DashboardEmptyState name={firstName} data={d} onPress={go} />}
 
         {!isLoading && !isEmpty && (
           <>
@@ -244,7 +289,7 @@ export default function DashboardScreen() {
             <View style={s.secTitleRow}>
               <View style={s.secBar} />
               <Text style={s.secTitle}>Visão geral</Text>
-              <View style={s.secCount}><Text style={s.secCountText}>{currentMonth().slice(0, 3).toLowerCase()} {String(new Date().getFullYear()).slice(-2)}</Text></View>
+              <View style={s.secCount}><Text style={s.secCountText}>{monthNameBR(brNow.month, false).slice(0, 3)} {String(brNow.year).slice(-2)}</Text></View>
             </View>
             <KPIGrid d={d} onNavigate={go} />
 

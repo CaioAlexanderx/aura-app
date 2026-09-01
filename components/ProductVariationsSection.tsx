@@ -905,7 +905,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             <View style={s.photoHint}>
               <ActivityIndicator size="small" color={Colors.violet3} />
               <Text style={s.photoHintText}>
-                Fotos das cores recem-adicionadas liberam apos salvar (auto, ~1s).
+                Fotos das cores recem-adicionadas liberam após salvar (auto, ~1s).
               </Text>
             </View>
           )}
@@ -918,7 +918,7 @@ export function ProductVariationsSection({ productId, productName, parentColor, 
             <View style={s.photoHintNeutral}>
               <Icon name="image" size={12} color={Colors.ink3} />
               <Text style={s.photoHintNeutralText}>
-                Esse produto nao tem cor — use a foto do produto (no topo do formulario) para todos os tamanhos.
+                Esse produto não tem cor — use a foto do produto (no topo do formulário) para todos os tamanhos.
               </Text>
             </View>
           )}

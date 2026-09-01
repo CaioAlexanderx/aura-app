@@ -72,7 +72,7 @@ export function ReferralCard() {
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
         <Text style={s.desc}>
-          Ganhe 20% de desconto indicando amigos. Quem voce indicar tambem ganha 20% no primeiro mes.
+          Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
         </Text>
         <View style={s.codeBox}>
           <Text style={s.codeLabel}>Seu código</Text>
@@ -90,7 +90,7 @@ export function ReferralCard() {
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
       <Text style={s.desc}>
-        Ganhe 20% de desconto indicando amigos. Quem voce indicar tambem ganha 20% no primeiro mes.
+        Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
       </Text>
 
       {code ? (

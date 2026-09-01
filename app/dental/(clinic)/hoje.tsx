@@ -35,7 +35,7 @@ const ORDERS: Record<DentalPersona, SectionKey[]> = {
 const PERSONA_TAGLINE: Record<DentalPersona, string> = {
   dentista: "Sua agenda, pacientes e atendimentos do dia.",
   recepcao: "Confirmacoes, check-ins, cobranças e recall.",
-  gestor:   "Faturamento, conversao e indicadores da clinica.",
+  gestor:   "Faturamento, conversao e indicadores da clínica.",
 };
 
 const PERSONAS_WITH_APPOINTMENTS_PANEL = new Set<DentalPersona>(["dentista", "recepcao"]);

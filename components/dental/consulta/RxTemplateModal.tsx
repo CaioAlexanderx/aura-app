@@ -98,7 +98,7 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
       });
     },
     onSuccess: (res: any) => {
-      toast.success("Receituario emitido");
+      toast.success("Receituário emitido");
       qc.invalidateQueries({ queryKey: ["dental-documents", cid] });
       onEmitted?.(res?.document?.id);
       onClose();
@@ -122,7 +122,7 @@ export function RxTemplateModal({ open, patientId, appointmentId, practitionerId
           width: "100%", maxWidth: 560,
         }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: DentalColors.ink, marginBottom: 4 }}>
-            💊 Receituario express
+            💊 Receituário express
           </Text>
           <Text style={{ fontSize: 11, color: DentalColors.ink3, marginBottom: 14 }}>
             Templates pre-prontos. Selecione um, complete os campos e emita.

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
+import type { PdvSaleResponse } from "@/services/salesApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -17,6 +18,10 @@ export type PaymentEntry = {
 
 export type SaleResult = {
   id: string;
+  // 01/09/2026: sequencial legivel por empresa que o backend passou a devolver
+  // em body.sale.sale_number. SO EXIBICAO (recibo) — `id` continua sendo a
+  // chave de toda rota. null/undefined em venda antiga ou fallback offline.
+  saleNumber?: number | null;
   total: number;
   payment: string;       // método "primário" — primeira entrada quando split, ou o único quando single
   payments?: PaymentEntry[]; // populado quando splitMode foi usado (length >= 1)
@@ -103,7 +108,10 @@ export function useCart() {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
-      qc.invalidateQueries({ queryKey: ["customers", companyId] });
+      // 01/09/2026: invalida o prefixo inteiro (nao so ["customers", companyId]).
+      // Com ?sort=recent a venda muda a ORDEM da lista, e o modo consolidado
+      // guarda a lista sob ["customers","me"] — que a chave antiga nao alcancava.
+      qc.invalidateQueries({ queryKey: ["customers"] });
       qc.invalidateQueries({ queryKey: ["employees", companyId] });
       // Crediário: invalida saldos pra UI de /clientes refletir o novo debit.
       qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
@@ -335,9 +343,10 @@ export function useCart() {
       saleData.first_due_date = crediario.first_due_date;
     }
 
-    function buildLastSale(saleId: string): SaleResult {
+    function buildLastSale(saleId: string, saleNumber?: number | null): SaleResult {
       return {
         id: String(saleId),
+        saleNumber: saleNumber ?? null,
         total: totalAfterCoupon,
         payment: primaryPayment,
         payments: paymentsSnapshot,
@@ -357,9 +366,13 @@ export function useCart() {
 
     if (companyId && !isDemo) {
       saleMutation.mutate(saleData, {
-        onSuccess: function(res: any) {
-          var saleId = res?.sale?.id || res?.id || Date.now().toString(36).toUpperCase().slice(-6);
-          setLastSale(buildLastSale(String(saleId)));
+        onSuccess: function(raw: any) {
+          var res = raw as PdvSaleResponse;
+          var saleId = res?.sale?.id || (res as any)?.id || Date.now().toString(36).toUpperCase().slice(-6);
+          // sale_number pode vir null (venda de ambiente nao migrado) — o
+          // recibo cai no UUID encurtado nesse caso.
+          var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
+          setLastSale(buildLastSale(String(saleId), saleNumber));
           setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");

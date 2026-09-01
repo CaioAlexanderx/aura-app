@@ -34,7 +34,7 @@ const ACTIONS_BY_PERSONA: Record<DentalPersona, ActionDef[]> = {
     { label: "Faturamento",   icon: "dollar",    href: "/dental/(clinic)/faturamento" },
     { label: "Comunicação",   icon: "message",   href: "/dental/(clinic)/comunicacao", color: DentalColors.amber },
     { label: "Tratamentos",   icon: "tag",       href: "/dental/(clinic)/tratamentos", color: DentalColors.violet },
-    { label: "Clinica",       icon: "settings",  href: "/dental/(clinic)/clinica" },
+    { label: "Clínica",       icon: "settings",  href: "/dental/(clinic)/clinica" },
   ],
   gestor: [
     { label: "Faturamento",   icon: "dollar",    href: "/dental/(clinic)/faturamento" },
@@ -42,7 +42,7 @@ const ACTIONS_BY_PERSONA: Record<DentalPersona, ActionDef[]> = {
     { label: "Agenda",        icon: "calendar",  href: "/dental/(clinic)/agenda" },
     { label: "Tratamentos",   icon: "tag",       href: "/dental/(clinic)/tratamentos", color: DentalColors.violet },
     { label: "Materiais",     icon: "box",       href: "/dental/(clinic)/materiais", color: DentalColors.green },
-    { label: "Clinica",       icon: "settings",  href: "/dental/(clinic)/clinica" },
+    { label: "Clínica",       icon: "settings",  href: "/dental/(clinic)/clinica" },
   ],
 };
 

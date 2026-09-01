@@ -123,7 +123,7 @@ export function SaveViewModal({
             />
 
             {/* Descricao */}
-            <Text style={[s.fieldLabel, { marginTop: 14 }]}>Descricao (opcional)</Text>
+            <Text style={[s.fieldLabel, { marginTop: 14 }]}>Descrição (opcional)</Text>
             <TextInput
               value={description}
               onChangeText={setDescription}

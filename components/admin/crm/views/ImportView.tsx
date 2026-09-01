@@ -84,7 +84,7 @@ export function ImportView({ waTemplate, setWaTemplate, onImport, isImporting, i
         <Text style={cs.sectionTitle}>Importar planilha</Text>
         <Text style={cs.hintText}>
           Selecione o Excel gerado pelo script Python. A aba "Com Telefone" e escolhida
-          automaticamente. Cidade e extraida do endereco quando nao ha coluna explicita.
+          automaticamente. Cidade e extraida do endereço quando não ha coluna explicita.
         </Text>
 
         <Pressable

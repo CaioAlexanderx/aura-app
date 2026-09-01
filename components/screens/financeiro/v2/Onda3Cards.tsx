@@ -38,7 +38,7 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
     return (
       <View style={s.empty}>
         <Text style={[s.emptyText, { color: Colors.ink3 }]}>
-          Sem historico suficiente pra projetar fluxo de caixa
+          Sem histórico suficiente pra projetar fluxo de caixa
         </Text>
       </View>
     );
@@ -110,7 +110,7 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
 
       {/* Projeção 30/60/90 com banda confiança */}
       <Text style={[s.cfSection, { color: Colors.ink3, marginTop: 18 }]}>
-        PROJECAO COM BANDA DE CONFIANCA · ±15%
+        PROJEÇÃO COM BANDA DE CONFIANCA · ±15%
       </Text>
       <View style={s.cfProjList}>
         {data.projection.map(function(p) {
@@ -137,12 +137,12 @@ export function CashflowChart({ data, consolidated }: { data?: CashflowData; con
 
       {data.history.every(function(d) { return d.income === 0 && d.expenses === 0; }) && (
         <Text style={[s.cfHint, { color: Colors.ink3 }]}>
-          Sem lancamentos nos ultimos 30 dias — projecao reflete saldo zero.
+          Sem lancamentos nos últimos 30 dias — projeção reflete saldo zero.
         </Text>
       )}
       {consolidated && (
         <Text style={[s.cfHint, { color: Colors.ink3 }]}>
-          Soma de todas as empresas. Pra projetar uma empresa especifica, abra ela no seletor.
+          Soma de todas as empresas. Pra projetar uma empresa específica, abra ela no seletor.
         </Text>
       )}
     </View>
@@ -238,7 +238,7 @@ export function ProfessionalsRanking({ items, consolidated }: { items: RankingIt
         <View style={{ flex: 1 }}>
           <Text style={[s.rankBlockedTitle, { color: Colors.ink }]}>Disponível por empresa</Text>
           <Text style={[s.rankBlockedSub, { color: Colors.ink3 }]}>
-            Ranking de profissionais usa a tabela de funcionarios de cada empresa. Selecione uma empresa especifica pra ver.
+            Ranking de profissionais usa a tabela de funcionarios de cada empresa. Selecione uma empresa específica pra ver.
           </Text>
         </View>
       </View>
@@ -249,7 +249,7 @@ export function ProfessionalsRanking({ items, consolidated }: { items: RankingIt
     return (
       <View style={s.empty}>
         <Text style={[s.emptyText, { color: Colors.ink3 }]}>
-          Sem profissionais com receita registrada no periodo
+          Sem profissionais com receita registrada no período
         </Text>
         <Text style={[s.emptyText, { color: Colors.ink3, fontSize: 11, marginTop: 2 }]}>
           (vincule funcionarios aos lancamentos pra ver o ranking)

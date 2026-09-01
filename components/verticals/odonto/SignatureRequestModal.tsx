@@ -269,7 +269,7 @@ export function SignatureRequestModal({
                     <Image source={{ uri: qrSrc }} style={s.qr} resizeMode="contain" />
                   ) : null}
                   <Text style={s.qrCaption}>
-                    Aponte a camera do paciente pra este codigo
+                    Aponte a camera do paciente pra este código
                   </Text>
                 </View>
 
@@ -300,7 +300,7 @@ export function SignatureRequestModal({
                 </View>
 
                 <Text style={s.note}>
-                  Voce tambem pode mostrar o codigo na tela do seu celular pra
+                  Você também pode mostrar o código na tela do seu celular pra
                   paciente apontar a camera.
                 </Text>
               </>

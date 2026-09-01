@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth";
 // VER-03e: Audit trail / Logs
 
 const MOCK_LOGS = [
-  { id: "1", user: "Caio", action: "module_activated", detail: "Module odonto activated for Clinica Sorriso", ip: "177.x.x.x", time: "03/04 14:30" },
+  { id: "1", user: "Caio", action: "module_activated", detail: "Module odonto activated for Clínica Sorriso", ip: "177.x.x.x", time: "03/04 14:30" },
   { id: "2", user: "Caio", action: "register", detail: "New account: marcos@barbearia.com", ip: "177.x.x.x", time: "03/04 14:15" },
   { id: "3", user: "Caio", action: "treatment_plan_created", detail: "Plan ORC-2026-001 for patient Maria — R$ 4541", ip: "177.x.x.x", time: "03/04 13:50" },
   { id: "4", user: "Caio", action: "cash_opened", detail: "Caixa aberto com R$ 200", ip: "177.x.x.x", time: "03/04 08:00" },

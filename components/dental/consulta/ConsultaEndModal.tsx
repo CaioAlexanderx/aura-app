@@ -188,7 +188,7 @@ export function ConsultaEndModal({
                 style={editableStyle}
               />
               <Text style={{ fontSize: 9, color: DentalColors.ink3, marginTop: 4 }}>
-                * envio automatico chega em PR futura. Por ora, copie e cole no WhatsApp Web.
+                * envio automático chega em PR futura. Por ora, copie e cole no WhatsApp Web.
               </Text>
             </SummaryCard>
           </ScrollView>

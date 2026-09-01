@@ -282,12 +282,20 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
 
   const active = !!value;
   // 29/08/2026: com busca vazia a lista NÃO é alfabética — o pai manda os
-  // recentes primeiro. `nRecent` marca onde termina esse bloco pra desenhar
-  // os dois cabeçalhos. Digitou algo, volta a ser busca pura.
+  // recentes primeiro (01/09/2026: agora ordenados pelo servidor, ?sort=recent).
+  // `nRecent` marca onde termina esse bloco pra desenhar os dois cabeçalhos.
+  // Digitou algo, volta a ser busca pura — sobre a lista INTEIRA, não só sobre
+  // o trecho exibido.
   const searching = !!searchable && query.trim().length >= 1;
   const nRecent = searching ? 0 : Math.min(recentCount || 0, options.length);
+  // 01/09/2026: o placeholder promete "Nome ou telefone…" mas o filtro só olhava
+  // o nome. O subtítulo é o telefone (ou e-mail) — entra na busca.
+  const needle = query.trim().toLowerCase();
   const filtered = searching
-    ? options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
+    ? options.filter(o =>
+        o.name.toLowerCase().includes(needle) ||
+        (o.subtitle || "").toLowerCase().includes(needle)
+      ).slice(0, 8)
     : options.slice(0, nRecent + 10);
 
   const wrapStyle: any = { position: "relative", opacity: disabled ? 0.5 : 1, zIndex: open ? 500 : 1 };

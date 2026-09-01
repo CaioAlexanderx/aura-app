@@ -8,10 +8,10 @@ import type { KPI, FlowStep, VerticalConfig } from '@/components/verticals/Verti
 // ============================================================
 
 const CONFIG: VerticalConfig = {
-  name: 'Barbearia / Salao',
+  name: 'Barbearia / Salão',
   icon: '\u2702\uFE0F',
   accent: '#F59E0B',
-  establishment: 'Meu Salao',
+  establishment: 'Meu Salão',
   professional: '4 profissionais ativos',
 };
 
@@ -31,7 +31,7 @@ const SCREEN_DATA: Record<string, { kpis: KPI[]; flow: { title: string; steps: F
     emptyIcon: '\uD83D\uDE4B', emptyTitle: 'Fila vazia', emptySubtitle: 'Adicione clientes walk-in na fila de espera.',
   },
   Comissoes: {
-    kpis: [{ value: 'R$ 0', label: 'Receita bruta', color: '#F59E0B' }, { value: 'R$ 0', label: 'Comissões', color: '#10B981' }, { value: 'R$ 0', label: 'Cota salao', color: '#7C3AED' }, { value: '0%', label: 'Media', color: '#06B6D4' }],
+    kpis: [{ value: 'R$ 0', label: 'Receita bruta', color: '#F59E0B' }, { value: 'R$ 0', label: 'Comissões', color: '#10B981' }, { value: 'R$ 0', label: 'Cota salão', color: '#7C3AED' }, { value: '0%', label: 'Media', color: '#06B6D4' }],
     flow: { title: 'Fluxo', steps: [{ label: 'Atendimento' }, { label: 'Calcular %' }, { label: 'Acumular' }, { label: 'Gerar folha' }, { label: 'NFS-e parceiro' }, { label: 'Pagamento' }] },
     actionLabel: 'Exportar folha',
     emptyIcon: '\uD83D\uDCB0', emptyTitle: 'Sem comissões no período', emptySubtitle: 'Comissões são calculadas automaticamente a cada atendimento.',

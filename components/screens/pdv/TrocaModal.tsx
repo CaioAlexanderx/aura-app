@@ -526,8 +526,8 @@ export function TrocaModal({
           <View style={s.exitCard}>
             <Text style={s.exitTitle}>Descartar esta operação?</Text>
             <Text style={s.exitMsg}>
-              Voce tem uma troca / devolucao em andamento. Se sair agora, os itens
-              selecionados serao perdidos.
+              Você tem uma troca / devolução em andamento. Se sair agora, os itens
+              selecionados serão perdidos.
             </Text>
             <View style={s.exitActions}>
               <Pressable style={s.exitStay} onPress={() => setShowExitConfirm(false)}>

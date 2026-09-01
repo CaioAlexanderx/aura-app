@@ -226,7 +226,7 @@ export function QuickBatchModal({
               keyboardType="number-pad"
             />
             <Text style={s.hint}>
-              Mesmo numero pra todas as variantes criadas. Ajuste depois individualmente.
+              Mesmo número pra todas as variantes criadas. Ajuste depois individualmente.
             </Text>
           </View>
 

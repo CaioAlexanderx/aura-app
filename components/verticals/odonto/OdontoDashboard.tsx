@@ -262,7 +262,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
       <View style={z.infoCard}>
         <Icon name="star" size={12} color={DentalColors.violet} />
         <Text style={z.infoText}>
-          A IA Aura analisa estes mesmos dados pra sugerir acoes durante a consulta. Disponivel no plano Expansao.
+          A IA Aura analisa estes mesmos dados pra sugerir ações durante a consulta. Disponível no plano Expansão.
         </Text>
       </View>
     </ScrollView>

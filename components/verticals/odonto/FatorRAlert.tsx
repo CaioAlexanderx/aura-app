@@ -53,7 +53,7 @@ export function FatorRAlert({ faturamentoMensal, folhaMensal, regime = "simples"
           <Text style={s.detailVal}>R$ {faturamentoMensal.toLocaleString("pt-BR")}</Text>
         </View>
         <View style={s.detailRow}>
-          <Text style={s.detailLabel}>Folha (pro-labore + salarios)</Text>
+          <Text style={s.detailLabel}>Folha (pro-labore + salários)</Text>
           <Text style={s.detailVal}>R$ {folhaMensal.toLocaleString("pt-BR")}</Text>
         </View>
         {!isOk && (

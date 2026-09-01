@@ -79,7 +79,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
           <View style={{ height: 16 }} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.label}>Aniversario (DD/MM ou DD/MM/AAAA)</Text>
+          <Text style={s.label}>Aniversário (DD/MM ou DD/MM/AAAA)</Text>
           <DateInput style={s.input} value={birthday} onChangeText={setBirthday} placeholder="15/06/1990" />
           <View style={{ height: 16 }} />
         </View>

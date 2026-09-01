@@ -45,7 +45,7 @@ export function GoalsCard({ data, isLoading, onEdit }: Props) {
           )}
         </View>
         <Text style={cs.hintText}>
-          Sem meta para este mes. Defina contatos/conversoes/MRR pra acompanhar ritmo.
+          Sem meta para este mês. Defina contatos/conversoes/MRR pra acompanhar ritmo.
         </Text>
         <View style={s.row}>
           <Stat label="Contatos no mês"  value={String(actual_contacts)}  color={Colors.violet3} />

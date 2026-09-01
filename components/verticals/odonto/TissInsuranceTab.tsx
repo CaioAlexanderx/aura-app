@@ -32,7 +32,7 @@ export function TissInsuranceTab({ cid, onAddFromCatalog, onEdit }: InsuranceTab
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
       <Pressable onPress={onAddFromCatalog} style={[st.actionsRow, st.btnPrimary, { flex: 0, marginBottom: 12, paddingHorizontal: 12 }]}>
         <Icon name="plus" size={14} color="#fff" />
-        <Text style={st.btnPrimaryText}>Adicionar do catalogo</Text>
+        <Text style={st.btnPrimaryText}>Adicionar do catálogo</Text>
       </Pressable>
 
       {isLoading ? (
@@ -41,7 +41,7 @@ export function TissInsuranceTab({ cid, onAddFromCatalog, onEdit }: InsuranceTab
         <View style={st.empty}>
           <Icon name="briefcase" size={32} color="#475569" />
           <Text style={st.emptyTitle}>Nenhum convênio cadastrado</Text>
-          <Text style={st.emptySub}>Adicione do catalogo Aura (Bradesco, Amil, SulAmerica, Unimed) ou crie manualmente.</Text>
+          <Text style={st.emptySub}>Adicione do catálogo Aura (Bradesco, Amil, SulAmerica, Unimed) ou crie manualmente.</Text>
         </View>
       ) : items.map(i => (
         <Pressable key={i.id} onPress={() => onEdit(i)} style={st.card}>
@@ -93,7 +93,7 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
       <View style={st.backdrop}>
         <View style={st.sheet}>
           <View style={st.sheetHeader}>
-            <Text style={st.sheetTitle}>{selected ? selected.name : 'Catalogo de convênios'}</Text>
+            <Text style={st.sheetTitle}>{selected ? selected.name : 'Catálogo de convênios'}</Text>
             <Pressable onPress={reset} hitSlop={10}><Icon name="x" size={18} color="#94A3B8" /></Pressable>
           </View>
           <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ padding: 14 }}>
@@ -112,7 +112,7 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
               <>
                 <Text style={st.label}>Código do prestador *</Text>
                 <TextInput value={providerCode} onChangeText={setProviderCode} style={st.input} placeholder="Ex: 12345678000190" placeholderTextColor="#475569" />
-                <Text style={st.label}>Numero do contrato (opcional)</Text>
+                <Text style={st.label}>Número do contrato (opcional)</Text>
                 <TextInput value={contractNumber} onChangeText={setContractNumber} style={st.input} placeholder="Ex: 0001234" placeholderTextColor="#475569" />
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
                   <Pressable onPress={() => setSelected(null)} style={[st.btn, st.btnGhost]}><Text style={st.btnGhostText}>Voltar</Text></Pressable>

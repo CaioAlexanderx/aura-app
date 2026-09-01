@@ -63,7 +63,7 @@ export function ExportButton({ type, label, from, to, period }: Props) {
         <View style={s.menu}>
           <Pressable onPress={() => doExport('pdf')} style={s.menuItem}>
             <Icon name="file_text" size={14} color={Colors.ink} />
-            <Text style={s.menuText}>PDF (Relatorio)</Text>
+            <Text style={s.menuText}>PDF (Relatório)</Text>
           </Pressable>
           <View style={s.menuDivider} />
           <Pressable onPress={() => doExport('csv')} style={s.menuItem}>
