@@ -50,6 +50,17 @@ jest.mock("@/hooks/useCategories", () => {
   const actual = jest.requireActual("@/hooks/useCategories");
   return { ...actual, useCategories: jest.fn() };
 });
+// O botao de banner da categoria (tira da home) usa react-query. Esta
+// tela e renderizada sem QueryClientProvider, entao o hook e mockado —
+// mesmo tratamento que useCategories e useCategoryTree ja recebem.
+jest.mock("@/hooks/useBannerDeCategoria", () => ({
+  useBannerDeCategoria: () => ({
+    escolherEEnviar: jest.fn(),
+    remover: { mutateAsync: jest.fn() },
+    enviando: false,
+  }),
+}));
+
 jest.mock("@/hooks/useCategoryTree", () => {
   const actual = jest.requireActual("@/hooks/useCategoryTree");
   return { ...actual, useCategoryTree: jest.fn() };

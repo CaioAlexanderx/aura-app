@@ -34,11 +34,15 @@ import { useRouter } from "expo-router";
 import { useColors } from "@/constants/colors";
 import { useCategories, canHaveChildren } from "@/hooks/useCategories";
 import { useCategoryTree } from "@/hooks/useCategoryTree";
+import { useBannerDeCategoria } from "@/hooks/useBannerDeCategoria";
+import { SPECS } from "@/components/screens/canal/specsDeImagem";
 import type { Category } from "@/services/categoriesApi";
 
 type PendenteExclusao = { cat: Category; productCount: number } | null;
 
 export default function OrganizarCatalogoScreen() {
+  // Banner da categoria: so o primeiro nivel entra na tira da home.
+  const banner = useBannerDeCategoria();
   const C = useColors();
   const router = useRouter();
   const { tree, flattened, isLoading, create, isCreating, refetch } = useCategories();
@@ -156,6 +160,18 @@ export default function OrganizarCatalogoScreen() {
                 <Text style={s.acao}>+ sub</Text>
               </Pressable>
             ) : null}
+            {nivel === 0 ? (
+              <Pressable
+                onPress={() => banner.escolherEEnviar(cat.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Banner de ${cat.name}`}
+                testID={`banner-${cat.id}`}
+              >
+                <Text style={[s.acao, cat.banner_url ? { color: C.green } : null]}>
+                  {cat.banner_url ? "banner ✓" : "banner"}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => setMovendo(cat)} accessibilityRole="button">
               <Text style={s.acao}>mover</Text>
             </Pressable>
@@ -200,6 +216,12 @@ export default function OrganizarCatalogoScreen() {
       <Text style={s.sub}>
         Até três níveis. O número ao lado de cada categoria conta os produtos dela e de tudo
         que está abaixo.
+      </Text>
+      {/* A medida sai de specsDeImagem.ts — a mesma que o resto do painel
+          usa. Escrita aqui de novo, viraria a segunda fonte. */}
+      <Text style={s.sub}>
+        As categorias principais podem ter um banner na sua loja ({SPECS.categoria.resumo}).
+        Sem banner, a categoria aparece com um fundo da sua cor.
       </Text>
 
       {isLoading ? <ActivityIndicator color={C.ink3} /> : null}
