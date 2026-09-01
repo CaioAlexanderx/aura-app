@@ -126,14 +126,19 @@ export function ServiceIconPreview({ icon, size = 18, color }: { icon: string; s
   }
 }
 
-export function Field({ label, value, onChange, placeholder, multiline }: {
+export function Field({ label, value, onChange, placeholder, multiline, onBlur, testID }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
+  // onBlur: pra normalizar o que a pessoa colou SEM corrigir a cada tecla
+  // (completar "loja.com" pra "https://loja.com" no meio da digitacao
+  // faria o cursor pular). testID: pro teste alcancar o campo.
+  onBlur?: () => void; testID?: string;
 }) {
   const cs = useChannelStyles();
   return (
     <View style={cs.field}>
       <Text style={cs.fieldLabel}>{label}</Text>
       <TextInput style={[cs.input, multiline && cs.textarea]} value={value} onChangeText={onChange}
+        onBlur={onBlur} testID={testID}
         placeholder={placeholder} placeholderTextColor={Colors.ink3} multiline={multiline} numberOfLines={multiline ? 3 : 1} />
     </View>
   );

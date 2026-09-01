@@ -21,6 +21,7 @@ import {
   Field, ChipToggle, ToggleRow, SectionTitle, useChannelStyles,
 } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
+import { estadoDoCta, avisoDoCta, normalizarDestino } from "./destinoDoCta";
 import { PreviewTipografia } from "./PreviewTipografia";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
@@ -33,7 +34,7 @@ import { SPECS } from "./specsDeImagem";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
 type Banner = {
-  kicker?: string; headline?: string; body?: string; cta?: string;
+  kicker?: string; headline?: string; body?: string; cta?: string; cta_url?: string;
   tone?: BannerTone;
   tint?: "brand" | "accent";
   image_url?: string | null; enabled?: boolean;
@@ -132,7 +133,7 @@ function normalizeBanners(input: any): Banner[] {
     const tone: BannerTone = imageUrl ? "image-clean" : (rawTone === "image-clean" ? "split" : rawTone);
     return {
       kicker: b?.kicker || "", headline: b?.headline || "",
-      body: b?.body || "", cta: b?.cta || "",
+      body: b?.body || "", cta: b?.cta || "", cta_url: b?.cta_url || "",
       tone,
       tint: ["brand", "accent"].includes(b?.tint) ? b.tint : "brand",
       image_url: imageUrl,
@@ -657,6 +658,19 @@ export function TabDesign({
           <Field label="Botão (CTA)" value={b.cta || ""}
             onChange={(v) => updateBanner(idx, { cta: v })}
             placeholder="Ex: Ver coleção" />
+          {/* O botão só aparece na loja com texto E destino — ver o
+              comentário de destinoDoCta.ts. Antes deste campo, a lojista
+              escrevia o texto, salvava, e não aparecia nada. */}
+          <Field label="Link do botão" value={b.cta_url || ""}
+            onChange={(v) => updateBanner(idx, { cta_url: v })}
+            onBlur={() => updateBanner(idx, { cta_url: normalizarDestino(b.cta_url || "") })}
+            placeholder="https://instagram.com/sualoja"
+            testID={`cta-url-${idx}`} />
+          {avisoDoCta(estadoDoCta(b.cta, b.cta_url)) ? (
+            <Text style={s.avisoCta} testID={`cta-aviso-${idx}`}>
+              {avisoDoCta(estadoDoCta(b.cta, b.cta_url))}
+            </Text>
+          ) : null}
 
           <Text style={cs.fieldLabel}>Layout do banner</Text>
           {/* Fase 2 — picker visual de 4 thumbs (3 quando sem imagem). Auto-lock em image-clean quando ha b.image_url. */}
@@ -1056,6 +1070,9 @@ function buildThumbStyles(accent: AccentTokens) {
 
 function buildStyles(accent: AccentTokens) {
   return StyleSheet.create({
+    // Aviso do CTA sem link: cor de atenção, não de erro — nada está
+    // quebrado, só há um botão que ainda não aparece na loja.
+    avisoCta: { fontSize: 11, color: Colors.amber, lineHeight: 15, marginTop: -6, marginBottom: 10 },
     sideBySide: { flexDirection: "row", gap: 16, alignItems: "stretch", minHeight: 720 },
     editorSide: { width: 380, flexShrink: 0 },
     previewSide: { flex: 1 },
