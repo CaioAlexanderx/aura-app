@@ -25,6 +25,11 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   agentes: 'expansao',
+  // 30/08/2026 -- Hub Social (Aurinha): secao "Atendimento" dentro da aba
+  // Agentes, com chave PROPRIA (regra da casa) para poder ser vendida como
+  // add-on via module_overrides independente do resto da aba. O gate
+  // comercial fino e hub_agent_settings.enabled no backend.
+  hub_social: 'expansao',
   // 2026-05-21 (F2 do polish pre-Fase 7): vertical Food entra com gates
   // distintos por sub-modulo. Mesas/Pedidos/Cardapio/KDS sao basicos do
   // restaurante (Negocio). Delivery (rotas, motoboys, frete) e NFC-e
@@ -67,7 +72,9 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   folha:         ['folha', 'agendamento'],
   configuracoes: ['configuracoes'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
-  agentes:       ['agentes'],
+  // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
+  // ve o hub. Granularidade propria fica pra quando o produto pedir.
+  agentes:       ['agentes', 'hub_social'],
   // 2026-05-21 (F2 do polish pre-Fase 7): nao existem permissions food
   // granulares no banco ainda — toda permission food cai numa chave umbrella
   // "food.access" que destrava os sub-modulos juntos. Quando o produto
