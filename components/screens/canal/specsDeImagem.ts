@@ -21,7 +21,7 @@ export type SpecDeImagem = {
   detalhes: string[];
 };
 
-export const SPECS: Record<"logo" | "banner" | "produto" | "capa", SpecDeImagem> = {
+export const SPECS: Record<"logo" | "banner" | "produto" | "capa" | "categoria", SpecDeImagem> = {
   logo: {
     resumo: "PNG com fundo transparente, quadrado, 512×512px",
     detalhes: [
@@ -54,6 +54,16 @@ export const SPECS: Record<"logo" | "banner" | "produto" | "capa", SpecDeImagem>
     detalhes: [
       "Use 1600×900px, deitada",
       "Ela fica atrás do nome da sua loja, com um véu da sua cor por cima",
+    ],
+  },
+  categoria: {
+    resumo: "1600×900px, JPG, até 2 MB",
+    detalhes: [
+      "Use 1600×900px, deitada",
+      "Aparece na tira de categorias, logo abaixo do banner da sua loja",
+      "Só as categorias principais têm banner — as subcategorias não",
+      "No celular o cartão é quase quadrado, então deixe a peça no centro",
+      "Sem banner a categoria aparece assim mesmo, com um fundo da sua cor",
     ],
   },
 };
