@@ -19,6 +19,8 @@ import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/Button";
 import { Motion, Shadows, webTransition } from "@/constants/motion";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
+import { pluralize } from "@/utils/plural";
 
 // ============================================================
 // AURA. — Crediário (F2 do redesign — spec docs/crediario-redesign-spec.md §2.2)
@@ -372,6 +374,10 @@ export default function CrediarioScreen() {
 
   // Carteira: filtro único + ordenação.
   const carteiraRaw = carteiraQ.data?.customers || [];
+  // 01/09/2026: a contagem de clientes com saldo tinha tres fontes e era
+  // remontada em cada lugar que precisava dela (hero, cabecalho, rotulo de
+  // acessibilidade). Uma so, e o pluralize cuida da concordancia.
+  const customersOpen = Number(kpis?.customers_with_balance ?? carteiraQ.data?.customers_open ?? carteiraRaw.length) || 0;
   const carteira = [...carteiraRaw]
     .filter((c) => {
       if (filterSel === "todos") return true;
@@ -396,10 +402,11 @@ export default function CrediarioScreen() {
   if (isLoading) {
     return (
       <ScrollView style={s.screen} contentContainerStyle={[s.content, { padding: pad }]}>
-        <View style={{ marginBottom: 20 }}>
-          <Text style={s.eyebrow}>Relacionamento · fiado</Text>
-          <Text style={s.pageTitle}>Crediário</Text>
-        </View>
+        <ScreenHero
+          eyebrow="Relacionamento · fiado"
+          title="Crediário"
+          subtitle="Carregando a carteira…"
+        />
         <GlassCard tone="gradient" style={{ padding: 22 }}>
           <PulseBlock w={90} h={10} r={5} mb={12} />
           <PulseBlock w={180} h={36} r={8} mb={16} />
@@ -421,46 +428,59 @@ export default function CrediarioScreen() {
       contentContainerStyle={[s.content, { padding: pad }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
     >
-      {/* ── Header: eyebrow + título + ações (F2: sem subtítulo) ── */}
-      <View style={[s.headerRow, !isWide && s.headerRowMobile]}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={s.eyebrow}>Relacionamento · fiado</Text>
-          <Text style={s.pageTitle}>Crediário</Text>
-        </View>
-        <View style={[{ flexDirection: "row", gap: 8 }, !isWide && { width: "100%" }]}>
-          <Button
-            title="Novo lançamento"
-            icon="plus"
-            variant="secondary"
-            onPress={() => setShowCriar(true)}
-            style={!isWide ? { flex: 1 } : undefined}
-          />
-          <Button
-            title=""
-            icon="settings"
-            variant="secondary"
-            accessibilityLabel="Configurações do crediário"
-            onPress={() => router.push("/crediario/settings" as any)}
-            style={{ paddingHorizontal: 13, gap: 0 } as any}
-          />
-        </View>
-      </View>
+      {/* ── Header (01/09/2026, QA onda 2 — cabeçalho unificado) ──
+          A tela já tinha eyebrow + título próprios, quase o desenho certo.
+          Agora é o MESMO componente das outras onze abas (ScreenHero), então
+          a escala tipográfica e a altura passam a bater com /estoque,
+          /clientes e /vendas em vez de chegar perto.
 
-      {/* ── Abas: Carteira | Prontos pra comprar (Fase 2, 02/08/2026) ── */}
-      <View style={s.tabBar}>
-        <Pressable
-          onPress={() => setActiveTab("carteira")}
-          style={[s.tabBtn, activeTab === "carteira" && s.tabBtnOn]}
-        >
-          <Text style={[s.tabText, activeTab === "carteira" && s.tabTextOn]}>Carteira</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setActiveTab("leads")}
-          style={[s.tabBtn, activeTab === "leads" && s.tabBtnOn]}
-        >
-          <Text style={[s.tabText, activeTab === "leads" && s.tabTextOn]}>Prontos pra comprar</Text>
-        </Pressable>
-      </View>
+          Métricas do subtítulo: quanto está em aberto · quantos clientes
+          devem · quanto já venceu. É a leitura de risco da carteira, e o
+          vencido é o único que pede ação hoje — por isso carrega a cor. */}
+      <ScreenHero
+        eyebrow="Relacionamento · fiado"
+        title="Crediário"
+        live
+        subtitle={
+          <>
+            {fmt(Number(totalOpen) || 0)} em aberto · {pluralize(customersOpen, "cliente com saldo", "clientes com saldo")}
+            {overdueAmount > 0 ? (
+              <Text style={{ color: Colors.red, fontWeight: "600" }}>{" · " + fmt(overdueAmount) + " vencidos"}</Text>
+            ) : (
+              <Text style={{ color: Colors.green, fontWeight: "600" }}>{" · nada vencido"}</Text>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <Button
+              title="Novo lançamento"
+              icon="plus"
+              variant="secondary"
+              onPress={() => setShowCriar(true)}
+            />
+            <Button
+              title=""
+              icon="settings"
+              variant="secondary"
+              accessibilityLabel="Configurações do crediário"
+              onPress={() => router.push("/crediario/settings" as any)}
+              style={{ paddingHorizontal: 13, gap: 0 } as any}
+            />
+          </>
+        }
+      />
+
+      {/* ── Abas: Carteira | Prontos pra comprar (Fase 2, 02/08/2026)
+          01/09/2026: sublinhado -> pílula (ScreenTabs), como /vendas fez. ── */}
+      <ScreenTabs
+        tabs={[
+          { key: "carteira", label: "Carteira" },
+          { key: "leads", label: "Prontos pra comprar" },
+        ]}
+        active={activeTab}
+        onSelect={(k) => setActiveTab(k as "carteira" | "leads")}
+      />
 
       {activeTab === "leads" && (
         <CreditoLivreTab
@@ -478,20 +498,20 @@ export default function CrediarioScreen() {
           <Text style={s.heroLabel}>Em aberto · total</Text>
           <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(heroValue)}</Text>
           <Text style={s.heroMeta}>
-            {(kpis?.customers_with_balance ?? carteiraQ.data?.customers_open ?? carteiraRaw.length)} cliente(s) com saldo em aberto
+            {pluralize(customersOpen, "cliente com saldo em aberto", "clientes com saldo em aberto")}
           </Text>
           <View style={s.heroStats}>
             <HeroStat
               dot={Colors.red} color={Colors.red}
               label="Vencido" value={fmt(overdueAmount)}
-              sub={`${kpis?.overdue_count || 0} parcela(s)`}
+              sub={pluralize(kpis?.overdue_count || 0, "parcela")}
               onPress={() => toggleFilter("atraso")}
               active={filterSel === "atraso"}
             />
             <HeroStat
               dot={Colors.green} color={Colors.green}
               label="Recebido no mês" value={fmt(kpis?.paid_this_month_amount || 0)}
-              sub={`${kpis?.paid_this_month_count || 0} recebimento(s)`}
+              sub={pluralize(kpis?.paid_this_month_count || 0, "recebimento")}
             />
             <HeroStat
               dot={Colors.amber} color={Colors.amber}
@@ -528,7 +548,7 @@ export default function CrediarioScreen() {
                     key={faixa}
                     onPress={() => toggleFilter(faixa)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${AGING_LABELS[faixa]}: ${fmt(amt)}, ${row.count} cliente(s). Toque para filtrar`}
+                    accessibilityLabel={`${AGING_LABELS[faixa]}: ${fmt(amt)}, ${pluralize(row.count, "cliente")}. Toque para filtrar`}
                     style={({ hovered }: any) => [
                       {
                         width: (`${pct}%` as any),
@@ -789,18 +809,9 @@ const s = StyleSheet.create({
   screen: { flex: 1 },
   // Fase 2: abas Carteira | Credito livre. Mesmo visual da tab bar de
   // /vendas (sublinhado violeta), pra nao inventar um terceiro padrao.
-  tabBar: { flexDirection: "row", gap: 4, marginTop: 4, marginBottom: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  tabBtnOn: { borderBottomColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextOn: { color: Colors.violet3, fontWeight: "700" },
   content: { paddingBottom: 48, maxWidth: 1040, alignSelf: "center", width: "100%" },
 
   // Header
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 20, marginBottom: 22 },
-  headerRowMobile: { flexDirection: "column", alignItems: "stretch", gap: 14 },
-  eyebrow: { fontSize: 10, fontWeight: "800", color: Colors.ink3, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 6 },
-  pageTitle: { fontSize: 30, fontWeight: "800", color: Colors.ink, letterSpacing: -0.6, lineHeight: 32 },
 
   // Hero (glass gradient) — F4.1: cores theme-aware p/ contraste no claro
   heroLabel: { fontSize: 10, fontWeight: "800", color: HERO_LABEL, letterSpacing: 1.4, textTransform: "uppercase" },

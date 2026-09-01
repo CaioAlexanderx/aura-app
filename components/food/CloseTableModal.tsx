@@ -673,7 +673,7 @@ function NfceStep({
 
       {!emitNfce && !blocked && (
         <Text style={{ fontSize: 11, color: FoodColors.ink4, textAlign: "center", fontStyle: "italic" }}>
-          Cliente nao quer nota — vamos pular emissao
+          Cliente não quer nota — vamos pular emissão
         </Text>
       )}
     </>
@@ -758,13 +758,13 @@ function ConfirmStep({
           borderWidth: 1, borderColor: FoodColors.red + "55", gap: 8,
         }}>
           <Text style={{ fontSize: 12, color: FoodColors.red, fontWeight: "700" }}>
-            ⚠ NFC-e nao foi emitida
+            ⚠ NFC-e não foi emitida
           </Text>
           <Text style={{ fontSize: 11, color: FoodColors.ink3 }}>
             {nfceError || nfce!.error || "Erro desconhecido"}
           </Text>
           <Text style={{ fontSize: 10, color: FoodColors.ink4 }}>
-            A venda foi registrada normalmente. Voce pode tentar reemitir mais tarde no painel de NFC-e.
+            A venda foi registrada normalmente. Você pode tentar reemitir mais tarde no painel de NFC-e.
           </Text>
           <Pressable onPress={onRetryNfce} style={{
             backgroundColor: FoodColors.surface, padding: 10, borderRadius: 8, alignItems: "center",
@@ -777,7 +777,7 @@ function ConfirmStep({
 
       {skipped && (
         <Text style={{ fontSize: 11, color: FoodColors.ink4, textAlign: "center", fontStyle: "italic" }}>
-          NFC-e nao foi emitida (cliente dispensou ou recurso indisponivel)
+          NFC-e não foi emitida (cliente dispensou ou recurso indisponivel)
         </Text>
       )}
     </>

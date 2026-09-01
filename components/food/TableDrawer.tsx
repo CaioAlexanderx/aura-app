@@ -289,10 +289,10 @@ export function TableDrawer({ table, onClose }: Props) {
                     <Text style={{ fontSize: 18 }}>🖨</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, color: FoodColors.ink, fontWeight: "700" }}>
-                        Reimprimir cupom termico
+                        Reimprimir cupom térmico
                       </Text>
                       <Text style={{ fontSize: 10, color: FoodColors.ink3, marginTop: 2 }}>
-                        Ultima NFC-e emitida nesta mesa
+                        Última NFC-e emitida nesta mesa
                       </Text>
                     </View>
                     <Icon name="chevron_right" size={14} color={FoodColors.ink3} />

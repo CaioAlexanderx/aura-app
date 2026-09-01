@@ -162,7 +162,7 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
               <>
                 <Text style={cs.modalTitle}>Deletar {selectedCount} lead(s)?</Text>
                 <Text style={cs.hintText}>
-                  Esta acao e permanente. O historico de interacoes tambem sera removido.
+                  Esta ação e permanente. O histórico de interacoes também será removido.
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable onPress={close} style={[cs.actionBtn, { flex: 1 }]}>

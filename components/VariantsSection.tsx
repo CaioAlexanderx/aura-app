@@ -227,7 +227,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
         <View style={s.emptyBox}>
           <Text style={s.empty}>Nenhuma variante cadastrada.</Text>
           <Text style={s.emptyHint}>
-            Use "Em lote" pra criar varios tamanhos ou cores de uma vez (ex: "P, M, G").
+            Use "Em lote" pra criar vários tamanhos ou cores de uma vez (ex: "P, M, G").
           </Text>
         </View>
       )}

@@ -117,7 +117,7 @@ export default function SuporteScreen() {
             <View style={s.analystAvatar}><Text style={s.analystAvatarT}>A</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={s.welcomeTitle}>Ola, {user?.full_name?.split(' ')[0] || 'voce'}!</Text>
-              <Text style={s.welcomeDesc}>{isNegocio ? 'Seu analista de negócios esta disponível para ajudar com configuração, leitura de dados, dúvidas e suporte.' : 'Precisa de ajuda? Nossa equipe de suporte esta pronta para atender.'}</Text>
+              <Text style={s.welcomeDesc}>{isNegocio ? 'Seu analista de negócios está disponível para ajudar com configuração, leitura de dados, dúvidas e suporte.' : 'Precisa de ajuda? Nossa equipe de suporte está pronta para atender.'}</Text>
             </View>
           </View>
           <View style={s.contactRow}>

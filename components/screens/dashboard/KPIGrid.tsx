@@ -39,7 +39,8 @@ export function KPIGrid({ d, onNavigate }: Props) {
       <KPICard
         ic="bag" iconColor={Colors.violet3}
         label="Vendas hoje" value={fmt(d.salesToday)}
-        hint="Total vendido hoje"
+        hint="Valor vendido hoje (não a quantidade)"
+        hintLong={"Vendas hoje: o valor vendido hoje, não a quantidade de vendas — a contagem fica no bloco Vendas, logo abaixo. Diferente da Receita total, que soma o mês inteiro."}
         spark={d.sparkNet}
         onPress={() => onNavigate("/pdv")}
       />

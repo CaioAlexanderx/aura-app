@@ -266,7 +266,15 @@ export function useFinancialInsights(args: Args): FinancialInsights {
   // Merge server > client
   return useMemo(function() {
     var server = serverQuery.data;
-    var pending = enabled && serverQuery.isPending;
+    // FIX 01/09/2026 (QA de producao): o bloco "Verificando o que precisa da
+    // sua atencao..." ficava preso na tela, sem resolver nem sumir. A causa era
+    // `isPending`: no React Query v5 `status` fica 'pending' enquanto NAO ha
+    // dado — inclusive quando a query esta pausada (offline / fetchStatus
+    // 'paused'), e ai nunca sai desse estado. `isLoading` (= isPending &&
+    // isFetching) e o idiomatico pra "primeira carga em voo": query pausada ou
+    // com erro deixa de contar como pendente, e o AcoesCard cai no estado real
+    // em vez de prometer uma verificacao que nao esta acontecendo.
+    var pending = enabled && serverQuery.isLoading;
     if (!server || !server.health || typeof server.health.score !== "number") {
       // Server nao retornou ainda ou erro — usa client puro
       return { ...clientSide, insights_pending: pending };

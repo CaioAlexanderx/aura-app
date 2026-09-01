@@ -122,7 +122,7 @@ export function BulkPayConfirmModal({ visible, federationId, targets, noPendingC
                 {result.fail.length > 0 && (
                   <View style={st.note}>
                     <Text style={st.noteText}>
-                      Erro parcial não invalida o lote — os pagamentos registrados acima já valeram normalmente. Reveja os itens com erro e tente de novo só para eles.
+                      Erro parcial não inválida o lote — os pagamentos registrados acima já valeram normalmente. Reveja os itens com erro e tente de novo só para eles.
                     </Text>
                   </View>
                 )}

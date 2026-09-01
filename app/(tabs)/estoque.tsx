@@ -40,7 +40,8 @@ import { productLinksApi, type AggregatedProduct } from "@/services/productLinks
 // Cada um vive em seu próprio arquivo pra manter este screen <50KB e
 // permitir backtracking limpo. Todos web-only (Platform.OS check interno).
 import { useEstoquePremiumStyles } from "@/components/screens/estoque/useEstoquePremiumStyles";
-import { EstoqueHero } from "@/components/screens/estoque/EstoqueHero";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
+import { pluralize } from "@/utils/plural";
 import { EstoqueKpiStrip } from "@/components/screens/estoque/EstoqueKpiStrip";
 import { CategoryDropdownWeb } from "@/components/screens/estoque/CategoryDropdownWeb";
 import { ProductTableWeb } from "@/components/screens/estoque/ProductTableWeb";
@@ -48,6 +49,17 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+
+// 01/09/2026 (QA onda 2) — FIM DA DUPLICAÇÃO DO CABEÇALHO.
+//
+// O ScreenHero nasceu da extração deste cabeçalho (29/08), mas o EstoqueHero
+// original continuou aqui e os dois coexistiram por três dias: qualquer ajuste
+// no padrão precisava ser feito duas vezes, e a tela que TODAS as outras estão
+// copiando era justamente a que não usava o componente compartilhado.
+// Agora /estoque chama o ScreenHero como todo mundo e o arquivo antigo foi
+// apagado. A saída na tela é a mesma: mesma sobrancelha, mesmo título, mesma
+// frase, mesmas cores condicionais do alerta.
+const fmtInt = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const PAGE_SIZE = 20;
 // Thresholds reativos pro layout split (table+rail). 1100px = mostra
 // rail; 900px = mostra Table/Grid (abaixo cai pra ProductRow).
@@ -77,13 +89,6 @@ function SummaryCard({ label, value, color, sub, onPress }: { label: string; val
     <Text style={[s.cardValue, color ? { color } : {}]}>{value}</Text>
     {sub && <Text style={s.cardSub}>{sub}</Text>}
   </Pressable>;
-}
-
-function TabBar({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }}
-    contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-    {TABS.map((tab, i) => <Pressable key={tab} onPress={() => onSelect(i)} style={[s.tab, active === i && s.tabActive]}><Text style={[s.tabText, active === i && s.tabTextActive]}>{tab}</Text></Pressable>)}
-  </ScrollView>;
 }
 
 type CategoriesModalState = { open: boolean; initialType?: CategoryType };
@@ -586,7 +591,24 @@ export default function EstoqueScreen() {
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={isWebWide ? s.contentWide : s.content}>
         {isWebWide ? (
           <>
-            <EstoqueHero totalProducts={products.length} totalUnits={totalItems} lowCount={lowStock.length} />
+            <ScreenHero
+              eyebrow="Painel da loja"
+              title="Estoque"
+              live
+              subtitle={
+                <>
+                  {fmtInt(products.length)} produtos cadastrados · {fmtInt(totalItems)} unidades em prateleira ·
+                  <Text style={{
+                    color: lowStock.length > 0 ? (isDark ? "#fbbf24" : "#b45309") : (isDark ? "#34d399" : "#059669"),
+                    fontWeight: "600",
+                  }}>
+                    {" " + (lowStock.length > 0
+                      ? pluralize(lowStock.length, "alerta") + " de estoque baixo"
+                      : "tudo em ordem")}
+                  </Text>
+                </>
+              }
+            />
             <View style={[s.headerRow, { marginBottom: 18, marginTop: 4 }]}>
               <View style={s.headerActions}>
                 <ActionButtons />
@@ -669,7 +691,14 @@ export default function EstoqueScreen() {
           </View>
         )}
 
-        {products.length > 0 && <TabBar active={activeTab} onSelect={handleTabSelect} />}
+        {/* 01/09/2026: TabBar local (cópia byte a byte do ScreenTabs) saiu. */}
+        {products.length > 0 && (
+          <ScreenTabs
+            tabs={TABS.map((t) => ({ key: t, label: t }))}
+            active={TABS[activeTab]}
+            onSelect={(k) => handleTabSelect(TABS.indexOf(k))}
+          />
+        )}
 
         {products.length > 0 && activeTab === 0 && (
           <View>
@@ -898,10 +927,6 @@ const s = StyleSheet.create({
   cardLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
   cardValue: { fontSize: 20, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
   cardSub: { fontSize: 10, color: Colors.ink3, marginTop: 4 },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
   toolbar: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
   catBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   catBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },

@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { pluralize } from "@/utils/plural";
 
 type Props = {
   regimeLabel: string;
@@ -19,7 +20,9 @@ export function FiscalHero({ regimeLabel, actionable, done, pending, overdue }: 
     ? `Voce tem ${overdue} ${overdue === 1 ? "obrigação vencida" : "obrigações vencidas"}. Regularize para evitar multas.`
     : pending === 0
     ? "Todas as obrigações do período estão em dia. Continue assim!"
-    : `Falta ${pending === 1 ? "1 obrigação" : `${pending} obrigacoes`} para ficar 100% em dia.`;
+    // 01/09/2026 (QA): dizia "Falta 3 obrigacoes" — sem acento e sem
+    // concordancia. O verbo concorda com o numero, nao fica fixo no singular.
+    : `${pending === 1 ? "Falta" : "Faltam"} ${pluralize(pending, "obrigação", "obrigações")} para ficar 100% em dia.`;
 
   const r = 38, circ = 2 * Math.PI * r, offset = circ * (1 - pct);
   const donutSvg = `<svg width="90" height="90" viewBox="0 0 90 90" style="transform:rotate(-90deg)"><circle cx="45" cy="45" r="38" fill="none" stroke="${Colors.bg4}" stroke-width="7"/><circle cx="45" cy="45" r="38" fill="none" stroke="${statusColor}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/></svg><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center"><div style="font-size:22px;font-weight:800;color:${Colors.ink}">${done}/${actionable}</div><div style="font-size:9px;color:${Colors.ink3}">em dia</div></div>`;

@@ -151,12 +151,12 @@ export function AddServiceForm({ onSave, onCancel, onOpenCategories }: {
       </View>
 
       <View style={{ marginBottom: 16 }}>
-        <Text style={s.label}>Duracao estimada (opcional)</Text>
+        <Text style={s.label}>Duração estimada (opcional)</Text>
         <TextInput style={s.input} value={duration} onChangeText={setDuration} placeholder="Ex: 45 min, 1h30, 2 horas" placeholderTextColor={Colors.ink3} />
       </View>
 
       <View style={{ marginBottom: 16 }}>
-        <Text style={s.label}>Descricao (opcional)</Text>
+        <Text style={s.label}>Descrição (opcional)</Text>
         <TextInput style={[s.input, { minHeight: 60, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Detalhes do serviço..." placeholderTextColor={Colors.ink3} multiline numberOfLines={2} />
       </View>
 

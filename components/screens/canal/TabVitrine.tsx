@@ -342,7 +342,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
             {semCategoria} produto(s) fora da navegacao por categoria
           </Text>
           <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
-            Eles aparecem na vitrine, mas nao sao encontrados quando o cliente navega por
+            Eles aparecem na vitrine, mas não são encontrados quando o cliente navega por
             categoria. Toque para categorizar em lote.
           </Text>
         </Pressable>
@@ -360,7 +360,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           tocado duas vezes (D1 e D2). */}
       <View style={cs.card}>
         <Text style={{ color: Colors.ink, fontWeight: "700", fontSize: 13 }}>
-          Organizacao do catalogo
+          Organização do catálogo
         </Text>
         <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
           A navegacao por categoria da loja sai daqui.
@@ -372,10 +372,10 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           accessibilityRole="button"
         >
           <Text style={{ color: Colors.ink, fontSize: 13, fontWeight: "600" }}>
-            Organizar catalogo
+            Organizar catálogo
           </Text>
           <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
-            Criar, renomear e mover categorias. Ate tres niveis.
+            Criar, renomear e mover categorias. Até três níveis.
           </Text>
         </Pressable>
 
@@ -385,7 +385,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           accessibilityRole="button"
         >
           <Text style={{ color: Colors.ink, fontSize: 13, fontWeight: "600" }}>
-            Assistente de migracao
+            Assistente de migração
           </Text>
           <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
             Converter as categorias antigas, escritas como texto, para a arvore.
@@ -402,7 +402,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
             {semCategoria > 0 ? ` (${semCategoria})` : ""}
           </Text>
           <Text style={{ color: Colors.ink3, fontSize: 12, marginTop: 2 }}>
-            Categorizar varios de uma vez.
+            Categorizar vários de uma vez.
           </Text>
         </Pressable>
       </View>

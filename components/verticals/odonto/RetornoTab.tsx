@@ -134,8 +134,8 @@ export function RetornoTab() {
           <View style={s.infoCard}>
             <Icon name="info" size={12} color={Colors.violet3 || "#a78bfa"} />
             <Text style={s.infoText}>
-              Historico completo de pacientes com faltas. Use pra decidir politica de deposito
-              antecipado ou contato previo.
+              Histórico completo de pacientes com faltas. Use pra decidir política de deposito
+              antecipado ou contato prévio.
             </Text>
           </View>
 

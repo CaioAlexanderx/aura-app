@@ -635,7 +635,7 @@ function MemberRow(props: {
         <View style={s.permEditor}>
           <Text style={s.permSectionLabel}>Membro suspenso</Text>
           <Text style={{ fontSize: 12, color: Colors.ink3, marginBottom: 12 }}>
-            Sem acesso ao sistema. Voce pode remove-lo definitivamente.
+            Sem acesso ao sistema. Você pode remove-lo definitivamente.
           </Text>
           <View style={s.permActions}>
             <Pressable onPress={() => setConfirmDelete(true)} disabled={isDeleting} style={[s.deleteMemberBtn, { flex: 1 }]}>

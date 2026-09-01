@@ -299,7 +299,7 @@ export function DentalSettings() {
           <View style={{ flex: 1 }}>
             <Text style={s.cardTitle}>Dentistas ({practitioners.length})</Text>
             <Text style={s.cardSub}>
-              Cadastre todos os dentistas que atendem na clinica. Cada um pode ser alocado em uma cadeira.
+              Cadastre todos os dentistas que atendem na clínica. Cada um pode ser alocado em uma cadeira.
             </Text>
           </View>
           {!showForm && (

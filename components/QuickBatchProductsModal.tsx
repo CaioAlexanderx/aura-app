@@ -576,7 +576,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                   <>
                     <Text style={s.infoTitle}>Expandir tamanhos/cores: {`{P,M,G,GG}`}</Text>
                     <Text style={s.infoText}>
-                      Use chaves pra gerar varias linhas de uma vez. Combina tamanho x cor.
+                      Use chaves pra gerar várias linhas de uma vez. Combina tamanho x cor.
                     </Text>
                     <View style={s.exampleBox}>
                       <Text style={s.exampleText}>{EXAMPLE_EXPANSION}</Text>
@@ -607,7 +607,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                     <Text style={s.infoTitle}>Markup automático: digite custo, vendemos calculado</Text>
                     <Text style={s.infoText}>
                       Preencha o campo Markup acima (ex: 2x, 2.5x, +100%) e digite o CUSTO no
-                      lugar do preco. O preco de venda eh calculado automaticamente.
+                      lugar do preço. O preço de venda eh calculado automaticamente.
                     </Text>
                     <View style={s.exampleBox}>
                       <Text style={s.exampleText}>{"Markup: 2x\n\n" + EXAMPLE_MARKUP + "\n\n-> Camiseta R$ 50,00 (custo 25)\n-> Bermuda R$ 70,00 (custo 35)"}</Text>
@@ -624,7 +624,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
             {/* Markup global + Categoria padrao -- row dupla */}
             <View style={s.row2}>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Markup automatico (opcional)</Text>
+                <Text style={s.label}>Markup automático (opcional)</Text>
                 <View style={[s.markupWrap, markup && s.markupWrapActive]}>
                   <Icon name="layers" size={12} color={markup ? Colors.violet3 : Colors.ink3} />
                   <TextInput

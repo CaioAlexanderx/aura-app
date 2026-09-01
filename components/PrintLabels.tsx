@@ -567,7 +567,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             </Pressable>
           </View>
           <Text style={s.invalidHint}>
-            Codigos como "...", "-", "0000" ou muito curtos geram barras ilegiveis no scanner. Edite o produto no Estoque e cadastre um SKU real.
+            Códigos como "...", "-", "0000" ou muito curtos geram barras ilegiveis no scanner. Edite o produto no Estoque e cadastre um SKU real.
           </Text>
           <ScrollView style={s.invalidList} nestedScrollEnabled>
             {invalidCodes.map(function(item, idx) {

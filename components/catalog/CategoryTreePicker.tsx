@@ -121,7 +121,7 @@ export function CategoryTreePicker({ value, onChange, productId }: Props) {
             <View style={s.emptyState}>
               <Icon name="layers" size={28} color={C.ink3} />
               <Text style={[s.emptyTitle, { color: C.ink }]}>Nenhuma categoria ainda</Text>
-              <Text style={[s.emptyText, { color: C.ink3 }]}>Crie a primeira categoria para organizar o catalogo.</Text>
+              <Text style={[s.emptyText, { color: C.ink3 }]}>Crie a primeira categoria para organizar o catálogo.</Text>
               <Pressable onPress={() => setShowCreate(true)} style={[s.cta, { backgroundColor: C.violet }]}>
                 <Icon name="plus" size={14} color="#fff" />
                 <Text style={s.ctaText}>Criar primeira categoria</Text>

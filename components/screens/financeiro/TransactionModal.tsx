@@ -460,7 +460,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         <View style={s.dateHint}>
           <Icon name="info" size={11} color={Colors.violet3} />
           <Text style={[s.dateHintText, { color: Colors.violet3 }]}>
-            Mudancas em forma de pagamento e vendedor sao sincronizadas com a venda do PDV.
+            Mudancas em forma de pagamento e vendedor são sincronizadas com a venda do PDV.
           </Text>
         </View>
       )}
@@ -468,9 +468,9 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         <View style={s.dateHint}>
           <Icon name="alert" size={11} color="#fb923c" />
           <Text style={[s.dateHintText, { color: "#fb923c" }]}>
-            Este e o "A Receber" do crediario. Mexer no valor ou na categoria aqui
-            NAO muda o carne do cliente e tira o lancamento dos relatorios de
-            crediario. Pra devolver produto, use a lista de mercadorias acima.
+            Este e o "A Receber" do crediário. Mexer no valor ou na categoria aqui
+            NÃO muda o carne do cliente e tira o lancamento dos relatórios de
+            crediário. Pra devolver produto, use a lista de mercadorias acima.
           </Text>
         </View>
       )}

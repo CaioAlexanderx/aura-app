@@ -9,6 +9,8 @@ import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import type { DashboardBreakdown } from "@/services/meAggregates";
+// 01/09/2026: helper compartilhado de plural (o pill mostrava "1 empresas").
+import { pluralize } from "@/utils/plural";
 
 function fmtBRL(value: number): string {
   if (value === null || value === undefined || isNaN(value)) return "R$ 0,00";
@@ -53,7 +55,7 @@ export function ConsolidatedBreakdownCard({
           <Text style={s.title}>Resumo por empresa</Text>
         </View>
         <View style={s.countPill}>
-          <Text style={s.countText}>{breakdown.length} empresas</Text>
+          <Text style={s.countText}>{pluralize(breakdown.length, "empresa", "empresas")}</Text>
         </View>
       </View>
 
@@ -78,6 +80,9 @@ export function ConsolidatedBreakdownCard({
               pressed && s.rowPressed,
               Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={"Entrar em " + b.company_name}
+            {...({ dataSet: { auraHover: "card" } } as any)}
           >
             <View style={s.rowLeft}>
               <Avatar name={b.company_name} />
@@ -119,7 +124,7 @@ export function ConsolidatedBreakdownCard({
 
       <View style={s.foot}>
         <Text style={s.footText}>
-          Toque numa empresa para entrar nela específicamente
+          Toque numa empresa para entrar nela especificamente
         </Text>
       </View>
     </View>

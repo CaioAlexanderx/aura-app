@@ -201,7 +201,7 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
         </View>
       )}
 
-      {cnpjInput && !cnpjInputValid && <Text style={sh.fieldError}>CNPJ deve ter 14 digitos</Text>}
+      {cnpjInput && !cnpjInputValid && <Text style={sh.fieldError}>CNPJ deve ter 14 dígitos</Text>}
     </Card>
   );
 }

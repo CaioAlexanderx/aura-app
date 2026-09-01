@@ -135,7 +135,7 @@ export function DentalComplianceConfigCard() {
       <View style={s.header}>
         <Text style={s.title}>🦷 Compliance Odonto</Text>
         <Text style={s.subtitle}>
-          Cadastre os dados regulatorios da clinica. Usamos pra calcular vencimentos e lembrar voce 60/30/7 dias antes.
+          Cadastre os dados regulatorios da clínica. Usamos pra calcular vencimentos e lembrar você 60/30/7 dias antes.
         </Text>
       </View>
 
@@ -222,7 +222,7 @@ export function DentalComplianceConfigCard() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Inscricao da clinica (PJ)</Text>
+                <Text style={s.label}>Inscrição da clínica (PJ)</Text>
                 <TextInput
                   value={croPj}
                   onChangeText={setCroPj}
@@ -232,7 +232,7 @@ export function DentalComplianceConfigCard() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>RT (Responsavel Tecnico)</Text>
+                <Text style={s.label}>RT (Responsável Técnico)</Text>
                 <TextInput
                   value={croRt}
                   onChangeText={setCroRt}
@@ -252,7 +252,7 @@ export function DentalComplianceConfigCard() {
               <TextInput
                 value={cnesNumber}
                 onChangeText={setCnesNumber}
-                placeholder="7 digitos"
+                placeholder="7 dígitos"
                 placeholderTextColor={DentalColors.ink3}
                 keyboardType="numeric"
                 maxLength={7}

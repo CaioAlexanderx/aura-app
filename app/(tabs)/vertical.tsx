@@ -26,7 +26,7 @@ import BarberScreen from '@/components/verticals/BarberScreen';
 
 const VERTICAL_NAMES: Record<string, string> = {
   odonto: 'Odontologia',
-  barber: 'Barbearia / Salao',
+  barber: 'Barbearia / Salão',
   food: 'Food Service',
   studio: 'Aura Studio',
   estetica: 'Estética',
@@ -70,7 +70,7 @@ export default function VerticalTab() {
         <View style={s.noVertical}>
           <Text style={s.noIcon}>🔒</Text>
           <Text style={s.noTitle}>Nenhum módulo vertical ativo</Text>
-          <Text style={s.noText}>Módulos verticais são ativados pela equipe Aura no setup do seu negócio. Disponíveis: Odontologia, Barbearia/Salao, Food Service, Estética, Pet Shop e Academia.</Text>
+          <Text style={s.noText}>Módulos verticais são ativados pela equipe Aura no setup do seu negócio. Disponíveis: Odontologia, Barbearia/Salão, Food Service, Estética, Pet Shop e Academia.</Text>
           <Text style={s.noContact}>Entre em contato com seu Analista de Negócios para ativar.</Text>
         </View>
       )}

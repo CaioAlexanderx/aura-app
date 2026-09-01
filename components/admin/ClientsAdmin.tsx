@@ -113,7 +113,7 @@ function seatsIncludedFor(plan: string, extra: number): number {
 type VerticalMeta = { key: VerticalKey; label: string; color: string; icon: string; ready: boolean };
 var VERTICAL_META: VerticalMeta[] = [
   { key: "odonto",   label: "Odontologia",   color: "#06b6d4", icon: "🩺", ready: true  }, // cyan 🦷
-  { key: "barber",   label: "Barber / Salao", color: Colors.amber, icon: "✂️", ready: true  }, // amber ✂️
+  { key: "barber",   label: "Barber / Salão", color: Colors.amber, icon: "✂️", ready: true  }, // amber ✂️
   { key: "food",     label: "Food Service",  color: "#fb7185", icon: "🍽️", ready: true  }, // coral 🍽️
   { key: "estetica", label: "Estética",      color: Colors.ink3, icon: "✨", ready: false }, // em dev ✨
   { key: "pet",      label: "Pet Shop",      color: Colors.ink3, icon: "🐾", ready: false }, // em dev 🐾
@@ -468,7 +468,7 @@ export function ClientsAdmin() {
             </Pressable>
             <Text style={s.trialHint}>
               Se o trial ja vencer, conta a partir de hoje. Se ativo, soma ao final atual.
-              Acao registrada em admin_audit_log com seu user + motivo.
+              Ação registrada em admin_audit_log com seu user + motivo.
             </Text>
           </View>
         )}
@@ -500,8 +500,8 @@ export function ClientsAdmin() {
             })}
           </View>
           <Text style={s.planHint}>
-            Alterar plano aqui ajusta apenas os modulos visiveis.
-            Nao altera a cobranca no Asaas — faca isso separadamente se necessario.
+            Alterar plano aqui ajusta apenas os módulos visiveis.
+            Não altera a cobrança no Asaas — faca isso separadamente se necessário.
           </Text>
         </View>
 
@@ -809,8 +809,8 @@ export function ClientsAdmin() {
             {toggleMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
           </View>
           <Text style={s.modulesHint}>
-            Por padrao, seguem o plano do cliente. Toggle manual cria um override
-            (o modulo fica destacado como "forcado ativo" ou "forcado inativo").
+            Por padrão, seguem o plano do cliente. Toggle manual cria um override
+            (o módulo fica destacado como "forcado ativo" ou "forcado inativo").
           </Text>
           {MODULE_CATALOG.map(function(mod) {
             var r = computeVisible(sc.plan, sc.module_overrides, mod.key);

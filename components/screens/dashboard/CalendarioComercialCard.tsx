@@ -6,6 +6,8 @@ import { Icon } from "@/components/Icon";
 import { companiesApi } from "@/services/api";
 import { type CommercialDateRow } from "@/services/companiesApi";
 import { useAuthStore } from "@/stores/auth";
+// 01/09/2026: helper compartilhado de plural — o contador dizia "1 dias".
+import { pluralize } from "@/utils/plural";
 
 /**
  * CalendarioComercialCard — datas que movimentam o comércio, no Painel.
@@ -40,7 +42,7 @@ function dayMonth(dateStr: string): { day: string; mon: string } {
 function countdownLabel(days: number): string {
   if (days <= 0) return "É hoje";
   if (days === 1) return "Amanhã";
-  return "faltam " + days + " dias";
+  return "faltam " + pluralize(days, "dia");
 }
 
 export function CalendarioComercialCard() {

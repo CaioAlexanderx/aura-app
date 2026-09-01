@@ -112,10 +112,17 @@ const u = StyleSheet.create({
 //    O MESMO hook (usePdvState -> useCustomers -> ["customers", companyId]),
 //    ja tinha cache quente e listava dezenas. Nao havia divergencia de
 //    escopo entre as telas: era estado de carregamento sem skeleton.
+//
+// 01/09/2026 — a outra metade do mesmo "0 clientes": FALHA DE REDE. O
+// useCustomers devolvia [] sem expor erro, entao a tela desenhava o empty
+// state ("Nenhum cliente cadastrado" + CTA de cadastrar) para uma base que
+// podia estar cheia. Agora sao TRES estados mutuamente exclusivos na aba
+// Lista, nesta ordem: isLoading -> skeleton; isError -> aviso + "Tentar de
+// novo" (refetch); base vazia de verdade -> empty state com CTA.
 // ============================================================
 export default function ClientesScreen() {
   const {
-    customers, isLoading, isDemo, planBlocked, bulkDeleting,
+    customers, isLoading, isError, refetch, isDemo, planBlocked, bulkDeleting,
     addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers,
     consolidatedView, companyCount,
     plan, planLimit,
@@ -259,6 +266,8 @@ export default function ClientesScreen() {
   // que a base esta vazia — ver nota 4 no topo do arquivo.
   const heroSub = isLoading
     ? "Carregando sua base de clientes…"
+    : isError
+    ? "Não foi possível carregar sua base de clientes."
     : customers.length === 0
     ? "Nenhum cliente cadastrado ainda — comece cadastrando um ou importando sua lista."
     : (
@@ -327,7 +336,7 @@ export default function ClientesScreen() {
           onSelect={(k) => handleTabSelect(Number(k))}
         />
 
-        {tab === 0 && !planBlocked && !isLoading && customers.length > 0 && (
+        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
           <View style={s.importRow}>
             <ImportExportBar onExport={handleExport} itemCount={customers.length} />
             {!consolidatedView && (
@@ -380,7 +389,25 @@ export default function ClientesScreen() {
             quente) listava dezenas. Era o "0 clientes" do QA. 29/08/2026. */}
         {tab === 0 && isLoading && <ListSkeleton rows={6} />}
 
-        {tab === 0 && !isLoading && (
+        {/* FALHOU — estado distinto do vazio: a base pode estar cheia, quem
+            falhou foi a requisicao. Sem isto a tela mentia com o empty state.
+            01/09/2026. */}
+        {tab === 0 && !isLoading && isError && !planBlocked && (
+          <View style={s.errorWrap}>
+            <View style={s.errorIcon}>
+              <Icon name="alert" size={20} color={Colors.amber} />
+            </View>
+            <Text style={s.errorTitle}>Não foi possível carregar seus clientes</Text>
+            <Text style={s.errorSub}>
+              A lista não chegou do servidor. Sua base continua salva — verifique a conexão e tente de novo.
+            </Text>
+            <Pressable onPress={() => refetch()} style={s.errorBtn}>
+              <Text style={s.errorBtnText}>Tentar de novo</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {tab === 0 && !isLoading && !isError && (
           <View>
             {(customers.length > 0 || search.length > 0) && (
               <TextInput style={s.searchInput} placeholder="Buscar por nome, telefone, e-mail ou Instagram…" placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
@@ -554,6 +581,14 @@ const s = StyleSheet.create({
   bulkActionText:   { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   searchInput:      { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink, marginBottom: 16 },
   emptyWrap:        { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, paddingBottom: 24, marginBottom: 8 },
+  // 01/09/2026: estado de falha — deliberadamente diferente do emptyWrap
+  // (borda ambar, sem CTA de cadastrar) pra nao ser confundido com base vazia.
+  errorWrap:        { backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.amber + "44", paddingHorizontal: 24, paddingVertical: 32, marginBottom: 8, alignItems: "center", gap: 8 },
+  errorIcon:        { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.amberD, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  errorTitle:       { fontSize: 15, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  errorSub:         { fontSize: 12.5, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 380 },
+  errorBtn:         { marginTop: 8, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  errorBtnText:     { color: "#fff", fontSize: 13, fontWeight: "700" },
   emptyImport:      { alignItems: "center", marginTop: -8 },
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },

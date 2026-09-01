@@ -29,7 +29,7 @@ interface ModulesResponse {
 // Demo data for when API is unavailable
 const DEMO_MODULES: Module[] = [
   { key: "odonto", name: "Odontologia", accent: "#06B6D4", icon: "tooth", minPlan: "negocio", is_active: false, activated_at: null, config: {} },
-  { key: "barber", name: "Barbearia/Salao", accent: "#F59E0B", icon: "scissors", minPlan: "negocio", is_active: false, activated_at: null, config: {} },
+  { key: "barber", name: "Barbearia/Salão", accent: "#F59E0B", icon: "scissors", minPlan: "negocio", is_active: false, activated_at: null, config: {} },
   { key: "estetica", name: "Estética", accent: "#EC4899", icon: "sparkles", minPlan: "negocio", is_active: false, activated_at: null, config: {} },
   { key: "pet", name: "Pet Shop", accent: "#10B981", icon: "paw", minPlan: "negocio", is_active: false, activated_at: null, config: {} },
   { key: "food", name: "Food Service", accent: "#EF4444", icon: "utensils", minPlan: "negocio", is_active: false, activated_at: null, config: {} },

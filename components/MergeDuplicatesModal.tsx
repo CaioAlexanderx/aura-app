@@ -200,7 +200,7 @@ export function MergeDuplicatesModal({
                   Escolha o produto principal e o valor de {attributeName.toLowerCase()} de cada variante
                 </Text>
                 <Text style={s.sectionHint}>
-                  O principal mantem o nome, preco e imagens. Os outros viram variantes.
+                  O principal mantem o nome, preço e imagens. Os outros viram variantes.
                 </Text>
 
                 <View style={{ gap: 10, marginTop: 12 }}>

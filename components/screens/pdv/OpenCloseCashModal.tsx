@@ -330,7 +330,7 @@ export function OpenCloseCashModal({
         </View>
         <Text style={s.helpTxt}>
           Conte cedulas + moedas separadas para troco. Esse valor e o ponto de partida do
-          fechamento — nao inclui vendas posteriores.
+          fechamento — não inclui vendas posteriores.
         </Text>
       </>
     );

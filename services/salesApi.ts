@@ -34,6 +34,9 @@ export type SaleDetails = {
   };
   sale?: {
     id: string;
+    // 01/09/2026: ver nota em SalesListItem.sale_number (opcional — este
+    // endpoint nao estava na lista verificada em producao).
+    sale_number?: number | null;
     total_amount: number;
     discount_amount: number;
     payment_method: string | null;
@@ -79,6 +82,11 @@ export type RemoveSaleItemResult = {
 
 export type SalesListItem = {
   id: string;
+  // 01/09/2026: sequencial legivel POR EMPRESA (comeca em 1). SO EXIBICAO —
+  // o `id` (UUID) continua sendo a chave de toda rota (buscar, cancelar).
+  // Em modo consolidado duas empresas podem ter a mesma #12: desambigue pela
+  // company_id/company_name da mesma linha. null em venda anterior a migration.
+  sale_number?: number | null;
   total_amount: number;
   discount_amount: number;
   payment_method: string | null;
@@ -156,6 +164,8 @@ export type SaleFiscalEmission = {
 export type SaleDetailFull = {
   sale: {
     id: string;
+    // 01/09/2026: ver nota em SalesListItem.sale_number.
+    sale_number?: number | null;
     total_amount: number;
     discount_amount: number;
     payment_method: string | null;
@@ -283,6 +293,18 @@ export type UpdateSaleResult = {
   sale_id: string;
   total_amount?: number;
   discount_amount?: number;
+};
+
+// 01/09/2026: resposta do POST /companies/:id/pdv/sale (e /pdv/sale-com-sinal).
+// Tipada aqui pra que o `sale_number` do recibo tenha contrato — o pdvApi.createSale
+// de services/api.ts ainda devolve `any`.
+export type PdvSaleResponse = {
+  sale?: {
+    id: string;
+    sale_number?: number | null;
+    [k: string]: any;
+  };
+  [k: string]: any;
 };
 
 export var salesApi = {

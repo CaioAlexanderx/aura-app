@@ -64,8 +64,8 @@ export function LabTab() {
       <View style={s.infoCard}>
         <Icon name="info" size={12} color={Colors.violet3 || "#a78bfa"} />
         <Text style={s.infoText}>
-          Acompanhe pedidos a laboratorios externos (proteses, guias, trabalhos protetitos).
-          Clique no status pra avancar a proxima etapa.
+          Acompanhe pedidos a laboratorios externos (próteses, guias, trabalhos protetitos).
+          Clique no status pra avancar a próxima etapa.
         </Text>
       </View>
 

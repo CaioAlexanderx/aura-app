@@ -28,8 +28,8 @@ export function NfseTab() {
         </View>
         <Text style={s.title}>Notas Fiscais de Serviço</Text>
         <Text style={s.subtitle}>
-          Emita NFS-e diretamente pelo Aura. Provider integrado, calculo
-          automatico de ISS, PDF/XML pra entregar ao cliente.
+          Emita NFS-e diretamente pelo Aura. Provider integrado, cálculo
+          automático de ISS, PDF/XML pra entregar ao cliente.
         </Text>
 
         <View style={s.featureCard}>
@@ -65,9 +65,9 @@ export function NfseTab() {
         </Pressable>
 
         <Text style={s.help}>
-          A primeira vez que abrir, voce sera direcionado pro setup pra cadastrar
-          a chave do Nuvem Fiscal e os dados fiscais da clinica (Inscricao Municipal,
-          codigo de servico, aliquota ISS).
+          A primeira vez que abrir, você será direcionado pro setup pra cadastrar
+          a chave do Nuvem Fiscal e os dados fiscais da clínica (Inscrição Municipal,
+          código de serviço, aliquota ISS).
         </Text>
       </ScrollView>
 

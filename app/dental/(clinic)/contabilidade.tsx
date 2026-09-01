@@ -46,10 +46,10 @@ export default function DentalContabilidadeScreen() {
             }}>
               <View style={{ marginBottom: 14 }}>
                 <Text style={{ fontSize: 16, fontWeight: "800", color: DentalColors.ink }}>
-                  ✨ Relatorios Aura · Compliance Odonto
+                  ✨ Relatórios Aura · Compliance Odonto
                 </Text>
                 <Text style={{ fontSize: 11, color: DentalColors.ink3, marginTop: 4, lineHeight: 16 }}>
-                  Cada obrigacao saude gera um relatorio formatado com tudo que voce precisa pra entregar no portal oficial.
+                  Cada obrigação saúde gera um relatório formatado com tudo que você precisa pra entregar no portal oficial.
                 </Text>
               </View>
 

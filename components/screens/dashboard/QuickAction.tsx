@@ -8,8 +8,9 @@ export function QuickAction({ ic, iconColor, label, onPress }: { ic: string; ico
     background: Glass.card,
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
-    transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
-    cursor: "pointer",
+    // 01/09/2026: transição no CSS de [data-aura-hover] (Painel), pra que
+    // o prefers-reduced-motion consiga desligá-la.
+    cursor: onPress ? "pointer" : "default",
     position: "relative",
     overflow: "hidden",
   });
@@ -29,6 +30,9 @@ export function QuickAction({ ic, iconColor, label, onPress }: { ic: string; ico
     <Pressable
       style={[s.btn, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}
       onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={label}
+      {...(onPress ? ({ dataSet: { auraHover: "card" } } as any) : null)}
     >
       {Platform.OS === "web" && <span style={webGlow as any} />}
       <View style={[s.iw, Platform.OS === "web" ? (webChip as any) : { borderColor: iconColor + "33", backgroundColor: iconColor + "11" }]}>

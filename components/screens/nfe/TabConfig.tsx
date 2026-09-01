@@ -72,7 +72,7 @@ export function TabConfig({ companyId }: { companyId: string }) {
           </View>
         )}
       </View>
-      <View style={ns.infoCard}><Icon name="info" size={13} color={Colors.violet3} /><Text style={ns.infoText}>O certificado A1 e necessario para emissao de NF-e e NFC-e. Adquira junto a sua certificadora (Certisign, Serasa, etc). Validade: 1 ano.</Text></View>
+      <View style={ns.infoCard}><Icon name="info" size={13} color={Colors.violet3} /><Text style={ns.infoText}>O certificado A1 e necessário para emissão de NF-e e NFC-e. Adquira junto a sua certificadora (Certisign, Serasa, etc). Validade: 1 ano.</Text></View>
     </View>
   );
 }

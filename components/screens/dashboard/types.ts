@@ -8,7 +8,101 @@ export const fmt = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minim
 export const fmtK = (n: number) => n >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : fmt(n);
 export const fmtInt = (n: number) => (n || 0).toLocaleString("pt-BR");
 export function greeting() { const h = new Date().getHours(); return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite"; }
-export function currentMonth() { return new Date().toLocaleString("pt-BR", { month: "long" }).replace(/^\w/, c => c.toUpperCase()); }
+
+// ── Fuso do Brasil ─────────────────────────────────────────
+// 01/09/2026: a virada do mês tem que acontecer no fuso do Brasil. Em UTC,
+// 21h do dia 31 já é dia 1º do mês seguinte — o Painel trocava de mês três
+// horas antes pra quem está aqui. Todo cálculo de mês/dia do Painel passa
+// por brToday(), nunca por new Date().getMonth() direto.
+export const BR_TZ = "America/Sao_Paulo";
+
+export type BRDate = { year: number; month: number; day: number };
+
+/** Ano/mês/dia de "agora" no fuso do Brasil (month é 1-12, não 0-11). */
+export function brToday(base?: Date): BRDate {
+  const d = base || new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: BR_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(d);
+    const pick = (t: string) => {
+      const found = parts.filter(p => p.type === t)[0];
+      return found ? parseInt(found.value, 10) : NaN;
+    };
+    const year = pick("year"), month = pick("month"), day = pick("day");
+    if (year && month && day) return { year: year, month: month, day: day };
+  } catch (e) {
+    // Intl sem base de fusos (Hermes sem ICU completo) — cai no offset fixo.
+  }
+  // Fallback: o Brasil não tem mais horário de verão desde 2019, então
+  // UTC-3 é constante e chega no mesmo dia que o Intl daria.
+  const br = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+  return { year: br.getUTCFullYear(), month: br.getUTCMonth() + 1, day: br.getUTCDate() };
+}
+
+const MESES_BR = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+/** Nome do mês em pt-BR (month 1-12). Capitalizado por padrão. */
+export function monthNameBR(month: number, capitalized = true): string {
+  const name = MESES_BR[(((month - 1) % 12) + 12) % 12] || "";
+  return capitalized ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
+/** Mês anterior a um {year, month} (1-12), virando o ano quando month = 1. */
+export function previousMonthOf(d: { year: number; month: number }): { year: number; month: number } {
+  return d.month === 1 ? { year: d.year - 1, month: 12 } : { year: d.year, month: d.month - 1 };
+}
+
+/** Quantos dias tem o mês (month 1-12). */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Nome do mês corrente no fuso do Brasil, capitalizado. */
+export function currentMonth() { return monthNameBR(brToday().month); }
+
+// ── Painel vazio: "conta nova" x "mês novo" ─────────────────────
+// 01/09/2026 — QA da virada do mês. O critério do estado vazio era só "mês
+// atual sem movimento", mas o texto era de onboarding de conta nova: toda
+// lojista com histórico via "Bem-vindo!" todo dia 1º e achava que os dados
+// tinham sumido. Agora o estado vazio olha o histórico antes de escolher o
+// que dizer — e o caso "conta nova" segue com o onboarding de sempre.
+export type EmptyDashboardKind = "carregando" | "conta-nova" | "mes-novo";
+
+/** true se alguma sparkline do payload tem ponto diferente de zero. */
+export function hasMovementInSpark(...sparks: (number[] | null | undefined)[]): boolean {
+  for (let i = 0; i < sparks.length; i++) {
+    const spark = sparks[i];
+    if (!spark || !spark.length) continue;
+    for (let k = 0; k < spark.length; k++) {
+      if (typeof spark[k] === "number" && spark[k] !== 0) return true;
+    }
+  }
+  return false;
+}
+
+export function classifyEmptyDashboard(args: {
+  /** Algum ponto de sparkline != 0 no payload do dashboard (sinal barato). */
+  hasSpark?: boolean;
+  /** Totais do mês anterior (/financeiro/comparative). null/undefined = sem resposta. */
+  previousTotals?: { income?: number; expenses?: number; net?: number } | null;
+  /** Consulta do histórico ainda em voo. */
+  loadingHistory?: boolean;
+}): EmptyDashboardKind {
+  // A sparkline já vem no payload do dashboard: quando ela tem movimento dá
+  // pra decidir na hora, sem esperar o histórico e sem piscar o texto errado.
+  if (args.hasSpark) return "mes-novo";
+  const p = args.previousTotals;
+  if (p && ((p.income || 0) !== 0 || (p.expenses || 0) !== 0 || (p.net || 0) !== 0)) return "mes-novo";
+  if (args.loadingHistory) return "carregando";
+  // Sem histórico — ou histórico indisponível (erro/demo): mantém o
+  // onboarding, que é o texto certo pra conta nova e o menos errado quando
+  // não dá pra saber.
+  return "conta-nova";
+}
 
 // Claude Design gradient tokens — used by inline SVG paints on web.
 export const GRAD = {

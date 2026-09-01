@@ -47,7 +47,7 @@ export function DentalAiConvList({ conversations, isLoading, onSelect, onNewConv
           </View>
           <Text style={st.emptyTitle}>Comece sua primeira conversa</Text>
           <Text style={st.emptySub}>
-            A IA Odonto ja conhece sua clinica. Faca uma pergunta sobre agenda, cobranca ou peca um script de WhatsApp.
+            A IA Odonto ja conhece sua clínica. Faca uma pergunta sobre agenda, cobrança ou peca um script de WhatsApp.
           </Text>
           <Pressable onPress={onNewConversation} style={[st.btn, st.btnPrimary, { marginTop: 20 }]}>
             <Icon name="plus" size={14} color="#fff" />

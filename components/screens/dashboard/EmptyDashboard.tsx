@@ -23,15 +23,15 @@ export function EmptyDashboard({ name, onPress }: { name: string; onPress: (p: s
       <Text style={s.title}>Bem-vindo, {name}!</Text>
       <Text style={s.sub}>Seu painel vai ganhar vida à medida que você usar a Aura. Comece por uma destas ações:</Text>
       <View style={s.actions}>
-        <Pressable style={s.action} onPress={() => onPress("/financeiro")}>
+        <Pressable style={s.action} onPress={() => onPress("/financeiro")} accessibilityRole="button" {...({ dataSet: { auraHover: "card" } } as any)}>
           <Icon name="dollar" size={18} color={Colors.green} />
           <Text style={s.actionText}>Lançar receita</Text>
         </Pressable>
-        <Pressable style={s.action} onPress={() => onPress("/estoque")}>
+        <Pressable style={s.action} onPress={() => onPress("/estoque")} accessibilityRole="button" {...({ dataSet: { auraHover: "card" } } as any)}>
           <Icon name="package" size={18} color={Colors.amber} />
           <Text style={s.actionText}>Cadastrar produto</Text>
         </Pressable>
-        <Pressable style={s.action} onPress={() => onPress("/clientes")}>
+        <Pressable style={s.action} onPress={() => onPress("/clientes")} accessibilityRole="button" {...({ dataSet: { auraHover: "card" } } as any)}>
           <Icon name="user_plus" size={18} color={Colors.violet3} />
           <Text style={s.actionText}>Cadastrar cliente</Text>
         </Pressable>

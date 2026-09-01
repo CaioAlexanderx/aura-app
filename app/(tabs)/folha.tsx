@@ -17,8 +17,23 @@ import { useConfirmModal } from "@/components/ConfirmModal";
 import { FolhaToolbar } from "@/components/FolhaToolbar";
 import type { Employee } from "@/components/screens/folha/types";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
+import { pluralize } from "@/utils/plural";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
+
+// 01/09/2026 (QA onda 2) — RÓTULO NÃO É ID (mesma regra de /contabilidade).
+// TABS vem de screens/folha/types.ts com "Funcionarios" sem acento, e esse
+// valor é comparado em código. O valor fica; só o rótulo visível é acentuado.
+const TAB_LABELS: Record<string, string> = {
+  "Funcionarios": "Funcionários",
+};
+
+const PLAN_LABEL: Record<string, string> = {
+  essencial: "Plano Essencial",
+  negocio: "Plano Negócio",
+  expansao: "Plano Expansão",
+};
 
 type FormData = { name: string; role: string; salary: string; admDate: string; cpf: string; phone: string; email: string };
 const emptyForm: FormData = { name: "", role: "", salary: "", admDate: "", cpf: "", phone: "", email: "" };
@@ -185,13 +200,13 @@ function FolhaScreenInner() {
       // Validacoes de folha real (Negocio+)
       if (!form.salary || parseFloat(form.salary.replace(",", ".")) <= 0) e.salary = "Salário obrigatório";
       const cpfDigits = form.cpf.replace(/\D/g, "");
-      if (!cpfDigits || cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 digitos";
+      if (!cpfDigits || cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 dígitos";
       const dateNorm = normalizeDate(form.admDate);
       if (!form.admDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) e.admDate = "Data obrigatória (dd/mm/aaaa)";
     } else {
       // Essencial: se CPF foi preenchido, valida formato; senao, permite vazio.
       const cpfDigits = form.cpf.replace(/\D/g, "");
-      if (cpfDigits.length > 0 && cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 digitos quando preenchido";
+      if (cpfDigits.length > 0 && cpfDigits.length !== 11) e.cpf = "CPF deve ter 11 dígitos quando preenchido";
       // Data admissao opcional; se preenchida, valida formato.
       if (form.admDate.trim()) {
         const dateNorm = normalizeDate(form.admDate);
@@ -229,7 +244,7 @@ function FolhaScreenInner() {
   // TEAM-RM 19/06: fluxo Suspender (reversivel) + Apagar (real, com confirmacao).
   async function handleDelete(emp: Employee) {
     const ok = await confirm({
-      title: "Apagar funcionario",
+      title: "Apagar funcionário",
       message: `Apagar ${emp.name} permanentemente? Esta acao nao pode ser desfeita. Se ele tiver vendas ou folha vinculadas, use Suspender.`,
       confirmLabel: "Apagar",
       destructive: true,
@@ -240,7 +255,7 @@ function FolhaScreenInner() {
 
   async function handleSuspend(emp: Employee) {
     const ok = await confirm({
-      title: "Suspender funcionario",
+      title: "Suspender funcionário",
       message: `Suspender ${emp.name}? Ele fica como Desligado e sai dos calculos da folha, mas o historico e mantido. Voce pode reativar a qualquer momento.`,
       confirmLabel: "Suspender",
     });
@@ -266,28 +281,53 @@ function FolhaScreenInner() {
     ? `${active.length} / ${planLimit}`
     : String(active.length);
 
-  // PLAN-02: titulo + subtitulo adaptados por plano.
+  // PLAN-02: titulo adaptado por plano.
   // Essencial: foca em "Equipe" (cadastro de vendedores).
   // Negocio+: foca em "Folha" completa (calculo + holerite).
+  // 01/09/2026: o subtitulo por plano saiu daqui — quem carrega a diferenca
+  // agora e a linha de metricas do ScreenHero (heroSub, logo abaixo).
   const pageTitle = isEssencial ? "Equipe" : "Equipe e Folha";
-  const pageSubtitle = isEssencial
-    ? "Cadastre quem vende. Atribua vendas no caixa."
-    : null;
+
+  // Subtítulo do cabeçalho. Essencial não tem cálculo de folha: a pergunta é
+  // "quem está no time e quanto ainda cabe no plano". Negócio+ tem folha: a
+  // pergunta vira "quantos ativos, quanto sai de bruto, quanto de FGTS".
+  const heroSub = isEssencial
+    ? (
+      <>
+        {pluralize(active.length, "pessoa ativa", "pessoas ativas")}
+        {planLimit && planLimit < 999999 ? " de " + planLimit + " do plano" : ""}
+        {" · cadastre quem vende e atribua as vendas no caixa"}
+      </>
+    )
+    : (
+      <>
+        {pluralize(active.length, "funcionário ativo", "funcionários ativos")} ·{" "}
+        {fmt(totalBruto)} de folha bruta ·{" "}
+        <Text style={{ color: Colors.amber, fontWeight: "600" }}>{fmt(totalFgts)} de FGTS no mês</Text>
+      </>
+    );
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: pageSubtitle ? 4 : 20, flexWrap: "wrap", gap: 10 }}>
-        <Text style={s.pageTitle}>{pageTitle}</Text>
-        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          {/* FolhaToolbar (envia holerite por email) so Negocio+ */}
-          {!isDemo && employees.length > 0 && !isEssencial && <FolhaToolbar period={currentPeriod} />}
-          <Pressable onPress={openCreate} style={s.addBtn}>
-            <Icon name="plus" size={16} color="#fff" />
-            <Text style={s.addBtnText}>{isEssencial ? "Novo membro" : "Novo funcionario"}</Text>
-          </Pressable>
-        </View>
-      </View>
-      {pageSubtitle && <Text style={s.pageSub}>{pageSubtitle}</Text>}
+      {/* 01/09/2026 (QA onda 2 — cabeçalho unificado): o título de 22px com os
+          botões ao lado virou o mesmo ScreenHero das outras onze abas. */}
+      <ScreenHero
+        eyebrow="Quem trabalha com você"
+        title={pageTitle}
+        live
+        badge={PLAN_LABEL[plan as string]}
+        subtitle={heroSub}
+        actions={
+          <>
+            {/* FolhaToolbar (envia holerite por email) so Negocio+ */}
+            {!isDemo && employees.length > 0 && !isEssencial && <FolhaToolbar period={currentPeriod} />}
+            <Pressable onPress={openCreate} style={s.addBtn}>
+              <Icon name="plus" size={16} color="#fff" />
+              <Text style={s.addBtnText}>{isEssencial ? "Novo membro" : "Novo funcionário"}</Text>
+            </Pressable>
+          </>
+        }
+      />
 
       {/* PLAN-02: banner near-limit pro Essencial */}
       {nearLimit && (
@@ -296,8 +336,8 @@ function FolhaScreenInner() {
           <View style={{ flex: 1 }}>
             <Text style={s.nearLimitTitle}>
               {active.length >= (planLimit || 0)
-                ? `Limite do plano atingido (${planLimit} funcionarios ativos)`
-                : `Voce esta perto do limite (${active.length} / ${planLimit})`}
+                ? `Limite do plano atingido (${planLimit} funcionários ativos)`
+                : `Você está perto do limite (${active.length} / ${planLimit})`}
             </Text>
             <Text style={s.nearLimitSub}>Toque para ver opções de upgrade</Text>
           </View>
@@ -309,16 +349,16 @@ function FolhaScreenInner() {
         <View style={s.emptyCard}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>&#128101;</Text>
           <Text style={s.emptyTitle}>
-            {isEssencial ? "Nenhum membro cadastrado" : "Nenhum funcionario cadastrado"}
+            {isEssencial ? "Nenhum membro cadastrado" : "Nenhum funcionário cadastrado"}
           </Text>
           <Text style={s.emptyDesc}>
             {isEssencial
               ? "Cadastre vendedores ou colaboradores. Eles aparecem no caixa pra atribuir vendas."
-              : "Adicione seu primeiro funcionario para calcular a folha de pagamento."}
+              : "Adicione seu primeiro funcionário para calcular a folha de pagamento."}
           </Text>
           <Pressable onPress={openCreate} style={[s.addBtn, { marginTop: 12 }]}>
             <Icon name="plus" size={16} color="#fff" />
-            <Text style={s.addBtnText}>{isEssencial ? "Cadastrar membro" : "Cadastrar funcionario"}</Text>
+            <Text style={s.addBtnText}>{isEssencial ? "Cadastrar membro" : "Cadastrar funcionário"}</Text>
           </Pressable>
         </View>
       )}
@@ -327,8 +367,8 @@ function FolhaScreenInner() {
         <View style={s.formCard}>
           <Text style={s.formTitle}>
             {editingId
-              ? (isEssencial ? "Editar membro" : "Editar funcionario")
-              : (isEssencial ? "Novo membro" : "Novo funcionario")}
+              ? (isEssencial ? "Editar membro" : "Editar funcionário")
+              : (isEssencial ? "Novo membro" : "Novo funcionário")}
           </Text>
 
           {/* PLAN-02: form ENXUTO pro Essencial (so nome+cargo+contato).
@@ -354,7 +394,7 @@ function FolhaScreenInner() {
               <View style={s.essencialHint}>
                 <Icon name="info" size={12} color={Colors.ink3} />
                 <Text style={s.essencialHintText}>
-                  Folha de pagamento (CPF, salario, comissao, holerite) esta disponivel no plano Negocio.
+                  Folha de pagamento (CPF, salário, comissão, holerite) está disponível no plano Negócio.
                 </Text>
               </View>
             </>
@@ -418,16 +458,11 @@ function FolhaScreenInner() {
       {/* Tabs: Essencial so mostra a primeira (Funcionarios). Negocio+ tem todas.
           Cadeado nas tabs avancadas pro Essencial. */}
       {employees.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-          {TABS.map((t, i) => (
-            <Pressable key={t} onPress={() => { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }} style={[s.tab, tab === i && s.tabActive]}>
-              <Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text>
-              {isEssencial && i > 0 && (
-                <Icon name="lock" size={10} color={tab === i ? "#fff" : Colors.ink3} />
-              )}
-            </Pressable>
-          ))}
-        </ScrollView>
+        <ScreenTabs
+          tabs={TABS.map((t, i) => ({ key: t, label: TAB_LABELS[t] || t, locked: isEssencial && i > 0 }))}
+          active={TABS[tab]}
+          onSelect={(k) => { setTab(TABS.indexOf(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+        />
       )}
 
       {isLoading && <ListSkeleton rows={3} showCards />}
@@ -458,7 +493,7 @@ function FolhaScreenInner() {
           description="Veja todos os encargos da folha em um painel consolidado."
           features={[
             "Total bruto, INSS, IRRF e FGTS por mês",
-            "Líquido a pagar por funcionario",
+            "Líquido a pagar por funcionário",
             "Comparativo mensal",
           ]}
         />
@@ -469,7 +504,7 @@ function FolhaScreenInner() {
           title="Histórico de folha"
           description="Acompanhe todos os pagamentos passados, com holerites individuais."
           features={[
-            "Holerites mensais por funcionario",
+            "Holerites mensais por funcionário",
             "Envio automático por e-mail",
             "Exportação para contador (PDF/XLSX)",
           ]}
@@ -522,8 +557,6 @@ export default function FolhaScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
-  pageSub: { fontSize: 13, color: Colors.ink3, marginBottom: 20 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16 },
   addBtnText: { fontSize: 13, color: "#fff", fontWeight: "600" },
   emptyCard: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.border, marginBottom: 20 },
@@ -544,10 +577,6 @@ const s = StyleSheet.create({
   kpi: { flex: 1, minWidth: IS_WIDE ? 120 : "30%", backgroundColor: Colors.bg3, borderRadius: 14, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
   kpiValue: { fontSize: IS_WIDE ? 18 : 14, fontWeight: "700", color: Colors.ink },
   kpiLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
-  tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   // PLAN-02

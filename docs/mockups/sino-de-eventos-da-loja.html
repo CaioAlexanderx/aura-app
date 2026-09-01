@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — sino de eventos da loja (gaveta, vazio e preferências)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — QA onda 2, 01/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+
+     O que está sendo proposto: o sino deixa de ser "lista de pedidos
+     das últimas 24h" e vira feed de EVENTOS da loja online
+     (loja_pedido_pago, loja_comprovante_enviado, loja_pix_expirado,
+     loja_estoque_baixo, loja_sem_pagamento_configurado, ...).
+
+     Três decisões que este mockup existe para validar:
+     1. CORTE no topo — "Precisa de você" (exige ação humana) separado
+        do resto. O informativo desce e é agrupado por dia e por pedido.
+     2. SEVERIDADE por forma, não só por cor — faixa lateral + ícone
+        próprio + rótulo textual ("Crítico" / "Ação"). Daltônico e
+        modo claro/escuro continuam lendo a diferença.
+     3. PREFERÊNCIAS dentro da gaveta (engrenagem no cabeçalho), não
+        em tela nova — mexer em navegação não é desta frente e o
+        ajuste acontece onde o barulho é sentido.
+     ============================================================ */
+  :root {
+    --bg: #06081a;
+    --bg2: #090c1a;
+    --bg3: #0e1228;
+    --bg4: #141830;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff;
+    --ink2: rgba(220,215,255,0.75);
+    --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed;
+    --violet3: #a78bfa;
+    --green: #34d399;
+    --greenD: rgba(52,211,153,0.10);
+    --red: #f87171;
+    --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24;
+    --amberD: rgba(251,191,36,0.10);
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0;
+    --bg2: #fafbff;
+    --bg3: #ffffff;
+    --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22);
+    --border2: rgba(120,100,240,0.30);
+    --ink: #18172b;
+    --ink2: #3b3461;
+    --ink3: #6a608e;
+    --violet: #7c3aed;
+    --violet3: #6d28d9;
+    --green: #059669;
+    --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626;
+    --redD: rgba(220,38,38,0.06);
+    --amber: #d97706;
+    --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 32px 24px 80px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .topo { max-width: 1380px; margin: 0 auto 24px; display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .nota {
+    flex: 1; min-width: 320px; padding: 14px 16px;
+    border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55;
+  }
+  .nota b { color: var(--violet3); }
+  .btn-tema {
+    padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--ink2); font: inherit; font-size: 12px;
+    font-weight: 600; cursor: pointer; min-height: 44px;
+  }
+
+  .vitrine { max-width: 1380px; margin: 0 auto; display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .coluna { display: flex; flex-direction: column; gap: 10px; }
+  .rotulo { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+
+  /* ── Gaveta ─────────────────────────────────────────────── */
+  .gaveta {
+    width: 440px; max-width: 92vw; height: 760px;
+    display: flex; flex-direction: column;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: -12px 0 40px rgba(0,0,0,0.18);
+  }
+  .cab {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 14px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .cab-titulo { flex: 1; font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .cab-btn {
+    width: 34px; height: 34px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg3); color: var(--ink3);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .cab-btn:hover { color: var(--ink); }
+  .cab-link {
+    min-height: 34px; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--violet3); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  }
+  .corpo { flex: 1; overflow-y: auto; padding: 12px 14px 24px; }
+
+  /* Cabeçalho de seção */
+  .secao { display: flex; align-items: center; gap: 8px; margin: 16px 2px 9px; }
+  .secao:first-child { margin-top: 2px; }
+  .secao-txt { font-size: 10.5px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink3); }
+  .secao-acao .secao-txt { color: var(--amber); }
+  .secao-pill {
+    font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px;
+    background: var(--amberD); color: var(--amber); border: 1px solid var(--amber);
+  }
+  .secao-linha { flex: 1; height: 1px; background: var(--border); }
+
+  /* ── Card de evento ─────────────────────────────────────── */
+  .ev {
+    position: relative; display: flex; gap: 10px; width: 100%; text-align: left;
+    padding: 11px 12px 11px 14px; margin-bottom: 7px;
+    border: 1px solid var(--border); border-radius: 11px;
+    background: var(--bg3); color: inherit; font: inherit;
+    cursor: pointer; min-height: 56px;
+  }
+  .ev:hover { border-color: var(--border2); }
+  .ev:focus-visible { outline: 2px solid var(--violet3); outline-offset: 2px; }
+  /* Faixa de severidade — FORMA, não só cor:
+     crítico = faixa cheia 4px; atenção = faixa tracejada 4px; info = sem faixa. */
+  .ev::before {
+    content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px;
+    border-radius: 0 3px 3px 0;
+  }
+  .ev-critico::before { background: var(--red); }
+  .ev-atencao::before {
+    background: repeating-linear-gradient(180deg, var(--amber) 0 5px, transparent 5px 10px);
+  }
+  .ev-info::before { background: none; }
+  .ev-critico { background: var(--redD); border-color: var(--red); }
+  .ev-atencao { background: var(--amberD); }
+
+  .ev-icone {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); background: var(--bg4);
+  }
+  .ev-corpo { flex: 1; min-width: 0; }
+  .ev-linha1 { display: flex; align-items: baseline; gap: 7px; }
+  .ev-tipo { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .ev-critico .ev-tipo, .ev-atencao .ev-tipo { font-weight: 800; }
+  .ev-hora { margin-left: auto; font-size: 10.5px; color: var(--ink3); flex-shrink: 0; }
+  .ev-txt { font-size: 11.5px; color: var(--ink2); margin-top: 2px; line-height: 1.4; }
+  .ev-selo {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 1px 6px; border-radius: 5px; border: 1px solid;
+  }
+  .selo-critico { color: var(--red); border-color: var(--red); background: var(--redD); }
+  .selo-atencao { color: var(--amber); border-color: var(--amber); background: var(--amberD); }
+  .ev-cta {
+    margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+    min-height: 36px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--violet); background: var(--violet); color: #fff;
+    font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  }
+  .ev-ponto { width: 7px; height: 7px; border-radius: 4px; background: var(--violet3); flex-shrink: 0; align-self: center; }
+
+  /* Grupo por pedido */
+  .grupo { border: 1px solid var(--border); border-radius: 11px; background: var(--bg3); margin-bottom: 7px; overflow: hidden; }
+  .grupo-cab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; width: 100%; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; min-height: 48px; }
+  .grupo-cab:hover { background: var(--bg4); }
+  .grupo-titulo { font-size: 13px; font-weight: 700; }
+  .grupo-sub { font-size: 11px; color: var(--ink3); margin-top: 1px; }
+  .grupo-conta { font-size: 10.5px; font-weight: 700; color: var(--ink3); margin-left: auto; }
+  .grupo-itens { border-top: 1px solid var(--border); padding: 4px 0; }
+  .grupo-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px 8px 14px; width: 100%; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; min-height: 44px; }
+  .grupo-item:hover { background: var(--bg4); }
+  .grupo-item .ev-tipo { font-size: 12.5px; font-weight: 600; }
+
+  .mais {
+    width: 100%; min-height: 44px; margin-top: 4px; border-radius: 9px;
+    border: 1px dashed var(--border2); background: transparent;
+    color: var(--violet3); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+
+  /* ── Vazio ──────────────────────────────────────────────── */
+  .vazio { padding: 56px 22px; text-align: center; }
+  .vazio-arte { width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: var(--greenD); border: 1px solid var(--green); }
+  .vazio-t { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .vazio-s { font-size: 12.5px; color: var(--ink3); line-height: 1.5; margin-bottom: 18px; }
+  .vazio-botoes { display: flex; flex-direction: column; gap: 8px; }
+  .btn-primario { min-height: 44px; border-radius: 10px; border: 0; background: var(--violet); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-secundario { min-height: 44px; border-radius: 10px; border: 1px solid var(--border2); background: transparent; color: var(--ink2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+  /* ── Preferências ───────────────────────────────────────── */
+  .pref-intro { font-size: 12px; color: var(--ink3); line-height: 1.5; margin: 2px 2px 14px; }
+  .pref-bloco { margin-bottom: 16px; }
+  .pref-bloco-t { font-size: 10.5px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink3); margin: 0 2px 8px; }
+  .pref-linha {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 11px 12px; margin-bottom: 6px; min-height: 56px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--bg3);
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .pref-linha:focus-visible { outline: 2px solid var(--violet3); outline-offset: 2px; }
+  .pref-nome { font-size: 13px; font-weight: 600; }
+  .pref-desc { font-size: 11px; color: var(--ink3); margin-top: 2px; line-height: 1.35; }
+  .switch { width: 42px; height: 24px; border-radius: 12px; background: var(--bg4); border: 1px solid var(--border); flex-shrink: 0; position: relative; transition: background .15s; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 9px; background: var(--ink3); transition: transform .15s, background .15s; }
+  .pref-linha[aria-checked="true"] .switch { background: var(--violet); border-color: var(--violet); }
+  .pref-linha[aria-checked="true"] .switch::after { transform: translateX(18px); background: #fff; }
+  .pref-trava { font-size: 10px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <div class="nota">
+    <b>Mockup 01/09/2026 — sino de eventos da loja.</b> Três telas lado a lado: a gaveta com volume real
+    (15 eventos, tipos e severidades misturados), o estado vazio e as preferências.
+    <br />• <b>Corte no topo:</b> “Precisa de você” só aceita evento que exige mão humana (comprovante para conferir,
+    loja sem meio de pagamento, PIX expirado, estoque furado). O resto desce para “Hoje/Ontem”.
+    <br />• <b>Severidade sem depender de cor:</b> faixa cheia (crítico), faixa tracejada (atenção), sem faixa (info),
+    mais ícone próprio por tipo e selo textual. Troque o tema no botão ao lado para conferir os dois modos.
+    <br />• <b>Volume:</b> dois ou mais eventos do mesmo pedido colapsam num card só, com contagem.
+  </div>
+  <button class="btn-tema" onclick="alternarTema()">Alternar claro / escuro</button>
+</div>
+
+<div class="vitrine">
+
+  <!-- ═══════════ 1. GAVETA COM VOLUME ═══════════ -->
+  <div class="coluna">
+    <div class="rotulo">1. Gaveta — dia cheio</div>
+    <div class="gaveta">
+      <div class="cab">
+        <span class="cab-titulo">Notificações</span>
+        <button class="cab-link">Marcar tudo lido</button>
+        <button class="cab-btn" title="Preferências" aria-label="Preferências de notificação">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="cab-btn" title="Fechar" aria-label="Fechar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="corpo">
+
+        <!-- ── PRECISA DE VOCÊ ── -->
+        <div class="secao secao-acao">
+          <span class="secao-txt">Precisa de você</span>
+          <span class="secao-pill">4</span>
+          <span class="secao-linha"></span>
+        </div>
+
+        <button class="ev ev-critico">
+          <span class="ev-icone">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          </span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Loja sem meio de pagamento</span><span class="ev-hora">2h</span></span>
+            <span class="ev-txt"><span class="ev-selo selo-critico">Crítico</span> A vitrine está no ar aceitando pedido, mas nenhuma forma de pagamento está ligada. Ninguém consegue finalizar a compra.</span>
+            <span class="ev-cta">Configurar pagamento</span>
+          </span>
+        </button>
+
+        <button class="ev ev-atencao">
+          <span class="ev-icone">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+          </span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Comprovante para conferir</span><span class="ev-hora">18min</span></span>
+            <span class="ev-txt"><span class="ev-selo selo-atencao">Ação</span> Pedido #1042 · Marina Aguiar · R$ 289,90 — comprovante de PIX enviado, esperando sua conferência.</span>
+            <span class="ev-cta">Conferir comprovante</span>
+          </span>
+          <span class="ev-ponto" aria-label="não lido"></span>
+        </button>
+
+        <button class="ev ev-atencao">
+          <span class="ev-icone">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+          </span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Comprovante para conferir</span><span class="ev-hora">51min</span></span>
+            <span class="ev-txt"><span class="ev-selo selo-atencao">Ação</span> Pedido #1038 · Rafael Lins · R$ 74,00.</span>
+            <span class="ev-cta">Conferir comprovante</span>
+          </span>
+          <span class="ev-ponto" aria-label="não lido"></span>
+        </button>
+
+        <button class="ev ev-atencao">
+          <span class="ev-icone">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+          </span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Estoque abaixo do mínimo</span><span class="ev-hora">3h</span></span>
+            <span class="ev-txt"><span class="ev-selo selo-atencao">Ação</span> Caneca Preta 325ml caiu para 2 unidades depois das vendas da loja online.</span>
+            <span class="ev-cta">Ver produto</span>
+          </span>
+        </button>
+
+        <!-- ── NOVIDADES (banner Gestão Aura) ── -->
+        <div class="secao">
+          <span class="secao-txt">Novidades</span>
+          <span class="secao-linha"></span>
+        </div>
+        <div class="ev ev-info" style="cursor:default">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--violet3)" stroke-width="2.2" stroke-linecap="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Encomendas com sinal chegaram ao Studio</span></span>
+            <span class="ev-txt">Agora dá para receber uma parte na hora e o resto na entrega.</span>
+            <span class="ev-cta">Ver como funciona</span>
+          </span>
+        </div>
+
+        <!-- ── HOJE ── -->
+        <div class="secao">
+          <span class="secao-txt">Hoje</span>
+          <span class="secao-linha"></span>
+        </div>
+
+        <!-- grupo por pedido: 3 eventos do mesmo #1041 -->
+        <div class="grupo">
+          <button class="grupo-cab">
+            <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--violet3)" stroke-width="2.2" stroke-linecap="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
+            <span>
+              <span class="grupo-titulo">Pedido #1041 · Camila Ruiz</span>
+              <span class="grupo-sub">Entregue · R$ 158,00 · há 40min</span>
+            </span>
+            <span class="grupo-conta">3 eventos</span>
+          </button>
+          <div class="grupo-itens">
+            <button class="grupo-item">
+              <span class="ev-ponto" style="background:var(--green)"></span>
+              <span class="ev-tipo">Pedido entregue</span><span class="ev-hora">40min</span>
+            </button>
+            <button class="grupo-item">
+              <span class="ev-ponto" style="background:var(--violet3)"></span>
+              <span class="ev-tipo">Saiu para entrega</span><span class="ev-hora">2h</span>
+            </button>
+            <button class="grupo-item">
+              <span class="ev-ponto" style="background:var(--green)"></span>
+              <span class="ev-tipo">Pagamento confirmado</span><span class="ev-hora">3h</span>
+            </button>
+          </div>
+        </div>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Pagamento confirmado</span><span class="ev-hora">1h</span></span>
+            <span class="ev-txt">Pedido #1044 · Bruno Sá · R$ 92,50 no PIX.</span>
+          </span>
+          <span class="ev-ponto" aria-label="não lido"></span>
+        </button>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--violet3)" stroke-width="2.2" stroke-linecap="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Pedido novo</span><span class="ev-hora">1h</span></span>
+            <span class="ev-txt">Canal Digital · #1044 · Bruno Sá · R$ 92,50.</span>
+          </span>
+          <span class="ev-ponto" aria-label="não lido"></span>
+        </button>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Sinal pago</span><span class="ev-hora">2h</span></span>
+            <span class="ev-txt">Encomenda #77 · Júlia Prado · R$ 60,00 de R$ 240,00.</span>
+          </span>
+        </button>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">PIX expirou sem pagamento</span><span class="ev-hora">4h</span></span>
+            <span class="ev-txt">Pedido #1036 · Tiago Melo · R$ 45,00. O pedido continua reservado por 24h.</span>
+          </span>
+        </button>
+
+        <button class="mais">Mostrar mais 6 de hoje</button>
+
+        <!-- ── ONTEM ── -->
+        <div class="secao">
+          <span class="secao-txt">Ontem</span>
+          <span class="secao-linha"></span>
+        </div>
+
+        <div class="grupo">
+          <button class="grupo-cab">
+            <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)" stroke-width="2.2" stroke-linecap="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
+            <span>
+              <span class="grupo-titulo">Pedido #1029 · Ana Beatriz</span>
+              <span class="grupo-sub">Cancelado · R$ 310,00</span>
+            </span>
+            <span class="grupo-conta">2 eventos</span>
+          </button>
+        </div>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Pagamento confirmado</span><span class="ev-hora">1d</span></span>
+            <span class="ev-txt">Pedido #1031 · Léo Martins · R$ 128,00 no cartão.</span>
+          </span>
+        </button>
+
+        <button class="ev ev-info">
+          <span class="ev-icone"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span class="ev-corpo">
+            <span class="ev-linha1"><span class="ev-tipo">Pedido entregue</span><span class="ev-hora">1d</span></span>
+            <span class="ev-txt">Pedido #1027 · Sofia Camargo.</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 2. VAZIO ═══════════ -->
+  <div class="coluna">
+    <div class="rotulo">2. Estado vazio</div>
+    <div class="gaveta" style="height:420px">
+      <div class="cab">
+        <span class="cab-titulo">Notificações</span>
+        <button class="cab-btn" title="Preferências" aria-label="Preferências de notificação">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="cab-btn" title="Fechar" aria-label="Fechar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="corpo">
+        <div class="vazio">
+          <div class="vazio-arte">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <div class="vazio-t">Nada pendente por aqui</div>
+          <div class="vazio-s">
+            Nenhum pedido, pagamento ou aviso da loja esperando você.
+            Quando algo acontecer na vitrine, aparece aqui na hora.
+          </div>
+          <div class="vazio-botoes">
+            <button class="btn-primario">Ver pedidos da loja</button>
+            <button class="btn-secundario">Escolher o que me avisa</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="nota" style="width:440px;max-width:92vw">
+      Vazio com <b>botão que faz</b>, não texto que aponta: leva aos pedidos e abre as preferências.
+      Se a lojista tiver desligado tudo, o segundo botão vira “Você desligou todos os avisos — reativar”.
+    </div>
+  </div>
+
+  <!-- ═══════════ 3. PREFERÊNCIAS ═══════════ -->
+  <div class="coluna">
+    <div class="rotulo">3. Preferências (dentro da gaveta)</div>
+    <div class="gaveta" style="height:760px">
+      <div class="cab">
+        <button class="cab-btn" title="Voltar" aria-label="Voltar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg>
+        </button>
+        <span class="cab-titulo">O que me avisa</span>
+        <button class="cab-btn" title="Fechar" aria-label="Fechar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="corpo">
+        <div class="pref-intro">
+          Loja movimentada gera muito aviso. Desligue o que virou ruído — o que pede
+          decisão sua fica sempre ligado.
+        </div>
+
+        <div class="pref-bloco">
+          <div class="pref-bloco-t">Sempre ligado</div>
+          <div class="pref-linha" role="switch" aria-checked="true" aria-disabled="true">
+            <span style="flex:1">
+              <span class="pref-nome">Loja sem meio de pagamento</span>
+              <span class="pref-desc">A vitrine no ar sem ninguém conseguir pagar. Não dá para desligar.</span>
+            </span>
+            <span class="pref-trava">Fixo</span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="true" aria-disabled="true">
+            <span style="flex:1">
+              <span class="pref-nome">Comprovante esperando conferência</span>
+              <span class="pref-desc">Alguém enviou comprovante e o pedido trava até você olhar.</span>
+            </span>
+            <span class="pref-trava">Fixo</span>
+          </div>
+        </div>
+
+        <div class="pref-bloco">
+          <div class="pref-bloco-t">Dinheiro</div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Pagamento confirmado</span>
+              <span class="pref-desc">PIX, cartão ou boleto que caiu.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Sinal pago</span>
+              <span class="pref-desc">Entrada de encomenda do Studio.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="false">
+            <span style="flex:1">
+              <span class="pref-nome">PIX expirou</span>
+              <span class="pref-desc">Cobrança venceu antes de o cliente pagar.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+        </div>
+
+        <div class="pref-bloco">
+          <div class="pref-bloco-t">Pedidos</div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Pedido novo</span>
+              <span class="pref-desc">Chegou pedido na vitrine.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="false">
+            <span style="flex:1">
+              <span class="pref-nome">Saiu para entrega</span>
+              <span class="pref-desc">Normalmente quem marca é você — desligado por padrão.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="false">
+            <span style="flex:1">
+              <span class="pref-nome">Pedido entregue</span>
+              <span class="pref-desc">Fecha o ciclo do pedido.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Pedido cancelado</span>
+              <span class="pref-desc">Cliente ou você desfez a venda.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+        </div>
+
+        <div class="pref-bloco">
+          <div class="pref-bloco-t">Estoque e loja</div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Estoque abaixo do mínimo</span>
+              <span class="pref-desc">Venda online derrubou o saldo do produto.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+          <div class="pref-linha" role="switch" aria-checked="true">
+            <span style="flex:1">
+              <span class="pref-nome">Novidades da Aura</span>
+              <span class="pref-desc">Recursos novos e avisos do time.</span>
+            </span>
+            <span class="switch"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function alternarTema() {
+    var h = document.documentElement;
+    h.dataset.tema = h.dataset.tema === 'claro' ? 'escuro' : 'claro';
+  }
+  // Demonstra o toggle das preferências no mockup.
+  document.querySelectorAll('.pref-linha[role="switch"]:not([aria-disabled="true"])').forEach(function (el) {
+    el.addEventListener('click', function () {
+      el.setAttribute('aria-checked', el.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+    });
+  });
+</script>
+</body>
+</html>

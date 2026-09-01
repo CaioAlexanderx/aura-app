@@ -123,7 +123,7 @@ export function RepasseDentista() {
             <Text style={[z.totalValue, { color: Colors.amber || "#F59E0B" }]}>{fmt(totals.repasse)}</Text>
           </View>
           <View style={z.totalCol}>
-            <Text style={z.totalLabel}>CLINICA</Text>
+            <Text style={z.totalLabel}>CLÍNICA</Text>
             <Text style={[z.totalValue, { color: Colors.green || "#10B981" }]}>{fmt(totals.clinica)}</Text>
           </View>
         </View>
@@ -169,7 +169,7 @@ export function RepasseDentista() {
               </View>
               <View style={z.practStat}>
                 <Text style={z.practStatV}>{fmt(p.total_clinica)}</Text>
-                <Text style={z.practStatL}>Clinica</Text>
+                <Text style={z.practStatL}>Clínica</Text>
               </View>
             </View>
 
@@ -202,7 +202,7 @@ export function RepasseDentista() {
           <Icon name="dollar" size={28} color={Colors.ink3} />
           <Text style={z.emptyText}>Nenhum repasse em {monthLabel}</Text>
           <Text style={z.emptyHint}>
-            Clique em "Recalcular" para gerar repasses com base nos atendimentos concluidos no mes.
+            Clique em "Recalcular" para gerar repasses com base nos atendimentos concluidos no mês.
           </Text>
         </View>
       )}

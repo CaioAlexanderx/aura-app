@@ -32,7 +32,7 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
       <tr><td>IRRF</td><td class="r ${mensal.irrf > 0 ? 'red' : ''}">${mensal.irrf > 0 ? f(mensal.irrf) : 'Isento'}</td></tr>`;
   } else if (type === "ferias") {
     totalProv = ferias.bruto; totalDesc = ferias.inss + ferias.irrf; liquid = ferias.liquid;
-    proventosRows = `<tr><td>Salario base (30 dias)</td><td class="r">${f(ferias.salary)}</td></tr>
+    proventosRows = `<tr><td>Salário base (30 dias)</td><td class="r">${f(ferias.salary)}</td></tr>
       <tr><td>1/3 constitucional</td><td class="r">${f(ferias.terco)}</td></tr>`;
     descontosRows = `<tr><td>INSS</td><td class="r red">${f(ferias.inss)}</td></tr>
       <tr><td>IRRF</td><td class="r ${ferias.irrf > 0 ? 'red' : ''}">${ferias.irrf > 0 ? f(ferias.irrf) : 'Isento'}</td></tr>`;
@@ -211,7 +211,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
         {payslipType === "ferias" && (
           <>
             <View style={s.sec}><Text style={s.secT}>Proventos</Text>
-              <View style={s.row}><Text style={s.rl}>Salario base (30 dias)</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(ferias.salary)}</Text></View>
+              <View style={s.row}><Text style={s.rl}>Salário base (30 dias)</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(ferias.salary)}</Text></View>
               <View style={s.row}><Text style={s.rl}>1/3 constitucional</Text><Text style={[s.rv, { color: Colors.green }]}>{fmt(ferias.terco)}</Text></View>
               <View style={[s.row, s.totalRow]}><Text style={[s.rl, s.bold]}>Total proventos</Text><Text style={[s.rv, s.bold]}>{fmt(ferias.bruto)}</Text></View>
             </View>

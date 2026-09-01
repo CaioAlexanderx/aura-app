@@ -103,7 +103,7 @@ export function DentalTissRetentionsCard() {
         }}
       >
         <Text style={{ fontSize: 14, color: DentalColors.ink, fontWeight: "700" }}>
-          Retencoes TISS no periodo
+          Retencoes TISS no período
         </Text>
         <Text
           style={{
@@ -113,9 +113,9 @@ export function DentalTissRetentionsCard() {
             lineHeight: 16,
           }}
         >
-          Sem guias TISS pagas no periodo selecionado. Quando convenios pagarem com
-          retencao na fonte (IRRF/ISS/PIS-COFINS-CSLL), os valores aparecem aqui pra
-          compensacao tributaria.
+          Sem guias TISS pagas no período selecionado. Quando convênios pagarem com
+          retenção na fonte (IRRF/ISS/PIS-COFINS-CSLL), os valores aparecem aqui pra
+          compensacao tributária.
         </Text>
       </View>
     );
@@ -222,7 +222,7 @@ export function DentalTissRetentionsCard() {
           }}
         >
           <Text style={{ fontSize: 11, color: DentalColors.cyan, fontWeight: "700" }}>
-            💡 COMPENSACAO IRPJ DISPONIVEL
+            💡 COMPENSACAO IRPJ DISPONÍVEL
           </Text>
           <Text
             style={{
@@ -252,7 +252,7 @@ export function DentalTissRetentionsCard() {
               letterSpacing: 0.5,
             }}
           >
-            Por convenio
+            Por convênio
           </Text>
           <View style={{ gap: 6 }}>
             {data.by_insurance.map((row) => (

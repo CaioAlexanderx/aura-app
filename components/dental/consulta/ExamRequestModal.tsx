@@ -235,7 +235,7 @@ export function ExamRequestModal({ open, patientId, appointmentId, practitionerI
             </Pressable>
           </View>
           <Text style={{ fontSize: 11, color: DentalColors.ink3, marginBottom: 14 }}>
-            Marque os exames. Cada um gera um documento separado. Personalize indicacao por exame se necessario.
+            Marque os exames. Cada um gera um documento separado. Personalize indicação por exame se necessário.
           </Text>
 
           <ScrollView style={{ maxHeight: 400 }}>

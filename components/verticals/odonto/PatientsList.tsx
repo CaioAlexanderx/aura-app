@@ -580,7 +580,7 @@ function ImportCsvModal({ visible, onClose }: { visible: boolean; onClose: () =>
           <View style={{ marginTop: 14, padding: 12, backgroundColor: DentalColors.cyanDim, borderRadius: 10, borderWidth: 1, borderColor: DentalColors.cyanBorder }}>
             <Text style={{ fontSize: 11, color: DentalColors.cyan, fontWeight: "700", marginBottom: 4 }}>💡 EM BREVE</Text>
             <Text style={{ fontSize: 12, color: DentalColors.ink2, lineHeight: 18 }}>
-              A importacao em lote esta em desenvolvimento. Por enquanto, cadastre os pacientes individualmente via "Novo paciente".
+              A importação em lote esta em desenvolvimento. Por enquanto, cadastre os pacientes individualmente via "Novo paciente".
             </Text>
           </View>
 

@@ -35,11 +35,11 @@ export function MonthExpensesBanner({ count, total, onSwitchToMonth }: Props) {
       <Icon name="alert" size={14} color={amber} />
       <View style={{ flex: 1 }}>
         <Text style={s.title}>
-          Voce tem <Text style={[s.count, { color: amber }]}>{count} despesa{count === 1 ? "" : "s"}</Text>
+          Você tem <Text style={[s.count, { color: amber }]}>{count} despesa{count === 1 ? "" : "s"}</Text>
           {" "}no mes atual ({fmt(total)})
         </Text>
         <Text style={s.subtitle}>
-          O filtro selecionado nao esta exibindo essas despesas.
+          O filtro selecionado não esta exibindo essas despesas.
         </Text>
       </View>
       <Pressable onPress={onSwitchToMonth} style={[s.btn, { backgroundColor: amber }]} hitSlop={4}>

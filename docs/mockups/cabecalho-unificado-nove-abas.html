@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — cabeçalho unificado (as nove abas restantes)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — QA onda 2, 01/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+
+     Continuação de docs/mockups/cabecalho-unificado-clientes-vendas.html
+     (29/08/2026), que fixou o ScreenHero e as abas em pílula para
+     /estoque, /clientes e /vendas.
+
+     Esta rodada aplica o MESMO cabeçalho nas nove abas que sobraram —
+     cada uma abria com um cabeçalho diferente. Nada de tipografia nova:
+     o que muda por tela é só a sobrancelha, o título e QUAIS métricas
+     entram na linha de subtítulo.
+
+     Também registra a extensão do componente (selo `badge` na
+     sobrancelha) e os defeitos de texto corrigidos por tela.
+     ============================================================ */
+  :root {
+    --bg: #06081a;
+    --bg2: #0a0c1f;
+    --bg3: rgba(20,14,38,0.55);
+    --border: rgba(120,100,240,0.18);
+    --border2: rgba(167,139,250,0.30);
+    --ink: #f0edff;
+    --ink2: #cfc7ee;
+    --ink3: #9a93bb;
+    --violet: #7c3aed;
+    --violet3: #a78bfa;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .page { max-width: 1100px; margin: 0 auto 56px; }
+  .nota {
+    max-width: 1100px; margin: 0 auto 28px; padding: 14px 16px;
+    border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55;
+  }
+  .nota b { color: var(--violet3); }
+  .nota code { color: var(--violet3); font-family: 'DM Mono', monospace; font-size: 11.5px; }
+
+  /* ── Cabeçalho compartilhado (ScreenHero) ───────────────── */
+  .hero { padding: 16px 4px 18px; }
+  .hero-eyebrow {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .glyph { width: 14px; height: 14px; flex-shrink: 0; }
+  .pill-live {
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(124,58,237,0.12); color: var(--violet3);
+    font-size: 10px; letter-spacing: 0.08em;
+  }
+  /* NOVO nesta rodada — selo neutro da sobrancelha (prop `badge`). */
+  .pill-badge {
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); color: var(--ink3);
+    border: 1px solid var(--border);
+    font-size: 10px; letter-spacing: 0.08em;
+  }
+  .hero-row { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero-title {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 64px; line-height: 0.95; font-weight: 400;
+    letter-spacing: -0.025em; color: var(--ink); flex: 1; min-width: 0;
+  }
+  .hero-title span { color: var(--violet); }
+  .hero-actions { display: flex; gap: 8px; align-items: center; padding-bottom: 6px; flex-wrap: wrap; }
+  .hero-sub { font-size: 14px; color: var(--ink3); margin-top: 10px; max-width: 720px; line-height: 1.5; }
+  .hero-sub .ok { color: var(--green); font-weight: 600; }
+  .hero-sub .warn { color: var(--amber); font-weight: 600; }
+  .hero-sub .bad { color: var(--red); font-weight: 600; }
+
+  .btn {
+    border: 1px solid var(--border2); background: rgba(124,58,237,0.14);
+    color: var(--violet3); font-size: 12px; font-weight: 600;
+    padding: 9px 14px; border-radius: 10px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: inherit;
+  }
+  .btn-primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+
+  /* ── Abas: PÍLULA (ScreenTabs) ──────────────────────────── */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 4px 18px; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 16px; border-radius: 10px;
+    background: rgba(20,14,38,0.55); border: 1px solid var(--border);
+    color: var(--ink3); font-size: 13px; font-weight: 500; cursor: pointer;
+    font-family: inherit;
+  }
+  .tab.is-active { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .tab .lock { opacity: 0.7; font-size: 10px; }
+
+  /* ── Conteúdo de exemplo abaixo do cabeçalho ────────────── */
+  .card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 18px; margin: 0 4px 10px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55;
+  }
+  .card b { color: var(--ink); font-weight: 600; }
+  .fix {
+    margin: 6px 4px 0; padding: 12px 14px;
+    border-left: 2px solid var(--violet); border-radius: 0 10px 10px 0;
+    background: rgba(124,58,237,0.07);
+    font-size: 12px; color: var(--ink3); line-height: 1.6;
+  }
+  .fix b { color: var(--violet3); }
+  .fix .antes { color: var(--red); text-decoration: line-through; }
+  .fix .depois { color: var(--green); font-weight: 600; }
+  .fix.externo { border-left-color: var(--amber); background: rgba(251,191,36,0.06); }
+  .fix.externo b { color: var(--amber); }
+  .fix code { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink2); }
+
+  .legenda {
+    max-width: 1100px; margin: 0 auto; padding: 18px 20px;
+    border-top: 1px solid var(--border); font-size: 12.5px;
+    color: var(--ink3); line-height: 1.6;
+  }
+  .legenda h4 { color: var(--ink); font-size: 13px; margin: 18px 0 6px; }
+  .legenda code { color: var(--violet3); font-family: 'DM Mono', monospace; font-size: 11.5px; }
+
+  @media (max-width: 880px) { .hero-title { font-size: 38px; } }
+</style>
+</head>
+<body>
+
+<div class="nota">
+  <b>Mockup — 01/09/2026 (QA onda 2).</b> O <code>ScreenHero</code> já abre
+  <b>/estoque</b>, <b>/clientes</b> e <b>/vendas</b>. Aqui ele passa a abrir as
+  <b>nove abas restantes</b>, e <code>/estoque</code> troca o
+  <code>EstoqueHero</code> duplicado pelo componente compartilhado.
+  Abas convergem para <b>pílula</b> (<code>ScreenTabs</code>).
+  Uma extensão genérica no componente: o selo <code>badge</code> na sobrancelha,
+  para o contexto que não cabe no título (regime tributário, empresa ativa,
+  situação da loja online).
+</div>
+
+<!-- ══════════════════ 1. FINANCEIRO ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Caixa e contas</span>
+      <span class="pill-live">ao vivo</span>
+      <span class="pill-badge">Boutique da Ana</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Financeiro<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">Exportar</button>
+        <button class="btn btn-primary">+ Novo lançamento</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      R$ 18.420,00 entraram · R$ 11.905,30 saíram neste mês ·
+      <span class="ok">sobraram R$ 6.514,70</span> · 3 contas esperando confirmação
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Visão Geral</button>
+    <button class="tab">Receitas</button>
+    <button class="tab">Despesas</button>
+    <button class="tab">Lançamentos</button>
+  </div>
+  <div class="card">
+    Abaixo do cabeçalho continua a barra de período + ações
+    (<b>FinanceiroTopbar</b>). O que sai dela é só o kicker
+    "FINANCEIRO ·", que agora duplicaria o título editorial.
+  </div>
+  <div class="fix">
+    <b>Métricas escolhidas:</b> entrou · saiu · sobrou · pendentes. É a
+    pergunta que a lojista faz ao abrir a tela, e nessa ordem.
+  </div>
+  <div class="fix externo">
+    <b>Fora desta frente (já resolvido por outra):</b> o chip de período
+    <span class="antes">Mes</span> → <span class="depois">Mês</span> vive em
+    <code>components/screens/financeiro/v2/FinanceiroTopbar.tsx</code>; o bloco
+    preso em "Verificando o que precisa da sua atenção…" vinha de
+    <code>insights_pending = enabled &amp;&amp; isPending</code> em
+    <code>hooks/useFinancialInsights.ts</code> — no React Query v5 o status fica
+    <code>pending</code> enquanto não há dado, inclusive com a query
+    <b>pausada</b> (<code>fetchStatus: 'paused'</code>, sem rede) ou em erro, e
+    daí nunca saía. Passou a usar <code>isLoading</code>. Os dois arquivos são
+    de outra frente e já estão corrigidos nesta branch.
+  </div>
+</section>
+
+<!-- ══════════════════ 2. CONTABILIDADE ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Obrigações fiscais</span>
+      <span class="pill-live">ao vivo</span>
+      <span class="pill-badge">Simples Nacional</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Contabilidade<span>.</span></div>
+    </div>
+    <div class="hero-sub">
+      5 de 8 obrigações em dia · <span class="warn">faltam 3 obrigações</span> ·
+      <span class="bad">1 vencida</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Visão Geral</button>
+    <button class="tab">Obrigações</button>
+    <button class="tab">Guias</button>
+    <button class="tab">Histórico</button>
+  </div>
+  <div class="fix">
+    <b>Rótulo ≠ id.</b> O valor <code>"Visao Geral"</code> em
+    <code>screens/contabilidade/types.ts</code> é comparado em código e assertado
+    em teste — continua intacto. A tela passa a ter um mapa
+    <code>id → rótulo</code> e só o <b>rótulo</b> é acentuado.
+  </div>
+  <div class="fix">
+    <b>Concordância:</b> a linha de métricas do cabeçalho diz
+    <span class="depois">faltam 3 obrigações</span> (era
+    <span class="antes">Falta 3 obrigacoes</span>), via <code>pluralize</code>
+    de <code>utils/plural.ts</code>.
+  </div>
+  <div class="fix externo">
+    <b>Fora desta frente:</b> a MESMA frase errada também é montada dentro do
+    cartão do <code>FiscalHero</code>
+    (<code>components/screens/contabilidade/FiscalHero.tsx</code>, na variável
+    <code>message</code>) e continua lá — o cartão segue dizendo
+    <span class="antes">Falta 3 obrigacoes para ficar 100% em dia</span>.
+    Correção de uma linha: trocar o literal <code>"obrigacoes"</code> pelo
+    <code>pluralize</code> e o <code>"Falta"</code> fixo por "Falta/Faltam".
+  </div>
+</section>
+
+<!-- ══════════════════ 3. CREDIÁRIO ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Relacionamento · fiado</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Crediário<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">+ Novo lançamento</button>
+        <button class="btn">⚙</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      R$ 4.870,00 em aberto · 4 clientes com saldo ·
+      <span class="bad">R$ 1.240,00 vencidos</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Carteira</button>
+    <button class="tab">Prontos pra comprar</button>
+  </div>
+  <div class="card">
+    A faixa <b>Carteira por atraso</b> (o mapa que É o filtro) fica exatamente
+    como está — foi o melhor achado da tela no QA.
+  </div>
+  <div class="fix">
+    <b>Plural:</b> <span class="antes">4 cliente(s) com saldo em aberto</span> →
+    <span class="depois">4 clientes com saldo</span> (e "1 cliente com saldo"),
+    via <code>pluralize</code>. Mesma correção em "parcela(s)" e "recebimento(s)".
+  </div>
+</section>
+
+<!-- ══════════════════ 4. NF-e ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Documentos fiscais</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Notas fiscais<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">↻</button>
+        <button class="btn btn-primary">Emitir NFC-e</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      36 notas emitidas · R$ 12.980,40 faturados ·
+      <span class="ok">nenhuma esperando a SEFAZ</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Documentos</button>
+    <button class="tab">Emitir NFS-e</button>
+    <button class="tab">Emitir NFC-e</button>
+  </div>
+  <div class="fix">
+    <b>Estado vazio com saída.</b> <span class="antes">"Use as abas acima para
+    emitir sua primeira NFC-e ou NFS-e"</span> apontava para um lugar em vez de
+    levar. Vira <span class="depois">botão "Emitir NFC-e"</span> (primário, abre
+    a aba de emissão) + atalho secundário para NFS-e.
+  </div>
+</section>
+
+<!-- ══════════════════ 5. CUPONS ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Descontos do caixa</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Cupons<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn btn-primary">+ Criar cupom</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      6 cupons criados · <span class="ok">4 valendo agora</span> ·
+      usados 37 vezes
+    </div>
+  </div>
+  <div class="card">
+    Sem abas. A linha de subtítulo antecipa em texto os três KPIs
+    (Total · Ativos · Usos totais), que continuam em cartão logo abaixo —
+    mesmo arranjo já aprovado em /clientes e /vendas: a frase responde de
+    relance, os cartões ficam para quem quer o número isolado.
+  </div>
+</section>
+
+<!-- ══════════════════ 6. FOLHA ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Quem trabalha com você</span>
+      <span class="pill-live">ao vivo</span>
+      <span class="pill-badge">Plano Negócio</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Equipe e Folha<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">Enviar holerites</button>
+        <button class="btn btn-primary">+ Novo funcionário</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      4 funcionários ativos · R$ 9.600,00 de folha bruta ·
+      R$ 768,00 de FGTS no mês
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Funcionários</button>
+    <button class="tab">Resumo mensal</button>
+    <button class="tab">Histórico</button>
+    <button class="tab">Metas</button>
+    <button class="tab">Comissões</button>
+  </div>
+  <div class="fix">
+    <b>Acentos:</b> <span class="antes">Novo funcionario</span> /
+    <span class="antes">Funcionarios</span> →
+    <span class="depois">Novo funcionário</span> /
+    <span class="depois">Funcionários</span>. Como em Contabilidade, o valor
+    <code>"Funcionarios"</code> em <code>screens/folha/types.ts</code> é id de
+    aba: só o rótulo é acentuado, pelo mapa da tela.
+  </div>
+</section>
+
+<!-- ══════════════════ 7. CANAL DIGITAL ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Sua loja online</span>
+      <span class="pill-live">ao vivo</span>
+      <span class="pill-badge">Publicada</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Canal Digital<span>.</span></div>
+      <div class="hero-actions">
+        <button class="btn">Ver site</button>
+      </div>
+    </div>
+    <div class="hero-sub">
+      loja.getaura.com.br/boutique-da-ana ·
+      <span class="ok">visível para clientes</span> · compartilhe o link e comece a vender
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Meu Site</button>
+    <button class="tab">Design</button>
+    <button class="tab">Vitrine</button>
+    <button class="tab">Entrega</button>
+    <button class="tab">Pedidos</button>
+  </div>
+  <div class="card">
+    O <b>preview da loja</b> das abas internas não é tocado — é o melhor
+    elemento da tela. O que sai é só o cartão "Sua loja online em minutos",
+    que repetia o que o cabeçalho passa a dizer.
+  </div>
+  <div class="fix externo">
+    <b>Fora desta frente:</b> <span class="antes">Visivel para clientes</span> →
+    <span class="depois">Visível para clientes</span> está em
+    <code>components/screens/canal/TabMeuSite.tsx</code>, dentro da aba, não no
+    cabeçalho. O cabeçalho novo já usa a forma acentuada.
+  </div>
+</section>
+
+<!-- ══════════════════ 8. AGENTES ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Trabalho automático</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Agentes<span>.</span></div>
+    </div>
+    <div class="hero-sub">
+      42 ações neste mês · <span class="ok">10,5h economizadas</span> ·
+      5 agentes trabalhando
+    </div>
+  </div>
+  <div class="card">
+    Os três KPIs em cartão (Ações este mês · Tempo economizado · Agentes ativos)
+    já eram exatamente esta frase — a frase passa a abrir a tela, os cartões
+    continuam abaixo.
+  </div>
+  <div class="fix">
+    <b>Acento:</b> <span class="antes">Os agentes vao registrar ações aqui</span> →
+    <span class="depois">Os agentes vão registrar ações aqui</span>.
+  </div>
+</section>
+
+<!-- ══════════════════ 9. ESTOQUE ══════════════════ -->
+<section class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg class="glyph" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity="0.3" /><circle cx="12" cy="12" r="3.2" fill="#7c3aed" /></svg>
+      <span>Aura<span style="color:#7c3aed">.</span> · Painel da loja</span>
+      <span class="pill-live">ao vivo</span>
+    </div>
+    <div class="hero-row">
+      <div class="hero-title">Estoque<span>.</span></div>
+    </div>
+    <div class="hero-sub">
+      128 produtos cadastrados · 1.940 unidades em prateleira ·
+      <span class="warn">3 alertas de estoque baixo</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab is-active">Produtos</button>
+    <button class="tab">Alertas</button>
+    <button class="tab">Etiquetas</button>
+  </div>
+  <div class="fix">
+    <b>Pixel a pixel igual ao que está no ar.</b> Mesma sobrancelha, mesmo
+    título, mesma frase de métricas, mesmas cores condicionais do alerta.
+    A única mudança é de onde o markup vem: <code>ScreenHero</code> no lugar do
+    <code>EstoqueHero</code>, que fica órfão e é removido. O
+    <code>TabBar</code> local da tela (cópia byte a byte do
+    <code>ScreenTabs</code>) some junto.
+  </div>
+</section>
+
+<div class="legenda">
+  <h4>Decisões que este mockup fixa</h4>
+  <p>
+    <b>1. Doze telas, um cabeçalho.</b> Depois desta rodada as 12 abas abrem com
+    o mesmo bloco: sobrancelha <code>Aura. · contexto</code> (+ "ao vivo" +
+    selo), título display serifado com ponto violeta, linha de métricas em texto
+    corrido e slot de ações à direita. O "produto único" para de aparecer e
+    desaparecer conforme se navega.
+  </p>
+  <p>
+    <b>2. A linha de métricas responde uma pergunta, não lista números.</b>
+    Regra usada em todas: no máximo 3 números, na ordem em que a lojista
+    pensa, e o terceiro carrega a cor (verde = tudo certo, âmbar = atenção,
+    vermelho = vencido). As faixas de KPI existentes continuam onde estão —
+    mesmo arranjo de /clientes e /vendas.
+  </p>
+  <p>
+    <b>3. Extensão do componente: <code>badge</code>.</b> Três telas precisam de
+    contexto que não cabe no título e não é métrica — regime tributário
+    (Contabilidade), empresa/consolidado ativo (Financeiro), situação da loja
+    (Canal Digital). Em vez de um slot livre por tela, uma prop de string com
+    o mesmo desenho da pílula "ao vivo", em tom neutro. Nada de gambiarra por tela.
+  </p>
+  <p>
+    <b>4. Abas: pílula, sempre.</b> <code>ScreenTabs</code> passa a servir
+    Financeiro, Contabilidade, Crediário, NF-e, Folha, Canal e Estoque. Somem
+    três reimplementações do mesmo desenho (o <code>TabBar</code> de
+    <code>components/TabBar.tsx</code> usado pelo Canal, o <code>TabBar</code>
+    local do Estoque e as cópias inline em Financeiro/Contabilidade/NF-e/Folha).
+  </p>
+  <p>
+    <b>5. Rótulo nunca é id.</b> Contabilidade e Folha comparam a string da aba
+    em código e em teste. Onde o valor está sem acento, o valor fica —
+    a tela ganha um mapa <code>id → rótulo</code> e acentua só o que aparece.
+  </p>
+</div>
+
+</body>
+</html>

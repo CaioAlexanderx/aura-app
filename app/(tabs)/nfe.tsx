@@ -5,10 +5,11 @@ import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { nfceApi, type NfceEmission, type NfceStatus } from "@/services/nfceApi";
-import { PageHeader } from "@/components/PageHeader";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { pluralize } from "@/utils/plural";
 import { Icon } from "@/components/Icon";
 import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
@@ -180,25 +181,65 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   // Filtros aplicados — quando 0 resultados mas há emissions, mostra dica
   const filtersActive = tipoFilter !== "all" || statusFilter !== "all";
 
+  // Botao de refresh — em cabecalho normal vira acao do ScreenHero; embutida
+  // no Studio continua sozinho, alinhado a direita (o wrapper de la ja tem
+  // titulo). E funcional, nao decorativo: nao some em nenhum dos dois casos.
+  var refreshBtn = (
+    <Pressable
+      onPress={handleManualRefresh}
+      disabled={isFetching}
+      style={[s.refreshBtn, isFetching && { opacity: 0.5 }]}
+      accessibilityLabel="Atualizar lista de notas"
+    >
+      {isFetching
+        ? <ActivityIndicator size="small" color={Colors.violet3} />
+        : <Icon name="refresh" size={16} color={Colors.violet3} />}
+    </Pressable>
+  );
+
   return (
     <ScrollView style={s.scr} contentContainerStyle={s.cnt}>
-      <View style={[s.headerRow, embedded && s.headerRowEmbedded]}>
-        {!embedded && (
-          <View style={{ flex: 1 }}>
-            <PageHeader title="Notas fiscais" subtitle="NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal" />
-          </View>
-        )}
-        <Pressable
-          onPress={handleManualRefresh}
-          disabled={isFetching}
-          style={[s.refreshBtn, isFetching && { opacity: 0.5 }]}
-          accessibilityLabel="Atualizar lista de notas"
-        >
-          {isFetching
-            ? <ActivityIndicator size="small" color={Colors.violet3} />
-            : <Icon name="refresh" size={16} color={Colors.violet3} />}
-        </Pressable>
-      </View>
+      {/* 01/09/2026 (QA onda 2 — cabeçalho unificado): o "Notas fiscais" plano
+          virou o mesmo ScreenHero das outras onze abas. Métricas do subtítulo:
+          quantas notas saíram, quanto isso faturou e quantas ainda esperam a
+          SEFAZ — a terceira é a única que pede ação, então é ela que carrega a
+          cor. */}
+      {embedded ? (
+        <View style={[s.headerRow, s.headerRowEmbedded]}>{refreshBtn}</View>
+      ) : (
+        <ScreenHero
+          eyebrow="Documentos fiscais"
+          title="Notas fiscais"
+          live
+          subtitle={
+            emissions.length === 0 && !isLoading
+              ? "NFC-e (consumidor) e NF-e (B2B) via Nuvem Fiscal. Nenhuma nota emitida ainda."
+              : (
+                <>
+                  {pluralize(totalEmitted, "nota emitida", "notas emitidas")} · {fmt(totalRevenue)} faturados ·{" "}
+                  {totalProcessing > 0 ? (
+                    <Text style={{ color: Colors.amber, fontWeight: "600" }}>
+                      {pluralize(totalProcessing, "nota esperando a SEFAZ", "notas esperando a SEFAZ")}
+                    </Text>
+                  ) : (
+                    <Text style={{ color: Colors.green, fontWeight: "600" }}>nenhuma esperando a SEFAZ</Text>
+                  )}
+                </>
+              )
+          }
+          actions={
+            <>
+              {refreshBtn}
+              {company?.id ? (
+                <Pressable onPress={() => setTab(2)} style={s.emitBtn}>
+                  <Icon name="plus" size={14} color="#fff" />
+                  <Text style={s.emitBtnText}>Emitir NFC-e</Text>
+                </Pressable>
+              ) : null}
+            </>
+          }
+        />
+      )}
 
       <View style={s.kpis}>
         <View style={s.kpi}>
@@ -235,26 +276,30 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
         </Pressable>
       )}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, marginBottom: 12 }}
-        contentContainerStyle={{ flexDirection: "row", gap: 6, paddingRight: 20 }}>
-        {TABS.map((t, i) => (
-          <Pressable key={t} onPress={() => setTab(i)} style={[s.tab, tab === i && s.tabActive]}>
-            <Text style={[s.tabText, tab === i && s.tabTextActive]}>{t}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <ScreenTabs
+        tabs={TABS.map((t) => ({ key: t, label: t }))}
+        active={TABS[tab]}
+        onSelect={(k) => setTab(TABS.indexOf(k))}
+      />
 
       {isLoading && tab === 0 && <ListSkeleton rows={4} />}
 
       {tab === 0 && !isLoading && (
         <View>
           {emissions.length === 0 ? (
+            /* 01/09/2026 (QA onda 2): o texto apontava pra cima ("use as abas
+               acima") em vez de levar. Agora o estado vazio tem a saída dentro
+               dele: botão primário abre a emissão de NFC-e (o caso do balcão) e
+               o secundário, a de NFS-e (serviço). */
             <EmptyState
               icon="file_text"
               iconColor={Colors.violet3}
               title="Nenhuma nota fiscal emitida"
-              subtitle="Use as abas acima para emitir sua primeira NFC-e ou NFS-e."
+              subtitle="Emita a primeira daqui mesmo: NFC-e para venda no balcão, NFS-e para serviço prestado."
+              actionLabel="Emitir NFC-e"
+              onAction={() => setTab(2)}
+              secondaryLabel="Emitir NFS-e"
+              onSecondary={() => setTab(1)}
             />
           ) : (
             <>
@@ -402,10 +447,12 @@ const s = StyleSheet.create({
     marginBottom: 12, borderWidth: 1, borderColor: Colors.violet3 + "44",
   },
   reemitPendingText: { flex: 1, fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
+  emitBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.violet, borderRadius: 10,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  emitBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
   clearFilterBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,

@@ -5,11 +5,26 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Platform, TextInput, Act
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
-import { PageHeader } from "@/components/PageHeader";
+import { ScreenHero } from "@/components/ScreenHero";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { HubView } from "@/components/screens/hub/HubView";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { pluralize } from "@/utils/plural";
+
+// 01/09/2026 (QA onda 2 — cabeçalho unificado): saiu o PageHeader + subtítulo
+// solto, entrou o ScreenHero (mesmo cabeçalho de /estoque, /clientes, /vendas).
+// Métricas do subtítulo: ações no mês · tempo economizado · agentes ativos —
+// é a única pergunta que a tela responde ("o que a Aura fez por mim?"), e são
+// exatamente os três KPIs que já estavam em cartão logo abaixo.
+//
+// 01/09/2026 (merge com o hub social, #826): a aba passou a ter DUAS visões
+// — Atendimento (inbox da Aurinha) e Análises. As duas usam o mesmo
+// ScreenHero de propósito: cabeçalho diferente por visão dentro da mesma aba
+// é o defeito que esta onda veio corrigir. O subtítulo de métricas fica só
+// em Análises, que é de onde os números vêm; no Atendimento o hero entra sem
+// subtítulo, porque a contagem da caixa de entrada mora dentro do HubView e
+// puxá-la pra cá exigiria mudar o contrato dele.
 
 const AGENT_META: Record<string, { icon: string; color: string }> = {
   Financeiro:   { icon: "wallet", color: Colors.green },
@@ -26,7 +41,7 @@ function getAgentMeta(name: string) { return AGENT_META[name] || AGENT_META.Gera
 function ActivityRow({ item }: { item: any }) {
   const [h, sH] = useState(false); const w = Platform.OS === "web";
   const sc = item.status === "done" ? Colors.green : item.status === "pending" ? Colors.amber : Colors.violet3;
-  const sl = item.status === "done" ? "Concluido" : item.status === "pending" ? "Pendente" : "Info";
+  const sl = item.status === "done" ? "Concluído" : item.status === "pending" ? "Pendente" : "Info";
   const meta = getAgentMeta(item.agent);
   return (
     <Pressable onHoverIn={w ? () => sH(true) : undefined} onHoverOut={w ? () => sH(false) : undefined}
@@ -140,7 +155,7 @@ export default function AgentesScreen() {
     return (
       <View style={z.screen}>
         <View style={[z.content, { flex: 1 }]}>
-          <PageHeader title="Agentes" />
+          <ScreenHero eyebrow="Trabalho automático" title="Agentes" live />
           {viewTabs}
           <HubView />
         </View>
@@ -150,9 +165,19 @@ export default function AgentesScreen() {
 
   return (
     <ScrollView style={z.screen} contentContainerStyle={z.content}>
-      <PageHeader title="Agentes" />
+      <ScreenHero
+        eyebrow="Trabalho automático"
+        title="Agentes"
+        live
+        subtitle={
+          <>
+            {pluralize(totalActions, "ação")} neste mês ·{" "}
+            <Text style={{ color: Colors.green, fontWeight: "600" }}>{totalSaved}h economizadas</Text> ·{" "}
+            {pluralize(summaryData.length || 5, "agente")} trabalhando
+          </>
+        }
+      />
       {viewTabs}
-      <Text style={z.subtitle}>Painel de atividade dos seus agentes de IA</Text>
 
       {/* Summary KPIs */}
       <View style={z.kpiRow}>
@@ -182,7 +207,7 @@ export default function AgentesScreen() {
                 </View>
                 <Text style={z.agentName}>{ag.name}</Text>
                 <View style={z.agentStats}>
-                  <Text style={z.agentStat}>{ag.actions} acoes</Text>
+                  <Text style={z.agentStat}>{pluralize(ag.actions, "ação")}</Text>
                   <Text style={[z.agentStat, { color: Colors.green }]}>{ag.saved} salvas</Text>
                 </View>
               </View>
@@ -209,7 +234,7 @@ export default function AgentesScreen() {
           icon="star"
           iconColor={Colors.violet3}
           title="Nenhuma atividade ainda"
-          subtitle="Os agentes vao registrar ações aqui conforme analisam seus dados. Comece conversando com um agente abaixo."
+          subtitle="Os agentes vão registrar ações aqui conforme analisam seus dados. Comece conversando com um agente abaixo."
         />
       )}
 
@@ -266,7 +291,6 @@ const z = StyleSheet.create({
   viewTabText: { fontSize: 13, fontWeight: "600", color: Colors.ink2 },
   viewTabTextOn: { color: "#fff" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
-  subtitle: { fontSize: 13, color: Colors.ink3, marginBottom: 20, marginTop: -8 },
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 6 },
   kpiValue: { fontSize: 28, fontWeight: "800", color: Colors.ink },

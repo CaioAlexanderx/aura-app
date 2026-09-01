@@ -442,7 +442,7 @@ export default function StudioEstoque() {
             ) : products.length === 0 ? (
               <StudioEmpty
                 icon="package"
-                title="Catalogo vazio"
+                title="Catálogo vazio"
                 desc="Cadastre seu primeiro produto pra comecar a vender."
                 primaryCta={{
                   label: "Cadastrar produto",
@@ -906,7 +906,7 @@ function BasicoForm({
 
       <View style={s.row2}>
         <View style={[s.field, { flex: 1 }]}>
-          <Text style={s.fieldLabel}>Preco (R$)</Text>
+          <Text style={s.fieldLabel}>Preço (R$)</Text>
           <TextInput
             value={price}
             onChangeText={(v) => setPrice(v.replace(/[^0-9.,]/g, ""))}

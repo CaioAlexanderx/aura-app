@@ -171,7 +171,7 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
           <Pressable onPress={onClose} hitSlop={10}><Icon name="x" size={20} color="#94A3B8" /></Pressable>
           <View style={{ flex: 1 }}>
             <Text style={st.headerTitle}>IA Odonto</Text>
-            <Text style={st.headerSub}>Conversas salvas com sua clinica</Text>
+            <Text style={st.headerSub}>Conversas salvas com sua clínica</Text>
           </View>
           <Pressable onPress={() => createMut.mutate({ patient_id: null, title: null })} hitSlop={10} style={st.newBtn}>
             {createMut.isPending ? <ActivityIndicator color="#a78bfa" size="small" /> : (

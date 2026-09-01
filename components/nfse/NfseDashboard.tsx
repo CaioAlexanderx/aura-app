@@ -281,7 +281,7 @@ function ListMode({ cid, onEmit, onConfig }: {
         </View>
         <Text style={s.heroTitle}>Configure NFS-e</Text>
         <Text style={s.heroSub}>
-          Para emitir Notas Fiscais de Servico voce precisa configurar o provider
+          Para emitir Notas Fiscais de Serviço você precisa configurar o provider
           e os dados fiscais da sua empresa.
         </Text>
         <View style={s.featureCard}>
@@ -556,7 +556,7 @@ function EmitMode({ cid, initialRecipient, initialService, onSuccess, onConfig }
         />
         {recipientDoc && !docValid && (
           <Text style={s.helpErr}>
-            {recipientType === 'pf' ? 'CPF deve ter 11 digitos' : 'CNPJ deve ter 14 digitos'}
+            {recipientType === 'pf' ? 'CPF deve ter 11 dígitos' : 'CNPJ deve ter 14 dígitos'}
           </Text>
         )}
 
@@ -789,7 +789,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
         placeholderTextColor="#475569"
       />
       <Text style={s.helpSm}>
-        IM da prefeitura onde a clinica esta cadastrada. Sem IM, nao da pra emitir.
+        IM da prefeitura onde a clínica esta cadastrada. Sem IM, não da pra emitir.
       </Text>
 
       <Text style={s.label}>Código de serviço padrão</Text>
@@ -801,10 +801,10 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
         placeholderTextColor="#475569"
       />
       <Text style={s.helpSm}>
-        Codigo da Lista de Servicos (LC 116/2003) ou municipal. Pra Odonto: 04.13 ou 0401.
+        Código da Lista de Serviços (LC 116/2003) ou municipal. Pra Odonto: 04.13 ou 0401.
       </Text>
 
-      <Text style={s.label}>Aliquota ISS padrao (%)</Text>
+      <Text style={s.label}>Aliquota ISS padrão (%)</Text>
       <TextInput
         value={issRate}
         onChangeText={setIssRate}
@@ -814,7 +814,7 @@ function ConfigMode({ cid, onDone }: { cid: string; onDone: () => void }) {
         keyboardType="decimal-pad"
       />
       <Text style={s.helpSm}>
-        Em Jacarei, ISS de servico de saude e 2%. Confirme com sua prefeitura.
+        Em Jacarei, ISS de serviço de saúde e 2%. Confirme com sua prefeitura.
       </Text>
 
       <Pressable

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, useWindowDimensions, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions, TextInput } from "react-native";
 import { useLocalSearchParams, router, useRootNavigationState } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
@@ -12,7 +12,7 @@ import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
-import { TABS, TAB_INDEX } from "@/components/screens/financeiro/types";
+import { TABS, TAB_INDEX, fmt as fmtBRL } from "@/components/screens/financeiro/types";
 import type { PeriodKey, Transaction } from "@/components/screens/financeiro/types";
 import { arrayToCSV, downloadCSV, pickFileAndParse, TRANSACTION_COLUMNS } from "@/utils/csv";
 import { toast } from "@/components/Toast";
@@ -28,8 +28,26 @@ import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/Consol
 import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens/financeiro/v2";
 // F3-3D (29/05/2026): Surface de A Receber do crediario na aba Visao Geral.
 import { creditApi } from "@/services/creditApi";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
+import { pluralize } from "@/utils/plural";
 
-var isWeb = Platform.OS === "web";
+// 01/09/2026 (QA onda 2 — cabeçalho unificado): a tela abria com o kicker
+// pequeno "FINANCEIRO ·" da Topbar. Agora abre com o mesmo ScreenHero das
+// outras onze abas, e a Topbar fica embaixo com o que é funcional dela
+// (período + Exportar + Novo lançamento).
+//
+// Como o período mora na Topbar e não no cabeçalho, o subtítulo precisa dizer
+// A QUE período os números se referem — senão "R$ 18.420 entraram" é uma frase
+// sem sujeito.
+var PERIOD_PHRASE: Record<string, string> = {
+  today: "hoje",
+  week: "nesta semana",
+  month: "neste mês",
+  year: "neste ano",
+  prev_year: "no ano passado",
+  all: "em todo o histórico",
+  custom: "no período escolhido",
+};
 
 var TAB_KEY_TO_INDEX: Record<string, number> = {
   visao: TAB_INDEX.visao,
@@ -173,7 +191,6 @@ const rcv = StyleSheet.create({
 export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = {}) {
   var { width: vw } = useWindowDimensions();
   var layout = getLayoutForWidth(vw);
-  var IS_WIDE = vw >= 768;
   var IS_NARROW = vw < 480;
 
   var params = useLocalSearchParams<{ tab?: string; focus?: string }>();
@@ -277,6 +294,11 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     .filter(function(t: any) { return !t.category || String(t.category).toLowerCase() === "outros"; })
     .map(function(t: any) { return t.desc || t.description; })
     .filter(Boolean);
+
+  // Quantas contas ainda nao viraram dinheiro (entrada ou saida). E o quarto
+  // numero do cabecalho: "entrou/saiu/sobrou" conta o passado, este conta o
+  // que ainda esta no ar.
+  var pendingCount = transactions.filter(function(t: any) { return t.status === "pending"; }).length;
 
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
 
@@ -398,6 +420,39 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
         />
       </WebPortal>
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={contentStyle}>
+        {!embedded && (
+          <ScreenHero
+            eyebrow="Caixa e contas"
+            title="Financeiro"
+            live
+            badge={consolidatedView
+              ? "Consolidado · " + pluralize(companyCount || 0, "empresa")
+              : (company?.name || undefined)}
+            subtitle={
+              isLoading
+                ? "Carregando seus lançamentos…"
+                : isError
+                ? "Não foi possível carregar seus lançamentos."
+                : (
+                  <>
+                    {fmtBRL(summary.income)} entraram · {fmtBRL(summary.expenses)} saíram {PERIOD_PHRASE[period] || ""} ·{" "}
+                    <Text style={{ color: summary.balance >= 0 ? Colors.green : Colors.red, fontWeight: "600" }}>
+                      {summary.balance >= 0
+                        ? "sobraram " + fmtBRL(summary.balance)
+                        : "faltaram " + fmtBRL(Math.abs(summary.balance))}
+                    </Text>
+                    {pendingCount > 0
+                      ? " · " + pluralize(pendingCount, "conta esperando confirmação", "contas esperando confirmação")
+                      : ""}
+                  </>
+                )
+            }
+          />
+        )}
+
+        {/* `embedded` na Topbar esconde só o kicker "FINANCEIRO ·". Agora ele
+            some nos dois casos: fora do Studio porque o ScreenHero acima já é
+            o título; dentro do Studio porque o wrapper de lá já tem o dele. */}
         <FinanceiroTopbar
           companyName={company?.name || ""}
           consolidated={!!consolidatedView}
@@ -406,7 +461,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           onPeriodChange={handlePeriodChange}
           onExport={function() { setShowExport(true); }}
           onNew={consolidatedView ? undefined : handleNewTransaction}
-          embedded={embedded}
+          embedded
         />
 
         {consolidatedView && (
@@ -461,14 +516,13 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           <ConsolidatedBreakdownCard breakdown={breakdownForCard as any} />
         )}
 
-        {/* Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: IS_NARROW ? 4 : IS_WIDE ? 8 : 6 }}>
-          {TABS.map(function(tab, i) {
-            return <Pressable key={tab} onPress={function() { handleTabSelect(i); }} style={[s.tab, IS_NARROW ? s.tabNarrow : null, activeTab === i && s.tabActive, isWeb && { transition: "all 0.15s ease" } as any]}>
-              <Text style={[s.tabText, IS_NARROW && s.tabTextNarrow, activeTab === i && s.tabTextActive]}>{tab}</Text>
-            </Pressable>;
-          })}
-        </ScrollView>
+        {/* Tabs — 01/09/2026: pílula compartilhada (ScreenTabs), igual ao
+            resto do app. Eram uma quarta reimplementação do mesmo desenho. */}
+        <ScreenTabs
+          tabs={TABS.map(function(t: string) { return { key: t, label: t }; })}
+          active={TABS[activeTab]}
+          onSelect={function(k: string) { handleTabSelect(TABS.indexOf(k)); }}
+        />
 
         {/* F2 (24/08/2026): a FinanceiroToolbar (Exportar Vendas + Categorizar com
             IA) saiu da Visao Geral. Ela competia com o "Exportar" da Topbar logo
@@ -574,12 +628,6 @@ var s = StyleSheet.create({
   customInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, textAlign: "center" },
   customOk: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   customWarn: { fontSize: 11.5, color: Colors.amber, fontWeight: "600", marginTop: -8, marginBottom: 16, marginLeft: 4 },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabNarrow: { paddingHorizontal: 8, paddingVertical: 7 },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextNarrow: { fontSize: 11 },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 

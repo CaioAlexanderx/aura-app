@@ -3,8 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-na
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
-import { PageHeader } from "@/components/PageHeader";
-import { TabBar } from "@/components/TabBar";
+import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { IS_WIDE, TABS } from "@/components/screens/canal/shared";
@@ -15,6 +14,15 @@ import { TabEntrega } from "@/components/screens/canal/TabEntrega";
 import { TabPedidos } from "@/components/screens/canal/TabPedidos";
 
 const STOREFRONT_BASE = 'https://loja.getaura.com.br';
+
+// 01/09/2026 (QA onda 2 — cabeçalho unificado): o PageHeader + o cartão
+// "Sua loja online em minutos" viraram um ScreenHero só, igual às outras onze
+// abas. O cartão dizia em duas linhas o que o cabeçalho agora diz na
+// sobrancelha (situação) e no subtítulo (endereço da loja + próximo passo), e
+// o botão "Ver site" virou ação do cabeçalho.
+//
+// O que NÃO foi tocado: o preview da loja dentro das abas — é o melhor
+// elemento da tela.
 
 export default function CanalDigitalScreen() {
   const [tab, setTab] = useState(0);
@@ -33,7 +41,11 @@ export default function CanalDigitalScreen() {
   if (!hasAccess) {
     return (
       <ScrollView style={s.screen} contentContainerStyle={s.content}>
-        <PageHeader title="Canal Digital" />
+        <ScreenHero
+          eyebrow="Sua loja online"
+          title="Canal Digital"
+          subtitle="Vitrine de produtos, domínio personalizado e pedidos — disponível a partir do plano Negócio."
+        />
         <View style={s.lockBox}>
           <Icon name="globe" size={36} color={Colors.ink3} />
           <Text style={s.lockTitle}>Canal Digital</Text>
@@ -49,21 +61,34 @@ export default function CanalDigitalScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      <PageHeader title="Canal Digital" />
-      <View style={s.hero}>
-        <View style={s.heroIcon}><Icon name="globe" size={22} color={Colors.violet3} /></View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.heroTitle}>Sua loja online em minutos</Text>
-          <Text style={s.heroDesc}>Configure, personalize e compartilhe o link.</Text>
-        </View>
-        {config.is_published && storefrontUrl && (
+      <ScreenHero
+        eyebrow="Sua loja online"
+        title="Canal Digital"
+        live={!!config.is_published}
+        badge={config.is_published ? "Publicada" : "Rascunho"}
+        subtitle={
+          config.is_published && storefrontUrl
+            ? (
+              <>
+                {storefrontUrl.replace(/^https?:\/\//, "")} ·{" "}
+                <Text style={{ color: Colors.green, fontWeight: "600" }}>visível para clientes</Text>
+                {" "}· compartilhe o link e comece a vender
+              </>
+            )
+            : "Ainda não publicada. Configure, personalize e publique — o link fica pronto para compartilhar."
+        }
+        actions={config.is_published && storefrontUrl ? (
           <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
             <Icon name="globe" size={13} color={Colors.violet3} />
             <Text style={s.viewSiteBtnText}>Ver site</Text>
           </Pressable>
-        )}
-      </View>
-      <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+        ) : undefined}
+      />
+      <ScreenTabs
+        tabs={TABS.map((t) => ({ key: t, label: t }))}
+        active={TABS[tab]}
+        onSelect={(k) => setTab(TABS.indexOf(k))}
+      />
       {isLoading ? <ListSkeleton rows={4} /> : (
         <>
           {tab === 0 && (
@@ -104,10 +129,6 @@ export default function CanalDigitalScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1 }, content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 1280, alignSelf: "center", width: "100%" },
-  hero: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.violetD, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
-  heroIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, flexShrink: 0 },
-  heroTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
-  heroDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
   viewSiteBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: Colors.border2, flexShrink: 0 },
   viewSiteBtnText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   lockBox: { alignItems: "center", paddingVertical: 48, gap: 12, backgroundColor: Colors.bg3, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 32 },

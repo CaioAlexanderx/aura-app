@@ -219,7 +219,7 @@ export function AccessCodesCard() {
                 </View>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>Dias gratis</Text>
+                <Text style={s.fieldLabel}>Dias grátis</Text>
                 <TextInput
                   value={formTrialDays}
                   onChangeText={setFormTrialDays}

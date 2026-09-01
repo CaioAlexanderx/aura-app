@@ -504,7 +504,7 @@ export default function StudioFichaTecnicaPanel({
             <View style={[styles.kpiBox, styles.kpiMargin, styles.kpiMarginEmpty]}>
               <Icon name="info" size={13} color={t.ink3} />
               <Text style={[styles.kpiEmptyMsg, { color: t.ink3 }]}>
-                Defina a ficha tecnica para ver custo e margem
+                Defina a ficha técnica para ver custo e margem
               </Text>
             </View>
           ) : (
@@ -827,7 +827,7 @@ export default function StudioFichaTecnicaPanel({
                   <View style={[styles.hintBox, { backgroundColor: t.warningSoft }]}>
                     <Icon name="alert-triangle" size={14} color={t.warningInk} />
                     <Text style={[styles.hintText, { color: t.warningInk }]}>
-                      Produto sem variantes. Cadastre options em Personalizacao.
+                      Produto sem variantes. Cadastre options em Personalização.
                     </Text>
                   </View>
                 ) : null}
@@ -863,7 +863,7 @@ export default function StudioFichaTecnicaPanel({
           >
             <Icon name="info" size={14} color={t.infoInk} />
             <Text style={[styles.hintText, { color: t.infoInk }]}>
-              Cadastre insumos pra liberar a edicao da ficha.
+              Cadastre insumos pra liberar a edição da ficha.
             </Text>
           </Pressable>
         ) : null}

@@ -61,7 +61,7 @@ export function ComissoesDashboard({
       <View style={s.kpiRow}>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#F59E0B" }]}>{fmt(calcRevenue)}</Text><Text style={s.kpiLbl}>Receita bruta</Text></View>
         <View style={s.kpi}><Text style={[s.kpiVal, { color: "#EF4444" }]}>{fmt(calcCommissions)}</Text><Text style={s.kpiLbl}>Comissões</Text></View>
-        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(calcSalon)}</Text><Text style={s.kpiLbl}>Cota salao</Text></View>
+        <View style={s.kpi}><Text style={[s.kpiVal, { color: "#10B981" }]}>{fmt(calcSalon)}</Text><Text style={s.kpiLbl}>Cota salão</Text></View>
         {calcTips > 0 && (
           <View style={s.kpi}><Text style={[s.kpiVal, { color: "#7C3AED" }]}>{fmt(calcTips)}</Text><Text style={s.kpiLbl}>Gorjetas</Text></View>
         )}

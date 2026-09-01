@@ -15,11 +15,14 @@
 //   · linha de subtitulo com metricas em texto corrido
 //   · slot de acoes a direita do titulo
 //
-// EstoqueHero NAO foi tocado nesta rodada (arquivo de outra frente).
-// Quando alguem migrar /estoque pra ca, o hero de la vira uma chamada
-// deste componente e o arquivo antigo some.
+// 01/09/2026 (QA onda 2) — as outras NOVE abas passaram a usar este
+// cabecalho, e /estoque migrou pra ca: o EstoqueHero ficou orfao e foi
+// removido. Nesta rodada o componente ganhou a prop `badge` (selo neutro
+// na sobrancelha) — ver comentario na prop.
 //
-// Mockup aprovado: docs/mockups/cabecalho-unificado-clientes-vendas.html
+// Mockups aprovados:
+//   · docs/mockups/cabecalho-unificado-clientes-vendas.html  (29/08/2026)
+//   · docs/mockups/cabecalho-unificado-nove-abas.html        (01/09/2026)
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Dimensions } from "react-native";
@@ -57,11 +60,22 @@ type ScreenHeroProps = {
   subtitle?: React.ReactNode;
   /** Mostra a pill "ao vivo" na sobrancelha. */
   live?: boolean;
+  /**
+   * Selo neutro na sobrancelha, depois do "ao vivo" (01/09/2026).
+   *
+   * Nasceu na onda 2 do QA: tres telas tinham contexto que nao e titulo nem
+   * metrica — o regime tributario (/contabilidade), a empresa ou o
+   * "Consolidado · N empresas" (/financeiro) e a situacao da loja online
+   * (/canal). Cada uma ia inventar seu proprio cantinho no cabecalho; e uma
+   * prop de string com o mesmo desenho da pill "ao vivo", em tom neutro, pra
+   * nao virar slot livre por tela.
+   */
+  badge?: string;
   /** Botoes a direita do titulo. */
   actions?: React.ReactNode;
 };
 
-export function ScreenHero({ eyebrow, title, subtitle, live, actions }: ScreenHeroProps) {
+export function ScreenHero({ eyebrow, title, subtitle, live, badge, actions }: ScreenHeroProps) {
   const C = useColors();
   useScreenHeroStyles();
   const accent = C.violet;
@@ -72,7 +86,9 @@ export function ScreenHero({ eyebrow, title, subtitle, live, actions }: ScreenHe
   if (!IS_WEB) {
     return (
       <View style={n.wrap}>
-        <Text style={[n.eyebrow, { color: C.ink3 }]}>{("Aura. · " + eyebrow).toUpperCase()}</Text>
+        <Text style={[n.eyebrow, { color: C.ink3 }]}>
+          {("Aura. · " + eyebrow + (badge ? " · " + badge : "")).toUpperCase()}
+        </Text>
         <View style={n.titleRow}>
           <Text style={[n.title, { color: C.ink }]} numberOfLines={1}>
             {title}<Text style={{ color: accent }}>.</Text>
@@ -114,6 +130,14 @@ export function ScreenHero({ eyebrow, title, subtitle, live, actions }: ScreenHe
             fontSize: 10, letterSpacing: "0.08em",
           } as any}>ao vivo</span>
         )}
+        {!!badge && (
+          <span style={{
+            padding: "3px 8px", borderRadius: 999,
+            background: C.bg3, color: C.ink3,
+            border: "1px solid " + C.border,
+            fontSize: 10, letterSpacing: "0.08em",
+          } as any}>{badge}</span>
+        )}
       </div>
 
       {/* Titulo display + acoes */}
@@ -132,11 +156,17 @@ export function ScreenHero({ eyebrow, title, subtitle, live, actions }: ScreenHe
         )}
       </div>
 
-      {/* Linha de metricas */}
+      {/* Linha de metricas.
+          01/09/2026: era um <div> cru. Virou <Text> porque as telas da onda 2
+          precisam colorir UM pedaco da frase (o alerta em ambar, o vencido em
+          vermelho) — e um <Text> aninhado dentro de <div> nao herda o contexto
+          de texto do react-native-web, entao vira bloco e quebra a linha no
+          meio. Dentro de um <Text>, o aninhado sai inline nas duas
+          plataformas. Frase em string pura continua funcionando igual. */}
       {!!subtitle && (
-        <div style={{ fontSize: 14, color: C.ink3, marginTop: 10, maxWidth: 720, lineHeight: 1.5 } as any}>
+        <Text style={{ fontSize: 14, color: C.ink3, marginTop: 10, maxWidth: 720, lineHeight: 21 }}>
           {subtitle}
-        </div>
+        </Text>
       )}
     </div>
   );

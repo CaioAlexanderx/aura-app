@@ -22,8 +22,10 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     boxShadow: Glass.cardShadow,
-    transition: "all 0.3s cubic-bezier(0.3, 0, 0.2, 1)",
-    cursor: "pointer",
+    // 01/09/2026: cursor só quando o card leva a algum lugar — e a
+    // transição saiu daqui pro CSS de [data-aura-hover] no Painel, que é
+    // onde o prefers-reduced-motion consegue desligá-la.
+    cursor: onPress ? "pointer" : "default",
     position: "relative",
     overflow: "hidden",
   });
@@ -44,6 +46,11 @@ export function KPICard({ ic, iconColor, label, value, delta, deltaUp, large, sp
     <Pressable
       style={[s.card, large && s.large, Platform.OS === "web" ? (webCard as any) : { backgroundColor: Colors.bg3 }]}
       onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      // 01/09/2026: estado de hover/foco vem do CSS do Painel. Ele só
+      // realça o card — nada aqui é revelado por hover, então em touch
+      // a tela continua completa.
+      {...(onPress ? ({ dataSet: { auraHover: "card" } } as any) : null)}
       // 29/08/2026: o mesmo rotulo aparecia com valores diferentes em telas
       // diferentes. O tooltip diz o que ESTE numero soma.
       {...(Platform.OS === "web" && (hintLong || hint) ? ({ title: hintLong || hint } as any) : null)}

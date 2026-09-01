@@ -94,7 +94,7 @@ const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
   ortodontia:  { label: "Ortodontia",     emoji: "🪞" },
   estetica:    { label: "Estética",       emoji: "✨" },
   periodontia: { label: "Periodontia",    emoji: "🌿" },
-  protese:     { label: "Protese",        emoji: "👑" },
+  protese:     { label: "Prótese",        emoji: "👑" },
   generico:    { label: "Genérico",       emoji: "📋" },
   lgpd:        { label: "LGPD / Imagem",  emoji: "🛡️" },
 };
@@ -111,7 +111,7 @@ const PLACEHOLDER_LABELS: Record<string, { label: string; hint?: string; long?: 
   riscos:           { label: "Riscos específicos",    long: true, hint: "Riscos do caso (opcional)" },
   observacoes:      { label: "Observações",           long: true },
   valor_estimado:   { label: "Valor estimado (R$)",   hint: "Apenas números, ex: 1500" },
-  nome_clinica:     { label: "Nome da clinica",       hint: "Auto-preenchido se vazio" },
+  nome_clinica:     { label: "Nome da clínica",       hint: "Auto-preenchido se vazio" },
 };
 
 const AUTO_FILLED = new Set(["nome_paciente", "data"]); // BE faz auto-fill
@@ -365,7 +365,7 @@ export function ConsentCollectModal({
     return (
       <View style={{ gap: 12 }}>
         <Text style={s.helperText}>
-          Escolha um modelo. Voce podera personalizar antes de enviar pro paciente.
+          Escolha um modelo. Você podera personalizar antes de enviar pro paciente.
         </Text>
         {categories.map(cat => {
           const meta = CATEGORY_META[cat] || { label: cat, emoji: "📄" };
@@ -403,7 +403,7 @@ export function ConsentCollectModal({
     return (
       <View style={{ gap: 12 }}>
         <Text style={s.helperText}>
-          Preencha os dados do termo. Campos marcados com * sao obrigatorios.
+          Preencha os dados do termo. Campos marcados com * são obrigatórios.
         </Text>
 
         {requiredPlaceholders.map(key => {
@@ -448,7 +448,7 @@ export function ConsentCollectModal({
           </View>
           <Text style={s.successTitle}>Termo assinado!</Text>
           <Text style={s.hint}>
-            O documento foi salvo no historico do paciente.
+            O documento foi salvo no histórico do paciente.
           </Text>
         </View>
       );
@@ -486,7 +486,7 @@ export function ConsentCollectModal({
         <View style={s.qrWrap}>
           {qrSrc ? <Image source={{ uri: qrSrc }} style={s.qr} resizeMode="contain" /> : null}
           <Text style={s.qrCaption}>
-            Aponte a camera do paciente pra este codigo
+            Aponte a camera do paciente pra este código
           </Text>
         </View>
 
@@ -516,7 +516,7 @@ export function ConsentCollectModal({
         </View>
 
         <Text style={s.note}>
-          O paciente vai ler o termo, marcar a confirmacao LGPD e assinar com o dedo.
+          O paciente vai ler o termo, marcar a confirmação LGPD e assinar com o dedo.
         </Text>
       </View>
     );
