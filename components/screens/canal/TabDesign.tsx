@@ -38,6 +38,8 @@ type Banner = {
   tone?: BannerTone;
   tint?: "brand" | "accent";
   image_url?: string | null; enabled?: boolean;
+  /** Versao quadrada so pro celular (02/09/2026). Sem ela, a larga serve nos dois. */
+  image_url_mobile?: string | null;
 };
 
 type ServiceCard = {
@@ -128,6 +130,7 @@ function normalizeBanners(input: any): Banner[] {
   const arr: Banner[] = input.slice(0, 3).map((b: any) => {
     const rawTone = VALID_TONES.includes(b?.tone) ? (b.tone as BannerTone) : "split";
     const imageUrl = b?.image_url || null;
+    const imageUrlMobile = b?.image_url_mobile || null;
     // Auto-corrige legado: banner com imagem mas tone antigo (split/editorial/centered)
     // O backend ja renderiza como image-clean nesse caso — frontend espelha localmente.
     const tone: BannerTone = imageUrl ? "image-clean" : (rawTone === "image-clean" ? "split" : rawTone);
@@ -137,6 +140,7 @@ function normalizeBanners(input: any): Banner[] {
       tone,
       tint: ["brand", "accent"].includes(b?.tint) ? b.tint : "brand",
       image_url: imageUrl,
+      image_url_mobile: imageUrlMobile,
       enabled: b?.enabled !== false,
     };
   });
@@ -406,7 +410,7 @@ export function TabDesign({
     });
   }
 
-  async function pickAndUploadImage(type: "logo" | `banner_${number}`) {
+  async function pickAndUploadImage(type: "logo" | `banner_${number}` | `banner_${number}_mobile`) {
     if (Platform.OS !== "web") {
       toast.info("Upload de imagem disponível na versão web por enquanto");
       return;
@@ -430,13 +434,16 @@ export function TabDesign({
           setPreviewKey((k) => k + 1);
           if (type.startsWith("banner_")) {
             const idx = parseInt(type.split("_")[1], 10);
-            if (res?.image_url) {
+            const mobile = type.endsWith("_mobile");
+            const url = mobile ? res?.image_url_mobile : res?.image_url;
+            if (url) {
               // Fase 2: ao subir imagem, auto-seta tone='image-clean' (backend ja renderiza assim).
+              // A versao do celular so troca o proprio campo.
               setBanners((prev) => {
                 const next = prev.map((b, i) =>
-                  i === idx
-                    ? { ...b, image_url: res.image_url, enabled: true, tone: "image-clean" as BannerTone }
-                    : b
+                  i !== idx ? b
+                    : mobile ? { ...b, image_url_mobile: url }
+                    : { ...b, image_url: url, enabled: true, tone: "image-clean" as BannerTone }
                 );
                 scheduleSave({ banners: next });
                 return next;
@@ -684,6 +691,47 @@ export function TabDesign({
               )}
             </Pressable>
           )}
+
+          {/* QA da Finesse (02/09/2026): o banner 3:1 e cortado no centro
+              no celular e leva o texto da arte junto. A Oscar resolve com
+              um banner proprio pro celular; aqui tambem. So aparece
+              depois da larga — sem a larga nao ha o que substituir. */}
+          {b.image_url ? (
+            <>
+              <Text style={[cs.fieldLabel, { marginTop: 14 }]}>Imagem para celular (opcional)</Text>
+              <Text style={cs.hint}>
+                No celular o banner largo é cortado no centro. Se a sua arte tem texto, suba uma versão quadrada só para o celular.
+              </Text>
+              {b.image_url_mobile ? (
+                <View style={s.imagePreview}>
+                  <Image source={{ uri: b.image_url_mobile }} style={s.imageThumb} resizeMode="cover" />
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Pressable style={s.smallBtn} onPress={() => pickAndUploadImage(`banner_${idx}_mobile` as any)}>
+                      <Icon name="upload" size={14} color={accent.primaryStrong} />
+                      <Text style={s.smallBtnText}>Trocar</Text>
+                    </Pressable>
+                    <Pressable style={[s.smallBtn, s.smallBtnDanger]}
+                      onPress={async () => {
+                        try {
+                          await deleteImage(`banner_${idx}_mobile` as any);
+                          updateBanner(idx, { image_url_mobile: null });
+                        } catch (err: any) { toast.error(err?.message); }
+                      }}>
+                      <Icon name="trash" size={14} color="#dc2626" />
+                      <Text style={[s.smallBtnText, { color: "#dc2626" }]}>Remover</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable style={s.uploadDrop} onPress={() => pickAndUploadImage(`banner_${idx}_mobile` as any)}
+                  disabled={isUploadingImage} testID={`banner-mobile-${idx}`}>
+                  <Icon name="image" size={20} color={Colors.ink3} />
+                  <Text style={s.uploadText}>Adicionar imagem para celular</Text>
+                  <Text style={s.uploadHint}>{SPECS.banner_mobile.resumo}</Text>
+                </Pressable>
+              )}
+            </>
+          ) : null}
         </View>
         );
       })}

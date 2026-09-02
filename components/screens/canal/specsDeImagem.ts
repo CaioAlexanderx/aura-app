@@ -21,7 +21,7 @@ export type SpecDeImagem = {
   detalhes: string[];
 };
 
-export const SPECS: Record<"logo" | "banner" | "produto" | "capa" | "categoria", SpecDeImagem> = {
+export const SPECS: Record<"logo" | "banner" | "banner_mobile" | "produto" | "capa" | "categoria", SpecDeImagem> = {
   logo: {
     resumo: "PNG com fundo transparente, quadrado, 512×512px",
     detalhes: [
@@ -38,6 +38,16 @@ export const SPECS: Record<"logo" | "banner" | "produto" | "capa" | "categoria",
       "Deixe o lado esquerdo mais vazio: é onde entram o título e o botão",
       "No celular a arte é cortada no centro, então não coloque nada importante nas pontas",
       "Até 500 KB — imagem pesada deixa sua loja lenta pra abrir",
+    ],
+  },
+  banner_mobile: {
+    // QA da Finesse 02/09/2026: no celular o 3:1 e cortado no centro e o
+    // texto da arte some. Quadrada: o hero do celular e 375x340.
+    resumo: "1080×1080px, JPG ou PNG, até 300 KB",
+    detalhes: [
+      "Quadrada, 1080×1080px — no celular o banner largo é cortado no centro",
+      "Se a sua arte tem texto, é aqui que ele cabe inteiro",
+      "Até 300 KB",
     ],
   },
   produto: {
