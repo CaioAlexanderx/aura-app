@@ -121,3 +121,23 @@ describe("a tela usa a regra, não uma cópia dela", () => {
     expect(tela).toContain("cta_url: v");
   });
 });
+
+// Redesign 09/2026: o CTA do hero pode apontar pra uma categoria da
+// propria loja. O formato e o do backend (destinoDoCta): #cat=/caminho.
+describe("categoria da loja como destino", () => {
+  test("#cat=/caminho passa, e fica como esta ao normalizar", () => {
+    expect(destinoValido("#cat=/vestidos")).toBe(true);
+    expect(destinoValido("#cat=/vestidos/festa")).toBe(true);
+    expect(normalizarDestino("#cat=/vestidos")).toBe("#cat=/vestidos");
+  });
+
+  test("o resto com # nao passa — a mesma regua do backend", () => {
+    for (const ruim of ["#cat=", "#cat=vestidos", "#outra", "#cat=/Vestidos Festa"]) {
+      expect(destinoValido(ruim)).toBe(false);
+    }
+  });
+
+  test("o aviso de link invalido menciona a categoria", () => {
+    expect(avisoDoCta(estadoDoCta("Ver", "loja.com"))).toContain("#cat=/");
+  });
+});

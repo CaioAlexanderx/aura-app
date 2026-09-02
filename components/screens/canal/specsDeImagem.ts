@@ -31,12 +31,13 @@ export const SPECS: Record<"logo" | "banner" | "produto" | "capa" | "categoria",
     ],
   },
   banner: {
-    resumo: "1600×600px, JPG, até 2 MB",
+    // Redesign 09/2026: hero full-bleed 3:1 (1920x640), como a Oscar.
+    resumo: "1920×640px, JPG ou PNG, até 500 KB",
     detalhes: [
-      "Use 1600×600px — é a proporção do espaço na sua loja",
-      "Deixe o lado esquerdo mais vazio: é onde entra o texto",
-      "No celular as laterais são cortadas, então não coloque nada importante nas pontas",
-      "Até 2 MB — imagem pesada deixa sua loja lenta pra abrir",
+      "Use 1920×640px — o banner cobre toda a largura da loja",
+      "Deixe o lado esquerdo mais vazio: é onde entram o título e o botão",
+      "No celular a arte é cortada no centro, então não coloque nada importante nas pontas",
+      "Até 500 KB — imagem pesada deixa sua loja lenta pra abrir",
     ],
   },
   produto: {
