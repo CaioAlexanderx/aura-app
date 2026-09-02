@@ -526,47 +526,12 @@ export function TabDesign({
           placeholder="#7c3aed"
           estiloInput={cs.input}
         />
-
-        <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor do degradê do topo</Text>
-        <Text style={[cs.hint, { marginTop: -4, marginBottom: 8 }]}>
-          Combina com a primeira no topo da loja. Também tinge a bolinha do carrinho.
+        {/* Redesign 09/2026 (decisao 4): a loja tem UMA cor. Cor de
+            destaque, paletas e tema escuro sairam do painel; as colunas
+            continuam no banco, inertes. Tudo deriva desta cor. */}
+        <Text style={[cs.hint, { marginTop: 10 }]}>
+          Tudo na loja deriva desta cor: botões, bordas, sombras e o fundo dos banners.
         </Text>
-        <View style={cs.colorRow}>
-          {ACCENT_PRESETS.map((c) => (
-            <Pressable key={c} onPress={() => { setAccentColor(c); scheduleSave({ accent_color: c }); }}
-              style={[cs.colorDot, { backgroundColor: c }, accentColor === c && cs.colorDotActive]} />
-          ))}
-        </View>
-        <SeletorDeCor
-          valor={accentColor}
-          onMudar={(v) => { setAccentColor(v); scheduleSave({ accent_color: v }); }}
-          placeholder="#a78bfa"
-          estiloInput={cs.input}
-        />
-
-        <View style={cs.divider} />
-        <Text style={cs.fieldLabel}>Paletas prontas</Text>
-        <View style={[cs.colorRow, { gap: 8, flexDirection: "row", flexWrap: "wrap" }]}>
-          {PALETTE_PRESETS.map(([p, a, label]) => {
-            const active = primary.toLowerCase() === p.toLowerCase() && accentColor.toLowerCase() === a.toLowerCase();
-            return (
-              <Pressable key={label}
-                onPress={() => { setPrimary(p); setAccentColor(a); scheduleSave({ primary_color: p, accent_color: a }); }}
-                style={[s.paletteChip, active && s.paletteChipActive]}>
-                <View style={s.paletteSplit}>
-                  <View style={[s.paletteHalf, { backgroundColor: p, borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }]} />
-                  <View style={[s.paletteHalf, { backgroundColor: a, borderTopRightRadius: 8, borderBottomRightRadius: 8 }]} />
-                </View>
-                <Text style={[s.paletteLabel, active && { color: accent.primaryStrong, fontWeight: "700" }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={cs.divider} />
-        <ToggleRow label="Tema escuro" value={dark}
-          onChange={(v) => { setDark(v); scheduleSave({ dark_mode: v }); }}
-          hint="Inverte fundo e texto, mantendo a paleta" />
       </View>
 
       <SectionTitle title="Tipografia" />
@@ -602,14 +567,22 @@ export function TabDesign({
         <Field label="Texto exibido no topo (desktop)" value={annBar}
           onChange={(v) => { setAnnBar(v); scheduleSave({ announcement_bar: v }); }}
           placeholder="Ex: Frete grátis acima de R$ 250" />
-        <Text style={cs.hint}>Deixe vazio para esconder a faixa.</Text>
+        <Text style={cs.hint}>
+          Deixe vazio e a loja monta a faixa com o que você ligou: frete grátis acima de um valor, troca em 7 dias e o desconto no Pix.
+        </Text>
       </View>
 
       <SectionTitle title="Banners do topo" />
       <View style={cs.card}>
         <Text style={cs.hint}>
-          Até 3 banners se alternam automaticamente no carrossel da home.
+          Até 3 banners se alternam no topo da loja, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o seu título sobre um fundo com a sua cor — nada fica quebrado.
         </Text>
+        <View style={s.toneHelper}>
+          <Text style={s.toneHelperText}>
+            <Text style={s.toneHelperTitle}>Tamanho indicado: 1920 × 640 px</Text>{" "}
+            JPG ou PNG até 500 KB. O texto e o botão ficam sobre o lado esquerdo; no celular a arte é cortada no centro.
+          </Text>
+        </View>
 
         {/* Fase 3 — Rec #6: tempo entre slides do carrossel */}
         <View style={s.rotateRow}>
@@ -664,35 +637,16 @@ export function TabDesign({
           <Field label="Link do botão" value={b.cta_url || ""}
             onChange={(v) => updateBanner(idx, { cta_url: v })}
             onBlur={() => updateBanner(idx, { cta_url: normalizarDestino(b.cta_url || "") })}
-            placeholder="https://instagram.com/sualoja"
+            placeholder="https://… ou uma categoria: #cat=/vestidos"
             testID={`cta-url-${idx}`} />
+          <Text style={cs.hint}>
+            Um link (https://…) abre em nova aba. Uma categoria da sua loja (#cat=/vestidos, o caminho da categoria) abre aqui mesmo.
+          </Text>
           {avisoDoCta(estadoDoCta(b.cta, b.cta_url)) ? (
             <Text style={s.avisoCta} testID={`cta-aviso-${idx}`}>
               {avisoDoCta(estadoDoCta(b.cta, b.cta_url))}
             </Text>
           ) : null}
-
-          <Text style={cs.fieldLabel}>Layout do banner</Text>
-          {/* Fase 2 — picker visual de 4 thumbs (3 quando sem imagem). Auto-lock em image-clean quando ha b.image_url. */}
-          <BannerLayoutPicker
-            value={toneKey}
-            hasImage={hasImage}
-            onChange={(v) => updateBanner(idx, { tone: v })}
-            pickerStyles={pickerStyles}
-            thumb={thumb}
-          />
-
-          {/* Rec #10 — helper text dinamico por tone */}
-          <View style={s.toneHelper}>
-            <Text style={s.toneHelperText}>
-              <Text style={s.toneHelperTitle}>{toneHelper.title}</Text>{" "}
-              {toneHelper.body}
-            </Text>
-          </View>
-
-          <Text style={[cs.fieldLabel, { marginTop: 14 }]}>Cor de fundo</Text>
-          <ChipToggle options={BANNER_TINTS} value={b.tint || "brand"}
-            onChange={(v: any) => updateBanner(idx, { tint: v })} />
 
           <View style={cs.divider} />
           <Text style={cs.fieldLabel}>Imagem de fundo (opcional)</Text>
@@ -708,8 +662,7 @@ export function TabDesign({
                   onPress={async () => {
                     try {
                       await deleteImage(`banner_${idx}` as any);
-                      // Fase 2: ao remover imagem, restaura tone='split' (default original).
-                      updateBanner(idx, { image_url: null, tone: "split" });
+                      updateBanner(idx, { image_url: null });
                     } catch (err: any) { toast.error(err?.message); }
                   }}>
                   <Icon name="trash" size={14} color="#dc2626" />
@@ -735,9 +688,9 @@ export function TabDesign({
         );
       })}
 
-      <SectionTitle title="Cards de benefícios (rodapé)" />
+      <SectionTitle title="Selos de confiança" />
       <Text style={cs.hint}>
-        Cards curtos exibidos abaixo da grade de produtos. Até 4, cada um com ícone, título e descrição.
+        Quatro selos curtos entre a grade e o rodapé. Sem nenhum escrito, a loja mostra os padrões com o que você ligou (Pix ou cartão, troca em 7 dias, entrega ou retirada, WhatsApp) — nunca um selo do que a loja não faz.
       </Text>
 
       {/* Rec #5 — empty state com biblioteca de templates */}
