@@ -36,6 +36,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [phone, setPhone] = useState(maskPhone(config.phone || ""));
   const [whatsapp, setWhatsapp] = useState(maskPhone(config.whatsapp || ""));
   const [instagram, setInstagram] = useState(config.instagram || "");
+  // 02/09/2026: as tres redes do rodape da loja. O backend normaliza o @
+  // (services/redesSociais.js), entao aqui e so o campo.
+  const [tiktok, setTiktok] = useState(config.tiktok || "");
+  const [facebook, setFacebook] = useState(config.facebook || "");
   const [address, setAddress] = useState(config.address || "");
   // primary_color continua no payload mas a UI de edicao mora em Tab Design (Rec #1)
   const [color, setColor] = useState(config.primary_color || "#7c3aed");
@@ -83,6 +87,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setSiteName(config.site_name || ""); setTagline(config.tagline || "");
     setDescription(config.description || ""); setPhone(maskPhone(config.phone || ""));
     setWhatsapp(maskPhone(config.whatsapp || "")); setInstagram(config.instagram || "");
+    setTiktok(config.tiktok || ""); setFacebook(config.facebook || "");
     setAddress(config.address || ""); setColor(config.primary_color || "#7c3aed");
     setPublished(config.is_published ?? false);
     setPixKey(config.pix_key || "");
@@ -135,6 +140,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       phone: phone.trim() || null,
       whatsapp: whatsapp.trim() || null,
       instagram: instagram.trim() || null,
+      tiktok: tiktok.trim() || null,
+      facebook: facebook.trim() || null,
       address: address.trim() || null,
       primary_color: color,
       is_published: published,
@@ -310,6 +317,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <Field label="Descrição" value={description} onChange={setDescription} placeholder="Conte sobre seu negócio..." multiline />
         <Field label="WhatsApp" value={whatsapp} onChange={(v) => setWhatsapp(maskPhone(v))} placeholder="(12) 99999-0000" />
         <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seunegocio" />
+        <Field label="TikTok" value={tiktok} onChange={setTiktok} placeholder="@seunegocio" />
+        <Field label="Facebook" value={facebook} onChange={setFacebook} placeholder="@seunegocio" />
+        <Text style={cs.hint}>
+          Cada rede preenchida vira um ícone no rodapé da sua loja. Pode colar o @ ou o link do perfil.
+        </Text>
         <Field label="Telefone" value={phone} onChange={(v) => setPhone(maskPhone(v))} placeholder="(12) 3333-0000" />
         <Field label="Endereço" value={address} onChange={setAddress} placeholder="Rua Principal, 100 - Jacarei/SP" />
         <Pressable onPress={handleSave} disabled={isSaving} style={[cs.saveBtn, isSaving && { opacity: 0.6 }]}><Text style={cs.saveBtnText}>{isSaving ? "Salvando..." : "Salvar configurações"}</Text></Pressable>
