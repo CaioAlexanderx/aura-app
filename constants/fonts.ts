@@ -75,33 +75,36 @@ export const TIPOGRAFIAS: Record<ChaveTipografia, ParTipografico> = {
     chave: "classic",
     nome: "Elegante",
     hint: "Serifada fina, de traço clássico. Boutique, joalheria, moda autoral.",
-    display: "'Instrument Serif', Georgia, serif",
-    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Instrument+Serif:ital@0;1", "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700"],
+    // RE-CURADO em 02/09/2026 (redesign da loja, Claude Design). Os quatro
+    // TIPOS continuam; mudam as familias. Espelho: aura-backend
+    // src/templates/storefrontTypography.js — mexer nos dois.
+    display: "'Cormorant Garamond', Georgia, serif",
+    body: "'Figtree', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Cormorant+Garamond:ital,wght@0,500;0,600;1,500", "Figtree:wght@400;500;600;700"],
   },
   modern: {
     chave: "modern",
     nome: "Moderna",
     hint: "Sem serifa, geométrica. Streetwear, esporte, tecnologia.",
     display: "'Space Grotesk', -apple-system, sans-serif",
-    body: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Space+Grotesk:wght@500;600;700", "Inter:wght@400;500;600;700"],
+    body: "'Manrope', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Space+Grotesk:wght@500;600;700", "Manrope:wght@400;500;600;700"],
   },
   editorial: {
     chave: "editorial",
     nome: "Marcante",
     hint: "Peso alto e largura estreita. Atacado, liquidação, preço em destaque.",
-    display: "'Archivo Black', Impact, sans-serif",
+    display: "'Anton', Impact, sans-serif",
     body: "'Archivo', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Archivo+Black", "Archivo:wght@400;500;600;700"],
+    familias: ["Anton", "Archivo:wght@400;500;600;700"],
   },
   humanist: {
     chave: "humanist",
     nome: "Acolhedora",
     hint: "Serifada macia, de curvas abertas. Artesanal, casa, presentes.",
-    display: "'Fraunces', Georgia, serif",
-    body: "'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    familias: ["Fraunces:opsz,wght@9..144,400;9..144,600", "Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700"],
+    display: "'Lora', Georgia, serif",
+    body: "'Karla', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Lora:ital,wght@0,400;0,500;0,600;1,400", "Karla:wght@400;500;600;700"],
   },
 };
 
