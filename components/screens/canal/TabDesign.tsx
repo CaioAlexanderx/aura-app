@@ -527,46 +527,6 @@ export function TabDesign({
           estiloInput={cs.input}
         />
 
-        <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Cor do degradê do topo</Text>
-        <Text style={[cs.hint, { marginTop: -4, marginBottom: 8 }]}>
-          Combina com a primeira no topo da loja. Também tinge a bolinha do carrinho.
-        </Text>
-        <View style={cs.colorRow}>
-          {ACCENT_PRESETS.map((c) => (
-            <Pressable key={c} onPress={() => { setAccentColor(c); scheduleSave({ accent_color: c }); }}
-              style={[cs.colorDot, { backgroundColor: c }, accentColor === c && cs.colorDotActive]} />
-          ))}
-        </View>
-        <SeletorDeCor
-          valor={accentColor}
-          onMudar={(v) => { setAccentColor(v); scheduleSave({ accent_color: v }); }}
-          placeholder="#a78bfa"
-          estiloInput={cs.input}
-        />
-
-        <View style={cs.divider} />
-        <Text style={cs.fieldLabel}>Paletas prontas</Text>
-        <View style={[cs.colorRow, { gap: 8, flexDirection: "row", flexWrap: "wrap" }]}>
-          {PALETTE_PRESETS.map(([p, a, label]) => {
-            const active = primary.toLowerCase() === p.toLowerCase() && accentColor.toLowerCase() === a.toLowerCase();
-            return (
-              <Pressable key={label}
-                onPress={() => { setPrimary(p); setAccentColor(a); scheduleSave({ primary_color: p, accent_color: a }); }}
-                style={[s.paletteChip, active && s.paletteChipActive]}>
-                <View style={s.paletteSplit}>
-                  <View style={[s.paletteHalf, { backgroundColor: p, borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }]} />
-                  <View style={[s.paletteHalf, { backgroundColor: a, borderTopRightRadius: 8, borderBottomRightRadius: 8 }]} />
-                </View>
-                <Text style={[s.paletteLabel, active && { color: accent.primaryStrong, fontWeight: "700" }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={cs.divider} />
-        <ToggleRow label="Tema escuro" value={dark}
-          onChange={(v) => { setDark(v); scheduleSave({ dark_mode: v }); }}
-          hint="Inverte fundo e texto, mantendo a paleta" />
       </View>
 
       <SectionTitle title="Tipografia" />
