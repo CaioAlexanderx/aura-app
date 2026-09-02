@@ -92,7 +92,7 @@ describe("specs de imagem", () => {
   });
 
   test("o resumo do banner traz a medida — é o erro mais comum", () => {
-    expect(SPECS.banner.resumo).toContain("1600×600");
+    expect(SPECS.banner.resumo).toContain("1920×640");
   });
 
   test("o texto fala COM a lojista, sem termo interno", () => {
