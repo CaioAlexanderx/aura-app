@@ -132,6 +132,91 @@ export function cssDaVitrine(chave?: string | null): string {
     "&display=swap";
 }
 
+// ═══════════════════════════════════════════════════════════════
+// TIPOGRAFIAS DO STUDIO — as MESMAS quatro chaves, outros pares
+//
+// A chave (`classic`, `modern`, `editorial`, `humanist`) e contrato de
+// banco, congelado por CHECK na migration 299, e a lojista escolhe uma so
+// vez para as duas lojas dela. O que muda e o que cada chave RESOLVE:
+//
+//   loja comum  — a curadoria de 02/09, virada para varejo de moda
+//   vitrine Studio — o trio Studio Premium (Fraunces · DM Sans · DM Mono)
+//
+// Nao sao dois seletores nem duas colunas: e a mesma escolha, lida com o
+// vocabulario de cada vitrine. O rotulo que a lojista ve ("Elegante",
+// "Moderna") vem de TIPOGRAFIAS e continua valendo nos dois lugares.
+//
+// Decisao 1 do redesign da vitrine Studio, 03/09/2026.
+// ═══════════════════════════════════════════════════════════════
+export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
+  classic: {
+    chave: "classic",
+    nome: TIPOGRAFIAS.classic.nome,
+    hint: TIPOGRAFIAS.classic.hint,
+    // Fraunces e a voz editorial do Studio Premium — serifada optica, com
+    // italico expressivo. E o padrao porque `classic` e o default do banco.
+    display: "'Fraunces', 'Instrument Serif', Georgia, serif",
+    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400",
+               "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+  },
+  modern: {
+    chave: "modern",
+    nome: TIPOGRAFIAS.modern.nome,
+    hint: TIPOGRAFIAS.modern.hint,
+    // Sem serifa em tudo: DM Sans tambem no display.
+    display: "'DM Sans', -apple-system, sans-serif",
+    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800"],
+  },
+  editorial: {
+    chave: "editorial",
+    nome: TIPOGRAFIAS.editorial.nome,
+    hint: TIPOGRAFIAS.editorial.hint,
+    // Instrument Serif e a display alternativa do sistema: mesma familia
+    // de voz, traco mais leve.
+    display: "'Instrument Serif', Georgia, serif",
+    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Instrument+Serif:ital@0;1",
+               "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+  },
+  humanist: {
+    chave: "humanist",
+    nome: TIPOGRAFIAS.humanist.nome,
+    hint: TIPOGRAFIAS.humanist.hint,
+    // Manuscrita — a loja de lembrancinha e convite pede isso, e Pacifico
+    // ja e carregada como fonte de ARTE, entao nao custa banda nova.
+    display: "'Pacifico', cursive",
+    body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    familias: ["Pacifico",
+               "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+  },
+};
+
+/** O par do Studio para a chave escolhida, com queda para `classic`. */
+export function tipografiaDoStudio(chave?: string | null): ParTipografico {
+  const k = String(chave || "").trim() as ChaveTipografia;
+  return TIPOGRAFIAS_STUDIO[k] || TIPOGRAFIAS_STUDIO.classic;
+}
+
+/**
+ * O link do Google Fonts da vitrine Studio: so o par escolhido, mais a
+ * mono dos precos e as fontes de arte que vao impressas no produto.
+ */
+export function cssDaVitrineStudio(chave?: string | null): string {
+  const par = tipografiaDoStudio(chave);
+  const familias = [
+    ...par.familias,
+    "DM+Mono:wght@400;500",
+    ...ART_FONTS.map((f) => f.replace(/ /g, "+")),
+  ];
+  // Set: `modern` repete DM Sans, e familia duplicada na URL e 404 no CSS.
+  return "https://fonts.googleapis.com/css2?" +
+    [...new Set(familias)].map((f) => "family=" + f).join("&") +
+    "&display=swap";
+}
+
+
 /**
  * CSS com TODAS as tipografias — so pro painel.
  *

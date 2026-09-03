@@ -29,7 +29,9 @@
 // ============================================================
 import { View, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import type { CustomizationField } from "../types";
-import { T } from "../types";
+import { useMemo } from "react";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
+import type { PaletaDaVitrine } from "../theme";
 import { Texto } from "../TipografiaVitrine";
 import {
   ART_DESIGNER, priceLabel, choiceHint, briefingFor,
@@ -55,6 +57,8 @@ export function FieldArtService({
   onChange,
   onBriefChange,
 }: Props) {
+  const T = usePaletaDaVitrine();
+  const styles = useMemo(() => folha(T), [T]);
   const shouldReduceMotion = Platform.OS === "web" ? false : false; // fallback seguro
 
   const choices: Array<{ value: string; label: string; price_delta?: number }> =
@@ -145,7 +149,10 @@ export function FieldArtService({
   );
 }
 
-const styles = StyleSheet.create({
+// A folha inteira depende da cor da loja, entao ela vira funcao do tema.
+// Memoizada dentro do componente: StyleSheet.create a cada render
+// descartaria o cache de estilo do react-native-web.
+const folha = (T: PaletaDaVitrine) => StyleSheet.create({
   root: {
     gap: 8,
     marginTop: 4,
@@ -210,7 +217,7 @@ const styles = StyleSheet.create({
     color: T.ink2,
   },
   optionTitleActive: {
-    color: T.primary,
+    color: T.primaryTexto,
   },
   designerTitleActive: {
     color: T.accent,
@@ -321,4 +328,4 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: 3,
   },
-});
+})

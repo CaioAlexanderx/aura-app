@@ -4,7 +4,8 @@
 // ============================================================
 import { View, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
-import { T, sectionLabel } from "../types";
+import { sectionLabel } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
 export function FieldColor({
@@ -14,6 +15,7 @@ export function FieldColor({
   value: any;
   onChange: (v: any) => void;
 }) {
+  const T = usePaletaDaVitrine();
   const colors = field.config.colors || ["#FFFFFF", "#000000"];
   const choices = field.config.choices || [];
   return (

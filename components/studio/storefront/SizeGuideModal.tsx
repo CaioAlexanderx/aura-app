@@ -7,7 +7,7 @@
 // ============================================================
 import { useEffect } from "react";
 import { View, Pressable, Modal, ScrollView, Platform } from "react-native";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 
 import { Texto } from "./TipografiaVitrine";
 export type SizeGuide = {
@@ -22,6 +22,7 @@ export function SizeGuideModal({
   sizeGuide: SizeGuide;
   onClose: () => void;
 }) {
+  const T = usePaletaDaVitrine();
   const isImage =
     sizeGuide.content_type === "image/png" ||
     sizeGuide.content_type === "image/jpeg" ||
@@ -245,7 +246,7 @@ export function SizeGuideModal({
                   <Texto
                     style={{
                       fontSize: 13,
-                      color: T.primary,
+                      color: T.primaryTexto,
                       fontWeight: "700",
                     }}
                   >

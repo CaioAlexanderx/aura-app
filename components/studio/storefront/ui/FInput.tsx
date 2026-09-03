@@ -3,7 +3,7 @@
 // Componente de input de formulário reutilizável.
 // ============================================================
 import { TextInput } from "react-native";
-import { T } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 export function FInput({
   v, on, ph, kb, multi, flex,
@@ -15,6 +15,7 @@ export function FInput({
   multi?: boolean;
   flex?: number;
 }) {
+  const T = usePaletaDaVitrine();
   return (
     <TextInput
       value={v}

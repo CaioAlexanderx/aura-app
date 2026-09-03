@@ -17,9 +17,12 @@
 // ============================================================
 import { createContext, useContext, type ReactNode } from "react";
 import { Text, type TextProps } from "react-native";
-import { tipografiaDaLoja, type ParTipografico } from "@/constants/fonts";
+// A chave e a MESMA que a lojista escolheu (contrato de banco), mas a
+// vitrine Studio resolve ela no trio Studio Premium — Fraunces, DM Sans
+// e DM Mono. A loja comum resolve na curadoria dela. Ver constants/fonts.ts.
+import { tipografiaDoStudio, type ParTipografico } from "@/constants/fonts";
 
-const Contexto = createContext<ParTipografico>(tipografiaDaLoja(null));
+const Contexto = createContext<ParTipografico>(tipografiaDoStudio(null));
 
 export function TipografiaDaVitrine({
   chave, children,
@@ -28,7 +31,7 @@ export function TipografiaDaVitrine({
   chave?: string | null;
   children: ReactNode;
 }) {
-  return <Contexto.Provider value={tipografiaDaLoja(chave)}>{children}</Contexto.Provider>;
+  return <Contexto.Provider value={tipografiaDoStudio(chave)}>{children}</Contexto.Provider>;
 }
 
 /** O par escolhido, para quem precisa da serifada de título. */

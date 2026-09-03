@@ -4,7 +4,7 @@
 // ============================================================
 import { View, Pressable } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { LivePreview } from "./LivePreview";
 
 import { CapaProduto } from "./CapaProduto";
@@ -38,6 +38,7 @@ export function CartBar({
   sf: StorefrontState;
   accent: string;
 }) {
+  const T = usePaletaDaVitrine();
   if (sf.cart.length === 0) return null;
   return (
     <Pressable
@@ -82,6 +83,7 @@ export function CartBar({
 
 /** Lista de itens no checkout */
 export function CartItemList({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
   const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
   const editChip: any = {
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,

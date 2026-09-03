@@ -11,7 +11,7 @@
 // ============================================================
 import { useState } from "react";
 import { View, Pressable, Image, Platform } from "react-native";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { CapaProduto } from "./CapaProduto";
 
@@ -62,6 +62,7 @@ type Props = {
 };
 
 export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay, altura, preencher }: Props) {
+  const T = usePaletaDaVitrine();
   const [i, setI] = useState(0);
   const [hover, setHover] = useState(false);
   const cor = corDaLoja || AURA.violet;
@@ -144,6 +145,7 @@ export function CarrosselFoto({ fotos, nome, tamanho, corDaLoja, fonteDisplay, a
 }
 
 function Chevron({ dir, cor }: { dir: "esquerda" | "direita"; cor: string }) {
+  const T = usePaletaDaVitrine();
   return (
     <View
       style={{

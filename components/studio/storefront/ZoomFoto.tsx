@@ -11,7 +11,7 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { View, Image, Pressable, Modal, Platform, useWindowDimensions } from "react-native";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { proximoIndice } from "./CarrosselFoto";
 
 import { Texto } from "./TipografiaVitrine";
@@ -113,6 +113,7 @@ function Seta({ glifo, rotulo, onPress }: { glifo: string; rotulo: string; onPre
  * botão e alcança o teclado na ordem natural.
  */
 export function DicaDeZoom({ onPress, corDaLoja }: { onPress: () => void; corDaLoja?: string | null }) {
+  const T = usePaletaDaVitrine();
   const cor = corDaLoja || T.ink2;
   return (
     <Pressable

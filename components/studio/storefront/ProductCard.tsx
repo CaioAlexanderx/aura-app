@@ -12,7 +12,7 @@
 // ============================================================
 import { View, Pressable, Platform } from "react-native";
 import { Fonts } from "@/constants/fonts";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { CarrosselFoto } from "./CarrosselFoto";
 import { resumo } from "./capaModel";
@@ -44,6 +44,7 @@ export function ProductCard({
   nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay,
   estilo = "editorial", onPress,
 }: Props) {
+  const T = usePaletaDaVitrine();
   const cor = corDaLoja || AURA.violet;
   // No minimal a descricao nao entra: o estilo existe pra caber mais
   // produto na tela, e uma linha extra por cartao briga com isso.

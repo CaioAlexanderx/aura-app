@@ -11,7 +11,6 @@
 // como no Oscar, e não escondido num rodapé.
 // ============================================================
 import { View, Pressable, Platform, Linking } from "react-native";
-import { T } from "./types";
 import { AURA, wash, parLegivel } from "./theme";
 
 import { Texto } from "./TipografiaVitrine";

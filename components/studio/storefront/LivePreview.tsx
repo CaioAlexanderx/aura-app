@@ -31,7 +31,8 @@ import { View, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
 import { valuesForSide } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "./types";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import type { PaletaDaVitrine } from "./theme";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
 import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
 
@@ -53,16 +54,22 @@ import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
 import { Texto } from "./TipografiaVitrine";
-// Paleta do storefront (light) derivada do T da loja — sem tocar no
-// tema interno do painel. Mantém o mockup coerente com a vitrine pública.
-const STOREFRONT_PALETTE: PreviewPalette = {
-  bgSoft: T.bg,
-  ink: T.ink,
-  ink3: T.ink3,
-  ink4: T.ink4,
-  ink5: T.border,
-  primary: T.primary,
-};
+// Paleta do mockup, derivada da paleta da vitrine — sem tocar no tema
+// interno do painel. Mantém o preview coerente com a loja em volta.
+//
+// Era uma constante de módulo, montada da paleta cravada. Com o tema
+// vivo (S1), ela passa a ser função: a cor é da lojista e só existe em
+// tempo de render.
+function paletaDoPreview(T: PaletaDaVitrine): PreviewPalette {
+  return {
+    bgSoft: T.bg,
+    ink: T.ink,
+    ink3: T.ink3,
+    ink4: T.ink4,
+    ink5: T.border,
+    primary: T.primary,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,6 +106,7 @@ function findPdfImageField(
 }
 
 function PdfNote({ size }: { size: number }) {
+  const T = usePaletaDaVitrine();
   return (
     <View
       style={{
@@ -154,6 +162,7 @@ export function LivePreview({
    *  visual. Sem ela o cliente ve um quadrado colorido no lugar da peca. */
   fotoProduto?: string | null;
 }) {
+  const T = usePaletaDaVitrine();
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
   const [viewId, setViewId] = useState<"front" | "back" | "middle">("front");
@@ -302,7 +311,7 @@ export function LivePreview({
         size={size}
         productName={productName}
         showLabel={showLabel}
-        t={STOREFRONT_PALETTE}
+        t={paletaDoPreview(T)}
       />
       {pdfField && <PdfNote size={size} />}
     </View>

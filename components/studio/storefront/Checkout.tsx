@@ -5,7 +5,8 @@
 // ============================================================
 import { View, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { T, sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
+import { sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { CartItemList } from "./Cart";
 import { montarTema } from "./theme";
 import { FInput } from "./ui/FInput";
@@ -15,6 +16,7 @@ import { PoweredByAura } from "./ui/PoweredByAura";
 import { tipografiaDaLoja } from "@/constants/fonts";
 import { Texto } from "./TipografiaVitrine";
 export function Checkout({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
   // A cor da loja tambem no botao que fecha a venda — era azul-marinho
   // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
   // arbitrario (ver fase 01).

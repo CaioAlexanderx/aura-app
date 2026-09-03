@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { View, Pressable, ScrollView, Platform, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { montarTema } from "./theme";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
@@ -14,6 +14,7 @@ import { QrCode } from "@/components/QrCode";
 import { tipografiaDaLoja } from "@/constants/fonts";
 import { Texto } from "./TipografiaVitrine";
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
   // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
   const tema = montarTema((sf.store as any)?.site?.primary_color);
   const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
