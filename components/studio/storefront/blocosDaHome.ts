@@ -174,13 +174,16 @@ export function tiraDeCategorias(
   produtos: StudioStoreProduct[],
 ): Array<{ id: string; nome: string; slug: string; total: number }> {
   const raizes = (categorias || []).filter((c) => c.depth === 0);
-  if (raizes.length < MINIMO_NA_FILEIRA) return [];
   const conta = (raiz: StoreCategory) =>
     (produtos || []).filter((p) => (p.category_path || "").startsWith(raiz.path)).length;
-  return raizes
+  const comProduto = raizes
     .map((c) => ({ id: c.id, nome: c.name, slug: c.slug, total: conta(c) }))
-    .filter((c) => c.total > 0)
-    .slice(0, MAXIMO_CATEGORIAS);
+    .filter((c) => c.total > 0);
+  // O minimo vale DEPOIS do filtro. A Sheid tem tres categorias na
+  // arvore e produto em uma so: "Escolha por onde comecar" com um
+  // cartao nao e escolha, e rotulo — visto na loja no ar em 03/09.
+  if (comProduto.length < MINIMO_NA_FILEIRA) return [];
+  return comProduto.slice(0, MAXIMO_CATEGORIAS);
 }
 
 /** Monta a home inteira a partir do payload. */

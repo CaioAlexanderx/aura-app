@@ -205,6 +205,22 @@ export function ProductCard({
         {/* O que da para personalizar, lido do customization_config. No
             image-heavy nao entra: sobre a foto ja ha nome e preco, e mais
             uma fileira taparia a peca. */}
+        {/* No image-heavy a tarja sobre a foto so cabe UM chip — e ele
+            entra mesmo assim: "Mockup 3D" e o argumento de venda do
+            Studio, e perde-lo por causa de um estilo de cartao seria
+            esconder justamente o que diferencia a loja. */}
+        {chips && chips.length > 0 && sobreposto ? (
+          <View style={{
+            alignSelf: "flex-start", marginTop: 4, borderRadius: 999,
+            paddingHorizontal: 7, paddingVertical: 3,
+            backgroundColor: "rgba(255,255,255,0.22)",
+          }}>
+            <Texto style={{ fontSize: 9.5, color: "#fff", letterSpacing: 0.2 }}>
+              {chips[0].texto}
+            </Texto>
+          </View>
+        ) : null}
+
         {chips && chips.length > 0 && !sobreposto && !compacto ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
             {chips.map((c) => (
