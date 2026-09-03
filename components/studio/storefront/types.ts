@@ -30,6 +30,10 @@ export type StudioStoreProduct = {
   // (preco unitario e percentual por faixa). [] quando nao ha faixa.
   qty_tiers?: QtyTier[];
   stock_qty: number;
+  /** S0 — quantos pedidos esta peça já teve. Ordena o bloco "mais pedidos". */
+  pedidos?: number;
+  /** S0 — 'model3d' | 'photo2d' | null. Vira o chip "Mockup 3D" no card. */
+  visual_kind?: string | null;
   // Ficha tecnica (migration 305). Nasceu na loja comum em 23/08 e levou
   // uma correcao pra chegar ate aqui (backend #598) — o SELECT da vitrine
   // e outro. Opcional porque o backend so devolve depois da migration.
@@ -67,6 +71,28 @@ export type StoreRevisions = {
   policy_text: string | null;
 };
 
+/** Um banner da home. Mesmo formato que a loja comum recebe. */
+export type BannerDaLoja = {
+  kicker: string;
+  headline: string;
+  body: string;
+  cta: string;
+  cta_url: string | null;
+  tone: string;
+  tint: string;
+  image_url: string | null;
+  /** A versão quadrada, para o celular; sem ela a larga serve nos dois. */
+  image_url_mobile: string | null;
+  enabled: boolean;
+};
+
+export type RedeSocial = {
+  rede: string;
+  nome: string;
+  handle: string;
+  url: string;
+};
+
 export type StorePayload = {
   site: {
     name: string; tagline?: string;
@@ -76,6 +102,11 @@ export type StorePayload = {
     /** Estilo do cartao: editorial | minimal | image-heavy. */
     card_style?: string | null;
     logo_url: string | null; cover_url?: string | null;
+    /** S0 — os banners da lojista, no MESMO formato da loja comum. */
+    banners?: BannerDaLoja[];
+    /** S0 — Instagram, TikTok e Facebook com a URL pronta. */
+    redes?: RedeSocial[];
+    whatsapp?: string | null;
   };
   products: StudioStoreProduct[];
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };
@@ -94,6 +125,8 @@ export type StorePayload = {
     pickup_eta_text: string | null;
     delivery_eta_text: string | null;
   };
+  /** S0 — os números da faixa de confiança, do banco. */
+  numeros?: { pedidos_entregues: number };
   total_products: number;
 };
 

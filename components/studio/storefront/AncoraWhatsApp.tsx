@@ -50,6 +50,24 @@ type Props = {
   acimaDaBarra?: boolean;
 };
 
+/**
+ * O link do WhatsApp para pedido em lote.
+ *
+ * Ate o assistente publico existir (S6), o bloco B2B da home leva a
+ * conversa para o WhatsApp com o assunto ja escrito — que e como a
+ * lojista atende esse pedido hoje. Melhor um caminho real e curto do que
+ * um botao que ainda nao faz nada.
+ */
+export function linkDeLote(bruto?: string | null, nomeDaLoja?: string | null): string | null {
+  const num = numeroWhatsApp(bruto);
+  if (!num) return null;
+  const loja = String(nomeDaLoja || "").trim();
+  const texto = loja
+    ? `Olá! Vim pela loja ${loja} e queria um orçamento em lote (peças personalizadas com nomes).`
+    : "Olá! Queria um orçamento em lote de peças personalizadas com nomes.";
+  return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
+}
+
 export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: Props) {
   const href = linkWhatsApp(numero, nomeDaLoja);
   // Sem número configurado não há botão. Um botão que não leva a lugar
