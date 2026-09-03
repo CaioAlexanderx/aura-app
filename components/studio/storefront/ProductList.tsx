@@ -3,10 +3,10 @@
 // Stage="list": hero da loja + grid de produtos + CartBar.
 // ============================================================
 import { useMemo, useState } from "react";
-import { View, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
+import { View, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions , Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { Fonts, tipografiaDaLoja } from "@/constants/fonts";
+import { Fonts } from "@/constants/fonts";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
 import { casa } from "./buscaVitrine";
@@ -17,10 +17,15 @@ import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 import { wash } from "./theme";
 
-import { AncoraWhatsApp } from "./AncoraWhatsApp";
+import { AncoraWhatsApp, linkDeLote } from "./AncoraWhatsApp";
 import { RodapeInstitucional } from "./RodapeInstitucional";
+import { montarBlocosDaHome } from "./blocosDaHome";
+import {
+  FaixaDeAvisos, Hero, ComoFunciona, TiraDeCategorias,
+  MaisPedidos, ArtesProntas, BlocoB2B, FaixaDeConfianca,
+} from "./HomeDaVitrine";
 import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, useTipografia } from "./TipografiaVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   if (!sf.store) return null;
@@ -43,7 +48,10 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // linhas — menor que o proprio botao. Agora ocupa a largura do cartao.
   // Par tipografico da loja. A escolha ja existia no painel e so a loja
   // comum consumia; aqui a vitrine Studio passa a respeitar.
-  const tipo = tipografiaDaLoja((store.site as any).font_family);
+  // A tipografia vem do contexto: o provider ja resolveu a chave da
+  // lojista no par do Studio. Chamar o resolvedor da loja comum aqui
+  // era a fonte da vitrine divergindo da fonte do resto dela.
+  const tipo = useTipografia();
 
   const GAP = 14;
   const LARGURA_MAX = 980;
@@ -57,6 +65,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   const colunas = colunasComDensidade(estiloCartao === "minimal" ? base + 1 : base, denso);
   const larguraUtil = Math.min(width, LARGURA_MAX) - 28; // padding do scroll
   const larguraCartao = Math.floor((larguraUtil - GAP * (colunas - 1)) / colunas);
+
+  // Os blocos da home: QUEM aparece e decisao de blocosDaHome.ts.
+  const blocos = useMemo(() => montarBlocosDaHome(store), [store]);
+  // O bloco B2B so aparece com destino: sem WhatsApp da loja, o botao
+  // nao teria para onde levar. O assistente publico entra na S6.
+  const loteWa = linkDeLote((store.site as any).whatsapp, store.site.name);
 
   const menu = useMemo(
     () => montarMenu(store.categories, store.products, cabemNaBarra(width)),
@@ -112,103 +126,25 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Hero */}
-      <View
-        style={[
-          { paddingHorizontal: telaLarga ? 20 : 14, paddingTop: 28, paddingBottom: 32, backgroundColor: primary },
-          Platform.OS === "web"
-            ? (store.site.cover_url
-                ? ({
-                    // cover do lojista com overlay do gradiente da marca por cima
-                    // (legibilidade do texto branco). Visual final no DESIGN-32.
-                    backgroundImage:
-                      "linear-gradient(135deg, " + primary + "E6, " + accent + "CC), url(" +
-                      store.site.cover_url + ")",
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  } as any)
-                : ({ background: "linear-gradient(135deg, " + primary + ", " + accent + ")" } as any))
-            : {},
-        ]}
+      {/* A home inteira rola. Antes so a grade rolava e o hero ficava
+          preso no topo — com um hero editorial e sete blocos abaixo, isso
+          deixaria metade da pagina inalcancavel no celular.
+          A barra de busca e categorias fica grudenta (indice 3): e o
+          controle que a pessoa procura quando ja esta no meio da grade. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        stickyHeaderIndices={[3]}
+        contentContainerStyle={{ paddingBottom: sf.cart.length > 0 ? 150 : 60 }}
       >
-        {/* Conteudo do hero alinhado a MESMA coluna de 980 do resto da
-            pagina. Antes ele comecava a 24px da borda enquanto a grade
-            comecava no centro — a loja parecia duas paginas coladas. */}
-        <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: telaLarga ? 20 : 0 }}>
-          {store.site.logo_url ? (
-            <Image
-              source={{ uri: store.site.logo_url }}
-              style={{
-                width: 56, height: 56, borderRadius: 12, marginBottom: 14,
-                backgroundColor: "rgba(255,255,255,0.15)",
-              }}
-              resizeMode="contain"
-              accessibilityLabel={store.site.name}
-            />
-          ) : null}
+        <FaixaDeAvisos avisos={blocos.avisos} />
 
-          {/* Micro-label monoespaçada — a mesma voz do site da Aura. */}
-          <Texto
-            style={{
-              fontFamily: Fonts.mono,
-              color: "rgba(255,255,255,0.8)",
-              fontSize: 10.5, letterSpacing: 1.6, textTransform: "uppercase",
-            }}
-          >
-            — Aura Studio · Personalizados
-          </Texto>
+        <Hero
+          hero={blocos.hero}
+          sla={store.sla.total_estimate_days}
+          totalProdutos={store.products.length}
+        />
 
-          {/* O nome da loja na SERIFADA da marca, grande. Era DM Sans 900,
-              que e voz de UI, nao de vitrine. */}
-          <Texto
-            style={{
-              fontFamily: tipo.display,
-              color: "#fff",
-              fontSize: telaLarga ? 52 : 36,
-              lineHeight: telaLarga ? 56 : 40,
-              marginTop: 6,
-            }}
-          >
-            {store.site.name}
-          </Texto>
-
-          {store.site.tagline ? (
-            <Texto style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, marginTop: 8, maxWidth: 520 }}>
-              {store.site.tagline}
-            </Texto>
-          ) : null}
-
-          {/* Meta numa linha so: o que a loja e, quanto tempo leva e o
-              tamanho do catalogo. Antes eram tres blocos empilhados. */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
-            <View
-              style={{
-                flexDirection: "row", alignItems: "center", gap: 5,
-                backgroundColor: "rgba(255,255,255,0.18)",
-                paddingHorizontal: 10, paddingVertical: 5,
-                borderRadius: 999,
-                borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
-              }}
-            >
-              <Texto style={{ color: "#fff", fontSize: 9 }}>●</Texto>
-              <Texto style={{ color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
-                Loja oficial · Arte personalizada
-              </Texto>
-            </View>
-
-            <Texto style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>
-              Produção em ~{store.sla.total_estimate_days}{" "}
-              {store.sla.total_estimate_days === 1 ? "dia útil" : "dias úteis"}
-            </Texto>
-
-            {store.products.length > 0 ? (
-              <Texto style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
-                · {store.products.length} {store.products.length === 1 ? "produto" : "produtos"}
-              </Texto>
-            ) : null}
-          </View>
-        </View>
-      </View>
+        <ComoFunciona passos={blocos.comoFunciona} />
 
       {/* Busca — a vitrine nao tinha nenhuma. Com 3 produtos da pra rolar;
           com 30, ou com os 74 da Sheid, nao da. */}
@@ -243,10 +179,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       <StoreNav menu={menu} ativa={ativa} onSelect={setAtiva} primary={primary} />
 
       {/* Grade de produtos */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          padding: 14, gap: 10, paddingBottom: sf.cart.length > 0 ? 150 : 60,
+      <View
+        style={{
+          padding: 14, gap: 10,
           width: "100%", maxWidth: 980, alignSelf: "center",
         }}
       >
@@ -388,6 +323,32 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             do scroll, depois dos produtos: e o fim da leitura, nao uma
             barra fixa competindo com o carrinho. O conteudo chega pronto
             do backend — ver o comentario do componente. */}
+      </View>
+
+        {/* Os blocos de baixo. Cada um devolve null quando a loja nao tem
+            o que mostrar — ver blocosDaHome.ts. */}
+        <TiraDeCategorias
+          categorias={blocos.categorias}
+          onEscolher={(slug) => {
+            const item = menu.itens.find((i) => i.slug === slug);
+            if (item) setAtiva(item);
+          }}
+        />
+
+        <MaisPedidos
+          produtos={blocos.maisPedidos}
+          nomeDaLoja={store.site.name}
+          onAbrir={(p) => sf.openConfigure(p)}
+        />
+
+        <ArtesProntas artes={blocos.artes} />
+
+        {blocos.mostrarB2B && loteWa ? (
+          <BlocoB2B onAbrir={() => Linking.openURL(loteWa)} />
+        ) : null}
+
+        <FaixaDeConfianca numeros={blocos.confianca} />
+
         <RodapeInstitucional
           rodape={(store as any).rodape_institucional}
           corDoTexto={T.ink}
