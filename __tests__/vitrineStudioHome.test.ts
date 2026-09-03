@@ -174,15 +174,26 @@ describe("a tira de categorias", () => {
 
   test("só primeiro nível, e só categoria com produto", () => {
     const r = tiraDeCategorias(cats, [
+      // Duas em /canecas, uma delas na subcategoria — a raiz conta as duas.
       produto({ category_path: "/canecas/brancas" }),
       produto({ category_path: "/canecas" }),
+      produto({ category_path: "/camisetas" }),
     ]);
-    expect(r.map((c) => c.nome)).toEqual(["Canecas"]);
-    expect(r[0].total).toBe(2);
+    // "Brancas" é depth 1: não entra na tira, só soma para a raiz dela.
+    expect(r.map((c) => c.nome)).toEqual(["Canecas", "Camisetas"]);
+    expect(r.map((c) => c.total)).toEqual([2, 1]);
   });
 
   test("uma categoria só não vira tira — a loja não tem por onde escolher", () => {
     expect(tiraDeCategorias([cats[0]], [produto({ category_path: "/canecas" })])).toEqual([]);
+  });
+
+  test("três na árvore mas produto em uma só também não vira tira", () => {
+    // O caso real da Sheid, visto na loja no ar: Canecas, Cartão de
+    // visita e Foto Colorida cadastradas, produto só em Canecas. O
+    // mínimo tem que valer DEPOIS do filtro, senão sobra um cartão
+    // sozinho sob o título "Escolha por onde começar".
+    expect(tiraDeCategorias(cats, [produto({ category_path: "/canecas" })])).toEqual([]);
   });
 
   test("loja sem árvore não quebra", () => {
