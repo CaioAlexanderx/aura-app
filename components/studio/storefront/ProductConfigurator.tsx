@@ -8,14 +8,15 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions, Platform } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import type { PaletaDaVitrine } from "./theme";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
-import { montarTema } from "./theme";
+import { montarTema, wash } from "./theme";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
+import { validateRequiredFields } from "./useStorefront";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { SizeGuideModal } from "./SizeGuideModal";
 // sideOf: fonte unica pra decidir o lado de um campo (front/back/middle).
@@ -149,6 +150,33 @@ export function ProductConfigurator({
   // middle, o layout vira sempre "Frente" + secao(oes) do(s) lado(s) extra(s).
   const shouldRenderAnySide = shouldRenderBack || shouldRenderMiddle;
 
+  // S4 — o que ainda falta, calculado ENQUANTO a pessoa preenche.
+  //
+  // validateRequiredFields ja existia e so rodava no commit: a pessoa
+  // configurava a peca inteira, tocava "Comprar agora" e so entao
+  // descobria que faltava a arte. A mesma funcao, chamada aqui, vira
+  // aviso na tela em vez de recusa no fim.
+  //
+  // E a MESMA do commit de proposito: duas validacoes divergentes fazem
+  // o aviso sumir e o botao recusar mesmo assim.
+  // A promessa de revisao desta loja, em uma linha.
+  const notaDeRevisao = (() => {
+    const r: any = (sf.store as any)?.revisions;
+    if (!r) return null;
+    if (r.policy_text) return String(r.policy_text);
+    const inc = Number(r.max_included) || 0;
+    if (inc <= 0) return "Você aprova o mockup antes de a loja produzir.";
+    const extra = Number(r.extra_price) || 0;
+    const base = `Você aprova o mockup antes de produzir. ${inc} ${inc === 1 ? "revisão inclusa" : "revisões inclusas"}`;
+    return extra > 0
+      ? `${base}; revisão extra R$ ${extra.toFixed(2).replace(".", ",")}.`
+      : `${base}.`;
+  })();
+
+  const pendencia = validateRequiredFields(
+    cfg ?? null, editingValues, showBackBody, showMiddleBody,
+  );
+
   // Agente J: designer=true quando o campo art_service existe e tem valor 'designer'
   const artServiceDesigner =
     artServiceField != null &&
@@ -219,6 +247,17 @@ export function ProductConfigurator({
     alignSelf: "center" as const,
     alignItems: telaLarga ? ("flex-start" as const) : ("stretch" as const),
   };
+  // S4 (decisao 3) — no celular a peca fica GRUDADA no topo enquanto a
+  // pessoa desce preenchendo. Sem isto, escolher a cor no fim do
+  // formulario nao mostra nada: o mockup ja rolou para fora da tela, e a
+  // promessa da vitrine e justamente "veja antes de pagar".
+  //
+  // No desktop nao e preciso: as duas colunas cabem lado a lado.
+  const previewGrudento = !telaLarga && Platform.OS === "web"
+    ? ({ position: "sticky", top: 0, zIndex: 3, backgroundColor: T.bg,
+         paddingBottom: 10 } as any)
+    : {};
+
   const colunaPreview = {
     width: telaLarga ? 360 : ("100%" as const),
     alignItems: "center" as const,
@@ -322,7 +361,7 @@ export function ProductConfigurator({
         contentContainerStyle={{ padding: telaLarga ? 28 : 16, paddingBottom: 160 }}
       >
         <View style={linhaConteudo}>
-        <View style={colunaPreview}>
+        <View style={[colunaPreview, previewGrudento]}>
           <View style={{ width: ladoDoPreview, alignSelf: "center" }}>
             <LivePreview
               config={cfg ?? null}
@@ -725,6 +764,31 @@ export function ProductConfigurator({
           alignItems: telaLarga ? "center" : "stretch",
         }}
       >
+        {/* O que falta, em ambar, antes do botao — nao depois do toque. */}
+        {pendencia ? (
+          <View style={{
+            width: "100%", maxWidth: telaLarga ? 420 : undefined, marginBottom: 10,
+            backgroundColor: wash(T.amber, 0.14), borderRadius: 10,
+            paddingVertical: 8, paddingHorizontal: 12,
+          }}>
+            <Texto style={{ fontSize: 12, color: T.ink2, lineHeight: 17 }}>
+              {pendencia}
+            </Texto>
+          </View>
+        ) : null}
+
+        {/* A politica de revisao e o que separa "comprei e torci" de
+            "comprei e vou ver antes". Ela existe no payload desde
+            25/05/2026 e so aparecia na tela de confirmacao — depois de
+            pagar, que e tarde para tranquilizar alguem. */}
+        {notaDeRevisao ? (
+          <Texto style={{
+            width: "100%", maxWidth: telaLarga ? 420 : undefined,
+            fontSize: 11.5, color: T.ink3, marginBottom: 10, lineHeight: 16,
+          }}>
+            {notaDeRevisao}
+          </Texto>
+        ) : null}
         {/* Editando uma linha do carrinho ha UMA acao: atualizar. Oferecer
             "Comprar agora" ali seria oferecer o que a pessoa ja fez —
             ela veio do carrinho. */}
