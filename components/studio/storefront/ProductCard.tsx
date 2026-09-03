@@ -37,12 +37,22 @@ type Props = {
    * vitrine Studio desenhava sempre do mesmo jeito.
    */
   estilo?: "editorial" | "minimal" | "image-heavy";
+  /**
+   * Selo de canto: "Mais pedido" ou "Novo". No maximo UM — dois
+   * empilhados viram etiqueta de liquidacao em cima da peca.
+   * Ver selosDoProduto.ts, que decide qual.
+   */
+  destaque?: { texto: string; tom: "marca" | "novo" } | null;
+  /** O que da para personalizar: "Mockup 3D", "Frente e verso"... */
+  chips?: Array<{ texto: string }>;
+  /** "R$ 39,90 cada 50 un ou mais" — so com escada configurada. */
+  escada?: string | null;
   onPress: () => void;
 };
 
 export function ProductCard({
   nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay,
-  estilo = "editorial", onPress,
+  estilo = "editorial", destaque, chips, escada, onPress,
 }: Props) {
   const T = usePaletaDaVitrine();
   const cor = corDaLoja || AURA.violet;
@@ -93,6 +103,26 @@ export function ProductCard({
           : ({ elevation: compacto ? 0 : hovered ? 4 : 2 } as any),
       ]}
     >
+      {destaque ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute", top: sobreposto ? 10 : 18, left: sobreposto ? 10 : 18,
+            zIndex: 2, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5,
+            backgroundColor: destaque.tom === "marca" ? cor : T.card,
+            borderWidth: destaque.tom === "marca" ? 0 : 1, borderColor: T.border,
+          }}
+        >
+          <Texto style={{
+            fontSize: 9.5, fontWeight: "800", letterSpacing: 0.9,
+            textTransform: "uppercase",
+            color: destaque.tom === "marca" ? T.sobrePrimary : T.ink2,
+          }}>
+            {destaque.texto}
+          </Texto>
+        </View>
+      ) : null}
+
       <CarrosselFoto
         fotos={fotos}
         nome={nome}
@@ -159,6 +189,36 @@ export function ProductCard({
         >
           R$ {preco.toFixed(2)}
         </Texto>
+
+        {/* A escada so existe quando a lojista configurou faixa. Nenhuma
+            das lojas Studio tem hoje — inventar uma seria anunciar
+            desconto que o checkout nao daria. */}
+        {escada && !compacto ? (
+          <Texto style={{
+            fontFamily: Fonts.mono, fontSize: 10.5,
+            color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
+          }}>
+            {escada}
+          </Texto>
+        ) : null}
+
+        {/* O que da para personalizar, lido do customization_config. No
+            image-heavy nao entra: sobre a foto ja ha nome e preco, e mais
+            uma fileira taparia a peca. */}
+        {chips && chips.length > 0 && !sobreposto && !compacto ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+            {chips.map((c) => (
+              <View key={c.texto} style={{
+                borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3,
+                borderWidth: 1, borderColor: T.border, backgroundColor: T.bg,
+              }}>
+                <Texto style={{ fontSize: 9.5, color: T.ink3, letterSpacing: 0.2 }}>
+                  {c.texto}
+                </Texto>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );

@@ -20,6 +20,7 @@ import { wash } from "./theme";
 import { AncoraWhatsApp, linkDeLote } from "./AncoraWhatsApp";
 import { RodapeInstitucional } from "./RodapeInstitucional";
 import { montarBlocosDaHome } from "./blocosDaHome";
+import { seloDoProduto, chipsDoProduto, linhaDeEscada, pecaMaisPedida } from "./selosDoProduto";
 import {
   FaixaDeAvisos, Hero, ComoFunciona, TiraDeCategorias,
   MaisPedidos, ArtesProntas, BlocoB2B, FaixaDeConfianca,
@@ -71,6 +72,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
   // O bloco B2B so aparece com destino: sem WhatsApp da loja, o botao
   // nao teria para onde levar. O assistente publico entra na S6.
   const loteWa = linkDeLote((store.site as any).whatsapp, store.site.name);
+  // A campea da loja e uma so: o selo "Mais pedido" nao pode aparecer
+  // em quatro cartoes ao mesmo tempo.
+  const campea = useMemo(() => pecaMaisPedida(store.products), [store.products]);
 
   const menu = useMemo(
     () => montarMenu(store.categories, store.products, cabemNaBarra(width)),
@@ -311,6 +315,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   corDaLoja={primary}
                   fonteDisplay={tipo.display}
                   estilo={estiloCartao}
+                  destaque={seloDoProduto(p, campea)}
+                  chips={chipsDoProduto(p)}
+                  escada={linhaDeEscada(p)}
                   onPress={() => sf.openConfigure(p)}
                 />
               );
