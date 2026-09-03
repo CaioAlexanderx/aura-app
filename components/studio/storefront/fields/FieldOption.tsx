@@ -4,7 +4,8 @@
 // ============================================================
 import { View, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
-import { T, sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "../types";
+import { sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
 export function FieldOption({
@@ -14,6 +15,7 @@ export function FieldOption({
   value: any;
   onChange: (v: any) => void;
 }) {
+  const T = usePaletaDaVitrine();
   const choices = field.config.choices || [];
   return (
     <View>

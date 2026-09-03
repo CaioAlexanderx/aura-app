@@ -3,9 +3,10 @@
 // Linha de total no checkout.
 // ============================================================
 import { View, Text } from "react-native";
-import { T } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 export function TotalRow({ l, v, big }: { l: string; v: number; big?: boolean }) {
+  const T = usePaletaDaVitrine();
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
       <Text style={{ fontSize: big ? 14 : 12, color: big ? T.ink : T.ink2, fontWeight: big ? "800" : "500" }}>{l}</Text>

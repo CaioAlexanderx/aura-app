@@ -10,7 +10,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import type { PaletaDaVitrine } from "./theme";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
 import { montarTema } from "./theme";
@@ -39,7 +40,9 @@ const qtyBtn: any = {
   backgroundColor: "#f3f4f6",
   alignItems: "center", justifyContent: "center",
 };
-const qtyTxt: any = { color: T.ink, fontSize: 16, fontWeight: "800" };
+// Estilo solto no módulo lia a paleta cravada; com o tema vivo ele
+// depende da loja, então vira função chamada dentro do componente.
+const qtyTxtCom = (T: PaletaDaVitrine): any => ({ color: T.ink, fontSize: 16, fontWeight: "800" });
 
 export function ProductConfigurator({
   sf,
@@ -49,6 +52,8 @@ export function ProductConfigurator({
   /** Slug da loja — necessario para o endpoint de upload no FieldImage */
   slug: string;
 }) {
+  const T = usePaletaDaVitrine();
+  const qtyTxt = qtyTxtCom(T);
   const {
     activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
     editingAddBack, setEditingAddBack,

@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { View, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { Fonts, tipografiaDaLoja } from "@/constants/fonts";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
@@ -22,6 +22,7 @@ import { RodapeInstitucional } from "./RodapeInstitucional";
 import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
 import { Texto } from "./TipografiaVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
   if (!sf.store) return null;
   const { store } = sf;
   const accent = store.site.accent_color || T.accent;

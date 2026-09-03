@@ -20,7 +20,8 @@
 import { useState, useRef, useCallback } from "react";
 import { View, Pressable, Platform, ActivityIndicator } from "react-native";
 import type { CustomizationField } from "../types";
-import { T, sectionLabel } from "../types";
+import { sectionLabel } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
 const API_BASE =
@@ -98,6 +99,7 @@ export function FieldImage({
   slug: string;
   onChange: (url: string) => void;
 }) {
+  const T = usePaletaDaVitrine();
   // --- estado local ---
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -294,7 +296,7 @@ export function FieldImage({
                   rel="noopener noreferrer"
                   style={{
                     fontSize: 11,
-                    color: T.primary,
+                    color: T.primaryTexto,
                     fontWeight: "700",
                     textDecoration: "underline",
                     whiteSpace: "nowrap",

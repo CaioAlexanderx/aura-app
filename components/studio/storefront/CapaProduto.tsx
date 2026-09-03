@@ -19,7 +19,7 @@
 // ============================================================
 import { View, Image } from "react-native";
 import { Fonts } from "@/constants/fonts";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, corLegivelSobre, AURA } from "./theme";
 import { iniciais, degrauDaCapa } from "./capaModel";
 
@@ -48,6 +48,7 @@ type Props = {
 };
 
 export function CapaProduto({ uri, nome, tamanho, corDaLoja, fonteDisplay, altura, preencher }: Props) {
+  const T = usePaletaDaVitrine();
   const cor = corDaLoja || AURA.violet;
   const alt = altura || tamanho;
   const raio = Math.round(Math.min(tamanho, alt) * 0.14);

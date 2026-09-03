@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Pressable, ScrollView, useWindowDimensions, Platform, Animated, Easing } from "react-native";
 import { AURA } from "./theme";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import type { ItemMenu, Menu } from "./storeNavModel";
 
 import { Texto } from "./TipografiaVitrine";
@@ -31,6 +31,7 @@ type Props = {
 };
 
 export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
+  const T = usePaletaDaVitrine();
   const { width } = useWindowDimensions();
   const telaLarga = width >= 720;
   const cor = primary || T.primary;

@@ -16,7 +16,7 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { cssDaVitrine } from "@/constants/fonts";
+import { cssDaVitrineStudio } from "@/constants/fonts";
 import { ActivityIndicator, View, Text } from "react-native";
 import { useStorefront } from "@/components/studio/storefront/useStorefront";
 import { T } from "@/components/studio/storefront/types";
@@ -27,6 +27,7 @@ import { SentConfirmation } from "@/components/studio/storefront/SentConfirmatio
 
 import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
 import { TipografiaDaVitrine } from "@/components/studio/storefront/TipografiaVitrine";
+import { TemaDaVitrine } from "@/components/studio/storefront/TemaDaVitrine";
 function Center({ children }: { children: any }) {
   return (
     <View
@@ -68,7 +69,7 @@ export default function StudioStorefrontPage() {
     const link = document.createElement("link");
     link.id = "aura-storefront-fonts";
     link.rel = "stylesheet";
-    link.href = cssDaVitrine(parEscolhido);
+    link.href = cssDaVitrineStudio(parEscolhido);
     document.head.appendChild(pre1);
     document.head.appendChild(pre2);
     document.head.appendChild(link);
@@ -92,7 +93,12 @@ export default function StudioStorefrontPage() {
   // A fonte da loja vale pra PAGINA TODA, nao so pros titulos. Medido na
   // loja de teste antes disto: de 20 textos da tela de produto, 19 saiam
   // em -apple-system. Ver TipografiaVitrine.tsx.
+  // A cor da lojista vale pra vitrine INTEIRA, nao so pros 3 componentes
+  // que ja montavam o tema. Ver TemaDaVitrine.tsx: ate aqui os outros 27
+  // liam uma paleta cravada, e a cliente entrava na loja da lojista e
+  // comprava numa loja da Aura.
   return (
+    <TemaDaVitrine cor={(sf.store as any)?.site?.primary_color}>
     <TipografiaDaVitrine chave={parEscolhido}>
       {sf.stage === "sent" ? (
         <SentConfirmation sf={sf} />
@@ -106,5 +112,6 @@ export default function StudioStorefrontPage() {
         <ProductList sf={sf} />
       )}
     </TipografiaDaVitrine>
+    </TemaDaVitrine>
   );
 }

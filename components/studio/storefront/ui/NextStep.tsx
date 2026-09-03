@@ -3,7 +3,7 @@
 // Item numerado da lista de "Próximos passos" no stage sent.
 // ============================================================
 import { View, Text } from "react-native";
-import { T } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 export function NextStep({
   n, title, desc, last,
@@ -13,6 +13,7 @@ export function NextStep({
   desc: string;
   last?: boolean;
 }) {
+  const T = usePaletaDaVitrine();
   return (
     <View style={{ flexDirection: "row", gap: 10, paddingBottom: last ? 0 : 12 }}>
       <View

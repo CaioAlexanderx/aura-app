@@ -217,13 +217,32 @@ export function corLegivelSobreEscuro(hex: string, fundo: string = AURA.bg): str
 export const SUPERFICIE = {
   escuro: {
     bg: AURA.bg, bg2: AURA.bg2, bg3: AURA.bg3, bg4: AURA.bg4,
-    ink: AURA.ink, ink2: AURA.ink2, ink3: AURA.ink3,
+    ink: AURA.ink, ink2: AURA.ink2, ink3: AURA.ink3, ink4: "rgba(140,130,200,0.45)",
     border: AURA.border,
   },
   claro: {
     bg: AURA.bgClaro, bg2: AURA.bg2Claro, bg3: AURA.bg3Claro, bg4: AURA.bg4Claro,
     ink: AURA.inkClaro, ink2: AURA.ink2Claro, ink3: AURA.ink3Claro,
+    ink4: "rgba(60,52,100,0.38)",
     border: AURA.borderClaro,
+  },
+  /**
+   * Papel quente — o Studio Premium.
+   *
+   * `claro` puxa os neutros para o violeta, porque nasceu para a vitrine
+   * comum, que e produto da Aura. A vitrine Studio vende objeto feito a
+   * mao: caneca, camiseta, lembranca de festa. O design system dela pede
+   * papel quente, e neutro violeta sobre foto de produto artesanal briga
+   * com a foto.
+   *
+   * Nasce como modo NOVO em vez de substituir `claro` de proposito: a
+   * MiniLoja do painel monta o tema pelo mesmo motor, e trocar `claro`
+   * mudaria a cara dela sem ninguem ter pedido.
+   */
+  papel: {
+    bg: "#FBF8F3", bg2: "#FFFFFF", bg3: "#F6F1E8", bg4: "#F0E9DC",
+    ink: "#1A1714", ink2: "#4A443C", ink3: "#837A6E", ink4: "#B4A99A",
+    border: "#E7DFD3",
   },
 } as const;
 
@@ -236,6 +255,8 @@ export type VitrineTema = {
   modo: ModoVitrine;
   bg: string; bg2: string; bg3: string; bg4: string;
   ink: string; ink2: string; ink3: string;
+  /** O degrau mais apagado da tinta — placeholder, campo vazio, desabilitado. */
+  ink4: string;
   border: string; borderAccent: string;
   /** Cor da loja como veio — use em preenchimento, nunca como texto. */
   marca: string;
@@ -277,6 +298,7 @@ export function montarTema(corDaLoja?: string | null, modo: ModoVitrine = "claro
     ink: s.ink,
     ink2: s.ink2,
     ink3: s.ink3,
+    ink4: s.ink4,
     border: s.border,
     // A borda tingida acompanha a loja, não o violeta fixo.
     borderAccent: wash(marca, 0.22),
@@ -316,4 +338,58 @@ export function sombra(tema: VitrineTema, nivel: 1 | 2 = 1) {
   return nivel === 1
     ? { shadowColor: tema.marca, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 }
     : { shadowColor: tema.marca, shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 6 };
+}
+
+/**
+ * A paleta antiga (`T`), montada a partir do tema vivo.
+ *
+ * A vitrine tinha DUAS paletas: `montarTema` — este motor, que deriva
+ * tudo da cor da loja — ligado em 3 componentes, e a constante `T` de
+ * `types.ts`, azul-marinho e magenta cravados, nos outros 27. A migração
+ * ficou pela metade em 08/2026 e o cabeçalho do StoreNav registrava isso
+ * como "fase 03, ainda não feita".
+ *
+ * Traduzir aqui, UMA vez, em vez de reescrever 290 usos: cada componente
+ * troca o import por `usePaleta()` e o corpo dele não muda. O que era
+ * decisão cravada vira decisão do tema — e as três que exigem julgamento
+ * ficam explícitas abaixo, em vez de espalhadas.
+ */
+export type PaletaDaVitrine = {
+  bg: string; card: string; border: string;
+  ink: string; ink2: string; ink3: string; ink4: string;
+  /** Preenchimento da marca. Já garantido legível com `sobrePrimary`. */
+  primary: string;
+  /** A marca como TEXTO. Um azul-marinho vira legível sem deixar de ser azul. */
+  primaryTexto: string;
+  /** A tinta que fica POR CIMA de `primary`. */
+  sobrePrimary: string;
+  /** Destaque. Na vitrine white-label ele é a própria marca, não um magenta fixo. */
+  accent: string;
+  green: string; amber: string; red: string;
+};
+
+export function paletaDaVitrine(tema: VitrineTema): PaletaDaVitrine {
+  return {
+    bg: tema.bg,
+    // `card` era branco cravado; agora é a segunda superfície do modo.
+    card: tema.bg2,
+    border: tema.border,
+    ink: tema.ink,
+    ink2: tema.ink2,
+    ink3: tema.ink3,
+    ink4: tema.ink4,
+    // Das 23 aparições de `primary` na vitrine, 19 são preenchimento —
+    // por isso ele mapeia para `marcaFill`, que vem com tinta garantida.
+    // As 3 que são texto usam `primaryTexto`.
+    primary: tema.marcaFill,
+    primaryTexto: tema.marcaTexto,
+    sobrePrimary: tema.sobreMarca,
+    // O magenta #EC4899 era a cor de destaque do Aura Studio, não da
+    // loja. Numa vitrine white-label a loja tem UMA cor, e o destaque é
+    // ela — legível como texto, que é como o destaque aparece.
+    accent: tema.marcaTexto,
+    green: tema.green,
+    amber: tema.amber,
+    red: tema.red,
+  };
 }

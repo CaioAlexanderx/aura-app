@@ -3,9 +3,10 @@
 // Footer "Powered by Aura" — presente em todos os stages exceto sent.
 // ============================================================
 import { View, Text } from "react-native";
-import { T } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 export function PoweredByAura() {
+  const T = usePaletaDaVitrine();
   return (
     <View
       style={{

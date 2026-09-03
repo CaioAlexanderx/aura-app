@@ -4,7 +4,8 @@
 // ============================================================
 import { View, Pressable, ScrollView, Platform } from "react-native";
 import type { CustomizationField, StudioStoreProduct } from "../types";
-import { T, sectionLabel } from "../types";
+import { sectionLabel } from "../types";
+import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
 export function FieldTemplate({
@@ -15,6 +16,7 @@ export function FieldTemplate({
   templates: StudioStoreProduct["templates"];
   onChange: (v: any) => void;
 }) {
+  const T = usePaletaDaVitrine();
   return (
     <View>
       <Texto style={sectionLabel}>

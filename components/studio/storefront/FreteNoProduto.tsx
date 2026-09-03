@@ -12,7 +12,7 @@
 // ============================================================
 import { useState } from "react";
 import { View, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { BASE_URL } from "@/services/api";
 
@@ -40,6 +40,7 @@ export function FreteNoProduto({
   slug: string;
   corDaLoja?: string | null;
 }) {
+  const T = usePaletaDaVitrine();
   const cor = corDaLoja || AURA.violet;
   const [cep, setCep] = useState("");
   const [carregando, setCarregando] = useState(false);

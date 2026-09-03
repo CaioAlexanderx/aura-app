@@ -16,7 +16,7 @@
 // ============================================================
 import { useEffect, useRef } from "react";
 import { View, Animated, Easing, Platform, useWindowDimensions } from "react-native";
-import { T } from "./types";
+import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { AURA } from "./theme";
 
 /** Pulso lento e único para a tela toda — vários timers desencontrados viram ruído. */
@@ -46,6 +46,7 @@ function Bloco({
   opacidade: any;
   style?: any;
 }) {
+  const T = usePaletaDaVitrine();
   return (
     <Animated.View
       style={[
@@ -67,6 +68,7 @@ type PropsSkeleton = {
 };
 
 export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
+  const T = usePaletaDaVitrine();
   const o = usePulso();
   const { width } = useWindowDimensions();
 
