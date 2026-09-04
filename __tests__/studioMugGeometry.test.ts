@@ -14,7 +14,7 @@
 // só no web. Estes testes cobrem a leitura do spec, que é onde erra.
 // ============================================================
 import {
-  readMugGeometry, heartPath, MUG_GEOMETRY_PADRAO,
+  readMugGeometry, heartPath, latheProfile, squarePath, MUG_GEOMETRY_PADRAO,
 } from "@/components/studio/visualEngine/mugGeometry";
 
 describe("readMugGeometry — compatibilidade primeiro", () => {
@@ -23,10 +23,12 @@ describe("readMugGeometry — compatibilidade primeiro", () => {
       .toEqual(MUG_GEOMETRY_PADRAO);
   });
 
+  // Os campos que entraram depois (bottomRound, filled, tilt) têm valor
+  // neutro: base reta, alça vazada, sem inclinação — o desenho de antes.
   it("os defaults são os literais que estavam no código", () => {
-    expect(MUG_GEOMETRY_PADRAO.body).toEqual({ topRadius: 1, bottomRadius: 0.94, height: 2.3 });
+    expect(MUG_GEOMETRY_PADRAO.body).toEqual({ topRadius: 1, bottomRadius: 0.94, height: 2.3, bottomRound: 0 });
     expect(MUG_GEOMETRY_PADRAO.handle).toEqual({
-      shape: "ring", radius: 0.52, tube: 0.11, offsetX: 1.02, offsetY: 0,
+      shape: "ring", radius: 0.52, tube: 0.11, offsetX: 1.02, offsetY: 0, filled: false, tilt: 0,
     });
   });
 
@@ -43,7 +45,7 @@ describe("readMugGeometry — o que cada modelo precisa", () => {
     const g = readMugGeometry({
       model: { geometry: { body: { topRadius: 1.25, bottomRadius: 0.95, height: 3.1 } } },
     });
-    expect(g.body).toEqual({ topRadius: 1.25, bottomRadius: 0.95, height: 3.1 });
+    expect(g.body).toEqual({ topRadius: 1.25, bottomRadius: 0.95, height: 3.1, bottomRound: 0 });
   });
 
   // Borda e interior acompanham o corpo quando não declarados: template
@@ -68,6 +70,89 @@ describe("readMugGeometry — o que cada modelo precisa", () => {
   it("forma desconhecida cai no anel, não some a alça", () => {
     expect(readMugGeometry({ model: { geometry: { handle: { shape: "banana" } } } }).handle.shape)
       .toBe("ring");
+  });
+});
+
+// ── 04/09/2026 — alça vazada ou preenchida, inclinada; base arredondada ──
+// Requisito do Caio: a alça é diferencial do produto. Uma "orelha" maciça
+// e um anel de tubo são canecas diferentes, e o coração das fotos da
+// Sheid não fica com o bico reto para baixo — entra no corpo inclinado.
+describe("readMugGeometry — alça preenchida, inclinação e base arredondada", () => {
+  it("alça é vazada por padrão; `filled: true` a preenche, em anel ou coração", () => {
+    expect(readMugGeometry({ model: { geometry: { handle: { shape: "heart" } } } }).handle.filled).toBe(false);
+    expect(readMugGeometry({ model: { geometry: { handle: { shape: "heart", filled: true } } } }).handle.filled).toBe(true);
+    expect(readMugGeometry({ model: { geometry: { handle: { shape: "ring", filled: true } } } }).handle.filled).toBe(true);
+  });
+
+  it("só o booleano verdadeiro preenche — 'sim' ou 1 não valem", () => {
+    expect(readMugGeometry({ model: { geometry: { handle: { filled: "sim" } } } }).handle.filled).toBe(false);
+    expect(readMugGeometry({ model: { geometry: { handle: { filled: 1 } } } }).handle.filled).toBe(false);
+  });
+
+  it("inclinação em graus, limitada a ±90; fora disso volta a zero", () => {
+    expect(readMugGeometry({ model: { geometry: { handle: { tilt: -45 } } } }).handle.tilt).toBe(-45);
+    expect(readMugGeometry({ model: { geometry: { handle: { tilt: 400 } } } }).handle.tilt).toBe(0);
+  });
+
+  it("arredondamento da base lido, e limitado ao que ainda é uma base", () => {
+    expect(readMugGeometry({ model: { geometry: { body: { bottomRound: 0.25 } } } }).body.bottomRound).toBe(0.25);
+    // Maior que o raio da base viraria outra forma: cai em zero.
+    expect(readMugGeometry({ model: { geometry: { body: { bottomRadius: 0.5, bottomRound: 0.45 } } } }).body.bottomRound).toBe(0);
+  });
+});
+
+// A Chopp da foto tem alça em "D", não um anel: cantos arredondados,
+// lados retos, mais alta que larga.
+describe("squarePath — a alça em D da caneca de chopp", () => {
+  it("é aceita como forma de alça", () => {
+    expect(readMugGeometry({ model: { geometry: { handle: { shape: "square" } } } }).handle.shape).toBe("square");
+  });
+
+  it("é um contorno fechado, mais alto que largo, centrado na origem", () => {
+    const p = squarePath(1);
+    expect(p[0]).toEqual(p[p.length - 1]);
+    const xs = p.map((q) => q.x), ys = p.map((q) => q.y);
+    expect(Math.max(...ys)).toBeCloseTo(1, 6);
+    expect(Math.min(...ys)).toBeCloseTo(-1, 6);
+    expect(Math.max(...xs)).toBeCloseTo(0.7, 6);
+    expect(Math.min(...xs)).toBeCloseTo(-0.7, 6);
+  });
+
+  it("escala com o raio", () => {
+    const g = squarePath(2), pq = squarePath(1);
+    expect(Math.max(...g.map((q) => q.y))).toBeCloseTo(2 * Math.max(...pq.map((q) => q.y)), 6);
+  });
+});
+
+describe("latheProfile — o perfil do corpo torneado", () => {
+  const reto = { topRadius: 1, bottomRadius: 0.94, height: 2.3, bottomRound: 0 };
+
+  it("sem arredondamento é a reta do cilindro de antes, da base ao topo", () => {
+    const p = latheProfile(reto, 5);
+    expect(p[0]).toEqual({ x: 0.94, y: -1.15 });
+    expect(p[p.length - 1]).toEqual({ x: 1, y: 1.15 });
+    // interpolação linear no meio
+    expect(p[2].x).toBeCloseTo(0.97, 6);
+    expect(p[2].y).toBeCloseTo(0, 6);
+  });
+
+  // O V da textura segue o índice do ponto no LatheGeometry; só com
+  // altura uniforme ele continua sendo "fração da altura", que é o que
+  // as áreas de impressão assumem.
+  it("os pontos são igualmente espaçados em altura, com ou sem arredondamento", () => {
+    const p = latheProfile({ ...reto, bottomRound: 0.3 }, 24);
+    const passo = p[1].y - p[0].y;
+    for (let i = 1; i < p.length; i++) expect(p[i].y - p[i - 1].y).toBeCloseTo(passo, 9);
+  });
+
+  it("o arredondamento encolhe o raio só perto da base, e o resto fica igual", () => {
+    const r = latheProfile({ ...reto, bottomRound: 0.3 }, 47);
+    const s = latheProfile(reto, 47);
+    expect(r[0].x).toBeCloseTo(0.94 - 0.3, 6);
+    for (let i = 0; i < r.length; i++) {
+      if (r[i].y + 1.15 >= 0.3) expect(r[i].x).toBeCloseTo(s[i].x, 9);
+      else expect(r[i].x).toBeLessThan(s[i].x);
+    }
   });
 });
 
@@ -152,8 +237,8 @@ describe("heartPath — a curva nasce no plano XY", () => {
 // metálica inteira, e a VINTAGE é branca com faixa ocre no topo.
 // ============================================================
 import {
-  readMugMaterials, applyCustomerColor, readMugAccessories,
-  MUG_MATERIALS_PADRAO,
+  readMugMaterials, applyCustomerColor, readMugAccessories, readCustomerColorTargets,
+  MUG_MATERIALS_PADRAO, LEGACY_TARGETS,
 } from "@/components/studio/visualEngine/mugGeometry";
 
 describe("readMugMaterials — compatibilidade primeiro", () => {
@@ -162,11 +247,31 @@ describe("readMugMaterials — compatibilidade primeiro", () => {
     expect(readMugMaterials(null)).toEqual(MUG_MATERIALS_PADRAO);
   });
 
-  // Caneca de uma cor só é o caso comum; repetir a cor em dois lugares
+  // Caneca de uma cor só é o caso comum; repetir a cor em cinco lugares
   // convida a divergirem no cadastro.
-  it("accent herda do body quando não é declarado", () => {
+  it("alça, borda e fundo herdam do body quando não são declarados", () => {
     const m = readMugMaterials({ model: { materials: { body: { color: "#FFFFFF" } } } });
-    expect(m.accent.color).toBe("#FFFFFF");
+    expect(m.handle.color).toBe("#FFFFFF");
+    expect(m.rim.color).toBe("#FFFFFF");
+    expect(m.bottom.color).toBe("#FFFFFF");
+  });
+
+  // As 10 specs publicadas usam `accent` para alça+borda+fundo. Elas
+  // precisam continuar rendendo igual sem retoque.
+  it("`accent` (bloco antigo) alimenta alça, borda e fundo", () => {
+    const m = readMugMaterials({ model: { materials: { body: { color: "#FFFFFF" }, accent: { color: "#D62828", roughness: 0.25 } } } });
+    expect(m.handle).toMatchObject({ color: "#D62828", roughness: 0.25 });
+    expect(m.rim.color).toBe("#D62828");
+    expect(m.bottom.color).toBe("#D62828");
+  });
+
+  it("peça declarada por nome vence o `accent`", () => {
+    const m = readMugMaterials({
+      model: { materials: { body: { color: "#FFFFFF" }, accent: { color: "#D62828" }, bottom: { color: "#FFFFFF" }, rim: { color: "#D9A441", roughness: 0.9 } } },
+    });
+    expect(m.handle.color).toBe("#D62828");
+    expect(m.bottom.color).toBe("#FFFFFF");
+    expect(m.rim).toMatchObject({ color: "#D9A441", roughness: 0.9 });
   });
 
   it("cor inválida cai no padrão em vez de quebrar a cena", () => {
@@ -206,15 +311,52 @@ describe("faixa no topo — a assinatura da Vintage Fosca", () => {
   });
 });
 
+// ── O alvo da cor: do campo antigo (um valor) para a lista de peças ──
+// Requisito do Caio (04/09): a cor pode estar só por dentro, só na alça,
+// nos dois, ou por fora — três lugares independentes. O campo antigo
+// continua aceito e vira a lista equivalente.
+describe("readCustomerColorTargets — o campo antigo vira lista equivalente", () => {
+  it("accent → alça, borda, fundo e interior (o bloco de antes)", () => {
+    expect(readCustomerColorTargets({ customer_color_target: "accent" }))
+      .toEqual(["handle", "rim", "bottom", "interior"]);
+  });
+
+  it("body → só o corpo; none → nada", () => {
+    expect(readCustomerColorTargets({ customer_color_target: "body" })).toEqual(["body"]);
+    expect(readCustomerColorTargets({ customer_color_target: "none" })).toEqual([]);
+  });
+
+  it("sem campo nenhum vale o padrão de antes (accent)", () => {
+    expect(readCustomerColorTargets({})).toEqual(LEGACY_TARGETS.accent);
+    expect(readCustomerColorTargets({ customer_color_target: "banana" })).toEqual(LEGACY_TARGETS.accent);
+  });
+
+  it("a lista nova manda, mesmo com o campo antigo presente", () => {
+    expect(readCustomerColorTargets({ customer_color_target: "accent", customer_color_targets: ["interior"] }))
+      .toEqual(["interior"]);
+  });
+
+  it("peça desconhecida na lista é ignorada sem derrubar as outras; repetida conta uma vez", () => {
+    expect(readCustomerColorTargets({ customer_color_targets: ["handle", "asa", "handle", "interior"] }))
+      .toEqual(["handle", "interior"]);
+  });
+
+  it("lista vazia é cor fixa do modelo", () => {
+    expect(readCustomerColorTargets({ customer_color_targets: [] })).toEqual([]);
+  });
+});
+
 describe("applyCustomerColor — onde a escolha do cliente incide", () => {
   const branca = {
     model: { materials: { body: { color: "#FFFFFF" }, customer_color_target: "accent" } },
   };
 
   // Foto da lojista: corpo branco, alça e interior coloridos.
-  it("alvo accent pinta alça e interior, e NÃO o corpo", () => {
+  it("alvo accent (antigo) pinta alça, borda, fundo e interior, e NÃO o corpo", () => {
     const m = applyCustomerColor(readMugMaterials(branca), "#E11D48");
-    expect(m.accent.color).toBe("#E11D48");
+    expect(m.handle.color).toBe("#E11D48");
+    expect(m.rim.color).toBe("#E11D48");
+    expect(m.bottom.color).toBe("#E11D48");
     expect(m.interior.color).toBe("#E11D48");
     expect(m.body.color).toBe("#FFFFFF");
   });
@@ -223,7 +365,7 @@ describe("applyCustomerColor — onde a escolha do cliente incide", () => {
     const spec = { model: { materials: { body: { color: "#FFF" }, accent: { color: "#000" }, customer_color_target: "body" } } };
     const m = applyCustomerColor(readMugMaterials(spec), "#E11D48");
     expect(m.body.color).toBe("#E11D48");
-    expect(m.accent.color).toBe("#000");
+    expect(m.handle.color).toBe("#000");
   });
 
   // Modelo de cor fixa — Imperial dourada, Alça de coração Preta.
@@ -231,13 +373,50 @@ describe("applyCustomerColor — onde a escolha do cliente incide", () => {
     const spec = { model: { materials: { body: { color: "#D4AF37" }, customer_color_target: "none" } } };
     const m = applyCustomerColor(readMugMaterials(spec), "#E11D48");
     expect(m.body.color).toBe("#D4AF37");
-    expect(m.accent.color).toBe("#D4AF37");
+    expect(m.handle.color).toBe("#D4AF37");
   });
 
   it("sem escolha, ou escolha inválida, o modelo fica como cadastrado", () => {
     const base = readMugMaterials(branca);
-    expect(applyCustomerColor(base, null).accent.color).toBe("#FFFFFF");
-    expect(applyCustomerColor(base, "azul").accent.color).toBe("#FFFFFF");
+    expect(applyCustomerColor(base, null).handle.color).toBe("#FFFFFF");
+    expect(applyCustomerColor(base, "azul").handle.color).toBe("#FFFFFF");
+  });
+
+  // Os três lugares independentes do requisito.
+  it("só o interior: corpo, alça, borda e fundo ficam como cadastrados", () => {
+    const spec = { model: { materials: { body: { color: "#FFFFFF" }, customer_color_targets: ["interior"] } } };
+    const m = applyCustomerColor(readMugMaterials(spec), "#2563EB");
+    expect(m.interior.color).toBe("#2563EB");
+    expect(m.body.color).toBe("#FFFFFF");
+    expect(m.handle.color).toBe("#FFFFFF");
+    expect(m.rim.color).toBe("#FFFFFF");
+    expect(m.bottom.color).toBe("#FFFFFF");
+  });
+
+  it("só a alça: o interior não acompanha", () => {
+    const spec = { model: { materials: { body: { color: "#FFFFFF" }, interior: { color: "#F0EDE6" }, customer_color_targets: ["handle"] } } };
+    const m = applyCustomerColor(readMugMaterials(spec), "#2563EB");
+    expect(m.handle.color).toBe("#2563EB");
+    expect(m.interior.color).toBe("#F0EDE6");
+    expect(m.rim.color).toBe("#FFFFFF");
+  });
+
+  // CANECA ALÇA COLORIDA e CANECA COM COLHER nas fotos: alça, borda e
+  // interior coloridos, corpo e base brancos.
+  it("alça + borda + interior, com a base branca", () => {
+    const spec = { model: { materials: { body: { color: "#FFFFFF" }, customer_color_targets: ["handle", "rim", "interior"] } } };
+    const m = applyCustomerColor(readMugMaterials(spec), "#A78BFA");
+    expect(m.handle.color).toBe("#A78BFA");
+    expect(m.rim.color).toBe("#A78BFA");
+    expect(m.interior.color).toBe("#A78BFA");
+    expect(m.bottom.color).toBe("#FFFFFF");
+    expect(m.body.color).toBe("#FFFFFF");
+  });
+
+  it("não muda o objeto de entrada", () => {
+    const base = readMugMaterials(branca);
+    applyCustomerColor(base, "#E11D48");
+    expect(base.handle.color).toBe("#FFFFFF");
   });
 });
 
