@@ -95,9 +95,9 @@ import {
 } from "./categoryGrouping";
 import { basePriceForQty } from "./qtyTiers";
 
-const API_BASE =
-  (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
-  "https://aura-backend-production-f805.up.railway.app/api/v1";
+import { enderecoDaApi } from "./enderecoDaApi";
+
+const API_BASE = enderecoDaApi();
 
 // --- Helpers de preco (identicos ao monolito) ---
 function choicesDelta(
