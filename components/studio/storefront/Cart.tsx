@@ -11,6 +11,7 @@ import { CapaProduto } from "./CapaProduto";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
 import { tipografiaDaLoja } from "@/constants/fonts";
 import { Texto } from "./TipografiaVitrine";
+import { dinheiro } from "./moeda";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
   cfg: any, explicit: boolean | undefined
@@ -73,7 +74,7 @@ export function CartBar({
           <Texto style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item personalizado" : "itens personalizados"}
           </Texto>
-          <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>R$ {sf.cartSubtotal.toFixed(2)}</Texto>
+          <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>{dinheiro(sf.cartSubtotal)}</Texto>
         </View>
       </View>
       <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
@@ -151,17 +152,17 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
             <View style={{ flex: 1 }}>
               <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Texto>
               <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
-                Qtd {l.qty} · R$ {sf._lineTotal(l).toFixed(2)}
+                Qtd {l.qty} · {dinheiro(sf._lineTotal(l))}
               </Texto>
               {hasDelta && (
                 <Texto style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
-                  inclui R$ {(unit - Number(l.product.price)).toFixed(2)} por opções
+                  inclui {dinheiro((unit - Number(l.product.price)))} por opções
                 </Texto>
               )}
               {backActive &&
                 (Number(l.product.customization_config?.back_price_delta) || 0) > 0 && (
                   <Texto style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
-                    + verso (R$ {Number(l.product.customization_config?.back_price_delta || 0).toFixed(2)})
+                    + verso ({dinheiro(Number(l.product.customization_config?.back_price_delta || 0))})
                   </Texto>
                 )}
               {backActive &&
@@ -172,7 +173,7 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
               {middleActive &&
                 (Number(l.product.customization_config?.middle_price_delta) || 0) > 0 && (
                   <Texto style={{ fontSize: 10, color: T.green, fontWeight: "700", marginTop: 1 }}>
-                    + meio (R$ {Number(l.product.customization_config?.middle_price_delta || 0).toFixed(2)})
+                    + meio ({dinheiro(Number(l.product.customization_config?.middle_price_delta || 0))})
                   </Texto>
                 )}
               {middleActive &&

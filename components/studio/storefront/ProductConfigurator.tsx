@@ -39,6 +39,7 @@ import { Texto } from "./TipografiaVitrine";
 import { FichaTecnica } from "./FichaTecnica";
 import { relacionadosDe } from "./relacionados";
 import { configDisponivel } from "./camposDaVitrine";
+import { dinheiro } from "./moeda";
 // 30px era menor que a ponta do dedo; 40px + hitSlop chega aos 44 que o
 // toque pede sem o controle ficar grande na tela.
 const qtyBtn: any = {
@@ -182,7 +183,7 @@ export function ProductConfigurator({
     const extra = Number(r.extra_price) || 0;
     const base = `Você aprova o mockup antes de produzir. ${inc} ${inc === 1 ? "revisão inclusa" : "revisões inclusas"}`;
     return extra > 0
-      ? `${base}; revisão extra R$ ${extra.toFixed(2).replace(".", ",")}.`
+      ? `${base}; revisão extra ${dinheiro(extra)}.`
       : `${base}.`;
   })();
 
@@ -359,7 +360,7 @@ export function ProductConfigurator({
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Texto style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
-            R$ {configuringUnitPrice.toFixed(2)}
+            {dinheiro(configuringUnitPrice)}
           </Texto>
           {/* "3x de R$ 53,30" e uma frase diferente de "R$ 159,90" pra
               quem esta decidindo. So aparece quando a lojista declarou o
@@ -369,7 +370,7 @@ export function ProductConfigurator({
           ) : null}
           {hasDelta && (
             <Texto style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
-              base R$ {Number(activeProduct.price).toFixed(2)}
+              base {dinheiro(Number(activeProduct.price))}
             </Texto>
           )}
         </View>
@@ -455,7 +456,7 @@ export function ProductConfigurator({
                       {m.name}
                     </Texto>
                     <Texto style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
-                      R$ {Number(m.price).toFixed(2)}
+                      {dinheiro(Number(m.price))}
                     </Texto>
                   </Pressable>
                 );
@@ -501,7 +502,7 @@ export function ProductConfigurator({
                       const next = !editingAddBack;
                       setEditingAddBack(next);
                       if (next && backPrice > 0) {
-                        console.log("[storefront] verso adicionado: +R$ " + backPrice.toFixed(2));
+                        console.log("[storefront] verso adicionado: +" + dinheiro(backPrice));
                       }
                     }}
                     style={{
@@ -535,13 +536,13 @@ export function ProductConfigurator({
                       )}
                       {editingAddBack && backPrice > 0 && (
                         <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
-                          +R$ {backPrice.toFixed(2)} no total
+                          +{dinheiro(backPrice)} no total
                         </Texto>
                       )}
                     </View>
                     {!editingAddBack && backPrice > 0 && (
                       <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {backPrice.toFixed(2)}</Texto>
+                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+{dinheiro(backPrice)}</Texto>
                       </View>
                     )}
                   </Pressable>
@@ -583,7 +584,7 @@ export function ProductConfigurator({
                       const next = !editingAddMiddle;
                       setEditingAddMiddle(next);
                       if (next && middlePrice > 0) {
-                        console.log("[storefront] meio adicionado: +R$ " + middlePrice.toFixed(2));
+                        console.log("[storefront] meio adicionado: +" + dinheiro(middlePrice));
                       }
                     }}
                     style={{
@@ -617,13 +618,13 @@ export function ProductConfigurator({
                       )}
                       {editingAddMiddle && middlePrice > 0 && (
                         <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
-                          +R$ {middlePrice.toFixed(2)} no total
+                          +{dinheiro(middlePrice)} no total
                         </Texto>
                       )}
                     </View>
                     {!editingAddMiddle && middlePrice > 0 && (
                       <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+R$ {middlePrice.toFixed(2)}</Texto>
+                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+{dinheiro(middlePrice)}</Texto>
                       </View>
                     )}
                   </Pressable>
@@ -684,7 +685,7 @@ export function ProductConfigurator({
                   key={t.min_qty}
                   onPress={() => setEditingQty(Math.max(editingQty, t.min_qty))}
                   accessibilityRole="button"
-                  accessibilityLabel={faixaLabel(t) + ": R$ " + Number(t.unit_price).toFixed(2) + " por unidade"}
+                  accessibilityLabel={faixaLabel(t) + ": " + dinheiro(Number(t.unit_price)) + " por unidade"}
                   style={{
                     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                     paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
@@ -698,7 +699,7 @@ export function ProductConfigurator({
                   </Texto>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Texto style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "800" }}>
-                      R$ {Number(t.unit_price).toFixed(2)}
+                      {dinheiro(Number(t.unit_price))}
                     </Texto>
                     <View style={{ backgroundColor: T.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                       <Texto style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>
@@ -711,7 +712,7 @@ export function ProductConfigurator({
             })}
             {proxima ? (
               <Texto style={{ fontSize: 11, color: T.ink3 }}>
-                Leve {proxima.min_qty} e pague R$ {Number(proxima.unit_price).toFixed(2)} por unidade.
+                Leve {proxima.min_qty} e pague {dinheiro(Number(proxima.unit_price))} por unidade.
               </Texto>
             ) : null}
           </View>
@@ -759,7 +760,7 @@ export function ProductConfigurator({
                     key={r.id}
                     onPress={() => openConfigure(r)}
                     accessibilityRole="button"
-                    accessibilityLabel={r.name + ", R$ " + Number(r.price).toFixed(2)}
+                    accessibilityLabel={r.name + ", " + dinheiro(Number(r.price))}
                     style={{ width: 138 }}
                   >
                     <View
@@ -785,7 +786,7 @@ export function ProductConfigurator({
                       {r.name}
                     </Texto>
                     <Texto style={{ fontSize: 12.5, fontWeight: "800", color: tema.marcaTexto, marginTop: 2 }}>
-                      R$ {Number(r.price).toFixed(2)}
+                      {dinheiro(Number(r.price))}
                     </Texto>
                   </Pressable>
                 );
@@ -842,7 +843,7 @@ export function ProductConfigurator({
             }}
           >
             <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
-              Atualizar • R$ {(configuringUnitPrice * editingQty).toFixed(2)}
+              Atualizar • {dinheiro((configuringUnitPrice * editingQty))}
             </Texto>
           </Pressable>
         ) : (
@@ -873,7 +874,7 @@ export function ProductConfigurator({
               }}
               accessibilityRole="button"
               accessibilityLabel={modo.aceita
-                ? "Comprar agora por R$ " + (configuringUnitPrice * editingQty).toFixed(2)
+                ? "Comprar agora por " + dinheiro((configuringUnitPrice * editingQty))
                 : "Pedir orcamento desta peca"}
               style={{
                 flex: 1, backgroundColor: tema.marcaFill, paddingVertical: 14,
@@ -885,7 +886,7 @@ export function ProductConfigurator({
                 {modo.rotuloDoBotao}
               </Texto>
               <Texto style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "700", opacity: 0.85, marginTop: 1 }}>
-                R$ {(configuringUnitPrice * editingQty).toFixed(2)}
+                {dinheiro((configuringUnitPrice * editingQty))}
               </Texto>
             </Pressable>
 

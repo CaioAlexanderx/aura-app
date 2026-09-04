@@ -24,6 +24,7 @@
 // ============================================================
 import type { StudioStoreProduct, CustomizationField } from "./types";
 import { numeroWhatsApp } from "./AncoraWhatsApp";
+import { dinheiro } from "./moeda";
 
 /** Quantos caracteres cabem sem o WhatsApp truncar o link. */
 const TETO = 1200;
@@ -75,9 +76,6 @@ export function linhasDaPersonalizacao(
   return linhas;
 }
 
-function dinheiro(v: number): string {
-  return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
-}
 
 /**
  * A mensagem inteira.

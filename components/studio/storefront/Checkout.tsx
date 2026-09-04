@@ -12,9 +12,11 @@ import { montarTema } from "./theme";
 import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
+import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 
 import { tipografiaDaLoja } from "@/constants/fonts";
 import { Texto } from "./TipografiaVitrine";
+import { dinheiro } from "./moeda";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   // A cor da loja tambem no botao que fecha a venda — era azul-marinho
@@ -26,6 +28,11 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
   if (!sf.store) return null;
   const sendDisabled =
     sf.sending || sf.cart.length === 0 || !sf.customerName.trim() || !sf.customerPhone.trim();
+  // O botão apagado diz o que falta — antes ficava cinza e mudo, com o
+  // campo obrigatório acima da dobra do celular.
+  const oQueFalta = sf.sending
+    ? null
+    : oQueFaltaNoCheckout({ itens: sf.cart.length, nome: sf.customerName, whatsapp: sf.customerPhone });
 
   // S8 — modalidades do config da loja. Sem o bloco `delivery` no payload
   // (backend anterior ao S8) cai no par de antes, que era o comportamento
@@ -141,7 +148,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
               <Texto style={{ fontSize: 12, color: T.ink2 }}>
                 {sf.shippingQuote.free_shipping
                   ? "Frete grátis para este CEP"
-                  : "Frete: R$ " + sf.shippingQuote.fee.toFixed(2)}
+                  : "Frete: " + dinheiro(sf.shippingQuote.fee)}
                 {sf.shippingQuote.eta ? " · " + sf.shippingQuote.eta : ""}
               </Texto>
             ) : null}
@@ -234,9 +241,17 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           }}
         >
           <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
-            {sf.sending ? "Enviando..." : "Enviar pedido • R$ " + sf.cartTotal.toFixed(2)}
+            {sf.sending ? "Enviando..." : "Enviar pedido • " + dinheiro(sf.cartTotal)}
           </Texto>
         </Pressable>
+        {oQueFalta ? (
+          <Texto
+            accessibilityLiveRegion="polite"
+            style={{ fontSize: 12, color: T.ink2, textAlign: "center", marginTop: 8 }}
+          >
+            {oQueFalta}
+          </Texto>
+        ) : null}
       </View>
 
       <PoweredByAura />

@@ -111,7 +111,7 @@ describe("a tela usa a MESMA validação do commit", () => {
     // ou falharia por causa de prosa.
     // 04/09/2026: o rotulo virou ternario — com a loja fechada para o
     // pico ele diz "Pedir orcamento". A regra guardada e a mesma.
-    const iBotao = fonte.indexOf('? "Comprar agora por R$ "');
+    const iBotao = fonte.indexOf('? "Comprar agora por "');
     expect(iAviso).toBeGreaterThan(0);
     expect(iAviso).toBeLessThan(iBotao);
   });

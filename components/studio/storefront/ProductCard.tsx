@@ -18,6 +18,7 @@ import { CarrosselFoto } from "./CarrosselFoto";
 import { resumo } from "./capaModel";
 
 import { Texto } from "./TipografiaVitrine";
+import { dinheiro } from "./moeda";
 type Props = {
   nome: string;
   preco: number;
@@ -75,7 +76,7 @@ export function ProductCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${nome}, a partir de R$ ${preco.toFixed(2)}`}
+      accessibilityLabel={`${nome}, a partir de ${dinheiro(preco)}`}
       style={({ pressed, hovered }: any) => [
         {
           width: largura,
@@ -187,7 +188,7 @@ export function ProductCard({
             fontVariant: ["tabular-nums"],
           }}
         >
-          R$ {preco.toFixed(2)}
+          {dinheiro(preco)}
         </Texto>
 
         {/* A escada so existe quando a lojista configurou faixa. Nenhuma

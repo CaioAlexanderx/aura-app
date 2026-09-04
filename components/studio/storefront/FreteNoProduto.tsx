@@ -14,9 +14,10 @@ import { useState } from "react";
 import { View, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
-import { BASE_URL } from "@/services/api";
+import { enderecoDaApi } from "./enderecoDaApi";
 
 import { Texto } from "./TipografiaVitrine";
+import { dinheiro } from "./moeda";
 /** Só os dígitos, no formato que a rota espera. */
 export function cepLimpo(v: string): string {
   return String(v || "").replace(/\D/g, "").slice(0, 8);
@@ -56,7 +57,7 @@ export function FreteNoProduto({
     setResultado(null);
     try {
       const r = await fetch(
-        `${BASE_URL}/storefront/${encodeURIComponent(slug)}/studio/shipping-quote?cep=${cepLimpo(cep)}`,
+        `${enderecoDaApi()}/storefront/${encodeURIComponent(slug)}/studio/shipping-quote?cep=${cepLimpo(cep)}`,
       );
       const j = await r.json();
       // A rota devolve 200 COM `error` no corpo para CEP inválido e fora
@@ -125,7 +126,7 @@ export function FreteNoProduto({
       {resultado ? (
         <Texto style={{ fontSize: 13.5, color: T.ink }}>
           <Texto style={{ fontWeight: "800", color: cor }}>
-            {resultado.fee > 0 ? `R$ ${resultado.fee.toFixed(2).replace(".", ",")}` : "Entrega grátis"}
+            {resultado.fee > 0 ? `${dinheiro(resultado.fee)}` : "Entrega grátis"}
           </Texto>
           {resultado.etaText ? <Texto style={{ color: T.ink3 }}>{` · ${resultado.etaText}`}</Texto> : null}
         </Texto>

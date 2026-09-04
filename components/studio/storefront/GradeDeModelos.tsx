@@ -18,13 +18,11 @@ import {
   modelosOrdenados, eixoQueVaria, faixaDePrecos, resumoDoGrupo,
 } from "./modelosDoGrupo";
 import type { StudioStoreProduct, StoreCategory } from "./types";
+import { dinheiro } from "./moeda";
 
 const COLUNA_MAX = 1040;
 const GAP = 14;
 
-function dinheiro(v: number): string {
-  return "R$ " + v.toFixed(2).replace(".", ",");
-}
 
 export function GradeDeModelos({
   categoria,

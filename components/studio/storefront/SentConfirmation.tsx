@@ -13,6 +13,7 @@ import { QrCode } from "@/components/QrCode";
 
 import { tipografiaDaLoja } from "@/constants/fonts";
 import { Texto } from "./TipografiaVitrine";
+import { dinheiro } from "./moeda";
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
@@ -87,7 +88,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         <Texto style={{ fontSize: 18, color: T.ink, fontWeight: "800" }}>#{sentOrder.order_number}</Texto>
         <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase", marginTop: 8 }}>Total</Texto>
         <Texto style={{ fontSize: 26, color: tema.marcaTexto, fontWeight: "800" }}>
-          R$ {Number(sentOrder.total).toFixed(2)}
+          {dinheiro(Number(sentOrder.total))}
         </Texto>
         <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "700", marginTop: 8 }}>
           Aguardando produção da arte
@@ -191,7 +192,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
               {rev.extra_price > 0 && (
                 <>
                   {" "}Revisão extra:{" "}
-                  <Texto style={{ fontWeight: "800", color: T.accent }}>R$ {rev.extra_price.toFixed(2)}</Texto>.
+                  <Texto style={{ fontWeight: "800", color: T.accent }}>{dinheiro(rev.extra_price)}</Texto>.
                 </>
               )}
             </Texto>
@@ -206,6 +207,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
 
       <Pressable
         onPress={sf.resetToList}
+        accessibilityRole="button"
         style={{
           backgroundColor: tema.marcaFill, paddingHorizontal: 24, paddingVertical: 12,
           borderRadius: 10, marginTop: 20,
