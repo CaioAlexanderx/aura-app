@@ -10,7 +10,9 @@
 //   - Subtítulos adicionados nas portas de venda (Orçamentos, Pedidos,
 //     Caixa / PDV, Loja digital)
 //   - Labels e subtítulos derivados de STUDIO_NAV (nav.ts) — fonte única.
-//   - NavChild ganha campo opcional `subtitle` e `primary`
+//   - NavChild ganha campo opcional `subtitle`
+//
+// 04/09/2026: `primary` (destaque fixo do Caixa/PDV) aposentado — ver nav.ts.
 // ============================================================
 import { StudioColors } from "@/constants/studio-tokens";
 import { STUDIO_NAV } from "./nav";
@@ -22,7 +24,6 @@ export type NavChild = {
   icon: string;
   href: string;
   subtitle?: string;
-  primary?: boolean;
   badge?: { value: string; tone?: "accent" | "warm" };
 };
 
@@ -56,7 +57,6 @@ function navItemsForGroup(groupLabel: 'ESTÚDIO' | 'VENDAS' | 'GESTÃO'): NavChi
       icon: item.icon,
       href: item.route,
       subtitle: item.subtitle,
-      primary: item.primary,
       badge: item.badge,
     }));
 }

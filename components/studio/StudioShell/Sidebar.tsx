@@ -29,9 +29,13 @@
 // residual conhecido — follow-up vai separar accentInk pra texto.
 //
 // 02/06/2026 (Shell clareza):
-//   - NavItem agora aceita `subtitle` e `primary` de NavChild
-//   - Porta primária Caixa/PDV recebe destaque visual (left-bar navy + bg tinted)
+//   - NavItem agora aceita `subtitle` de NavChild
 //   - Subtítulo de 1 linha exibido quando sidebar expandida
+//
+// 04/09/2026: aposentado o destaque de "porta primária" (Caixa/PDV com
+// barra, fundo e texto em navy mesmo inativo). Lido de fora, era um item
+// permanentemente selecionado ao lado do item ativo de verdade. O menu
+// volta a ter uma única ênfase: a da rota atual.
 //   - Labels e subtítulos derivados de STUDIO_NAV via types.ts (sem strings duplicadas)
 //
 // 13/06/2026 fix scroll:
@@ -304,7 +308,6 @@ function NavItem({
   expanded,
   indent,
   subtitle,
-  primary,
   enterDelay = 0,
   reduced = false,
   onPress,
@@ -316,13 +319,11 @@ function NavItem({
   expanded: boolean;
   indent?: boolean;
   subtitle?: string;
-  primary?: boolean;
   enterDelay?: number;
   reduced?: boolean;
   onPress: () => void;
 }) {
   const activeBg = "rgba(236,72,153,0.10)";
-  const primaryBg = "rgba(30,58,138,0.08)";
   const web = Platform.OS === "web";
   return (
     <View style={web ? enterStyle(enterDelay, reduced) : undefined}>
@@ -347,7 +348,6 @@ function NavItem({
           hovered && !active && { backgroundColor: t.accentSoft },
           hovered && !active && web && ({ boxShadow: `0 2px 12px ${t.accent}26` } as any),
           active && { backgroundColor: activeBg },
-          !active && primary && { backgroundColor: primaryBg },
           web && pressed && !reduced && ({ transform: "scale(1.03)", backgroundColor: activeBg } as any),
         ]}
       >
@@ -368,29 +368,14 @@ function NavItem({
                 pointerEvents="none"
               />
             )}
-            {!active && primary && (
-              <View
-                style={{
-                  position: "absolute",
-                  left: 2,
-                  top: 8,
-                  bottom: 8,
-                  width: 3,
-                  borderRadius: 2,
-                  backgroundColor: t.primary,
-                  opacity: 0.5,
-                }}
-                pointerEvents="none"
-              />
-            )}
-            <Icon name={icon} size={16} color={active || hovered ? t.accent : primary ? t.primary : t.ink2} />
+            <Icon name={icon} size={16} color={active || hovered ? t.accent : t.ink2} />
             {expanded && (
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text
                   style={{
                     fontSize: 13,
-                    fontWeight: active ? "800" : primary ? "700" : "600",
-                    color: active ? t.accentInk : hovered ? t.ink : primary ? t.primary : t.ink2,
+                    fontWeight: active ? "800" : "600",
+                    color: active ? t.accentInk : hovered ? t.ink : t.ink2,
                     letterSpacing: -0.1,
                   }}
                   numberOfLines={1}
@@ -481,7 +466,6 @@ function GroupSection({
               icon={c.icon}
               label={c.label}
               subtitle={c.subtitle}
-              primary={c.primary}
               active={active}
               expanded
               indent
