@@ -21,6 +21,8 @@ type Props = {
   size?: number;             // largura em px (altura ~0.78x)
   garmentColor?: string;
   artColor?: string;
+  /** Família da fonte de arte (pilha CSS). Sem ela o motor usa a serifada padrão. */
+  font?: string;
   accentColor?: string;      // cor dos chips (padrão navy storefront)
   /**
    * Lado escolhido fora daqui (editor do Studio). "middle" = wrap 360,
@@ -31,13 +33,39 @@ type Props = {
   side?: "front" | "back" | "middle";
 };
 
+// O nome da área de impressão, para quem compra. "Wrap 360°" e "9.7cm"
+// são jargão de oficina e ponto decimal de programador: a cliente lê
+// "Volta inteira" e "9,7 cm". A legenda "caneca provisória (GLB real
+// entra sem mudar o viewer)" era recado de desenvolvedor e ficou no ar
+// para a cliente da Sheid — saiu.
+export function rotuloDaArea(a: { id: string; width_cm?: number; height_cm?: number }): string {
+  const cm = (n?: number) => String(n ?? "").replace(".", ",");
+  if (a.id === "panel") {
+    return a.width_cm && a.height_cm ? "Painel " + cm(a.width_cm) + "×" + cm(a.height_cm) + " cm" : "Painel";
+  }
+  return "Volta inteira";
+}
+
 export function Mug3DPreview({
   spec, values, size = 320,
-  garmentColor = "#F5F2EA", artColor = "#D85A30", accentColor = "#1E3A8A", side,
+  garmentColor = "#F5F2EA", artColor = "#D85A30", font, accentColor = "#1E3A8A", side,
 }: Props) {
   const canvasRef = useRef<any>(null);
   const handleRef = useRef<Mug3DHandle | null>(null);
   const [areaId, setAreaId] = useState<string>(spec.areas?.[0]?.id || "panel");
+
+  // Cada spec ganha um <canvas> NOVO. Trocar de modelo no configurador
+  // (Alça de coração → Caneca branca) trocava a spec com o mesmo canvas
+  // embaixo: o viewer antigo era descartado e o novo abria um segundo
+  // WebGLRenderer no mesmo elemento — e a partir daí a caneca girava,
+  // mas nunca mais mostrava a arte da cliente. Visto em 04/09/2026 na
+  // loja da Sheid; o primeiro modelo aberto funcionava, o segundo não.
+  const specAnterior = useRef(spec);
+  const geracao = useRef(0);
+  if (specAnterior.current !== spec) {
+    specAnterior.current = spec;
+    geracao.current += 1;
+  }
 
   // O lado vindo de fora manda no viewer: "middle" é o wrap 360. Só
   // aplica se a spec realmente tiver a área, senão mantém a atual.
@@ -52,7 +80,7 @@ export function Mug3DPreview({
   useEffect(() => {
     if (Platform.OS !== "web" || !canvasRef.current) return;
     let cancelled = false;
-    createMugViewer(canvasRef.current, spec, values, { garmentColor, artColor, areaId })
+    createMugViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId })
       .then((h) => {
         if (cancelled) { h.dispose(); return; }
         handleRef.current = h;
@@ -68,8 +96,8 @@ export function Mug3DPreview({
   }, [spec]);
 
   useEffect(() => {
-    handleRef.current?.update(values, { garmentColor, artColor, areaId });
-  }, [values, garmentColor, artColor, areaId]);
+    handleRef.current?.update(values, { garmentColor, artColor, font, areaId });
+  }, [values, garmentColor, artColor, font, areaId]);
 
   if (Platform.OS !== "web") {
     return (
@@ -98,7 +126,7 @@ export function Mug3DPreview({
                 }}
               >
                 <Text style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : "#475569" }}>
-                  {a.id === "panel" ? "Painel " + a.width_cm + "×" + a.height_cm + "cm" : "Wrap 360°"}
+                  {rotuloDaArea(a)}
                 </Text>
               </Pressable>
             );
@@ -109,6 +137,7 @@ export function Mug3DPreview({
       <View style={{ width: size, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E2E8F0" }}>
         {/* @ts-ignore — canvas DOM no web */}
         <canvas
+          key={geracao.current}
           ref={canvasRef}
           style={{ width: "100%", height: Math.round(size * 0.78), display: "block", cursor: "grab", touchAction: "none" } as any}
         />
@@ -117,7 +146,7 @@ export function Mug3DPreview({
       {err ? (
         <Text style={{ fontSize: 11, color: "#B91C1C" }}>{err}</Text>
       ) : (
-        <Text style={{ fontSize: 10.5, color: "#94A3B8" }}>Arraste para girar · caneca provisória (GLB real entra sem mudar o viewer)</Text>
+        <Text style={{ fontSize: 10.5, color: "#94A3B8" }}>Arraste para girar a peça</Text>
       )}
     </View>
   );

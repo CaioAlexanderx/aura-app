@@ -56,7 +56,10 @@ export async function gerarRenderDoPedido(
   const template = tpl?.template;
   if (!template || !template.spec) {
     throw new Error(
-      'Produto "' + (item.product_name || "") + '" sem template visual vinculado. Vincule em Estúdio › Produtos ou envie o mockup manualmente.'
+      // O vínculo mora na aba Aparência da Loja Digital desde o S7 — a
+      // mensagem mandava a lojista procurar em "Estúdio › Produtos", onde
+      // não há nada disso.
+      'Produto "' + (item.product_name || "") + '" sem mockup 3D vinculado. Vincule em Vendas › Loja Digital › Aparência ou envie o mockup manualmente.'
     );
   }
 

@@ -24,7 +24,7 @@ export function FieldTemplate({
       </Texto>
       {templates.length === 0 ? (
         <Texto style={{ fontSize: 12, color: T.ink3, fontStyle: "italic" }}>
-          Loja não cadastrou templates ainda.
+          Esta peça não tem arte pronta — envie a sua.
         </Texto>
       ) : (
         <ScrollView

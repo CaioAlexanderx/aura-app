@@ -18,6 +18,7 @@
 // seguindo exatamente a mesma lógica de useStorefront.uploadImage.
 // ============================================================
 import { useState, useRef, useCallback } from "react";
+import { formatoAceito } from "../formatoDeArquivo";
 import { View, Pressable, Platform, ActivityIndicator } from "react-native";
 import type { CustomizationField } from "../types";
 import { sectionLabel } from "../types";
@@ -126,8 +127,10 @@ export function FieldImage({
       const file: File | undefined = ev?.target?.files?.[0];
       if (!file) return;
 
-      // Validação de formato
-      if (!allowedFormats.includes(file.type)) {
+      // Validação de formato — MIME ou extensão, tanto faz como a lojista
+      // gravou. Ver formatoDeArquivo.ts: a comparação crua recusava um
+      // PNG perfeito numa loja configurada com ["png","jpg","pdf"].
+      if (!formatoAceito(allowedFormats, file.type, file.name)) {
         setUploadError(`Formato inválido. Aceitos: ${formatLabel}`);
         try { ev.target.value = ""; } catch (_) {}
         return;
