@@ -188,6 +188,16 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           }}
         >
           <TotalRow l="Subtotal" v={sf.cartSubtotal} />
+
+          {/* O desconto so existe no Pix, e so quando a loja configurou.
+              A linha some sozinha nos outros casos — resumo com
+              "Desconto R$ 0,00" e ruido. */}
+          {sf.pixDiscount > 0 ? (
+            <TotalRow
+              l={`Desconto no Pix (${sf.pixDiscountPct}%)`}
+              v={-sf.pixDiscount}
+            />
+          ) : null}
           {/* S2 — o frete só entra na conta depois de cotado. Antes disso
               o total mostra o subtotal, sem inventar um valor. */}
           {sf.deliveryType === "delivery" && sf.shippingQuote && typeof sf.shippingQuote.fee === "number" ? (
