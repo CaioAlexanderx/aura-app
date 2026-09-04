@@ -218,13 +218,19 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
       </ScrollView>
 
       <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
+        {/* O botão acompanha a coluna do formulário (720px). Antes ia de
+            ponta a ponta num monitor de 1366px — a tela esticada que a
+            premissa de largura máxima chama de defeito. */}
         <Pressable
           onPress={sf.submitOrder}
           disabled={sendDisabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: sendDisabled }}
           style={{
             backgroundColor: tema.marcaFill,
             paddingVertical: 14, borderRadius: 10, alignItems: "center",
             opacity: sendDisabled ? 0.4 : 1,
+            width: "100%", maxWidth: 720, alignSelf: "center",
           }}
         >
           <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>

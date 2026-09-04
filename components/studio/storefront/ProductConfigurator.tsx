@@ -36,8 +36,11 @@ import { Texto } from "./TipografiaVitrine";
 // que falha se um campo de produto existir so de um lado.
 import { FichaTecnica } from "./FichaTecnica";
 import { relacionadosDe } from "./relacionados";
+import { configDisponivel } from "./camposDaVitrine";
+// 30px era menor que a ponta do dedo; 40px + hitSlop chega aos 44 que o
+// toque pede sem o controle ficar grande na tela.
 const qtyBtn: any = {
-  width: 30, height: 30, borderRadius: 8,
+  width: 40, height: 40, borderRadius: 10,
   backgroundColor: "#f3f4f6",
   alignItems: "center", justifyContent: "center",
 };
@@ -83,7 +86,11 @@ export function ProductConfigurator({
   // Agente J: detecta o campo art_service e o campo image em todos os fields.
   // Calculado ANTES do early return para que o useEffect abaixo possa ser
   // chamado incondicionalmente (Rules of Hooks).
-  const cfg = activeProduct?.customization_config;
+  // Campo "escolher template da galeria" numa loja sem arte pronta não é
+  // campo: sumia da tela com um recado para a lojista ("Loja não
+  // cadastrou templates ainda") e ainda entrava na pendência do rodapé.
+  // Ver camposDaVitrine.ts — o filtro vale para render E validação.
+  const cfg = configDisponivel(activeProduct?.customization_config, activeProduct?.templates);
   const allFieldsForHooks = cfg?.fields || [];
   const artServiceField = allFieldsForHooks.find(
     (f) => f.type === "option" && (f.config as any)?.is_art_service
@@ -234,7 +241,13 @@ export function ProductConfigurator({
   // DEPOIS de telaLarga: declarar antes daria "Cannot access
   // 'telaLarga' before initialization" — o mesmo erro que ja derrubou
   // esta tela antes.
-  const ladoDoPreview = telaLarga ? 360 : defaultConfiguratorSize();
+  // No celular o preview fica grudado no topo enquanto a pessoa rola. Com
+  // 320px de lado (250 de altura no 3D), mais os seletores, a legenda e
+  // o botão de zoom, o bloco grudado media ~445px num telefone de 812:
+  // sobravam 60px para o formulário, e o campo de texto ficava ESCONDIDO
+  // embaixo da caneca — tocar nele era impossível (visto em 04/09/2026).
+  // Preview menor no celular; zoom e frete saem do bloco grudado.
+  const ladoDoPreview = telaLarga ? 360 : Math.min(240, defaultConfiguratorSize());
   const LARGURA_MAX = 980;
   // Sobra de cada lado pra alinhar cabecalho e rodape com a coluna.
   const recuoLateral = telaLarga ? Math.max(28, (larguraTela - LARGURA_MAX) / 2) : 16;
@@ -361,26 +374,34 @@ export function ProductConfigurator({
         contentContainerStyle={{ padding: telaLarga ? 28 : 16, paddingBottom: 160 }}
       >
         <View style={linhaConteudo}>
-        <View style={[colunaPreview, previewGrudento]}>
-          <View style={{ width: ladoDoPreview, alignSelf: "center" }}>
-            <LivePreview
-              config={cfg ?? null}
-              values={editingValues}
-              size={ladoDoPreview}
-              productName={activeProduct.name}
-              showLabel={false}
-              slug={slug}
-              productId={activeProduct.id}
-              fotoProduto={(activeProduct as any).image_url}
-              allowSideToggle
-            />
-            {/* Em peca personalizada o detalhe E o produto: textura do
-                tecido, acabamento da costura. So oferece zoom quando ha
-                foto — ampliar a area de impressao nao serve a ninguem. */}
-            {fotosDaPeca.length > 0 ? (
-              <DicaDeZoom onPress={() => setZoom(0)} corDaLoja={(sf.store as any)?.site?.primary_color} />
-            ) : null}
+        <View style={colunaPreview}>
+          {/* So a peca gruda no topo. Zoom e frete ficam no fluxo: no
+              celular cada linha dentro do bloco grudado e uma linha a
+              menos de formulario visivel. */}
+          <View style={[{ width: "100%", alignItems: "center" }, previewGrudento]}>
+            <View style={{ width: ladoDoPreview, alignSelf: "center" }}>
+              <LivePreview
+                config={cfg ?? null}
+                values={editingValues}
+                size={ladoDoPreview}
+                productName={activeProduct.name}
+                showLabel={false}
+                slug={slug}
+                productId={activeProduct.id}
+                fotoProduto={(activeProduct as any).image_url}
+                allowSideToggle
+              />
+            </View>
           </View>
+
+          {/* Em peca personalizada o detalhe E o produto: textura do
+              tecido, acabamento da costura. So oferece zoom quando ha
+              foto — ampliar a area de impressao nao serve a ninguem. */}
+          {fotosDaPeca.length > 0 ? (
+            <View style={{ width: ladoDoPreview, alignSelf: "center" }}>
+              <DicaDeZoom onPress={() => setZoom(0)} corDaLoja={(sf.store as any)?.site?.primary_color} />
+            </View>
+          ) : null}
 
           {/* O cliente so via o frete depois de configurar a peca e
               preencher endereco — e desistia no numero que aparecia no
@@ -617,13 +638,25 @@ export function ProductConfigurator({
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 }}>
           <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>Quantidade</Texto>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Pressable onPress={() => setEditingQty(Math.max(1, editingQty - 1))} style={qtyBtn}>
+            <Pressable
+              onPress={() => setEditingQty(Math.max(1, editingQty - 1))}
+              style={qtyBtn}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel="Diminuir quantidade"
+            >
               <Texto style={qtyTxt}>−</Texto>
             </Pressable>
             <Texto style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "800", fontSize: 16 }}>
               {editingQty}
             </Texto>
-            <Pressable onPress={() => setEditingQty(editingQty + 1)} style={qtyBtn}>
+            <Pressable
+              onPress={() => setEditingQty(editingQty + 1)}
+              style={qtyBtn}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar quantidade"
+            >
               <Texto style={qtyTxt}>+</Texto>
             </Pressable>
           </View>
@@ -706,7 +739,9 @@ export function ProductConfigurator({
             vizinhos — fileira de um item so chama atencao pro tamanho da
             loja em vez de mostrar produto. */}
         {relacionados.length ? (
-          <View style={{ paddingHorizontal: recuoLateral, paddingBottom: 26, gap: 14 }}>
+          // paddingTop: no celular o titulo colava na ultima linha da
+          // descricao, parecendo continuacao do texto do produto.
+          <View style={{ paddingHorizontal: recuoLateral, paddingTop: 28, paddingBottom: 26, gap: 14 }}>
             <Texto style={{ fontFamily: tipo.display, fontSize: 19, color: T.ink }}>
               Produtos relacionados
             </Texto>

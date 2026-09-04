@@ -56,7 +56,11 @@ export function TabStudioRevisoes() {
     studioApi
       .getSettings(company.id)
       .then(({ settings }) => {
-        setMaxRevisions(String(settings.max_revisions_included ?? 3));
+        // Sem valor salvo a tela mostrava "3" como se fosse a política da
+        // loja — e a vitrine, que lê o mesmo campo, tratava como 0. A Sheid
+        // via 3 revisões no painel e a cliente não via nenhuma (04/09/2026).
+        // O que aparece aqui é o que está salvo; nada salvo é 0.
+        setMaxRevisions(String(settings.max_revisions_included ?? 0));
         setExtraPrice(formatPriceInput(settings.extra_revision_price ?? 0));
         setPolicyText(settings.revision_policy_text ?? "");
       })

@@ -85,16 +85,19 @@ export function CartBar({
 export function CartItemList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // Os dois chips tinham 22px de altura: no celular o dedo errava e
+  // "Remover" ficava a 6px de "Editar". Altura mínima e área de toque
+  // ampliada (hitSlop) — o desenho continua discreto.
   const editChip: any = {
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-    backgroundColor: T.primary,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, minHeight: 36,
+    backgroundColor: T.primary, alignItems: "center", justifyContent: "center",
   };
-  const editChipTxt: any = { color: "#fff", fontSize: 10, fontWeight: "800" };
+  const editChipTxt: any = { color: "#fff", fontSize: 11.5, fontWeight: "800" };
   const removeChip: any = {
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-    backgroundColor: "#fee2e2",
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, minHeight: 36,
+    backgroundColor: "#fee2e2", alignItems: "center", justifyContent: "center",
   };
-  const removeChipTxt: any = { color: T.red, fontSize: 10, fontWeight: "800" };
+  const removeChipTxt: any = { color: T.red, fontSize: 11.5, fontWeight: "800" };
 
   return (
     <>
@@ -178,11 +181,23 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
                   <Texto style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com meio personalizado</Texto>
                 )}
             </View>
-            <View style={{ gap: 6 }}>
-              <Pressable onPress={() => sf.editCartLine(l)} style={editChip}>
+            <View style={{ gap: 8 }}>
+              <Pressable
+                onPress={() => sf.editCartLine(l)}
+                style={editChip}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={"Editar " + l.product.name}
+              >
                 <Texto style={editChipTxt}>Editar</Texto>
               </Pressable>
-              <Pressable onPress={() => sf.removeCartLine(l.lineId)} style={removeChip}>
+              <Pressable
+                onPress={() => sf.removeCartLine(l.lineId)}
+                style={removeChip}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={"Remover " + l.product.name}
+              >
                 <Texto style={removeChipTxt}>Remover</Texto>
               </Pressable>
             </View>

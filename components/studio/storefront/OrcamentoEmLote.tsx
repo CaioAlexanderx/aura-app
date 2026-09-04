@@ -281,13 +281,17 @@ export function OrcamentoEmLote({
                             onPress={() => setProdutoId(p.id)}
                             accessibilityRole="button"
                             accessibilityState={{ selected: sel }}
+                            // maxWidth: "Caneca Imperial com Alça e Borda Cromado
+                            // Dourada 400ml" saía pela borda direita do celular,
+                            // cortada no meio (visto em 04/09/2026).
                             style={{
                               paddingVertical: 10, paddingHorizontal: 13, borderRadius: 12,
                               borderWidth: 1, borderColor: sel ? tema.marcaFill : T.border,
                               backgroundColor: sel ? tema.marcaWash : T.card, gap: 2,
+                              maxWidth: "100%",
                             }}
                           >
-                            <Texto style={{ fontSize: 13, fontWeight: "600", color: T.ink }}>
+                            <Texto numberOfLines={2} style={{ fontSize: 13, fontWeight: "600", color: T.ink }}>
                               {p.name}
                             </Texto>
                             <Texto style={{ fontFamily: Fonts.mono, fontSize: 11, color: T.ink3 }}>
@@ -358,6 +362,8 @@ export function OrcamentoEmLote({
                 <Texto style={{ fontSize: 12.5, color: T.red }}>{erro}</Texto>
               ) : null}
 
+              {!larga ? resumo : null}
+
               <View style={{ flexDirection: "row", gap: 10 }}>
                 {passo === 2 ? (
                   <Pressable
@@ -396,7 +402,10 @@ export function OrcamentoEmLote({
               ) : null}
             </View>
 
-            {resumo}
+            {/* No desktop o resumo é a coluna da direita; no celular ele
+                vinha DEPOIS do botão, e a pessoa tocava "Continuar" sem ter
+                visto o preço que a tela promete "na hora". */}
+            {larga ? resumo : null}
           </View>
         </View>
       </ScrollView>

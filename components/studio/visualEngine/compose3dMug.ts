@@ -71,12 +71,17 @@ const DEFAULTS: Required<Pick<Mug3DOptions, "garmentColor" | "artColor" | "font"
 
 type Opcoes = typeof DEFAULTS & Mug3DOptions;
 
-function loadImg(url: string): Promise<HTMLImageElement | null> {
+// Com teto de espera: uma imagem que nunca responde (rede presa, CDN
+// sem CORS que o navegador decide reprocessar) deixava a pintura
+// pendurada no `await` — e a textura, já apagada, nunca mais ganhava a
+// arte. Sem a foto a caneca ainda mostra o texto; sem resposta, também.
+function loadImg(url: string, limiteMs = 8000): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
+    const t = setTimeout(() => resolve(null), limiteMs);
+    img.onload = () => { clearTimeout(t); resolve(img); };
+    img.onerror = () => { clearTimeout(t); resolve(null); };
     img.src = url;
   });
 }
@@ -522,6 +527,15 @@ export async function createMugViewer(
     requestAnimationFrame(loop);
   }
 
+  // A pintura acontece num rascunho e só o resultado inteiro vai para a
+  // textura. Antes, cada `update` limpava a textura e pintava direto nela,
+  // com um `await` da imagem no meio: dois updates seguidos (trocar de
+  // área, digitar uma letra) se atropelavam — o segundo apagava o que o
+  // primeiro tinha acabado de escrever, e a caneca ficava lisa até a
+  // próxima mudança. Visto na loja da Sheid em 04/09/2026 ao trocar
+  // "Painel" por "Volta inteira". Pintura mais velha que terminar depois
+  // de uma mais nova é descartada.
+  let pinturaAtual = 0;
   async function update(newValues: Record<string, any>, newOpts?: Mug3DOptions) {
     o = { ...o, ...(newOpts || {}) };
     M = applyCustomerColor(readMugMaterials(spec), o.garmentColor);
@@ -533,7 +547,16 @@ export async function createMugViewer(
     o.bodyColor = M.body.color;
     o.bodyTopBand = M.body.topBand ?? null;
     o.bodyOpacity = M.body.opacity;
-    await paintTexture(texCv, spec, newValues, o);
+    const minha = ++pinturaAtual;
+    const rascunho = document.createElement("canvas");
+    rascunho.width = texCv.width;
+    rascunho.height = texCv.height;
+    await paintTexture(rascunho, spec, newValues, o);
+    if (minha !== pinturaAtual || disposed) return;
+    const ctx = texCv.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, texCv.width, texCv.height);
+    ctx.drawImage(rascunho, 0, 0);
     texture.needsUpdate = true;
     render();
   }

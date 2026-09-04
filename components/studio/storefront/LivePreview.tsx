@@ -26,10 +26,10 @@
 // DESACOPLAMENTO DE TEMA (Onda 0 · 0.6): mantido — storefront usa
 // PersonalizationPreviewBase com STOREFRONT_PALETTE no fallback.
 // ============================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
-import { valuesForSide } from "@/components/studio/customizationConfig";
+import { valoresDoMotor } from "./valoresDoMotor";
 import type { CustomizationConfig } from "./types";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import type { PaletaDaVitrine } from "./theme";
@@ -219,9 +219,17 @@ export function LivePreview({
   ];
   const showViewToggle = allowSideToggle && viewToggleOptions.length > 1;
 
-  // Os motores leem as chaves da frente; ver valuesForSide.
-  const engineValues = valuesForSide(safeValues, viewId);
-  const safeValuesKey = JSON.stringify(engineValues);
+  // Os motores leem `text`, `image` e `template` — chaves fixas — e a
+  // vitrine guarda tudo por id de campo. Sem esta tradução a caneca 3D
+  // girava VAZIA com o nome digitado e a foto enviada (visto na loja da
+  // Sheid em 04/09/2026). A cor e a fonte da arte seguem a mesma regra
+  // do preview SVG: escolha do cliente, depois paleta da lojista.
+  const motor = valoresDoMotor(config, safeValues, viewId);
+  const safeValuesKey = JSON.stringify([motor.values, motor.artColor, motor.font]);
+  // Identidade estável: o viewer 3D repinta a textura a cada objeto novo
+  // que recebe, e um objeto novo por render era uma repintura por render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const engineValues = useMemo(() => motor.values, [safeValuesKey]);
 
   // O lado escolhido pode sumir se a lojista desligar verso/meio com a
   // tela aberta — sem isso o cliente ficaria preso numa vista morta.
@@ -258,6 +266,8 @@ export function LivePreview({
     composeView(canvasRef.current, engineView, engineValues, {
       showAreas: false,
       pixelWidth: 800,
+      artColor: motor.artColor,
+      font: motor.font,
     });
     // safeValuesKey representa safeValues de forma estável
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,6 +288,8 @@ export function LivePreview({
           // ninguem a alimentava: toda caneca renderizava bege, qualquer
           // que fosse a cor escolhida. O parametro existia desde a F4.
           garmentColor={corDaLouca(config, safeValues)}
+          artColor={motor.artColor}
+          font={motor.font}
         />
         {pdfField && <PdfNote size={size} />}
       </View>

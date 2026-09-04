@@ -32,6 +32,11 @@ export function FieldColor({
             <View key={c} style={{ alignItems: "center", gap: 2 }}>
               <Pressable
                 onPress={() => onChange(c)}
+                // Sem nome, o leitor de tela anunciava oito "botão" iguais e
+                // ninguém sabia qual estava marcado.
+                accessibilityRole="button"
+                accessibilityLabel={`${field.label} ${c}`}
+                accessibilityState={{ selected }}
                 style={{
                   width: 36, height: 36, borderRadius: 18,
                   backgroundColor: c,
