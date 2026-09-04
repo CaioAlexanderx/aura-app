@@ -269,6 +269,7 @@ export function useStorefront(slug: string) {
   const [error, setError] = useState<string | null>(null);
 
   const [stage, setStage] = useState<Stage>("list");
+  const [grupoAberto, setGrupoAberto] = useState<{ categoria: any; produtos: StudioStoreProduct[] } | null>(null);
   const [activeProduct, setActiveProduct] = useState<StudioStoreProduct | null>(null);
   // S1 — os outros modelos da mesma categoria. Vazio quando o produto foi
   // aberto sozinho (sem categoria, ou categoria com um item so).
@@ -457,6 +458,18 @@ export function useStorefront(slug: string) {
 
   function goTo(s: Stage) {
     setStage(s);
+  }
+
+  /**
+   * Abre a grade de modelos de um grupo.
+   *
+   * Antes o cartao do grupo abria o PRIMEIRO modelo direto, e os
+   * outros viravam chips sem foto: quem vende variacao de louca
+   * vendia sempre a mais barata.
+   */
+  function abrirGrupo(categoria: any, produtos: StudioStoreProduct[]) {
+    setGrupoAberto({ categoria: categoria || null, produtos: produtos || [] });
+    setStage("modelos");
   }
 
   function setFieldValue(fieldId: string, value: any) {
@@ -779,6 +792,7 @@ export function useStorefront(slug: string) {
     store, loading, error, setError,
     // Navegacao
     stage, goTo,
+    abrirGrupo, grupoAberto,
     // Configurador
     activeProduct,
     editingValues, setFieldValue,

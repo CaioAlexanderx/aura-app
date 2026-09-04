@@ -291,11 +291,15 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                     preco={precoMinimo(products)}
                     fotos={fotosDoGrupo(products)}
                     selo={`${products.length} modelos para escolher`}
+                    
                     largura={larguraCartao}
                     corDaLoja={primary}
                     fonteDisplay={tipo.display}
                     estilo={estiloCartao}
-                    onPress={() => sf.openConfigure(products[0], products)}
+                    // 04/09/2026 — o grupo abre a GRADE, nao o primeiro modelo:
+                    // quem vende variacao de louca vendia sempre a mais
+                    // barata, porque a diferenca nao era visivel.
+                    onPress={() => sf.abrirGrupo(category, products)}
                   />
                 );
               }

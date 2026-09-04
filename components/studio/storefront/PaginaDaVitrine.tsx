@@ -27,6 +27,7 @@ import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton"
 import { TipografiaDaVitrine } from "@/components/studio/storefront/TipografiaVitrine";
 import { TemaDaVitrine, usePaletaDaVitrine } from "@/components/studio/storefront/TemaDaVitrine";
 import { OrcamentoEmLote } from "@/components/studio/storefront/OrcamentoEmLote";
+import { GradeDeModelos } from "@/components/studio/storefront/GradeDeModelos";
 
 // A tela de erro roda ANTES de a loja carregar, entao a cor da lojista
 // ainda nao existe. O hook fora do provider cai no tema padrao — o papel
@@ -109,7 +110,16 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
   return (
     <TemaDaVitrine cor={(sf.store as any)?.site?.primary_color}>
     <TipografiaDaVitrine chave={parEscolhido}>
-      {sf.stage === "lote" ? (
+      {sf.stage === "modelos" && sf.grupoAberto ? (
+        <GradeDeModelos
+          categoria={sf.grupoAberto.categoria}
+          produtos={sf.grupoAberto.produtos}
+          corDaLoja={(sf.store as any)?.site?.primary_color}
+          estiloCartao={(sf.store as any)?.site?.card_style}
+          onEscolher={(p) => sf.openConfigure(p, sf.grupoAberto!.produtos)}
+          onVoltar={() => sf.goTo("list")}
+        />
+      ) : sf.stage === "lote" ? (
         <OrcamentoEmLote store={sf.store} slug={slug} onVoltar={() => sf.goTo("list")} />
       ) : sf.stage === "sent" ? (
         <SentConfirmation sf={sf} />

@@ -171,7 +171,10 @@ export type CartLine = {
 
 // S6 — "lote" e o orcamento em lote publico. Aditivo: quem nao conhece
 // o estagio novo continua caindo em "list".
-export type Stage = "list" | "configure" | "checkout" | "sent" | "lote";
+// 04/09/2026 — "modelos" e a grade de um grupo (foto e preco lado a
+// lado). Aditivo pela mesma razao do "lote": quem nao conhece o
+// estagio novo continua caindo em "list".
+export type Stage = "list" | "configure" | "checkout" | "sent" | "lote" | "modelos";
 
 export type SentOrder = {
   order_id: string;

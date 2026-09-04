@@ -8,7 +8,7 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions, Platform } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions, Platform, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import type { PaletaDaVitrine } from "./theme";
@@ -18,6 +18,7 @@ import { montarTema, wash } from "./theme";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { validateRequiredFields } from "./useStorefront";
 import { PoweredByAura } from "./ui/PoweredByAura";
+import { linkDoPedido } from "./pedidoPeloWhatsApp";
 import { SizeGuideModal } from "./SizeGuideModal";
 // sideOf: fonte unica pra decidir o lado de um campo (front/back/middle).
 // Usar aqui em vez de reimplementar o ternario evita a mesma divergencia
@@ -879,6 +880,39 @@ export function ProductConfigurator({
             </Pressable>
           </View>
         )}
+
+        {/* O terceiro caminho: metade das clientes de personalizado so
+            fecha falando com gente. O que muda a conversa nao e o botao,
+            e a mensagem chegar pronta — a lojista le a peca, a
+            personalizacao e o valor sem perguntar "de qual peca voce
+            fala?". Sem numero cadastrado o botao nao existe: abrir o
+            WhatsApp em branco seria pior. */}
+        {(() => {
+          const link = linkDoPedido({
+            numero: (sf.store?.site as any)?.whatsapp,
+            produto: activeProduct,
+            valores: editingValues,
+            quantidade: editingQty,
+            precoUnitario: configuringUnitPrice,
+            nomeDaLoja: sf.store?.site?.name,
+          });
+          if (!link) return null;
+          return (
+            <Pressable
+              onPress={() => Linking.openURL(link)}
+              accessibilityRole="link"
+              accessibilityLabel="Fazer este pedido pelo WhatsApp da loja"
+              style={{
+                marginTop: 10, paddingVertical: 13, borderRadius: 10,
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Texto style={{ color: tema.ink2, fontSize: 13.5, fontWeight: "600" }}>
+                Prefere pedir pelo WhatsApp?
+              </Texto>
+            </Pressable>
+          );
+        })()}
       </View>
 
       <PoweredByAura />
