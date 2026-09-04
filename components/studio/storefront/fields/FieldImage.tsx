@@ -25,9 +25,9 @@ import { sectionLabel } from "../types";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
-const API_BASE =
-  (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
-  "https://aura-backend-production-f805.up.railway.app/api/v1";
+import { enderecoDaApi } from "../enderecoDaApi";
+
+const API_BASE = enderecoDaApi();
 
 // Formatos suportados: pdf + rasters. Fallback quando field.config.formats não vier.
 const DEFAULT_FORMATS = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];

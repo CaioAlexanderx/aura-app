@@ -29,9 +29,9 @@ import {
 } from "./loteDaVitrine";
 import type { StorePayload, StudioStoreProduct } from "./types";
 
-const API_BASE =
-  (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
-  "https://api.getaura.com.br/api/v1";
+import { enderecoDaApi } from "./enderecoDaApi";
+
+const API_BASE = enderecoDaApi();
 
 const LARGURA_MAX = 980;
 
