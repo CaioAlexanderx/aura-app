@@ -153,7 +153,11 @@ describe("a migração não deixou ninguém para trás", () => {
   });
 
   test("o provider embrulha a vitrine inteira, com a cor da loja", () => {
-    const shell = fs.readFileSync(path.join(RAIZ, "app/cardapio/studio/[slug].tsx"), "utf8");
+    // 04/09/2026: a tela saiu da rota e virou componente, porque agora
+    // DUAS rotas a abrem (`/<slug>`, o endereço público, e o caminho
+    // antigo). O provider foi junto — e é ele que precisa ficar por fora.
+    const shell = fs.readFileSync(
+      path.join(RAIZ, "components/studio/storefront/PaginaDaVitrine.tsx"), "utf8");
     expect(shell).toContain("<TemaDaVitrine cor={");
     expect(shell).toContain("site?.primary_color");
     // Antes das telas: um provider por dentro deixaria a lista de fora.
