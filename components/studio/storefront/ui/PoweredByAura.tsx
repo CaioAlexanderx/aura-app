@@ -1,6 +1,11 @@
 // ============================================================
 // components/studio/storefront/ui/PoweredByAura.tsx
-// Footer "Powered by Aura" — presente em todos os stages exceto sent.
+// Assinatura discreta nos stages que NAO terminam em rodape (configurador,
+// carrinho, checkout). Na vitrine quem assina e o RodapeDaVitrine.
+//
+// 04/09/2026: o endereco aqui apontava para a loja da PROPRIA Aura.
+// Quem lesse a assinatura na loja da Sheid ia parar na vitrine de outra
+// empresa. Agora leva ao site do produto, que e o que ela quer dizer.
 // ============================================================
 import { View, Text } from "react-native";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
@@ -19,7 +24,7 @@ export function PoweredByAura() {
       pointerEvents="none"
     >
       <Text style={{ fontSize: 9.5, color: T.ink4, letterSpacing: 0.4 }}>
-        Powered by <Text style={{ fontWeight: "800", color: T.ink3 }}>Aura</Text> · loja.getaura.com.br/aura
+        Powered by <Text style={{ fontWeight: "800", color: T.ink3 }}>Aura</Text> · getaura.com.br
       </Text>
     </View>
   );

@@ -22,12 +22,18 @@ export type RodapeDaLoja = {
 };
 
 export function RodapeInstitucional({
-  rodape, corDoTexto, corFraca, corDaLinha,
+  rodape, corDoTexto, corFraca, corDaLinha, compacto = false,
 }: {
   rodape?: RodapeDaLoja | null;
   corDoTexto: string;
   corFraca: string;
   corDaLinha: string;
+  /**
+   * Dentro do rodapé de três colunas este bloco é uma COLUNA, não o fim
+   * da página: sem a linha em cima nem o respiro que o separava dos
+   * produtos quando ele era o último elemento da vitrine.
+   */
+  compacto?: boolean;
 }) {
   const formas = Array.isArray(rodape?.formas) ? rodape!.formas : [];
   const politica = typeof rodape?.politica === "string" ? rodape!.politica.trim() : "";
@@ -37,7 +43,10 @@ export function RodapeInstitucional({
   if (!formas.length && !politica) return null;
 
   return (
-    <View testID="rodape-institucional" style={[s.caixa, { borderTopColor: corDaLinha }]}>
+    <View
+      testID="rodape-institucional"
+      style={[s.caixa, { borderTopColor: corDaLinha }, compacto && s.caixaCompacta]}
+    >
       {formas.length > 0 && (
         <View style={s.bloco}>
           <Text style={[s.titulo, { color: corDoTexto }]}>Formas de pagamento</Text>
@@ -71,6 +80,7 @@ const s = StyleSheet.create({
     marginTop: 32,
     gap: 20,
   },
+  caixaCompacta: { borderTopWidth: 0, paddingTop: 0, marginTop: 0 },
   bloco: { gap: 6 },
   titulo: {
     fontSize: 11,

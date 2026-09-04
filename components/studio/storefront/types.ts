@@ -107,6 +107,12 @@ export type StorePayload = {
     /** S0 — Instagram, TikTok e Facebook com a URL pronta. */
     redes?: RedeSocial[];
     whatsapp?: string | null;
+    /** Rodapé (04/09/2026): a coluna de identidade, igual à loja comum. */
+    endereco?: string;
+    /** "Seg a sáb, 9h às 18h" — já escrito pelo backend. */
+    horario_resumo?: string;
+    /** Já com máscara; formatar de novo daria duas máscaras. */
+    cnpj_formatado?: string;
   };
   products: StudioStoreProduct[];
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };
@@ -127,6 +133,16 @@ export type StorePayload = {
   };
   /** S0 — os números da faixa de confiança, do banco. */
   numeros?: { pedidos_entregues: number };
+  /**
+   * Formas de pagamento e política de troca, JÁ RESOLVIDAS pelo backend
+   * (services/rodapeInstitucional.js, um módulo só para as duas lojas).
+   * A vitrine desenha; não decide.
+   */
+  rodape_institucional?: {
+    formas?: string[];
+    politica_titulo?: string;
+    politica?: string;
+  };
   total_products: number;
 };
 
