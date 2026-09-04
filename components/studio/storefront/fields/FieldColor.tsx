@@ -8,6 +8,7 @@ import { sectionLabel } from "../types";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
+import { dinheiro } from "../moeda";
 export function FieldColor({
   field, value, onChange,
 }: {
@@ -46,7 +47,7 @@ export function FieldColor({
               />
               {typeof delta === "number" && delta !== 0 && (
                 <Texto style={{ fontSize: 9, fontWeight: "700", color: selected ? T.accent : T.ink3 }}>
-                  {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
+                  {delta > 0 ? "+" : ""}{dinheiro(delta)}
                 </Texto>
               )}
             </View>

@@ -16,6 +16,7 @@ import { Fonts } from "@/constants/fonts";
 import type { BlocosDaHome, PassoDaLoja } from "./blocosDaHome";
 import type { StudioStoreProduct } from "./types";
 import { CapaProduto } from "./CapaProduto";
+import { dinheiro } from "./moeda";
 
 const LARGURA_MAX = 980;
 
@@ -281,7 +282,7 @@ export function MaisPedidos({
               {p.name}
             </Texto>
             <Texto style={{ fontFamily: Fonts.mono, fontSize: 12, color: T.ink }}>
-              R$ {Number(p.price).toFixed(2)}
+              {dinheiro(Number(p.price))}
             </Texto>
           </Pressable>
         ))}

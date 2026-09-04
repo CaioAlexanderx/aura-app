@@ -16,6 +16,8 @@
 // com todas as letras, senão a pessoa acha que fechou negócio.
 // ============================================================
 
+import { dinheiro as escreverDinheiro } from "./moeda";
+
 /** Cada linha colada vira uma peça. O servidor também corta em 200. */
 export const MAXIMO_NOMES = 200;
 
@@ -100,5 +102,6 @@ export function pendenciaDoLote(d: {
 
 /** Reais em pt-BR, sem depender de Intl no react-native-web. */
 export function dinheiro(n: number): string {
-  return "R$ " + Number(n || 0).toFixed(2).replace(".", ",");
+  // Uma conta so para a vitrine inteira (ver moeda.ts).
+  return escreverDinheiro(n || 0);
 }

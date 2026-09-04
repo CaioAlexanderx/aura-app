@@ -8,6 +8,7 @@ import { sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "../types
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
+import { dinheiro } from "../moeda";
 export function FieldOption({
   field, value, onChange,
 }: {
@@ -41,7 +42,7 @@ export function FieldOption({
                     marginTop: 2,
                   }}
                 >
-                  {delta > 0 ? "+" : ""}R$ {delta.toFixed(2)}
+                  {delta > 0 ? "+" : ""}{dinheiro(delta)}
                 </Texto>
               )}
             </Pressable>
