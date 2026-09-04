@@ -108,7 +108,9 @@ describe("a vitrine usa o resolvedor do Studio", () => {
   });
 
   test("o shell da vitrine carrega o CSS do Studio", () => {
-    const s = fs.readFileSync(path.join(RAIZ, "app/cardapio/studio/[slug].tsx"), "utf8");
+    // 04/09/2026: a tela virou componente para as duas rotas a abrirem.
+    const s = fs.readFileSync(
+      path.join(RAIZ, "components/studio/storefront/PaginaDaVitrine.tsx"), "utf8");
     expect(s).toContain("cssDaVitrineStudio(parEscolhido)");
   });
 
