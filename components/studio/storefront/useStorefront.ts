@@ -58,7 +58,8 @@
 //   sf.quoteShipping()  -- S2, cota o frete pelo CEP (acao explicita)
 //   sf.shippingQuote    sf.quotingShipping   sf.shippingError
 //   sf.shippingFee      -- frete cobrado (0 fora de "delivery")
-//   sf.cartTotal        -- cartSubtotal + shippingFee
+//   sf.pixDiscount      -- desconto do Pix (0 fora do Pix)
+//   sf.cartTotal        -- cartSubtotal - pixDiscount + shippingFee
 //   sf.addressStreet    sf.setAddressStreet
 //   sf.addressNumber    sf.setAddressNumber
 //   sf.addressNeigh     sf.setAddressNeigh
@@ -411,7 +412,29 @@ export function useStorefront(slug: string) {
     return typeof f === "number" ? f : 0;
   }, [deliveryType, shippingQuote]);
 
-  const cartTotal = useMemo(() => cartSubtotal + shippingFee, [cartSubtotal, shippingFee]);
+  /**
+   * O desconto do Pix, com a MESMA conta do servidor.
+   *
+   * O backend passou a aplicar o desconto no pedido Studio no S0
+   * (routes/studioStorefront.js). Ate aqui o app somava subtotal + frete
+   * e pronto: a partir do dia em que uma lojista ligasse o desconto, a
+   * tela mostraria um total e a cobranca seria outra.
+   *
+   * A formula e copiada de la de proposito — `Math.round(subtotal * pct)
+   * / 100`, arredondando em centavos — e o frete fica FORA, tambem como
+   * la. Conta de dinheiro em dois lugares e conta que diverge; o jeito de
+   * conviver com isso e ela ser identica e ter teste dos dois lados.
+   */
+  const pixDiscountPct = Number((store as any)?.payment?.pix_discount_pct) || 0;
+  const pixDiscount = useMemo(() => {
+    if (paymentMethod !== "pix" || pixDiscountPct <= 0) return 0;
+    return Math.round(cartSubtotal * pixDiscountPct) / 100;
+  }, [paymentMethod, pixDiscountPct, cartSubtotal]);
+
+  const cartTotal = useMemo(
+    () => cartSubtotal - pixDiscount + shippingFee,
+    [cartSubtotal, pixDiscount, shippingFee],
+  );
 
   // Trocar de modalidade ou mexer no carrinho invalida a cotacao: o valor
   // depende do subtotal (frete gratis acima de X).
@@ -781,6 +804,8 @@ export function useStorefront(slug: string) {
     courierPlate, setCourierPlate: (v: string) => setCourierPlate(maskPlate(v)),
     shippingQuote, quotingShipping, shippingError, quoteShipping,
     shippingFee, cartTotal,
+    // S5 — o desconto do Pix, para o resumo mostrar a linha.
+    pixDiscount, pixDiscountPct,
     addressStreet, setAddressStreet,
     addressNumber, setAddressNumber,
     addressNeigh, setAddressNeigh,
