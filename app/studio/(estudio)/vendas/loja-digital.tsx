@@ -60,6 +60,7 @@ import { TabDesign }  from "@/components/screens/canal/TabDesign";
 import { TabEntrega } from "@/components/screens/canal/TabEntrega";
 // Tabs Studio-native novas
 import { TabStudioConfigurador } from "@/components/screens/studio-loja-digital/TabStudioConfigurador";
+import { TabStudioAparencia } from "@/components/screens/studio-loja-digital/TabStudioAparencia";
 import { TabStudioGaleria }      from "@/components/screens/studio-loja-digital/TabStudioGaleria";
 import { TabStudioRevisoes }     from "@/components/screens/studio-loja-digital/TabStudioRevisoes";
 import { TabStudioMarketplaces } from "@/components/screens/studio-loja-digital/TabStudioMarketplaces";
@@ -67,11 +68,14 @@ import { TabStudioPedidos }      from "@/components/screens/studio-loja-digital/
 
 const STOREFRONT_BASE = "https://loja.getaura.com.br";
 
-type TabKey = "site" | "design" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "orders";
+type TabKey = "site" | "design" | "aparencia" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "orders";
 
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: "site",          label: "Meu Site",     icon: "globe" },
   { key: "design",        label: "Design",       icon: "edit" },
+  // S7 — como as escolhas da lojista chegam NA VITRINE STUDIO. Fica ao
+  // lado de Design de proposito: uma configura, a outra mostra.
+  { key: "aparencia",     label: "Aparência",    icon: "eye" },
   { key: "configurator",  label: "Configurador", icon: "settings" },
   { key: "gallery",       label: "Galeria",      icon: "image" },
   { key: "revisions",     label: "Revisões",     icon: "refresh" },
@@ -83,7 +87,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
 // Índices APÓS os quais inserimos um separador vertical sutil entre grupos.
 // Grupos: [0,1]=Site/Design · [2,3,4,5]=Configurador/Galeria/Revisões/Marketplaces
 //         · [6,7]=Entrega/Pedidos
-const TAB_GROUP_DIVIDERS = new Set<number>([1, 5]);
+const TAB_GROUP_DIVIDERS = new Set<number>([2, 6]);
 
 const TAB_KEYS = new Set<string>(TABS.map((tDef) => tDef.key));
 
@@ -260,6 +264,12 @@ export default function StudioVendasLojaDigital() {
               isUploadingImage={isUploadingImage}
               deleteImage={deleteImage}
             />
+          )
+        )}
+
+        {tab === "aparencia" && (
+          isLoading ? <ListSkeleton rows={3} /> : (
+            <TabStudioAparencia config={config} onIrPara={(a) => setTab(a as TabKey)} />
           )
         )}
 
