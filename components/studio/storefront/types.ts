@@ -153,7 +153,9 @@ export type CartLine = {
   hasBackSelected?: boolean;
 };
 
-export type Stage = "list" | "configure" | "checkout" | "sent";
+// S6 — "lote" e o orcamento em lote publico. Aditivo: quem nao conhece
+// o estagio novo continua caindo em "list".
+export type Stage = "list" | "configure" | "checkout" | "sent" | "lote";
 
 export type SentOrder = {
   order_id: string;

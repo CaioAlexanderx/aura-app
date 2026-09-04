@@ -17,7 +17,7 @@ import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 import { wash } from "./theme";
 
-import { AncoraWhatsApp, linkDeLote } from "./AncoraWhatsApp";
+import { AncoraWhatsApp } from "./AncoraWhatsApp";
 import { RodapeInstitucional } from "./RodapeInstitucional";
 import { montarBlocosDaHome } from "./blocosDaHome";
 import { seloDoProduto, chipsDoProduto, linhaDeEscada, pecaMaisPedida } from "./selosDoProduto";
@@ -69,9 +69,6 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
   // Os blocos da home: QUEM aparece e decisao de blocosDaHome.ts.
   const blocos = useMemo(() => montarBlocosDaHome(store), [store]);
-  // O bloco B2B so aparece com destino: sem WhatsApp da loja, o botao
-  // nao teria para onde levar. O assistente publico entra na S6.
-  const loteWa = linkDeLote((store.site as any).whatsapp, store.site.name);
   // A campea da loja e uma so: o selo "Mais pedido" nao pode aparecer
   // em quatro cartoes ao mesmo tempo.
   const campea = useMemo(() => pecaMaisPedida(store.products), [store.products]);
@@ -350,8 +347,11 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
         <ArtesProntas artes={blocos.artes} />
 
-        {blocos.mostrarB2B && loteWa ? (
-          <BlocoB2B onAbrir={() => Linking.openURL(loteWa)} />
+        {/* S6 — o bloco B2B abre o assistente publico. Ate a S5 ele
+            levava ao WhatsApp, que era o caminho real enquanto o
+            assistente nao existia. */}
+        {blocos.mostrarB2B ? (
+          <BlocoB2B onAbrir={() => sf.goTo("lote")} />
         ) : null}
 
         <FaixaDeConfianca numeros={blocos.confianca} />
