@@ -341,7 +341,9 @@ export function readCustomerColorTargets(m: any): MugPart[] {
     return Array.from(vistos);
   }
   const antigo = m?.customer_color_target;
-  if (antigo in LEGACY_TARGETS) return LEGACY_TARGETS[antigo as CustomerColorTarget];
+  if (typeof antigo === "string" && Object.prototype.hasOwnProperty.call(LEGACY_TARGETS, antigo)) {
+    return LEGACY_TARGETS[antigo as CustomerColorTarget];
+  }
   return MUG_MATERIALS_PADRAO.customerColorTargets;
 }
 

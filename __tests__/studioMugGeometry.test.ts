@@ -329,6 +329,8 @@ describe("readCustomerColorTargets — o campo antigo vira lista equivalente", (
   it("sem campo nenhum vale o padrão de antes (accent)", () => {
     expect(readCustomerColorTargets({})).toEqual(LEGACY_TARGETS.accent);
     expect(readCustomerColorTargets({ customer_color_target: "banana" })).toEqual(LEGACY_TARGETS.accent);
+    // Nome herdado do protótipo não é um alvo — jsonb pode trazer qualquer texto.
+    expect(readCustomerColorTargets({ customer_color_target: "constructor" })).toEqual(LEGACY_TARGETS.accent);
   });
 
   it("a lista nova manda, mesmo com o campo antigo presente", () => {
