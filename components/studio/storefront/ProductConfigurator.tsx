@@ -19,6 +19,7 @@ import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { validateRequiredFields } from "./useStorefront";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { linkDoPedido } from "./pedidoPeloWhatsApp";
+import { modoDaVitrine } from "./modoDaVitrine";
 import { SizeGuideModal } from "./SizeGuideModal";
 // sideOf: fonte unica pra decidir o lado de um campo (front/back/middle).
 // Usar aqui em vez de reimplementar o ternario evita a mesma divergencia
@@ -57,7 +58,11 @@ export function ProductConfigurator({
   /** Slug da loja — necessario para o endpoint de upload no FieldImage */
   slug: string;
 }) {
+  // Pico: a loja continua inteira e o botao vira orcamento. Quem
+  // decide e o servidor — a mesma decisao vale no POST do pedido.
+
   const T = usePaletaDaVitrine();
+  const modo = modoDaVitrine(sf.store);
   const qtyTxt = qtyTxtCom(T);
   const {
     activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
@@ -847,9 +852,29 @@ export function ProductConfigurator({
                 loja comum — uma cor cheia por tela, e ela pertence a acao
                 que fecha a venda. */}
             <Pressable
-              onPress={() => commitConfigure({ direto: true })}
+              onPress={() => {
+                // Loja fechada: o mesmo preenchimento vira orcamento
+                // pelo WhatsApp, em vez de um pedido que ela nao
+                // consegue produzir.
+                if (!modo.aceita) {
+                  const l = linkDoPedido({
+                    numero: (sf.store?.site as any)?.whatsapp,
+                    produto: activeProduct,
+                    valores: editingValues,
+                    quantidade: editingQty,
+                    precoUnitario: configuringUnitPrice,
+                    nomeDaLoja: sf.store?.site?.name,
+                  });
+                  if (l) Linking.openURL(l);
+                  else sf.goTo("lote");
+                  return;
+                }
+                commitConfigure({ direto: true });
+              }}
               accessibilityRole="button"
-              accessibilityLabel={"Comprar agora por R$ " + (configuringUnitPrice * editingQty).toFixed(2)}
+              accessibilityLabel={modo.aceita
+                ? "Comprar agora por R$ " + (configuringUnitPrice * editingQty).toFixed(2)
+                : "Pedir orcamento desta peca"}
               style={{
                 flex: 1, backgroundColor: tema.marcaFill, paddingVertical: 14,
                 borderRadius: 10, alignItems: "center",
@@ -857,13 +882,14 @@ export function ProductConfigurator({
               }}
             >
               <Texto style={{ color: tema.sobreMarca, fontSize: 14.5, fontWeight: "800" }}>
-                Comprar agora
+                {modo.rotuloDoBotao}
               </Texto>
               <Texto style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "700", opacity: 0.85, marginTop: 1 }}>
                 R$ {(configuringUnitPrice * editingQty).toFixed(2)}
               </Texto>
             </Pressable>
 
+            {modo.aceita ? (
             <Pressable
               onPress={() => commitConfigure()}
               accessibilityRole="button"
@@ -878,8 +904,20 @@ export function ProductConfigurator({
                 Adicionar ao carrinho
               </Texto>
             </Pressable>
+            ) : null}
           </View>
         )}
+
+        {/* Loja fechada para pedidos: a vitrine continua inteira e a
+            cliente entende por que o botao mudou. Sem esta frase, uma
+            loja sem "comprar" parece quebrada. */}
+        {!modo.aceita ? (
+          <View style={{ marginTop: 12, padding: 14, borderRadius: 10, backgroundColor: wash(tema.marcaFill, 0.06) }}>
+            <Texto style={{ color: tema.ink2, fontSize: 13.5, lineHeight: 20 }}>
+              {modo.recado}
+            </Texto>
+          </View>
+        ) : null}
 
         {/* O terceiro caminho: metade das clientes de personalizado so
             fecha falando com gente. O que muda a conversa nao e o botao,

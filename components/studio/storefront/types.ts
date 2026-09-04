@@ -134,6 +134,17 @@ export type StorePayload = {
   /** S0 — os números da faixa de confiança, do banco. */
   numeros?: { pedidos_entregues: number };
   /**
+   * Pico (04/09/2026): a loja continua inteira e o botão vira orçamento.
+   * `aceita: false` nunca vem sem `recado` — loja sem botão de comprar e
+   * sem explicação parece quebrada.
+   */
+  pedidos?: {
+    aceita: boolean;
+    motivo: "pausado" | "prazo" | null;
+    recado: string | null;
+    pedidos_ate: string | null;
+  };
+  /**
    * Formas de pagamento e política de troca, JÁ RESOLVIDAS pelo backend
    * (services/rodapeInstitucional.js, um módulo só para as duas lojas).
    * A vitrine desenha; não decide.

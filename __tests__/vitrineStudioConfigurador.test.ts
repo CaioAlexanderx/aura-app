@@ -109,7 +109,9 @@ describe("a tela usa a MESMA validação do commit", () => {
     // Ancora no rotulo de acessibilidade do botao, nao na frase solta:
     // "Comprar agora" aparece antes num comentario, e o teste passaria
     // ou falharia por causa de prosa.
-    const iBotao = fonte.indexOf('accessibilityLabel={"Comprar agora por R$ "');
+    // 04/09/2026: o rotulo virou ternario — com a loja fechada para o
+    // pico ele diz "Pedir orcamento". A regra guardada e a mesma.
+    const iBotao = fonte.indexOf('? "Comprar agora por R$ "');
     expect(iAviso).toBeGreaterThan(0);
     expect(iAviso).toBeLessThan(iBotao);
   });
