@@ -11,14 +11,13 @@ import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
 import { casa } from "./buscaVitrine";
 import { CartBar } from "./Cart";
-import { PoweredByAura } from "./ui/PoweredByAura";
 import { precoMinimo } from "./categoryGrouping";
 import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 import { wash } from "./theme";
 
 import { AncoraWhatsApp } from "./AncoraWhatsApp";
-import { RodapeInstitucional } from "./RodapeInstitucional";
+import { RodapeDaVitrine } from "./RodapeDaVitrine";
 import { montarBlocosDaHome } from "./blocosDaHome";
 import { seloDoProduto, chipsDoProduto, linhaDeEscada, pecaMaisPedida } from "./selosDoProduto";
 import {
@@ -356,11 +355,14 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
         <FaixaDeConfianca numeros={blocos.confianca} />
 
-        <RodapeInstitucional
-          rodape={(store as any).rodape_institucional}
-          corDoTexto={T.ink}
-          corFraca={T.ink3}
-          corDaLinha={T.border}
+        {/* O rodape de tres colunas engloba o institucional: quem e a
+            loja, como ela atende, por onde navegar — e a assinatura. */}
+        <RodapeDaVitrine
+          store={store}
+          onAbrirCategoria={(porta) => {
+            const item = menu.itens.find((i) => i.slug === porta.slug);
+            if (item) setAtiva(item);
+          }}
         />
       </ScrollView>
 
@@ -371,7 +373,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         acimaDaBarra={sf.cart.length > 0}
       />
       <CartBar sf={sf} accent={accent} />
-      <PoweredByAura />
+      {/* Sem a barra flutuante "Powered by Aura" nesta tela: o rodape
+          assina a loja com a mesma frase, uma vez so, e no lugar onde
+          se procura por isso. A barra tampava o fim da pagina. */}
     </View>
   );
 }

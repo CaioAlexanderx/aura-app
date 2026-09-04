@@ -96,11 +96,17 @@ describe("a vitrine não recalcula o que o backend já resolveu", () => {
   });
 
   test("a tela passa o campo do payload, sem montar a lista", () => {
-    const lista = fs.readFileSync(
-      path.join(__dirname, "..", "components/studio/storefront/ProductList.tsx"),
-      "utf8"
-    );
-    expect(lista).toContain("rodape_institucional");
+    // 04/09/2026: este bloco virou UMA COLUNA do rodape de tres colunas.
+    // Quem le `rodape_institucional` do payload agora e o RodapeDaVitrine;
+    // a ProductList so entrega a loja inteira a ele. A regra guardada aqui
+    // continua a mesma — a vitrine repassa o texto pronto e nao remonta a
+    // lista de formas de pagamento em lugar nenhum.
+    const raiz = path.join(__dirname, "..", "components/studio/storefront");
+    const rodape = fs.readFileSync(path.join(raiz, "RodapeDaVitrine.tsx"), "utf8");
+    const lista = fs.readFileSync(path.join(raiz, "ProductList.tsx"), "utf8");
+    expect(rodape).toContain("rodape_institucional");
+    expect(rodape).not.toContain("Cartão de crédito e débito");
+    expect(lista).toContain("<RodapeDaVitrine");
     expect(lista).not.toContain("Cartão de crédito e débito");
   });
 });
