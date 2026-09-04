@@ -55,7 +55,6 @@ export function MobileMenuSheet({
                   tone={makeTones(tk)[g.toneKey].bg}
                   active={pathname.startsWith(c.href)}
                   subtitle={c.subtitle}
-                  primary={c.primary}
                   onPress={() => { onNavigate(c.href); onClose(); }}
                 />
               ))}
@@ -78,20 +77,17 @@ export function MobileMenuSheet({
 }
 
 function MobileMenuItem({
-  label, icon, tone, active, subtitle, primary, onPress,
+  label, icon, tone, active, subtitle, onPress,
 }: {
   label: string;
   icon: string;
   tone: string;
   active?: boolean;
   subtitle?: string;
-  primary?: boolean;
   onPress: () => void;
 }) {
   const tk = useStudioTokens();
   const mm = useMemo(() => makeMm(tk), [tk]);
-  // Porta primária (Caixa/PDV): borda navy sutil quando inativa
-  const primaryBorder = !active && primary ? tk.primary : undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -100,14 +96,13 @@ function MobileMenuItem({
       style={[
         mm.item,
         active && { backgroundColor: tone + "12", borderColor: tone },
-        primary && !active && { borderColor: primaryBorder ?? mm.item.borderColor },
       ]}
     >
       <View style={[mm.itemIcon, { backgroundColor: tone }]}>
         <Icon name={icon as any} size={14} color="#fff" />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[mm.itemTxt, active && { color: tone, fontWeight: "800" }, primary && !active && { fontWeight: "700", color: tk.primary }]} numberOfLines={1}>
+        <Text style={[mm.itemTxt, active && { color: tone, fontWeight: "800" }]} numberOfLines={1}>
           {label}
         </Text>
         {subtitle && (

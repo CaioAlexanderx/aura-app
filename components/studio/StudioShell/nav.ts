@@ -29,8 +29,6 @@ export type StudioNavItem = {
   icon: string;
   /** Frase curta "quando usar" — exibida sob o label nas portas de venda */
   subtitle?: string;
-  /** Destaque visual como porta primária de venda */
-  primary?: boolean;
   /** Badge opcional herdado do legado */
   badge?: { value: string; tone?: 'accent' | 'warm' };
 };
@@ -104,7 +102,10 @@ export const STUDIO_NAV: StudioNavItem[] = [
     group: 'VENDAS',
     icon: 'credit-card',
     subtitle: 'Venda no balcão',
-    primary: true,
+    // Sem destaque fixo: o item já teve barra, fundo e texto em navy como
+    // "porta primária", e na prática parecia SELECIONADO o tempo todo,
+    // competindo com o item realmente ativo (04/09/2026). No menu, a única
+    // ênfase permitida é a da rota atual.
   },
   {
     route: '/studio/vendas/loja-digital',
