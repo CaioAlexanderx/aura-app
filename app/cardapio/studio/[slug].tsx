@@ -28,6 +28,7 @@ import { SentConfirmation } from "@/components/studio/storefront/SentConfirmatio
 import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
 import { TipografiaDaVitrine } from "@/components/studio/storefront/TipografiaVitrine";
 import { TemaDaVitrine } from "@/components/studio/storefront/TemaDaVitrine";
+import { OrcamentoEmLote } from "@/components/studio/storefront/OrcamentoEmLote";
 function Center({ children }: { children: any }) {
   return (
     <View
@@ -100,7 +101,9 @@ export default function StudioStorefrontPage() {
   return (
     <TemaDaVitrine cor={(sf.store as any)?.site?.primary_color}>
     <TipografiaDaVitrine chave={parEscolhido}>
-      {sf.stage === "sent" ? (
+      {sf.stage === "lote" ? (
+        <OrcamentoEmLote store={sf.store} slug={slug} onVoltar={() => sf.goTo("list")} />
+      ) : sf.stage === "sent" ? (
         <SentConfirmation sf={sf} />
       ) : sf.stage === "configure" && sf.activeProduct ? (
         // slug e passado explicitamente pro ProductConfigurator

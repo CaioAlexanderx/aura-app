@@ -350,8 +350,11 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
         <ArtesProntas artes={blocos.artes} />
 
-        {blocos.mostrarB2B && loteWa ? (
-          <BlocoB2B onAbrir={() => Linking.openURL(loteWa)} />
+        {/* S6 — o bloco B2B abre o assistente publico. Ate a S5 ele
+            levava ao WhatsApp, que era o caminho real enquanto o
+            assistente nao existia. */}
+        {blocos.mostrarB2B ? (
+          <BlocoB2B onAbrir={() => sf.goTo("lote")} />
         ) : null}
 
         <FaixaDeConfianca numeros={blocos.confianca} />
