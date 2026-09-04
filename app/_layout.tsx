@@ -127,6 +127,16 @@ function AuthGuard() {
     const onPublicQrTable = segments[0] === "m";
     // Fase 5: storefront público de delivery em /cardapio/[slug].
     const onPublicCardapio = segments[0] === "cardapio";
+    // 04/09/2026: a vitrine de personalizados em /[slug] — o endereço
+    // público servido em loja.getaura.com.br/<slug>. É uma LOJA: quem
+    // abre é a cliente, que não tem conta.
+    //
+    // `useSegments` devolve o nome da ROTA, não o caminho: o segmento
+    // dinâmico da raiz chega como o literal "[slug]". Por isso a
+    // comparação é exata e não pega nenhuma rota declarada do painel —
+    // "/studio", "/empresas", "/cardapio" e as outras são estáticas e
+    // aparecem com o próprio nome.
+    const onVitrinePublica = segments.length === 1 && segments[0] === "[slug]";
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
@@ -177,7 +187,7 @@ function AuthGuard() {
       segments[1] === "roster-self" ||
       segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onPublicApproval || onPublicOrcamento || onPublicTrack || onPublicMesa || onKaratePublic) return;
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onVitrinePublica || onPublicApproval || onPublicOrcamento || onPublicTrack || onPublicMesa || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";

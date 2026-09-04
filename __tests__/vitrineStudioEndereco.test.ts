@@ -86,6 +86,16 @@ describe("as duas rotas abrem a mesma tela", () => {
     }
   });
 
+  test("a vitrine pública passa pelo guarda de autenticação", () => {
+    // Verificado no ar em 04/09: sem isto, `app.getaura.com.br/<slug>`
+    // caía na tela de login. O guarda libera por PRIMEIRO SEGMENTO, e o
+    // segmento dinâmico da raiz chega como o literal "[slug]" — uma
+    // loja aberta por quem não tem conta não pode pedir senha.
+    const layout = fs.readFileSync(path.join(RAIZ, "app/_layout.tsx"), "utf8");
+    expect(layout).toContain('segments.length === 1 && segments[0] === "[slug]"');
+    expect(layout).toContain("onVitrinePublica ||");
+  });
+
   test("a tela mora em componente, não na rota", () => {
     const tela = fs.readFileSync(
       path.join(RAIZ, "components/studio/storefront/PaginaDaVitrine.tsx"), "utf8");
