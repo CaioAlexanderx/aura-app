@@ -524,6 +524,16 @@ export default function StudioOrderDetail() {
               <Text style={[s.actionBtnTxt, { color: tk.ink2 }]}>Ver mockup</Text>
             </Pressable>
           ) : null}
+          {/* 05/09/2026 (decisao do Caio): a ficha de producao em A5 — o
+              que vai pra bancada junto com a peca. Ver pedidos/ficha/[id]. */}
+          <Pressable
+            testID="btn-ficha-de-producao"
+            onPress={() => router.push(`/studio/pedidos/ficha/${order.id}` as any)}
+            style={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}
+          >
+            <Icon name="file-text" size={16} color={tk.ink2} />
+            <Text style={[s.actionBtnTxt, { color: tk.ink2 }]}>Ficha de produção</Text>
+          </Pressable>
         </View>
 
         <View style={s.section}>

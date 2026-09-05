@@ -114,6 +114,17 @@ export const STUDIO_NAV: StudioNavItem[] = [
     icon: 'globe',
     subtitle: 'Vendas online',
   },
+  // 04/09/2026 (decisao do Caio): a feature de clientes ja existia no app
+  // comum e o Studio nao tinha a porta. Personalizado e recorrencia
+  // disfarcada de compra unica — a noiva de dezembro vira cha de bebe no
+  // ano seguinte — e sem a ficha da cliente essa recorrencia nao existe.
+  {
+    route: '/studio/clientes',
+    label: 'Clientes',
+    group: 'VENDAS',
+    icon: 'users',
+    subtitle: 'Quem ja comprou, e o que pediu',
+  },
 
   // ── GESTÃO ──────────────────────────────────────────────
   {

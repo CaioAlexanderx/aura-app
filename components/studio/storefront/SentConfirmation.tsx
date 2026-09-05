@@ -4,7 +4,7 @@
 // policy de revisões e próximos passos.
 // ============================================================
 import { useState } from "react";
-import { View, Pressable, ScrollView, Platform, Image } from "react-native";
+import { View, Pressable, ScrollView, Platform, Image, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { montarTema } from "./theme";
@@ -147,6 +147,41 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           </Pressable>
         </View>
       )}
+
+      {/* 05/09/2026: o link de acompanhamento. Nasce do payload ou nao
+          existe — antes da migration 322 o backend manda null e o bloco
+          some. E o link que a cliente guarda em vez de perguntar "e ai?"
+          no WhatsApp. */}
+      {sentOrder.track_url ? (
+        <View
+          testID="acompanhar-pedido"
+          style={{
+            backgroundColor: T.card, borderRadius: 12, padding: 16,
+            borderWidth: 1, borderColor: T.border,
+            marginTop: 16, maxWidth: 380, width: "100%", gap: 8,
+          }}
+        >
+          <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+            Acompanhe seu pedido
+          </Texto>
+          <Texto style={{ fontSize: 12.5, color: T.ink2, lineHeight: 18 }}>
+            Guarde este link: ele mostra em que etapa o pedido está, sem precisar perguntar.
+          </Texto>
+          <Pressable
+            onPress={() => Linking.openURL(sentOrder.track_url as string)}
+            accessibilityRole="link"
+            style={{
+              alignSelf: "flex-start", paddingVertical: 9, paddingHorizontal: 14,
+              borderRadius: 10, borderWidth: 1, borderColor: tema.marcaFill,
+            }}
+          >
+            <Texto style={{ fontSize: 12.5, fontWeight: "800", color: tema.marcaTexto }}>Abrir acompanhamento</Texto>
+          </Pressable>
+          <Texto selectable style={{ fontSize: 11, color: T.ink3 }} numberOfLines={2}>
+            {sentOrder.track_url}
+          </Texto>
+        </View>
+      ) : null}
 
       <View
         style={{

@@ -1,3 +1,4 @@
+import { useSegments } from "expo-router";
 import { useState, useEffect, useSyncExternalStore } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Linking, type LayoutChangeEvent } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -27,7 +28,7 @@ export function hasAnalyticsConsent(): boolean {
   return getLgpdConsent() === "all";
 }
 
-function saveConsent(choice: LgpdConsent) {
+export function saveConsent(choice: LgpdConsent) {
   try {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(STORAGE_KEY, choice === "all" ? "1" : "essential");
@@ -60,18 +61,28 @@ export function useLgpdConsentInset(): number {
   return useSyncExternalStore(subscribeInset, () => insetHeight, () => 0);
 }
 
+// 05/09/2026: a vitrine publica (loja.getaura.com.br/<slug> e
+// /cardapio/...) tem o proprio aviso, na cor da loja e so quando a loja
+// rastreia algo (ver storefront/ConsentimentoDaVitrine.tsx). Este banner
+// e do PAINEL: violeta escuro, fala em "app", e por cima da loja de uma
+// cliente ele parecia propaganda de outra empresa.
+const RAIZES_PUBLICAS = new Set(["[slug]", "cardapio"]);
+
 export function LGPDConsent() {
   const [visible, setVisible] = useState(false);
+  const segments = useSegments() as string[];
+  const naVitrine = RAIZES_PUBLICAS.has(String(segments[0] || ""));
 
   useEffect(() => {
     // So aparece na web (mobile ja tem termos aceitos no cadastro)
     if (Platform.OS !== "web") return;
+    if (naVitrine) return;
     // Pequeno delay para nao competir com splash
     const t = setTimeout(() => {
       if (!getLgpdConsent()) setVisible(true);
     }, 1200);
     return () => { clearTimeout(t); publishInset(0); };
-  }, []);
+  }, [naVitrine]);
 
   function decide(choice: LgpdConsent) {
     saveConsent(choice);
@@ -84,7 +95,7 @@ export function LGPDConsent() {
     Linking.openURL(PRIVACY_URL);
   }
 
-  if (!visible) return null;
+  if (!visible || naVitrine) return null;
 
   return (
     <View

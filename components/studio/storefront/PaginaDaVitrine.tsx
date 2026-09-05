@@ -28,6 +28,7 @@ import { TipografiaDaVitrine } from "@/components/studio/storefront/TipografiaVi
 import { TemaDaVitrine, usePaletaDaVitrine } from "@/components/studio/storefront/TemaDaVitrine";
 import { OrcamentoEmLote } from "@/components/studio/storefront/OrcamentoEmLote";
 import { GradeDeModelos } from "@/components/studio/storefront/GradeDeModelos";
+import { ConsentimentoDaVitrine } from "@/components/studio/storefront/ConsentimentoDaVitrine";
 
 // A tela de erro roda ANTES de a loja carregar, entao a cor da lojista
 // ainda nao existe. O hook fora do provider cai no tema padrao — o papel
@@ -133,6 +134,12 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
       ) : (
         <ProductList sf={sf} />
       )}
+      {/* 05/09/2026: GA4/Pixel so entram depois do "Aceitar". Loja sem
+          rastreador configurado nao renderiza aviso nenhum. */}
+      <ConsentimentoDaVitrine
+        rastreadores={(sf.store as any)?.site?.rastreadores}
+        corDaLoja={(sf.store as any)?.site?.primary_color}
+      />
     </TipografiaDaVitrine>
     </TemaDaVitrine>
   );
