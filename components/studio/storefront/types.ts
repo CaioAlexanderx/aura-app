@@ -97,6 +97,9 @@ export type StorePayload = {
   site: {
     name: string; tagline?: string;
     primary_color: string; accent_color: string;
+    /** 05/09/2026: IDs ja validados pelo backend (services/rastreadores.js).
+     *  Ausente ou os dois null = a loja nao rastreia nada. */
+    rastreadores?: { ga4: string | null; pixel: string | null };
     /** Par tipografico escolhido pela lojista (ver TIPOGRAFIAS). */
     font_family?: string | null;
     /** Estilo do cartao: editorial | minimal | image-heavy. */
@@ -194,6 +197,9 @@ export type SentOrder = {
   status: string;
   pix: { qrcode: string; payload: string } | null;
   card: { init_point: string } | null;
+  /** 05/09/2026: link publico de acompanhamento (/acompanhar/<token>).
+   *  null enquanto o backend nao gera token — a tela nao mostra o bloco. */
+  track_url?: string | null;
 };
 
 // Paleta Studio — exportada para sub-componentes não precisarem redefinir
