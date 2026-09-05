@@ -48,12 +48,19 @@ type Props = {
   chips?: Array<{ texto: string }>;
   /** "R$ 39,90 cada 50 un ou mais" — so com escada configurada. */
   escada?: string | null;
+  /**
+   * O preco de UMA unidade no Pix (04/09/2026). As duas referencias do
+   * mercado mostram isso em 100% dos cartoes; nos so no total do
+   * checkout — a cliente descobria o desconto depois de decidir.
+   * null = loja sem desconto no Pix, e a linha nao existe.
+   */
+  precoPix?: number | null;
   onPress: () => void;
 };
 
 export function ProductCard({
   nome, preco, fotos, descricao, selo, largura, corDaLoja, fonteDisplay,
-  estilo = "editorial", destaque, chips, escada, onPress,
+  estilo = "editorial", destaque, chips, escada, precoPix, onPress,
 }: Props) {
   const T = usePaletaDaVitrine();
   const cor = corDaLoja || AURA.violet;
@@ -190,6 +197,18 @@ export function ProductCard({
         >
           {dinheiro(preco)}
         </Texto>
+
+        {/* "ou R$ 35,91 no Pix": a mesma conta do checkout, numa unidade.
+            So aparece com desconto configurado — "0%" seria ruido. */}
+        {precoPix != null && precoPix < preco ? (
+          <Texto style={{
+            fontSize: compacto ? 10.5 : 11.5, marginTop: 1,
+            color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
+            fontVariant: ["tabular-nums"],
+          }}>
+            ou {dinheiro(precoPix)} no Pix
+          </Texto>
+        ) : null}
 
         {/* A escada so existe quando a lojista configurou faixa. Nenhuma
             das lojas Studio tem hoje — inventar uma seria anunciar

@@ -22,7 +22,7 @@
 // Foto enviada vira o endereço do arquivo: é assim que a lojista abre a
 // arte sem pedir para reenviar.
 // ============================================================
-import type { StudioStoreProduct, CustomizationField } from "./types";
+import type { StudioStoreProduct, CustomizationField, CartLine } from "./types";
 import { numeroWhatsApp } from "./AncoraWhatsApp";
 import { dinheiro } from "./moeda";
 
@@ -140,4 +140,56 @@ export function linkDoPedido(args: {
   const num = numeroWhatsApp(args.numero);
   if (!num) return null;
   return `https://wa.me/${num}?text=${encodeURIComponent(mensagemDoPedido(args))}`;
+}
+
+/**
+ * A mensagem do CARRINHO inteiro, para pedir orçamento (04/09/2026).
+ *
+ * Decisão do Caio: o orçamento é sempre acionável e apartado do checkout —
+ * um botão pequeno, que não disputa com "Finalizar". A cliente que
+ * prefere conversar leva o carrinho que já montou, peça por peça, com a
+ * personalização de cada uma.
+ */
+export function mensagemDoCarrinho({
+  linhas,
+  nomeDaLoja,
+}: {
+  linhas: CartLine[];
+  nomeDaLoja?: string | null;
+}): string {
+  const loja = String(nomeDaLoja || "").trim();
+  const partes: string[] = [];
+  partes.push(loja
+    ? `Olá! Vim pela loja ${loja} e quero um orçamento destas peças:`
+    : "Olá! Vim pela loja e quero um orçamento destas peças:");
+
+  let total = 0;
+  for (const l of linhas || []) {
+    const qtd = Math.max(1, Math.floor(Number(l.qty) || 1));
+    const unit = Number(l.product?.price) || 0;
+    total += unit * qtd;
+    partes.push("");
+    partes.push(`*${l.product?.name || "Peça personalizada"}* × ${qtd}`);
+    for (const c of linhasDaPersonalizacao(l.product, l.values)) {
+      partes.push(`${c.rotulo}: ${c.valor}`);
+    }
+  }
+  if (total > 0) {
+    partes.push("");
+    partes.push(`Estimativa pelo preço de tabela: ${dinheiro(total)}`);
+  }
+
+  const texto = partes.join("\n");
+  return texto.length <= TETO ? texto : texto.slice(0, TETO - 1) + "…";
+}
+
+/** O link do orçamento do carrinho, ou `null` sem WhatsApp na loja. */
+export function linkDoOrcamentoDoCarrinho(args: {
+  numero?: string | null;
+  linhas: CartLine[];
+  nomeDaLoja?: string | null;
+}): string | null {
+  const num = numeroWhatsApp(args.numero);
+  if (!num || !args.linhas?.length) return null;
+  return `https://wa.me/${num}?text=${encodeURIComponent(mensagemDoCarrinho(args))}`;
 }

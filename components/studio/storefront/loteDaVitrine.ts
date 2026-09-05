@@ -31,7 +31,19 @@ export type CotacaoDoLote = {
   savings: number;
   tiers: FaixaDoLote[];
   product?: { id: string; name: string; price: number };
+  /**
+   * Prazo declarado pela lojista para esta tiragem, em dias úteis.
+   * `null` é "a loja informa" — e a tela escreve isso, não um número.
+   */
+  prazo_dias?: number | null;
 };
+
+/** A frase do prazo, como a cliente lê. */
+export function fraseDoPrazo(prazoDias: number | null | undefined): string {
+  const n = Number(prazoDias);
+  if (!Number.isFinite(n) || n <= 0) return "Prazo: a loja informa junto com a resposta.";
+  return n === 1 ? "Prazo estimado: 1 dia útil." : `Prazo estimado: ${Math.ceil(n)} dias úteis.`;
+}
 
 /**
  * A lista colada, virada em nomes.

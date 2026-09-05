@@ -14,6 +14,7 @@ import { useTipografia, Texto } from "./TipografiaVitrine";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto } from "./CarrosselFoto";
 import { chipsDoProduto } from "./selosDoProduto";
+import { precoNoPix } from "./precoNoPix";
 import {
   modelosOrdenados, eixoQueVaria, faixaDePrecos, resumoDoGrupo,
 } from "./modelosDoGrupo";
@@ -29,6 +30,7 @@ export function GradeDeModelos({
   produtos,
   corDaLoja,
   estiloCartao,
+  pixPct = 0,
   onEscolher,
   onVoltar,
 }: {
@@ -36,6 +38,8 @@ export function GradeDeModelos({
   produtos: StudioStoreProduct[];
   corDaLoja: string;
   estiloCartao?: string;
+  /** Desconto no Pix da loja, em %. 0 = sem linha de Pix nos cartoes. */
+  pixPct?: number;
   onEscolher: (p: StudioStoreProduct) => void;
   onVoltar: () => void;
 }) {
@@ -100,6 +104,7 @@ export function GradeDeModelos({
                 fonteDisplay={tipo.display}
                 estilo={estiloCartao as any}
                 chips={chipsDoProduto(m.produto)}
+                precoPix={precoNoPix(m.preco, pixPct)}
                 onPress={() => onEscolher(m.produto)}
               />
             ))}

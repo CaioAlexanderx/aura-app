@@ -24,7 +24,7 @@ import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { Fonts } from "@/constants/fonts";
 import { Etiqueta } from "./HomeDaVitrine";
 import {
-  nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro,
+  nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro, fraseDoPrazo,
   type CotacaoDoLote,
 } from "./loteDaVitrine";
 import type { StorePayload, StudioStoreProduct } from "./types";
@@ -205,6 +205,12 @@ export function OrcamentoEmLote({
               {dinheiro(degrau.precoUn)} cada ({degrau.pct}% off).
             </Texto>
           ) : null}
+          {/* O prazo é da LOJISTA, por faixa de tiragem. Sem ele, a frase
+              diz que ela informa — que é verdade — em vez de um número
+              que ninguém prometeu. */}
+          <Texto style={{ fontSize: 11.5, color: T.ink3, lineHeight: 16 }}>
+            {fraseDoPrazo(cotacao.prazo_dias)}
+          </Texto>
         </View>
       ) : cotando ? (
         <ActivityIndicator color={tema.marcaTexto} />

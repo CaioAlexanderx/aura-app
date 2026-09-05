@@ -90,6 +90,7 @@ import type {
 } from "./types";
 import { normalizePlate, maskPlate } from "./courierPlate";
 import { isArtSourceType, sideOf } from "@/components/studio/customizationConfig";
+import { versoAtivo } from "./versoDoPedido";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
@@ -704,9 +705,14 @@ export function useStorefront(slug: string) {
         payment_method: paymentMethod || undefined,
         notes: notes.trim() || null,
         items: cart.map((l) => {
-          const backActive = effectiveBackSelected(
+          // Decisao do Caio (04/09/2026): o verso so vai para a producao
+          // quando a cliente o escolheu E preencheu. Antes, verso incluso
+          // no preco saia como "Sim" em todo pedido, e a ficha mandava
+          // prensar um verso que ninguem tocou. Ver versoDoPedido.ts.
+          const backActive = versoAtivo(
             l.product.customization_config,
-            l.hasBackSelected
+            l.hasBackSelected,
+            l.values
           );
           // Bandeira do meio guardada em values (ver commitConfigure) —
           // recalculamos a atividade efetiva aqui pelo mesmo motivo do

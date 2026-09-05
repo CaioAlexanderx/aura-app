@@ -20,6 +20,7 @@ import { AncoraWhatsApp } from "./AncoraWhatsApp";
 import { RodapeDaVitrine } from "./RodapeDaVitrine";
 import { montarBlocosDaHome } from "./blocosDaHome";
 import { seloDoProduto, chipsDoProduto, linhaDeEscada, pecaMaisPedida } from "./selosDoProduto";
+import { precoNoPix } from "./precoNoPix";
 import {
   FaixaDeAvisos, Hero, ComoFunciona, TiraDeCategorias,
   MaisPedidos, ArtesProntas, BlocoB2B, FaixaDeConfianca,
@@ -289,6 +290,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                     key={"cat-" + category.id}
                     nome={category.name}
                     preco={precoMinimo(products)}
+                    precoPix={precoNoPix(precoMinimo(products), sf.pixDiscountPct)}
                     fotos={fotosDoGrupo(products)}
                     selo={`${products.length} modelos para escolher`}
                     
@@ -309,6 +311,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   key={p.id}
                   nome={p.name}
                   preco={Number(p.price)}
+                  precoPix={precoNoPix(Number(p.price), sf.pixDiscountPct)}
                   fotos={fotosDoProduto((p as any).gallery_urls, p.image_url)}
                   descricao={p.description}
                   largura={larguraCartao}

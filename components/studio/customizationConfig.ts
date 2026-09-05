@@ -289,7 +289,10 @@ export function normalizationDefaults(type: CustomizationFieldType): Customizati
     case "text":
       return { max_chars: TEXT_MAX_CHARS_PADRAO, fonts: [...FONTS_PRESET], colors: [...COLORS_PRESET] };
     case "image":
-      return { formats: [...FORMATS_PRESET], max_mb: IMAGE_MAX_MB_PADRAO, min_dpi: IMAGE_MIN_DPI_PADRAO };
+      // `min_dpi` saiu (04/09/2026): era gravado em todo produto e nenhum
+      // codigo o lia — a foto de 180px passava sem uma palavra. Campo que
+      // promete uma validacao que nao existe e pior que campo nenhum.
+      return { formats: [...FORMATS_PRESET], max_mb: IMAGE_MAX_MB_PADRAO };
     case "template":
       return { category_ids: [] };
     case "color":
