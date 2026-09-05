@@ -66,6 +66,13 @@ function buildAccept(formats: string[]): string {
       return ext ? "." + ext.toLowerCase() : null;
     })
     .filter(Boolean) as string[];
+  // HEIC (decisao do Caio, 04/09/2026): a foto do iPhone chega como HEIC
+  // so quando o campo NAO declara `image/*`. Com `image/*` na lista, o
+  // proprio Safari converte para JPEG no envio — sem servidor, sem
+  // biblioteca nativa. Entra sempre que algum formato de imagem e aceito;
+  // um campo so-PDF continua so-PDF.
+  const aceitaImagem = partes.some((p) => p.startsWith("image/") || /^\.(png|jpe?g|webp|gif)$/i.test(p));
+  if (aceitaImagem && !partes.includes("image/*")) partes.push("image/*");
   return [...new Set(partes)].join(",");
 }
 

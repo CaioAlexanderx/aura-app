@@ -2,8 +2,9 @@
 // components/studio/storefront/Cart.tsx
 // Barra flutuante do carrinho (stage="list") + lista no checkout.
 // ============================================================
-import { View, Pressable } from "react-native";
+import { View, Pressable, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
+import { linkDoOrcamentoDoCarrinho } from "./pedidoPeloWhatsApp";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { LivePreview } from "./LivePreview";
 
@@ -77,7 +78,34 @@ export function CartBar({
           <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>{dinheiro(sf.cartSubtotal)}</Texto>
         </View>
       </View>
-      <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        {/* Orcamento sempre acionavel e APARTADO do checkout (decisao do
+            Caio, 04/09/2026): um botao pequeno, que nao disputa com
+            "Finalizar". Leva o carrinho inteiro, peca por peca, para o
+            WhatsApp da loja. Sem numero cadastrado ele nao existe. */}
+        {(() => {
+          const link = linkDoOrcamentoDoCarrinho({
+            numero: (sf.store?.site as any)?.whatsapp,
+            linhas: sf.cart,
+            nomeDaLoja: sf.store?.site?.name,
+          });
+          if (!link) return null;
+          return (
+            <Pressable
+              onPress={(e: any) => { e?.stopPropagation?.(); Linking.openURL(link); }}
+              accessibilityRole="link"
+              accessibilityLabel="Pedir orcamento destas pecas pelo WhatsApp"
+              hitSlop={8}
+              style={{ paddingVertical: 6, paddingHorizontal: 4 }}
+            >
+              <Texto style={{ color: "rgba(255,255,255,0.75)", fontSize: 11.5, fontWeight: "600" }}>
+                Orçamento
+              </Texto>
+            </Pressable>
+          );
+        })()}
+        <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
+      </View>
     </Pressable>
   );
 }

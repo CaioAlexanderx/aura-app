@@ -319,6 +319,16 @@ export type PainelData = {
   faturamento_serie: PainelSeriePoint[];
   faturamento_total: number;
   top_produtos: PainelTopProduto[];
+  /**
+   * "Precisa de você" (04/09/2026): o que está esperando a lojista AGORA,
+   * independentemente do período. Faixa fina acima dos KPIs — o painel de
+   * métricas fica, mas a ação urgente não se esconde atrás do gráfico.
+   */
+  precisa_de_voce?: {
+    artes_aguardando_cliente: number;
+    pedidos_nao_pagos: number;
+    orcamentos_novos: number;
+  };
   funil_aprovacao: {
     pendentes: PainelFunilStage;
     aprovados: PainelFunilStage;
@@ -522,6 +532,12 @@ export type StudioPricingTier = {
   max_qty: number | null;
   unit_multiplier?: number;
   unit_price?: number;
+  /**
+   * Prazo por faixa (04/09/2026): dias úteis que a lojista leva para
+   * produzir esta tiragem. Cinquenta canecas não ficam prontas no prazo
+   * de uma. Sem o campo, a cotação do lote diz "a loja informa".
+   */
+  lead_days?: number | null;
 };
 
 export type StudioPricingRule = {

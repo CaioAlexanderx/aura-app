@@ -53,6 +53,7 @@ import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
+import { itensDaFaixa } from "@/components/studio/precisaDeVoce";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
@@ -265,6 +266,40 @@ export default function StudioPainel() {
         {/* ═══════ Conteudo (mesmo durante refetch, com opacity reduzida) ═══════ */}
         {(!painelLoading || painel) && (
           <View style={[painelLoading && { opacity: 0.6 }]}>
+            {/* ─── Precisa de voce ───
+                Decisao do Caio (04/09/2026): o painel de metricas fica —
+                mas a acao urgente nao se esconde atras do grafico. Uma
+                faixa fina, so quando ha o que fazer; zero pendencias, zero
+                faixa. A ordem e a do dia dela: orcamento novo, pedido nao
+                pago, arte esperando a cliente. */}
+            {(() => {
+              const itens = itensDaFaixa(painel?.precisa_de_voce);
+              if (!itens.length) return null;
+              return (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                  {itens.map((it) => (
+                    <Pressable
+                      key={it.texto}
+                      onPress={() => router.push(it.rota as any)}
+                      accessibilityRole="button"
+                      accessibilityLabel={it.texto}
+                      style={{
+                        flexDirection: "row", alignItems: "center", gap: 8,
+                        paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999,
+                        backgroundColor: it.urgente ? t.accentSoft : t.paperCardElev,
+                        borderWidth: 1, borderColor: it.urgente ? t.accent : t.ink4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: it.urgente ? t.accentInk : t.ink2 }}>
+                        {it.texto}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: it.urgente ? t.accentInk : t.ink3 }}>→</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              );
+            })()}
+
             {/* ─── KPI row ─── */}
             <View style={s.kpiRow}>
               <KpiCard

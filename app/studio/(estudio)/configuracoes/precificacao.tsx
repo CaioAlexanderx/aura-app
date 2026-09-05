@@ -53,6 +53,8 @@ type TierDraft = {
   unit_multiplier: string;
   unit_price: string;
   mode: TierMode;
+  /** Dias úteis para produzir esta tiragem. Vazio = "a loja informa". */
+  lead_days: string;
 };
 
 type ProductRuleDraft = {
@@ -68,7 +70,7 @@ type ProductRuleDraft = {
 
 // ─── Helpers ───────────────────────────────────────────────
 function emptyTier(): TierDraft {
-  return { min_qty: "", max_qty: "", unit_multiplier: "", unit_price: "", mode: "multiplier" };
+  return { min_qty: "", max_qty: "", unit_multiplier: "", unit_price: "", mode: "multiplier", lead_days: "" };
 }
 
 function ruleToDraft(rule: StudioPricingRule): Omit<ProductRuleDraft, "product" | "saving" | "preview_price"> {
@@ -81,6 +83,7 @@ function ruleToDraft(rule: StudioPricingRule): Omit<ProductRuleDraft, "product" 
         // Regra já salva com preço fixo → toggle abre em "fixed"; senão
         // (ou nenhum dos dois) abre em "multiplier" (default histórico).
         mode:            t.unit_price != null ? "fixed" : "multiplier",
+        lead_days:       t.lead_days != null ? String(t.lead_days) : "",
       }))
     : [];
   return {
@@ -106,6 +109,10 @@ function tiersFromDraft(tiers: TierDraft[]): StudioPricingTier[] {
       } else {
         tier.unit_multiplier = t.unit_multiplier.trim() !== "" ? parseFloat(t.unit_multiplier) || 1 : 1;
       }
+      // Prazo só vai quando ela escreveu um número: vazio é "a loja
+      // informa", e mandar 0 seria prometer entrega no mesmo dia.
+      const prazo = parseInt(t.lead_days, 10);
+      if (Number.isFinite(prazo) && prazo > 0) tier.lead_days = prazo;
       return tier;
     });
 }
@@ -228,6 +235,20 @@ function TiersEditor({
             >
               <Text style={[ts.tierModeChipTxt, tier.mode === "fixed" && ts.tierModeChipTxtSel]}>Preço fechado</Text>
             </Pressable>
+          </View>
+
+          {/* Prazo por faixa (04/09/2026): cinquenta canecas não ficam
+              prontas no prazo de uma. É o número que a cotação do lote
+              mostra à cliente; vazio, ela lê "a loja informa". */}
+          <View style={ts.tierCell}>
+            <Text style={ts.tierLabel}>Prazo desta tiragem (dias úteis)</Text>
+            <TextInput
+              style={ts.tierInput}
+              keyboardType="number-pad"
+              placeholder="ex: 5 — vazio: a loja informa"
+              value={tier.lead_days}
+              onChangeText={(v) => update(idx, "lead_days", v)}
+            />
           </View>
 
           {tier.mode === "multiplier" ? (

@@ -187,6 +187,16 @@ export default function NovoInsumoModal({
         const r = await studioApi.updateInput(companyId, editing.id, payload);
         console.log("[NovoInsumoModal] updated", r);
         toast.success("Insumo atualizado!");
+        // Decisao do Caio (04/09/2026): o backend ja calculava quais pecas
+        // ficaram no prejuizo quando o custo sobe; nenhuma tela mostrava.
+        // O recado chega junto da resposta e aparece AQUI, no momento em
+        // que ela acabou de subir o preco da louca — sem ir procurar.
+        const risco = (r as any)?.margem;
+        if (risco?.recado) {
+          const perdendo = (risco.pecas || []).filter((x: any) => x.situacao === "prejuizo").length;
+          // Prejuizo e vermelho; margem apertada e ambar. Sao urgencias diferentes.
+          (perdendo > 0 ? toast.error : toast.warning)(risco.recado);
+        }
         onUpdated?.(r);
       } else {
         console.log("[NovoInsumoModal] creating input", {

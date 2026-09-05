@@ -116,6 +116,7 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
           produtos={sf.grupoAberto.produtos}
           corDaLoja={(sf.store as any)?.site?.primary_color}
           estiloCartao={(sf.store as any)?.site?.card_style}
+          pixPct={sf.pixDiscountPct}
           onEscolher={(p) => sf.openConfigure(p, sf.grupoAberto!.produtos)}
           onVoltar={() => sf.goTo("list")}
         />
