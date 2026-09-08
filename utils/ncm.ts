@@ -1,7 +1,7 @@
 // ============================================================================
 // AURA. — Sugestão de NCM a partir do nome (e da categoria) do produto
 //
-// Este módulo existia duplicado e divergente em dois lugares (AddProductForm e
+// Este módulo existia duplicado e divergente em dois lugares (o cadastro de produto e
 // DanfeImportModal), cada um com seu próprio dicionário. Agora é um só.
 //
 // POR QUE A REESCRITA (medido no catálogo real da Finesse, 1302 produtos):

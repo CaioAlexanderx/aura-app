@@ -12,8 +12,7 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { ServerImport } from "@/components/ServerImport";
-import { AddProductForm } from "@/components/screens/estoque/AddProductForm";
-import { AddServiceForm } from "@/components/screens/estoque/AddServiceForm";
+import { ItemWizardModal } from "@/components/screens/estoque/ItemWizardModal";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
@@ -253,10 +252,10 @@ const agg = StyleSheet.create({
 
 export default function EstoqueScreen() {
   useEstoquePremiumStyles();
-  const { products, categories, isLoading, isDemo, addProduct, updateProduct, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
-  // D1 (F0): vinculo de categoria do produto recem-criado.
-  // D2 (F0): `flattened` alimenta o filtro hierarquico.
-  const { assignProductCategories, flattened: categoriasFlat } = useCategories();
+  const { products, categories, isLoading, isDemo, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
+  // D2 (F0): `flattened` alimenta o filtro hierarquico. O vinculo de
+  // categoria do produto recem-criado passou para o ItemWizardModal.
+  const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
@@ -278,8 +277,11 @@ export default function EstoqueScreen() {
   const [catsMulti, setCatsMulti] = useState<string[]>([]);
   const [view, setView] = useState<"table" | "grid">("table");
   const [showRail, setShowRail] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showServiceForm, setShowServiceForm] = useState(false);
+  // 08/09/2026: os dois formulários viraram UM wizard de 3 passos
+  // (ItemWizardModal). `wizardOpen` + `wizardType` + `editProduct`
+  // substituem showAddForm/showServiceForm.
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardType, setWizardType] = useState<"product" | "service">("product");
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [labelSelection, setLabelSelection] = useState<string[]>([]);
@@ -397,53 +399,28 @@ export default function EstoqueScreen() {
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
   const serviceCount = products.filter(p => p.category === "Servicos" || p.unit === "srv").length;
 
-  function closeFormModal() {
-    setShowAddForm(false);
-    setShowServiceForm(false);
+  // 08/09/2026: o wizard cuida do create (POST + vínculo de categoria +
+  // PUT /variations) e do auto-save de cada campo. A tela só abre, fecha
+  // e recarrega o que depende da lista.
+  function abrirWizard(tipo: "product" | "service", prod?: Product | null) {
+    setEditProduct(prod || null);
+    setWizardType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
+    setWizardOpen(true);
+    setActiveTab(0);
+  }
+
+  function fecharWizard() {
+    setWizardOpen(false);
     setEditProduct(null);
   }
 
-  // D1 (F0): alem de salvar, grava o VINCULO de categoria escolhido na
-  // arvore. Em EDICAO o proprio CategoryTreePicker ja gravou (ele recebe
-  // o productId e chama assignProductCategories sozinho); aqui tratamos
-  // o caso de CRIACAO, onde o id so passa a existir depois do create.
-  //
-  // O vinculo e o que faz o produto entrar no modelo novo. Sem ele, o
-  // produto nasce so com o texto legado e precisaria de uma passada do
-  // wizard depois -- exatamente o que a fase existe para evitar.
-  async function handleSaveProduct(product: Product) {
-    const selecao = (product as any).categorySelection as
-      | { primaryCategoryId: string | null; alsoInIds: string[] }
-      | undefined;
-
-    if (editProduct) {
-      updateProduct(product);
-      setEditProduct(null);
-    } else {
-      const criado = await addProduct(product);
-      if (criado?.id && selecao?.primaryCategoryId) {
-        // Falhar aqui nao pode desfazer o cadastro: o produto ja existe e
-        // o texto legado ja esta gravado. O vinculo vira pendencia do
-        // wizard, que e o mesmo destino do que a importacao nao resolve.
-        try {
-          await assignProductCategories(criado.id, {
-            primary_category_id: selecao.primaryCategoryId,
-            also_in: selecao.alsoInIds,
-          });
-        } catch (_) { /* silencioso: ver comentario acima */ }
-      }
-    }
-
-    setShowAddForm(false);
-    setShowServiceForm(false);
+  function aposSalvarItem() {
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
     setTimeout(() => refetchDupGroups(), 500);
   }
 
   function handleEdit(product: Product) {
-    setEditProduct(product);
-    setShowAddForm(true);
-    setShowServiceForm(false);
-    setActiveTab(0);
+    abrirWizard(product.unit === "srv" ? "service" : "product", product);
   }
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -500,8 +477,6 @@ export default function EstoqueScreen() {
     refetchDupGroups();
   }
 
-  const formOpen = showAddForm || showServiceForm;
-
   if (consolidatedView) {
     return (
       <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
@@ -519,7 +494,7 @@ export default function EstoqueScreen() {
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   const ActionButtons = () => (
     <>
-      <Pressable onPress={() => { setEditProduct(null); setShowServiceForm(true); setShowAddForm(false); setActiveTab(0); }} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
+      <Pressable onPress={() => abrirWizard("service")} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
         <Icon name="star" size={14} color={Colors.violet3} />
         {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Serviço</Text>}
       </Pressable>
@@ -547,7 +522,7 @@ export default function EstoqueScreen() {
           </Text>}
         </Pressable>
       )}
-      <Pressable onPress={() => { setEditProduct(null); setShowAddForm(true); setShowServiceForm(false); setActiveTab(0); }} style={s.addBtn}>
+      <Pressable onPress={() => abrirWizard("product")} style={s.addBtn}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
       </Pressable>
@@ -668,7 +643,7 @@ export default function EstoqueScreen() {
 
         {!isLoading && products.length === 0 && !isDemo && (
           <View>
-            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => { setShowAddForm(true); setActiveTab(0); }} />
+            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => abrirWizard("product")} />
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
               <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole vários produtos de uma vez e cadastre em segundos</Text></View>
@@ -869,35 +844,13 @@ export default function EstoqueScreen() {
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
 
-      {formOpen && (
-        <Pressable style={s.formOverlay} onPress={closeFormModal}>
-          <Pressable style={s.formSheet} onPress={() => {}}>
-            <View style={s.formHandle} />
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 32 }}
-            >
-              {showServiceForm && (
-                <AddServiceForm
-                  onSave={handleSaveProduct}
-                  onCancel={closeFormModal}
-                  onOpenCategories={() => setCategoriesModal({ open: true, initialType: "service" })}
-                />
-              )}
-              {showAddForm && (
-                <AddProductForm
-                  categories={allCategories}
-                  onSave={handleSaveProduct}
-                  onCancel={closeFormModal}
-                  editProduct={editProduct}
-                />
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      )}
+      <ItemWizardModal
+        visible={wizardOpen}
+        onClose={fecharWizard}
+        initialType={wizardType}
+        editProduct={editProduct}
+        onSaved={aposSalvarItem}
+      />
     </View>
   );
 }
@@ -1011,35 +964,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#7c3aed30", marginBottom: 16,
   },
   multicnpjHintText: { fontSize: 11.5, color: Colors.ink, flex: 1, lineHeight: 16 },
-  formOverlay: {
-    // Web: position fixed pra ficar relativo a viewport (não a wrapper que pode
-    // ser muito alto no novo layout wide com Hero+KPIs+Table). Native: absolute
-    // ainda funciona porque RN só tem static/absolute.
-    // FIX 08/05/2026: bug do form sheet sumindo offscreen no layout wide.
-    position: (Platform.OS === "web" ? "fixed" : "absolute") as any,
-    top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 100,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  formSheet: {
-    backgroundColor: Colors.bg3,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: "88%",
-    width: "100%",
-    maxWidth: 640,
-  },
-  formHandle: {
-    width: 40, height: 4,
-    backgroundColor: Colors.border2,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
   // Estoque Premium v2 (08/05/2026) — view toggle (table/grid)
   viewToggleWrap: {
     flexDirection: "row",
