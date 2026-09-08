@@ -11,7 +11,7 @@
 //
 // NCM (08/05): coluna NCM adicionada com TextInput 8 dígitos,
 // badge ✓/n/8/💡. O 💡 e um BOTAO: a sugestao so entra no clique.
-// Inferência compartilhada com o AddProductForm via utils/ncm.ts.
+// Inferência compartilhada com o ItemWizardModal via utils/ncm.ts.
 //
 // Fix #5 (08/05): overlay usa position: fixed (web) para garantir
 // que o modal abre sempre na viewport, mesmo com ScrollView rolada.
@@ -72,7 +72,7 @@ interface DanfeImportModalProps {
 }
 
 // ─── NCM ─────────────────────────────────────────────────────────────
-// A tabela era local e DIVERGIA da do AddProductForm -- bota aqui era
+// A tabela era local e DIVERGIA da do cadastro de produto -- bota aqui era
 // 64031990, la 64039190, e ninguem tinha reparado. Agora as duas telas leem
 // utils/ncm.ts. Aqui NAO passamos categoria: a coluna nasce chumbada em
 // "Calçados" pra toda linha do XML, e default nao e escolha da lojista --

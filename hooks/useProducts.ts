@@ -122,9 +122,17 @@ export function useProducts() {
     onError: (err: any) => toast.error(err?.message || "Erro ao salvar produto"),
   });
 
+  // `silent` (08/09/2026): o ItemWizardModal salva campo a campo no blur.
+  // Sem isso, cadastrar um produto renderia oito toasts "Produto
+  // atualizado!" em sequência — o wizard mostra "✓ Salvo" no cartão e no
+  // rodapé. O erro continua com toast em qualquer caso.
   const updateMutation = useMutation({
-    mutationFn: ({ prodId, body }: { prodId: string; body: any }) => companiesApi.updateProduct(companyId!, prodId, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto atualizado!"); },
+    mutationFn: ({ prodId, body }: { prodId: string; body: any; silent?: boolean }) =>
+      companiesApi.updateProduct(companyId!, prodId, body),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+      if (!vars?.silent) toast.success("Produto atualizado!");
+    },
     onError: () => toast.error("Erro ao atualizar produto"),
   });
 
@@ -154,9 +162,18 @@ export function useProducts() {
     }
   }
 
-  function updateProduct(product: Product) {
-    if (!companyId || isDemo) return;
-    updateMutation.mutate({ prodId: product.id, body: buildBody(product) });
+  // Devolve true quando o PATCH aterrissou. O wizard de cadastro usa isso
+  // para acender "Salvo" só depois da resposta -- acender no disparo mente
+  // quando a rede falha. O catch e silencioso de proposito: o onError da
+  // mutation ja mostra o toast.
+  async function updateProduct(product: Product, opts?: { silent?: boolean }): Promise<boolean> {
+    if (!companyId || isDemo) return false;
+    try {
+      await updateMutation.mutateAsync({ prodId: product.id, body: buildBody(product), silent: opts?.silent });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function decrementStock(productId: string, qty: number) {
