@@ -50,6 +50,12 @@ function mapApiProduct(p: any): Product {
     cuidados: p.cuidados || "",
     color: p.color || "",
     size: p.size || "",
+    // Migration 323 — duração do serviço em minutos. Base atrás da
+    // migration devolve undefined; vira null, e o wizard cai na leitura
+    // do sufixo antigo da descrição.
+    durationMinutes: p.duration_minutes === null || p.duration_minutes === undefined
+      ? null
+      : (parseInt(p.duration_minutes, 10) || 0),
     image_url: p.image_url || "",
     has_variants: hasVariants,
     variant_barcodes: Array.isArray(p.variant_barcodes) ? p.variant_barcodes : [],
@@ -105,6 +111,13 @@ export function useProducts() {
       material: (product as any).material ?? undefined,
       medidas:  (product as any).medidas  ?? undefined,
       cuidados: (product as any).cuidados ?? undefined,
+      // Migration 323 — duração do serviço. `undefined` some do JSON e a
+      // coluna nem entra no UPDATE: produto nunca escreve aqui. Serviço
+      // manda número OU null, e null é o jeito de APAGAR a duração —
+      // por isso `?? undefined` estaria errado neste campo.
+      duration_minutes: product.unit === "srv"
+        ? ((product as any).durationMinutes ?? null)
+        : undefined,
     };
   }
 

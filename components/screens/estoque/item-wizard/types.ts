@@ -10,6 +10,7 @@
 // passo 3 — pra ser testável sem montar React. Ver __tests__/cadastroItem.
 // ============================================================
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
+import type { ProductImage } from "@/services/productImagesApi";
 
 export type ItemType = "product" | "service";
 export type StockMode = "single" | "variants";
@@ -18,7 +19,10 @@ export type WizardStep = 1 | 2 | 3;
 export type CardKey = "photo" | "var" | "desc" | "codes";
 export type WizardColor = { hex: string; name: string };
 
-export const DURATION_PRESETS = ["30 min", "45 min", "1h", "1h30", "2h"];
+// Os chips do passo 2, em MINUTOS. O rótulo é derivado (minutosParaRotulo)
+// pra que a tela e a coluna nunca discordem: "1h30" e 90 são a mesma coisa
+// escrita de dois jeitos, e só um dos dois vai para o banco.
+export const DURATION_PRESET_MIN = [30, 45, 60, 90, 120];
 export const DURATION_OTHER = "Outra";
 
 // ── moeda ───────────────────────────────────────────────────
@@ -35,11 +39,17 @@ export function valorDaMascara(mascarado: string): number {
 }
 
 // ── duração de serviço ──────────────────────────────────────
-// NÃO existe coluna duration_minutes no backend ainda. A convenção de
-// hoje (AddServiceForm) concatena "Duração: X" no fim da descrição;
-// mantemos ela pra não perder o dado, e sabemos ler de volta na edição.
+// 09/09/2026 — migration 323: `products.duration_minutes` existe. A
+// duração deixou de ser texto colado no fim da descrição e virou número.
+//
+// O QUE MUDA PRA QUEM JÁ CADASTROU: nada na hora. A descrição antiga
+// continua com "… | Duração: 45 min"; a edição LÊ esse sufixo, mostra o
+// chip certo e, na próxima gravação, escreve a coluna e tira o sufixo do
+// texto (lerDuracaoDoServico decide isso). Nada é escrito no formato
+// antigo a partir de agora.
 const DUR_MARKER = "Duração:";
 
+/** Separa "Corte | Duração: 45 min" em descrição e duração (leitura do legado). */
 export function parseDuracao(notes: string | null | undefined): { descricao: string; duracao: string } {
   const txt = notes || "";
   const idx = txt.lastIndexOf(DUR_MARKER);
@@ -50,11 +60,93 @@ export function parseDuracao(notes: string | null | undefined): { descricao: str
   return { descricao: head, duracao };
 }
 
-export function composeDuracao(descricao: string, duracao: string): string {
-  const d = (descricao || "").trim();
-  const t = (duracao || "").trim();
-  if (!t) return d;
-  return (d ? d + " | " : "") + DUR_MARKER + " " + t;
+// Um dia. Acima disso é dedo escorregado ("100" horas, "3000") — e um
+// número absurdo na coluna some da tela sem ninguém perceber.
+const MAX_DURACAO_MIN = 24 * 60;
+
+/**
+ * O que a lojista escreveu, em minutos — ou null quando não dá pra
+ * entender ("meio período", "sob consulta"). Entende "45", "45 min",
+ * "1h", "1h30", "2 horas", "1,5h".
+ *
+ * null NÃO é erro de digitação necessariamente: é o sinal de "isto não
+ * vira número", e quem chama decide (o passo 2 mostra uma dica e deixa o
+ * chip apagado; a leitura do legado deixa o texto na descrição).
+ */
+export function duracaoParaMinutos(texto: string | null | undefined): number | null {
+  const t = String(texto == null ? "" : texto).trim().toLowerCase().replace(",", ".");
+  if (!t) return null;
+
+  const limite = (n: number) => (n > 0 && n <= MAX_DURACAO_MIN ? n : null);
+
+  // "1h", "1h30", "1 h 30 min", "2 horas"
+  const hm = t.match(/^(\d+)\s*(?:h|hs|hora|horas)\s*(\d+)?\s*(?:m|min|mins|minuto|minutos)?$/);
+  if (hm) {
+    const m = hm[2] ? parseInt(hm[2], 10) : 0;
+    if (m >= 60) return null;
+    return limite(parseInt(hm[1], 10) * 60 + m);
+  }
+
+  // "1.5h" / "0,5 hora"
+  const dec = t.match(/^(\d+\.\d+)\s*(?:h|hs|hora|horas)$/);
+  if (dec) return limite(Math.round(parseFloat(dec[1]) * 60));
+
+  // "45", "45 min", "90 minutos"
+  const mm = t.match(/^(\d+)\s*(?:m|min|mins|minuto|minutos)?$/);
+  if (mm) return limite(parseInt(mm[1], 10));
+
+  return null;
+}
+
+/** 90 → "1h30". O rótulo do chip e o que aparece no rodapé. */
+export function minutosParaRotulo(minutos: number | null | undefined): string {
+  const n = Number(minutos);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const h = Math.floor(n / 60);
+  const m = Math.round(n % 60);
+  if (h === 0) return m + " min";
+  if (m === 0) return h + "h";
+  return h + "h" + String(m).padStart(2, "0");
+}
+
+export type LeituraDeDuracao = {
+  /** Descrição já sem o sufixo legado — quando o sufixo pôde ser convertido. */
+  descricao: string;
+  /** O que vai no campo/chip de duração. "" quando não há duração. */
+  duracaoTxt: string;
+  minutos: number | null;
+  /** true = veio do sufixo antigo e a próxima gravação migra pra coluna. */
+  migrandoDoLegado: boolean;
+};
+
+/**
+ * De onde sai a duração ao abrir um serviço para edição.
+ *
+ * Ordem: a coluna manda. Sem coluna, tenta o sufixo antigo — e SÓ tira o
+ * sufixo da descrição se ele virar número. Um "Duração: meio período"
+ * não vira coluna nenhuma, então continua sendo parte da descrição:
+ * migrar apagando o que a lojista escreveu seria pior que não migrar.
+ */
+export function lerDuracaoDoServico(
+  notes: string | null | undefined,
+  durationMinutes: number | null | undefined
+): LeituraDeDuracao {
+  const bruto = notes || "";
+  const { descricao, duracao } = parseDuracao(bruto);
+
+  const daColuna = durationMinutes === null || durationMinutes === undefined
+    ? null
+    : duracaoParaMinutos(String(durationMinutes));
+  if (daColuna != null) {
+    return { descricao, duracaoTxt: minutosParaRotulo(daColuna), minutos: daColuna, migrandoDoLegado: false };
+  }
+
+  const doLegado = duracaoParaMinutos(duracao);
+  if (doLegado != null) {
+    return { descricao, duracaoTxt: minutosParaRotulo(doLegado), minutos: doLegado, migrandoDoLegado: true };
+  }
+
+  return { descricao: bruto.trim(), duracaoTxt: "", minutos: null, migrandoDoLegado: false };
 }
 
 // ── margem ao vivo (passo 2) ────────────────────────────────
@@ -184,25 +276,99 @@ export function gerarCodigoServico(): string {
 export type ChipTom = "" | "ok" | "rec";
 export type ChipStatus = { tom: ChipTom; texto: string };
 
-// A API de variações devolve as fotos numa chave "hex|tamanho" — a foto
-// é POR COR (aplica em todas as variantes da cor), então qualquer chave
-// com aquele hex serve.
-export function fotoDaCor(fotosPorCor: Record<string, string> | null | undefined, hex: string): string | null {
-  const alvo = (hex || "").toUpperCase();
-  const mapa = fotosPorCor || {};
-  for (const k of Object.keys(mapa)) {
-    if ((k.split("|")[0] || "").toUpperCase() === alvo) return mapa[k];
-  }
-  return null;
+// ── galeria de fotos por cor (migration 323) ────────────────
+//
+// QUATRO É O TETO, DUAS É A SUGESTÃO. O servidor recusa a quinta foto de
+// uma cor; a tela nunca recusa nada — ela só rotula os dois primeiros
+// espaços vazios ("frente" e "no corpo"; na principal, "capa" e "no
+// corpo") pra dizer o que costuma vender. Quem fotografou quatro ângulos
+// do mesmo tênis não pode levar bronca por isso.
+export const MAX_FOTOS_POR_COR = 4;
+export const SUGESTAO_DE_FOTOS = 2;
+
+/** As chaves de `by_color` vêm em minúsculo; o wizard guarda hex em CAIXA ALTA. */
+export function chaveDaCor(hex: string | null | undefined): string {
+  return String(hex == null ? "" : hex).trim().toLowerCase();
 }
 
-export function statusFoto(temFoto: boolean, cores: WizardColor[], fotosPorCor: Record<string, string>): ChipStatus {
-  if (!temFoto) return { tom: "rec", texto: "recomendado" };
-  const semFoto = (cores || []).filter((c) => !fotoDaCor(fotosPorCor, c.hex)).length;
+export function fotosDaCor(
+  porCor: Record<string, ProductImage[]> | null | undefined,
+  hex: string
+): ProductImage[] {
+  return (porCor || {})[chaveDaCor(hex)] || [];
+}
+
+/** A capa (posição 0) — é ela que espelha image_url no resto do sistema. */
+export function capaDa(fotos: ProductImage[] | null | undefined): ProductImage | null {
+  const f = fotos || [];
+  return f.length ? f[0] : null;
+}
+
+/**
+ * Quantos quadradinhos a linha desenha: as fotos que existem mais um
+ * espaço vazio — nunca menos que a sugestão de duas, pra que "no corpo"
+ * apareça já na primeira vez, e nunca mais que o teto de quatro.
+ */
+export function contarSlots(quantasFotos: number): number {
+  const n = Math.max(0, Math.min(MAX_FOTOS_POR_COR, Number(quantasFotos) || 0));
+  if (n >= MAX_FOTOS_POR_COR) return MAX_FOTOS_POR_COR;
+  return Math.min(MAX_FOTOS_POR_COR, Math.max(n + 1, SUGESTAO_DE_FOTOS));
+}
+
+/** O rótulo do espaço vazio. "" = só o "+", sem sugestão nenhuma. */
+export function rotuloDoSlot(indice: number, principal: boolean): string {
+  if (indice === 0) return principal ? "capa" : "frente";
+  if (indice === 1) return "no corpo";
+  return "";
+}
+
+/**
+ * O selo do cartão Foto.
+ *
+ * A ordem importa: sem capa nada mais é urgente; depois, cor NENHUMA
+ * foto (a loja mostra a foto principal no lugar da cor errada); só então
+ * a sugestão de segunda foto, que é conselho, não cobrança.
+ */
+export function statusGaleria(
+  principal: ProductImage[] | null | undefined,
+  cores: WizardColor[] | null | undefined,
+  porCor: Record<string, ProductImage[]> | null | undefined
+): ChipStatus {
+  if ((principal || []).length === 0) return { tom: "rec", texto: "recomendado" };
+
+  const cs = cores || [];
+  const semFoto = cs.filter((c) => fotosDaCor(porCor, c.hex).length === 0).length;
   if (semFoto > 0) {
     return { tom: "rec", texto: semFoto + (semFoto === 1 ? " cor sem foto" : " cores sem foto") };
   }
+
+  const soUma = cs.find((c) => fotosDaCor(porCor, c.hex).length === 1);
+  if (soUma) return { tom: "rec", texto: (soUma.name || soUma.hex) + ": só 1 foto" };
+
   return { tom: "ok", texto: "preenchido" };
+}
+
+/**
+ * A lista COMPLETA de ids na ordem nova, com uma foto movida para
+ * `destino` — é o corpo do PATCH /images/reorder, que recusa lista
+ * parcial (sem todas, duas fotos disputariam a posição 0).
+ *
+ * `destino` 0 é "Tornar capa"; as setas mandam índice ± 1.
+ */
+export function idsComFotoEm(
+  fotos: ProductImage[] | null | undefined,
+  id: string,
+  destino: number
+): string[] {
+  const ids = (fotos || []).map((f) => f.id);
+  const de = ids.indexOf(id);
+  if (de < 0) return ids;
+  const alvo = Math.max(0, Math.min(ids.length - 1, Math.trunc(Number(destino) || 0)));
+  if (alvo === de) return ids;
+  const out = ids.slice();
+  out.splice(de, 1);
+  out.splice(alvo, 0, id);
+  return out;
 }
 
 export function statusVariacoes(cores: WizardColor[], tamanhos: string[], stockMode: StockMode): ChipStatus {

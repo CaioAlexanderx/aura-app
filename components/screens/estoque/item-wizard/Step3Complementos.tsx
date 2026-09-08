@@ -9,18 +9,19 @@
 // fechar não pode remontar a ScrollView nem recarregar a grade de
 // variações.
 // ============================================================
-import { View, Text, Pressable } from "react-native";
+import { useEffect, useRef } from "react";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ImageUploadSection } from "@/components/ImageUploadSection";
 import { ProductVariationsSection } from "@/components/ProductVariationsSection";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
-import { ColorImageButton } from "@/components/ColorImageButton";
 import { suggestNcm, formatNcmDisplay, ncmFamilyByCode, getNcmStatus } from "@/utils/ncm";
 import { AccordionCard, Campo, Entrada, MiniBtn, Nota, StoreNote, s } from "./ui";
+import { LinhaDaGaleria, useGaleriaDoProduto } from "./GaleriaDeFotos";
 import {
-  faltaNcm, fmtBRL, fotoDaCor, gerarSku, nomeDoTipo, statusCodigos, statusDescricao, statusFoto, statusVariacoes,
-  valorDaMascara, type CardKey, type ItemType, type SaveState, type StockMode, type WizardColor,
+  capaDa, faltaNcm, fmtBRL, fotosDaCor, gerarSku, nomeDoTipo, statusCodigos, statusDescricao,
+  statusGaleria, statusVariacoes, valorDaMascara,
+  type CardKey, type ItemType, type SaveState, type StockMode, type WizardColor,
 } from "./types";
 
 type Props = {
@@ -37,13 +38,14 @@ type Props = {
   nome: string;
   preco: string;
   imagemUrl: string | null;
-  onImagem: (url: string | null) => void;
+  /** A capa da galeria principal — alimenta a prévia da loja, sem acender "Salvo". */
+  onCapaPrincipal: (url: string | null) => void;
+  /** Depois de subir, apagar ou reordenar uma foto: acende "Salvo" no cartão. */
+  onFotoMudou: () => void;
 
   cores: WizardColor[];
   tamanhos: string[];
   stockMode: StockMode;
-  fotosPorCor: Record<string, string>;
-  onFotoCorMudou: () => void;
   corPai: string | null;
   tamanhoPai: string | null;
   estoquePai: number | null;
@@ -71,9 +73,29 @@ export function Step3Complementos(p: Props) {
   const ncmBadge = ncmStatus === "valid" ? "✓ OK" : ncmStatus === "partial" ? p.ncm.length + "/8" : "vazio";
   const ncmFamilia = (sugestao && p.ncm === sugestao.ncm) ? sugestao.family : (ncmFamilyByCode(p.ncm) || "NCM válido");
 
-  const semFoto = p.cores.filter((c) => !fotoDaCor(p.fotosPorCor, c.hex)).length;
-
   // ── Foto ────────────────────────────────────────────────
+  //
+  // Migration 323: deixou de ser UMA foto principal + UMA por cor. Agora
+  // são até quatro de cada, com capa reordenável. A capa (posição 0) é o
+  // que a vitrine, o PDV e o catálogo do WhatsApp continuam lendo, então
+  // "Tornar capa" muda o que o cliente vê primeiro.
+  const g = useGaleriaDoProduto(p.productId);
+  const capaPrincipal = capaDa(g.principal)?.url || null;
+
+  // A prévia da loja (mais abaixo neste passo) desenha a capa. Ela vem da
+  // galeria, não de um estado próprio — sem isso a prévia mentiria depois
+  // de um "Tornar capa".
+  const capaVista = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (g.carregando) return;
+    if (capaVista.current === capaPrincipal) return;
+    capaVista.current = capaPrincipal;
+    if (capaPrincipal !== p.imagemUrl) p.onCapaPrincipal(capaPrincipal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capaPrincipal, g.carregando]);
+
+  const semFoto = p.cores.filter((c) => fotosDaCor(g.porCor, c.hex).length === 0).length;
+
   const corpoFoto = (
     <View>
       <View style={{ marginTop: 12 }}>
@@ -82,38 +104,61 @@ export function Step3Complementos(p: Props) {
           " e no catálogo do WhatsApp. Quadrada fica melhor."
         } />
       </View>
+
       <Campo
-        label="Foto principal"
-        optional={p.cores.length ? "capa da página" : undefined}
-        style={{ marginTop: 12, marginBottom: 0 }}
+        label="Fotos principais"
+        optional={g.principal.length ? g.principal.length + " de " + g.maxPorCor : "até " + g.maxPorCor}
+        style={{ marginTop: 12, marginBottom: isProduto ? 14 : 0 }}
       >
-        <ImageUploadSection
-          productId={p.productId}
-          currentImageUrl={p.imagemUrl}
-          onImageChange={p.onImagem}
-        />
+        {g.carregando ? (
+          <View style={st.carregando}><ActivityIndicator size="small" color={Colors.violet3} /></View>
+        ) : (
+          <LinhaDaGaleria
+            fotos={g.principal}
+            principal
+            rotulo="foto principal"
+            maxPorCor={g.maxPorCor}
+            onSubir={g.subir}
+            onRemover={g.remover}
+            onReordenar={g.reordenar}
+            onMudou={p.onFotoMudou}
+          />
+        )}
+        <Text style={s.hint}>
+          A primeira é a capa — é ela que aparece na lista, no Caixa e no link que você manda.
+          Duas já contam a peça: a capa e uma no corpo.
+        </Text>
       </Campo>
 
       {isProduto && (
         p.cores.length > 0 ? (
           <Campo
-            label="Foto por cor"
+            label="Fotos por cor"
             optional={semFoto ? semFoto + " de " + p.cores.length + " sem foto" : "todas com foto"}
             style={{ marginBottom: 0 }}
           >
             <View style={st.cph}>
               {p.cores.map((c) => (
-                <View key={c.hex} style={st.cphLinha}>
-                  <View style={[st.swatch, { backgroundColor: c.hex }]} />
-                  <Text style={st.cphNome} numberOfLines={1}>{c.name || c.hex}</Text>
-                  <ColorImageButton
-                    productId={p.productId}
-                    colorHex={c.hex}
-                    imageUrl={fotoDaCor(p.fotosPorCor, c.hex)}
-                    size={36}
-                    onUploaded={p.onFotoCorMudou}
-                    onDeleted={p.onFotoCorMudou}
-                  />
+                <View key={c.hex} style={[st.cphLinha, p.narrow && st.cphLinhaNarrow]}>
+                  <View style={[st.cphTopo, p.narrow && { width: "100%" as any, marginBottom: 6 }]}>
+                    <View style={[st.swatch, { backgroundColor: c.hex }]} />
+                    <Text style={st.cphNome} numberOfLines={1}>{c.name || c.hex}</Text>
+                  </View>
+                  {g.carregando ? (
+                    <View style={st.carregando}><ActivityIndicator size="small" color={Colors.violet3} /></View>
+                  ) : (
+                    <LinhaDaGaleria
+                      fotos={fotosDaCor(g.porCor, c.hex)}
+                      principal={false}
+                      corHex={c.hex}
+                      rotulo={c.name || c.hex}
+                      maxPorCor={g.maxPorCor}
+                      onSubir={g.subir}
+                      onRemover={g.remover}
+                      onReordenar={g.reordenar}
+                      onMudou={p.onFotoMudou}
+                    />
+                  )}
                 </View>
               ))}
             </View>
@@ -126,7 +171,7 @@ export function Step3Complementos(p: Props) {
           <Text style={s.hint}>
             Tem cores?{" "}
             <Text style={s.link} onPress={p.onIrParaPasso2}>Cadastre no passo 2</Text>
-            {" "}e cada cor ganha a própria foto aqui.
+            {" "}e cada cor ganha as próprias fotos aqui.
           </Text>
         )
       )}
@@ -342,9 +387,9 @@ export function Step3Complementos(p: Props) {
 
       <AccordionCard
         icon="camera"
-        titulo="Foto"
+        titulo="Fotos"
         subtitulo="É o que o cliente vê primeiro na loja"
-        status={statusFoto(!!p.imagemUrl, p.cores, p.fotosPorCor)}
+        status={statusGaleria(g.principal, p.cores, g.porCor)}
         aberto={!!p.aberto.photo}
         onToggle={() => p.onToggle("photo")}
         saveState={p.cardSave.photo}
@@ -404,10 +449,14 @@ const st = {
   cph: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, backgroundColor: Colors.bg3, overflow: "hidden" as const },
   cphLinha: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 10,
-    paddingHorizontal: 12, paddingVertical: 8,
+    paddingHorizontal: 12, paddingVertical: 9,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
+  // Celular: quatro quadradinhos não cabem ao lado do nome da cor.
+  cphLinhaNarrow: { flexDirection: "column" as const, alignItems: "flex-start" as const, gap: 0 },
+  cphTopo: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, width: 108 },
   cphNome: { flex: 1, fontSize: 12.5, color: Colors.ink },
+  carregando: { paddingVertical: 16, alignItems: "center" as const },
   pv: { marginTop: 14, borderWidth: 1, borderStyle: "dashed" as any, borderColor: Colors.border2, borderRadius: 10, overflow: "hidden" as const },
   pvHead: {
     fontSize: 10.5, letterSpacing: 0.4, textTransform: "uppercase" as const,

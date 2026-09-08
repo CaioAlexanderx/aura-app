@@ -6,8 +6,11 @@
 //      fazia parseFloat("1.234,50".replace(",", ".")) = 1.234 — um corte
 //      de mil e duzentos reais virava um real e vinte e três centavos.
 //      Agora serviço usa a MESMA máscara do produto.
-//   2. A duração do serviço sobrevive à ida e volta pela descrição
-//      (não existe coluna duration_minutes no backend ainda).
+//   2. A duração do serviço virou NÚMERO (migration 323) e o serviço
+//      cadastrado no formato antigo — "… | Duração: 45 min" colado na
+//      descrição — é lido, migrado e nunca perdido.
+//   2b. A galeria de fotos por cor: quatro é o teto, duas é a sugestão,
+//      e "Tornar capa" manda a lista completa de ids na ordem nova.
 //   3. A margem ao vivo do passo 2 distingue "sem preço", "sem custo",
 //      lucro e prejuízo — os quatro estados do mockup.
 //   4. A matriz de variações nasce zerada nas TRÊS formas (cor+tamanho,
@@ -19,25 +22,35 @@ import {
   calcMargem,
   chaveDaMatriz,
   chaveUltimaCategoria,
-  composeDuracao,
+  contarSlots,
+  duracaoParaMinutos,
   faltaNcm,
+  fotosDaCor,
   gravarUltimaCategoria,
+  idsComFotoEm,
+  lerDuracaoDoServico,
   lerUltimaCategoria,
   mascaraDeValor,
   matrizZerada,
+  minutosParaRotulo,
   parseDuracao,
   passoClicavel,
   podeAvancar,
   preservarValores,
+  rotuloDoSlot,
   rotulosDosPassos,
   statusCodigos,
   statusDescricao,
-  statusFoto,
+  statusGaleria,
   statusVariacoes,
   subtituloDoPasso,
   tituloDoModal,
   valorDaMascara,
 } from "@/components/screens/estoque/item-wizard/types";
+import type { ProductImage } from "@/services/productImagesApi";
+
+const foto = (id: string, position: number): ProductImage =>
+  ({ id, url: "https://r2/" + id + ".jpg", thumb_url: null, position });
 
 describe("1. preço de serviço com a máscara de moeda do produto", () => {
   test('"1.234,50" vale mil duzentos e trinta e quatro reais e cinquenta', () => {
@@ -60,37 +73,158 @@ describe("1. preço de serviço com a máscara de moeda do produto", () => {
   });
 });
 
-describe("2. duração do serviço vai e volta pela descrição", () => {
-  test("compõe no formato que o AddServiceForm gravava", () => {
-    expect(composeDuracao("Corte com lavagem", "45 min")).toBe("Corte com lavagem | Duração: 45 min");
+describe("2. duração do serviço em minutos (migration 323)", () => {
+  test("o que a lojista escreve vira número", () => {
+    expect(duracaoParaMinutos("45")).toBe(45);
+    expect(duracaoParaMinutos("45 min")).toBe(45);
+    expect(duracaoParaMinutos("90 minutos")).toBe(90);
+    expect(duracaoParaMinutos("1h")).toBe(60);
+    expect(duracaoParaMinutos("1h30")).toBe(90);
+    expect(duracaoParaMinutos("1 h 30 min")).toBe(90);
+    expect(duracaoParaMinutos("2 horas")).toBe(120);
+    expect(duracaoParaMinutos("1,5h")).toBe(90);
   });
 
-  test("sem descrição, só a duração", () => {
-    expect(composeDuracao("", "1h30")).toBe("Duração: 1h30");
+  test("o que não vira número devolve null — e null não é zero", () => {
+    expect(duracaoParaMinutos("meio período")).toBeNull();
+    expect(duracaoParaMinutos("sob consulta")).toBeNull();
+    expect(duracaoParaMinutos("")).toBeNull();
+    expect(duracaoParaMinutos(null)).toBeNull();
+    expect(duracaoParaMinutos("0")).toBeNull();
+    expect(duracaoParaMinutos("1h90")).toBeNull();
+    expect(duracaoParaMinutos("3000")).toBeNull();
   });
 
-  test("sem duração, a descrição fica intacta", () => {
-    expect(composeDuracao("Corte com lavagem", "")).toBe("Corte com lavagem");
-    expect(composeDuracao("", "")).toBe("");
+  test("o rótulo é o caminho de volta", () => {
+    expect(minutosParaRotulo(30)).toBe("30 min");
+    expect(minutosParaRotulo(60)).toBe("1h");
+    expect(minutosParaRotulo(90)).toBe("1h30");
+    expect(minutosParaRotulo(120)).toBe("2h");
+    expect(minutosParaRotulo(65)).toBe("1h05");
+    expect(minutosParaRotulo(null)).toBe("");
+    expect(minutosParaRotulo(0)).toBe("");
   });
 
-  test("lê de volta o que gravou", () => {
-    const texto = composeDuracao("Corte com lavagem e finalização", "45 min");
-    expect(parseDuracao(texto)).toEqual({ descricao: "Corte com lavagem e finalização", duracao: "45 min" });
+  test("ida e volta pelos chips não muda o número", () => {
+    [30, 45, 60, 90, 120].forEach((m) => {
+      expect(duracaoParaMinutos(minutosParaRotulo(m))).toBe(m);
+    });
   });
 
-  test("descrição sem duração não inventa duração", () => {
+  test("a coluna manda quando existe", () => {
+    expect(lerDuracaoDoServico("Corte com lavagem", 45)).toEqual({
+      descricao: "Corte com lavagem", duracaoTxt: "45 min", minutos: 45, migrandoDoLegado: false,
+    });
+  });
+
+  test("sem coluna, o sufixo antigo é lido e marcado pra migrar", () => {
+    expect(lerDuracaoDoServico("Corte com lavagem | Duração: 45 min", null)).toEqual({
+      descricao: "Corte com lavagem", duracaoTxt: "45 min", minutos: 45, migrandoDoLegado: true,
+    });
+  });
+
+  test("a coluna vence o sufixo antigo quando os dois existem", () => {
+    const r = lerDuracaoDoServico("Corte | Duração: 45 min", 90);
+    expect(r.minutos).toBe(90);
+    expect(r.descricao).toBe("Corte");
+    expect(r.migrandoDoLegado).toBe(false);
+  });
+
+  test("sufixo que NÃO vira número fica na descrição — migrar não pode apagar texto", () => {
+    const r = lerDuracaoDoServico("Consultoria | Duração: meio período", null);
+    expect(r.minutos).toBeNull();
+    expect(r.duracaoTxt).toBe("");
+    expect(r.descricao).toBe("Consultoria | Duração: meio período");
+  });
+
+  test("serviço sem duração nenhuma", () => {
+    expect(lerDuracaoDoServico("Corte com lavagem", null)).toEqual({
+      descricao: "Corte com lavagem", duracaoTxt: "", minutos: null, migrandoDoLegado: false,
+    });
+    expect(lerDuracaoDoServico("", undefined).minutos).toBeNull();
+  });
+
+  test("parseDuracao continua sabendo ler o formato antigo", () => {
+    expect(parseDuracao("Duração: 2h")).toEqual({ descricao: "", duracao: "2h" });
     expect(parseDuracao("Corte com lavagem")).toEqual({ descricao: "Corte com lavagem", duracao: "" });
     expect(parseDuracao("")).toEqual({ descricao: "", duracao: "" });
   });
+});
 
-  test("texto que é só a duração", () => {
-    expect(parseDuracao("Duração: 2h")).toEqual({ descricao: "", duracao: "2h" });
+describe("2b. galeria de fotos por cor (migration 323)", () => {
+  test("quatro é o teto; duas é a sugestão que aparece de saída", () => {
+    expect(contarSlots(0)).toBe(2);
+    expect(contarSlots(1)).toBe(2);
+    expect(contarSlots(2)).toBe(3);
+    expect(contarSlots(3)).toBe(4);
+    expect(contarSlots(4)).toBe(4);
+    expect(contarSlots(9)).toBe(4);
   });
 
-  test("duração livre (chip Outra) também sobrevive", () => {
-    const t = composeDuracao("Consultoria completa", "meio período");
-    expect(parseDuracao(t).duracao).toBe("meio período");
+  test("os dois primeiros espaços vêm rotulados; do terceiro em diante é só o +", () => {
+    expect(rotuloDoSlot(0, false)).toBe("frente");
+    expect(rotuloDoSlot(1, false)).toBe("no corpo");
+    expect(rotuloDoSlot(2, false)).toBe("");
+    expect(rotuloDoSlot(0, true)).toBe("capa");
+    expect(rotuloDoSlot(1, true)).toBe("no corpo");
+    expect(rotuloDoSlot(3, true)).toBe("");
+  });
+
+  test("a cor é achada apesar da diferença de caixa (servidor minúsculo, wizard maiúsculo)", () => {
+    const porCor = { "#1f2937": [foto("a", 0)] };
+    expect(fotosDaCor(porCor, "#1F2937")).toHaveLength(1);
+    expect(fotosDaCor(porCor, "#EF4444")).toEqual([]);
+    expect(fotosDaCor(undefined, "#1F2937")).toEqual([]);
+  });
+
+  test("sem foto principal nada mais é urgente", () => {
+    expect(statusGaleria([], [{ hex: "#1F2937", name: "Preto" }], {})).toEqual({ tom: "rec", texto: "recomendado" });
+  });
+
+  test("cor sem foto nenhuma é contada", () => {
+    const cores = [{ hex: "#1F2937", name: "Preto" }, { hex: "#EF4444", name: "Vermelho" }];
+    const main = [foto("m0", 0)];
+    expect(statusGaleria(main, cores, {})).toEqual({ tom: "rec", texto: "2 cores sem foto" });
+    expect(statusGaleria(main, cores, { "#1f2937": [foto("a", 0)] }))
+      .toEqual({ tom: "rec", texto: "1 cor sem foto" });
+  });
+
+  test("com uma foto só, a sugestão nomeia a cor — e é conselho, não erro", () => {
+    const cores = [{ hex: "#1F2937", name: "Preto" }, { hex: "#EF4444", name: "Vermelho" }];
+    const st = statusGaleria([foto("m0", 0)], cores, {
+      "#1f2937": [foto("a", 0)],
+      "#ef4444": [foto("b", 0), foto("c", 1)],
+    });
+    expect(st).toEqual({ tom: "rec", texto: "Preto: só 1 foto" });
+  });
+
+  test("todas com duas ou mais: preenchido", () => {
+    const cores = [{ hex: "#1F2937", name: "Preto" }];
+    expect(statusGaleria([foto("m0", 0)], cores, { "#1f2937": [foto("a", 0), foto("b", 1)] }))
+      .toEqual({ tom: "ok", texto: "preenchido" });
+  });
+
+  test("sem cores, basta a foto principal", () => {
+    expect(statusGaleria([foto("m0", 0)], [], {})).toEqual({ tom: "ok", texto: "preenchido" });
+  });
+
+  test('"Tornar capa" manda a lista COMPLETA na ordem nova', () => {
+    const fotos = [foto("a", 0), foto("b", 1), foto("c", 2)];
+    expect(idsComFotoEm(fotos, "c", 0)).toEqual(["c", "a", "b"]);
+  });
+
+  test("as setas movem uma casa e param nas pontas", () => {
+    const fotos = [foto("a", 0), foto("b", 1), foto("c", 2)];
+    expect(idsComFotoEm(fotos, "b", 2)).toEqual(["a", "c", "b"]);
+    expect(idsComFotoEm(fotos, "b", 0)).toEqual(["b", "a", "c"]);
+    expect(idsComFotoEm(fotos, "a", -1)).toEqual(["a", "b", "c"]);
+    expect(idsComFotoEm(fotos, "c", 9)).toEqual(["a", "b", "c"]);
+  });
+
+  test("id que não é da lista não reordena nada", () => {
+    const fotos = [foto("a", 0), foto("b", 1)];
+    expect(idsComFotoEm(fotos, "z", 0)).toEqual(["a", "b"]);
+    expect(idsComFotoEm([], "a", 0)).toEqual([]);
   });
 });
 
@@ -212,17 +346,6 @@ describe("6. última categoria usada, por empresa e por tipo", () => {
 });
 
 describe("7. selos dos cartões do passo 3", () => {
-  test("sem foto o cartão pede foto", () => {
-    expect(statusFoto(false, [], {})).toEqual({ tom: "rec", texto: "recomendado" });
-  });
-
-  test("com foto principal mas cor sem foto, o selo conta as cores", () => {
-    const cores = [{ hex: "#1F2937", name: "Preto" }, { hex: "#EF4444", name: "Vermelho" }];
-    expect(statusFoto(true, cores, { "#1F2937|P": "url" })).toEqual({ tom: "rec", texto: "1 cor sem foto" });
-    expect(statusFoto(true, cores, {})).toEqual({ tom: "rec", texto: "2 cores sem foto" });
-    expect(statusFoto(true, cores, { "#1F2937|P": "a", "#EF4444|M": "b" })).toEqual({ tom: "ok", texto: "preenchido" });
-  });
-
   test("modo por cor e tamanho sem grade montada avisa", () => {
     expect(statusVariacoes([], [], "variants")).toEqual({ tom: "rec", texto: "monte a grade" });
     expect(statusVariacoes([], [], "single")).toEqual({ tom: "", texto: "vazio" });

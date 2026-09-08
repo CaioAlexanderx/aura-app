@@ -17,11 +17,17 @@
 //      para PUT /variations logo depois do create. O passo 3 mostra a
 //      grade (estoque, código e foto de cada uma).
 //
-// Limitações conhecidas desta rodada:
-//   - 1 foto por cor (é o que o backend suporta hoje via /color-image).
-//   - Duração de serviço não tem coluna própria: continua concatenada
-//     na descrição como "… | Duração: 45 min" (parseDuracao/composeDuracao
-//     em item-wizard/types.ts fazem ida e volta).
+// 09/09/2026 — as duas limitações da rodada anterior caíram (backend
+// #684, migration 323):
+//
+//   - FOTO. Deixou de ser uma por cor: são até quatro por cor e quatro
+//     na galeria principal, com capa reordenável (item-wizard/
+//     GaleriaDeFotos.tsx). A posição 0 continua espelhando o image_url
+//     que a vitrine, o PDV e o catálogo do WhatsApp sempre leram.
+//   - DURAÇÃO. Virou coluna (`products.duration_minutes`). Não se
+//     escreve mais "… | Duração: 45 min" no fim da descrição; o texto
+//     antigo continua sendo LIDO na edição e migra para a coluna na
+//     gravação seguinte (lerDuracaoDoServico em item-wizard/types.ts).
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,9 +54,10 @@ import { Step3Complementos } from "./item-wizard/Step3Complementos";
 import { CategoriaSheet, useBreadcrumbLabel } from "./item-wizard/CategorySelector";
 import { rotuloSalvando } from "./item-wizard/ui";
 import {
-  calcMargem, composeDuracao, faltaNcm, fmtBRL, gerarCodigoServico, gravarUltimaCategoria,
-  lerUltimaCategoria, mascaraDeValor, matrizZerada, nomeDoTipo, parseDuracao, passoClicavel,
-  podeAvancar, preservarValores, rotulosDosPassos, subtituloDoPasso, tituloDoModal, valorDaMascara,
+  calcMargem, duracaoParaMinutos, faltaNcm, fmtBRL, gerarCodigoServico, gravarUltimaCategoria,
+  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizZerada, minutosParaRotulo,
+  nomeDoTipo, passoClicavel, podeAvancar, preservarValores, rotulosDosPassos, subtituloDoPasso,
+  tituloDoModal, valorDaMascara,
   type CardKey, type ItemType, type SaveState, type StockMode, type WizardColor, type WizardStep,
 } from "./item-wizard/types";
 
@@ -195,9 +202,13 @@ export function ItemWizardModal({ visible, onClose, initialType = "product", edi
     setMinimoTxt(prod ? String(prod.minStock) : "");
     const bruto = prod?.notes || "";
     if (t === "service") {
-      const { descricao: d, duracao: dur } = parseDuracao(bruto);
-      setDescricao(d);
-      setDuracao(dur);
+      // A coluna manda; sem coluna, o sufixo antigo da descrição é lido e
+      // migra na próxima gravação. Um sufixo que não vira número
+      // ("meio período") FICA na descrição — migrar apagando o que ela
+      // escreveu seria pior que não migrar.
+      const d = lerDuracaoDoServico(bruto, prod?.durationMinutes ?? null);
+      setDescricao(d.descricao);
+      setDuracao(d.duracaoTxt);
     } else {
       setDescricao(bruto);
       setDuracao("");
@@ -296,7 +307,11 @@ export function ItemWizardModal({ visible, onClose, initialType = "product", edi
       minStock: isProduto ? (parseInt(minimoTxt, 10) || 0) : 0,
       unit: isProduto ? unidade : "srv",
       brand: alvo?.brand || "",
-      notes: isProduto ? descricao.trim() : composeDuracao(descricao, duracao),
+      // A descrição é só a descrição. A duração tem coluna própria desde
+      // a migration 323 — e gravar aqui SEM o sufixo é o que tira o
+      // "| Duração: 45 min" do serviço antigo na primeira gravação.
+      notes: descricao.trim(),
+      durationMinutes: isProduto ? undefined : duracaoParaMinutos(duracao),
       material: isProduto ? material.trim() : "",
       medidas: isProduto ? medidas.trim() : "",
       cuidados: isProduto ? cuidados.trim() : "",
@@ -506,7 +521,8 @@ export function ItemWizardModal({ visible, onClose, initialType = "product", edi
             : "quantidade única")
         : fmtBRL(precoNum) + " por unidade";
     } else {
-      info = fmtBRL(precoNum) + (duracao ? " · " + duracao : "");
+      const rotuloDur = minutosParaRotulo(duracaoParaMinutos(duracao));
+      info = fmtBRL(precoNum) + (rotuloDur ? " · " + rotuloDur : "");
     }
   } else {
     info = "Nada aqui é obrigatório";
@@ -649,15 +665,13 @@ export function ItemWizardModal({ visible, onClose, initialType = "product", edi
                 nome={nome}
                 preco={preco}
                 imagemUrl={imagemUrl}
-                onImagem={(url) => { setImagemUrl(url); marcarSalvo("photo"); }}
+                // A capa vem da galeria; o modal só reflete na prévia da
+                // loja. Sem "Salvo" aqui: hidratar não é salvar.
+                onCapaPrincipal={setImagemUrl}
+                onFotoMudou={() => marcarSalvo("photo")}
                 cores={cores}
                 tamanhos={tamanhos}
                 stockMode={stockMode}
-                fotosPorCor={(variacoes?.images || {}) as Record<string, string>}
-                onFotoCorMudou={() => {
-                  qc.invalidateQueries({ queryKey: ["productVariations", company?.id, productId] });
-                  marcarSalvo("photo");
-                }}
                 corPai={stockMode === "single" ? (alvo?.color || null) : null}
                 tamanhoPai={stockMode === "single" ? (alvo?.size || null) : null}
                 estoquePai={stockMode === "single" ? (alvo?.stock ?? null) : null}
