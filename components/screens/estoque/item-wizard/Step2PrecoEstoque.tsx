@@ -15,7 +15,8 @@ import { hexToName } from "@/utils/colorNames";
 import { UNITS } from "../types";
 import { Campo, Chip, Entrada, Nota, IS_WEB, s } from "./ui";
 import {
-  calcMargem, valorDaMascara, fmtBRL, DURATION_PRESETS, DURATION_OTHER,
+  calcMargem, valorDaMascara, fmtBRL, duracaoParaMinutos, minutosParaRotulo,
+  DURATION_PRESET_MIN, DURATION_OTHER,
   type ItemType, type StockMode, type WizardColor,
 } from "./types";
 
@@ -103,8 +104,14 @@ export function Step2PrecoEstoque({
   const [novoTam, setNovoTam] = useState("");
   const [mostrarOutra, setMostrarOutra] = useState(false);
 
-  const ehPreset = DURATION_PRESETS.indexOf(duracao) >= 0;
-  const outraAtiva = mostrarOutra || (!!duracao && !ehPreset);
+  // A duração vira NÚMERO (migration 323). O chip acende pelos minutos,
+  // não pelo texto: quem digita "1 hora" no campo livre vê o chip "1h"
+  // acender, porque é a mesma coisa. Texto que não vira número mantém
+  // todos os chips apagados e ganha uma dica — nada é gravado torto.
+  const minutos = duracaoParaMinutos(duracao);
+  const ehPreset = minutos != null && DURATION_PRESET_MIN.indexOf(minutos) >= 0;
+  const outraAtiva = mostrarOutra || (!!duracao.trim() && !ehPreset);
+  const naoEntendi = !!duracao.trim() && minutos == null;
 
   function addCor(hex: string) {
     const h = (hex || "").toUpperCase();
@@ -304,12 +311,16 @@ export function Step2PrecoEstoque({
         <View>
           <Campo label="Duração estimada" optional="opcional">
             <View style={s.chips}>
-              {DURATION_PRESETS.map((d) => (
+              {DURATION_PRESET_MIN.map((m) => (
                 <Chip
-                  key={d}
-                  label={d}
-                  active={duracao === d}
-                  onPress={() => { setMostrarOutra(false); onDuracao(duracao === d ? "" : d); onBlur(); }}
+                  key={m}
+                  label={minutosParaRotulo(m)}
+                  active={minutos === m}
+                  onPress={() => {
+                    setMostrarOutra(false);
+                    onDuracao(minutos === m ? "" : minutosParaRotulo(m));
+                    onBlur();
+                  }}
                 />
               ))}
               <Chip
@@ -324,11 +335,19 @@ export function Step2PrecoEstoque({
                 onChangeText={onDuracao}
                 onBlur={onBlur}
                 onSubmitEditing={onSubmit}
-                placeholder="Ex.: 3h, 20 min, meio período"
+                placeholder="Ex.: 20 min, 3h, 1h30"
                 style={{ marginTop: 8 }}
               />
             )}
-            <Text style={s.hint}>Ajuda na agenda e aparece na página do serviço.</Text>
+            <Text style={s.hint}>
+              {naoEntendi ? (
+                <Text style={{ color: Colors.amber, fontWeight: "700" }}>
+                  Não entendi essa duração. Escreva como 20 min, 1h ou 1h30 — a agenda precisa do número.
+                </Text>
+              ) : (
+                "Ajuda na agenda e aparece na página do serviço."
+              )}
+            </Text>
           </Campo>
           <Nota>
             <Text style={s.hint}>

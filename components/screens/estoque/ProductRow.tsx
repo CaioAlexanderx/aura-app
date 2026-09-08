@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { ProductImageUpload } from "@/components/ProductImageUpload";
 import type { Product } from "./types";
 import { fmt } from "./types";
+import { minutosParaRotulo } from "./item-wizard/types";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -44,6 +45,7 @@ export function ProductRow({
   // Servico nao tem estoque, entao nunca esta "baixo"
   const isLow = !isService && product.stock <= product.minStock;
   const margin = product.price > 0 ? ((product.price - product.cost) / product.price * 100).toFixed(0) : "0";
+  const duracao = isService ? minutosParaRotulo(product.durationMinutes) : "";
   const colorName = product.color ? hexToName(product.color) : "";
   const hasVariant = !!(product.color || product.size);
   const hasImage = !!product.image_url;
@@ -115,9 +117,15 @@ export function ProductRow({
             </View>
           ) : (
             <View style={s.detailGrid}>
-              {[["Preço", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]].map(([l, v]) =>
-                <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
-              )}
+              {/* Duração: era texto colado no fim da descrição ("| Duração:
+                  45 min") e aparecia aqui embaixo, em itálico, junto das
+                  observações. Virou coluna na migration 323 — e passa a ter
+                  um lugar próprio, ao lado do preço. */}
+              {([["Preço", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]] as Array<[string, string]>)
+                .concat(duracao ? [["Duração", duracao]] : [])
+                .map(([l, v]) =>
+                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
+                )}
             </View>
           )}
           {!isService && hasVariant && (
