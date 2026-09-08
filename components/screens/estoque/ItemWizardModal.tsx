@@ -319,9 +319,12 @@ export function ItemWizardModal({ visible, onClose, initialType = "product", edi
     setSaveState("busy");
     if (card) setCardSave((s) => ({ ...s, [card]: "busy" }));
     if (salvarTimer.current) clearTimeout(salvarTimer.current);
-    salvarTimer.current = setTimeout(() => {
-      updateProduct(montarProduto(productId), { silent: true });
-      marcarSalvo(card);
+    salvarTimer.current = setTimeout(async () => {
+      // "Salvo" so depois da resposta. Em falha o toast do hook ja avisou;
+      // aqui basta apagar o "Salvando…" para nao ficar preso na tela.
+      const ok = await updateProduct(montarProduto(productId), { silent: true });
+      if (ok) marcarSalvo(card);
+      else { setSaveState(null); if (card) setCardSave((s) => ({ ...s, [card]: null })); }
     }, 600);
   }
 

@@ -162,9 +162,18 @@ export function useProducts() {
     }
   }
 
-  function updateProduct(product: Product, opts?: { silent?: boolean }) {
-    if (!companyId || isDemo) return;
-    updateMutation.mutate({ prodId: product.id, body: buildBody(product), silent: opts?.silent });
+  // Devolve true quando o PATCH aterrissou. O wizard de cadastro usa isso
+  // para acender "Salvo" só depois da resposta -- acender no disparo mente
+  // quando a rede falha. O catch e silencioso de proposito: o onError da
+  // mutation ja mostra o toast.
+  async function updateProduct(product: Product, opts?: { silent?: boolean }): Promise<boolean> {
+    if (!companyId || isDemo) return false;
+    try {
+      await updateMutation.mutateAsync({ prodId: product.id, body: buildBody(product), silent: opts?.silent });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function decrementStock(productId: string, qty: number) {
