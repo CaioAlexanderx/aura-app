@@ -12,7 +12,7 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { ServerImport } from "@/components/ServerImport";
-import { ItemWizardModal } from "@/components/screens/estoque/ItemWizardModal";
+import { ItemFormModal } from "@/components/screens/estoque/ItemFormModal";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
 import { PrintLabels } from "@/components/PrintLabels";
@@ -254,7 +254,7 @@ export default function EstoqueScreen() {
   useEstoquePremiumStyles();
   const { products, categories, isLoading, isDemo, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
   // D2 (F0): `flattened` alimenta o filtro hierarquico. O vinculo de
-  // categoria do produto recem-criado passou para o ItemWizardModal.
+  // categoria do produto recem-criado passou para o ItemFormModal.
   const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
@@ -277,11 +277,11 @@ export default function EstoqueScreen() {
   const [catsMulti, setCatsMulti] = useState<string[]>([]);
   const [view, setView] = useState<"table" | "grid">("table");
   const [showRail, setShowRail] = useState(true);
-  // 08/09/2026: os dois formulários viraram UM wizard de 3 passos
-  // (ItemWizardModal). `wizardOpen` + `wizardType` + `editProduct`
-  // substituem showAddForm/showServiceForm.
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardType, setWizardType] = useState<"product" | "service">("product");
+  // 09/09/2026: os dois formulários viraram UM formulário aberto
+  // (ItemFormModal, que substituiu o wizard de 3 passos). `formOpen` +
+  // `formType` + `editProduct` substituem showAddForm/showServiceForm.
+  const [formOpen, setFormOpen] = useState(false);
+  const [formType, setFormType] = useState<"product" | "service">("product");
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [labelSelection, setLabelSelection] = useState<string[]>([]);
@@ -399,18 +399,18 @@ export default function EstoqueScreen() {
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
   const serviceCount = products.filter(p => p.category === "Servicos" || p.unit === "srv").length;
 
-  // 08/09/2026: o wizard cuida do create (POST + vínculo de categoria +
-  // PUT /variations) e do auto-save de cada campo. A tela só abre, fecha
-  // e recarrega o que depende da lista.
-  function abrirWizard(tipo: "product" | "service", prod?: Product | null) {
+  // 09/09/2026: o modal cuida de tudo num Salvar só (POST/PATCH +
+  // vínculo de categoria + PUT /variations + fila de fotos). A tela só
+  // abre, fecha e recarrega o que depende da lista.
+  function abrirCadastro(tipo: "product" | "service", prod?: Product | null) {
     setEditProduct(prod || null);
-    setWizardType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
-    setWizardOpen(true);
+    setFormType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
+    setFormOpen(true);
     setActiveTab(0);
   }
 
-  function fecharWizard() {
-    setWizardOpen(false);
+  function fecharCadastro() {
+    setFormOpen(false);
     setEditProduct(null);
   }
 
@@ -420,7 +420,7 @@ export default function EstoqueScreen() {
   }
 
   function handleEdit(product: Product) {
-    abrirWizard(product.unit === "srv" ? "service" : "product", product);
+    abrirCadastro(product.unit === "srv" ? "service" : "product", product);
   }
 
   function handleTabSelect(i: number) { setActiveTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }
@@ -494,7 +494,7 @@ export default function EstoqueScreen() {
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   const ActionButtons = () => (
     <>
-      <Pressable onPress={() => abrirWizard("service")} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
+      <Pressable onPress={() => abrirCadastro("service")} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
         <Icon name="star" size={14} color={Colors.violet3} />
         {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Serviço</Text>}
       </Pressable>
@@ -522,7 +522,7 @@ export default function EstoqueScreen() {
           </Text>}
         </Pressable>
       )}
-      <Pressable onPress={() => abrirWizard("product")} style={s.addBtn}>
+      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
       </Pressable>
@@ -643,7 +643,7 @@ export default function EstoqueScreen() {
 
         {!isLoading && products.length === 0 && !isDemo && (
           <View>
-            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => abrirWizard("product")} />
+            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => abrirCadastro("product")} />
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
               <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole vários produtos de uma vez e cadastre em segundos</Text></View>
@@ -844,10 +844,10 @@ export default function EstoqueScreen() {
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
 
-      <ItemWizardModal
-        visible={wizardOpen}
-        onClose={fecharWizard}
-        initialType={wizardType}
+      <ItemFormModal
+        visible={formOpen}
+        onClose={fecharCadastro}
+        initialType={formType}
         editProduct={editProduct}
         onSaved={aposSalvarItem}
       />

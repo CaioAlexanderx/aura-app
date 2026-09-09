@@ -20,10 +20,10 @@ import { request } from "@/services/api";
 // continuam lendo o que sempre leram. Reordenar troca a capa; apagar a
 // capa promove a próxima.
 //
-// As chaves de `by_color` vêm em MINÚSCULO (#rrggbb). O wizard guarda os
-// hex das cores em CAIXA ALTA (herança do atributo Cor das variantes) —
-// por isso todo acesso passa por fotosDaCor()/chaveDaCor() em
-// item-wizard/types.ts, nunca por indexação direta.
+// As chaves de `by_color` vêm em MINÚSCULO (#rrggbb). O cadastro guarda
+// os hex das cores em CAIXA ALTA (herança do atributo Cor das variantes)
+// — por isso todo acesso passa por fotosDaCor()/chaveDaCor() em
+// item-form/types.ts, nunca por indexação direta.
 //
 // Estilo espelhado de services/productsVariationsApi.ts.
 // ============================================================

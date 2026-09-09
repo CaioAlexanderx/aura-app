@@ -1,1 +1,1 @@
-export { ItemWizardModal } from "./ItemWizardModal";
+export { ItemFormModal } from "./ItemFormModal";
