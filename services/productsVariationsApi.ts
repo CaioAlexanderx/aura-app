@@ -18,8 +18,12 @@ import { request } from "@/services/api";
 // uploadColorImage/deleteColorImage acionam POST/DELETE /color-image,
 // que aplica imagem em TODAS variantes ativas da cor (independente de
 // tamanho). Evita a janela de race entre PUT /variations e upload por
-// combo (cor,tamanho). UX nova em ProductVariationsSection esconde foto
-// por variante em produtos so-tamanho e agrupa por cor nos demais.
+// combo (cor,tamanho). A UX que consumia isso vivia em
+// ProductVariationsSection, removido em 09/09/2026 junto com
+// ColorImageButton/VariantImageButton quando o cadastro de item virou
+// tela unica (#859); a grade hoje e desenhada por
+// components/screens/estoque/item-form/SecaoEstoque.tsx, que grava tudo
+// no PUT /variations do Salvar.
 // ============================================================
 
 export type ColorEntry = {
@@ -127,8 +131,9 @@ export var productsVariationsApi = {
     );
   },
   // 27/06/2026: foto POR COR (aplica em TODAS variantes ativas com Cor=hex,
-  // independente de tamanho). Usado pelo ColorImageButton no novo fluxo de
-  // ProductVariationsSection.
+  // independente de tamanho). Sem chamador desde a remocao do
+  // ColorImageButton em 09/09/2026 — mantido porque a rota /color-image
+  // segue existindo no backend.
   uploadColorImage: function(companyId: string, productId: string, body: UploadColorImageBody) {
     return request<UploadColorImageResponse>(
       "/companies/" + companyId + "/products/" + productId + "/color-image",
