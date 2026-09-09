@@ -4,7 +4,7 @@ import { Colors } from "@/constants/colors";
 import { ProductImageUpload } from "@/components/ProductImageUpload";
 import type { Product } from "./types";
 import { fmt } from "./types";
-import { minutosParaRotulo } from "./item-wizard/types";
+import { minutosParaRotulo } from "./item-form/types";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',

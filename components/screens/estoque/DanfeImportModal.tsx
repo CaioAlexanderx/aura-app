@@ -11,7 +11,7 @@
 //
 // NCM (08/05): coluna NCM adicionada com TextInput 8 dígitos,
 // badge ✓/n/8/💡. O 💡 e um BOTAO: a sugestao so entra no clique.
-// Inferência compartilhada com o ItemWizardModal via utils/ncm.ts.
+// Inferência compartilhada com o ItemFormModal via utils/ncm.ts.
 //
 // Fix #5 (08/05): overlay usa position: fixed (web) para garantir
 // que o modal abre sempre na viewport, mesmo com ScrollView rolada.

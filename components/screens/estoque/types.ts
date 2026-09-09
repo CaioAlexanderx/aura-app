@@ -22,7 +22,7 @@ export type Product = {
   // Migration 323 — duração do SERVIÇO, em minutos. null = não informada.
   // undefined em produto (a coluna nem vai no corpo do PATCH). Antes disso
   // a duração era texto colado no fim da descrição ("| Duração: 45 min");
-  // item-wizard/types.lerDuracaoDoServico ainda lê o formato antigo.
+  // item-form/types.lerDuracaoDoServico ainda lê o formato antigo.
   durationMinutes?: number | null;
   image_url?: string;
   has_variants?: boolean;

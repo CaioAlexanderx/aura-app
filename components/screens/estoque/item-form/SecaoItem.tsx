@@ -1,19 +1,18 @@
 // ============================================================
-// AURA. — Cadastro de item · passo 1 "O básico"
+// AURA. — Cadastro de item (aberto) · seção "O item"
 //
-// Tipo (produto/serviço, travado na edição), nome e categoria. O nome
-// é a estrela: recebe foco sozinho no desktop e é o único obrigatório
-// pra seguir. A checagem de duplicata agora vem com AÇÃO — o aviso
-// leva pra edição do produto que já existe, na grade de variações.
+// Nome, o aviso de duplicata COM AÇÃO e a categoria numa linha. É a
+// primeira coisa da coluna esquerda e a única que o Salvar cobra junto
+// com o preço.
 // ============================================================
 import { useEffect, useRef } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { hexToName } from "@/utils/colorNames";
-import { Campo, Entrada, IS_WEB, s } from "./ui";
+import { Campo, Entrada, Secao, IS_WEB, s } from "./ui";
 import { CategoriaSeletor } from "./CategorySelector";
-import { nomeDoTipo, type ItemType } from "./types";
+import { nomeDoTipo, statusItem, type ItemType } from "./types";
 
 export type DuplicataRow = {
   id: string; name: string; sku?: string; barcode?: string;
@@ -22,10 +21,8 @@ export type DuplicataRow = {
 
 type Props = {
   type: ItemType;
-  travado: boolean;
   nome: string;
   onNome: (v: string) => void;
-  onTipo: (t: ItemType) => void;
   duplicatas: DuplicataRow[];
   onDupMerge: (d: DuplicataRow) => void;
   onDupNao: () => void;
@@ -33,51 +30,20 @@ type Props = {
   categoriaUltimaUsada: boolean;
   onAbrirCategoria: () => void;
   onSubmit: () => void;
-  onBlur: () => void;
   autoFocus: boolean;
   narrow: boolean;
 };
 
-function CartaoTipo({
-  ativo, desabilitado, icon, titulo, texto, onPress, narrow,
-}: {
-  ativo: boolean; desabilitado: boolean; icon: string; titulo: string;
-  texto: string; onPress: () => void; narrow: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={desabilitado ? undefined : onPress}
-      disabled={desabilitado}
-      accessibilityLabel={titulo}
-      style={[
-        st.tipo,
-        narrow ? { flexDirection: "column", gap: 8 } : null,
-        ativo && st.tipoAtivo,
-        desabilitado && { opacity: 0.45 },
-      ]}
-    >
-      <View style={[st.tipoIco, ativo && st.tipoIcoAtivo]}>
-        <Icon name={icon as any} size={16} color={ativo ? "#fff" : Colors.ink3} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={st.tipoTitulo}>{titulo}</Text>
-        <Text style={st.tipoTexto}>{texto}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-export function Step1Basico({
-  type, travado, nome, onNome, onTipo, duplicatas, onDupMerge, onDupNao,
-  categoriaRotulo, categoriaUltimaUsada, onAbrirCategoria,
-  onSubmit, onBlur, autoFocus, narrow,
+export function SecaoItem({
+  type, nome, onNome, duplicatas, onDupMerge, onDupNao,
+  categoriaRotulo, categoriaUltimaUsada, onAbrirCategoria, onSubmit, autoFocus, narrow,
 }: Props) {
   const isProduto = type === "product";
   const nomeRef = useRef<any>(null);
 
   // Foco automático só no desktop/web — no celular abriria o teclado por
-  // cima do modal antes da pessoa decidir o tipo. preventScroll evita o
-  // salto do painel inteiro.
+  // cima do modal antes de a lojista ver o que tem na tela. preventScroll
+  // evita o salto do painel inteiro.
   useEffect(() => {
     if (!autoFocus || !IS_WEB || narrow) return;
     const t = setTimeout(() => {
@@ -89,45 +55,17 @@ export function Step1Basico({
   }, [autoFocus, narrow]);
 
   return (
-    <View>
-      <View style={[st.tipos, narrow && { flexDirection: "column" }]}>
-        <CartaoTipo
-          ativo={isProduto}
-          desabilitado={travado && !isProduto}
-          icon="package"
-          titulo="Produto"
-          texto="Fica no estoque. Pode ter código de barras, cores e tamanhos."
-          onPress={() => onTipo("product")}
-          narrow={narrow}
-        />
-        <CartaoTipo
-          ativo={!isProduto}
-          desabilitado={travado && isProduto}
-          icon="star"
-          titulo="Serviço"
-          texto="Não tem estoque. Vendido direto no Caixa, com duração."
-          onPress={() => onTipo("service")}
-          narrow={narrow}
-        />
-      </View>
-
-      {travado && (
-        <View style={st.lockNote}>
-          <Icon name="lock" size={12} color={Colors.ink3} />
-          <Text style={st.lockTxt}>O tipo não muda depois de criado.</Text>
-        </View>
-      )}
-
+    <Secao icon={isProduto ? "package" : "star"} titulo="O item" selo={statusItem(nome)}>
       <Campo label={"Nome do " + nomeDoTipo(type)} required>
         <Entrada
           ref={nomeRef}
           value={nome}
           onChangeText={onNome}
-          onBlur={onBlur}
           onSubmitEditing={onSubmit}
-          returnKeyType="next"
+          returnKeyType="done"
           placeholder={isProduto ? "Ex.: Vestido midi floral" : "Ex.: Corte feminino, Manicure, Consultoria"}
           autoComplete="off"
+          style={s.inputGrande}
         />
       </Campo>
 
@@ -172,38 +110,21 @@ export function Step1Basico({
         </View>
       )}
 
-      <Campo label="Categoria" optional="opcional">
+      <Campo label="Categoria" optional="opcional" style={{ marginBottom: 0 }}>
         <CategoriaSeletor
           rotulo={categoriaRotulo}
           ultimaUsada={categoriaUltimaUsada}
           onAbrir={onAbrirCategoria}
         />
       </Campo>
-    </View>
+    </Secao>
   );
 }
 
 const st = {
-  tipos: { flexDirection: "row" as const, gap: 10, marginBottom: 18 },
-  tipo: {
-    flex: 1, flexDirection: "row" as const, gap: 11, alignItems: "flex-start" as const,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    backgroundColor: Colors.bg4, borderWidth: 1.5, borderColor: Colors.border,
-  },
-  tipoAtivo: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
-  tipoIco: {
-    width: 34, height: 34, borderRadius: 9, backgroundColor: Colors.bg3,
-    borderWidth: 1, borderColor: Colors.border,
-    alignItems: "center" as const, justifyContent: "center" as const,
-  },
-  tipoIcoAtivo: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tipoTitulo: { fontSize: 13.5, color: Colors.ink, fontWeight: "700" as const },
-  tipoTexto: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16, marginTop: 2 },
-  lockNote: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginTop: -10, marginBottom: 16 },
-  lockTxt: { fontSize: 11, color: Colors.ink3 },
   dup: {
     backgroundColor: Colors.amberD, borderWidth: 1, borderColor: "rgba(251,191,36,0.35)",
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: -6, marginBottom: 14,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: -4, marginBottom: 12,
   },
   dupTitulo: { fontSize: 12.5, color: Colors.amber, fontWeight: "700" as const, flex: 1 },
   dupSub: { fontSize: 11.5, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
@@ -221,4 +142,4 @@ const st = {
   dupNao: { fontSize: 12, color: Colors.ink3, textDecorationLine: "underline" as const },
 };
 
-export default Step1Basico;
+export default SecaoItem;

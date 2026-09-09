@@ -135,10 +135,11 @@ export function useProducts() {
     onError: (err: any) => toast.error(err?.message || "Erro ao salvar produto"),
   });
 
-  // `silent` (08/09/2026): o ItemWizardModal salva campo a campo no blur.
-  // Sem isso, cadastrar um produto renderia oito toasts "Produto
-  // atualizado!" em sequência — o wizard mostra "✓ Salvo" no cartão e no
-  // rodapé. O erro continua com toast em qualquer caso.
+  // `silent` (08/09/2026): nasceu para o auto-save campo a campo do
+  // wizard, que sumiu em 09/09 — o cadastro aberto grava UMA vez, no
+  // Salvar, e quer o toast. A opção fica porque é barata e o próximo
+  // fluxo que gravar em rajada vai precisar dela; o erro continua com
+  // toast em qualquer caso.
   const updateMutation = useMutation({
     mutationFn: ({ prodId, body }: { prodId: string; body: any; silent?: boolean }) =>
       companiesApi.updateProduct(companyId!, prodId, body),
@@ -175,10 +176,10 @@ export function useProducts() {
     }
   }
 
-  // Devolve true quando o PATCH aterrissou. O wizard de cadastro usa isso
-  // para acender "Salvo" só depois da resposta -- acender no disparo mente
-  // quando a rede falha. O catch e silencioso de proposito: o onError da
-  // mutation ja mostra o toast.
+  // Devolve true quando o PATCH aterrissou. O cadastro usa isso para so
+  // fechar o modal depois da resposta -- fechar no disparo mente quando a
+  // rede falha. O catch e silencioso de proposito: o onError da mutation
+  // ja mostra o toast.
   async function updateProduct(product: Product, opts?: { silent?: boolean }): Promise<boolean> {
     if (!companyId || isDemo) return false;
     try {

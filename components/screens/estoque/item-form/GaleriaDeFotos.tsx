@@ -19,6 +19,11 @@
 // Por isso reordenar não é enfeite: "Tornar capa" troca a foto que
 // aparece na vitrine, no PDV e no catálogo do WhatsApp.
 //
+// 09/09/2026 — no formulário aberto o cadastro também tem galeria, antes
+// mesmo de o produto existir: LinhaDaGaleriaLocal desenha os mesmos
+// quadradinhos para as fotos que ainda estão na fila (sobem logo depois
+// do POST, ver ItemFormModal).
+//
 // TOQUE (CLAUDE.md, armadilha 7): o × e as setas aparecem no hover no
 // desktop, mas em tela sem hover — `matchMedia("(hover: none)")`, o
 // equivalente em JS do @media — ficam SEMPRE visíveis. Hover-reveal puro
@@ -34,6 +39,7 @@ import { useAuthStore } from "@/stores/auth";
 import { productImagesApi, type ProductImage } from "@/services/productImagesApi";
 import {
   MAX_FOTOS_POR_COR, chaveDaCor, contarSlots, idsComFotoEm, rotuloDoSlot,
+  type FotoPendente,
 } from "./types";
 
 const IS_WEB = Platform.OS === "web";
@@ -348,6 +354,89 @@ export function LinhaDaGaleria({
           <Text style={st.tetoTxt}>{teto + " fotos"}</Text>
         </View>
       )}
+    </View>
+  );
+}
+
+// ── a mesma linha, antes de o produto existir ───────────────
+//
+// No cadastro não há id: a foto escolhida fica em memória (base64) e sobe
+// depois do POST. A linha é a mesma para a lojista — os mesmos
+// quadradinhos, os mesmos rótulos "capa"/"no corpo", o mesmo × — só que
+// o × aqui tira da fila em vez de apagar do servidor.
+export function LinhaDaGaleriaLocal({
+  fotos, principal, rotulo, corHex, onAdicionar, onRemover,
+}: {
+  fotos: FotoPendente[];
+  principal: boolean;
+  rotulo: string;
+  corHex?: string | null;
+  onAdicionar: (corHex: string | null, base64: string, contentType: string) => void;
+  onRemover: (id: string) => void;
+}) {
+  const semHover = useSemHover();
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const cor = principal ? null : (corHex || null);
+  const slots = contarSlots(fotos.length);
+  const vazios = Math.max(0, Math.min(slots, MAX_FOTOS_POR_COR) - fotos.length);
+
+  return (
+    <View style={st.linha}>
+      {fotos.map((f, i) => {
+        const mostrarAcoes = semHover || hoverId === f.id;
+        return (
+          <View
+            key={f.id}
+            style={st.slot}
+            {...(IS_WEB && !semHover
+              ? {
+                  onMouseEnter: () => setHoverId(f.id),
+                  onMouseLeave: () => setHoverId((h) => (h === f.id ? null : h)),
+                }
+              : {})}
+          >
+            <Image
+              source={{ uri: "data:" + f.contentType + ";base64," + f.base64 }}
+              style={st.foto}
+              resizeMode="cover"
+              accessibilityLabel={rotulo + " — foto " + (i + 1) + " de " + fotos.length}
+            />
+            {i === 0 && <View style={st.capa}><Text style={st.capaTxt}>CAPA</Text></View>}
+            {mostrarAcoes && (
+              <Pressable
+                onPress={() => onRemover(f.id)}
+                hitSlop={6}
+                style={st.x}
+                accessibilityLabel={"Remover foto " + (i + 1) + " de " + rotulo}
+              >
+                <Icon name="x" size={9} color="#fff" />
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+
+      {Array.from({ length: vazios }).map((_, k) => {
+        const indice = fotos.length + k;
+        const primeiroVazio = k === 0;
+        const dica = rotuloDoSlot(indice, principal);
+        return (
+          <Pressable
+            key={"vazio-" + indice}
+            onPress={primeiroVazio ? () => escolherFoto((b64, ctype) => onAdicionar(cor, b64, ctype)) : undefined}
+            disabled={!primeiroVazio}
+            style={[st.slot, st.vazio, !primeiroVazio && st.vazioFraco]}
+            accessibilityLabel={
+              primeiroVazio
+                ? "Adicionar foto" + (dica ? " (" + dica + ")" : "") + " de " + rotulo
+                : "Espaço para foto de " + rotulo
+            }
+          >
+            <Icon name="plus" size={14} color={primeiroVazio ? Colors.violet3 : Colors.ink3} />
+            {!!dica && <Text style={st.dica} numberOfLines={1}>{dica}</Text>}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
