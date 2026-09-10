@@ -95,8 +95,16 @@ export function TabHistorico({
   async function handleDelete(transactionId: string) {
     setDeletingId(transactionId);
     try {
-      await creditApi.undoTransaction(companyId, transactionId);
-      toast.success("Lançamento excluído!");
+      const res = await creditApi.undoTransaction(companyId, transactionId);
+      // 10/09/2026 (caso Ana Lucia, looks da jenny): o backend passou a cancelar
+      // as parcelas que nasceram com o lançamento — dizemos quantas, para a
+      // lojista não estranhar o carnê encolhendo.
+      const n = res?.cancelled_installments ?? 0;
+      toast.success(
+        n > 0
+          ? `Lançamento excluído! ${n} ${n === 1 ? "parcela cancelada" : "parcelas canceladas"}.`
+          : "Lançamento excluído!"
+      );
       onRefresh();
       setHistLoaded(false);
       loadHistory();

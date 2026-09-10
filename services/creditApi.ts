@@ -474,7 +474,12 @@ export const creditApi = {
     );
   },
   undoTransaction(companyId: string, transactionId: string) {
-    return request<{ deleted: boolean; new_balance: number }>(
+    // cancelled_installments / reallocated_amount / credit_left: backend novo
+    // (parcelas do lançamento são canceladas junto); backend antigo não manda.
+    return request<{
+      deleted: boolean; new_balance: number;
+      cancelled_installments?: number; reallocated_amount?: number; credit_left?: number;
+    }>(
       `${base(companyId)}/transaction/${transactionId}`, { method: "DELETE" }
     );
   },
