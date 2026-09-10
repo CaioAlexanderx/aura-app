@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -15,6 +16,15 @@ import { TabPedidos } from "@/components/screens/canal/TabPedidos";
 
 const STOREFRONT_BASE = 'https://loja.getaura.com.br';
 
+// 10/09/2026: o aviso de pedido (sino e navegador) aponta para
+// /canal?tab=pedidos&order_id=<id>. A aba era estado local e ignorava o
+// endereco — o clique caia em "Meu Site".
+const ABA_PELO_NOME: Record<string, number> = { site: 0, design: 1, vitrine: 2, entrega: 3, pedidos: 4 };
+function abaDoEndereco(valor: unknown): number | null {
+  const nome = String(Array.isArray(valor) ? valor[0] : valor || "").toLowerCase();
+  return nome in ABA_PELO_NOME ? ABA_PELO_NOME[nome] : null;
+}
+
 // 01/09/2026 (QA onda 2 — cabeçalho unificado): o PageHeader + o cartão
 // "Sua loja online em minutos" viraram um ScreenHero só, igual às outras onze
 // abas. O cartão dizia em duas linhas o que o cabeçalho agora diz na
@@ -25,7 +35,14 @@ const STOREFRONT_BASE = 'https://loja.getaura.com.br';
 // elemento da tela.
 
 export default function CanalDigitalScreen() {
-  const [tab, setTab] = useState(0);
+  const params = useLocalSearchParams<{ tab?: string; order_id?: string }>();
+  const [tab, setTab] = useState(() => abaDoEndereco(params.tab) ?? 0);
+  const pedidoDoEndereco = typeof params.order_id === "string" ? params.order_id : undefined;
+  // Clique no aviso com a tela ja aberta: o endereco muda, a aba acompanha.
+  useEffect(() => {
+    const aba = abaDoEndereco(params.tab);
+    if (aba !== null) setTab(aba);
+  }, [params.tab, params.order_id]);
   const { company } = useAuthStore();
   const {
     config, isLoading,
@@ -120,7 +137,7 @@ export default function CanalDigitalScreen() {
               TabPedidos derivava o cid de `orders[0]?.company_id` e fazia
               early-return mudo quando a lista não trazia esse campo. O hook
               ainda cai na empresa do store se a prop vier undefined. */}
-          {tab === 4 && <TabPedidos companyId={company?.id} />}
+          {tab === 4 && <TabPedidos companyId={company?.id} orderIdInicial={pedidoDoEndereco} />}
         </>
       )}
     </ScrollView>

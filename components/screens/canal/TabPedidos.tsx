@@ -1,522 +1,520 @@
 // ============================================================
 // AURA. — Canal Digital · TabPedidos
-// 03/05: Pix manual flow — comprovante anexado + Aprovar/Rejeitar.
-// 11/05: Confirmação manual de pagamento — quick-action "✓ Pago" no
-//   card da lista + botão "Confirmar pagamento recebido" no detalhe,
-//   agora cobrindo pedidos com status `pending_payment` (cliente NÃO
-//   clicou "Já paguei" no site, mas o lojista viu o Pix cair). O
-//   endpoint backend `approve-payment` já aceita esse status — só a
-//   UI estava restrita a `awaiting_approval`.
-// 18/05: Audit Rec #8 — chips de filtro de 7 status granulares pra 4
-//   grupos cliente-facing (Precisa agir / Em curso / Concluídos /
-//   Cancelados) + "Todos". O status interno continua visível no card
-//   e no detalhe; só o filtro foi agrupado. "Precisa agir" tem badge
-//   de contagem porque é o que demanda ação imediata.
-// 21/05: MP CheckoutPro Fase 2 follow-up — payment_method='card'
-//   ganha label/icon proprios (💳 Cartão), copy distinta no detalhe,
-//   e canApprovePayment exclui card (confirmação via webhook MP).
-//   STATUS_MAP.pending_payment vira label genérica.
-// 21/05: Davi pediu fluxo de excluir pedidos teste — botão "Excluir pedido
-//   permanentemente" no modal de detalhe (só aparece em cancelled/pending_payment
-//   sem transação/estoque/nfce). Chama DELETE /orders/:oid, backend valida.
-// 25/05: Migrado pra useChannelStyles() + useAccent() — sai violeta hard-coded,
-//   entra accent tematizado por vertical. Comportamento 100% preservado.
-// 25/05: StyleSheet local agora é buildStyles(accent) memoizado — last violet
-//   refs (refreshText, proofPdfText, advBtn, lightboxOpenBtn) viram accent.*.
-// 17/08: FIX — aprovar/rejeitar Pix NUNCA funcionou (quebrado desde 03/05).
-//   Esta tela importava `{ api }` de "@/services/api", símbolo que aquele
-//   arquivo nunca exportou; o Metro não faz type-check no bundle, então
-//   `api` era `undefined` e `api.post(...)` estourava
-//   "Cannot read properties of undefined (reading 'post')" — engolido pelo
-//   catch e virando um toast genérico. Nenhum pedido do produto chegou a
-//   `confirmed`/`preparing`/`ready` desde então. Segundo modo de falha
-//   independente, que escondia o primeiro: o `cid` vinha de
-//   `orders[0]?.company_id` (canal.tsx não passava a prop `companyId`), e
-//   `if (!targetOrder || !cid) return` fazia early-return SEM nem toast.
-//   Agora as duas chamadas vivem em useDigitalOrders(), que já tem o cid
-//   autenticado do store. Terceiro fix: o KPI "Aguardando aprov." lia
-//   `(kpi as any).awaiting_approval`, chave que o hook nunca montava — o
-//   `as any` matou o type-check e o card mostrava 0 permanentemente.
-// 17/08: FIX — contraste no modo escuro. `cardHighlight`/`cardWarn` tinham
-//   backgroundColor FIXO claro (#fff5f5 / #fffbeb) pensado só pro tema claro.
-//   No escuro, o texto do card (Colors.ink/ink3) vira quase branco — e ficava
-//   branco sobre fundo quase branco, ilegível. Trocado pelos tokens de tema
-//   Colors.redD/amberD (translúcidos, já usados no resto do arquivo), que
-//   se adaptam ao fundo escuro/claro mantendo contraste com o texto.
+//
+// Histórico (detalhes nos commits):
+//   03/05 Pix manual (comprovante + aprovar/rejeitar) · 11/05 confirmação
+//   manual de pagamento · 18/05 chips por grupo · 21/05 cartão (CheckoutPro)
+//   e excluir pedido teste · 25/05 accent por vertical · 17/08 aprovar Pix
+//   voltou a funcionar e contraste no escuro.
+//
+// 10/09/2026 — REDESENHO da fila (relato do Caio com print da Finesse):
+//   1. Visual: status tinham cor fixa clara (#fef3c7...) — no tema escuro
+//      viravam pílulas creme brilhantes, e o card pendente ganhava borda
+//      âmbar de 2 px e fundo tingido. Agora o card é neutro, com uma barra
+//      lateral no tom do status quando pede ação, e a pílula usa os tokens
+//      do tema. A folha de detalhe tinha fundo branco fixo.
+//   2. Cancelar e Excluir no próprio card, com confirmação ali mesmo. Antes
+//      Cancelar só aparecia no detalhe e NÃO aparecia em Pix pendente.
+//   3. Foto e nome do primeiro item no card, e busca por número, cliente,
+//      telefone ou produto (backend: services/filaDePedidos.js).
+//   4. Detalhe carregado da rota própria — a seção "Itens" lia o objeto da
+//      lista, que nunca trouxe itens, e saía vazia.
+//   5. `orderIdInicial`: o link do aviso no navegador abre o pedido direto.
+//
+// Regras (quem pode confirmar, cancelar, excluir; rótulos) vivem em
+// utils/filaDePedidos.ts, testadas sem montar componente.
 // ============================================================
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
   Modal, ActivityIndicator, Linking, Image, TextInput,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { useDigitalOrders } from "@/hooks/useDigitalOrders";
+import { useDigitalOrders, useDigitalOrderDetail } from "@/hooks/useDigitalOrders";
 import { toast } from "@/components/Toast";
 import { useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
+import {
+  CHIPS, ChipKey, Tom, PedidoDaFila, PROXIMO_STATUS,
+  situacaoDoPedido, rotuloDoStatus, podeConfirmarPagamento, podeCancelar, podeExcluir,
+  filtrarPorGrupo, contagemDosGrupos, resumoDosItens, rotuloDoPagamento,
+  rotuloDaEntrega, tempoDesde, formatarReais,
+} from "@/utils/filaDePedidos";
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  pending_payment:    { label: "Aguardando pagamento", color: "#d97706", bg: "#fef3c7" },
-  awaiting_approval:  { label: "Aguardando aprov.", color: "#dc2626", bg: "#fee2e2" },
-  confirmed:          { label: "Confirmado",        color: "#2563eb", bg: "#dbeafe" },
-  preparing:          { label: "Em preparo",        color: "#7c3aed", bg: "#ede9fe" },
-  ready:              { label: "Pronto",            color: "#059669", bg: "#d1fae5" },
-  delivered:          { label: "Entregue",          color: "#374151", bg: "#f3f4f6" },
-  cancelled:          { label: "Cancelado",         color: "#dc2626", bg: "#fee2e2" },
-};
-
-const NEXT_STATUS: Record<string, string> = {
-  confirmed: "preparing",
-  preparing: "ready",
-  ready:     "delivered",
-};
-
-// Audit Rec #8: chips consolidados em 4 grupos cliente-facing (+ Todos).
-// O status granular do backend continua intacto — só o filtro agrupa.
-// "Precisa agir" é o único com badge de contagem porque demanda ação.
-type ChipKey = "all" | "precisa-agir" | "em-curso" | "concluidos" | "cancelados";
-
-const CHIPS: { key: ChipKey; label: string }[] = [
-  { key: "all",          label: "Todos" },
-  { key: "precisa-agir", label: "Precisa agir" },
-  { key: "em-curso",     label: "Em curso" },
-  { key: "concluidos",   label: "Concluídos" },
-  { key: "cancelados",   label: "Cancelados" },
-];
-
-const GROUP_STATUSES: Record<Exclude<ChipKey, "all">, string[]> = {
-  "precisa-agir": ["pending_payment", "awaiting_approval"],
-  "em-curso":     ["confirmed", "preparing", "ready"],
-  "concluidos":   ["delivered"],
-  "cancelados":   ["cancelled"],
-};
-
-// Pedidos onde o lojista pode confirmar pagamento manualmente.
-// - `awaiting_approval`: cliente clicou "Já paguei" + anexou comprovante
-// - `pending_payment`: cliente NÃO clicou "Já paguei" mas Pix pode ter
-//   sido pago de qualquer jeito (cliente esqueceu, fechou aba, etc).
-//   Lojista valida no extrato e confirma manualmente.
-//
-// 21/05/2026: cartão (CheckoutPro) NUNCA aceita confirmação manual —
-// MP só marca como aprovado via webhook após captura real. Botão manual
-// pra card geraria divergencia entre Aura e o que o lojista efetivamente
-// recebeu (pode ter sido recusa antifraude / chargeback).
-function canApprovePayment(order: any): boolean {
-  if (!order) return false;
-  if (order.payment_method === "card") return false;
-  return order.status === "awaiting_approval" || order.status === "pending_payment";
+function coresDoTom(tom: Tom): { cor: string; fundo: string } {
+  switch (tom) {
+    case "ambar":    return { cor: Colors.amber, fundo: Colors.amberD };
+    case "vermelho": return { cor: Colors.red, fundo: Colors.redD };
+    case "violeta":  return { cor: Colors.violet3, fundo: Colors.violetD };
+    case "verde":    return { cor: Colors.green, fundo: Colors.greenD };
+    default:         return { cor: Colors.ink3, fundo: Colors.bg4 };
+  }
 }
 
-// Pode excluir definitivamente quando:
-//   - status === 'cancelled' OU 'pending_payment'
-//   - sem transação financeira/estoque/NFCe vinculados (backend revalida)
-// Botão fica disponível só nesses casos pra evitar perda de histórico.
-function canDeleteOrder(order: any): boolean {
-  if (!order) return false;
-  if (!["cancelled", "pending_payment"].includes(order.status)) return false;
-  if (order.transaction_id) return false;
-  if (order.stock_deducted) return false;
-  if (order.confirmed_at) return false;
-  if (order.nfce_id) return false;
-  return true;
+function Miniatura({ uri, tamanho = 48 }: { uri?: string | null; tamanho?: number }) {
+  const [falhou, setFalhou] = useState(false);
+  const altura = Math.round(tamanho * 1.25);
+  if (!uri || falhou) {
+    return (
+      <View style={[estiloMini.caixa, { width: tamanho, height: altura }]}>
+        <Icon name="package" size={Math.round(tamanho * 0.4)} color={Colors.ink3} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      onError={() => setFalhou(true)}
+      style={[estiloMini.caixa, { width: tamanho, height: altura }]}
+      resizeMode="cover"
+    />
+  );
 }
 
-// 21/05/2026: helpers de display do método de pagamento.
-function paymentMethodIcon(method: string | undefined): string {
-  if (method === "card") return "💳";
-  if (method === "on_delivery") return "💵";
-  return "💸";
-}
-function paymentMethodShortLabel(method: string | undefined): string {
-  if (method === "card") return "Cartão";
-  if (method === "on_delivery") return "Na entrega";
-  return "Pix";
-}
-function paymentMethodLongLabel(method: string | undefined): string {
-  if (method === "card") return "Cartão de crédito (Mercado Pago)";
-  if (method === "on_delivery") return "Pagamento na entrega";
-  return "Pix manual";
-}
+const estiloMini = StyleSheet.create({
+  caixa: { borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+});
 
-function timeAgo(iso: string) {
-  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `${min}min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
+type Confirmacao = { tipo: "cancelar" | "excluir"; id: string } | null;
 
-function fmt(v: number | string) {
-  return "R$ " + Number(v).toFixed(2).replace(".", ",");
-}
-
-export function TabPedidos({ companyId }: { companyId?: string } = {}) {
+export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; orderIdInicial?: string } = {}) {
   const cs = useChannelStyles();
   const accent = useAccent();
   const s = useMemo(() => buildStyles(accent), [accent]);
+
   const [filter, setFilter] = useState<ChipKey>("all");
-  const [order, setOrder] = useState<any>(null);
+  const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
+  const [abertoId, setAbertoId] = useState<string | null>(orderIdInicial || null);
+  const [confirmacao, setConfirmacao] = useState<Confirmacao>(null);
   const [proofZoom, setProofZoom] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [showRejectInput, setShowRejectInput] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [modoNoDetalhe, setModoNoDetalhe] = useState<"normal" | "cancelar" | "excluir">("normal");
   const [working, setWorking] = useState(false);
-  // ID do pedido que está com a quick-action em andamento (loading state inline)
   const [approvingId, setApprovingId] = useState<string | null>(null);
-  // Hook sempre busca "all" — filtro de grupo é aplicado client-side
-  // pra mapear N status granulares -> 1 chip sem precisar mudar a API.
-  // `companyId` é opcional: sem ele o hook usa a empresa autenticada do store
-  // (era daqui que vinha o bug do `cid` montado a partir de orders[0]).
+
+  // Busca vai ao servidor 300 ms depois da última tecla.
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaAplicada(busca.trim()), 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  // Link do aviso (/canal?tab=pedidos&order_id=...) chegando com a tela aberta.
+  useEffect(() => {
+    if (orderIdInicial) setAbertoId(orderIdInicial);
+  }, [orderIdInicial]);
+
   const {
-    orders, kpi, counts, isLoading, refetch,
-    updateStatus, isUpdating, deleteOrder, isDeleting,
+    orders, counts, kpi, isLoading, isFetching, refetch,
+    updateStatus, isUpdating, cancelOrder, isCancelling, deleteOrder, isDeleting,
     approvePayment: approvePaymentApi, rejectPayment: rejectPaymentApi,
-  } = useDigitalOrders("all", companyId);
+  } = useDigitalOrders("all", companyId, buscaAplicada);
 
-  // Filtragem client-side por grupo. Os status do backend continuam
-  // chegando intactos — só agrupamos pra UI.
-  const filteredOrders = useMemo(() => {
-    if (filter === "all") return orders;
-    const allow = GROUP_STATUSES[filter];
-    if (!allow) return orders;
-    return orders.filter((o: any) => allow.includes(o.status));
-  }, [orders, filter]);
+  const detalhe = useDigitalOrderDetail(abertoId, companyId);
+  // Enquanto o detalhe carrega, o card da lista já desenha o cabeçalho.
+  const pedidoAberto: any = detalhe.data || orders.find((o: any) => o.id === abertoId) || null;
 
-  // Contagem do badge "Precisa agir" — usa counts.* do backend quando
-  // disponível (mais preciso, conta tudo no DB), fallback no client.
-  const precisaAgirCount = useMemo(() => {
-    const fromCounts =
-      (counts?.pending_payment || 0) + (counts?.awaiting_approval || 0);
-    if (fromCounts > 0) return fromCounts;
-    return orders.filter((o: any) =>
-      GROUP_STATUSES["precisa-agir"].includes(o.status)
-    ).length;
-  }, [counts, orders]);
+  const pedidosFiltrados = useMemo(() => filtrarPorGrupo(orders as PedidoDaFila[], filter), [orders, filter]);
+  const grupos = contagemDosGrupos(counts);
 
-  async function advance() {
-    if (!order) return;
-    const next = NEXT_STATUS[order.status];
-    if (!next) return;
-    await updateStatus({ oid: order.id, status: next });
-    setOrder(null);
+  function fecharDetalhe() {
+    setAbertoId(null);
+    setModoNoDetalhe("normal");
+    setMotivo("");
   }
 
-  async function cancel() {
-    if (!order) return;
-    await updateStatus({ oid: order.id, status: "cancelled" });
-    setOrder(null);
-  }
-
-  // Chamada genérica do endpoint approve-payment. Aceita pedidos em
-  // `awaiting_approval` ou `pending_payment` (validação no backend).
-  // `fromList` indica se foi acionado via quick-action no card (loading
-  // inline) ou via modal (loading global).
-  async function approvePayment(targetOrder: any, opts?: { fromList?: boolean }) {
-    if (!targetOrder) return;
-    const fromList = !!opts?.fromList;
-    if (fromList) {
-      setApprovingId(targetOrder.id);
-    } else {
-      setWorking(true);
-    }
+  async function confirmarPagamento(o: any, opts?: { daLista?: boolean }) {
+    if (!o) return;
+    if (opts?.daLista) setApprovingId(o.id); else setWorking(true);
     try {
-      await approvePaymentApi(targetOrder.id);
-      toast.success("Pagamento confirmado · pedido #" + targetOrder.order_number);
-      if (!fromList) setOrder(null);
+      await approvePaymentApi(o.id);
+      toast.success("Pagamento confirmado · pedido #" + o.order_number);
+      if (!opts?.daLista) fecharDetalhe();
       refetch();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao confirmar pagamento");
     } finally {
-      if (fromList) setApprovingId(null);
-      else setWorking(false);
+      if (opts?.daLista) setApprovingId(null); else setWorking(false);
     }
   }
 
-  async function rejectPayment() {
-    if (!order) return;
+  async function cancelarDaLista(o: any) {
+    try {
+      await cancelOrder({ oid: o.id, orderNumber: o.order_number });
+      setConfirmacao(null);
+    } catch {}
+  }
+
+  async function excluirDaLista(o: any) {
+    try {
+      await deleteOrder(o.id);
+      setConfirmacao(null);
+    } catch {}
+  }
+
+  // No detalhe, cancelar Pix pendente/comprovante usa reject-payment: ele
+  // grava o motivo na nota do pedido. O resto usa o status "cancelled".
+  async function cancelarDoDetalhe() {
+    if (!pedidoAberto) return;
     setWorking(true);
     try {
-      await rejectPaymentApi(order.id, rejectReason.trim() || undefined);
-      toast.success("Pedido rejeitado");
-      setOrder(null);
-      setShowRejectInput(false);
-      setRejectReason("");
+      if (podeConfirmarPagamento(pedidoAberto)) {
+        await rejectPaymentApi(pedidoAberto.id, motivo.trim() || undefined);
+        toast.success(`Pedido #${pedidoAberto.order_number} cancelado`);
+      } else {
+        await cancelOrder({ oid: pedidoAberto.id, orderNumber: pedidoAberto.order_number });
+      }
+      fecharDetalhe();
       refetch();
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao rejeitar");
+      toast.error(err?.message || "Erro ao cancelar o pedido");
     } finally {
       setWorking(false);
     }
   }
 
-  async function handleDelete() {
-    if (!order) return;
+  async function excluirDoDetalhe() {
+    if (!pedidoAberto) return;
     try {
-      await deleteOrder(order.id);
-      setOrder(null);
-      setShowDeleteConfirm(false);
+      await deleteOrder(pedidoAberto.id);
+      fecharDetalhe();
     } catch {}
   }
 
-  function openProof(url: string) {
-    setProofZoom(url);
+  async function avancar() {
+    if (!pedidoAberto) return;
+    const proximo = PROXIMO_STATUS[pedidoAberto.status];
+    if (!proximo) return;
+    await updateStatus({ oid: pedidoAberto.id, status: proximo });
+    fecharDetalhe();
   }
 
   return (
     <View>
-      {/* KPI Row */}
+      {/* Cartões de cima: o que pede ação, o que está andando, o que entrou hoje. */}
       <View style={s.kpiRow}>
-        <View style={[s.kpiCard, { borderTopColor: "#dc2626" }]}>
-          <Text style={[s.kpiNum, { color: "#dc2626" }]}>{kpi.awaiting_approval}</Text>
-          <Text style={s.kpiLabel}>Aguardando aprov.</Text>
+        <View style={s.kpiCard}>
+          <View style={[s.kpiBarra, { backgroundColor: grupos.precisaAgir ? Colors.amber : Colors.border }]} />
+          <Text style={[s.kpiNum, grupos.precisaAgir ? { color: Colors.amber } : null]}>{grupos.precisaAgir}</Text>
+          <Text style={s.kpiLabel}>Precisa agir</Text>
         </View>
-        <View style={[s.kpiCard, { borderTopColor: accent.primary }]}>
-          <Text style={[s.kpiNum, { color: accent.primary }]}>{kpi.confirmed}</Text>
-          <Text style={s.kpiLabel}>Confirmados</Text>
+        <View style={s.kpiCard}>
+          <View style={[s.kpiBarra, { backgroundColor: Colors.violet3 }]} />
+          <Text style={s.kpiNum}>{grupos.emCurso}</Text>
+          <Text style={s.kpiLabel}>Em curso</Text>
         </View>
-        <View style={[s.kpiCard, { borderTopColor: Colors.green }]}>
-          <Text style={[s.kpiNum, { color: Colors.green }]} numberOfLines={1} adjustsFontSizeToFit>
-            {fmt(kpi.revenue_today)}
-          </Text>
+        <View style={s.kpiCard}>
+          <View style={[s.kpiBarra, { backgroundColor: Colors.green }]} />
+          <Text style={s.kpiNum} numberOfLines={1} adjustsFontSizeToFit>{formatarReais(kpi.revenue_today)}</Text>
           <Text style={s.kpiLabel}>Receita hoje</Text>
         </View>
       </View>
 
-      {/* Filter Chips — 5 chips (Todos + 4 grupos). Audit Rec #8. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-        {CHIPS.map((c) => {
-          const active = filter === c.key;
-          const showBadge = c.key === "precisa-agir" && precisaAgirCount > 0;
-          return (
-            <Pressable key={c.key} onPress={() => setFilter(c.key)} style={[cs.filterChip, active && cs.filterChipActive]}>
-              <Text style={[cs.filterText, active && cs.filterTextActive]}>{c.label}</Text>
-              {showBadge && (
-                <View style={s.chipBadge}>
-                  <Text style={s.chipBadgeText}>{precisaAgirCount}</Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* Busca */}
+      <View style={s.buscaCaixa}>
+        <Icon name="search" size={14} color={Colors.ink3} />
+        <TextInput
+          value={busca}
+          onChangeText={setBusca}
+          placeholder="Buscar por nº do pedido, cliente, telefone ou produto"
+          placeholderTextColor={Colors.ink3}
+          // outlineStyle só existe no web e não está no tipo do RN: vai inline.
+          style={[s.buscaInput, { outlineStyle: "none" } as any]}
+          testID="fila-busca"
+          accessibilityLabel="Buscar pedidos"
+        />
+        {isFetching && !!buscaAplicada && <ActivityIndicator size="small" color={Colors.ink3} />}
+        {!!busca && (
+          <Pressable onPress={() => setBusca("")} style={s.buscaLimpar} accessibilityLabel="Limpar busca">
+            <Icon name="x" size={13} color={Colors.ink3} />
+          </Pressable>
+        )}
+      </View>
 
-      <Pressable onPress={() => refetch()} style={s.refreshBtn}>
-        <Icon name="refresh" size={12} color={accent.primaryStrong} />
-        <Text style={s.refreshText}>Atualizar</Text>
-      </Pressable>
+      <View style={s.chipsLinha}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
+          {CHIPS.map((c) => {
+            const ativo = filter === c.key;
+            const badge = c.key === "precisa-agir" && grupos.precisaAgir > 0;
+            return (
+              <Pressable key={c.key} onPress={() => setFilter(c.key)} style={[cs.filterChip, ativo && cs.filterChipActive, s.chip]}>
+                <Text style={[cs.filterText, ativo && cs.filterTextActive]}>{c.label}</Text>
+                {badge && (
+                  <View style={s.chipBadge}>
+                    <Text style={s.chipBadgeText}>{grupos.precisaAgir}</Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable onPress={() => refetch()} style={s.refreshBtn} accessibilityLabel="Atualizar pedidos">
+          <Icon name="refresh" size={12} color={accent.primaryStrong} />
+          <Text style={s.refreshText}>Atualizar</Text>
+        </Pressable>
+      </View>
 
       {isLoading ? (
         <ActivityIndicator size="small" color={accent.primary} style={{ marginTop: 32 }} />
-      ) : filteredOrders.length === 0 ? (
-        <View style={s.empty}>
-          <Text style={s.emptyIcon}>📦</Text>
-          <Text style={s.emptyTitle}>Nenhum pedido aqui</Text>
-          <Text style={s.emptyDesc}>Quando clientes fizerem pedidos pelo site, eles aparecerão aqui.</Text>
+      ) : pedidosFiltrados.length === 0 ? (
+        <View style={s.vazio}>
+          <Icon name="inbox" size={30} color={Colors.ink3} />
+          <Text style={s.vazioTitulo}>{buscaAplicada ? "Nenhum pedido encontrado" : "Nenhum pedido aqui"}</Text>
+          <Text style={s.vazioDesc}>
+            {buscaAplicada
+              ? `Nada com “${buscaAplicada}”. Tente o número do pedido ou o nome do cliente.`
+              : "Quando clientes fizerem pedidos pelo site, eles aparecem aqui."}
+          </Text>
         </View>
       ) : (
-        filteredOrders.map((o: any) => {
-          const st = STATUS_MAP[o.status] || STATUS_MAP.cancelled;
-          const isAwaiting = o.status === "awaiting_approval";
-          const isPendingPayment = o.status === "pending_payment";
-          const showApproveQuick = canApprovePayment(o);
+        pedidosFiltrados.map((o: any) => {
+          const sit = situacaoDoPedido(o);
+          const cores = coresDoTom(sit.tom);
+          const confirmar = podeConfirmarPagamento(o);
+          const cancelar = podeCancelar(o);
+          const excluir = podeExcluir(o);
+          const confirmandoCancelar = !!confirmacao && confirmacao.id === o.id && confirmacao.tipo === "cancelar";
+          const confirmandoExcluir = !!confirmacao && confirmacao.id === o.id && confirmacao.tipo === "excluir";
+          const itens = resumoDosItens(o);
           return (
-            <Pressable key={o.id} style={[s.card, isAwaiting && s.cardHighlight, isPendingPayment && o.payment_method !== "card" && s.cardWarn]} onPress={() => setOrder(o)}>
-              <View style={s.cardTop}>
-                <Text style={s.cardNum}>#{o.order_number}</Text>
-                <View style={[s.badge, { backgroundColor: st.bg }]}>
-                  <Text style={[s.badgeText, { color: st.color }]}>{st.label}</Text>
+            <Pressable key={o.id} style={s.card} onPress={() => setAbertoId(o.id)} testID={`fila-pedido-${o.order_number}`}>
+              <View style={[s.cardBarra, { backgroundColor: sit.precisaAgir ? cores.cor : "transparent" }]} />
+              <View style={s.cardCorpo}>
+                <View style={s.cardTopo}>
+                  <Miniatura uri={o.first_item_image} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={s.cardLinha}>
+                      <Text style={s.cardNum}>#{o.order_number}</Text>
+                      <View style={[s.pill, { backgroundColor: cores.fundo }]}>
+                        <View style={[s.pillPonto, { backgroundColor: cores.cor }]} />
+                        <Text style={[s.pillTexto, { color: cores.cor }]}>{sit.rotulo}</Text>
+                      </View>
+                    </View>
+                    <Text style={s.cardCliente} numberOfLines={1}>{o.customer_name || "Cliente"}</Text>
+                    {!!itens && <Text style={s.cardItens} numberOfLines={1}>{itens}</Text>}
+                  </View>
                 </View>
-              </View>
-              <Text style={s.cardCustomer}>{o.customer_name}</Text>
-              <View style={s.cardBottom}>
-                <Text style={s.cardTotal}>{fmt(o.total)}</Text>
-                <Text style={s.cardMeta}>
-                  {paymentMethodIcon(o.payment_method)} {paymentMethodShortLabel(o.payment_method)}
-                  {" · "}
-                  {o.delivery_type === "delivery" ? "🚚 Entrega" : "🏪 Retirada"}
-                  {" · "}
-                  {timeAgo(o.created_at)}
-                </Text>
-              </View>
-              {isAwaiting && o.payment_proof_url && (
-                <View style={s.proofBadgeRow}>
-                  <Icon name="check" size={11} color={Colors.green} />
-                  <Text style={s.proofBadgeText}>Comprovante anexado</Text>
+
+                <View style={s.cardRodape}>
+                  <Text style={s.cardTotal}>{formatarReais(o.total)}</Text>
+                  <Text style={s.cardMeta} numberOfLines={1}>
+                    {rotuloDoPagamento(o.payment_method)} · {rotuloDaEntrega(o.delivery_type)} · {tempoDesde(o.created_at)}
+                  </Text>
                 </View>
-              )}
-              {/* Quick action: confirmar pagamento direto da lista — não abre modal.
-                  Aparece sempre que o pedido aceita aprovação (Pix em pending_payment
-                  ou awaiting_approval). Card NUNCA mostra — webhook MP confirma sozinho.
-                  Em RN, Pressable filho consome o evento de toque sem disparar o pai. */}
-              {showApproveQuick && (
-                <View style={s.quickRow}>
-                  <Pressable
-                    onPress={() => approvePayment(o, { fromList: true })}
-                    disabled={approvingId === o.id}
-                    style={[s.quickBtn, approvingId === o.id && { opacity: 0.6 }]}
-                  >
-                    {approvingId === o.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Icon name="check" size={12} color="#fff" />
-                        <Text style={s.quickBtnText}>Confirmar pagamento</Text>
-                      </>
+
+                {o.status === "awaiting_approval" && !!o.payment_proof_url && (
+                  <View style={s.comprovante}>
+                    <Icon name="check" size={11} color={Colors.green} />
+                    <Text style={s.comprovanteTexto}>Comprovante anexado</Text>
+                  </View>
+                )}
+
+                {(confirmandoCancelar || confirmandoExcluir) ? (
+                  <View style={s.confirmaCaixa}>
+                    <Text style={s.confirmaTexto}>
+                      {confirmandoCancelar
+                        ? `Cancelar o pedido #${o.order_number}? A cliente é avisada por e-mail se tiver informado um.`
+                        : `Excluir o pedido #${o.order_number} de vez? Não dá para desfazer.`}
+                    </Text>
+                    <View style={s.acoes}>
+                      <Pressable onPress={() => setConfirmacao(null)} style={s.btnSecundario}>
+                        <Text style={s.btnSecundarioTexto}>Voltar</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => (confirmandoCancelar ? cancelarDaLista(o) : excluirDaLista(o))}
+                        disabled={isCancelling || isDeleting}
+                        style={[s.btnPerigo, (isCancelling || isDeleting) && { opacity: 0.6 }]}
+                      >
+                        <Text style={s.btnPerigoTexto}>
+                          {confirmandoCancelar ? (isCancelling ? "Cancelando..." : "Cancelar pedido") : (isDeleting ? "Excluindo..." : "Excluir")}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (confirmar || cancelar || excluir) ? (
+                  <View style={s.acoes}>
+                    {confirmar && (
+                      <Pressable
+                        onPress={() => confirmarPagamento(o, { daLista: true })}
+                        disabled={approvingId === o.id}
+                        style={[s.btnPrimario, approvingId === o.id && { opacity: 0.6 }]}
+                        testID={`fila-confirmar-${o.order_number}`}
+                      >
+                        {approvingId === o.id ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Icon name="check" size={12} color="#fff" />
+                            <Text style={s.btnPrimarioTexto}>Confirmar pagamento</Text>
+                          </>
+                        )}
+                      </Pressable>
                     )}
-                  </Pressable>
-                </View>
-              )}
+                    {cancelar && (
+                      <Pressable onPress={() => setConfirmacao({ tipo: "cancelar", id: o.id })} style={s.btnSecundario} testID={`fila-cancelar-${o.order_number}`}>
+                        <Icon name="x_circle" size={12} color={Colors.ink2} />
+                        <Text style={s.btnSecundarioTexto}>Cancelar</Text>
+                      </Pressable>
+                    )}
+                    {excluir && (
+                      <Pressable onPress={() => setConfirmacao({ tipo: "excluir", id: o.id })} style={s.btnIcone} accessibilityLabel={`Excluir pedido ${o.order_number}`} testID={`fila-excluir-${o.order_number}`}>
+                        <Icon name="trash" size={13} color={Colors.ink3} />
+                      </Pressable>
+                    )}
+                  </View>
+                ) : null}
+              </View>
             </Pressable>
           );
         })
       )}
 
-      {/* Detail Modal */}
-      <Modal
-        visible={!!order}
-        animationType="slide"
-        transparent
-        presentationStyle="overFullScreen"
-        onRequestClose={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); setShowDeleteConfirm(false); }}
-      >
+      {/* Detalhe */}
+      <Modal visible={!!abertoId} animationType="slide" transparent presentationStyle="overFullScreen" onRequestClose={fecharDetalhe}>
         <View style={s.overlay}>
           <View style={s.sheet}>
-            {order && (() => {
-              const st = STATUS_MAP[order.status] || STATUS_MAP.cancelled;
-              const nextSt = NEXT_STATUS[order.status];
-              const isAwaiting = order.status === "awaiting_approval";
-              const isPendingPayment = order.status === "pending_payment";
-              const isCard = order.payment_method === "card";
-              const canApprove = canApprovePayment(order);
-              const canCancel = !["delivered", "cancelled"].includes(order.status);
+            {!pedidoAberto ? (
+              <ActivityIndicator size="small" color={accent.primary} style={{ margin: 40 }} />
+            ) : (() => {
+              const o = pedidoAberto;
+              const sit = situacaoDoPedido(o);
+              const cores = coresDoTom(sit.tom);
+              const proximo = PROXIMO_STATUS[o.status];
+              const confirmar = podeConfirmarPagamento(o);
+              const cancelar = podeCancelar(o);
+              const excluir = podeExcluir(o);
+              const cartao = o.payment_method === "card";
+              const itens: any[] = Array.isArray(o.items) ? o.items : [];
               return (
                 <>
                   <View style={s.sheetHead}>
                     <View>
-                      <Text style={s.sheetTitle}>Pedido #{order.order_number}</Text>
-                      <Text style={s.sheetSub}>{timeAgo(order.created_at)}</Text>
+                      <Text style={s.sheetTitle}>Pedido #{o.order_number}</Text>
+                      <Text style={s.sheetSub}>{tempoDesde(o.created_at)}</Text>
                     </View>
-                    <Pressable onPress={() => { setOrder(null); setShowRejectInput(false); setRejectReason(""); setShowDeleteConfirm(false); }} style={s.closeBtn}>
-                      <Text style={{ fontSize: 20, color: Colors.ink3 }}>×</Text>
+                    <Pressable onPress={fecharDetalhe} style={s.closeBtn} accessibilityLabel="Fechar">
+                      <Icon name="x" size={16} color={Colors.ink3} />
                     </Pressable>
                   </View>
 
                   <ScrollView style={{ padding: 20 }}>
-                    <View style={[s.statusBanner, { backgroundColor: st.bg }]}>
-                      <Text style={[s.statusBannerText, { color: st.color }]}>{st.label}</Text>
+                    <View style={[s.statusBanner, { backgroundColor: cores.fundo, borderColor: cores.cor }]}>
+                      <Text style={[s.statusBannerText, { color: cores.cor }]}>{sit.rotulo}</Text>
                     </View>
 
                     <Text style={s.sec}>Pagamento</Text>
                     <View style={cs.card}>
-                      <Text style={s.dLine}>
-                        {paymentMethodIcon(order.payment_method)} {paymentMethodLongLabel(order.payment_method)}
-                      </Text>
+                      <Text style={s.dLine}>{rotuloDoPagamento(o.payment_method)}</Text>
                       <Text style={s.dSub}>
-                        {order.payment_status === "confirmed"
-                          ? (isCard ? "✓ Pagamento confirmado pelo Mercado Pago" : "✓ Pagamento confirmado")
-                          : order.payment_method === "on_delivery"
-                            ? "Cliente paga no momento da entrega/retirada"
-                            : isAwaiting
-                              ? "Cliente avisou que pagou — confirme abaixo"
-                              : isCard && isPendingPayment
-                                ? "Cliente foi para o checkout do Mercado Pago. A confirmação entra automaticamente quando o pagamento for aprovado — você não precisa fazer nada aqui."
-                                : isPendingPayment
-                                  ? "Cliente ainda não confirmou no site. Se o Pix já caiu na sua conta, confirme manualmente abaixo."
-                                  : "Aguardando cliente pagar"}
+                        {o.payment_status === "confirmed"
+                          ? (cartao ? "Pagamento confirmado pelo Mercado Pago" : "Pagamento confirmado")
+                          : o.payment_status === "expired"
+                            ? "O Pix não foi pago em 48 h e o pedido foi cancelado automaticamente."
+                            : o.payment_method === "on_delivery"
+                              ? "Cliente paga no momento da entrega ou retirada"
+                              : o.status === "awaiting_approval"
+                                ? "Cliente avisou que pagou. Confira o comprovante e confirme abaixo."
+                                : cartao && o.status === "pending_payment"
+                                  ? "Cliente foi para o checkout do Mercado Pago. A confirmação entra sozinha quando o pagamento for aprovado."
+                                  : o.status === "pending_payment"
+                                    ? "Cliente ainda não avisou no site. Se o Pix já caiu na sua conta, confirme abaixo."
+                                    : "Aguardando pagamento"}
                       </Text>
-
-                      {order.payment_proof_url && (
-                        <Pressable onPress={() => openProof(order.payment_proof_url)} style={s.proofThumb}>
-                          {order.payment_proof_url.toLowerCase().includes(".pdf") ? (
+                      {!!o.payment_proof_url && (
+                        <Pressable onPress={() => setProofZoom(o.payment_proof_url)} style={s.proofThumb}>
+                          {String(o.payment_proof_url).toLowerCase().includes(".pdf") ? (
                             <View style={s.proofPdf}>
-                              <Text style={{ fontSize: 28 }}>📄</Text>
+                              <Icon name="file_text" size={24} color={accent.primaryStrong} />
                               <Text style={s.proofPdfText}>Ver comprovante (PDF)</Text>
                             </View>
                           ) : (
-                            <Image source={{ uri: order.payment_proof_url }} style={s.proofImg} resizeMode="cover" />
+                            <Image source={{ uri: o.payment_proof_url }} style={s.proofImg} resizeMode="cover" />
                           )}
-                          <Text style={s.proofZoomHint}>🔍 Toque pra ampliar</Text>
+                          <Text style={s.proofZoomHint}>Toque para ampliar</Text>
                         </Pressable>
                       )}
                     </View>
 
                     <Text style={s.sec}>Cliente</Text>
                     <View style={cs.card}>
-                      <Text style={s.dLine}>{order.customer_name}</Text>
-                      {!!order.customer_phone && (
-                        <Pressable onPress={() => Linking.openURL(`https://wa.me/${order.customer_phone.replace(/\D/g, "")}`)}>
-                          <Text style={[s.dSub, { color: accent.primaryStrong }]}>{order.customer_phone} (abrir WhatsApp)</Text>
+                      <Text style={s.dLine}>{o.customer_name}</Text>
+                      {!!o.customer_phone && (
+                        <Pressable onPress={() => Linking.openURL(`https://wa.me/${String(o.customer_phone).replace(/\D/g, "")}`)}>
+                          <Text style={[s.dSub, { color: accent.primaryStrong }]}>{o.customer_phone} · abrir WhatsApp</Text>
                         </Pressable>
                       )}
-                      {!!order.customer_email && <Text style={s.dSub}>{order.customer_email}</Text>}
+                      {!!o.customer_email && <Text style={s.dSub}>{o.customer_email}</Text>}
                     </View>
 
                     <Text style={s.sec}>Entrega</Text>
                     <View style={cs.card}>
-                      <Text style={s.dLine}>{order.delivery_type === "delivery" ? "🚚 Entrega a domicílio" : "🏪 Retirada no local"}</Text>
-                      {!!order.delivery_address && <Text style={s.dSub}>{order.delivery_address}</Text>}
+                      <Text style={s.dLine}>{o.delivery_type === "delivery" ? "Entrega a domicílio" : rotuloDaEntrega(o.delivery_type)}</Text>
+                      {!!o.delivery_address && <Text style={s.dSub}>{o.delivery_address}</Text>}
                     </View>
 
                     <Text style={s.sec}>Itens</Text>
                     <View style={cs.card}>
-                      {(order.items || []).map((item: any, i: number) => (
-                        <View key={i} style={[s.itemRow, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8, paddingTop: 8 }]}>
-                          <Text style={s.itemName}>{item.product_name} × {item.quantity}</Text>
-                          <Text style={s.itemPrice}>{fmt(item.subtotal)}</Text>
+                      {detalhe.isLoading && !itens.length ? (
+                        <ActivityIndicator size="small" color={Colors.ink3} />
+                      ) : itens.length === 0 ? (
+                        <Text style={s.dSub}>Sem itens registrados.</Text>
+                      ) : itens.map((item: any, i: number) => (
+                        <View key={item.id || i} style={[s.itemRow, i > 0 && s.itemSeparado]}>
+                          <Miniatura uri={item.product_image} tamanho={36} />
+                          <Text style={s.itemName}>{item.product_name_display || item.product_name} × {item.quantity}</Text>
+                          <Text style={s.itemPrice}>{formatarReais(item.subtotal)}</Text>
                         </View>
                       ))}
-                      <View style={{ borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 10, paddingTop: 8 }}>
-                        {order.delivery_fee > 0 && (
-                          <View style={s.sumRow}><Text style={s.sumLabel}>Entrega</Text><Text style={s.sumVal}>{fmt(order.delivery_fee)}</Text></View>
+                      <View style={s.somaBloco}>
+                        {Number(o.delivery_fee) > 0 && (
+                          <View style={s.sumRow}><Text style={s.sumLabel}>Entrega</Text><Text style={s.sumVal}>{formatarReais(o.delivery_fee)}</Text></View>
                         )}
                         <View style={s.sumRow}>
-                          <Text style={[s.sumLabel, { fontWeight: "800", color: Colors.ink }]}>Total</Text>
-                          <Text style={[s.sumVal, { fontWeight: "800", color: Colors.ink }]}>{fmt(order.total)}</Text>
+                          <Text style={[s.sumLabel, s.sumForte]}>Total</Text>
+                          <Text style={[s.sumVal, s.sumForte]}>{formatarReais(o.total)}</Text>
                         </View>
                       </View>
                     </View>
 
-                    {!!order.notes && (
+                    {!!o.notes && (
                       <>
                         <Text style={s.sec}>Observações</Text>
-                        <View style={cs.card}><Text style={s.dLine}>{order.notes}</Text></View>
+                        <View style={cs.card}><Text style={s.dSub}>{String(o.notes).trim()}</Text></View>
                       </>
                     )}
 
-                    {/* Caixa de motivo de rejeição (aparece quando user clica em Rejeitar) */}
-                    {canApprove && showRejectInput && (
-                      <View style={[cs.card, { borderColor: "#fecaca", backgroundColor: "#fef2f2" }]}>
-                        <Text style={[cs.fieldLabel, { color: "#dc2626" }]}>Motivo da rejeição (opcional)</Text>
-                        <TextInput
-                          style={cs.input}
-                          value={rejectReason}
-                          onChangeText={setRejectReason}
-                          placeholder="Ex: comprovante não bate com o valor"
-                          placeholderTextColor={Colors.ink3}
-                          multiline
-                        />
+                    {modoNoDetalhe === "cancelar" && (
+                      <View style={[cs.card, s.caixaPerigo]}>
+                        <Text style={[cs.fieldLabel, { color: Colors.red }]}>
+                          {confirmar ? "Motivo do cancelamento (opcional)" : "Cancelar este pedido?"}
+                        </Text>
+                        {confirmar ? (
+                          <TextInput
+                            style={cs.input}
+                            value={motivo}
+                            onChangeText={setMotivo}
+                            placeholder="Ex.: o Pix não caiu na conta"
+                            placeholderTextColor={Colors.ink3}
+                            multiline
+                          />
+                        ) : (
+                          <Text style={s.dSub}>A cliente é avisada por e-mail se tiver informado um.</Text>
+                        )}
                       </View>
                     )}
 
-                    {showDeleteConfirm && (
-                      <View style={[cs.card, { borderColor: "#fecaca", backgroundColor: "#fef2f2", marginTop: 10 }]}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#dc2626", marginBottom: 6 }}>
-                          Excluir pedido permanentemente?
-                        </Text>
-                        <Text style={{ fontSize: 12, color: Colors.ink3, lineHeight: 17 }}>
-                          Esta ação apaga o pedido e seus itens do banco. Não pode ser desfeita. Use só pra pedidos teste.
-                        </Text>
+                    {modoNoDetalhe === "excluir" && (
+                      <View style={[cs.card, s.caixaPerigo]}>
+                        <Text style={[s.dLine, { color: Colors.red }]}>Excluir o pedido de vez?</Text>
+                        <Text style={s.dSub}>Apaga o pedido e os itens. Não dá para desfazer. Use para pedidos de teste.</Text>
                       </View>
                     )}
 
-                    {canDeleteOrder(order) && !showDeleteConfirm && !showRejectInput && (
-                      <Pressable onPress={() => setShowDeleteConfirm(true)} style={{ alignSelf: "center", marginTop: 16, padding: 8 }}>
-                        <Text style={{ fontSize: 12, color: "#dc2626", fontWeight: "600", textDecorationLine: "underline" }}>
-                          Excluir pedido permanentemente
-                        </Text>
+                    {excluir && modoNoDetalhe === "normal" && (
+                      <Pressable onPress={() => setModoNoDetalhe("excluir")} style={s.linkExcluir}>
+                        <Text style={s.linkExcluirTexto}>Excluir pedido de vez</Text>
                       </Pressable>
                     )}
 
@@ -524,49 +522,40 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
                   </ScrollView>
 
                   <View style={s.sheetFoot}>
-                    {showDeleteConfirm ? (
+                    {modoNoDetalhe === "excluir" ? (
                       <>
-                        <Pressable onPress={() => setShowDeleteConfirm(false)} disabled={isDeleting} style={[s.cancelBtn, isDeleting && { opacity: 0.6 }]}>
-                          <Text style={s.cancelText}>Voltar</Text>
+                        <Pressable onPress={() => setModoNoDetalhe("normal")} disabled={isDeleting} style={s.footSecundario}>
+                          <Text style={s.footSecundarioTexto}>Voltar</Text>
                         </Pressable>
-                        <Pressable onPress={handleDelete} disabled={isDeleting} style={[s.advBtn, { backgroundColor: "#dc2626" }, isDeleting && { opacity: 0.6 }]}>
-                          <Text style={s.advText}>{isDeleting ? "Excluindo..." : "Excluir definitivamente"}</Text>
+                        <Pressable onPress={excluirDoDetalhe} disabled={isDeleting} style={[s.footPrimario, { backgroundColor: Colors.red }, isDeleting && { opacity: 0.6 }]}>
+                          <Text style={s.footPrimarioTexto}>{isDeleting ? "Excluindo..." : "Excluir de vez"}</Text>
+                        </Pressable>
+                      </>
+                    ) : modoNoDetalhe === "cancelar" ? (
+                      <>
+                        <Pressable onPress={() => { setModoNoDetalhe("normal"); setMotivo(""); }} disabled={working} style={s.footSecundario}>
+                          <Text style={s.footSecundarioTexto}>Voltar</Text>
+                        </Pressable>
+                        <Pressable onPress={cancelarDoDetalhe} disabled={working} style={[s.footPrimario, { backgroundColor: Colors.red }, working && { opacity: 0.6 }]}>
+                          <Text style={s.footPrimarioTexto}>{working ? "Cancelando..." : "Cancelar pedido"}</Text>
                         </Pressable>
                       </>
                     ) : (
                       <>
-                        {/* Fluxo de aprovação cobre awaiting_approval E pending_payment.
-                            Awaiting tem comprovante; pending_payment não tem (cliente esqueceu).
-                            Em ambos, o lojista pode aprovar/rejeitar.
-                            Card NÃO entra aqui (canApprovePayment retorna false). */}
-                        {canApprove && !showRejectInput && (
-                          <>
-                            <Pressable onPress={() => setShowRejectInput(true)} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
-                              <Text style={s.cancelText}>Rejeitar</Text>
-                            </Pressable>
-                            <Pressable onPress={() => approvePayment(order)} disabled={working} style={[s.advBtn, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
-                              <Text style={s.advText}>{working ? "..." : (isPendingPayment ? "✓ Confirmar pagamento recebido" : "✓ Aprovar pagamento")}</Text>
-                            </Pressable>
-                          </>
-                        )}
-                        {canApprove && showRejectInput && (
-                          <>
-                            <Pressable onPress={() => { setShowRejectInput(false); setRejectReason(""); }} disabled={working} style={[s.cancelBtn, working && { opacity: 0.6 }]}>
-                              <Text style={s.cancelText}>Voltar</Text>
-                            </Pressable>
-                            <Pressable onPress={rejectPayment} disabled={working} style={[s.advBtn, { backgroundColor: "#dc2626" }, working && { opacity: 0.6 }]}>
-                              <Text style={s.advText}>{working ? "..." : "Confirmar rejeição"}</Text>
-                            </Pressable>
-                          </>
-                        )}
-                        {!canApprove && canCancel && (
-                          <Pressable onPress={cancel} disabled={isUpdating} style={[s.cancelBtn, isUpdating && { opacity: 0.6 }]}>
-                            <Text style={s.cancelText}>Cancelar pedido</Text>
+                        {cancelar && (
+                          <Pressable onPress={() => setModoNoDetalhe("cancelar")} disabled={working || isUpdating} style={s.footSecundario}>
+                            <Text style={s.footSecundarioTexto}>Cancelar pedido</Text>
                           </Pressable>
                         )}
-                        {!canApprove && !!nextSt && (
-                          <Pressable onPress={advance} disabled={isUpdating} style={[s.advBtn, isUpdating && { opacity: 0.6 }]}>
-                            <Text style={s.advText}>{isUpdating ? "..." : `→ ${STATUS_MAP[nextSt]?.label}`}</Text>
+                        {confirmar ? (
+                          <Pressable onPress={() => confirmarPagamento(o)} disabled={working} style={[s.footPrimario, { backgroundColor: Colors.green }, working && { opacity: 0.6 }]}>
+                            <Text style={s.footPrimarioTexto}>
+                              {working ? "..." : (o.status === "pending_payment" ? "Confirmar pagamento recebido" : "Aprovar pagamento")}
+                            </Text>
+                          </Pressable>
+                        ) : !!proximo && (
+                          <Pressable onPress={avancar} disabled={isUpdating} style={[s.footPrimario, isUpdating && { opacity: 0.6 }]}>
+                            <Text style={s.footPrimarioTexto}>{isUpdating ? "..." : `Marcar como ${rotuloDoStatus(proximo).toLowerCase()}`}</Text>
                           </Pressable>
                         )}
                       </>
@@ -580,17 +569,12 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
       </Modal>
 
       {/* Lightbox do comprovante */}
-      <Modal
-        visible={!!proofZoom}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setProofZoom(null)}
-      >
+      <Modal visible={!!proofZoom} animationType="fade" transparent onRequestClose={() => setProofZoom(null)}>
         <Pressable style={s.lightbox} onPress={() => setProofZoom(null)}>
           {proofZoom && (
             proofZoom.toLowerCase().includes(".pdf") ? (
               <View style={{ alignItems: "center", gap: 16 }}>
-                <Text style={{ color: "#fff", fontSize: 18 }}>📄 Comprovante em PDF</Text>
+                <Text style={{ color: "#fff", fontSize: 18 }}>Comprovante em PDF</Text>
                 <Pressable onPress={() => Linking.openURL(proofZoom)} style={s.lightboxOpenBtn}>
                   <Text style={s.lightboxOpenText}>Abrir PDF em nova aba</Text>
                 </Pressable>
@@ -607,76 +591,91 @@ export function TabPedidos({ companyId }: { companyId?: string } = {}) {
 
 function buildStyles(accent: AccentTokens) {
   return StyleSheet.create({
-    kpiRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-    kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, borderTopWidth: 3, alignItems: "center" },
-    kpiNum: { fontSize: 18, fontWeight: "800", marginBottom: 3 },
-    kpiLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
-    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10, alignSelf: "flex-end" },
-    // WCAG AA: 11px magenta sobre fundo claro do canal — peso 700 garante ratio ≥3:1.
+    kpiRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+    kpiCard: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", overflow: "hidden" },
+    kpiBarra: { position: "absolute", top: 0, left: 0, right: 0, height: 2 },
+    kpiNum: { fontSize: 18, fontWeight: "800", color: Colors.ink, marginBottom: 3 },
+    kpiLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textAlign: "center" },
+
+    buscaCaixa: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, marginBottom: 10 },
+    buscaInput: { flex: 1, paddingVertical: 10, fontSize: 13, color: Colors.ink },
+    buscaLimpar: { padding: 6, borderRadius: 6 },
+
+    chipsLinha: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+    chip: { flexDirection: "row", alignItems: "center" },
+    chipBadge: { marginLeft: 6, backgroundColor: Colors.amber, borderRadius: 999, minWidth: 18, height: 18, paddingHorizontal: 5, alignItems: "center", justifyContent: "center" },
+    chipBadgeText: { color: Colors.bg, fontSize: 10, fontWeight: "800", lineHeight: 12 },
+    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingVertical: 6 },
     refreshText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "700" },
-    empty: { alignItems: "center", paddingVertical: 48, gap: 10 },
-    emptyIcon: { fontSize: 36 },
-    emptyTitle: { fontSize: 15, fontWeight: "700", color: Colors.ink },
-    emptyDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 260 },
-    card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 10 },
-    // 17/08: eram backgroundColor fixo claro (#fff5f5/#fffbeb) — no tema
-    // escuro o texto do card (Colors.ink/ink3, quase branco) ficava sobre
-    // esse fundo claro fixo e virava ilegível. Colors.redD/amberD são
-    // translúcidos e já respeitam o tema ativo, como o resto do arquivo.
-    cardHighlight: { borderColor: Colors.red, borderWidth: 2, backgroundColor: Colors.redD },
-    cardWarn: { borderColor: Colors.amber, borderWidth: 2, backgroundColor: Colors.amberD },
-    cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-    cardNum: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-    cardCustomer: { fontSize: 12, color: Colors.ink3, marginBottom: 8 },
-    cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+
+    vazio: { alignItems: "center", paddingVertical: 48, gap: 10 },
+    vazioTitulo: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+    vazioDesc: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 300 },
+
+    card: { flexDirection: "row", backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 10, overflow: "hidden" },
+    cardBarra: { width: 3 },
+    cardCorpo: { flex: 1, padding: 14, gap: 10 },
+    cardTopo: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+    cardLinha: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 3 },
+    cardNum: { fontSize: 14, fontWeight: "800", color: Colors.ink },
+    cardCliente: { fontSize: 12, color: Colors.ink2, marginBottom: 2 },
+    cardItens: { fontSize: 12, color: Colors.ink3 },
+    cardRodape: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
     cardTotal: { fontSize: 15, fontWeight: "800", color: Colors.ink },
-    cardMeta: { fontSize: 10, color: Colors.ink3, flex: 1, textAlign: "right", marginLeft: 8 },
-    badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-    badgeText: { fontSize: 10, fontWeight: "700" },
-    proofBadgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
-    proofBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "600" },
-    // Badge de contagem dentro do chip "Precisa agir" — vermelho/contraste
-    // pra puxar olho. Aparece só quando count > 0.
-    chipBadge: {
-      marginLeft: 6, backgroundColor: "#dc2626", borderRadius: 999,
-      minWidth: 18, height: 18, paddingHorizontal: 5,
-      alignItems: "center", justifyContent: "center",
-    },
-    chipBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", lineHeight: 12 },
-    quickRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
-    quickBtn: {
-      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-      backgroundColor: Colors.green, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
-    },
-    quickBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-    sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden" },
+    cardMeta: { fontSize: 11, color: Colors.ink3, flexShrink: 1, textAlign: "right" },
+
+    pill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+    pillPonto: { width: 6, height: 6, borderRadius: 3 },
+    pillTexto: { fontSize: 11, fontWeight: "700" },
+
+    comprovante: { flexDirection: "row", alignItems: "center", gap: 5 },
+    comprovanteTexto: { fontSize: 11, color: Colors.green, fontWeight: "600" },
+
+    acoes: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+    btnPrimario: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.green, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12 },
+    btnPrimarioTexto: { color: "#fff", fontSize: 12, fontWeight: "700" },
+    btnSecundario: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12 },
+    btnSecundarioTexto: { color: Colors.ink2, fontSize: 12, fontWeight: "600" },
+    btnIcone: { alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 9, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+    btnPerigo: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.red, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12 },
+    btnPerigoTexto: { color: "#fff", fontSize: 12, fontWeight: "700" },
+    confirmaCaixa: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10, gap: 2 },
+    confirmaTexto: { fontSize: 12, color: Colors.ink2, lineHeight: 17, marginBottom: 2 },
+
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+    sheet: { backgroundColor: Colors.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%", overflow: "hidden", borderWidth: 1, borderColor: Colors.border, width: "100%" as any, maxWidth: 720, alignSelf: "center" },
     sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
     sheetTitle: { fontSize: 16, fontWeight: "800", color: Colors.ink },
     sheetSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
     closeBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-    statusBanner: { borderRadius: 10, padding: 12, alignItems: "center", marginBottom: 8 },
+    statusBanner: { borderRadius: 10, padding: 12, alignItems: "center", marginBottom: 8, borderWidth: 1 },
     statusBannerText: { fontSize: 14, fontWeight: "800" },
     sec: { fontSize: 11, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 14 },
     dLine: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-    dSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+    dSub: { fontSize: 12, color: Colors.ink3, marginTop: 3, lineHeight: 17 },
     proofThumb: { marginTop: 12, alignItems: "center", gap: 6 },
     proofImg: { width: "100%" as any, height: 180, borderRadius: 10, backgroundColor: Colors.bg4 },
     proofPdf: { width: "100%" as any, height: 100, borderRadius: 10, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center", gap: 6 },
     proofPdfText: { fontSize: 13, color: accent.primaryStrong, fontWeight: "700" },
     proofZoomHint: { fontSize: 11, color: Colors.ink3 },
-    itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    itemRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    itemSeparado: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8, paddingTop: 8 },
     itemName: { fontSize: 13, color: Colors.ink, flex: 1 },
     itemPrice: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+    somaBloco: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 10, paddingTop: 8 },
     sumRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
     sumLabel: { fontSize: 13, color: Colors.ink3 },
     sumVal: { fontSize: 13, color: Colors.ink3 },
+    sumForte: { fontWeight: "800", color: Colors.ink },
+    caixaPerigo: { borderColor: Colors.red, backgroundColor: Colors.redD, marginTop: 10 },
+    linkExcluir: { alignSelf: "center", marginTop: 16, padding: 8 },
+    linkExcluirTexto: { fontSize: 12, color: Colors.red, fontWeight: "600", textDecorationLine: "underline" },
     sheetFoot: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: Colors.border },
-    cancelBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
-    cancelText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
-    advBtn: { flex: 2, backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-    advText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-    // Lightbox
+    footSecundario: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
+    footSecundarioTexto: { fontSize: 13, fontWeight: "700", color: Colors.ink2 },
+    footPrimario: { flex: 2, backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+    footPrimarioTexto: { fontSize: 14, fontWeight: "700", color: "#fff" },
+
     lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center", padding: 20 },
     lightboxImg: { width: "100%" as any, height: "80%" as any },
     lightboxOpenBtn: { backgroundColor: accent.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
