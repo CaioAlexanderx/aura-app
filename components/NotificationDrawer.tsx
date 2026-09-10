@@ -56,6 +56,8 @@ interface Props {
   prefs:          Record<string, boolean>;
   prefsAllMuted:  boolean;
   savePrefs:      (next: Record<string, boolean>) => void;
+  // 10/09/2026: som e aviso no computador (Neste navegador) precisam da empresa.
+  companyId?:     string;
 }
 
 interface InnerProps extends Props {
@@ -777,7 +779,7 @@ function DrawerContent(props: InnerProps) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px 24px' } as any}>
         {emPrefs
-          ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} />
+          ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} />
           : <FeedBody {...props} />}
       </div>
     </>
@@ -893,7 +895,7 @@ function DrawerNative(props: InnerProps) {
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           {emPrefs
-            ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} />
+            ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} />
             : <FeedBody {...props} onClose={handleClose} />}
         </ScrollView>
       </Animated.View>

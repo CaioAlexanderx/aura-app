@@ -25,7 +25,7 @@
 //   antes de o backend emitir os `loja_*`.
 // ============================================================
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/stores/auth';
 import {
   notificationsApi,
@@ -35,6 +35,10 @@ import {
 import {
   ordersToEvents, buildFeed, mergePrefs, defaultPrefs, allMuted,
 } from '@/components/notificationEventModel';
+// 10/09/2026 — som de pedido e aviso no computador (Web Push).
+import { avisosNovos, eventosDaResposta, chaveDoAviso, tocaParaPush } from '@/utils/avisosDePedido';
+import { tocarAvisoDePedido, instalarDesbloqueioDoSom } from '@/utils/somDePedido';
+import { registrarServiceWorker, sincronizarInscricao, ouvirAvisosDoServiceWorker } from '@/services/webPush';
 
 const POLL_INTERVAL = 30_000; // 30 segundos
 const ORDER_ALERT_WINDOW = 2 * 60 * 60 * 1000; // pedido "novo" alerta por 2h
@@ -76,12 +80,23 @@ export function useNotifications() {
 
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Som de pedido (10/09/2026): chaves já vistas nesta aba. A primeira
+  // carga só aprende o que já existia — abrir o painel não toca pelos
+  // pedidos de ontem. Ver utils/avisosDePedido.ts.
+  const conhecidosRef    = useRef<Set<string>>(new Set());
+  const primeiraCargaRef = useRef(true);
 
   const fetchNotifications = useCallback(async () => {
     if (!companyId) return;
     try {
       const res = await notificationsApi.list(companyId);
       setData({ ...res });
+      const { novos, conhecidos } = avisosNovos(
+        conhecidosRef.current, eventosDaResposta(res), { primeiraCarga: primeiraCargaRef.current },
+      );
+      conhecidosRef.current = conhecidos;
+      primeiraCargaRef.current = false;
+      if (novos.length) tocarAvisoDePedido();
     } catch (_) {
       // silent — polling não deve crashar a UI
     }
@@ -100,6 +115,9 @@ export function useNotifications() {
   }, []);
 
   useEffect(() => {
+    // Troca de empresa: recomeça do zero, sem tocar pelo que já existe lá.
+    conhecidosRef.current = new Set();
+    primeiraCargaRef.current = true;
     fetchNotifications();
     startPolling();
 
@@ -110,7 +128,10 @@ export function useNotifications() {
         fetchNotifications();
         startPolling();
       } else if (next === 'background' || next === 'inactive') {
-        stopPolling();
+        // No web a aba escondida CONTINUA consultando (10/09/2026): é
+        // justamente com o painel atrás de outra janela que o som de
+        // pedido precisa tocar. No app nativo, economiza bateria como antes.
+        if (Platform.OS !== 'web') stopPolling();
       }
     });
 
@@ -120,6 +141,24 @@ export function useNotifications() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
+
+  // Aviso de pedido no navegador (10/09/2026): destrava o som no primeiro
+  // clique, registra o service worker, reafirma a inscrição do Web Push
+  // nesta empresa e toca na hora em que o push chega, sem esperar o poll.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    instalarDesbloqueioDoSom();
+    registrarServiceWorker().then(() => sincronizarInscricao(companyId)).catch(() => {});
+    const parar = ouvirAvisosDoServiceWorker((aviso) => {
+      const chave = chaveDoAviso(String(aviso.type || ''), aviso.tag);
+      if (!conhecidosRef.current.has(chave)) {
+        conhecidosRef.current.add(chave);
+        if (tocaParaPush(aviso)) tocarAvisoDePedido();
+      }
+      fetchNotifications();
+    });
+    return parar;
+  }, [companyId, fetchNotifications]);
 
   // Eventos do servidor + pedidos antigos convertidos. Um pedido que já tem
   // evento próprio não entra duas vezes (dedupe por entity_id).
@@ -240,5 +279,6 @@ export function useNotifications() {
     ensurePrefs,
     savePrefs,
     refresh:     fetchNotifications,
+    companyId,
   };
 }
