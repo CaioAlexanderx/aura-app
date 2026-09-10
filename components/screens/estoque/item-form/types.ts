@@ -582,7 +582,7 @@ export function tituloDoModal(type: ItemType, modoEdicao: boolean): string {
 
 export function subtituloDoModal(modoEdicao: boolean): string {
   return modoEdicao
-    ? "Fotos e grade salvam na hora. O resto, no Salvar."
+    ? "Fotos salvam na hora. O resto, no Salvar."
     : "Nome e preço bastam. O resto você completa quando quiser.";
 }
 
@@ -592,3 +592,117 @@ export function rotuloDoBotaoSalvar(type: ItemType, modoEdicao: boolean): string
 
 export const fmtBRL = (n: number) =>
   "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ── produto antigo: cor e tamanho gravados NO PRÓPRIO produto ──
+//
+// 10/09/2026 — suporte: a cliente abria a edição e não via as cores e o
+// tamanho que o item já tinha. Medido no banco nesse dia: 4.858 produtos
+// em 7 empresas guardam cor e/ou tamanho nas colunas do próprio produto
+// (o AddProductForm antigo tinha "Cor principal" e "Tamanho"), sem
+// nenhuma variação. A grade antiga (ProductVariationsSection, 08/05/2026)
+// mesclava isso na tela, e o PUT /variations formaliza a combinação como
+// variação e limpa color/size do pai. O formulário aberto não lia essas
+// colunas: a edição abria com "Quantidade única" e nada de cor.
+
+/** Chave da grade com o hex em caixa alta: "#abcdef|M" -> "#ABCDEF|M". */
+export function normalizarChaveDaGrade(k: string): string {
+  const i = String(k).indexOf("|");
+  if (i < 0) return String(k);
+  return k.slice(0, i).toUpperCase() + k.slice(i);
+}
+
+/** Mesma normalização para um mapa inteiro (matriz ou códigos de barras). */
+export function normalizarMapaDaGrade<T>(mapa: Record<string, T> | null | undefined): Record<string, T> {
+  const out: Record<string, T> = {};
+  const src = mapa || {};
+  Object.keys(src).forEach((k) => { out[normalizarChaveDaGrade(k)] = src[k]; });
+  return out;
+}
+
+export function totalDaMatriz(m: Record<string, number> | null | undefined): number {
+  return Object.keys(m || {}).reduce((acc, k) => acc + (Number((m as Record<string, number>)[k]) || 0), 0);
+}
+
+export type MesclaDoPai = {
+  cores: CorDoItem[];
+  tamanhos: string[];
+  celulas: Record<string, string>;
+  /** true quando algo do pai entrou na grade: o Salvar precisa gravá-la. */
+  mesclou: boolean;
+  aviso: string | null;
+};
+
+/**
+ * Leva a cor e o tamanho gravados no produto para a grade local.
+ *
+ * - Cor em nome ("Preto") passa por nomeParaHex; cor irreconhecível fica
+ *   de fora (o tamanho ainda entra).
+ * - O estoque do pai só entra quando o produto NÃO tem variações: com
+ *   variações, `stock` já é a soma delas e jogá-la numa célula duplicaria
+ *   o estoque.
+ * - A célula só é preenchida se a combinação existe na grade final e
+ *   ainda está vazia ou zerada.
+ */
+export function mesclarPaiNaGrade(o: {
+  cores: CorDoItem[];
+  tamanhos: string[];
+  celulas: Record<string, string>;
+  paiCor: string | null | undefined;
+  paiTamanho: string | null | undefined;
+  paiEstoque: number | null | undefined;
+  nomeParaHex: (nome: string) => string | null;
+  hexParaNome: (hex: string) => string;
+  keyFn?: (hex: string | null, size: string | null) => string;
+}): MesclaDoPai {
+  const keyFn = o.keyFn || chaveDaMatriz;
+  const semMudanca: MesclaDoPai = { cores: o.cores, tamanhos: o.tamanhos, celulas: o.celulas, mesclou: false, aviso: null };
+
+  const corBruta = String(o.paiCor || "").trim();
+  const hexLido = corBruta ? o.nomeParaHex(corBruta) : null;
+  const hex = hexLido && /^#[0-9A-Fa-f]{6}$/.test(hexLido) ? hexLido.toUpperCase() : null;
+  const tam = String(o.paiTamanho || "").trim() || null;
+  if (!hex && !tam) return semMudanca;
+
+  const cores = [...(o.cores || [])];
+  const tamanhos = [...(o.tamanhos || [])];
+  const celulas = { ...(o.celulas || {}) };
+  const nomeCor = hex ? (o.hexParaNome(hex) || hex) : null;
+  let mesclou = false;
+
+  if (hex && !cores.some((c) => String(c.hex).toUpperCase() === hex)) {
+    cores.push({ hex, name: nomeCor as string });
+    mesclou = true;
+  }
+  if (tam && tamanhos.indexOf(tam) < 0) {
+    tamanhos.push(tam);
+    mesclou = true;
+  }
+
+  const estoque = Math.max(0, Math.floor(Number(o.paiEstoque) || 0));
+  let colocouEstoque = false;
+  if (estoque > 0) {
+    const matriz = cores.length > 0 && tamanhos.length > 0;
+    // Em grade cor × tamanho, só existe célula se o pai tem os dois.
+    const k = matriz
+      ? (hex && tam ? keyFn(hex, tam) : null)
+      : (cores.length ? (hex ? keyFn(hex, null) : null) : (tam ? keyFn(null, tam) : null));
+    if (k && numeroDaCelula(celulas[k]) === 0) {
+      celulas[k] = String(estoque);
+      colocouEstoque = true;
+      mesclou = true;
+    }
+  }
+
+  if (!mesclou) return semMudanca;
+
+  // Sem particípio: "cor" e "tamanho" têm gêneros diferentes. O estoque
+  // só aparece no aviso quando ele de fato entrou numa célula.
+  const partes = [nomeCor ? "cor " + nomeCor : null, tam ? "tamanho " + tam : null].filter(Boolean) as string[];
+  const rotulo = partes.join(" · ");
+  const aviso = rotulo.charAt(0).toUpperCase() + rotulo.slice(1)
+    + (colocouEstoque ? " (" + estoque + " un)" : "")
+    + (partes.length > 1 ? " estavam" : " estava")
+    + " no cadastro do produto, fora da grade. Ao salvar, vira uma variação"
+    + (colocouEstoque ? " com o mesmo estoque." : ".");
+  return { cores, tamanhos, celulas, mesclou: true, aviso };
+}
