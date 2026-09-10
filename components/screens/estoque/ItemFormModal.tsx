@@ -64,7 +64,7 @@ import { CategoriaSheet, useBreadcrumbLabel } from "./item-form/CategorySelector
 import { useGaleriaDoProduto } from "./item-form/GaleriaDeFotos";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico, gravarUltimaCategoria,
-  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, totalDaMatriz,
+  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara,
@@ -157,6 +157,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [pendentes, setPendentes] = useState<FotoPendente[]>([]);
   const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
   const [confirmarSaida, setConfirmarSaida] = useState(false);
+  // Duplicata escolhida com um cadastro em andamento: espera confirmação.
+  const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
 
   const modoEdicao = !!alvo;
   const productId = alvo?.id || null;
@@ -297,6 +299,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setCategoriaSuja(false);
     setCatSheet(false);
     setConfirmarSaida(false);
+    setDupPendente(null);
 
     if (prod) {
       setSelecao(VAZIO);
@@ -386,8 +389,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // A descrição é só a descrição. A duração tem coluna própria desde
       // a migration 323 — e gravar aqui SEM o sufixo é o que tira o
       // "| Duração: 45 min" do serviço antigo na primeira gravação.
-      notes: descricao.trim(),
-      durationMinutes: isProduto ? undefined : duracaoParaMinutos(duracao),
+      // Serviço: duração que não vira número ("sob consulta") volta para o
+      // fim da descrição em vez de sumir (gravacaoDaDuracao).
+      notes: isProduto ? descricao.trim() : gravacaoDaDuracao(descricao, duracao).notes,
+      durationMinutes: isProduto ? undefined : gravacaoDaDuracao(descricao, duracao).durationMinutes,
       material: isProduto ? material.trim() : "",
       medidas: isProduto ? medidas.trim() : "",
       cuidados: isProduto ? cuidados.trim() : "",
@@ -485,6 +490,15 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           const okVar = await salvarVariacoes(alvo!.id);
           if (!okVar) return;
         }
+        // Fotos de cores que só passaram a existir neste Salvar esperaram na
+        // fila: sobem agora que a grade foi gravada. Quem sai sem salvar não
+        // deixa foto gravada para uma cor que não existe (suporte 10/09).
+        if (pendentes.length > 0) {
+          const coresVivasEd = stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
+          filaRef.current = pendentes.filter((f) => f.corHex != null && coresVivasEd.indexOf(chaveDaCor(f.corHex)) >= 0);
+          setPendentes([]);
+          void subirFila(alvo!.id);
+        }
         if (categoriaSuja) vincularCategoria(alvo!.id);
         gravarUltimaCategoria(company?.id, type, {
           primaryCategoryId: selecao.primaryCategoryId,
@@ -553,17 +567,33 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   }
 
   // ── duplicata vira edição do que já existe ───────────────
-  function abrirDuplicata(d: DuplicataRow) {
+  function executarDuplicata(d: DuplicataRow) {
     const existente = products.find((p) => p.id === d.id);
     if (!existente) { toast.error("Produto não encontrado na lista. Recarregue o estoque."); return; }
     semear(existente, "product");
     toast.info("Abrindo " + existente.name);
   }
 
+  // Abrir o produto que já existe descarta este cadastro. Só o nome
+  // digitado não justifica perguntar; preço, grade, fotos ou códigos sim.
+  function abrirDuplicata(d: DuplicataRow) {
+    if (temProgressoAlemDoNome(camposDoCadastro())) { setDupPendente(d); return; }
+    executarDuplicata(d);
+  }
+
   // ── sair ─────────────────────────────────────────────────
+  function camposDoCadastro() {
+    return {
+      preco: precoNum, custo: valorDaMascara(custo), pendentes: pendentes.length,
+      cores: cores.length, tamanhos: tamanhos.length, estoque: estoqueTxt,
+      descricao, sku, barcode, ncm, duracao,
+    };
+  }
+  // Na edição, foto de cor nova esperando na fila também é algo a perder.
+  // No cadastro, quem começou bipando o código ou montando a grade também.
   const temProgresso = modoEdicao
-    ? (sujo || gradeSuja || categoriaSuja)
-    : (!!nome.trim() || precoNum > 0 || pendentes.length > 0);
+    ? (sujo || gradeSuja || categoriaSuja || pendentes.length > 0)
+    : (!!nome.trim() || temProgressoAlemDoNome(camposDoCadastro()));
 
   function pedirFechar() {
     if (temProgresso) setConfirmarSaida(true);
@@ -580,7 +610,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     edicao: false, pode: false, sheet: false,
   });
   acoesRef.current = {
-    salvar, fechar: pedirFechar, fecharSheet: () => setCatSheet(false),
+    salvar,
+    // Escape fecha uma camada por vez: a confirmação aberta antes do modal.
+    fechar: () => {
+      if (dupPendente) setDupPendente(null);
+      else if (confirmarSaida) setConfirmarSaida(false);
+      else pedirFechar();
+    },
+    fecharSheet: () => setCatSheet(false),
     edicao: modoEdicao, pode: podeSalvar, sheet: catSheet,
   };
   useEffect(() => {
@@ -764,6 +801,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       }}
       onRemoverPendente={(id) => setPendentes((f) => f.filter((x) => x.id !== id))}
       onFotoMudou={() => { /* na edição a foto já está salva; nada a marcar */ }}
+      coresSalvas={(variacoes?.colors || []).map((c) => chaveDaCor(c.hex))}
       cores={stockMode === "variants" ? cores : []}
     />
   );
@@ -917,21 +955,32 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         )}
       </View>
 
-      {confirmarSaida && (
+      {(confirmarSaida || dupPendente) && (
         <View style={s.exitOverlay}>
           <View style={s.exitCard}>
-            <Text style={s.exitTitle}>{modoEdicao ? "Sair sem salvar?" : "Descartar este cadastro?"}</Text>
+            <Text style={s.exitTitle}>
+              {dupPendente ? "Abrir o produto que já existe?" : (modoEdicao ? "Sair sem salvar?" : "Descartar este cadastro?")}
+            </Text>
             <Text style={s.exitMsg}>
-              {modoEdicao
-                ? "Você tem alterações não salvas."
-                : "Você começou a cadastrar um " + nomeDoTipo(type) + ". Se sair agora, o que preencheu será perdido."}
+              {dupPendente
+                ? "O que você preencheu aqui (preço, grade, fotos, códigos) será descartado. Se for a mesma peça em outra cor ou tamanho, é no produto existente que ela entra."
+                : modoEdicao
+                  ? "Você tem alterações não salvas."
+                  : "Você começou a cadastrar um " + nomeDoTipo(type) + ". Se sair agora, o que preencheu será perdido."}
             </Text>
             <View style={s.exitActions}>
-              <Pressable style={s.exitStay} onPress={() => setConfirmarSaida(false)}>
-                <Text style={s.exitStayTxt}>Continuar</Text>
+              <Pressable style={s.exitStay} onPress={() => { setConfirmarSaida(false); setDupPendente(null); }}>
+                <Text style={s.exitStayTxt}>{dupPendente ? "Continuar aqui" : "Continuar"}</Text>
               </Pressable>
-              <Pressable style={s.exitLeave} onPress={() => { setConfirmarSaida(false); onClose(); }}>
-                <Text style={s.exitLeaveTxt}>{modoEdicao ? "Sair sem salvar" : "Descartar e sair"}</Text>
+              <Pressable
+                style={s.exitLeave}
+                onPress={() => {
+                  if (dupPendente) { const d = dupPendente; setDupPendente(null); executarDuplicata(d); return; }
+                  setConfirmarSaida(false);
+                  onClose();
+                }}
+              >
+                <Text style={s.exitLeaveTxt}>{dupPendente ? "Descartar e abrir" : (modoEdicao ? "Sair sem salvar" : "Descartar e sair")}</Text>
               </Pressable>
             </View>
           </View>

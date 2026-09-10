@@ -139,7 +139,7 @@ export function SecaoPreco({ type, narrow, preco, onPreco, custo, onCusto, durac
           <Text style={s.hint}>
             {naoEntendi ? (
               <Text style={{ color: Colors.amber, fontWeight: "700" }}>
-                Não entendi essa duração. Escreva como 20 min, 1h ou 1h30 — a agenda precisa do número.
+                {"Não vira minutos, então fica fora da agenda. Vai para a descrição do serviço como \"Duração: " + duracao.trim() + "\"."}
               </Text>
             ) : (
               "Ajuda na agenda e aparece na página do serviço. Serviços não têm estoque."

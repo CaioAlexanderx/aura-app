@@ -123,10 +123,10 @@ export type LeituraDeDuracao = {
 /**
  * De onde sai a duração ao abrir um serviço para edição.
  *
- * Ordem: a coluna manda. Sem coluna, tenta o sufixo antigo — e SÓ tira o
- * sufixo da descrição se ele virar número. Um "Duração: meio período"
- * não vira coluna nenhuma, então continua sendo parte da descrição:
- * migrar apagando o que a lojista escreveu seria pior que não migrar.
+ * Ordem: a coluna manda. Sem coluna, tenta o sufixo antigo. Sufixo que
+ * vira número migra para a coluna. Sufixo que não vira ("Duração: sob
+ * consulta") aparece no campo de duração, e o Salvar o devolve ao fim
+ * da descrição (gravacaoDaDuracao): nada que a lojista escreveu se perde.
  */
 export function lerDuracaoDoServico(
   notes: string | null | undefined,
@@ -147,6 +147,9 @@ export function lerDuracaoDoServico(
     return { descricao, duracaoTxt: minutosParaRotulo(doLegado), minutos: doLegado, migrandoDoLegado: true };
   }
 
+  // Texto que não vira número volta para o campo de duração; o Salvar o
+  // regrava na descrição. Ida e volta sem perder o que foi escrito.
+  if (duracao) return { descricao, duracaoTxt: duracao, minutos: null, migrandoDoLegado: false };
   return { descricao: bruto.trim(), duracaoTxt: "", minutos: null, migrandoDoLegado: false };
 }
 
@@ -705,4 +708,45 @@ export function mesclarPaiNaGrade(o: {
     + " no cadastro do produto, fora da grade. Ao salvar, vira uma variação"
     + (colocouEstoque ? " com o mesmo estoque." : ".");
   return { cores, tamanhos, celulas, mesclou: true, aviso };
+}
+
+// ── pendências do suporte (10/09/2026) ──────────────────────
+
+/**
+ * O que o Salvar grava de um serviço: a duração em minutos na coluna ou,
+ * quando o texto não vira número ("sob consulta"), no fim da descrição,
+ * no mesmo formato que lerDuracaoDoServico entende. Antes, esse texto
+ * sumia no Salvar.
+ */
+export function gravacaoDaDuracao(descricao: string, duracaoTxt: string): { notes: string; durationMinutes: number | null } {
+  const d = String(descricao || "").trim();
+  const t = String(duracaoTxt || "").trim();
+  const minutos = duracaoParaMinutos(t);
+  if (t && minutos == null) {
+    return { notes: (d ? d + " | " : "") + DUR_MARKER + " " + t, durationMinutes: null };
+  }
+  return { notes: d, durationMinutes: minutos };
+}
+
+export type CamposDoCadastro = {
+  preco: number; custo: number; pendentes: number; cores: number; tamanhos: number;
+  estoque: string; descricao: string; sku: string; barcode: string; ncm: string; duracao: string;
+};
+
+/**
+ * Há algo além do nome que se perderia ao descartar o cadastro? Decide se
+ * abrir a duplicata pede confirmação e se fechar pede confirmação: só o
+ * nome digitado não justifica a pergunta; preço, grade, fotos, códigos,
+ * descrição ou duração justificam.
+ */
+export function temProgressoAlemDoNome(c: CamposDoCadastro): boolean {
+  return (Number(c.preco) || 0) > 0
+    || (Number(c.custo) || 0) > 0
+    || (c.pendentes || 0) > 0 || (c.cores || 0) > 0 || (c.tamanhos || 0) > 0
+    || !!String(c.estoque || "").trim()
+    || !!String(c.descricao || "").trim()
+    || !!String(c.sku || "").trim()
+    || !!String(c.barcode || "").trim()
+    || !!String(c.ncm || "").trim()
+    || !!String(c.duracao || "").trim();
 }

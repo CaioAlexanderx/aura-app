@@ -10,6 +10,9 @@
 //     memória e sobe logo depois do POST, com o progresso no rodapé.
 //     Para quem cadastra, a diferença não existe: são os mesmos
 //     quadradinhos, os mesmos rótulos.
+//   - COR NOVA NA EDIÇÃO (10/09/2026): a cor ainda não existe no servidor,
+//     então a foto dela segue o caminho do cadastro — fila, e sobe no
+//     Salvar depois da grade. Sair sem salvar não deixa foto órfã.
 // ============================================================
 import { View, Text, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -32,6 +35,8 @@ type Props = {
   onRemoverPendente: (id: string) => void;
   onFotoMudou: () => void;
   cores: CorDoItem[];
+  /** Edição: cores que já existem no servidor (chaveDaCor). */
+  coresSalvas?: string[];
 };
 
 export function SecaoFotos(p: Props) {
@@ -44,9 +49,15 @@ export function SecaoFotos(p: Props) {
   const pendentesDaCor = (hex: string) =>
     p.pendentes.filter((f) => f.corHex != null && chaveDaCor(f.corHex) === chaveDaCor(hex));
 
+  // Cor que usa a fila: todas no cadastro; na edição, a cor que ainda não
+  // foi gravada e não tem foto nenhuma no servidor.
+  const ehLocal = (hex: string) =>
+    !p.persistido ||
+    ((p.coresSalvas || []).indexOf(chaveDaCor(hex)) < 0 && fotosDaCor(p.galeria.porCor, hex).length === 0);
+
   const qtdPrincipal = p.persistido ? p.galeria.principal.length : pendentesPrincipais.length;
   const contagens = cores.map((c) =>
-    p.persistido ? fotosDaCor(p.galeria.porCor, c.hex).length : pendentesDaCor(c.hex).length
+    ehLocal(c.hex) ? pendentesDaCor(c.hex).length : fotosDaCor(p.galeria.porCor, c.hex).length
   );
 
   const carregando = p.persistido && p.galeria.carregando;
@@ -96,7 +107,8 @@ export function SecaoFotos(p: Props) {
             {cores.map((c) => {
               const doServidor = fotosDaCor(p.galeria.porCor, c.hex);
               const daFila = pendentesDaCor(c.hex);
-              const quantas = p.persistido ? doServidor.length : daFila.length;
+              const local = ehLocal(c.hex);
+              const quantas = local ? daFila.length : doServidor.length;
               return (
                 <View key={c.hex} style={[st.cphLinha, p.narrow && st.cphLinhaNarrow]}>
                   <View style={[st.cphTopo, p.narrow && { width: "100%" as any, marginBottom: 6 }]}>
@@ -104,11 +116,12 @@ export function SecaoFotos(p: Props) {
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={st.cphNome} numberOfLines={1}>{c.name || c.hex}</Text>
                       {quantas === 1 && <Text style={st.cphSo}>só 1 foto</Text>}
+                      {p.persistido && local && <Text style={st.cphSo}>sobe no Salvar</Text>}
                     </View>
                   </View>
-                  {carregando ? (
+                  {carregando && !local ? (
                     <View style={st.carregando}><ActivityIndicator size="small" color={Colors.violet3} /></View>
-                  ) : p.persistido ? (
+                  ) : !local ? (
                     <LinhaDaGaleria
                       fotos={doServidor}
                       principal={false}
