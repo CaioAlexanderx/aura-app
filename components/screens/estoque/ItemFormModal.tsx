@@ -50,7 +50,7 @@ import { companiesApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { productImagesApi } from "@/services/productImagesApi";
 import { productsVariationsApi, matrixKey, type MatrixMap } from "@/services/productsVariationsApi";
-import { hexToName } from "@/utils/colorNames";
+import { hexToName, nameToHex } from "@/utils/colorNames";
 import type { CategorySelection } from "@/components/catalog/CategoryTreePicker";
 import { IS_WEB, webOnly } from "@/components/screens/pdv/types";
 import type { Product } from "./types";
@@ -64,7 +64,7 @@ import { CategoriaSheet, useBreadcrumbLabel } from "./item-form/CategorySelector
 import { useGaleriaDoProduto } from "./item-form/GaleriaDeFotos";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico, gravarUltimaCategoria,
-  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, motivosQueBloqueiam,
+  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, totalDaMatriz,
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara,
@@ -136,6 +136,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [celulas, setCelulas] = useState<Record<string, string>>({});
   const [barras, setBarras] = useState<Record<string, string>>({});
   const [gradeSuja, setGradeSuja] = useState(false);
+  // Cada abertura do modal ganha um número. A hidratação da grade depende
+  // dele: o modal nunca desmonta, então reabrir o MESMO produto trazia a
+  // variação do cache com a mesma referência e a grade abria vazia.
+  const [semente, setSemente] = useState(0);
+  // Cor/tamanho gravados no próprio produto entraram na grade: o Salvar
+  // grava a grade mesmo sem a lojista ter mexido nela.
+  const [migrarPai, setMigrarPai] = useState(false);
+  const [avisoPai, setAvisoPai] = useState<string | null>(null);
 
   const [selecao, setSelecao] = useState<CategorySelection>(VAZIO);
   const [legado, setLegado] = useState("");
@@ -182,28 +190,56 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const variacoesRef = useRef<any>(null);
   useEffect(() => { variacoesRef.current = variacoes || null; }, [variacoes]);
 
-  const hidratou = useRef(false);
-  useEffect(() => { hidratou.current = false; }, [productId]);
+  // Hidratação da grade (suporte 10/09/2026). Três regras:
+  //  1. roda a cada ABERTURA (semente), não só quando `variacoes` muda;
+  //  2. dado mais novo (o refetch depois de um Salvar, ou o cache velho
+  //     sendo trocado pelo fresco) re-hidrata — a menos que a lojista já
+  //     tenha mexido na grade, e aí o que está na tela vence;
+  //  3. cor e tamanho gravados no próprio produto entram na grade
+  //     (mesclarPaiNaGrade) e o Salvar os formaliza como variação.
+  const gradeTocadaRef = useRef(false);
   useEffect(() => {
-    if (!variacoes || hidratou.current) return;
-    hidratou.current = true;
+    if (!visible || !alvo || !variacoes) return;
+    const doProduto = String((variacoes as any).product_id || "");
+    if (doProduto && doProduto !== String(alvo.id)) return;
+    if (gradeTocadaRef.current) return;
     const cs: CorDoItem[] = (variacoes.colors || []).map((c) => ({
       hex: (c.hex || "").toUpperCase(),
       name: c.name || hexToName(c.hex) || c.hex,
     }));
     const zs = variacoes.sizes || [];
-    if (!cs.length && !zs.length) return;
-    setCores(cs);
-    setTamanhos(zs);
-    setStockMode("variants");
+    const cel: Record<string, string> = {};
+    const matriz = normalizarMapaDaGrade<number>(variacoes.matrix);
+    Object.keys(matriz).forEach((k) => { cel[k] = String(matriz[k] ?? 0); });
+    const temVariacoes = cs.length > 0 || zs.length > 0;
+    const m = mesclarPaiNaGrade({
+      cores: cs, tamanhos: zs, celulas: cel,
+      paiCor: alvo.color, paiTamanho: alvo.size,
+      // Com variações, `stock` já é a soma delas (mapApiProduct).
+      paiEstoque: temVariacoes ? 0 : alvo.stock,
+      nomeParaHex: nameToHex,
+      hexParaNome: (h) => hexToName(h) || h,
+      keyFn: matrixKey,
+    });
+    if (!m.cores.length && !m.tamanhos.length) {
+      setMigrarPai(false);
+      setAvisoPai(null);
+      return;
+    }
+    setCores(m.cores);
+    setTamanhos(m.tamanhos);
     // A grade nasce com o que está no banco e daí em diante é local: só
     // o Salvar a manda de volta.
-    const cel: Record<string, string> = {};
-    Object.keys(variacoes.matrix || {}).forEach((k) => { cel[k] = String((variacoes.matrix || {})[k] ?? 0); });
-    setCelulas(cel);
-    setBarras({ ...(variacoes.barcodes || {}) });
+    setCelulas(m.celulas);
+    setBarras(normalizarMapaDaGrade<string>(variacoes.barcodes));
+    setStockMode("variants");
     setGradeSuja(false);
-  }, [variacoes]);
+    setMigrarPai(m.mesclou);
+    setAvisoPai(m.aviso);
+  }, [variacoes, semente, visible, alvo]);
+  const servidorTemVariacoes = !!variacoes && (((variacoes.colors || []).length > 0) || ((variacoes.sizes || []).length > 0));
+  const variacoesCarregadas = !!variacoes && !!alvo
+    && (!(variacoes as any).product_id || String((variacoes as any).product_id) === String(alvo.id));
 
   // ── galeria (só existe com produto persistido) ───────────
   const galeria = useGaleriaDoProduto(productId);
@@ -249,7 +285,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setBarras({});
     setGradeSuja(false);
     setStockMode(prod?.has_variants ? "variants" : "single");
-    hidratou.current = false;
+    gradeTocadaRef.current = false;
+    setMigrarPai(false);
+    setAvisoPai(null);
+    setSemente((n) => n + 1);
     setDuplicatas([]);
     setDupDispensada(false);
     setPendentes([]);
@@ -318,6 +357,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // ── montar o corpo do produto ────────────────────────────
   function montarProduto(id: string): Product {
     const temVariantes = isProduto && stockMode === "variants" && (cores.length > 0 || tamanhos.length > 0);
+    // Se a grade vai ser gravada neste Salvar, o PATCH já leva o total
+    // dela: o PUT /variations grava o mesmo número logo depois, e se ele
+    // falhar o estoque do pai não fica zerado (era o risco de converter
+    // um produto antigo com cor/tamanho no próprio item).
+    const vaiGravarGrade = temVariantes && (!modoEdicao || gradeSuja || migrarPai);
+    const estoqueDaGrade = vaiGravarGrade
+      ? totalDaMatriz(matrizDaGrade(cores, tamanhos, celulas, normalizarMapaDaGrade<number>(variacoesRef.current?.matrix), matrixKey))
+      : 0;
     return {
       id,
       name: nome.trim(),
@@ -329,7 +376,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // Produto com variantes guarda o estoque NAS variantes (migration
       // que zerou products.stock_qty do pai). Reescrever o total aqui
       // ressuscitaria o estoque fantasma no pai.
-      stock: isProduto && !temVariantes ? (parseInt(estoqueTxt, 10) || 0) : 0,
+      // Com variações e grade que NÃO vai ser gravada, stock fica undefined
+      // e some do JSON: o PATCH não toca no estoque do pai, que é a soma
+      // das variações gravada pelo último PUT (auditoria 10/09).
+      stock: !isProduto ? 0 : (temVariantes ? (vaiGravarGrade ? estoqueDaGrade : (undefined as any)) : (parseInt(estoqueTxt, 10) || 0)),
       minStock: isProduto ? (parseInt(minimoTxt, 10) || 0) : 0,
       unit: isProduto ? unidade : "srv",
       brand: alvo?.brand || "",
@@ -352,11 +402,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     if (!company?.id) return false;
     try {
       const anterior = variacoesRef.current || {};
-      const matriz: MatrixMap = matrizDaGrade(cores, tamanhos, celulas, anterior.matrix, matrixKey);
+      const matriz: MatrixMap = matrizDaGrade(cores, tamanhos, celulas, normalizarMapaDaGrade<number>(anterior.matrix), matrixKey);
       const chaves = Object.keys(matriz);
       // Código de barras: o que está na tela vence; o que não está na
       // tela mas sobreviveu à mudança de cores/tamanhos é preservado.
-      const guardados = preservarValores<string>(chaves, anterior.barcodes);
+      const guardados = preservarValores<string>(chaves, normalizarMapaDaGrade<string>(anterior.barcodes));
       const doForm: Record<string, string> = {};
       chaves.forEach((k) => { if ((barras[k] || "").trim()) doForm[k] = barras[k].trim(); });
       await productsVariationsApi.save(company.id, id, {
@@ -419,9 +469,19 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setSalvando(true);
     try {
       if (modoEdicao) {
+        // Grade gravada quando foi mexida (ou herdou cor/tamanho do pai) no
+        // modo por cor e tamanho — ou esvaziada por quem voltou para a
+        // quantidade única num produto que tinha variações.
+        const gravarGrade = isProduto && (gradeSuja || migrarPai) && (stockMode === "variants" || servidorTemVariacoes);
+        // Um PUT com a grade vazia desativa TODAS as variações: sem a grade
+        // do servidor lida, não se grava nada (auditoria 10/09).
+        if (gravarGrade && !variacoesCarregadas) {
+          toast.error("As cores e tamanhos ainda estão carregando. Espere um instante e salve de novo.");
+          return;
+        }
         const ok = await updateProduct(montarProduto(alvo!.id));
         if (!ok) return;
-        if (isProduto && gradeSuja && stockMode === "variants") {
+        if (gravarGrade) {
           const okVar = await salvarVariacoes(alvo!.id);
           if (!okVar) return;
         }
@@ -455,19 +515,33 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         legado: categoriaFinal,
       });
 
+      // Foto de uma cor que saiu da grade antes do Salvar não sobe órfã.
+      const coresVivas = isProduto && stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
+      filaRef.current = pendentes.filter((f) => f.corHex == null || coresVivas.indexOf(chaveDaCor(f.corHex)) >= 0);
+      setPendentes([]);
+
       if (isProduto && stockMode === "variants" && (cores.length > 0 || tamanhos.length > 0)) {
-        await salvarVariacoes(criado.id);
+        const okVar = await salvarVariacoes(criado.id);
+        if (!okVar) {
+          // O produto existe; a grade não. O modal fica aberto, já como
+          // edição desse produto e com a grade na tela, para tentar de novo.
+          gradeTocadaRef.current = true;
+          setAlvo({ ...corpo, id: String(criado.id) });
+          setGradeSuja(true);
+          onSaved?.();
+          void subirFila(criado.id);
+          return;
+        }
       }
 
       onSaved?.();
-
-      filaRef.current = pendentes;
-      setPendentes([]);
-      await subirFila(criado.id);
+      // O Salvar termina aqui. As fotos sobem soltas a partir do ref: fechar
+      // ou começar o próximo item não espera o upload nem é atropelado por
+      // ele — o fim só avisa por toast (auditoria 10/09).
+      void subirFila(criado.id);
 
       if (cadastrarOutro) {
-        const t = type;
-        semear(null, t);
+        semear(null, type);
         toast.success("Salvo. Próximo item");
       } else {
         onClose();
@@ -522,15 +596,24 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         return;
       }
       if (e.key !== "Enter") return;
+      // Enter num botão focado é do botão, não do cadastro.
+      if (e.target?.tagName !== "INPUT") return;
       if (!painel || typeof painel.contains !== "function" || !painel.contains(e.target)) return;
       if (e.target?.tagName === "TEXTAREA") return;
+      // Folha de categoria aberta: Enter é da busca dela, não do cadastro.
+      if (acoesRef.current.sheet) return;
+      // Campos cujo Enter tem sentido próprio (novo tamanho, célula da
+      // grade, código de barras, seletor de cor) marcam data-enter-local.
+      if (typeof e.target?.closest === "function" && e.target.closest("[data-enter-local]")) return;
       if (acoesRef.current.edicao && !(e.ctrlKey || e.metaKey)) return;
       if (!acoesRef.current.pode) return;
       e.preventDefault();
       acoesRef.current.salvar(false);
     }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // CAPTURA: o TextInput do react-native-web chama stopPropagation em toda
+    // tecla, e na fase de bolha o Ctrl+Enter e o Escape nunca chegavam aqui.
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [visible]);
 
   // Celular: o campo em foco rola até o centro, longe do teclado.
@@ -591,7 +674,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           setUltimaUsada(!!u && (!!u.primaryCategoryId || !!u.legado));
         }}
         disabled={travado}
-        accessibilityLabel={rotulo}
+        accessibilityLabel={travado ? rotulo + " (o tipo não muda depois de criado)" : rotulo}
         style={[s.tipoBtn, ativo && s.tipoBtnAtivo, travado && { opacity: 0.45 }, narrow && { flex: 1, justifyContent: "center" }]}
       >
         <Icon name={icone as any} size={13} color={ativo ? "#fff" : Colors.ink3} />
@@ -632,14 +715,22 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     <SecaoEstoque
       narrow={narrow}
       modoEdicao={modoEdicao}
+      avisoDoPai={stockMode === "variants" ? avisoPai : null}
       unidade={unidade} onUnidade={(v) => { setUnidade(v); setSujo(true); }}
-      stockMode={stockMode} onStockMode={(v) => { setStockMode(v); setSujo(true); setGradeSuja(true); }}
+      stockMode={stockMode} onStockMode={(v) => {
+        if (v === stockMode) return;
+        if (v === "single" && modoEdicao && servidorTemVariacoes && (cores.length > 0 || tamanhos.length > 0)) {
+          toast.info("Para voltar à quantidade única, remova antes as cores e os tamanhos.");
+          return;
+        }
+        setStockMode(v); setSujo(true); gradeTocadaRef.current = true; setGradeSuja(true);
+      }}
       estoque={estoqueTxt} onEstoque={(v) => { setEstoqueTxt(v); setSujo(true); }}
       minimo={minimoTxt} onMinimo={(v) => { setMinimoTxt(v); setSujo(true); }}
-      cores={cores} onCores={(v) => { setCores(v); setGradeSuja(true); setSujo(true); }}
-      tamanhos={tamanhos} onTamanhos={(v) => { setTamanhos(v); setGradeSuja(true); setSujo(true); }}
-      celulas={celulas} onCelula={(k, v) => { setCelulas((c) => ({ ...c, [k]: v })); setGradeSuja(true); setSujo(true); }}
-      barras={barras} onBarra={(k, v) => { setBarras((b) => ({ ...b, [k]: v })); setGradeSuja(true); setSujo(true); }}
+      cores={cores} onCores={(v) => { setCores(v); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
+      tamanhos={tamanhos} onTamanhos={(v) => { setTamanhos(v); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
+      celulas={celulas} onCelula={(k, v) => { setCelulas((c) => ({ ...c, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
+      barras={barras} onBarra={(k, v) => { setBarras((b) => ({ ...b, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
     />
   ) : null;
@@ -718,12 +809,6 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
           {!narrow && (
             <View style={s.tipo}>
-              {modoEdicao && (
-                <View style={s.tipoLock}>
-                  <Icon name="lock" size={11} color={Colors.ink3} />
-                  <Text style={s.tipoLockTxt}>tipo fixo</Text>
-                </View>
-              )}
               {tipoBtn("product", "package", "Produto")}
               {tipoBtn("service", "star", "Serviço")}
             </View>
@@ -897,8 +982,6 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 2, padding: 2, borderRadius: 9,
     backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
   },
-  tipoLock: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6 },
-  tipoLockTxt: { fontSize: 11, color: Colors.ink3 },
   tipoBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 6 },
   tipoBtnAtivo: { backgroundColor: Colors.violet },
   tipoTxt: { fontSize: 12.5, fontWeight: "600", color: Colors.ink3 },

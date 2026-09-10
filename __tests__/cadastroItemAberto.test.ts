@@ -65,6 +65,9 @@ import {
   type FotoPendente,
 } from "@/components/screens/estoque/item-form/types";
 import type { ProductImage } from "@/services/productImagesApi";
+import {
+  mesclarPaiNaGrade, normalizarChaveDaGrade, normalizarMapaDaGrade, totalDaMatriz,
+} from "@/components/screens/estoque/item-form/types";
 
 const foto = (id: string, position: number): ProductImage =>
   ({ id, url: "https://r2/" + id + ".jpg", thumb_url: null, position });
@@ -508,7 +511,7 @@ describe("9. layout e textos do cabeçalho", () => {
 
   test("o subtítulo diz o que salva quando", () => {
     expect(subtituloDoModal(false)).toBe("Nome e preço bastam. O resto você completa quando quiser.");
-    expect(subtituloDoModal(true)).toBe("Fotos e grade salvam na hora. O resto, no Salvar.");
+    expect(subtituloDoModal(true)).toBe("Fotos salvam na hora. O resto, no Salvar.");
   });
 
   test("o botão nomeia o que vai salvar", () => {
@@ -516,5 +519,90 @@ describe("9. layout e textos do cabeçalho", () => {
     expect(rotuloDoBotaoSalvar("service", false)).toBe("Salvar serviço");
     expect(rotuloDoBotaoSalvar("product", true)).toBe("Salvar alterações");
     expect(nomeDoTipo("service")).toBe("serviço");
+  });
+});
+
+// ── suporte 10/09/2026: a edição não mostrava as cores e tamanhos ──
+// 4.858 produtos guardam cor/tamanho no próprio cadastro, sem variação.
+describe("edição: cor e tamanho gravados no próprio produto", () => {
+  const HEX: Record<string, string> = { preto: "#1F2937", azul: "#3B82F6" };
+  const NOME: Record<string, string> = { "#1F2937": "Preto", "#3B82F6": "Azul" };
+  const nomeParaHex = (n: string) => (/^#[0-9A-Fa-f]{6}$/.test(n) ? n : HEX[n.toLowerCase()] || null);
+  const hexParaNome = (h: string) => NOME[h.toUpperCase()] || h;
+  const vazio = { cores: [], tamanhos: [], celulas: {}, nomeParaHex, hexParaNome };
+
+  test("só tamanho no produto: vira grade de tamanho com o estoque dele", () => {
+    const m = mesclarPaiNaGrade({ ...vazio, paiCor: "", paiTamanho: "M", paiEstoque: 5 });
+    expect(m.cores).toEqual([]);
+    expect(m.tamanhos).toEqual(["M"]);
+    expect(m.celulas).toEqual({ "|M": "5" });
+    expect(m.mesclou).toBe(true);
+    expect(m.aviso).toBe("Tamanho M (5 un) estava no cadastro do produto, fora da grade. Ao salvar, vira uma variação com o mesmo estoque.");
+  });
+
+  test("cor em hex minúsculo e tamanho: a chave sai em caixa alta, como a grade usa", () => {
+    const m = mesclarPaiNaGrade({ ...vazio, paiCor: "#1f2937", paiTamanho: "P", paiEstoque: 3 });
+    expect(m.cores).toEqual([{ hex: "#1F2937", name: "Preto" }]);
+    expect(m.tamanhos).toEqual(["P"]);
+    expect(m.celulas).toEqual({ "#1F2937|P": "3" });
+    expect(m.aviso).toBe("Cor Preto · tamanho P (3 un) estavam no cadastro do produto, fora da grade. Ao salvar, vira uma variação com o mesmo estoque.");
+  });
+
+  test("cor escrita por nome e sem estoque: entra a cor, o aviso não cita estoque", () => {
+    const m = mesclarPaiNaGrade({ ...vazio, paiCor: "Azul", paiTamanho: null, paiEstoque: 0 });
+    expect(m.cores).toEqual([{ hex: "#3B82F6", name: "Azul" }]);
+    expect(m.celulas).toEqual({});
+    expect(m.aviso).toBe("Cor Azul estava no cadastro do produto, fora da grade. Ao salvar, vira uma variação.");
+  });
+
+  test("cor irreconhecível fica de fora, o tamanho ainda entra", () => {
+    const m = mesclarPaiNaGrade({ ...vazio, paiCor: "furta-cor", paiTamanho: "G", paiEstoque: 2 });
+    expect(m.cores).toEqual([]);
+    expect(m.tamanhos).toEqual(["G"]);
+    expect(m.celulas).toEqual({ "|G": "2" });
+  });
+
+  test("produto sem cor nem tamanho no cadastro: nada muda e nada força o Salvar", () => {
+    const base = { cores: [{ hex: "#1F2937", name: "Preto" }], tamanhos: ["P"], celulas: { "#1F2937|P": "4" } };
+    const m = mesclarPaiNaGrade({ ...base, nomeParaHex, hexParaNome, paiCor: "", paiTamanho: "", paiEstoque: 9 });
+    expect(m.mesclou).toBe(false);
+    expect(m.aviso).toBeNull();
+    expect(m.cores).toBe(base.cores);
+    expect(m.celulas).toBe(base.celulas);
+  });
+
+  test("combinação do pai já existe nas variações: não duplica nem sobrescreve", () => {
+    const base = { cores: [{ hex: "#1F2937", name: "Preto" }], tamanhos: ["P"], celulas: { "#1F2937|P": "4" } };
+    const m = mesclarPaiNaGrade({ ...base, nomeParaHex, hexParaNome, paiCor: "#1F2937", paiTamanho: "P", paiEstoque: 0 });
+    expect(m.mesclou).toBe(false);
+    expect(m.cores).toHaveLength(1);
+    expect(m.celulas["#1F2937|P"]).toBe("4");
+  });
+
+  test("grade cor × tamanho e pai só com tamanho: entra a coluna, nenhuma célula inventada", () => {
+    const base = { cores: [{ hex: "#1F2937", name: "Preto" }], tamanhos: ["P"], celulas: { "#1F2937|P": "4" } };
+    const m = mesclarPaiNaGrade({ ...base, nomeParaHex, hexParaNome, paiCor: null, paiTamanho: "M", paiEstoque: 7 });
+    expect(m.tamanhos).toEqual(["P", "M"]);
+    expect(m.celulas).toEqual({ "#1F2937|P": "4" });
+    expect(m.aviso).toBe("Tamanho M estava no cadastro do produto, fora da grade. Ao salvar, vira uma variação.");
+  });
+
+  test("célula já preenchida não é sobrescrita pelo estoque do pai", () => {
+    const m = mesclarPaiNaGrade({ ...vazio, tamanhos: ["M"], celulas: { "|M": "8" }, paiCor: "", paiTamanho: "M", paiEstoque: 5 });
+    expect(m.mesclou).toBe(false);
+    expect(m.celulas).toEqual({ "|M": "8" });
+  });
+
+  test("chaves da grade normalizadas: hex em caixa alta, tamanho intacto", () => {
+    expect(normalizarChaveDaGrade("#abcdef|m")).toBe("#ABCDEF|m");
+    expect(normalizarChaveDaGrade("|GG")).toBe("|GG");
+    expect(normalizarMapaDaGrade({ "#abcdef|P": 2, "|M": 1 })).toEqual({ "#ABCDEF|P": 2, "|M": 1 });
+    expect(normalizarMapaDaGrade(null)).toEqual({});
+  });
+
+  test("total da grade soma as células e ignora o que não é número", () => {
+    expect(totalDaMatriz({ "a|P": 2, "a|M": 3 })).toBe(5);
+    expect(totalDaMatriz({ "a|P": NaN as any })).toBe(0);
+    expect(totalDaMatriz(undefined)).toBe(0);
   });
 });

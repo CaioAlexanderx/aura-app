@@ -129,7 +129,7 @@ export function SecaoPreco({ type, narrow, preco, onPreco, custo, onCusto, durac
           </View>
           {outraAtiva && (
             <Entrada
-              value={ehPreset ? "" : duracao}
+              value={mostrarOutra || !ehPreset ? duracao : ""}
               onChangeText={onDuracao}
               onSubmitEditing={onSubmit}
               placeholder="Ex.: 20 min, 3h, 1h30"
