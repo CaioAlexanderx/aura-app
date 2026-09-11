@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useQuery } from "@tanstack/react-query";
 import { billingApi } from "@/services/api";
+import { discountInEffectText } from "@/components/billing/couponText";
 import { router } from "expo-router";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
@@ -173,6 +174,13 @@ export default function PlanosScreen() {
 
       {billingStatus && !trialActive && billingStatus.billing_status !== "inactive" && (
         <View style={s.statusBanner}><Text style={s.statusText}>Plano {billingStatus.plan} - {billingStatus.billing_status === "active" ? "Ativo" : billingStatus.billing_status}</Text></View>
+      )}
+
+      {/* 11/09/2026: desconto de varios meses em andamento — trocar de plano o encerra (o checkout avisa de novo). */}
+      {billingStatus?.discount && (
+        <View style={s.statusBanner}>
+          <Text style={s.statusText}>{discountInEffectText(billingStatus.discount)} Trocar de plano encerra o desconto.</Text>
+        </View>
       )}
 
       <View style={s.toggleWrap}>
