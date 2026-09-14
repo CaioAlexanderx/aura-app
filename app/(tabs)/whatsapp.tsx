@@ -33,6 +33,10 @@ import { ConexaoCard } from "@/components/whatsapp/ConexaoCard";
 import { UsoCard } from "@/components/whatsapp/UsoCard";
 import { FilaCard, filtrarCrediario } from "@/components/whatsapp/FilaCard";
 import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
+// Fases 7/8: marketing (aniversário e reativação) é outra categoria na
+// Meta, custa mais e exige consentimento declarado. A declaração mora na
+// aba Conexão porque é uma propriedade do NÚMERO, não de uma rotina.
+import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -96,6 +100,11 @@ export default function WhatsAppScreen() {
             <>
               <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
               <UsoCard status={wa.status} />
+              <ConsentimentoMarketingCard
+                companyId={companyId}
+                status={wa.status}
+                onChanged={wa.reloadStatus}
+              />
               <Pressable
                 onPress={() => router.push("/crediario/settings")}
                 accessibilityRole="button"
@@ -105,6 +114,17 @@ export default function WhatsAppScreen() {
                 <Icon name="arrow_right" size={14} color={Colors.violet3} />
                 <Text style={s.linkTxt}>
                   O envio automático das cobranças liga na régua, em Configurações do Crediário.
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/clientes/reativacao")}
+                accessibilityRole="button"
+                style={s.linkCard}
+                testID="wa-varejo-ir-para-reativacao"
+              >
+                <Icon name="arrow_right" size={14} color={Colors.violet3} />
+                <Text style={s.linkTxt}>
+                  O cupom para quem parou de comprar fica em Clientes, na tela de Reativação.
                 </Text>
               </Pressable>
             </>

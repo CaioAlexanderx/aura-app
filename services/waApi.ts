@@ -85,13 +85,29 @@ export type WaSignupMode = "padrao" | "coexistence";
  * não é WhatsApp. A mensalidade do dojô continua sendo o default (sem
  * preset).
  */
-export type WaTemplatePreset = "mensalidade_lembrete" | "parcela_lembrete" | "parcela_atraso";
+export type WaTemplatePreset =
+  | "mensalidade_lembrete"
+  | "parcela_lembrete"
+  | "parcela_atraso"
+  // Fases 7/8 — categoria MARKETING na Meta, mais cara por mensagem que
+  // as de cobrança (UTILITY) e sujeita a limite por usuário.
+  | "reativacao_cupom"
+  | "aniversario_cupom";
 
 /** Quais templates já estão APPROVED na Meta. Chave ausente = não. */
 export type WaTemplatesReady = Partial<Record<WaTemplatePreset, boolean>> & Record<string, boolean | undefined>;
 
 /** Templates que a régua do crediário precisa antes de ligar o automático. */
 export const WA_CREDIARIO_TEMPLATES: WaTemplatePreset[] = ["parcela_lembrete", "parcela_atraso"];
+
+/** Template da reativação (Fase 7) — um só, e MARKETING. */
+export const WA_REATIVACAO_TEMPLATES: WaTemplatePreset[] = ["reativacao_cupom"];
+
+/** Template do aniversário (Fase 8) — um só, e MARKETING. */
+export const WA_ANIVERSARIO_TEMPLATES: WaTemplatePreset[] = ["aniversario_cupom"];
+
+/** Os dois de marketing, para a tela de templates. */
+export const WA_MARKETING_TEMPLATES: WaTemplatePreset[] = ["reativacao_cupom", "aniversario_cupom"];
 
 export interface WaStatus {
   /** Já vem false quando a Meta recusou o token (ver token_expired). */
@@ -128,6 +144,21 @@ export interface WaStatus {
    * que sairia mensagem paga com template que a Meta ainda vai recusar.
    */
   templates_ready?: WaTemplatesReady;
+
+  /**
+   * Fases 7/8 — MARKETING. `marketing_consent_at` é a data em que o dono
+   * declarou que os clientes autorizaram receber mensagens da loja; null
+   * ou AUSENTE significa que não declarou, e sem isso nenhuma mensagem de
+   * marketing sai (a de cobrança continua, é outra categoria).
+   *
+   * `marketing_ready` é o resumo do backend das condições que não são do
+   * template: consentimento declarado + qualidade que a Meta ainda aceita
+   * para marketing (YELLOW já barra) + fila não pausada. Ausente = não
+   * pronto, como todo campo novo aqui.
+   */
+  marketing_consent_at?: string | null;
+  marketing_ready?: boolean;
+
   quality_rating?: WaQualityRating | null;
   /** QUALIDADE_BAIXA | CONTA_RESTRITA | MANUAL — fila pausada. */
   paused_reason?: string | null;
@@ -256,20 +287,33 @@ export interface WaPreviewItem {
   student_name?: string | null;
   /** No crediário quem recebe é cliente, não aluno — o backend reusa o shape. */
   customer_name?: string | null;
+  customer_id?: string | null;
   /** Já vem mascarado pelo backend — nunca o telefone inteiro. */
   phone_masked?: string | null;
   amount?: number | null;
   due_date?: string | null;
+  /** Reativação (Fase 7): o quanto o cliente já gastou e há quanto sumiu. */
+  total_spent?: number | null;
+  days_since?: number | null;
   /** null = entraria no envio; preenchido = motivo do pulo. */
   reason?: string | null;
 }
 
 export interface WaPreview {
-  date: string;
+  date?: string;
+  /** 'crediario' | 'reativacao' | 'aniversario' — de qual régua é a prévia. */
+  source?: string | null;
+  /** Reativação: qual segmento foi simulado (at_risk | dormant | both). */
+  segment?: string | null;
   template_name?: string | null;
   /** Quantas mensagens SAIRIAM (e seriam cobradas) nessa data. */
   would_send: number;
   skipped?: WaPreviewSkipped;
+  /**
+   * Motivo de a rotina INTEIRA não rodar (sem consentimento, sem addon,
+   * desligada…) — diferente de `skipped`, que é por cliente.
+   */
+  skipped_reason?: string | null;
   /** Máx. 200 itens — amostra, não a lista completa. */
   items?: WaPreviewItem[];
 }

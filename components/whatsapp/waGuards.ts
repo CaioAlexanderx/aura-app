@@ -141,6 +141,20 @@ const SKIP_REASON_PT: Record<string, string> = {
   sem_telefone: "Sem telefone cadastrado.",
   telefone_invalido: "Telefone inválido.",
 
+  // ── Marketing: reativação e aniversário (Fases 7/8) ────
+  // Estas custam MAIS que as de cobrança (categoria MARKETING na Meta) e
+  // dependem de consentimento. Quem lê precisa saber que não foi erro —
+  // foi a guarda funcionando — e o que fazer para destravar.
+  frequencia_marketing: "Este cliente já recebeu uma mensagem de marketing nos últimos 7 dias.",
+  qualidade_marketing: "Qualidade do número em atenção: marketing pausado.",
+  limite_marketing: "Limite diário de marketing atingido.",
+  sem_consentimento: "Marque o consentimento de marketing na aba WhatsApp.",
+  opt_out_marketing: "Este cliente pediu para não receber mensagens de marketing.",
+  sem_cupom: "Não foi possível gerar o cupom deste cliente.",
+  cliente_nao_encontrado: "Cliente não encontrado nesta loja.",
+  nao_enfileirado: "A mensagem não entrou na fila de envio.",
+  token_expirado: "A autorização da Meta expirou — reconecte o número da loja.",
+
   // ── Crediário (Fase 6) ─────────────────────────────────
   // Motivos que o runForCompany do backend devolve quando a régua do
   // crediário não casa. Nenhum deles é erro: são o desenho funcionando.
@@ -186,6 +200,12 @@ const SKIP_REASON_SHORT_PT: Record<string, string> = {
   qualidade_baixa: "qualidade baixa",
   pausado: "envios pausados",
   sem_saldo: "já quitadas",
+  frequencia_marketing: "marketing nos últimos 7 dias",
+  qualidade_marketing: "qualidade em atenção",
+  limite_marketing: "limite de marketing do dia",
+  sem_consentimento: "sem consentimento",
+  opt_out_marketing: "opt-out de marketing",
+  sem_cupom: "sem cupom",
 };
 
 export function waSkipReasonShort(reason: string | null | undefined): string | null {
@@ -293,6 +313,14 @@ export function mapWaError(e: any): WaMappedError {
         "O template de cobrança ainda não foi aprovado pela Meta — sem ele não é possível iniciar conversa.",
     };
   }
+  if (code === "SEM_CONSENTIMENTO") {
+    return {
+      code,
+      message:
+        e?.data?.error ||
+        "Confirme que os seus clientes autorizaram receber mensagens da loja pelo WhatsApp antes de ligar o envio automático.",
+    };
+  }
   if (code === "SCHEMA_PENDING") {
     return { code, message: "O WhatsApp ainda não está disponível neste ambiente (atualização pendente no servidor)." };
   }
@@ -312,7 +340,20 @@ export function mapWaError(e: any): WaMappedError {
  */
 const WA_ERROR_CODES = new Set([
   "ADDON_REQUIRED", "NAO_CONECTADO", "TOKEN_EXPIRADO", "TEMPLATE_NAO_APROVADO",
+  // Fases 7/8: chegam pelo PUT birthday/settings e pelo PUT
+  // reactivation/settings, que são rotas de OUTROS módulos.
+  "SEM_CONSENTIMENTO", "SCHEMA_PENDING",
 ]);
+
+/**
+ * "1 mensagem de marketing paga" / "12 mensagens de marketing pagas".
+ * A palavra "paga" está aqui de propósito: é a diferença entre o wa.me
+ * (grátis) e o template MARKETING, e quem clica precisa ver isso antes.
+ */
+export function waMarketingCostLabel(n: number): string {
+  const q = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+  return q === 1 ? "1 mensagem de marketing paga" : `${q} mensagens de marketing pagas`;
+}
 
 export function isWaErrorCode(code: unknown): boolean {
   return typeof code === "string" && WA_ERROR_CODES.has(code);
@@ -329,7 +370,12 @@ export function isWaErrorCode(code: unknown): boolean {
  * igual a `false`. `status` nulo (falha ao carregar) idem.
  */
 export interface WaAutoBlocker {
-  code: "SEM_STATUS" | "ADDON" | "CONEXAO" | "TOKEN" | "TEMPLATE" | "PAUSADO";
+  code:
+    | "SEM_STATUS" | "ADDON" | "CONEXAO" | "TOKEN" | "TEMPLATE" | "PAUSADO"
+    // Só marketing (Fases 7/8): o dono não declarou o consentimento, ou a
+    // Meta rebaixou o número a ponto de recusar marketing (YELLOW já
+    // barra) — a cobrança, que é UTILITY, continua saindo nesse estado.
+    | "CONSENTIMENTO" | "QUALIDADE_MARKETING";
   label: string;
 }
 
@@ -343,6 +389,15 @@ export interface WaAutoBlockersOptions {
   templateKeys?: string[];
   /** Trocas de texto por contexto ("do dojô" vs. "da loja"). */
   labels?: Partial<Record<WaAutoBlocker["code"], string>>;
+  /**
+   * Fases 7/8 — este canal é MARKETING. Liga duas guardas que a cobrança
+   * não tem: o consentimento declarado (`marketing_consent_at`) e a
+   * qualidade que a Meta exige para marketing (`marketing_ready`, que já
+   * considera YELLOW e fila pausada). Ambos AUSENTES bloqueiam: backend
+   * anterior à Fase 7 não sabe nada de marketing, e não saber nunca pode
+   * virar permissão de gastar.
+   */
+  requireConsent?: boolean;
 }
 
 /** true só quando TODAS as chaves pedidas estão explicitamente prontas. */
@@ -393,7 +448,69 @@ export function waAutoBlockers(
   if (status.paused_reason) {
     out.push({ code: "PAUSADO", label: `Envios pausados: ${waPausedReasonLabel(status.paused_reason)}` });
   }
+
+  if (opts?.requireConsent) {
+    if (!waMarketingConsentOk(status)) {
+      out.push({
+        code: "CONSENTIMENTO",
+        label: txt(
+          "CONSENTIMENTO",
+          "Confirme na aba WhatsApp que os seus clientes autorizaram receber mensagens da loja — sem isso nenhuma mensagem de marketing sai."
+        ),
+      });
+    } else if (!waMarketingQualityOk(status)) {
+      // Consentimento dado e ainda assim não pronto: sobrou qualidade ou
+      // pausa. A cobrança segue saindo — só o marketing para.
+      out.push({
+        code: "QUALIDADE_MARKETING",
+        label: txt(
+          "QUALIDADE_MARKETING",
+          "A Meta colocou o número em atenção: as mensagens de marketing ficam pausadas até a qualidade voltar. A cobrança continua saindo."
+        ),
+      });
+    }
+  }
   return out;
+}
+
+/** Data em que o dono declarou o consentimento. null = nunca declarou. */
+export function waMarketingConsentAt(status: WaStatus | null | undefined): string | null {
+  const raw = status?.marketing_consent_at;
+  return typeof raw === "string" && raw.trim() ? raw : null;
+}
+
+/** Consentimento declarado? Campo ausente = NÃO (nunca libera por omissão). */
+export function waMarketingConsentOk(status: WaStatus | null | undefined): boolean {
+  return waMarketingConsentAt(status) !== null;
+}
+
+/**
+ * A Meta ainda aceita MARKETING deste número? `marketing_ready` é o
+ * resumo do backend (consentimento + qualidade + pausa); quando ele não
+ * vem, caímos na leitura local do quality_rating — YELLOW já barra
+ * marketing, mesmo sem barrar cobrança.
+ */
+export function waMarketingQualityOk(status: WaStatus | null | undefined): boolean {
+  if (!status) return false;
+  if (status.marketing_ready === true) return true;
+  if (status.marketing_ready === false) return false;
+  const up = String(status.quality_rating || "").toUpperCase();
+  if (up === "YELLOW" || up === "RED") return false;
+  return !status.paused_reason;
+}
+
+/**
+ * As guardas de um canal de MARKETING, em uma chamada só: tudo o que a
+ * cobrança já exige (plano, conexão, template) MAIS consentimento e
+ * qualidade. Existe para que aniversário e reativação não tenham cada um
+ * a sua versão de "pode mandar?" — divergir aqui é mandar mensagem paga
+ * numa tela que a outra bloqueia.
+ */
+export function waMarketingBlockers(
+  status: WaStatus | null | undefined,
+  opts?: Omit<WaAutoBlockersOptions, "requireConsent">
+): WaAutoBlocker[] {
+  return waAutoBlockers(status, { ...(opts || {}), requireConsent: true });
 }
 
 /** wa_paused_reason → frase pt-BR (minúscula, entra no meio da frase). */

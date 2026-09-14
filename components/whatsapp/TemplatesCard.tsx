@@ -13,6 +13,13 @@
 //
 // Depois disso a aprovação é da Meta e leva até ~24h. Enquanto estiver
 // PENDING a tela diz isso, em vez de deixar o lojista achando que travou.
+//
+// Fases 7/8: entram mais dois, de outra natureza — reativação e
+// aniversário são categoria MARKETING. A Meta cobra mais por mensagem,
+// limita quantas cada pessoa recebe e exige consentimento. Eles ficam em
+// um grupo separado, com a categoria dita em voz alta, porque criar um
+// template de marketing achando que é cobrança é o tipo de engano que só
+// aparece na fatura.
 // ============================================================
 import React, { useState } from "react";
 import { View, Text, ActivityIndicator, Pressable, StyleSheet } from "react-native";
@@ -22,17 +29,42 @@ import { waApi, WaStatus, WaTemplate, WaTemplatePreset } from "@/services/waApi"
 import { fmtWhenBR, mapWaError, waCategoryLabel, waTemplateStatusSpec } from "./waGuards";
 import { waTonePair } from "./varejoTheme";
 
+interface PresetSpec {
+  preset: WaTemplatePreset;
+  titulo: string;
+  descricao: string;
+  botao: string;
+}
+
 /** Os presets do crediário, na ordem em que a régua os usa. */
-const PRESETS: { preset: WaTemplatePreset; titulo: string; descricao: string }[] = [
+const PRESETS: PresetSpec[] = [
   {
     preset: "parcela_lembrete",
     titulo: "Lembrete de parcela",
     descricao: "Usado nas etapas que avisam antes do vencimento e no dia. Leva o Pix copia e cola.",
+    botao: "Criar template de lembrete",
   },
   {
     preset: "parcela_atraso",
     titulo: "Parcela em atraso",
     descricao: "Usado nas etapas de atraso. Diz há quantos dias venceu e leva o Pix copia e cola.",
+    botao: "Criar template de atraso",
+  },
+];
+
+/** Os dois de MARKETING (Fases 7/8) — outra categoria, outro preço. */
+const PRESETS_MARKETING: PresetSpec[] = [
+  {
+    preset: "reativacao_cupom",
+    titulo: "Cupom de reativação",
+    descricao: "Enviado a quem não compra há um tempo, com um cupom e prazo curto para voltar.",
+    botao: "Criar template de reativação",
+  },
+  {
+    preset: "aniversario_cupom",
+    titulo: "Cupom de aniversário",
+    descricao: "Enviado no dia do aniversário do cliente, com o cupom de presente da loja.",
+    botao: "Criar template de aniversário",
   },
 ];
 
@@ -102,12 +134,64 @@ export function TemplatesCard({
     }
   }
 
+  function renderPreset(p: PresetSpec) {
+    const st = statusDoPreset(p.preset);
+    const spec = waTemplateStatusSpec(st);
+    const tone = waTonePair(spec.tone);
+    const existe = !!st;
+    return (
+      <View key={p.preset} style={s.preset} testID={`wa-varejo-preset-${p.preset}`}>
+        <View style={s.presetHead}>
+          <View style={{ flex: 1, minWidth: 160 }}>
+            <Text style={s.presetTitulo}>{p.titulo}</Text>
+            <Text style={s.presetNome}>{p.preset}</Text>
+          </View>
+          {existe && (
+            <View style={[s.badge, { backgroundColor: tone.bg }]}>
+              <Icon name={spec.icon} size={12} color={tone.color} />
+              <Text style={[s.badgeTxt, { color: tone.color }]}>{spec.label}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={s.presetDesc}>{p.descricao}</Text>
+
+        {!existe && (
+          <Pressable
+            onPress={() => criar(p.preset)}
+            disabled={criando === p.preset}
+            accessibilityRole="button"
+            style={[s.primaryBtn, criando === p.preset && s.btnDisabled]}
+            testID={`wa-varejo-criar-${p.preset}`}
+          >
+            {criando === p.preset
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Icon name="plus" size={13} color="#fff" />}
+            <Text style={s.primaryTxt}>{criando === p.preset ? "Criando…" : p.botao}</Text>
+          </Pressable>
+        )}
+
+        {(st === "PENDING" || st === "IN_APPEAL") && (
+          <Text style={s.presetNota} testID={`wa-varejo-pendente-${p.preset}`}>
+            Aguardando aprovação da Meta (normalmente até 24h). Quando sair a resposta, toque em
+            Sincronizar para atualizar o status aqui.
+          </Text>
+        )}
+        {st === "REJECTED" && (
+          <Text style={[s.presetNota, { color: Colors.red }]}>
+            A Meta recusou este template. Fale com a Aura: é preciso ajustar o texto e reenviar para
+            análise antes de ligar o envio automático.
+          </Text>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={s.card} testID="wa-varejo-templates">
       <View style={s.head}>
         <View style={s.headTitle}>
           <Icon name="file_text" size={16} color={Colors.violet3} />
-          <Text style={s.title}>Templates de cobrança</Text>
+          <Text style={s.title}>Templates da loja</Text>
         </View>
         <Pressable
           onPress={sincronizar}
@@ -121,8 +205,9 @@ export function TemplatesCard({
         </Pressable>
       </View>
       <Text style={s.sub}>
-        A régua do crediário só liga com os dois templates abaixo aprovados pela Meta. A aprovação
-        acontece do lado da Meta — aqui você cria o texto certo e acompanha o status.
+        Só dá para iniciar uma conversa no WhatsApp com um texto aprovado pela Meta. A régua do
+        crediário precisa dos dois primeiros; aniversário e reativação, dos dois de marketing. Aqui
+        você cria o texto certo e acompanha o status — a aprovação é do lado da Meta.
       </Text>
 
       {!!syncErr && <Text style={s.errTxt}>{syncErr}</Text>}
@@ -141,63 +226,19 @@ export function TemplatesCard({
       )}
 
       {!notConnected && (
-        <View style={s.presets}>
-          {PRESETS.map((p) => {
-            const st = statusDoPreset(p.preset);
-            const spec = waTemplateStatusSpec(st);
-            const tone = waTonePair(spec.tone);
-            const existe = !!st;
-            return (
-              <View key={p.preset} style={s.preset} testID={`wa-varejo-preset-${p.preset}`}>
-                <View style={s.presetHead}>
-                  <View style={{ flex: 1, minWidth: 160 }}>
-                    <Text style={s.presetTitulo}>{p.titulo}</Text>
-                    <Text style={s.presetNome}>{p.preset}</Text>
-                  </View>
-                  {existe && (
-                    <View style={[s.badge, { backgroundColor: tone.bg }]}>
-                      <Icon name={spec.icon} size={12} color={tone.color} />
-                      <Text style={[s.badgeTxt, { color: tone.color }]}>{spec.label}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={s.presetDesc}>{p.descricao}</Text>
+        <>
+          <View style={s.presets}>{PRESETS.map(renderPreset)}</View>
 
-                {!existe && (
-                  <Pressable
-                    onPress={() => criar(p.preset)}
-                    disabled={criando === p.preset}
-                    accessibilityRole="button"
-                    style={[s.primaryBtn, criando === p.preset && s.btnDisabled]}
-                    testID={`wa-varejo-criar-${p.preset}`}
-                  >
-                    {criando === p.preset
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Icon name="plus" size={13} color="#fff" />}
-                    <Text style={s.primaryTxt}>
-                      {criando === p.preset
-                        ? "Criando…"
-                        : p.preset === "parcela_lembrete" ? "Criar template de lembrete" : "Criar template de atraso"}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {(st === "PENDING" || st === "IN_APPEAL") && (
-                  <Text style={s.presetNota} testID={`wa-varejo-pendente-${p.preset}`}>
-                    Aguardando aprovação da Meta (normalmente até 24h). Quando sair a resposta, toque
-                    em Sincronizar para atualizar o status aqui.
-                  </Text>
-                )}
-                {st === "REJECTED" && (
-                  <Text style={[s.presetNota, { color: Colors.red }]}>
-                    A Meta recusou este template. Fale com a Aura: é preciso ajustar o texto e
-                    reenviar para análise antes de ligar o envio automático.
-                  </Text>
-                )}
-              </View>
-            );
-          })}
-        </View>
+          <View style={s.grupo} testID="wa-varejo-grupo-marketing">
+            <Text style={s.grupoTitulo}>Mensagens de marketing</Text>
+            <Text style={s.grupoSub}>
+              Reativação e aniversário são de categoria MARKETING na Meta: custam mais por mensagem
+              que a cobrança, têm limite por cliente e só saem para quem autorizou receber. O
+              consentimento é marcado na aba Conexão.
+            </Text>
+            <View style={s.presets}>{PRESETS_MARKETING.map(renderPreset)}</View>
+          </View>
+        </>
       )}
 
       {!!criarErr && <Text style={s.errTxt}>{criarErr}</Text>}
@@ -259,6 +300,9 @@ const s = StyleSheet.create({
   ghostTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
   btnDisabled: { opacity: 0.5 },
   presets: { gap: 10, marginTop: 14 },
+  grupo: { marginTop: 20, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 16 },
+  grupoTitulo: { fontSize: 13, fontWeight: "800", color: Colors.ink },
+  grupoSub: { fontSize: 11.5, color: Colors.ink2, marginTop: 6, lineHeight: 16.5, maxWidth: 620 },
   preset: { backgroundColor: Colors.bg2, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, padding: 12, gap: 4 },
   presetHead: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   presetTitulo: { fontSize: 13.5, fontWeight: "800", color: Colors.ink },
