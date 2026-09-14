@@ -13,38 +13,52 @@
 // Os templates aprovados vêm do pai (a lista já foi buscada uma vez).
 // Sem template aprovado, o campo de texto livre continua disponível —
 // mas ele só funciona dentro da janela de 24h, e a microcópia diz isso.
+//
+// Fase 3c: "teste" não quer dizer "de mentira". A mensagem sai de
+// verdade e a Meta cobra por ela — por isso o clique passa por uma
+// confirmação que diz isso com todas as letras, e o cartão mostra
+// quantos testes ainda cabem no dia (teto de 5, o mesmo do backend).
+// A contagem local serve para AVISAR; quem barra de verdade é o backend.
 // ============================================================
 import React, { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
+  View, Text, TextInput, TouchableOpacity, Modal, Pressable,
+  StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { waApi, WaTemplate, WaTestSendResult } from "@/services/waApi";
 import {
-  isValidWaPhone, mapWaError, waErrorLabel, waOutboxStatusView, waSkipReasonLabel,
+  WA_TEST_DAILY_CAP, fmtPhoneBR, isValidWaPhone, mapWaError, waErrorLabel,
+  waOutboxStatusView, waSkipReasonLabel,
 } from "./helpers";
 
 interface Props {
   companyId: string;
   /** Só os aprovados — enviar com template pendente/recusado a Meta recusa. */
   approvedTemplates: WaTemplate[];
+  /** Testes já feitos hoje (contados na fila pelo pai). Ausente = desconhecido. */
+  testsSentToday?: number;
   /** Avisa o pai pra recarregar status e fila (o teste entra no outbox). */
   onSent?: () => void;
 }
 
-export function WaTestSendCard({ companyId, approvedTemplates, onSent }: Props) {
+export function WaTestSendCard({ companyId, approvedTemplates, testsSentToday, onSent }: Props) {
   const [phone, setPhone] = useState("");
   const [templateName, setTemplateName] = useState<string | null>(null);
   const [text, setText] = useState("");
 
+  const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<WaTestSendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selected = approvedTemplates.find((t) => t.name === templateName) || null;
-  const canSend = isValidWaPhone(phone) && (!!selected || text.trim().length > 0);
+  const usados = typeof testsSentToday === "number" ? testsSentToday : null;
+  const restantes = usados != null ? Math.max(0, WA_TEST_DAILY_CAP - usados) : null;
+  const semCota = restantes === 0;
+  const canSend = isValidWaPhone(phone) && (!!selected || text.trim().length > 0) && !semCota;
 
   async function send() {
     setSending(true);
@@ -58,9 +72,11 @@ export function WaTestSendCard({ companyId, approvedTemplates, onSent }: Props) 
         text: selected ? undefined : text.trim(),
       });
       setResult(res);
+      setConfirming(false);
       onSent?.();
     } catch (e: any) {
       setError(mapWaError(e).message);
+      setConfirming(false);
     } finally {
       setSending(false);
     }
@@ -146,11 +162,44 @@ export function WaTestSendCard({ companyId, approvedTemplates, onSent }: Props) 
           size="sm"
           loading={sending}
           disabled={!canSend}
-          onPress={send}
+          onPress={() => setConfirming(true)}
         />
       </View>
 
+      {restantes != null && (
+        <Text style={semCota ? styles.cotaZero : styles.cota} testID="wa-teste-cota">
+          {semCota
+            ? `Os ${WA_TEST_DAILY_CAP} testes do dia já foram usados. O limite volta amanhã — ele existe para o teste não virar despesa.`
+            : `${restantes} de ${WA_TEST_DAILY_CAP} ${restantes === 1 ? "teste restante" : "testes restantes"} hoje.`}
+        </Text>
+      )}
+
       {!!error && <Text style={styles.errTxt}>{error}</Text>}
+
+      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+        <Pressable style={styles.backdrop} onPress={() => (sending ? null : setConfirming(false))}>
+          <Pressable style={styles.dialog} onPress={() => {}} testID="wa-teste-confirmacao">
+            <Text style={styles.dialogTitle}>Isto envia 1 mensagem real e paga. Continuar?</Text>
+            <Text style={styles.dialogSub}>
+              A mensagem sai agora para {fmtPhoneBR(phone)}
+              {selected ? ` usando o template ${selected.name}` : " como texto livre"}. A Meta cobra
+              a conversa na conta do dojô, igual a qualquer envio da régua.
+              {restantes != null ? ` Restam ${restantes} de ${WA_TEST_DAILY_CAP} testes hoje.` : ""}
+            </Text>
+            <View style={styles.dialogActions}>
+              <KarateButton label="Cancelar" variant="secondary" size="sm" disabled={sending} onPress={() => setConfirming(false)} />
+              <KarateButton
+                label={sending ? "Enviando…" : "Enviar mesmo assim"}
+                variant="sumi"
+                size="sm"
+                loading={sending}
+                disabled={sending}
+                onPress={send}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {!!outcome && !!outcomeView && (
         <View style={[styles.resultBox, { backgroundColor: outcomeView.bg }]}>
@@ -194,6 +243,13 @@ const styles = StyleSheet.create({
   hint: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 12, lineHeight: 16, maxWidth: 560 } as TextStyle,
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 } as ViewStyle,
   errTxt: { fontSize: 12, color: KarateColors.danger, marginTop: 8 } as TextStyle,
+  cota: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 8, lineHeight: 16.5, maxWidth: 560 } as TextStyle,
+  cotaZero: { fontSize: 11.5, fontWeight: "600", color: KarateColors.warn, marginTop: 8, lineHeight: 16.5, maxWidth: 560 } as TextStyle,
+  backdrop: { flex: 1, backgroundColor: "rgba(20,16,12,0.45)", alignItems: "center", justifyContent: "center", padding: 20 } as ViewStyle,
+  dialog: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 18, width: "100%", maxWidth: 460, gap: 10 } as ViewStyle,
+  dialogTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
+  dialogSub: { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
+  dialogActions: { flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" } as ViewStyle,
   resultBox: { marginTop: 12, borderRadius: KarateRadius.sm, padding: 10, gap: 4, alignSelf: "flex-start", maxWidth: 560 } as ViewStyle,
   resultHead: { flexDirection: "row", alignItems: "center", gap: 6 } as ViewStyle,
   resultTitle: { fontSize: 12.5, fontWeight: "800" } as TextStyle,

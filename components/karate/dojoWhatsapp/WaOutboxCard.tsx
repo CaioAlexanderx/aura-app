@@ -8,48 +8,39 @@
 //
 // Sem WABA/token (409 NAO_CONECTADO) vira estado vazio com orientação,
 // nunca erro cru.
+//
+// Fase 3c: virou PRESENTACIONAL. Quem carrega a fila é a
+// WhatsAppCloudSection — mesmo motivo do WaTemplatesCard: o bloco de
+// envio de teste precisa da MESMA lista para contar quantos testes já
+// saíram hoje, e duas buscas para a mesma coisa seria desperdício.
+//
+// Os skip_reason das guardas de custo (LIMITE_DIARIO, ADDON_INATIVO,
+// TEMPLATE_NAO_APROVADO, …) já chegam traduzidos por waSkipReasonLabel:
+// esta é a tela onde o sensei descobre por que uma cobrança não saiu, e
+// um código cru aqui não responde nada.
 // ============================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React from "react";
 import {
   View, Text, ActivityIndicator, TouchableOpacity, StyleSheet, ViewStyle, TextStyle,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
-import { waApi, WaOutboxItem } from "@/services/waApi";
+import { WaOutboxItem } from "@/services/waApi";
 import {
-  fmtPhoneBR, fmtWhenBR, mapWaError, waErrorLabel, waOutboxStatusView, waSkipReasonLabel,
+  fmtPhoneBR, fmtWhenBR, waErrorLabel, waOutboxStatusView, waSkipReasonLabel,
 } from "./helpers";
 
 interface Props {
-  companyId: string;
-  /** Muda após envio de teste / recarga do status — refaz a lista. */
-  refreshKey?: number;
+  items: WaOutboxItem[];
+  loading: boolean;
+  /** true = 409 NAO_CONECTADO (falta WABA/token) — estado vazio, não erro. */
+  notConnected: boolean;
+  error: string | null;
+  onReload: () => void;
 }
 
-export function WaOutboxCard({ companyId, refreshKey }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<WaOutboxItem[]>([]);
-  const [notConnected, setNotConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!companyId) return;
-    setLoading(true);
-    setError(null);
-    setNotConnected(false);
-    try {
-      const res = await waApi.listOutbox(companyId);
-      setItems(res.data ?? []);
-    } catch (e: any) {
-      const mapped = mapWaError(e);
-      if (mapped.code === "NAO_CONECTADO") setNotConnected(true);
-      else setError(mapped.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId]);
-
-  useEffect(() => { load(); }, [load, refreshKey]);
+export function WaOutboxCard({ items, loading, notConnected, error, onReload }: Props) {
+  const load = onReload;
 
   return (
     <View style={styles.card}>
@@ -113,7 +104,9 @@ export function WaOutboxCard({ companyId, refreshKey }: Props) {
                   <Text style={styles.rowMeta} numberOfLines={1}>
                     {item.template_name || item.kind || "Mensagem"} · {fmtWhenBR(item.created_at)}{attempts}
                   </Text>
-                  {!!skip && <Text style={styles.rowWhy} numberOfLines={2}>{skip}</Text>}
+                  {!!skip && (
+                    <Text style={styles.rowWhy} numberOfLines={2} testID="wa-outbox-motivo">{skip}</Text>
+                  )}
                   {!skip && !!err && <Text style={styles.rowErr} numberOfLines={2}>{err}</Text>}
                 </View>
                 <View style={[styles.badge, { backgroundColor: view.bg }]}>
