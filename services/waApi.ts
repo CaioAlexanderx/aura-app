@@ -63,6 +63,21 @@ export interface WaEmbeddedSignup {
   graph_version?: string | null;
 }
 
+/**
+ * Presets de template que o backend sabe criar (Fase 6c). O mapeamento
+ * regra do crediário → preset: lembrete/confirmacao/vencimento →
+ * `parcela_lembrete`; atraso_1/atraso_2 → `parcela_atraso`; `bloqueio`
+ * não é WhatsApp. A mensalidade do dojô continua sendo o default (sem
+ * preset).
+ */
+export type WaTemplatePreset = "mensalidade_lembrete" | "parcela_lembrete" | "parcela_atraso";
+
+/** Quais templates já estão APPROVED na Meta. Chave ausente = não. */
+export type WaTemplatesReady = Partial<Record<WaTemplatePreset, boolean>> & Record<string, boolean | undefined>;
+
+/** Templates que a régua do crediário precisa antes de ligar o automático. */
+export const WA_CREDIARIO_TEMPLATES: WaTemplatePreset[] = ["parcela_lembrete", "parcela_atraso"];
+
 export interface WaStatus {
   /** Já vem false quando a Meta recusou o token (ver token_expired). */
   connected: boolean;
@@ -89,6 +104,15 @@ export interface WaStatus {
   template_name?: string | null;
   /** Status conhecido desse template (APPROVED/PENDING/REJECTED/…). */
   template_status?: string | null;
+  /**
+   * Fase 6c — um template por tipo de aviso, cada um aprovado (ou não)
+   * pela Meta separadamente. `template_ready` acima continua sendo só o
+   * da mensalidade do dojô (legado).
+   *
+   * Chave AUSENTE = NÃO aprovada. Omissão nunca vira liberação: é por aí
+   * que sairia mensagem paga com template que a Meta ainda vai recusar.
+   */
+  templates_ready?: WaTemplatesReady;
   quality_rating?: WaQualityRating | null;
   /** QUALIDADE_BAIXA | CONTA_RESTRITA | MANUAL — fila pausada. */
   paused_reason?: string | null;
@@ -198,8 +222,13 @@ export interface WaConnectResult {
  */
 export type WaPreviewSkipped = Record<string, number>;
 
+/** Qual régua a prévia simula. Omitido no backend = mensalidade do dojô. */
+export type WaPreviewSource = "crediario" | (string & {});
+
 export interface WaPreviewItem {
   student_name?: string | null;
+  /** No crediário quem recebe é cliente, não aluno — o backend reusa o shape. */
+  customer_name?: string | null;
   /** Já vem mascarado pelo backend — nunca o telefone inteiro. */
   phone_masked?: string | null;
   amount?: number | null;
@@ -255,18 +284,38 @@ export const waApi = {
   /**
    * Quantas mensagens sairiam na data — SEM enfileirar nada. É o que a
    * régua mostra antes de deixar ligar o automático.
+   *
+   * `source` escolhe a régua simulada: omitido = mensalidade do dojô
+   * (comportamento da Fase 2, mantido para não quebrar a tela do dojô);
+   * 'crediario' = régua de parcelas do varejo. O segundo argumento
+   * aceita a data solta (chamada antiga) ou o objeto.
    */
-  getPreview: (companyId: string, date?: string): Promise<WaPreview> =>
-    request<WaPreview>(`${base(companyId)}/preview${date ? `?date=${encodeURIComponent(date)}` : ""}`),
+  getPreview: (
+    companyId: string,
+    opts?: string | { source?: WaPreviewSource; date?: string | null }
+  ): Promise<WaPreview> => {
+    const o = typeof opts === "string" ? { date: opts } : (opts || {});
+    const qs: string[] = [];
+    if (o.source) qs.push(`source=${encodeURIComponent(o.source)}`);
+    if (o.date) qs.push(`date=${encodeURIComponent(o.date)}`);
+    return request<WaPreview>(`${base(companyId)}/preview${qs.length ? `?${qs.join("&")}` : ""}`);
+  },
 
   listTemplates: (companyId: string): Promise<WaTemplatesResponse> =>
     request<WaTemplatesResponse>(`${base(companyId)}/templates`),
 
-  /** Sem body = template de cobrança padrão do backend (nome do env). */
-  createTemplate: (companyId: string): Promise<WaCreateTemplateResult> =>
+  /**
+   * Sem body = template de cobrança padrão do backend (mensalidade do
+   * dojô, nome do env). Com `preset` = um dos templates do crediário
+   * (Fase 6c) — o backend manda o texto UTILITY pt-BR já formatado.
+   */
+  createTemplate: (
+    companyId: string,
+    opts?: { preset?: WaTemplatePreset }
+  ): Promise<WaCreateTemplateResult> =>
     request<WaCreateTemplateResult>(`${base(companyId)}/templates`, {
       method: "POST",
-      body: {},
+      body: opts?.preset ? { preset: opts.preset } : {},
       timeout: 20000,
     }),
 

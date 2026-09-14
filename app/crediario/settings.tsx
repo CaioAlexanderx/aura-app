@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Switch } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,9 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type PeriodUnit } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { waApi, WA_CREDIARIO_TEMPLATES, type WaStatus } from "@/services/waApi";
+import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
+import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal";
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
@@ -24,6 +27,17 @@ import { toast } from "@/components/Toast";
 //   - Banner âmbar com texto legal CDC.
 //   - Validação inline (>2% / >1%) bloqueia salvar antes de chegar
 //     no backend; trata 422 LATE_FEE_ABOVE_CAP / LATE_INTEREST_ABOVE_CAP.
+// Fase 6 FE (14/09/2026) — WhatsApp oficial na régua:
+//   - Interruptor `whatsapp_auto`: a régua deixa de ser só texto para o
+//     wa.me e passa a ENVIAR sozinha pela Cloud API. Cada mensagem é
+//     cobrada pela Meta na conta da loja, então o interruptor fica
+//     TRAVADO enquanto faltar plano/addon, conexão ou os dois templates
+//     aprovados — e campo ausente do backend conta como faltando.
+//   - LIGAR passa obrigatoriamente pela prévia (quantas sairiam hoje);
+//     DESLIGAR é livre e imediato: quem gasta tem que poder parar.
+//   - O toggle salva sozinho (PUT collection/rules) e não depende do
+//     botão "Salvar configurações": ligar ou desligar envio pago não
+//     pode ficar pendurado num rascunho.
 // ============================================================
 
 type Rule = { id: string; name: string; days_relative: number; template: string; channel: string; enabled: boolean };
@@ -110,6 +124,16 @@ export default function CrediarioSettingsScreen() {
   const [lateFeeError, setLateFeePctError] = useState<string | null>(null);
   const [moraPctError, setMoraPctError] = useState<string | null>(null);
 
+  // ── Fase 6: WhatsApp oficial na régua ───────────────────────
+  /** /whatsapp/status. null = ainda não veio OU falhou — e null BLOQUEIA. */
+  const [waStatus, setWaStatus] = useState<WaStatus | null>(null);
+  const [waLoading, setWaLoading] = useState(true);
+  /** Espelha credit_collection_rules.whatsapp_auto. Ausente = desligado. */
+  const [waAuto, setWaAuto] = useState(false);
+  const [waSaving, setWaSaving] = useState(false);
+  const [waErr, setWaErr] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   const cfgQ = useQuery({
     queryKey: ["credit-plan-config", company?.id],
     queryFn: () => creditApi.getPlanConfig(company!.id),
@@ -160,11 +184,30 @@ export default function CrediarioSettingsScreen() {
     if (c.late_grace_days != null) setGraceStr(String(c.late_grace_days));
   }, [cfgQ.data]);
 
+  // Falha aqui NÃO derruba a tela: o canal base continua sendo o wa.me
+  // manual. O que ela faz é manter waStatus null — e null bloqueia o
+  // interruptor do WhatsApp automático, que é o lado certo do erro.
+  const loadWaStatus = useCallback(async () => {
+    if (!company?.id) { setWaLoading(false); return; }
+    setWaLoading(true);
+    try {
+      setWaStatus(await waApi.getStatus(company.id));
+    } catch {
+      setWaStatus(null);
+    } finally {
+      setWaLoading(false);
+    }
+  }, [company?.id]);
+
+  useEffect(() => { loadWaStatus(); }, [loadWaStatus]);
+
   // Hidrata Pix + régua
   useEffect(() => {
     const d: any = rulesQ.data;
     if (!d) return;
     setPixKey(d.pix_key || "");
+    // Campo da Fase 6a: backend antigo não devolve → desligado.
+    setWaAuto(d.whatsapp_auto === true);
     if (Array.isArray(d.rules) && d.rules.length) {
       setRules(d.rules.map((r: any, i: number) => ({
         id: r.id || `stage_${i}`, name: r.name || `Etapa ${i + 1}`,
@@ -243,6 +286,9 @@ export default function CrediarioSettingsScreen() {
         enabled: (rulesQ.data as any)?.enabled ?? true,
         rules: rules as any,
         pix_key: pixKey.trim(),
+        // Explícito de propósito: salvar a régua NÃO pode religar nem
+        // desligar envio pago por omissão. Vai o valor que está na tela.
+        whatsapp_auto: waAuto,
       } as any);
     },
     onSuccess: () => {
@@ -272,6 +318,64 @@ export default function CrediarioSettingsScreen() {
   function updateRule(i: number, patch: Partial<Rule>) {
     setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
     touch();
+  }
+
+  // ── Fase 6: ligar/desligar o WhatsApp automático ────────────
+  // Enquanto o status não chega, waStatus é null → waAutoBlockers devolve
+  // SEM_STATUS e o interruptor fica travado. É o lado certo do erro.
+  const waBlockers = waAutoBlockers(waStatus, {
+    templateKeys: WA_CREDIARIO_TEMPLATES,
+    labels: {
+      SEM_STATUS: "Não foi possível verificar o WhatsApp da loja — recarregue antes de ligar o envio automático.",
+      ADDON: "O envio automático por WhatsApp não está no seu plano. Fale com a Aura para ativar.",
+      CONEXAO: "Conecte o número da loja na aba WhatsApp.",
+      TOKEN: "A autorização da Meta expirou — reconecte o número da loja.",
+      TEMPLATE: "Os templates de cobrança (lembrete e atraso) ainda não foram aprovados pela Meta.",
+    },
+  });
+  const waTravado = !waAuto && (waLoading || waBlockers.length > 0);
+
+  /**
+   * Salva SÓ o interruptor: manda de volta a régua persistida (não o
+   * rascunho da tela) para que ligar o WhatsApp não publique edições que
+   * o lojista ainda não confirmou no botão Salvar.
+   */
+  async function salvarWaAuto(next: boolean) {
+    setWaSaving(true);
+    setWaErr(null);
+    try {
+      const persisted: any = rulesQ.data || {};
+      const res: any = await creditApi.updateCollectionRules(company!.id, {
+        enabled: persisted.enabled ?? true,
+        rules: (Array.isArray(persisted.rules) && persisted.rules.length ? persisted.rules : rules) as any,
+        pix_key: (persisted.pix_key ?? pixKey) || "",
+        whatsapp_auto: next,
+      } as any);
+      // Se o backend ecoou o campo, ele manda; senão vale o que pedimos.
+      setWaAuto(typeof res?.whatsapp_auto === "boolean" ? res.whatsapp_auto : next);
+      setPreviewOpen(false);
+      qc.invalidateQueries({ queryKey: ["credit-rules", company?.id] });
+      toast.success(next ? "Cobrança automática por WhatsApp ligada." : "Cobrança automática por WhatsApp desligada.");
+    } catch (e: any) {
+      // 403 ADDON_REQUIRED / 409 NAO_CONECTADO / 409 TEMPLATE_NAO_APROVADO
+      // chegam por ESTA rota; o mapeador genérico mostraria o código cru.
+      const code = e?.data?.code ?? e?.code ?? null;
+      const msg = isWaErrorCode(code) ? mapWaError(e).message : (e?.data?.error || e?.message || "Não foi possível salvar.");
+      setWaErr(msg);
+      // Guarda recusada pelo servidor: o status local está velho.
+      setWaAuto((rulesQ.data as any)?.whatsapp_auto === true);
+      if (isWaErrorCode(code)) loadWaStatus();
+    } finally {
+      setWaSaving(false);
+    }
+  }
+
+  // Ligar é o único caminho que passa pela prévia. Desligar é sempre
+  // livre e imediato: quem está gastando tem que poder parar de gastar.
+  function onToggleWaAuto(next: boolean) {
+    setWaErr(null);
+    if (!next) { salvarWaAuto(false); return; }
+    setPreviewOpen(true);
   }
 
   const loading = cfgQ.isLoading || rulesQ.isLoading;
@@ -489,14 +593,87 @@ export default function CrediarioSettingsScreen() {
                 placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" placeholderTextColor={Colors.ink3} />
             </View>
 
+            {/* ── Fase 6: envio automático pelo WhatsApp oficial ── */}
+            <View style={st.waBox} testID="crediario-wa-bloco">
+              <View style={st.waHead}>
+                <View style={{ flex: 1 }}>
+                  <View style={st.waTitleRow}>
+                    <Icon name="whatsapp" size={15} color={Colors.violet3} />
+                    <Text style={st.waTitle}>Enviar pelo WhatsApp oficial (automático)</Text>
+                  </View>
+                  <Text style={st.waSub}>
+                    Nos mesmos dias da régua, a cobrança sai sozinha pelo número da loja — sem você
+                    abrir o WhatsApp. Cada mensagem é cobrada pela Meta na conta da loja, então
+                    antes de ligar você vê quantos clientes receberiam hoje. Quem pediu para não
+                    receber nunca recebe, mesmo com isto ligado. A cobrança manual pelo wa.me
+                    continua disponível de qualquer forma.
+                  </Text>
+                </View>
+                <Switch
+                  value={waAuto}
+                  onValueChange={onToggleWaAuto}
+                  disabled={waTravado || waSaving}
+                  trackColor={{ false: Colors.bg4 as any, true: Colors.violet }}
+                  thumbColor="#fff"
+                  accessibilityLabel="Enviar pelo WhatsApp oficial (automático)"
+                  accessibilityState={{ disabled: waTravado || waSaving, checked: waAuto }}
+                  testID={waTravado ? "crediario-wa-switch-travado" : "crediario-wa-switch"}
+                />
+              </View>
+
+              {waLoading && !waAuto && (
+                <Text style={st.waVerificando} testID="crediario-wa-verificando">
+                  Verificando a conexão do WhatsApp da loja…
+                </Text>
+              )}
+
+              {!waLoading && waTravado && (
+                <View style={st.waMotivos} testID="crediario-wa-motivos">
+                  {waBlockers.map((b) => (
+                    <View key={b.code} style={st.waMotivoRow}>
+                      <Icon name="alert_triangle" size={12} color={Colors.amber} />
+                      <Text style={st.waMotivoTxt}>{b.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {!waLoading && waTravado && (
+                <Pressable
+                  onPress={() => router.push("/(tabs)/whatsapp")}
+                  accessibilityRole="button"
+                  style={st.waLink}
+                  testID="crediario-wa-configurar"
+                >
+                  <Icon name="arrow_right" size={13} color={Colors.violet3} />
+                  <Text style={st.waLinkTxt}>Configurar WhatsApp</Text>
+                </Pressable>
+              )}
+
+              {!!waErr && <Text style={st.waErr} testID="crediario-wa-erro">{waErr}</Text>}
+            </View>
+
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
-            <Text style={st.reguaSub}>Mensagens por etapa. Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em "Cobrar". Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.  </Text>
+            <Text style={st.reguaSub}>
+              Mensagens por etapa. {waAuto
+                ? "As etapas de WhatsApp saem sozinhas pelo número oficial da loja; o texto enviado é o template aprovado pela Meta, não o rascunho abaixo."
+                : "Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em \"Cobrar\"."} Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.
+            </Text>
 
             {rules.map((r, i) => (
               <View key={r.id} style={[st.stage, !r.enabled && st.stageOff]}>
                 <View style={st.stageHead}>
                   <View style={{ flex: 1 }}>
-                    <Text style={st.stageName}>{r.name}</Text>
+                    <View style={st.stageNameRow}>
+                      <Text style={st.stageName}>{r.name}</Text>
+                      {r.channel === "whatsapp" && (
+                        <View style={[st.canalChip, waAuto && st.canalChipAuto]} testID={`crediario-canal-${r.id}`}>
+                          <Text style={[st.canalChipTxt, waAuto && st.canalChipTxtAuto]}>
+                            {waAuto ? "automático" : "manual (wa.me)"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <View style={st.daysRow}>
                       <Text style={st.daysLbl}>Disparo:</Text>
                       <TextInput style={st.daysInput} value={String(r.days_relative)} keyboardType="numbers-and-punctuation"
@@ -519,6 +696,17 @@ export default function CrediarioSettingsScreen() {
             {saveMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={st.saveBtnText}>Salvar configurações</Text>}
           </Pressable>
         </>
+      )}
+
+      {!!company?.id && (
+        <PreviaCrediarioModal
+          visible={previewOpen}
+          companyId={company.id}
+          status={waStatus}
+          saving={waSaving}
+          onCancel={() => setPreviewOpen(false)}
+          onConfirm={() => salvarWaAuto(true)}
+        />
       )}
     </ScrollView>
   );
@@ -603,7 +791,29 @@ const st = StyleSheet.create({
   stage: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, marginBottom: 9, backgroundColor: Colors.bg2 },
   stageOff: { opacity: 0.6 },
   stageHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  stageNameRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   stageName: { fontSize: 13.5, fontWeight: "800", color: Colors.ink },
+
+  // Chip de canal por etapa: diz, sem abrir outra tela, se aquela etapa
+  // sai sozinha (e paga) ou se depende de alguém tocar em "Cobrar".
+  canalChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  canalChipAuto: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  canalChipTxt: { fontSize: 10, fontWeight: "700", color: Colors.ink3 },
+  canalChipTxtAuto: { color: Colors.violet3 },
+
+  // Bloco do WhatsApp oficial (Fase 6)
+  waBox: { marginTop: 18, backgroundColor: Colors.bg2, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, padding: 13 },
+  waHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  waTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  waTitle: { fontSize: 13, fontWeight: "800", color: Colors.ink, flexShrink: 1 },
+  waSub: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginTop: 6, maxWidth: 520 },
+  waVerificando: { fontSize: 11, color: Colors.ink3, marginTop: 9, fontStyle: "italic" },
+  waMotivos: { gap: 5, marginTop: 10 },
+  waMotivoRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  waMotivoTxt: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 16, fontWeight: "600" },
+  waLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 11, alignSelf: "flex-start", borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 11 },
+  waLinkTxt: { fontSize: 12, fontWeight: "700", color: Colors.violet3 },
+  waErr: { fontSize: 11.5, color: Colors.red, marginTop: 10, lineHeight: 16, fontWeight: "600" },
   daysRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" },
   daysLbl: { fontSize: 11, color: Colors.ink3 },
   daysInput: { width: 48, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 7, paddingVertical: 5, textAlign: "center", color: Colors.ink, fontWeight: "700", fontSize: 12 },
