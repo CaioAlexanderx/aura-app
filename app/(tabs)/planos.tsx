@@ -20,6 +20,11 @@ const AURA_WHATSAPP = "https://wa.me/5511956305269?text=Ol%C3%A1%2C%20gostaria%2
 // Regra: so feature REAL que existe no produto -- nada inventado.
 // Estrutura: cada plano tem "core" (categorias principais com 1-2 linhas
 // cada) cobrindo Vendas/Estoque/Fiscal/Financeiro/Clientes/Equipe/etc.
+//
+// Fase 8b (14/09/2026): a vitrine passou a ter DOIS planos. Expansão sai
+// da página — o plano continua existindo no código e no banco para quem
+// já está nele (aparece no banner de status no topo, como hoje), mas
+// ninguém novo escolhe por aqui. Ver PLANOS_VISIVEIS abaixo.
 const PLANS = [
   {
     key: "essencial", name: "Essencial", subtitle: "Para comecar",
@@ -48,6 +53,9 @@ const PLANS = [
       "DRE básica e categorização automática",
       "Lancamentos recorrentes",
       "Recebimento por Pix com QR Code",
+      // Fase 8b: no Essencial a cobrança por WhatsApp continua existindo —
+      // é o wa.me manual, que é grátis e não passa pela Meta.
+      "Cobrança pelo WhatsApp: manual (wa.me)",
       // Contabil
       "Apoio contábil guiado (MEI e Simples Nacional)",
       "Cálculo de DAS-MEI e guias fiscais",
@@ -82,7 +90,10 @@ const PLANS = [
       // Canais
       "Canal Digital: loja online inclusa",
       "Domínio personalizado .com.br opcional",
-      "WhatsApp Business com templates",
+      // Fase 8b: o WhatsApp oficial (Cloud API) deixou de ser adicional e
+      // entrou no plano — cobrança sem contagem e 100 promocionais/mês.
+      "Cobranças automáticas pelo WhatsApp oficial da sua loja: inclusas",
+      "100 mensagens promocionais por mês inclusas (pacotes extras de 100 por R$ 49)",
       // Verticais
       "Módulo Vertical incluso: Odonto, Beauty, Food ou Pet",
       // Acessos e gestao
@@ -130,7 +141,20 @@ const PLANS = [
   },
 ];
 
+/**
+ * O que a página mostra. Expansão fica fora da vitrine (Fase 8b) sem
+ * sumir do código: quem já assinou continua no plano, e o banner de
+ * status no topo segue dizendo qual é.
+ */
+const PLANOS_OCULTOS = ["expansao"];
+const PLANOS_VISIVEIS = PLANS.filter((p) => !PLANOS_OCULTOS.includes(p.key));
+
 const ADDONS = [
+  {
+    name: "Mensagens promocionais extras",
+    price: "R$ 49",
+    desc: "Pacote de 100 mensagens promocionais pelo WhatsApp oficial, para quando a cota do mês do plano Negócio acabar. Compra direto na aba WhatsApp",
+  },
   { name: "Usuário adicional", price: "R$ 19/mês", desc: "Para cada pessoa a mais com login no app, por mês" },
   { name: "Módulo vertical extra", price: "R$ 39/mês", desc: "A partir do Negócio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) além do incluso no seu plano" },
   { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuração, treinamento, automações e integrações personalizadas para o seu negócio", cta: true },
@@ -180,15 +204,19 @@ export default function PlanosScreen() {
         <Pressable onPress={() => setAnnual(true)} style={[s.toggleBtn, annual && s.toggleActive]}><Text style={[s.toggleText, annual && s.toggleTextActive]}>Anual</Text><View style={s.discountBadge}><Text style={s.discountText}>2 MESES GRÁTIS!</Text></View></Pressable>
       </View>
 
-      {annual && <Text style={s.savingsHint}>Economize ate {fmtR(savings(269))} por ano no plano Expansao</Text>}
+      {annual && <Text style={s.savingsHint}>Economize até {fmtR(savings(169))} por ano no plano Negócio</Text>}
 
-      <View style={s.plansRow}>
-        {PLANS.map(plan => {
+      <View style={s.plansRow} testID="planos-cards">
+        {PLANOS_VISIVEIS.map(plan => {
           const isCurrent = plan.key === currentPlan;
           const mo = price(plan.monthly);
           const yr = annualTotal(plan.monthly);
           return (
-            <View key={plan.key} style={[s.planCard, (plan as any).popular && s.planPopular, isCurrent && s.planCurrent]}>
+            <View
+              key={plan.key}
+              testID={`plano-card-${plan.key}`}
+              style={[s.planCard, (plan as any).popular && s.planPopular, isCurrent && s.planCurrent]}
+            >
               {(plan as any).popular && <View style={s.popularBadge}><Text style={s.popularText}>Mais popular</Text></View>}
               <Text style={s.planName}>{plan.name}</Text>
               <Text style={s.planSub}>{plan.subtitle}</Text>
