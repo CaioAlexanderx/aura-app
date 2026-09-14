@@ -35,6 +35,21 @@
 // página inteira. `queueRefreshKey` incrementa a cada salvamento
 // bem-sucedido e é passado pro WhatsAppQueueSection, que refaz o load
 // sozinho (sem recarregar o resto da tela).
+//
+// Fase 3c — GUARDAS DE CUSTO no toggle do WhatsApp automático:
+// diferente do e-mail, cada mensagem de WhatsApp é COBRADA pela Meta na
+// conta do dojô. Por isso o sub-toggle não é mais um interruptor livre:
+//   • fica DESABILITADO enquanto faltar addon, número conectado,
+//     template aprovado — ou enquanto a fila estiver pausada —, com o
+//     motivo escrito logo abaixo (waAutoBlockers em ../../dojoWhatsapp);
+//   • LIGAR abre a prévia (WaPreviewModal): o sensei vê quantos alunos
+//     receberiam hoje antes de confirmar;
+//   • DESLIGAR nunca é bloqueado — quem já está gastando tem que poder
+//     parar de gastar, mesmo com o status falhando.
+// O backend repete todas as guardas (403 ADDON_REQUIRED / 409
+// NAO_CONECTADO no PUT reminder-config); a UI existe para o sensei não
+// chegar lá. Campos novos ausentes = desconhecido, e desconhecido
+// bloqueia: é melhor uma ligação para a Aura do que uma fatura surpresa.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -44,9 +59,15 @@ import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
 import { useKarateFederation } from "@/contexts/KarateFederation";
+import { useAuthStore } from "@/stores/auth";
 import {
   karateDojoBillingApi, DojoReminderConfig, DojoReminderLogItem, DojoRunRemindersResult,
 } from "@/services/karateDojoBillingApi";
+import { waApi, WaStatus } from "@/services/waApi";
+import {
+  isWaErrorCode, mapWaError, waAutoBlockers,
+} from "@/components/karate/dojoWhatsapp/helpers";
+import { WaPreviewModal } from "@/components/karate/dojoWhatsapp/WaPreviewModal";
 import { buildRunSummary, currentCompetence, mapBillingError } from "../helpers";
 import { CompetenceSelector } from "../CompetenceSelector";
 import { OffsetsEditor } from "./OffsetsEditor";
@@ -65,6 +86,9 @@ function sameOffsets(a: number[], b: number[]): boolean {
 
 export function ReguaSection() {
   const { federationId } = useKarateFederation();
+  // No karatê o dojô É uma company — o /whatsapp/status é por company.
+  const company = useAuthStore((s) => s.company) as any;
+  const companyId: string | null = company?.id ?? null;
 
   const [loading, setLoading] = useState(true);
   const [schemaPending, setSchemaPending] = useState(false);
@@ -90,6 +114,11 @@ export function ReguaSection() {
   // QA 30/07 (item 4): incrementa a cada "Salvar régua" bem-sucedido —
   // WhatsAppQueueSection refaz o load sozinho quando isto muda.
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
+
+  // Fase 3c — guardas de custo do canal WhatsApp.
+  const [waStatus, setWaStatus] = useState<WaStatus | null>(null);
+  const [waLoading, setWaLoading] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const loadConfig = useCallback(async () => {
     if (!federationId) return;
@@ -126,8 +155,24 @@ export function ReguaSection() {
     }
   }, [federationId, logCompetence]);
 
+  // Falha aqui NÃO derruba a seção: o canal base é o e-mail. O que ela
+  // faz é manter waStatus null — e null bloqueia o toggle do WhatsApp,
+  // que é exatamente o comportamento seguro.
+  const loadWaStatus = useCallback(async () => {
+    if (!companyId) { setWaLoading(false); return; }
+    setWaLoading(true);
+    try {
+      setWaStatus(await waApi.getStatus(companyId));
+    } catch {
+      setWaStatus(null);
+    } finally {
+      setWaLoading(false);
+    }
+  }, [companyId]);
+
   useEffect(() => { loadConfig(); }, [loadConfig]);
   useEffect(() => { if (!schemaPending) loadLog(); }, [loadLog, schemaPending]);
+  useEffect(() => { loadWaStatus(); }, [loadWaStatus]);
 
   if (!federationId) return null;
 
@@ -136,7 +181,17 @@ export function ReguaSection() {
     !sameOffsets(offsets, saved.offsets ?? []) ||
     waAuto !== (saved.send_whatsapp_auto === true);
 
-  async function save() {
+  // Enquanto o status não chega, waStatus é null → waAutoBlockers devolve
+  // SEM_STATUS e o switch fica travado. É o lado certo do erro.
+  const waBlockers = waAutoBlockers(waStatus);
+  const waAutoTravado = !waAuto && (waLoading || waBlockers.length > 0);
+
+  /**
+   * `waAutoValue` existe porque a ativação pela prévia salva ANTES do
+   * estado do switch assentar: o modal confirma e o PUT já sai com
+   * true, sem depender de um re-render no meio do caminho.
+   */
+  async function save(waAutoValue: boolean = waAuto) {
     setSaving(true);
     setSaveErr(null);
     try {
@@ -144,19 +199,34 @@ export function ReguaSection() {
         enabled,
         offsets,
         send_email: true,
-        send_whatsapp_auto: waAuto,
+        send_whatsapp_auto: waAutoValue,
       });
       setSaved(cfg);
       setEnabled(cfg.enabled);
       setOffsets(cfg.offsets ?? []);
       setWaAuto(cfg.send_whatsapp_auto === true);
+      setPreviewOpen(false);
       // Quem é elegível hoje pro WhatsApp muda junto com a régua.
       setQueueRefreshKey((k) => k + 1);
     } catch (e: any) {
-      setSaveErr(mapBillingError(e).message);
+      // O gate do WhatsApp responde 403 ADDON_REQUIRED / 409 NAO_CONECTADO
+      // nesta MESMA rota, e mapBillingError transformaria qualquer 409 em
+      // "Essa cobrança já foi paga" — texto errado e assustador.
+      const code = e?.data?.code ?? e?.code ?? null;
+      setSaveErr(isWaErrorCode(code) ? mapWaError(e).message : mapBillingError(e).message);
+      // Guarda recusada pelo servidor: o status local está velho.
+      if (isWaErrorCode(code)) { setWaAuto(saved.send_whatsapp_auto === true); loadWaStatus(); }
     } finally {
       setSaving(false);
     }
+  }
+
+  // Ligar é o único caminho que passa pela prévia. Desligar é sempre
+  // livre e imediato: quem está gastando tem que poder parar de gastar.
+  function onToggleWaAuto(next: boolean) {
+    if (!next) { setWaAuto(false); return; }
+    setSaveErr(null);
+    setPreviewOpen(true);
   }
 
   async function runNow() {
@@ -234,7 +304,7 @@ export function ReguaSection() {
             <Text style={styles.label}>Quando enviar</Text>
             <OffsetsEditor offsets={offsets} onChange={setOffsets} />
 
-            <View style={styles.subToggle}>
+            <View style={styles.subToggle} testID="regua-wa-auto">
               <View style={styles.subToggleHead}>
                 <View style={styles.subToggleTitleRow}>
                   <Icon name="whatsapp" size={15} color={KarateColors.whatsapp} />
@@ -242,18 +312,39 @@ export function ReguaSection() {
                 </View>
                 <Switch
                   value={waAuto}
-                  onValueChange={setWaAuto}
+                  onValueChange={onToggleWaAuto}
+                  disabled={waAutoTravado}
                   trackColor={{ false: KarateColors.border2, true: KarateColors.primarySoft }}
                   thumbColor={waAuto ? KarateColors.primary : "#fff"}
                   accessibilityLabel="Enviar também por WhatsApp (automático)"
+                  accessibilityState={{ disabled: waAutoTravado, checked: waAuto }}
+                  testID={waAutoTravado ? "regua-wa-switch-travado" : "regua-wa-switch"}
                 />
               </View>
               <Text style={styles.subToggleSub}>
                 Nos mesmos dias da régua, o lembrete também sai por WhatsApp — sem você abrir o
-                aplicativo. Exige o WhatsApp do dojô conectado e um template aprovado pela Meta
-                (aba WhatsApp). Quem pediu para não receber nunca recebe, mesmo com isto ligado.
-                A fila manual abaixo continua disponível de qualquer forma.
+                aplicativo. Cada mensagem é cobrada pela Meta na conta do dojô, então antes de
+                ligar você vê quantos alunos receberiam hoje. Quem pediu para não receber nunca
+                recebe, mesmo com isto ligado. A fila manual abaixo continua disponível de
+                qualquer forma.
               </Text>
+
+              {waLoading && !waAuto && (
+                <Text style={styles.verificandoTxt} testID="regua-wa-verificando">
+                  Verificando a conexão do WhatsApp do dojô…
+                </Text>
+              )}
+
+              {!waLoading && waAutoTravado && (
+                <View style={styles.motivos} testID="regua-wa-motivos">
+                  {waBlockers.map((b) => (
+                    <View key={b.code} style={styles.motivoRow}>
+                      <Icon name="alert" size={12} color={KarateColors.warn} />
+                      <Text style={styles.motivoTxt}>{b.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -302,6 +393,17 @@ export function ReguaSection() {
         {!logLoading && !!logErr && <Text style={styles.errTxt}>{logErr}</Text>}
         {!logLoading && !logErr && <ReminderLogList items={log} />}
       </View>
+
+      {!!companyId && (
+        <WaPreviewModal
+          visible={previewOpen}
+          companyId={companyId}
+          status={waStatus}
+          saving={saving}
+          onCancel={() => setPreviewOpen(false)}
+          onConfirm={() => { setWaAuto(true); save(true); }}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -314,6 +416,10 @@ const styles = StyleSheet.create({
   subToggleTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, flex: 1 } as ViewStyle,
   subToggleTitle: { fontSize: 13, fontWeight: "700", color: KarateColors.ink, flexShrink: 1 } as TextStyle,
   subToggleSub: { fontSize: 11.5, color: KarateColors.ink2, marginTop: 7, lineHeight: 16.5, maxWidth: 620 } as TextStyle,
+  motivos: { gap: 4, marginTop: 9 } as ViewStyle,
+  motivoRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 } as ViewStyle,
+  motivoTxt: { flex: 1, fontSize: 11.5, fontWeight: "600", color: KarateColors.warn, lineHeight: 16.5, maxWidth: 600 } as TextStyle,
+  verificandoTxt: { fontSize: 11.5, color: KarateColors.ink3, marginTop: 9, lineHeight: 16.5 } as TextStyle,
   card: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.md, borderWidth: 1, borderColor: KarateColors.border, padding: 14 } as ViewStyle,
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 10 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,

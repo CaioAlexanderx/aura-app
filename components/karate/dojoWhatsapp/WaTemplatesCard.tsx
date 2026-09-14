@@ -13,6 +13,16 @@
 // Sem WABA/token o backend responde 409 NAO_CONECTADO — aqui isso NÃO é
 // erro cru: vira estado vazio com orientação. Mesmo racional do
 // SCHEMA_PENDING nas telas de mensalidades.
+//
+// Fase 3c: o template de COBRANÇA é o único que a régua usa, e sem ele
+// aprovado o envio automático não liga. Mandar o sensei até o
+// Gerenciador da Meta escrever o texto certo é onde quase todo mundo
+// desiste — por isso existe o botão "Criar template de cobrança"
+// (POST /whatsapp/templates sem body: o backend manda o texto padrão
+// já formatado com as variáveis que o disparo preenche).
+// Depois disso a aprovação é da Meta e leva até ~24h: enquanto estiver
+// PENDING a tela diz isso, em vez de deixar o sensei achando que
+// travou.
 // ============================================================
 import React, { useState } from "react";
 import {
@@ -32,14 +42,44 @@ interface Props {
   notConnected: boolean;
   error: string | null;
   onReload: () => void;
+  /** Nome efetivo do template de cobrança (status.template_name). */
+  billingTemplateName?: string | null;
+  /** Status conhecido dele pelo /status, quando a lista ainda não tem. */
+  billingTemplateStatus?: string | null;
 }
 
-export function WaTemplatesCard({ companyId, templates, loading, notConnected, error, onReload }: Props) {
+export function WaTemplatesCard({
+  companyId, templates, loading, notConnected, error, onReload,
+  billingTemplateName, billingTemplateStatus,
+}: Props) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
   // Token vencido não é falha do sync: é aviso de reconexão (âmbar, não vermelho).
   const [syncErrExpired, setSyncErrExpired] = useState(false);
+
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState<string | null>(null);
+
+  const billingName = billingTemplateName || null;
+  const billingRow = billingName ? templates.find((t) => t.name === billingName) || null : null;
+  const billingStatus = String(billingRow?.status || billingTemplateStatus || "").toUpperCase();
+  // Só dá para orientar sobre o template de cobrança quando o backend
+  // diz qual é o nome dele (campo da Fase 1f). Sem nome, nada aparece.
+  const mostraBloco = !loading && !notConnected && !error && !!billingName;
+
+  async function createBilling() {
+    setCreating(true);
+    setCreateErr(null);
+    try {
+      await waApi.createTemplate(companyId);
+      onReload();
+    } catch (e: any) {
+      setCreateErr(mapWaError(e).message);
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function sync() {
     setSyncing(true);
@@ -90,6 +130,49 @@ export function WaTemplatesCard({ companyId, templates, loading, notConnected, e
           <Text style={styles.okTxt}>{syncMsg}</Text>
         </View>
       )}
+
+      {mostraBloco && !billingStatus && (
+        <View style={styles.cobrancaBox} testID="wa-tpl-cobranca-ausente">
+          <Text style={styles.cobrancaTitulo}>Template de cobrança</Text>
+          <Text style={styles.cobrancaTxt}>
+            A régua automática precisa de um template chamado {billingName}, e ele ainda não existe
+            nesta conta. A Aura cria com o texto certo — depois é só esperar a Meta aprovar.
+          </Text>
+          <View style={styles.cobrancaAcoes}>
+            <KarateButton
+              label={creating ? "Criando…" : "Criar template de cobrança"}
+              variant="sumi"
+              size="sm"
+              loading={creating}
+              disabled={creating}
+              onPress={createBilling}
+            />
+          </View>
+        </View>
+      )}
+
+      {mostraBloco && (billingStatus === "PENDING" || billingStatus === "IN_APPEAL") && (
+        <View style={styles.cobrancaBox} testID="wa-tpl-cobranca-pendente">
+          <Text style={styles.cobrancaTitulo}>Template de cobrança</Text>
+          <Text style={styles.cobrancaTxt}>
+            Aguardando aprovação da Meta (normalmente até 24h). Quando sair a resposta, toque em
+            Sincronizar da Meta para atualizar o status aqui — o envio automático só liga depois
+            que ele estiver aprovado.
+          </Text>
+        </View>
+      )}
+
+      {mostraBloco && billingStatus === "REJECTED" && (
+        <View style={styles.cobrancaBox} testID="wa-tpl-cobranca-recusado">
+          <Text style={styles.cobrancaTitulo}>Template de cobrança</Text>
+          <Text style={styles.cobrancaTxt}>
+            A Meta recusou o template {billingName}. Fale com a Aura: é preciso ajustar o texto e
+            reenviar para análise antes de ligar o envio automático.
+          </Text>
+        </View>
+      )}
+
+      {!!createErr && <Text style={styles.errTxt}>{createErr}</Text>}
 
       {loading && (
         <View style={styles.stateBox}>
@@ -161,6 +244,13 @@ const styles = StyleSheet.create({
   headTitle: { flexDirection: "row", alignItems: "center", gap: 8 } as ViewStyle,
   cardTitle: { fontSize: 14, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   cardSub: { fontSize: 12.5, color: KarateColors.ink2, marginTop: 8, lineHeight: 18, maxWidth: 560 } as TextStyle,
+  cobrancaBox: {
+    marginTop: 12, backgroundColor: KarateColors.bg2, borderWidth: 1,
+    borderColor: KarateColors.border, borderRadius: KarateRadius.sm, padding: 11, gap: 4,
+  } as ViewStyle,
+  cobrancaTitulo: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2, color: KarateColors.ink2, textTransform: "uppercase" } as TextStyle,
+  cobrancaTxt: { fontSize: 12, color: KarateColors.ink2, lineHeight: 17, maxWidth: 560 } as TextStyle,
+  cobrancaAcoes: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 } as ViewStyle,
   list: { gap: 8, marginTop: 12 } as ViewStyle,
   row: {
     flexDirection: "row", alignItems: "flex-start", gap: 10, flexWrap: "wrap",

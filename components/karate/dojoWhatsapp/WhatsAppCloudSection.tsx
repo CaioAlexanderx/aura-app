@@ -20,8 +20,15 @@
 // Dois estados vazios elegantes, nunca erro cru:
 //   • schema_pending: true no /status → migration pendente no ambiente
 //   • 409 NAO_CONECTADO nas demais rotas → falta WABA/token
-// A lista de templates é carregada AQUI (e não dentro do card) porque o
-// bloco de envio de teste precisa dos aprovados — uma busca só.
+// A lista de templates e a fila são carregadas AQUI (e não dentro de
+// cada card) porque o bloco de envio de teste precisa das duas: dos
+// templates aprovados e da contagem de testes do dia. Uma busca só.
+//
+// Fase 3: a conexão deixou de ser trabalho de bastidor da Aura — o
+// próprio dojô conecta o número pelo Embedded Signup (WaConnectCard) e
+// vê o que isso está custando (WaUsageCard). A ordem dos cartões segue
+// a ordem das perguntas: conectei? quanto gastei? o template está
+// aprovado? chega mesmo? o que saiu?
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -31,8 +38,12 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { useAuthStore } from "@/stores/auth";
-import { waApi, WaStatus, WaTemplate } from "@/services/waApi";
-import { fmtDayMonthBR, fmtPhoneBR, mapWaError, waQueueChips } from "./helpers";
+import { waApi, WaOutboxItem, WaStatus, WaTemplate } from "@/services/waApi";
+import {
+  fmtDayMonthBR, fmtPhoneBR, mapWaError, waQueueChips, waTestsSentToday,
+} from "./helpers";
+import { WaConnectCard } from "./WaConnectCard";
+import { WaUsageCard } from "./WaUsageCard";
 import { WaTemplatesCard } from "./WaTemplatesCard";
 import { WaTestSendCard } from "./WaTestSendCard";
 import { WaOutboxCard } from "./WaOutboxCard";
@@ -50,8 +61,10 @@ export function WhatsAppCloudSection() {
   const [tplNotConnected, setTplNotConnected] = useState(false);
   const [tplError, setTplError] = useState<string | null>(null);
 
-  // Incrementa após um envio de teste — a fila precisa refletir o item novo.
-  const [outboxKey, setOutboxKey] = useState(0);
+  const [outbox, setOutbox] = useState<WaOutboxItem[]>([]);
+  const [outLoading, setOutLoading] = useState(true);
+  const [outNotConnected, setOutNotConnected] = useState(false);
+  const [outError, setOutError] = useState<string | null>(null);
 
   const loadStatus = useCallback(async () => {
     if (!companyId) return;
@@ -90,8 +103,26 @@ export function WhatsAppCloudSection() {
     }
   }, [companyId]);
 
+  const loadOutbox = useCallback(async () => {
+    if (!companyId) return;
+    setOutLoading(true);
+    setOutError(null);
+    setOutNotConnected(false);
+    try {
+      const res = await waApi.listOutbox(companyId);
+      setOutbox(res.data ?? []);
+    } catch (e: any) {
+      const mapped = mapWaError(e);
+      if (mapped.code === "NAO_CONECTADO") setOutNotConnected(true);
+      else setOutError(mapped.message);
+    } finally {
+      setOutLoading(false);
+    }
+  }, [companyId]);
+
   useEffect(() => { loadStatus(); }, [loadStatus]);
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
+  useEffect(() => { loadOutbox(); }, [loadOutbox]);
 
   if (!companyId) return null;
 
@@ -192,10 +223,10 @@ export function WhatsAppCloudSection() {
           </>
         ) : (
           <Text style={styles.cardSub}>
-            O envio automático por WhatsApp exige um número e um token da Cloud API cadastrados para
-            o dojô, além de pelo menos um template aprovado pela Meta. Enquanto isso não existir, a
-            fila manual da aba Régua continua sendo o caminho — ela abre o seu WhatsApp com a
-            mensagem pronta e não depende de nenhuma configuração.
+            O envio automático por WhatsApp exige o número do dojô conectado (é o cartão logo
+            abaixo) e um template de cobrança aprovado pela Meta. Enquanto isso não existir, a fila
+            manual da aba Régua continua sendo o caminho — ela abre o seu WhatsApp com a mensagem
+            pronta e não depende de nenhuma configuração.
           </Text>
         )}
 
@@ -205,22 +236,39 @@ export function WhatsAppCloudSection() {
         </TouchableOpacity>
       </View>
 
+      <WaConnectCard
+        companyId={companyId}
+        status={status}
+        onChanged={() => { loadStatus(); loadTemplates(); loadOutbox(); }}
+      />
+
+      <WaUsageCard status={status} />
+
       <WaTemplatesCard
         companyId={companyId}
         templates={templates}
         loading={tplLoading}
         notConnected={tplNotConnected}
         error={tplError}
-        onReload={loadTemplates}
+        onReload={() => { loadTemplates(); loadStatus(); }}
+        billingTemplateName={status?.template_name}
+        billingTemplateStatus={status?.template_status}
       />
 
       <WaTestSendCard
         companyId={companyId}
         approvedTemplates={approved}
-        onSent={() => { setOutboxKey((k) => k + 1); loadStatus(); }}
+        testsSentToday={waTestsSentToday(outbox)}
+        onSent={() => { loadOutbox(); loadStatus(); }}
       />
 
-      <WaOutboxCard companyId={companyId} refreshKey={outboxKey} />
+      <WaOutboxCard
+        items={outbox}
+        loading={outLoading}
+        notConnected={outNotConnected}
+        error={outError}
+        onReload={loadOutbox}
+      />
     </ScrollView>
   );
 }
