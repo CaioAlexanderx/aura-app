@@ -491,7 +491,29 @@ export default function ClientesScreen() {
               "Comparativo: novos x voltando",
             ]}
           />
-        ) : <RetentionTab />)}
+        ) : (
+          <>
+            {/* Fase 7: a aba Retenção diz quem sumiu; a tela de reativação
+                é onde isso vira ação — um cupom pelo WhatsApp oficial. */}
+            <Pressable
+              onPress={() => router.push("/clientes/reativacao")}
+              accessibilityRole="button"
+              style={s.reativacaoLink}
+              testID="clientes-ir-para-reativacao"
+            >
+              <Icon name="whatsapp" size={15} color={Colors.violet3} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.reativacaoTitle}>Reativação por WhatsApp</Text>
+                <Text style={s.reativacaoSub}>
+                  Mande um cupom com prazo curto para quem parou de comprar. Mensagem de marketing —
+                  paga e só para quem autorizou.
+                </Text>
+              </View>
+              <Icon name="chevron_right" size={16} color={Colors.violet3} />
+            </Pressable>
+            <RetentionTab />
+          </>
+        ))}
 
         {tab === 3 && (isEssencial ? (
           <UpgradeCard
@@ -592,6 +614,10 @@ const s = StyleSheet.create({
   emptyImport:      { alignItems: "center", marginTop: -8 },
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
+  // Ponte para a tela de reativacao (Fase 7).
+  reativacaoLink:   { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.violetD, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 12 },
+  reativacaoTitle:  { fontSize: 13.5, fontWeight: "800", color: Colors.ink },
+  reativacaoSub:    { fontSize: 11.5, color: Colors.ink3, lineHeight: 16.5, marginTop: 3 },
   demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   // MULTICNPJ Onda 2.3
   consolidatedBanner: {

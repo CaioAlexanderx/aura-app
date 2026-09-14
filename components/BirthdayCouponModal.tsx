@@ -16,6 +16,10 @@ import {
 } from "@/services/messaging";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+// Fase 8: além do wa.me (grátis, manual), o parabéns pode sair pelo
+// WhatsApp OFICIAL da loja — template MARKETING, pago, com guardas.
+import { waApi, WA_ANIVERSARIO_TEMPLATES } from "@/services/waApi";
+import { mapWaError, waMarketingBlockers, waSkipReasonLabel } from "@/components/whatsapp/waGuards";
 
 type Props = {
   visible: boolean;
@@ -52,6 +56,18 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
 
   const settings: BirthdaySettings | undefined = settingsQuery.data;
 
+  // Status do WhatsApp oficial. Falhar aqui deixa `waStatus` undefined —
+  // e undefined BLOQUEIA o envio pago (waMarketingBlockers devolve
+  // SEM_STATUS). O caminho wa.me, que é grátis, não depende disto.
+  const waStatusQuery = useQuery({
+    queryKey: ["wa-status", company?.id],
+    queryFn: () => waApi.getStatus(company!.id),
+    enabled: visible && !!company?.id,
+    staleTime: 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   // Form state — atualizado quando settings chegarem
   const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
   const [discountValue, setDiscountValue] = useState<string>("10");
@@ -62,6 +78,11 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
   const [messageText, setMessageText] = useState<string>("");      // editável
   const [creating, setCreating] = useState(false);
   const [sending, setSending] = useState(false);
+  // ── Fase 8: envio pelo WhatsApp oficial (pago) ───────────
+  const [confirmOficial, setConfirmOficial] = useState(false);
+  const [enviandoOficial, setEnviandoOficial] = useState(false);
+  /** Motivo já traduzido quando o backend respondeu `queued:false`. */
+  const [motivoOficial, setMotivoOficial] = useState<string | null>(null);
 
   // Reseta state quando abre com customer novo / settings carregam
   useEffect(() => {
@@ -74,6 +95,9 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
     setAdvancedOpen(false);
     setCreating(false);
     setSending(false);
+    setConfirmOficial(false);
+    setEnviandoOficial(false);
+    setMotivoOficial(null);
 
     // Texto inicial = template renderizado com placeholder de cupom
     const previewExpires = previewExpiresAt(parseInt(String(settings.defaults.validity_days)) || 7);
@@ -104,6 +128,23 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
 
   const phoneValid = !!normalizeBrPhone(customer.phone);
   const optedOut = customer.marketing_opt_out === true;
+
+  // Guardas do canal oficial: tudo o que a cobrança exige (plano,
+  // conexão, template aprovado) MAIS consentimento de marketing e
+  // qualidade do número. Qualquer campo ausente bloqueia — é por omissão
+  // que sairia mensagem paga sem ninguém ter autorizado.
+  const waBlockers = waMarketingBlockers(waStatusQuery.data ?? null, {
+    templateKeys: WA_ANIVERSARIO_TEMPLATES,
+    labels: {
+      SEM_STATUS: "Não foi possível verificar o WhatsApp da loja agora.",
+      ADDON: "O envio pelo WhatsApp oficial não está no seu plano.",
+      CONEXAO: "Conecte o número da loja na aba WhatsApp.",
+      TOKEN: "A autorização da Meta expirou — reconecte o número da loja.",
+      TEMPLATE: "O template de aniversário ainda não foi aprovado pela Meta.",
+      CONSENTIMENTO: "Marque o consentimento de marketing na aba WhatsApp.",
+    },
+  });
+  const oficialLiberado = waBlockers.length === 0 && phoneValid && !optedOut;
   const dvNum = parseFloat(discountValue.replace(",", ".")) || 0;
   const vdNum = parseInt(validityDays) || 0;
   const canCreate = dvNum > 0 && vdNum > 0 && !creating && !sending;
@@ -193,6 +234,48 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
       }
     } finally {
       setSending(false);
+    }
+  }
+
+  /**
+   * Fase 8 — cria o cupom com o que está NA TELA e manda pelo WhatsApp
+   * oficial. O cupom é criado aqui (e não deixado para o backend) porque
+   * o lojista pode ter ajustado desconto e validade no formulário; o
+   * texto, esse sim, é o template aprovado pela Meta — o rascunho acima
+   * não vai junto, e a tela diz isso.
+   *
+   * `queued:false` não é erro: é guarda. Vira frase em português no
+   * próprio modal, sem fechar nada, para a pessoa entender o porquê.
+   */
+  async function handleEnviarOficial() {
+    if (!company?.id || !customer || !oficialLiberado) return;
+    setMotivoOficial(null);
+    const res = await performCreate();
+    if (!res?.coupon) return;
+
+    setEnviandoOficial(true);
+    try {
+      const r = await birthdayApi.sendWhatsapp(company.id, {
+        customer_id: customer.id,
+        coupon_id: res.coupon.id,
+      });
+      if (r?.queued) {
+        toast.success(`Parabéns enviado para ${customer.name.split(" ")[0]} pelo WhatsApp oficial`);
+        qc.invalidateQueries({ queryKey: ["birthday-sent", company.id] });
+        onSuccess?.({ coupon_id: res.coupon.id, sent: true });
+        onClose();
+        return;
+      }
+      // Cupom já existe: a pessoa pode mandar pelo wa.me com o código.
+      setMotivoOficial(
+        waSkipReasonLabel(r?.reason) ||
+        "A mensagem não entrou na fila. O cupom foi criado — dá para enviar pelo WhatsApp normal."
+      );
+    } catch (e: any) {
+      setMotivoOficial(mapWaError(e).message);
+    } finally {
+      setEnviandoOficial(false);
+      setConfirmOficial(false);
     }
   }
 
@@ -318,6 +401,65 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
             </View>
           )}
 
+          {/* ── Fase 8: a pista oficial, paga, ao lado do wa.me ── */}
+          {oficialLiberado && (
+            <View style={s.oficialBox} testID="aniversario-wa-oficial">
+              <View style={s.oficialHead}>
+                <Icon name="whatsapp" size={14} color={Colors.violet} />
+                <Text style={s.oficialTitle}>Enviar pelo WhatsApp oficial</Text>
+              </View>
+              <Text style={s.oficialSub}>
+                Sai pelo número da loja, sem abrir o WhatsApp — com o texto do template aprovado pela
+                Meta, não com o rascunho acima. É uma mensagem de marketing paga.
+              </Text>
+
+              {!confirmOficial ? (
+                <Pressable
+                  onPress={() => { setMotivoOficial(null); setConfirmOficial(true); }}
+                  disabled={creating || sending || enviandoOficial}
+                  style={[s.oficialBtn, (creating || sending || enviandoOficial) && { opacity: 0.5 }]}
+                  testID="aniversario-wa-oficial-abrir"
+                >
+                  <Icon name="send" size={13} color={Colors.violet} />
+                  <Text style={s.oficialBtnText}>Criar cupom e enviar pelo oficial</Text>
+                </Pressable>
+              ) : (
+                <View style={s.oficialConfirm} testID="aniversario-wa-oficial-confirmar">
+                  <Text style={s.oficialConfirmTxt}>
+                    Isto envia 1 mensagem de marketing paga para {customer.name.split(" ")[0]}.
+                    Confirma?
+                  </Text>
+                  <View style={s.oficialActions}>
+                    <Pressable
+                      onPress={() => setConfirmOficial(false)}
+                      disabled={enviandoOficial}
+                      style={s.cancelBtn}
+                    >
+                      <Text style={s.cancelText}>Voltar</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleEnviarOficial}
+                      disabled={enviandoOficial || creating}
+                      style={[s.primaryBtn, (enviandoOficial || creating) && { opacity: 0.5 }]}
+                      testID="aniversario-wa-oficial-enviar"
+                    >
+                      <Text style={s.primaryText}>
+                        {enviandoOficial || creating ? "Enviando..." : "Enviar 1 mensagem paga"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {!!motivoOficial && (
+            <View style={s.warning} testID="aniversario-wa-oficial-motivo">
+              <Icon name="alert-triangle" size={14} color="#f59e0b" />
+              <Text style={s.warningText}>{motivoOficial}</Text>
+            </View>
+          )}
+
           {/* Ações */}
           <View style={s.actions}>
             <Pressable onPress={onClose} style={s.cancelBtn} disabled={creating || sending}>
@@ -430,6 +572,17 @@ const s = StyleSheet.create({
   advancedToggle: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, marginBottom: 6 },
   advancedText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   warning: { flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.4)", borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 14 },
+  // Bloco do canal oficial (Fase 8) — visualmente separado do wa.me para
+  // ninguem confundir o botao gratuito com o pago.
+  oficialBox: { backgroundColor: Colors.violet + "11", borderColor: Colors.violet + "44", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 14 },
+  oficialHead: { flexDirection: "row", alignItems: "center", gap: 7 },
+  oficialTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  oficialSub: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16.5, marginTop: 5 },
+  oficialBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: Colors.violet + "66", borderRadius: 10, paddingVertical: 11, marginTop: 10, minHeight: 42 },
+  oficialBtnText: { fontSize: 12.5, color: Colors.violet, fontWeight: "700" },
+  oficialConfirm: { marginTop: 10, gap: 8 },
+  oficialConfirmTxt: { fontSize: 12.5, color: Colors.ink, fontWeight: "600", lineHeight: 18 },
+  oficialActions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" },
   warningText: { fontSize: 12, color: "#f59e0b", flex: 1 },
   actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 4 },
   cancelBtn: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },

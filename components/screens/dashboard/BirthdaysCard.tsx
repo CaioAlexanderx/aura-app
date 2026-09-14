@@ -6,6 +6,10 @@ import { Icon } from "@/components/Icon";
 import { companiesApi, birthdayApi, type BirthdayCustomer } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { BirthdayCouponModal } from "@/components/BirthdayCouponModal";
+// Fase 8: o parabéns pode sair sozinho pelo WhatsApp oficial. O
+// interruptor mora aqui, ao lado da lista que ele afeta — e não numa
+// tela de configuração que ninguém abre.
+import { AniversarioAutoCard } from "@/components/whatsapp/AniversarioAutoCard";
 import { normalizeBrPhone } from "@/services/messaging";
 // 01/09/2026: helper compartilhado de plural — a linha dizia "em 1 dias".
 import { pluralize } from "@/utils/plural";
@@ -133,6 +137,8 @@ export function BirthdaysCard() {
             ))}
           </View>
         )}
+
+        {!!company?.id && <AniversarioAutoCard companyId={company.id} />}
       </View>
 
       <BirthdayCouponModal
