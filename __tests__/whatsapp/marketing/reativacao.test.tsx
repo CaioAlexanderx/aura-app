@@ -307,8 +307,8 @@ describe("reativação automática semanal", () => {
     expect(tem(tree, "reativacao-auto-erro")).toBe(true);
     const txt = JSON.stringify(tree.toJSON());
     // Sem `error` no corpo, quem escreve a frase é o mapeador do app —
-    // e ele fala de plano/adicional, nunca do código.
-    expect(txt).toMatch(/adicional do plano|não está no seu plano/);
+    // e ele fala do plano que inclui o WhatsApp oficial, nunca do código.
+    expect(txt).toMatch(/plano Negócio e do Aura Dojô/);
     expect(txt).not.toContain("ADDON_REQUIRED");
     tree.unmount();
   });

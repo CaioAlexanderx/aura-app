@@ -133,7 +133,10 @@ describe("motivos novos → pt-BR", () => {
   it("os quatro skip_reason de marketing", () => {
     expect(waSkipReasonLabel("FREQUENCIA_MARKETING")).toMatch(/últimos 7 dias/i);
     expect(waSkipReasonLabel("QUALIDADE_MARKETING")).toMatch(/marketing pausado/i);
-    expect(waSkipReasonLabel("LIMITE_MARKETING")).toMatch(/limite diário de marketing/i);
+    // Fase 8b: o mesmo código passou a cobrir a COTA do mês, e a frase
+    // mudou junto — dizer "diário" aqui mandaria o lojista esperar amanhã
+    // por algo que só volta no mês que vem.
+    expect(waSkipReasonLabel("LIMITE_MARKETING")).toMatch(/cota de mensagens promocionais/i);
     expect(waSkipReasonLabel("SEM_CONSENTIMENTO")).toMatch(/consentimento de marketing/i);
     expect(waSkipReasonLabel("OPT_OUT_MARKETING")).toMatch(/não receber/i);
   });

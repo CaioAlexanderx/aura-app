@@ -130,8 +130,11 @@ const SKIP_REASON_PT: Record<string, string> = {
   // Cada uma destas impediu uma mensagem PAGA de sair. Quem lê precisa
   // do motivo em português e do que fazer a respeito.
   template_nao_aprovado: "O template de cobrança ainda não foi aprovado pela Meta.",
-  addon_inativo: "O adicional de WhatsApp automático não está ativo nesta conta.",
+  addon_inativo: "O WhatsApp oficial não está liberado nesta conta — ele faz parte do plano Negócio e do Aura Dojô.",
   limite_diario: "Limite diário de mensagens atingido — o restante sai amanhã.",
+  // Fase 8b — uso justo das mensagens de cobrança. É teto de mês, não de
+  // dia: dizer "sai amanhã" aqui seria mentira.
+  limite_mensal: "Limite mensal de mensagens de cobrança atingido — fale com a Aura.",
   limite_por_contato: "Este contato já recebeu o máximo de mensagens do dia.",
   qualidade_baixa: "Envios pausados: a Meta rebaixou a qualidade do número.",
   telefone_invalido_meta: "A Meta informou que este número não recebe mensagens.",
@@ -147,7 +150,10 @@ const SKIP_REASON_PT: Record<string, string> = {
   // foi a guarda funcionando — e o que fazer para destravar.
   frequencia_marketing: "Este cliente já recebeu uma mensagem de marketing nos últimos 7 dias.",
   qualidade_marketing: "Qualidade do número em atenção: marketing pausado.",
-  limite_marketing: "Limite diário de marketing atingido.",
+  // Fase 8b: o mesmo skip_reason cobre o teto do dia (anti-rajada) e a
+  // COTA do mês. Como daqui não dá para distinguir os dois, a frase diz
+  // as duas saídas — esperar ou comprar um pacote.
+  limite_marketing: "Cota de mensagens promocionais atingida — aguarde o próximo mês ou compre um pacote na aba WhatsApp.",
   sem_consentimento: "Marque o consentimento de marketing na aba WhatsApp.",
   opt_out_marketing: "Este cliente pediu para não receber mensagens de marketing.",
   sem_cupom: "Não foi possível gerar o cupom deste cliente.",
@@ -194,15 +200,16 @@ const SKIP_REASON_SHORT_PT: Record<string, string> = {
   template_nao_aprovado: "template não aprovado",
   template_not_approved: "template não aprovado",
   template_nao_mapeado: "etapa sem template",
-  addon_inativo: "sem o adicional",
+  addon_inativo: "fora do plano",
   limite_diario: "acima do limite do dia",
+  limite_mensal: "acima do limite do mês",
   limite_por_contato: "limite por contato",
   qualidade_baixa: "qualidade baixa",
   pausado: "envios pausados",
   sem_saldo: "já quitadas",
   frequencia_marketing: "marketing nos últimos 7 dias",
   qualidade_marketing: "qualidade em atenção",
-  limite_marketing: "limite de marketing do dia",
+  limite_marketing: "cota promocional atingida",
   sem_consentimento: "sem consentimento",
   opt_out_marketing: "opt-out de marketing",
   sem_cupom: "sem cupom",
@@ -299,10 +306,12 @@ export function mapWaError(e: any): WaMappedError {
   if (code === "ADDON_REQUIRED") {
     return {
       code,
-      // O backend manda a frase comercial certa; o fallback é rede de proteção.
+      // O backend manda a frase comercial certa; o fallback é rede de
+      // proteção. Fase 8b: o WhatsApp oficial deixou de ser adicional —
+      // vem no Negócio e no Aura Dojô, e quem está no Essencial migra.
       message:
         e?.data?.error ||
-        "O envio automático por WhatsApp é um adicional do plano. Fale com a Aura para ativar.",
+        "O WhatsApp oficial faz parte do plano Negócio e do Aura Dojô. Fale com a Aura para migrar.",
     };
   }
   if (code === "TEMPLATE_NAO_APROVADO") {
@@ -359,6 +368,111 @@ export function isWaErrorCode(code: unknown): boolean {
   return typeof code === "string" && WA_ERROR_CODES.has(code);
 }
 
+// ── Cota mensal de mensagens promocionais (Fase 8b) ──────
+/** Tamanho e preço do pacote extra quando o backend não disser outro. */
+export const WA_MARKETING_PACK_QTY = 100;
+export const WA_MARKETING_PACK_PRICE_CENTS = 4900;
+
+/** A partir daqui a tela avisa que a cota está acabando. */
+export const WA_MARKETING_QUOTA_WARN = 0.8;
+
+export interface WaMarketingQuota {
+  /** Promocionais já enviadas no mês. null = backend não disse. */
+  monthSent: number | null;
+  /** Inclusa no plano. */
+  quotaBase: number | null;
+  /** Comprada em pacotes ativos. */
+  packsQty: number | null;
+  /** quotaBase + packsQty (o que o backend manda pronto). */
+  quota: number | null;
+  /** O que ainda cabe no mês. 0 = esgotada. */
+  remaining: number | null;
+  packQty: number;
+  packPriceCents: number;
+  /** 0..1 do consumo. null quando não dá para calcular a fração. */
+  ratio: number | null;
+  /** >= 80% e ainda não esgotada. */
+  near: boolean;
+  /** Cota do mês acabou: nenhuma promocional sai até comprar ou virar o mês. */
+  exhausted: boolean;
+}
+
+/**
+ * Lê a cota do `/status`. Devolve null quando o backend não falou nada de
+ * cota — e isso é de propósito: este app sobe ANTES do backend da Fase 8b,
+ * e inventar "0 de 0" faria a tela dizer que a cota acabou quando ela nem
+ * existe ainda. Ausência aqui não libera nada que já não estivesse
+ * liberado; o que libera continua sendo plano, conexão e template.
+ *
+ * Quando o backend fala, a leitura é conservadora: `remaining` explícito
+ * manda, e na falta dele a sobra é deduzida de `quota - month_sent`.
+ */
+export function waMarketingQuotaInfo(
+  status: WaStatus | null | undefined
+): WaMarketingQuota | null {
+  const m = status?.usage?.marketing;
+  if (!m || typeof m !== "object") return null;
+
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
+  const monthSent = num(m.month_sent);
+  const quotaBase = num(m.quota_base);
+  const packsQty = num(m.packs_qty);
+  let quota = num(m.quota);
+  if (quota == null && quotaBase != null) quota = quotaBase + (packsQty || 0);
+
+  let remaining = num(m.remaining);
+  if (remaining == null && quota != null && monthSent != null) {
+    remaining = Math.max(0, quota - monthSent);
+  }
+
+  // Nada conhecido = mesma coisa que não ter o objeto.
+  if (monthSent == null && quota == null && remaining == null) return null;
+
+  const ratio =
+    quota != null && quota > 0 && monthSent != null
+      ? Math.min(1, Math.max(0, monthSent / quota))
+      : remaining === 0
+        ? 1
+        : null;
+
+  const exhausted = remaining != null && remaining <= 0;
+
+  return {
+    monthSent,
+    quotaBase,
+    packsQty,
+    quota,
+    remaining,
+    packQty: num(m.pack_qty) ?? WA_MARKETING_PACK_QTY,
+    packPriceCents: num(m.pack_price_cents) ?? WA_MARKETING_PACK_PRICE_CENTS,
+    ratio,
+    near: !exhausted && ratio != null && ratio >= WA_MARKETING_QUOTA_WARN,
+    exhausted,
+  };
+}
+
+/** Centavos → "R$ 49" (ou "R$ 49,90" quando não for redondo). */
+export function waPackPriceLabel(cents: number | null | undefined): string {
+  const c = typeof cents === "number" && Number.isFinite(cents)
+    ? Math.max(0, Math.trunc(cents))
+    : WA_MARKETING_PACK_PRICE_CENTS;
+  const v = c / 100;
+  if (Number.isInteger(v)) return `R$ ${v.toLocaleString("pt-BR")}`;
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Status do pacote comprado → selo sem cor. */
+export function waMarketingPackStatusSpec(status: string | null | undefined): WaBadgeSpec {
+  switch (String(status || "").toLowerCase()) {
+    case "active": return { label: "Ativo", icon: "check_circle", tone: "ok" };
+    case "pending": return { label: "Aguardando pagamento", icon: "clock", tone: "warn" };
+    case "cancelled": return { label: "Cancelado", icon: "x_circle", tone: "neutral" };
+    default: return { label: humanize(String(status || "—")) || "—", icon: "clock", tone: "neutral" };
+  }
+}
+
 // ── Guardas de custo: por que NÃO dá para ligar o automático ──
 /**
  * Cada mensagem custa dinheiro. Esta função é a única fonte da verdade
@@ -375,7 +489,10 @@ export interface WaAutoBlocker {
     // Só marketing (Fases 7/8): o dono não declarou o consentimento, ou a
     // Meta rebaixou o número a ponto de recusar marketing (YELLOW já
     // barra) — a cobrança, que é UTILITY, continua saindo nesse estado.
-    | "CONSENTIMENTO" | "QUALIDADE_MARKETING";
+    | "CONSENTIMENTO" | "QUALIDADE_MARKETING"
+    // Fase 8b: a cota mensal de promocionais acabou. Também é só
+    // marketing — a cobrança é ilimitada no plano e continua saindo.
+    | "COTA";
   label: string;
 }
 
@@ -428,7 +545,13 @@ export function waAutoBlockers(
 
   const out: WaAutoBlocker[] = [];
   if (status.addon_active !== true) {
-    out.push({ code: "ADDON", label: txt("ADDON", "Adicional não ativo — fale com a Aura para contratar o WhatsApp automático.") });
+    out.push({
+      code: "ADDON",
+      label: txt(
+        "ADDON",
+        "O WhatsApp oficial faz parte do plano Negócio e do Aura Dojô. Fale com a Aura para migrar."
+      ),
+    });
   }
   if (status.token_expired === true) {
     out.push({ code: "TOKEN", label: txt("TOKEN", "A autorização da Meta expirou — reconecte o número.") });
@@ -466,6 +589,21 @@ export function waAutoBlockers(
         label: txt(
           "QUALIDADE_MARKETING",
           "A Meta colocou o número em atenção: as mensagens de marketing ficam pausadas até a qualidade voltar. A cobrança continua saindo."
+        ),
+      });
+    }
+
+    // Fase 8b — a cota do mês. Só entra quando o backend DIZ que acabou:
+    // cota ausente é backend anterior à fase, e nesse mundo não existe
+    // cota para esgotar. Barrar por omissão aqui pararia o marketing de
+    // todo mundo no dia em que este app subisse antes do backend.
+    const cota = waMarketingQuotaInfo(status);
+    if (cota?.exhausted) {
+      out.push({
+        code: "COTA",
+        label: txt(
+          "COTA",
+          "Cota de mensagens promocionais do mês esgotada — compre um pacote ou aguarde o próximo mês. As cobranças continuam saindo normalmente."
         ),
       });
     }

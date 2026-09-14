@@ -147,14 +147,16 @@ describe("interruptor do WhatsApp oficial na régua do crediário", () => {
     tree.unmount();
   });
 
-  it("sem plano nem addon: travado com o texto comercial", async () => {
+  it("fora do plano: travado com o texto comercial", async () => {
     mockStatus = { ...STATUS_LIBERADO, addon_active: false };
     let tree: any;
     await act(async () => { tree = montar(); });
     await flush();
 
     expect(temTestId(tree, "crediario-wa-switch-travado")).toBe(true);
-    expect(JSON.stringify(tree.toJSON())).toContain("não está no seu plano");
+    // Fase 8b: o texto comercial mudou — o WhatsApp oficial vem no
+    // Negócio, então o caminho é migrar de plano, não contratar addon.
+    expect(JSON.stringify(tree.toJSON())).toContain("plano Negócio e do Aura Dojô");
     tree.unmount();
   });
 
@@ -227,7 +229,7 @@ describe("interruptor do WhatsApp oficial na régua do crediário", () => {
 
     expect(temTestId(tree, "crediario-wa-erro")).toBe(true);
     const txt = JSON.stringify(tree.toJSON());
-    expect(txt).toContain("adicional do plano");
+    expect(txt).toContain("plano Negócio e do Aura Dojô");
     expect(txt).not.toContain("ADDON_REQUIRED");
     tree.unmount();
   });

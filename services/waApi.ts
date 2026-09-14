@@ -48,12 +48,81 @@ export interface WaQueueCounts {
 /** Nota de qualidade do número na Meta. Aberto a string: a Meta muda. */
 export type WaQualityRating = "GREEN" | "YELLOW" | "RED" | (string & {});
 
+/**
+ * Fase 8b — a COTA mensal de mensagens promocionais.
+ *
+ * O WhatsApp oficial passou a fazer parte do plano Negócio e do Aura
+ * Dojô: cobrança e lembrete (UTILITY) são ilimitados na prática, e o
+ * marketing vem com 100 mensagens por mês inclusas. Passou disso, a loja
+ * compra um pacote de 100 na própria tela.
+ *
+ * TODOS os campos são opcionais, e de propósito: o backend da Fase 8b
+ * sobe depois deste app. Sem eles a tela mostra exatamente o que mostrava
+ * antes (uso do mês e teto do dia) — nunca um "0 de 0" que parece cota
+ * zerada quando na verdade é só backend antigo.
+ */
+export interface WaUsageMarketing {
+  /** Promocionais que já saíram no mês (America/Sao_Paulo). */
+  month_sent?: number;
+  /** Cota inclusa no plano (default 100). */
+  quota_base?: number;
+  /** Soma dos pacotes ativos e dentro da validade. */
+  packs_qty?: number;
+  /** quota_base + packs_qty. */
+  quota?: number;
+  /** max(0, quota - month_sent). 0 = cota esgotada, marketing parado. */
+  remaining?: number;
+  /** Preço do pacote extra, em centavos (default 4900). */
+  pack_price_cents?: number;
+  /** Tamanho do pacote extra (default 100). */
+  pack_qty?: number;
+}
+
+/** Uso justo das mensagens de cobrança (UTILITY). Silencioso para o lojista. */
+export interface WaUsageUtility {
+  month_sent?: number;
+  cap?: number;
+}
+
 /** Consumo do mês/dia. Campos ausentes = backend anterior à Fase 1. */
 export interface WaUsage {
   today_sent?: number;
   month_sent?: number;
   /** Teto diário por company (env WA_DAILY_CAP no backend, default 300). */
   daily_cap?: number;
+  /** Fase 8b — cota mensal de marketing. Ausente = backend anterior. */
+  marketing?: WaUsageMarketing;
+  /** Fase 8b — uso justo da cobrança. Ausente = backend anterior. */
+  utility?: WaUsageUtility;
+}
+
+// ── Pacotes extras de mensagens promocionais (Fase 8b) ──
+export type WaMarketingPackStatus = "pending" | "active" | "cancelled" | (string & {});
+
+export interface WaMarketingPack {
+  id: string;
+  qty: number;
+  price_cents?: number | null;
+  status: WaMarketingPackStatus;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  /** Link do Pix/boleto do Asaas. null = ativação manual pela Aura. */
+  payment_url?: string | null;
+  activated_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface WaMarketingPacksResponse {
+  /** Últimos 12, mais recentes primeiro. */
+  data: WaMarketingPack[];
+}
+
+export interface WaMarketingPackResult {
+  pack?: WaMarketingPack | null;
+  /** Presente = a loja paga agora e o pacote entra quando confirmar. */
+  payment_url?: string | null;
+  /** true = sem cobrança automática; a Aura ativa o pacote na mão. */
+  needs_manual?: boolean;
 }
 
 /** Parâmetros do Embedded Signup da Meta (vêm do env do backend). */
@@ -411,5 +480,27 @@ export const waApi = {
     request<void>(`${base(companyId)}/contacts/opt`, {
       method: "POST",
       body: payload,
+    }),
+
+  // ── Pacotes extras de marketing (Fase 8b) ──────────────
+  /**
+   * Últimos pacotes comprados. 404/405 = backend anterior à Fase 8b —
+   * quem chama trata como lista vazia, não como erro de tela.
+   */
+  listMarketingPacks: (companyId: string): Promise<WaMarketingPacksResponse> =>
+    request<WaMarketingPacksResponse>(`${base(companyId)}/marketing-packs`),
+
+  /**
+   * Compra um pacote de mensagens promocionais. O backend cria a cobrança
+   * avulsa no Asaas quando dá (devolve `payment_url`) e, quando não dá,
+   * devolve `needs_manual` para a Aura ativar na mão — nos dois casos o
+   * pacote nasce `pending` e só conta na cota depois de ativo.
+   */
+  buyMarketingPack: (companyId: string, qty: number = 100): Promise<WaMarketingPackResult> =>
+    request<WaMarketingPackResult>(`${base(companyId)}/marketing-packs`, {
+      method: "POST",
+      body: { qty },
+      // Pode ir ao Asaas criar a cobrança; 10s default não dá conta.
+      timeout: 20000,
     }),
 };

@@ -99,7 +99,7 @@ export default function WhatsAppScreen() {
           {ativa === 0 && (
             <>
               <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
-              <UsoCard status={wa.status} />
+              <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
               <ConsentimentoMarketingCard
                 companyId={companyId}
                 status={wa.status}

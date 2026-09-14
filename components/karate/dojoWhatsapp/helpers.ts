@@ -86,6 +86,10 @@ const DOJO_LABELS: WaAutoBlockersOptions["labels"] = {
   CONEXAO: "Conecte o número do dojô na aba WhatsApp.",
   TOKEN: "A autorização da Meta expirou — reconecte o número do dojô.",
   TEMPLATE: "Template de cobrança ainda não aprovado pela Meta.",
+  // Fase 8b: o WhatsApp oficial vem no Aura Dojô, não é mais um adicional
+  // pago à parte. Um dojô que ainda veja este aviso está com a liberação
+  // pendente na Aura — não com uma compra pendente.
+  ADDON: "O WhatsApp oficial está incluso no Aura Dojô. Fale com a Aura para concluir a liberação neste dojô.",
 };
 
 export function waAutoBlockers(

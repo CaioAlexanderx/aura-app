@@ -22,8 +22,8 @@ import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { WaPreview, WaStatus } from "@/services/waApi";
 import {
-  mapWaError, waMarketingCostLabel, waPreviewSkippedSummary, waPreviewSkippedTotal,
-  waSkipReasonLabel,
+  mapWaError, waMarketingCostLabel, waMarketingQuotaInfo, waPreviewSkippedSummary,
+  waPreviewSkippedTotal, waSkipReasonLabel,
 } from "./waGuards";
 
 interface Props {
@@ -99,6 +99,11 @@ export function PreviaMarketingModal({
     ? status.usage.daily_cap
     : null;
   const acimaDoTeto = cap != null && wouldSend > cap;
+  // Fase 8b — quanto da cota do mês isto consome. Cota ausente = backend
+  // anterior à fase, e aí a linha simplesmente não aparece.
+  const cota = waMarketingQuotaInfo(status);
+  const sobra = cota?.remaining ?? null;
+  const acimaDaCota = sobra != null && wouldSend > sobra;
   const itens = (preview?.items || []).filter((i) => !i.reason).slice(0, MAX_ITENS_VISIVEIS);
   const pulados = (preview?.items || []).filter((i) => !!i.reason).slice(0, MAX_ITENS_VISIVEIS);
   // A rotina inteira barrada (sem consentimento, sem addon, desligada) é
@@ -160,6 +165,25 @@ export function PreviaMarketingModal({
                     : `clientes receberiam — ${waMarketingCostLabel(wouldSend)}.`}
                 </Text>
               </View>
+
+              {sobra != null && (
+                <Text style={s.line} testID={`${base}-cota`}>
+                  {wouldSend > 0
+                    ? `${Math.min(wouldSend, sobra)} de ${sobra} da cota promocional do mês serão usadas.`
+                    : `Restam ${sobra} mensagens promocionais na cota do mês.`}
+                </Text>
+              )}
+
+              {acimaDaCota && (
+                <View style={s.warnBox} testID={`${base}-acima-da-cota`}>
+                  <Icon name="alert" size={13} color={Colors.amber} />
+                  <Text style={s.warnTxt}>
+                    {sobra === 0
+                      ? "A cota de mensagens promocionais do mês já acabou: nada sai até você comprar um pacote ou o mês virar."
+                      : `Só ${sobra} cabem na cota do mês. O restante fica na fila até você comprar um pacote ou o mês virar.`}
+                  </Text>
+                </View>
+              )}
 
               {!!motivoGeral && (
                 <View style={s.warnBox} testID={`${base}-motivo-geral`}>

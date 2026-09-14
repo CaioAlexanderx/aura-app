@@ -131,11 +131,12 @@ export default function ReativacaoScreen() {
     templateKeys: WA_REATIVACAO_TEMPLATES,
     labels: {
       SEM_STATUS: "Não foi possível verificar o WhatsApp da loja — recarregue antes de enviar.",
-      ADDON: "O envio por WhatsApp oficial não está no seu plano. Fale com a Aura para ativar.",
+      ADDON: "O WhatsApp oficial faz parte do plano Negócio e do Aura Dojô. Fale com a Aura para migrar.",
       CONEXAO: "Conecte o número da loja na aba WhatsApp.",
       TOKEN: "A autorização da Meta expirou — reconecte o número da loja.",
       TEMPLATE: "O template de reativação ainda não foi aprovado pela Meta.",
       CONSENTIMENTO: "Marque o consentimento de marketing na aba WhatsApp — sem ele nenhuma mensagem de reativação sai.",
+      COTA: "Cota de mensagens promocionais do mês esgotada — compre um pacote na aba WhatsApp ou aguarde o próximo mês. As cobranças continuam saindo.",
     },
   });
   const podeEnviar = !waLoading && blockers.length === 0;

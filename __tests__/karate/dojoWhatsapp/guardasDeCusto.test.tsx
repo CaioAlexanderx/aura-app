@@ -111,10 +111,12 @@ describe("waAutoBlockers — quem pode ligar o envio automático", () => {
     expect(waAutoBlockers(STATUS_LIBERADO as any)).toEqual([]);
   });
 
-  it("bloqueia sem o adicional contratado", () => {
+  it("bloqueia sem a liberação do plano", () => {
     const b = waAutoBlockers({ ...STATUS_LIBERADO, addon_active: false } as any);
     expect(b.map((x) => x.code)).toEqual(["ADDON"]);
-    expect(b[0].label).toMatch(/Adicional não ativo/);
+    // Fase 8b: o WhatsApp oficial vem no Aura Dojô. O aviso deixou de
+    // pedir uma compra e passou a pedir a liberação.
+    expect(b[0].label).toMatch(/incluso no Aura Dojô/i);
   });
 
   it("campo ausente conta como bloqueio, nunca como liberação", () => {
@@ -150,7 +152,8 @@ describe("mapWaError — nenhum código cru na tela", () => {
   it("traduz ADDON_REQUIRED", () => {
     const m = mapWaError({ status: 403, data: { code: "ADDON_REQUIRED" } });
     expect(m.code).toBe("ADDON_REQUIRED");
-    expect(m.message).toMatch(/adicional do plano/i);
+    // Fase 8b: não é mais adicional — é o plano Negócio / Aura Dojô.
+    expect(m.message).toMatch(/plano Negócio e do Aura Dojô/i);
     expect(m.message).not.toMatch(/ADDON_REQUIRED/);
   });
 
@@ -170,7 +173,7 @@ describe("mapWaError — nenhum código cru na tela", () => {
 describe("skip_reason das guardas → pt-BR", () => {
   it("traduz os motivos novos da fila", () => {
     expect(waSkipReasonLabel("LIMITE_DIARIO")).toMatch(/Limite diário/);
-    expect(waSkipReasonLabel("ADDON_INATIVO")).toMatch(/adicional/i);
+    expect(waSkipReasonLabel("ADDON_INATIVO")).toMatch(/não está liberado nesta conta/i);
     expect(waSkipReasonLabel("TEMPLATE_NAO_APROVADO")).toMatch(/aprovado pela Meta/i);
     expect(waSkipReasonLabel("TELEFONE_INVALIDO_META")).toMatch(/não recebe mensagens/i);
     expect(waSkipReasonLabel("LIMITE_POR_CONTATO")).toMatch(/máximo de mensagens do dia/i);
@@ -217,7 +220,7 @@ describe("ReguaSection — o toggle do WhatsApp na tela", () => {
     mockGetPreview.mockClear();
   });
 
-  it("sem addon: switch travado e o motivo escrito na tela", async () => {
+  it("sem a liberação do plano: switch travado e o motivo escrito na tela", async () => {
     mockStatus = { ...STATUS_LIBERADO, addon_active: false };
     let tree: any;
     await act(async () => { tree = renderer.create(<ReguaSection />); });
@@ -227,7 +230,10 @@ describe("ReguaSection — o toggle do WhatsApp na tela", () => {
     expect(temTestId(tree, "regua-wa-switch")).toBe(false);
     expect(temTestId(tree, "regua-wa-motivos")).toBe(true);
     const motivos = JSON.stringify(tree.toJSON());
-    expect(motivos).toContain("Adicional não ativo");
+    expect(motivos).toContain("incluso no Aura Dojô");
+    // E nunca o texto antigo, que mandava contratar um adicional que não
+    // existe mais.
+    expect(motivos).not.toContain("Adicional não ativo");
     tree.unmount();
   });
 

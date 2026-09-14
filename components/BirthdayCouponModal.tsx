@@ -137,11 +137,12 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
     templateKeys: WA_ANIVERSARIO_TEMPLATES,
     labels: {
       SEM_STATUS: "Não foi possível verificar o WhatsApp da loja agora.",
-      ADDON: "O envio pelo WhatsApp oficial não está no seu plano.",
+      ADDON: "O WhatsApp oficial faz parte do plano Negócio e do Aura Dojô. Fale com a Aura para migrar.",
       CONEXAO: "Conecte o número da loja na aba WhatsApp.",
       TOKEN: "A autorização da Meta expirou — reconecte o número da loja.",
       TEMPLATE: "O template de aniversário ainda não foi aprovado pela Meta.",
       CONSENTIMENTO: "Marque o consentimento de marketing na aba WhatsApp.",
+      COTA: "Cota de mensagens promocionais do mês esgotada — compre um pacote na aba WhatsApp. O cupom pelo wa.me continua grátis.",
     },
   });
   const oficialLiberado = waBlockers.length === 0 && phoneValid && !optedOut;

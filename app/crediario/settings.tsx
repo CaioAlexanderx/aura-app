@@ -327,7 +327,7 @@ export default function CrediarioSettingsScreen() {
     templateKeys: WA_CREDIARIO_TEMPLATES,
     labels: {
       SEM_STATUS: "Não foi possível verificar o WhatsApp da loja — recarregue antes de ligar o envio automático.",
-      ADDON: "O envio automático por WhatsApp não está no seu plano. Fale com a Aura para ativar.",
+      ADDON: "O WhatsApp oficial faz parte do plano Negócio e do Aura Dojô. Fale com a Aura para migrar.",
       CONEXAO: "Conecte o número da loja na aba WhatsApp.",
       TOKEN: "A autorização da Meta expirou — reconecte o número da loja.",
       TEMPLATE: "Os templates de cobrança (lembrete e atraso) ainda não foram aprovados pela Meta.",
