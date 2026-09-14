@@ -10,6 +10,8 @@ import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
+import { waApi, WA_CREDIARIO_TEMPLATES } from "@/services/waApi";
+import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { toast } from "@/components/Toast";
 import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
@@ -144,6 +146,12 @@ type CobrancaPreviewState = {
   valorLabel?: string;
   valorDesc?: string;
   message: string;
+  /**
+   * Fase 6k — parcela que o envio pelo WhatsApp OFICIAL cobraria (a mais
+   * antiga em aberto, a mesma que o texto do wa.me cita). Sem ela não há
+   * o que enfileirar: o botão do canal oficial nem aparece.
+   */
+  installmentId?: string | null;
 };
 
 type SortOrder = "balance" | "az";
@@ -301,6 +309,36 @@ export default function CrediarioScreen() {
     staleTime: 5 * 60_000,
   });
 
+  // ── Fase 6k: o canal oficial só aparece se TUDO liberar ──────────────
+  // Falhar aqui devolve null, e null bloqueia (waAutoBlockers → SEM_STATUS).
+  // Nunca o contrário: mensagem paga não sai por omissão de campo.
+  const waStatusQ = useQuery({
+    queryKey: ["wa-status", company?.id],
+    queryFn: () => waApi.getStatus(company!.id).catch(() => null),
+    enabled: !!company?.id,
+    staleTime: 5 * 60_000,
+  });
+  const waPodeOficial =
+    waAutoBlockers(waStatusQ.data || null, { templateKeys: WA_CREDIARIO_TEMPLATES }).length === 0;
+
+  /**
+   * Enfileira UMA cobrança pelo número oficial (mensagem paga). O modal
+   * já confirmou com o lojista; aqui só traduzimos a resposta — inclusive
+   * `queued: false`, que é uma guarda do backend tendo funcionado.
+   */
+  const enviarCobrancaOficial = useCallback(async (installmentId: string) => {
+    try {
+      const res = await creditApi.triggerCollection(company!.id, installmentId, { channel: "whatsapp_auto" });
+      return { queued: res?.queued === true, reason: res?.reason ?? null };
+    } catch (e: any) {
+      const code = e?.data?.code ?? e?.code ?? null;
+      return {
+        queued: false,
+        erro: isWaErrorCode(code) ? mapWaError(e).message : (e?.data?.error || e?.message || "Não foi possível enviar agora."),
+      };
+    }
+  }, [company?.id]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -352,6 +390,7 @@ export default function CrediarioScreen() {
         valorLabel,
         valorDesc,
         message: lines.join("\n\n"),
+        installmentId: nextDue?.id || null,
       });
     } catch {
       toast.error("Erro ao montar a cobrança");
@@ -798,6 +837,12 @@ export default function CrediarioScreen() {
           valorLabel={cobrancaPreview.valorLabel}
           valorDesc={cobrancaPreview.valorDesc}
           initialMessage={cobrancaPreview.message}
+          podeEnviarOficial={waPodeOficial && !!cobrancaPreview.installmentId}
+          onEnviarOficial={
+            cobrancaPreview.installmentId
+              ? () => enviarCobrancaOficial(cobrancaPreview.installmentId as string)
+              : undefined
+          }
           onClose={() => setCobrancaPreview(null)}
         />
       )}

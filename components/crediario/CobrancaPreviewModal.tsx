@@ -8,18 +8,34 @@
 // reset da mensagem ao reabrir (antes dependia do pai).
 // F4.3 (10/07): maxHeight 88vh no web (ModalPop quebrava o "90%") +
 // ScrollView com flexShrink e indicador — conteúdo sempre alcançável.
+// Fase 6k (14/09/2026): quando a loja tem WhatsApp oficial conectado e
+// passa por todas as guardas, aparece um SEGUNDO caminho — "Enviar pelo
+// WhatsApp oficial", que enfileira uma mensagem de verdade na Cloud API.
+// Essa é PAGA, então: confirmação explícita antes de gastar, e
+// `queued: false` (uma guarda tendo funcionado) vira motivo em pt-BR,
+// nunca um código. O caminho wa.me continua exatamente como era —
+// grátis, manual e ainda o botão principal.
 // ============================================================
 import { useEffect, useState } from "react";
 import {
   View, Text, Pressable, TextInput, StyleSheet,
-  Platform, Linking, ScrollView,
+  Platform, Linking, ScrollView, ActivityIndicator,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { Motion, webTransition } from "@/constants/motion";
+import { waSkipReasonLabel } from "@/components/whatsapp/waGuards";
 
 const IS_WEB = Platform.OS === "web";
+
+/** O que o backend devolve no trigger com channel 'whatsapp_auto'. */
+export type EnvioOficialResultado = {
+  queued?: boolean;
+  reason?: string | null;
+  /** Erro já traduzido pelo pai (rede, 403, 409…). */
+  erro?: string | null;
+};
 
 export type CobrancaPreviewProps = {
   visible: boolean;
@@ -31,6 +47,14 @@ export type CobrancaPreviewProps = {
   valorDesc?: string;
   /** Mensagem inicial preenchida na área de edição. */
   initialMessage: string;
+  /**
+   * Só quando TODAS as guardas passam (plano/addon, conexão, templates
+   * aprovados, fila não pausada) e existe parcela em aberto para cobrar.
+   * Ausente ou false = só o wa.me, que é o comportamento de sempre.
+   */
+  podeEnviarOficial?: boolean;
+  /** Dispara o trigger com channel 'whatsapp_auto'. Resolve com o resultado. */
+  onEnviarOficial?: () => Promise<EnvioOficialResultado>;
   onClose: () => void;
 };
 
@@ -41,23 +65,49 @@ export function CobrancaPreviewModal({
   valorLabel,
   valorDesc,
   initialMessage,
+  podeEnviarOficial,
+  onEnviarOficial,
   onClose,
 }: CobrancaPreviewProps) {
   const [message, setMessage] = useState(initialMessage);
+  // Confirmação do envio pago: o primeiro clique escolhe, o segundo gasta.
+  const [confirmandoOficial, setConfirmandoOficial] = useState(false);
+  const [enviandoOficial, setEnviandoOficial] = useState(false);
+  const [resultadoOficial, setResultadoOficial] = useState<EnvioOficialResultado | null>(null);
 
   // F4: reseta a mensagem sempre que o modal reabre com nova proposta
   // (antes dependia do pai remontar o componente — risco de mensagem obsoleta).
   useEffect(() => {
-    if (visible) setMessage(initialMessage);
+    if (visible) {
+      setMessage(initialMessage);
+      setConfirmandoOficial(false);
+      setEnviandoOficial(false);
+      setResultadoOficial(null);
+    }
   }, [visible, initialMessage]);
 
   const initial = (recipientName.trim()[0] || "?").toUpperCase();
+  const oficialDisponivel = podeEnviarOficial === true && typeof onEnviarOficial === "function";
 
   function handleSend() {
     const clean = phone.replace(/\D/g, "");
     const num = clean.startsWith("55") ? clean : `55${clean}`;
     Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(message)}`);
     onClose();
+  }
+
+  async function enviarOficial() {
+    if (!onEnviarOficial) return;
+    setEnviandoOficial(true);
+    setResultadoOficial(null);
+    try {
+      setResultadoOficial(await onEnviarOficial());
+    } catch (e: any) {
+      setResultadoOficial({ queued: false, erro: e?.message || "Não foi possível enviar agora." });
+    } finally {
+      setEnviandoOficial(false);
+      setConfirmandoOficial(false);
+    }
   }
 
   return (
@@ -113,6 +163,74 @@ export function CobrancaPreviewModal({
             <Text style={cs.note}>
               Envio segue manual pelo WhatsApp. Nada é enviado sem você tocar em Enviar.
             </Text>
+
+            {/* ── Fase 6k: envio pelo número oficial da loja (pago) ── */}
+            {oficialDisponivel && (
+              <View style={cs.oficialBox} testID="cobranca-oficial">
+                {!confirmandoOficial && !resultadoOficial && (
+                  <Pressable
+                    onPress={() => setConfirmandoOficial(true)}
+                    accessibilityRole="button"
+                    style={cs.oficialBtn}
+                    testID="cobranca-oficial-abrir"
+                  >
+                    <Icon name="whatsapp" size={14} color={Colors.violet3} />
+                    <Text style={cs.oficialBtnTxt}>Enviar pelo WhatsApp oficial</Text>
+                  </Pressable>
+                )}
+
+                {confirmandoOficial && !resultadoOficial && (
+                  <View style={{ gap: 9 }} testID="cobranca-oficial-confirmar">
+                    <Text style={cs.oficialTxt}>
+                      Isto envia 1 mensagem real e paga pelo número oficial da loja, com o template
+                      aprovado pela Meta (o texto acima não é usado neste caminho). Continuar?
+                    </Text>
+                    <View style={cs.oficialAcoes}>
+                      <Pressable
+                        onPress={() => setConfirmandoOficial(false)}
+                        disabled={enviandoOficial}
+                        accessibilityRole="button"
+                        style={cs.oficialGhost}
+                      >
+                        <Text style={cs.oficialGhostTxt}>Cancelar</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={enviarOficial}
+                        disabled={enviandoOficial}
+                        accessibilityRole="button"
+                        style={[cs.oficialConfirma, enviandoOficial && { opacity: 0.6 }]}
+                        testID="cobranca-oficial-enviar"
+                      >
+                        {enviandoOficial && <ActivityIndicator size="small" color="#fff" />}
+                        <Text style={cs.oficialConfirmaTxt}>
+                          {enviandoOficial ? "Enviando…" : "Enviar mensagem paga"}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+
+                {!!resultadoOficial && resultadoOficial.queued === true && (
+                  <View style={cs.oficialOk} testID="cobranca-oficial-ok">
+                    <Icon name="check_circle" size={14} color={Colors.green} />
+                    <Text style={cs.oficialOkTxt}>
+                      Cobrança enfileirada no WhatsApp oficial. Acompanhe o status na aba WhatsApp.
+                    </Text>
+                  </View>
+                )}
+
+                {!!resultadoOficial && resultadoOficial.queued !== true && (
+                  <View style={cs.oficialWarn} testID="cobranca-oficial-nao-enviou">
+                    <Icon name="alert-triangle" size={14} color={Colors.amber} />
+                    <Text style={cs.oficialWarnTxt}>
+                      {resultadoOficial.erro
+                        || waSkipReasonLabel(resultadoOficial.reason)
+                        || "A mensagem não foi enfileirada. Tente pelo WhatsApp manual abaixo."}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Botões — F4: hover lift + pressed (antes sem feedback algum) */}
             <View style={cs.btnRow}>
@@ -271,6 +389,40 @@ const cs = StyleSheet.create({
     marginTop: 10,
     lineHeight: 16,
   },
+
+  // ── Fase 6k: caminho do WhatsApp oficial (pago) ──────────
+  oficialBox: {
+    marginTop: 12,
+    backgroundColor: Colors.bg2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border2,
+    padding: 12,
+  },
+  oficialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 40,
+  },
+  oficialBtnTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
+  oficialTxt: { fontSize: 11.5, color: Colors.ink2, lineHeight: 16.5 },
+  oficialAcoes: { flexDirection: "row", gap: 9 },
+  oficialGhost: {
+    flex: 1, alignItems: "center", justifyContent: "center", borderWidth: 1,
+    borderColor: Colors.border, borderRadius: 9, paddingVertical: 10, minHeight: 40,
+  },
+  oficialGhostTxt: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
+  oficialConfirma: {
+    flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
+    backgroundColor: Colors.violet, borderRadius: 9, paddingVertical: 10, minHeight: 40,
+  },
+  oficialConfirmaTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  oficialOk: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
+  oficialOkTxt: { flex: 1, fontSize: 11.5, fontWeight: "600", color: Colors.green, lineHeight: 16.5 },
+  oficialWarn: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
+  oficialWarnTxt: { flex: 1, fontSize: 11.5, fontWeight: "600", color: Colors.amber, lineHeight: 16.5 },
 
   btnRow: {
     flexDirection: "row",

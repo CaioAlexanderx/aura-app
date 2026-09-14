@@ -233,6 +233,44 @@ export type CollectionRules = {
     id: string; name: string; days_relative: number;
     template: string; channel: string; enabled: boolean;
   }>;
+  /**
+   * Fase 6a — interruptor do envio AUTOMÁTICO pelo WhatsApp oficial
+   * (Cloud API, pago). Estado declarado, não deduzido: `whatsapp_connected`
+   * é flag legada da tela antiga e NÃO diz se pode enviar.
+   *
+   * Opcional porque backend anterior à Fase 6 não devolve o campo — e
+   * ausente conta como DESLIGADO, nunca como ligado.
+   */
+  whatsapp_auto?: boolean;
+  /** Quando o automático foi ligado. Só informativo. */
+  whatsapp_auto_since?: string | null;
+};
+
+/**
+ * 'whatsapp' = texto pronto para o wa.me (manual, grátis).
+ * 'whatsapp_auto' = enfileira na Cloud API (Fase 6e) — mensagem paga.
+ * 'push'/'system' = avisos internos, sem custo.
+ */
+export type CollectionChannel = "whatsapp" | "whatsapp_auto" | "push" | "system" | (string & {});
+
+export type CollectionTriggerResult = {
+  success: boolean; message: string; phone: string; days_late: number;
+  /**
+   * Só vem com channel 'whatsapp_auto'. `false` NÃO é erro: é uma guarda
+   * tendo funcionado (opt-out, teto diário, template pendente…) e o
+   * motivo vem em `reason` para a tela traduzir.
+   */
+  queued?: boolean;
+  outbox_id?: string | null;
+  reason?: string | null;
+};
+
+export type CollectionAutoRunResult = {
+  enqueued?: number;
+  skipped?: Record<string, number>;
+  rules?: number;
+  /** Preenchido quando a régua inteira foi pulada por uma guarda. */
+  skipped_reason?: string | null;
 };
 
 export type CreditPreview = {
@@ -587,9 +625,35 @@ export const creditApi = {
   updateCollectionRules(companyId: string, body: Partial<CollectionRules>) {
     return request<CollectionRules>(`${base(companyId)}/collection/rules`, { method: "PUT", body });
   },
-  triggerCollection(companyId: string, installmentId: string, body?: { template?: string; channel?: string }) {
-    return request<{ success: boolean; message: string; phone: string; days_late: number }>(
+  /**
+   * Dispara UM aviso de cobrança para uma parcela.
+   *
+   * `channel` default ('whatsapp') continua montando o texto para o
+   * lojista abrir no wa.me — grátis, manual, nada sai sem ele tocar em
+   * enviar. `channel: 'whatsapp_auto'` (Fase 6e) ENFILEIRA uma mensagem
+   * de verdade na Cloud API: é paga pela Meta e passa pelas mesmas
+   * guardas da régua automática, então só chame depois de confirmar com
+   * o lojista.
+   */
+  triggerCollection(
+    companyId: string,
+    installmentId: string,
+    body?: { template?: string; channel?: CollectionChannel }
+  ) {
+    return request<CollectionTriggerResult>(
       `${base(companyId)}/collection/trigger/${installmentId}`, { method: "POST", body: body || {} }
+    );
+  },
+
+  /**
+   * Roda a régua do crediário para ESTA company agora (Fase 6e).
+   * `dry_run: true` não enfileira nada — é a contagem que a prévia usa.
+   * Todas as guardas valem igual: sem plano/addon, sem conexão ou sem
+   * template aprovado o backend devolve `skipped_reason` e não gasta.
+   */
+  runCollectionAuto(companyId: string, body?: { dry_run?: boolean; date?: string }) {
+    return request<CollectionAutoRunResult>(
+      `${base(companyId)}/collection/auto/run`, { method: "POST", body: body || {}, timeout: 30000 }
     );
   },
 
