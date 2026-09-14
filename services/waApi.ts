@@ -64,6 +64,21 @@ export interface WaEmbeddedSignup {
 }
 
 /**
+ * Modo de conexão do Embedded Signup (doc da Meta "Onboard WhatsApp
+ * Business app users"). `padrao` exige um número fora do app WhatsApp
+ * Business do celular (comportamento histórico). `coexistence` deixa o
+ * MESMO número no app do celular E na Cloud API — o celular pede para
+ * escanear um QR code durante a conexão.
+ *
+ * DEPENDE do backend (aura-backend, branch claude/whatsapp-coexistence,
+ * ainda não mergeada): sem esse deploy, `mode` é ignorado pelo
+ * `/connect` e os campos `coexistence`/`is_on_biz_app` nunca vêm no
+ * response — por isso são opcionais aqui, seguindo a mesma regra dos
+ * outros campos novos deste arquivo (ausente = desconhecido).
+ */
+export type WaSignupMode = "padrao" | "coexistence";
+
+/**
  * Presets de template que o backend sabe criar (Fase 6c). O mapeamento
  * regra do crediário → preset: lembrete/confirmacao/vencimento →
  * `parcela_lembrete`; atraso_1/atraso_2 → `parcela_atraso`; `bloqueio`
@@ -122,6 +137,12 @@ export interface WaStatus {
   registered?: boolean;
   usage?: WaUsage;
   embedded_signup?: WaEmbeddedSignup | null;
+  /**
+   * true = número conectado em modo Coexistence (também ativo no app
+   * WhatsApp Business do celular). Opcional: depende do backend da
+   * branch claude/whatsapp-coexistence (ver WaSignupMode acima).
+   */
+  coexistence?: boolean;
 }
 
 // ── Templates ─────────────────────────────────
@@ -198,6 +219,8 @@ export interface WaConnectPayload {
   /** Vêm do evento WA_EMBEDDED_SIGNUP; o backend descobre sozinho se faltar. */
   waba_id?: string | null;
   phone_number_id?: string | null;
+  /** 'padrao' | 'coexistence' (ver WaSignupMode). Omitido = 'padrao' no backend. */
+  mode?: WaSignupMode;
 }
 
 export interface WaConnectResult {
@@ -211,6 +234,10 @@ export interface WaConnectResult {
   registered?: boolean;
   /** Passos que falharam sem impedir a conexão. Já vêm em pt-BR. */
   warnings?: string[];
+  /** true = conectado em modo Coexistence. Opcional (ver WaSignupMode). */
+  coexistence?: boolean;
+  /** true = a Meta confirma o número ativo no WhatsApp Business app do celular. Opcional (ver WaSignupMode). */
+  is_on_biz_app?: boolean;
 }
 
 // ── Prévia do disparo automático (sem enfileirar) ─

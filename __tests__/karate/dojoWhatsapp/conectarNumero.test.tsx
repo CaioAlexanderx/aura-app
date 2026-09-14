@@ -141,6 +141,40 @@ describe("WaConnectCard na tela", () => {
     expect(temTestId(tree, "wa-connect-conectado")).toBe(true);
     expect(temTestId(tree, "wa-disconnect-btn")).toBe(true);
     expect(JSON.stringify(tree.toJSON())).toContain("+55 (11) 91234-5678");
+    // Sem coexistence no status, nenhum selo "Também no celular".
+    expect(temTestId(tree, "wa-connect-coexistence-badge")).toBe(false);
+    tree.unmount();
+  });
+
+  it("conectado em coexistence: mostra o selo 'Também no celular'", async () => {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <WaConnectCard companyId="dojo-1" status={{ ...STATUS_CONECTADO, coexistence: true }} onChanged={() => {}} />
+      );
+    });
+    await flush();
+    expect(temTestId(tree, "wa-connect-coexistence-badge")).toBe(true);
+    tree.unmount();
+  });
+
+  it("escolha do número: coexistence vem marcado por default, e dá para trocar para padrão", async () => {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<WaConnectCard companyId="dojo-1" status={STATUS_DESCONECTADO} onChanged={() => {}} />);
+    });
+    await flush();
+    // findAllByProps também casa o wrapper ModeOption (só tem testID, sem
+    // accessibilityState) — accessibilityRole:"radio" pega o Pressable de dentro.
+    const radio = (id: string) => tree.root.findAllByProps({ testID: id, accessibilityRole: "radio" })[0];
+    expect(radio("wa-connect-modo-coexistence").props.accessibilityState.checked).toBe(true);
+    expect(radio("wa-connect-modo-padrao").props.accessibilityState.checked).toBe(false);
+    expect(temTestId(tree, "wa-connect-modo-hint")).toBe(true);
+
+    await act(async () => { radio("wa-connect-modo-padrao").props.onPress(); });
+    expect(radio("wa-connect-modo-coexistence").props.accessibilityState.checked).toBe(false);
+    expect(radio("wa-connect-modo-padrao").props.accessibilityState.checked).toBe(true);
+    expect(temTestId(tree, "wa-connect-modo-hint")).toBe(false);
     tree.unmount();
   });
 
@@ -163,20 +197,22 @@ describe("WaConnectCard na tela", () => {
     tree.unmount();
   });
 
-  it("FB.login vai com os parâmetros do Embedded Signup e o code chega ao backend", async () => {
+  it("FB.login vai com os parâmetros do Embedded Signup e o code chega ao backend (default: coexistence)", async () => {
     let tree: any;
     await act(async () => {
       tree = renderer.create(<WaConnectCard companyId="dojo-1" status={STATUS_DESCONECTADO} onChanged={() => {}} />);
     });
     await flush();
 
+    // Nenhum radio foi tocado — o default da tela é "coexistence" (Fase
+    // coexistence/set-2026): a maioria dos dojôs já usa o número no app.
     await act(async () => { botao(tree, "Conectar meu WhatsApp").props.onPress(); });
     expect(ultimoLogin).not.toBeNull();
     expect(ultimoLogin!.opts).toEqual({
       config_id: "cfg-1",
       response_type: "code",
       override_default_response_type: true,
-      extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+      extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" },
     });
 
     // A Meta posta o FINISH antes de o popup fechar.
@@ -190,7 +226,65 @@ describe("WaConnectCard na tela", () => {
     await flush();
 
     expect(mockConnect).toHaveBeenCalledWith("dojo-1", {
-      code: "code-abc", waba_id: "waba-1", phone_number_id: "pn-1",
+      code: "code-abc", waba_id: "waba-1", phone_number_id: "pn-1", mode: "coexistence",
+    });
+    tree.unmount();
+  });
+
+  it("modo padrão: escolhendo 'número novo' o featureType e o mode voltam ao valor histórico", async () => {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<WaConnectCard companyId="dojo-1" status={STATUS_DESCONECTADO} onChanged={() => {}} />);
+    });
+    await flush();
+
+    await act(async () => { tree.root.findAllByProps({ testID: "wa-connect-modo-padrao" })[0].props.onPress(); });
+    await act(async () => { botao(tree, "Conectar meu WhatsApp").props.onPress(); });
+    expect(ultimoLogin!.opts).toEqual({
+      config_id: "cfg-1",
+      response_type: "code",
+      override_default_response_type: true,
+      extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+    });
+
+    await act(async () => {
+      postarDaMeta(
+        { type: "WA_EMBEDDED_SIGNUP", event: "FINISH", data: { phone_number_id: "pn-2", waba_id: "waba-2" } },
+        "https://www.facebook.com"
+      );
+    });
+    await act(async () => { ultimoLogin!.cb({ authResponse: { code: "code-xyz" } }); });
+    await flush();
+
+    expect(mockConnect).toHaveBeenCalledWith("dojo-1", {
+      code: "code-xyz", waba_id: "waba-2", phone_number_id: "pn-2", mode: "padrao",
+    });
+    tree.unmount();
+  });
+
+  it("coexistence: aceita o evento FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING igual ao FINISH", async () => {
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<WaConnectCard companyId="dojo-1" status={STATUS_DESCONECTADO} onChanged={() => {}} />);
+    });
+    await flush();
+
+    await act(async () => { botao(tree, "Conectar meu WhatsApp").props.onPress(); });
+    await act(async () => {
+      postarDaMeta(
+        {
+          type: "WA_EMBEDDED_SIGNUP",
+          event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+          data: { phone_number_id: "pn-coex", waba_id: "waba-coex" },
+        },
+        "https://www.facebook.com"
+      );
+    });
+    await act(async () => { ultimoLogin!.cb({ authResponse: { code: "code-coex" } }); });
+    await flush();
+
+    expect(mockConnect).toHaveBeenCalledWith("dojo-1", {
+      code: "code-coex", waba_id: "waba-coex", phone_number_id: "pn-coex", mode: "coexistence",
     });
     tree.unmount();
   });
@@ -213,7 +307,7 @@ describe("WaConnectCard na tela", () => {
     await flush();
 
     expect(mockConnect).toHaveBeenCalledWith("dojo-1", {
-      code: "code-abc", waba_id: null, phone_number_id: null,
+      code: "code-abc", waba_id: null, phone_number_id: null, mode: "coexistence",
     });
     tree.unmount();
   });
