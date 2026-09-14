@@ -242,10 +242,10 @@ export default function ReativacaoScreen() {
 
       {semAcesso && (
         <View style={st.card} testID="reativacao-sem-plano">
-          <Text style={st.cardTitle}>Disponível no plano Expansão</Text>
+          <Text style={st.cardTitle}>Disponível no plano Negócio</Text>
           <Text style={st.cardSub}>
-            A reativação de clientes faz parte do plano Expansão. Fale com a Aura para ativar — a
-            lista de quem sumiu continua no painel de retenção.
+            A reativação de clientes pelo WhatsApp oficial faz parte do plano Negócio. Fale com a
+            Aura para migrar — a lista de quem sumiu continua no painel de retenção.
           </Text>
           <Pressable onPress={() => router.push("/(tabs)/planos")} style={st.primaryBtn} accessibilityRole="button">
             <Text style={st.primaryTxt}>Ver planos</Text>
