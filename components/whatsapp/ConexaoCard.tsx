@@ -14,7 +14,7 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-nati
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
-import { WaStatus } from "@/services/waApi";
+import { WaSignupMode, WaStatus } from "@/services/waApi";
 import { useWaEmbeddedSignup } from "./useWaEmbeddedSignup";
 import { fmtPhoneBR } from "./waGuards";
 
@@ -25,10 +25,34 @@ interface Props {
   onChanged: () => void;
 }
 
+/** Escolha de número antes de conectar — radio compacto (mesmo desenho do SecaoEstoque). */
+function ModeOption({
+  selected, title, onPress, testID,
+}: { selected: boolean; title: string; onPress: () => void; testID: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={title}
+      style={[s.modeOption, selected && s.modeOptionOn]}
+      testID={testID}
+    >
+      <View style={[s.modeRadio, selected && s.modeRadioOn]}>
+        {selected ? <View style={s.modeRadioDot} /> : null}
+      </View>
+      <Text style={[s.modeOptionTxt, selected && s.modeOptionTxtOn]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 export function ConexaoCard({ companyId, status, onChanged }: Props) {
+  // Coexistence é o default: a maioria das lojas já usa o número no app
+  // do celular, e trocar de número para conectar seria o pior caminho.
+  const [signupMode, setSignupMode] = useState<WaSignupMode>("coexistence");
   const {
     mode, sdkError, busy, error, warnings, btnDisabled, startSignup, disconnect,
-  } = useWaEmbeddedSignup(companyId, status, onChanged);
+  } = useWaEmbeddedSignup(companyId, status, onChanged, signupMode);
   const [confirmOff, setConfirmOff] = useState(false);
 
   const doDisconnect = useCallback(async () => {
@@ -55,6 +79,12 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
             O WhatsApp {fmtPhoneBR(status?.phone_display)} está conectado e é ele que aparece para o
             cliente. As conversas iniciadas por template são cobradas pela Meta na conta da loja.
           </Text>
+          {status?.coexistence === true && (
+            <View style={s.badge} testID="wa-varejo-coexistence-badge">
+              <Icon name="qr_code" size={12} color={Colors.violet3} />
+              <Text style={s.badgeTxt}>Também no celular</Text>
+            </View>
+          )}
           {status?.registered === false && (
             <View style={s.warnBox} testID="wa-varejo-nao-registrado">
               <Icon name="alert" size={13} color={Colors.amber} />
@@ -98,9 +128,31 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
               : "Conecte o número da loja numa janela oficial do Facebook. O número continua sendo seu: a Aura só passa a enviar por ele as mensagens que você autorizar."}
           </Text>
           <Text style={s.hint}>
-            Tenha em mãos o acesso ao Facebook da loja e um número que ainda não esteja em uso no
-            aplicativo do WhatsApp. Cada conversa iniciada por template é cobrada pela Meta.
+            Tenha em mãos o acesso ao Facebook da loja. Cada conversa iniciada por template é cobrada
+            pela Meta.
           </Text>
+
+          <View style={s.modeGroup} testID="wa-varejo-modo-numero">
+            <ModeOption
+              selected={signupMode === "coexistence"}
+              title="Já uso este número no app WhatsApp Business do celular (recomendado — continua funcionando no celular)"
+              onPress={() => setSignupMode("coexistence")}
+              testID="wa-varejo-modo-coexistence"
+            />
+            <ModeOption
+              selected={signupMode === "padrao"}
+              title="Vou usar um número novo, só para o sistema"
+              onPress={() => setSignupMode("padrao")}
+              testID="wa-varejo-modo-padrao"
+            />
+          </View>
+          {signupMode === "coexistence" && (
+            <Text style={s.modeHint} testID="wa-varejo-modo-hint">
+              Durante a conexão, o celular vai pedir para escanear um QR code — é assim que o WhatsApp
+              Business do celular passa a funcionar junto com o sistema, sem trocar de número.
+            </Text>
+          )}
+
           <Pressable
             onPress={startSignup}
             disabled={btnDisabled}
@@ -191,4 +243,24 @@ const s = StyleSheet.create({
   warnTxt: { flex: 1, fontSize: 11.5, fontWeight: "600", color: Colors.amber, lineHeight: 16.5 },
   dialogTitle: { fontSize: 15, fontWeight: "800", color: Colors.ink },
   dialogActions: { flexDirection: "row", gap: 10, marginTop: 6 },
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 3,
+    paddingHorizontal: 9, backgroundColor: Colors.violetD, alignSelf: "flex-start", marginTop: 8,
+  },
+  badgeTxt: { fontSize: 10.5, fontWeight: "700", color: Colors.violet3 },
+  modeGroup: { gap: 8, marginTop: 14 },
+  modeOption: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10, borderWidth: 1.5, borderColor: Colors.border,
+    borderRadius: 11, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: Colors.bg4,
+  },
+  modeOptionOn: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  modeOptionTxt: { flex: 1, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
+  modeOptionTxtOn: { color: Colors.ink, fontWeight: "700" },
+  modeRadio: {
+    width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center", marginTop: 1,
+  },
+  modeRadioOn: { borderColor: Colors.violet },
+  modeRadioDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.violet },
+  modeHint: { fontSize: 11.5, color: Colors.ink3, marginTop: 8, lineHeight: 16.5, maxWidth: 620 },
 } as any);

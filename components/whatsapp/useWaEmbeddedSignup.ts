@@ -25,10 +25,18 @@
 //    www.facebook.com e web.facebook.com: qualquer iframe de terceiro na
 //    página poderia postar um `WA_EMBEDDED_SIGNUP` falso e nos fazer
 //    mandar um waba_id alheio para o backend.
+//
+// Coexistence (doc "Onboard WhatsApp Business app users"): o mesmo
+// número pode continuar no app WhatsApp Business do celular E entrar na
+// Cloud API ao mesmo tempo — sem esse modo, o número precisa sair do
+// app do celular antes de conectar. `mode` troca só o `extras` do
+// FB.login e o evento de sucesso aceito; o resto da mecânica é igual.
+// DEPENDE do backend (branch claude/whatsapp-coexistence, ainda não
+// mergeada) para os campos `coexistence`/`is_on_biz_app` no response.
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
-import { waApi, WaStatus } from "@/services/waApi";
+import { waApi, WaSignupMode, WaStatus } from "@/services/waApi";
 import { mapWaError, waConnectMode, WaConnectMode } from "./waGuards";
 
 // ── Tipagem local do SDK do Facebook ────────────────────────
@@ -133,14 +141,18 @@ export interface UseWaEmbeddedSignup {
 }
 
 /**
- * @param companyId company dona do número (no dojô, a company do sensei).
- * @param status    /whatsapp/status já carregado (null = ainda não veio).
- * @param onChanged conectou/desconectou — o dono recarrega status e templates.
+ * @param companyId  company dona do número (no dojô, a company do sensei).
+ * @param status     /whatsapp/status já carregado (null = ainda não veio).
+ * @param onChanged  conectou/desconectou — o dono recarrega status e templates.
+ * @param signupMode 'padrao' (default) ou 'coexistence' — ver o comentário do topo do arquivo.
+ *                   Nome diferente do `mode` devolvido pelo hook (esse é o
+ *                   ESTADO da tela — conectado/nativo/…, vem de waConnectMode).
  */
 export function useWaEmbeddedSignup(
   companyId: string,
   status: WaStatus | null,
-  onChanged: () => void
+  onChanged: () => void,
+  signupMode: WaSignupMode = "padrao"
 ): UseWaEmbeddedSignup {
   const isWeb = Platform.OS === "web";
   const es = status?.embedded_signup || null;
@@ -180,7 +192,10 @@ export function useWaEmbeddedSignup(
         try { payload = JSON.parse(payload); } catch { return; }
       }
       if (!payload || payload.type !== "WA_EMBEDDED_SIGNUP") return;
-      if (payload.event === "FINISH") {
+      // FINISH = modo padrão. FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING = modo
+      // Coexistence (mesmo popup, evento diferente) — a Meta manda
+      // waba_id/phone_number_id do mesmo jeito nos dois.
+      if (payload.event === "FINISH" || payload.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
         const d = payload.data || {};
         signupRef.current = {
           waba_id: d.waba_id != null ? String(d.waba_id) : null,
@@ -224,6 +239,7 @@ export function useWaEmbeddedSignup(
             code,
             waba_id: info?.waba_id ?? null,
             phone_number_id: info?.phone_number_id ?? null,
+            mode: signupMode,
           })
           .then((res) => {
             const list = Array.isArray(res?.warnings) ? res.warnings.slice() : [];
@@ -243,10 +259,13 @@ export function useWaEmbeddedSignup(
         config_id: configId,
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+        extras:
+          signupMode === "coexistence"
+            ? { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }
+            : { setup: {}, featureType: "", sessionInfoVersion: "3" },
       }
     );
-  }, [companyId, configId, onChanged]);
+  }, [companyId, configId, onChanged, signupMode]);
 
   const disconnect = useCallback(async () => {
     setBusy(true);

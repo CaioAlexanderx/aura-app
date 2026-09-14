@@ -31,7 +31,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
 import { KarateButton } from "@/components/karate/KarateButton";
-import { WaStatus } from "@/services/waApi";
+import { WaSignupMode, WaStatus } from "@/services/waApi";
 import { useWaEmbeddedSignup } from "@/components/whatsapp/useWaEmbeddedSignup";
 import { fmtPhoneBR } from "./helpers";
 
@@ -42,10 +42,34 @@ interface Props {
   onChanged: () => void;
 }
 
+/** Escolha de número antes de conectar — mesmo radio compacto do varejo, em KarateColors. */
+function ModeOption({
+  selected, title, onPress, testID,
+}: { selected: boolean; title: string; onPress: () => void; testID: string }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={title}
+      style={[styles.modeOption, selected && styles.modeOptionOn]}
+      testID={testID}
+    >
+      <View style={[styles.modeRadio, selected && styles.modeRadioOn]}>
+        {selected ? <View style={styles.modeRadioDot} /> : null}
+      </View>
+      <Text style={[styles.modeOptionTxt, selected && styles.modeOptionTxtOn]}>{title}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export function WaConnectCard({ companyId, status, onChanged }: Props) {
+  // Coexistence é o default: a maioria dos dojôs já usa o número no app
+  // do celular, e trocar de número para conectar seria o pior caminho.
+  const [signupMode, setSignupMode] = useState<WaSignupMode>("coexistence");
   const {
     mode, sdkError, busy, error, warnings, btnDisabled, startSignup, disconnect,
-  } = useWaEmbeddedSignup(companyId, status, onChanged);
+  } = useWaEmbeddedSignup(companyId, status, onChanged, signupMode);
   const [confirmOff, setConfirmOff] = useState(false);
 
   const doDisconnect = useCallback(async () => {
@@ -73,6 +97,12 @@ export function WaConnectCard({ companyId, status, onChanged }: Props) {
             O WhatsApp {fmtPhoneBR(status?.phone_display)} está conectado e é ele que aparece para o
             aluno. As conversas iniciadas por template são cobradas pela Meta na conta do dojô.
           </Text>
+          {status?.coexistence === true && (
+            <View style={styles.badge} testID="wa-connect-coexistence-badge">
+              <Icon name="qr_code" size={12} color={KarateColors.primary} />
+              <Text style={styles.badgeTxt}>Também no celular</Text>
+            </View>
+          )}
           {status?.registered === false && (
             <View style={styles.warnBox} testID="wa-connect-nao-registrado">
               <Icon name="alert" size={14} color={KarateColors.warn} />
@@ -116,9 +146,31 @@ export function WaConnectCard({ companyId, status, onChanged }: Props) {
               : "Conecte o número do dojô numa janela oficial do Facebook. O número continua sendo do dojô: a Aura só passa a enviar por ele as mensagens que você autorizar."}
           </Text>
           <Text style={styles.hint}>
-            Tenha em mãos o acesso ao Facebook do dojô e um número que ainda não esteja em uso no
-            aplicativo do WhatsApp. Cada conversa iniciada por template é cobrada pela Meta.
+            Tenha em mãos o acesso ao Facebook do dojô. Cada conversa iniciada por template é cobrada
+            pela Meta.
           </Text>
+
+          <View style={styles.modeGroup} testID="wa-connect-modo-numero">
+            <ModeOption
+              selected={signupMode === "coexistence"}
+              title="Já uso este número no app WhatsApp Business do celular (recomendado — continua funcionando no celular)"
+              onPress={() => setSignupMode("coexistence")}
+              testID="wa-connect-modo-coexistence"
+            />
+            <ModeOption
+              selected={signupMode === "padrao"}
+              title="Vou usar um número novo, só para o sistema"
+              onPress={() => setSignupMode("padrao")}
+              testID="wa-connect-modo-padrao"
+            />
+          </View>
+          {signupMode === "coexistence" && (
+            <Text style={styles.hint} testID="wa-connect-modo-hint">
+              Durante a conexão, o celular vai pedir para escanear um QR code — é assim que o WhatsApp
+              Business do celular passa a funcionar junto com o sistema, sem trocar de número.
+            </Text>
+          )}
+
           <View style={styles.actions}>
             <KarateButton
               label={busy ? "Conectando…" : btnDisabled ? "Carregando…" : connectLabel}
@@ -201,4 +253,23 @@ const styles = StyleSheet.create({
   dialogTitle: { fontSize: 15, fontWeight: "800", color: KarateColors.ink } as TextStyle,
   dialogSub: { fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
   dialogActions: { flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" } as ViewStyle,
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingVertical: 3,
+    paddingHorizontal: 9, backgroundColor: KarateColors.primarySoft, alignSelf: "flex-start", marginTop: 8,
+  } as ViewStyle,
+  badgeTxt: { fontSize: 10.5, fontWeight: "700", color: KarateColors.primary } as TextStyle,
+  modeGroup: { gap: 8, marginTop: 14 } as ViewStyle,
+  modeOption: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10, borderWidth: 1.5, borderColor: KarateColors.border,
+    borderRadius: KarateRadius.md, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: KarateColors.bg2,
+  } as ViewStyle,
+  modeOptionOn: { borderColor: KarateColors.primary, backgroundColor: KarateColors.primarySoft } as ViewStyle,
+  modeOptionTxt: { flex: 1, fontSize: 12.5, color: KarateColors.ink2, lineHeight: 18 } as TextStyle,
+  modeOptionTxtOn: { color: KarateColors.ink, fontWeight: "700" } as TextStyle,
+  modeRadio: {
+    width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: KarateColors.border2,
+    alignItems: "center", justifyContent: "center", marginTop: 1,
+  } as ViewStyle,
+  modeRadioOn: { borderColor: KarateColors.primary } as ViewStyle,
+  modeRadioDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: KarateColors.primary } as ViewStyle,
 });
