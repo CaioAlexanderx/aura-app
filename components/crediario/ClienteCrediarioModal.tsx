@@ -29,6 +29,7 @@ import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
   creditApi,
+  printReceipt,
   MAX_INSTALLMENTS_CEILING,
   type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
@@ -120,6 +121,15 @@ export function ClienteCrediarioModal({
   const [freePreview, setFreePreview] = useState<PaymentPlan | null>(null);
   const [freePreviewLoading, setFreePreviewLoading] = useState(false);
   const [freeSubmitting, setFreeSubmitting] = useState(false);
+  // 15/09/2026: depois de receber, o painel mostra o que foi pago e oferece o
+  // recibo na hora. Antes fechava com um toast e o recibo só existia no Histórico.
+  const [receiptResult, setReceiptResult] = useState<{
+    transactionId: string | null;
+    amount: number;
+    method: string;
+    applied: PaymentPlan["applied"];
+  } | null>(null);
+  const [printingReceipt, setPrintingReceipt] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Chave de idempotência da renegociação: gerada uma vez por sessão de
   // submissão e SÓ descartada no sucesso (ou ao fechar o painel). É isso que
@@ -136,6 +146,8 @@ export function ClienteCrediarioModal({
 
   // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo).
   useEffect(() => { setReceberGate(false); }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
+  useEffect(() => { if (!receberOpen) setReceiptResult(null); }, [receberOpen]);
+  useEffect(() => { setReceiptResult(null); }, [customerId]);
 
   // ── B2: Pix overlay — compartilhado entre parcela e valor livre ────────
   const [pixInstId, setPixInstId] = useState<string | null>(null);
@@ -502,10 +514,15 @@ export function ClienteCrediarioModal({
           ? `Recebido! Crédito gerado: ${fmt(res.credit_generated)}`
           : `Recebido! Novo saldo: ${fmt(res.new_balance)}`
       );
+      setReceiptResult({
+        transactionId: res.transaction_id ?? null,
+        amount: amt,
+        method: methodLabel,
+        applied: res.applied || [],
+      });
       setFreeAmt("");
       setFreePreview(null);
       setFreeDateBr(todayBrSp());
-      setReceberOpen(false);
       setReceberGate(false);
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
@@ -518,6 +535,19 @@ export function ClienteCrediarioModal({
       toast.error("Não foi possível registrar o recebimento. Confira os dados e tente de novo.");
     } finally {
       setFreeSubmitting(false);
+    }
+  }
+
+  async function handlePrintReceiptNow() {
+    if (!receiptResult?.transactionId) return;
+    setPrintingReceipt(true);
+    try {
+      await printReceipt(companyId, receiptResult.transactionId);
+    } catch (err) {
+      console.error("[crediário] printReceipt error:", err);
+      toast.error("Não foi possível abrir o recibo. Tente novamente.");
+    } finally {
+      setPrintingReceipt(false);
     }
   }
 
@@ -775,12 +805,71 @@ export function ClienteCrediarioModal({
                   </View>
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
-                <Text style={m.panelTitle}>Receber pagamento</Text>
+                <Text style={m.panelTitle}>{receiptResult ? "Pagamento registrado" : "Receber pagamento"}</Text>
                 <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
 
+              {receiptResult ? (
+              <>
+              <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
+                <View style={m.previewBox} testID="crediario-recebido">
+                  <Text style={m.previewTitle}>Recebido</Text>
+                  <View style={m.previewRow}>
+                    <Text style={m.previewLbl}>Valor</Text>
+                    <Text style={m.previewVal}>{fmt(receiptResult.amount)}</Text>
+                  </View>
+                  <View style={m.previewRow}>
+                    <Text style={m.previewLbl}>Forma</Text>
+                    <Text style={m.previewVal}>{receiptResult.method}</Text>
+                  </View>
+                </View>
+                {receiptResult.applied.length > 0 && (
+                  <View style={m.previewBox}>
+                    <Text style={m.previewTitle}>Parcelas pagas</Text>
+                    {receiptResult.applied.map((line, i) => (
+                      <View key={line.installment_id + i} style={m.previewRow}>
+                        <Text style={m.previewLbl}>Parcela {line.number ?? "?"}</Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={m.previewVal}>{fmt((line.principal_paid || 0) + (line.charges_paid || 0))}</Text>
+                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                            {translateStatus(line.status_after)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+              <View style={m.panelFoot}>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  {!!receiptResult.transactionId && (
+                    <Pressable
+                      style={[
+                        m.pixBtn,
+                        { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 12 },
+                        printingReceipt && { opacity: 0.5 },
+                      ]}
+                      disabled={printingReceipt}
+                      onPress={handlePrintReceiptNow}
+                      accessibilityRole="button"
+                    >
+                      <Text style={m.pixBtnTxt}>{printingReceipt ? "Abrindo..." : "Imprimir recibo"}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={[m.cta, { flex: 2 }]}
+                    onPress={() => { setReceiptResult(null); setReceberOpen(false); }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={m.ctaTxt}>Concluir</Text>
+                  </Pressable>
+                </View>
+              </View>
+              </>
+              ) : (
+              <>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
@@ -938,6 +1027,8 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
               </View>
+              </>
+              )}
              </ModalPop>
             </View>
           )}
