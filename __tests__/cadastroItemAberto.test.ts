@@ -67,6 +67,7 @@ import {
 import type { ProductImage } from "@/services/productImagesApi";
 import {
   mesclarPaiNaGrade, normalizarChaveDaGrade, normalizarMapaDaGrade, totalDaMatriz,
+  gravacaoDaDuracao, temProgressoAlemDoNome,
 } from "@/components/screens/estoque/item-form/types";
 
 const foto = (id: string, position: number): ProductImage =>
@@ -153,11 +154,12 @@ describe("2. duração do serviço em minutos (migration 323)", () => {
     expect(r.migrandoDoLegado).toBe(false);
   });
 
-  test("sufixo que NÃO vira número fica na descrição — migrar não pode apagar texto", () => {
+  test("sufixo que NÃO vira número volta para o campo de duração, sem sair da descrição gravada", () => {
     const r = lerDuracaoDoServico("Consultoria | Duração: meio período", null);
     expect(r.minutos).toBeNull();
-    expect(r.duracaoTxt).toBe("");
-    expect(r.descricao).toBe("Consultoria | Duração: meio período");
+    expect(r.duracaoTxt).toBe("meio período");
+    expect(r.descricao).toBe("Consultoria");
+    expect(r.migrandoDoLegado).toBe(false);
   });
 
   test("serviço sem duração nenhuma", () => {
@@ -604,5 +606,48 @@ describe("edição: cor e tamanho gravados no próprio produto", () => {
     expect(totalDaMatriz({ "a|P": 2, "a|M": 3 })).toBe(5);
     expect(totalDaMatriz({ "a|P": NaN as any })).toBe(0);
     expect(totalDaMatriz(undefined)).toBe(0);
+  });
+});
+
+// ── pendências do suporte 10/09/2026 ──
+describe("duração que não vira número não some no Salvar", () => {
+  test("número vai para a coluna e a descrição sai limpa", () => {
+    expect(gravacaoDaDuracao("Corte com lavagem", "1h30")).toEqual({ notes: "Corte com lavagem", durationMinutes: 90 });
+  });
+
+  test("texto vai para o fim da descrição e a coluna fica vazia", () => {
+    expect(gravacaoDaDuracao("Consultoria", "sob consulta")).toEqual({ notes: "Consultoria | Duração: sob consulta", durationMinutes: null });
+    expect(gravacaoDaDuracao("", "sob consulta")).toEqual({ notes: "Duração: sob consulta", durationMinutes: null });
+  });
+
+  test("sem duração nenhuma, nada é inventado", () => {
+    expect(gravacaoDaDuracao("  Corte  ", "")).toEqual({ notes: "Corte", durationMinutes: null });
+  });
+
+  test("ida e volta: o que foi escrito reaparece igual na edição", () => {
+    [["Consultoria", "sob consulta"], ["", "meio período"], ["Corte", "45 min"]].forEach(([desc, dur]) => {
+      const g = gravacaoDaDuracao(desc, dur);
+      const r = lerDuracaoDoServico(g.notes, g.durationMinutes);
+      expect(r.descricao).toBe(desc);
+      expect(duracaoParaMinutos(r.duracaoTxt) ?? r.duracaoTxt).toEqual(duracaoParaMinutos(dur) ?? dur);
+    });
+  });
+});
+
+describe("o que conta como cadastro em andamento", () => {
+  const vazio = { preco: 0, custo: 0, pendentes: 0, cores: 0, tamanhos: 0, estoque: "", descricao: "", sku: "", barcode: "", ncm: "", duracao: "" };
+
+  test("só o nome digitado não pede confirmação", () => {
+    expect(temProgressoAlemDoNome(vazio)).toBe(false);
+    expect(temProgressoAlemDoNome({ ...vazio, descricao: "   " })).toBe(false);
+  });
+
+  test("qualquer outra coisa preenchida pede", () => {
+    expect(temProgressoAlemDoNome({ ...vazio, preco: 10 })).toBe(true);
+    expect(temProgressoAlemDoNome({ ...vazio, pendentes: 1 })).toBe(true);
+    expect(temProgressoAlemDoNome({ ...vazio, cores: 2 })).toBe(true);
+    expect(temProgressoAlemDoNome({ ...vazio, barcode: "7891234567890" })).toBe(true);
+    expect(temProgressoAlemDoNome({ ...vazio, estoque: "3" })).toBe(true);
+    expect(temProgressoAlemDoNome({ ...vazio, duracao: "45 min" })).toBe(true);
   });
 });
