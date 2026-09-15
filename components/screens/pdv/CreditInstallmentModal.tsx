@@ -78,6 +78,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { creditApi, MAX_INSTALLMENTS_CEILING, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
+import { InstallmentCountSelect } from "./InstallmentCountSelect";
 
 // ConfirmPayload ampliado: campo `unify` presente somente quando o toggle está ativo.
 export type ConfirmPayload = {
@@ -477,53 +478,31 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                 {/* Fluxo SEM unify: seletor de parcelas normal */}
                 {!unifyEnabled && (
                   <>
-                    <View style={m.installHeaderRow}>
-                      <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
-                      <View style={m.installTyperWrap}>
-                        <TextInput
-                          style={m.installTyper}
-                          value={String(numInstallments)}
-                          onChangeText={(raw) => {
-                            const onlyDigits = String(raw).replace(/\D/g, "").slice(0, 3);
-                            if (onlyDigits === "") { setNumInstallments(1); return; }
-                            const n = Math.max(1, Math.min(maxInstallments, parseInt(onlyDigits, 10) || 1));
-                            setNumInstallments(n);
-                          }}
-                          keyboardType="numeric"
-                          inputMode="numeric"
-                          maxLength={3}
-                          selectTextOnFocus
+                    {/* 15/09/2026: a grade de botões 1x..Nx virou dropdown e o vencimento
+                        subiu para a mesma linha (quebra para baixo em tela estreita). */}
+                    <View style={m.installDateRow}>
+                      <View style={[m.fieldWrap, m.installDateCol]}>
+                        <Text style={m.fieldLabel}>Dividir em quantas vezes?</Text>
+                        <InstallmentCountSelect
+                          value={numInstallments}
+                          onChange={setNumInstallments}
+                          max={maxInstallments}
+                          total={totalNum}
+                          formatMoney={fmtCur}
+                          testID="pdv-crediario-parcelas"
                         />
-                        <Text style={m.installTyperSuffix}>x</Text>
+                        <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
                       </View>
-                    </View>
-                    <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
-                    <View style={m.installChips}>
-                      {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
-                        <Pressable
-                          key={`chip-${n}`}
-                          onPress={() => setNumInstallments(n)}
-                          style={[m.chip, numInstallments === n && m.chipActive]}
-                        >
-                          <Text style={[m.chipText, numInstallments === n && m.chipTextActive]}>{n}x</Text>
-                          {totalNum > 0 && (
-                            <Text style={[m.chipSub, numInstallments === n && { color: "rgba(255,255,255,0.75)" }]}>
-                              {fmtCur(Math.round(totalNum / n * 100) / 100)}
-                            </Text>
-                          )}
-                        </Pressable>
-                      ))}
-                    </View>
-
-                    <View style={m.fieldWrap}>
-                      <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
-                      <DateInput
-                        value={firstDueDateBr}
-                        onChangeText={setFirstDueDateBr}
-                        placeholder="dd/mm/aaaa"
-                        forceShowError={submitAttempted && !firstDueDateIso}
-                        errorMessage="Informe uma data válida (dd/mm/aaaa)."
-                      />
+                      <View style={[m.fieldWrap, m.installDateCol]}>
+                        <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
+                        <DateInput
+                          value={firstDueDateBr}
+                          onChangeText={setFirstDueDateBr}
+                          placeholder="dd/mm/aaaa"
+                          forceShowError={submitAttempted && !firstDueDateIso}
+                          errorMessage="Informe uma data válida (dd/mm/aaaa)."
+                        />
+                      </View>
                     </View>
 
                     {simInstallments.length > 0 && (
@@ -571,48 +550,28 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
                       );
                     })()}
 
-                    <View style={m.installHeaderRow}>
-                      <Text style={m.fieldLabel}>Novo nº de parcelas</Text>
-                      <View style={m.installTyperWrap}>
-                        <TextInput
-                          style={m.installTyper}
-                          value={String(unifyInstallments)}
-                          onChangeText={(raw) => {
-                            const onlyDigits = String(raw).replace(/\D/g, "").slice(0, 3);
-                            if (onlyDigits === "") { setUnifyInstallments(1); return; }
-                            const n = Math.max(1, Math.min(maxInstallments, parseInt(onlyDigits, 10) || 1));
-                            setUnifyInstallments(n);
-                          }}
-                          keyboardType="numeric"
-                          inputMode="numeric"
-                          maxLength={3}
-                          selectTextOnFocus
+                    <View style={m.installDateRow}>
+                      <View style={[m.fieldWrap, m.installDateCol]}>
+                        <Text style={m.fieldLabel}>Novo nº de parcelas</Text>
+                        <InstallmentCountSelect
+                          value={unifyInstallments}
+                          onChange={setUnifyInstallments}
+                          max={maxInstallments}
+                          formatMoney={fmtCur}
+                          testID="pdv-crediario-parcelas-unificadas"
                         />
-                        <Text style={m.installTyperSuffix}>x</Text>
+                        <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
                       </View>
-                    </View>
-                    <Text style={m.installMaxHint}>Máx {maxInstallments}x</Text>
-                    <View style={m.installChips}>
-                      {Array.from({ length: maxInstallments }, (_, i) => i + 1).map(n => (
-                        <Pressable
-                          key={`u-chip-${n}`}
-                          onPress={() => setUnifyInstallments(n)}
-                          style={[m.chip, unifyInstallments === n && m.chipActive]}
-                        >
-                          <Text style={[m.chipText, unifyInstallments === n && m.chipTextActive]}>{n}x</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-
-                    <View style={m.fieldWrap}>
-                      <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
-                      <DateInput
-                        value={unifyFirstDueBr}
-                        onChangeText={setUnifyFirstDueBr}
-                        placeholder="dd/mm/aaaa"
-                        forceShowError={submitAttempted && !unifyFirstDueIso}
-                        errorMessage="Informe uma data válida (dd/mm/aaaa)."
-                      />
+                      <View style={[m.fieldWrap, m.installDateCol]}>
+                        <Text style={m.fieldLabel}>Vencimento da 1ª parcela</Text>
+                        <DateInput
+                          value={unifyFirstDueBr}
+                          onChangeText={setUnifyFirstDueBr}
+                          placeholder="dd/mm/aaaa"
+                          forceShowError={submitAttempted && !unifyFirstDueIso}
+                          errorMessage="Informe uma data válida (dd/mm/aaaa)."
+                        />
+                      </View>
                     </View>
 
                     {/* Preview do unify */}
@@ -781,34 +740,10 @@ const m = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase" },
   fieldInput: { backgroundColor: Colors.bg3, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: Colors.ink },
 
-  installHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  installTyperWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.bg3,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  installTyper: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: Colors.ink,
-    minWidth: 32,
-    textAlign: "center",
-    paddingVertical: 4,
-  },
-  installTyperSuffix: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
-  installMaxHint: { fontSize: 10, color: Colors.ink3, marginTop: -6 },
-  installChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minWidth: 56, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  chipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
-  chipText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
-  chipTextActive: { color: "#fff" },
-  chipSub: { fontSize: 9, color: Colors.ink3, marginTop: 2 },
+  installMaxHint: { fontSize: 10, color: Colors.ink3 },
+  // Nº de parcelas e vencimento lado a lado; em tela estreita o vencimento desce.
+  installDateRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start" },
+  installDateCol: { flexGrow: 1, flexBasis: 200, minWidth: 0 },
 
   simTable: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 6 },
   simTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 4 },

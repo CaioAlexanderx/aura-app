@@ -329,7 +329,11 @@ export type PaymentPlanLine = {
   charges_paid: number; principal_paid: number; status_after: string | null;
 };
 /** Shape canônico: o GET /payments/preview e o POST /payments retornam isto. */
-export type PaymentPlan = { applied: PaymentPlanLine[]; new_balance: number; credit_generated: number };
+export type PaymentPlan = {
+  applied: PaymentPlanLine[]; new_balance: number; credit_generated: number;
+  /** Só no POST (15/09/2026): id do pagamento, para abrir o recibo na hora. */
+  transaction_id?: string | null;
+};
 
 // ─── B2 (DESIGN-38): Pix EMV por parcela / valor livre ───────────
 export type CreditPix = {
