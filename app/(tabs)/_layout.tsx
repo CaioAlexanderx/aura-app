@@ -79,11 +79,12 @@ const NAV: NavSection[] = [
   // /cupons (24/08/2026 — F6): a rota ja existia mas nada linkava pra ela; a
   // unica porta de entrada era uma aba dentro do Financeiro, que reimplementava
   // o mesmo CRUD. Cupom e ferramenta de venda (aplicada no Caixa), nao dado
-  // financeiro — entra aqui, herdando a visibilidade do modulo pdv.
+  // financeiro — entra aqui. 14/09/2026: ganhou modulo proprio "cupons" (antes
+  // usava mod "pdv"), com a mesma visibilidade que tinha.
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
