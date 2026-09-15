@@ -111,6 +111,7 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
             prefs={notifs.prefs}
             prefsAllMuted={notifs.prefsAllMuted}
             savePrefs={notifs.savePrefs}
+            companyId={notifs.companyId}
           />
         )}
       </>
@@ -177,6 +178,7 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
           prefs={notifs.prefs}
           prefsAllMuted={notifs.prefsAllMuted}
           savePrefs={notifs.savePrefs}
+          companyId={notifs.companyId}
         />
       )}
     </>
