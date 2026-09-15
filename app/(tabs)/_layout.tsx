@@ -83,7 +83,7 @@ const NAV: NavSection[] = [
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "pdv", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
@@ -206,7 +206,8 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       if (item.staff && !isStaff) return false;
       // 31/08/2026 — Ordem de Servico e opt-in por toggle (pdv_settings.
       // os_enabled), nao por modulo/plano: a loja liga deliberadamente em
-      // Configuracoes e so entao o item aparece no menu.
+      // Configuracoes e so entao o item aparece no menu. Alem do toggle, o
+      // item passa pelo modulo proprio "os" (14/09/2026 — antes usava "pdv").
       if (item.osToggle && osEnabled !== true) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
