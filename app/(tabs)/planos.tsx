@@ -72,6 +72,9 @@ const PLANS = [
       "Clientes (até 5.000 cadastros)",
       "CRM avancado: ranking de clientes por LTV",
       "Retenção: clientes em risco e perdidos",
+      // O gate real da reativação é Negócio+ (requirePlan no backend e a aba
+      // Retenção). Antes a linha estava no Expansão — ver app#872.
+      "Reativação automática de clientes inativos pelo WhatsApp oficial",
       "Aniversariantes com cupom automático",
       "Avaliações de clientes pos-venda",
       "Crediário (fiado) por cliente",
@@ -125,7 +128,6 @@ const PLANS = [
       "Projeção de fluxo de caixa com cenarios",
       "DRE Simples para o contador",
       "Metas de vendas por vendedor com acompanhamento",
-      "Reativação automática de clientes inativos",
       "Margem por produto e ranking de lucratividade",
       // Verticais
       "Todos os módulos verticais inclusos (Odonto, Beauty, Food, Pet, e mais)",
