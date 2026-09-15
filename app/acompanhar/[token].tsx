@@ -105,7 +105,7 @@ export default function AcompanharEncomenda() {
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", padding: 32 }}>
         <Text style={{ fontSize: 19, fontWeight: "800", color: C.ink, textAlign: "center" }}>
-          Pedido #{dados.pedido} cancelado
+          {(dados as any).tipo === "oculos" ? `${dados.pedido} cancelada` : `Pedido #${dados.pedido} cancelado`}
         </Text>
         <Text style={{ fontSize: 15, color: C.ink2, marginTop: 8, textAlign: "center", maxWidth: 320, lineHeight: 21 }}>
           Esta encomenda em {dados.loja || "a loja"} foi cancelada. Fale com a loja se tiver dúvida.
@@ -191,7 +191,7 @@ export default function AcompanharEncomenda() {
           valor, a data e o Pix a um toque. */}
       {saldo ? (
         <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 20, marginTop: 18 }}>
-          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>SALDO DA ENCOMENDA</Text>
+          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{(dados as any).tipo === "oculos" ? "SALDO DOS ÓCULOS" : "SALDO DA ENCOMENDA"}</Text>
           <Text style={{ fontSize: 28, fontWeight: "800", color: C.ink, marginTop: 6 }}>{money(saldo.valor)}</Text>
           <Text style={{ fontSize: 14.5, color: C.ink2, marginTop: 2 }}>
             {saldo.vencimento ? `para ${dataPorExtenso(saldo.vencimento)}` : ""}
@@ -229,7 +229,7 @@ export default function AcompanharEncomenda() {
 
       {dados.itens && dados.itens.length > 0 ? (
         <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 20, marginTop: 18 }}>
-          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>SEU PEDIDO</Text>
+          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{(dados as any).tipo === "oculos" ? "SEUS ÓCULOS" : "SEU PEDIDO"}</Text>
           {dados.itens.map((it, i) => (
             <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 10 }}>
               <Text style={{ fontSize: 15, color: C.ink, flex: 1 }}>{it.nome}</Text>
@@ -246,7 +246,7 @@ export default function AcompanharEncomenda() {
       ) : null}
 
       <Text style={{ fontSize: 12, color: C.ink3, textAlign: "center", marginTop: 26 }}>
-        Pedido #{dados.pedido} · feito com Aura Studio
+        {(dados as any).tipo === "oculos" ? `${dados.pedido} · feito com Aura` : `Pedido #${dados.pedido} · feito com Aura Studio`}
       </Text>
     </ScrollView>
   );

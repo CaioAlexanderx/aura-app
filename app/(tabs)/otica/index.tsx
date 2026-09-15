@@ -420,7 +420,7 @@ const st = StyleSheet.create({
 
   card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", gap: 14, alignItems: "center", flexWrap: "wrap" },
   cardLate: { borderLeftWidth: 3, borderLeftColor: Colors.red },
-  cardNum: { width: 92 },
+  cardNum: { width: 118 },
   osNumber: { fontSize: 15, color: Colors.ink, fontWeight: "800", letterSpacing: 0.3 },
   osLab: { fontSize: 10, color: Colors.ink3, fontFamily: Fonts.mono, marginTop: 2 },
   customer: { fontSize: 13, color: Colors.ink, fontWeight: "600" },

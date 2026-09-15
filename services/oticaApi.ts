@@ -288,6 +288,8 @@ export type OpticalOrder = ServiceOrder & {
   lab_redo_count?: number;
   deposit_sale_id?: string | null;
   deposit_sale_total?: string | number | null;
+  /** Soma dos pagamentos da venda do sinal (o que já entrou no caixa). */
+  deposit_paid?: string | number | null;
   tracker_token?: string | null;
   ready_notified_at?: string | null;
 };

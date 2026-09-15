@@ -65,7 +65,10 @@ export function buildTimeline(os: OpticalOrder): Step[] {
 
   const sent = !!os.lab_sent_at || ready || ["no_laboratorio", "recebida", "em_montagem", "refacao"].includes(ls);
   const received = !!os.lab_received_at || ready || ["recebida", "em_montagem"].includes(ls);
-  const mounting = ready || ls === "em_montagem";
+  // Lentes recebidas = a bancada é a etapa ATUAL (o botão "Iniciar montagem"
+  // mora nela). Antes só virava atual em em_montagem, e a OS ficava sem
+  // botão nenhum entre "chegaram" e "montar" (QA no app, 15/09/2026).
+  const mounting = ready || received;
 
   const steps: Step[] = [
     { key: "aberta", title: `Aberta${os.deposit_sale_total != null ? " · sinal recebido" : ""}`, detail: fmtDate(os.created_at, true), state: "done" },
@@ -319,7 +322,14 @@ export default function OticaOsDetailScreen() {
         <View style={st.totalRow}><Text style={st.totalLabel}>Total</Text><Text style={st.totalValue}>{fmt(total)}</Text></View>
         {deposit != null ? (
           <>
-            <Row k="Venda do sinal" v={`#${String(os.deposit_sale_id).slice(0, 8).toUpperCase()} · ${fmt(deposit)}`} />
+            {os.deposit_paid != null && Number(os.deposit_paid) > 0 ? (
+              <>
+                <Row k={`Sinal recebido · venda #${String(os.deposit_sale_id).slice(0, 8).toUpperCase()}`} v={fmt(os.deposit_paid)} />
+                <Row k="Saldo na entrega" v={fmt(Math.max(0, deposit - Number(os.deposit_paid)))} />
+              </>
+            ) : (
+              <Row k="Venda com sinal" v={`#${String(os.deposit_sale_id).slice(0, 8).toUpperCase()} · ${fmt(deposit)}`} />
+            )}
             <Text style={st.hint}>O sinal entrou no caixa na abertura; o saldo virou parcela no crediário com vencimento na data prometida e aparece no link de acompanhamento com Pix.</Text>
           </>
         ) : (
