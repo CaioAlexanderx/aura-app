@@ -19,7 +19,12 @@ export type SubscribeResponse = {
   // 13/07/2026 — cupom
   charged_now?: number;       // quanto foi cobrado agora (0 em cupom de dias gratis)
   trial_ends_at?: string | null;
-  coupon?: { code: string; discount_pct: number; trial_days: number } | null;
+  coupon?: {
+    code: string; discount_pct: number; trial_days: number;
+    // 11/09/2026 — desconto em reais e por varios meses
+    discount_value?: number; discount_months?: number;
+    discounted_value?: number | null; first_full_due_date?: string | null;
+  } | null;
   message?: string;
 };
 
@@ -38,6 +43,48 @@ export type ValidateCouponResponse = {
   recurring_value?: number;      // quanto passa a pagar depois
   first_charge_date?: string;    // YYYY-MM-DD
   extra_seats?: number;
+  // 11/09/2026 — cupom em reais (discount_value) e por varios meses
+  // (discount_months > 1: "R$ 50 nas 3 primeiras mensalidades").
+  discount_value?: number;
+  discount_months?: number;
+  discounted_value?: number | null;      // cada mensalidade com desconto
+  discounted_months?: number;            // 0 em cupom de dias gratis
+  first_full_charge_date?: string | null; // 1a mensalidade cheia (prevista)
+};
+
+// GET /companies/:id/billing/status
+export type BillingStatusResponse = {
+  plan: string;
+  billing_status: string;
+  billing_cycle: string;
+  trial_active: boolean;
+  trial_days_left: number;
+  trial_ends_at: string | null;
+  next_billing_date: string | null;
+  has_payment_method: boolean;
+  vertical_active: string | null;
+  allowed_plans: string[];
+  // 11/09/2026 — desconto de varios meses ainda valendo nesta assinatura.
+  // Mensalidades que vencem ANTES de first_full_due_date levam o desconto.
+  discount?: BillingDiscount | null;
+};
+export type BillingDiscount = {
+  code: string;
+  discount_amount: number;
+  months: number;
+  first_full_due_date: string;
+};
+
+// GET /companies/:id/billing/invoices
+export type BillingInvoice = {
+  id: string;
+  value: number;
+  status: string;
+  due_date: string;
+  payment_date: string | null;
+  billing_type: string;
+  invoice_url: string | null;
+  bank_slip_url: string | null;
 };
 
 export type KarateGateResponse = {
@@ -65,7 +112,7 @@ export type DojoGateResponse = {
 };
 
 export var billingApi = {
-  status: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/status"); },
+  status: function(companyId: string) { return request<BillingStatusResponse>("/companies/" + companyId + "/billing/status"); },
   tokenize: function(companyId: string, cardData: {
     card_number: string; card_expiry_month: string; card_expiry_year: string; card_ccv: string;
     holder_name: string; holder_cpf: string; holder_postal_code?: string; holder_address_number?: string; holder_address?: string;
@@ -98,7 +145,7 @@ export var billingApi = {
     });
   },
   cancel: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/cancel", { method: "POST" }); },
-  invoices: function(companyId: string) { return request<any>("/companies/" + companyId + "/billing/invoices"); },
+  invoices: function(companyId: string) { return request<{ total: number; invoices: BillingInvoice[] }>("/companies/" + companyId + "/billing/invoices"); },
   generatePix: function(companyId: string, paymentId: string) { return request<any>("/companies/" + companyId + "/billing/generate-pix/" + paymentId, { method: "POST" }); },
   plans: function() { return request<any>("/billing/plans"); },
   // Karatê: estado do gate de cobrança. Federação usa o contrato default

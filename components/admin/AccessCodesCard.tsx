@@ -49,6 +49,18 @@ function typeBadgeColors(type: string): { bg: string; text: string } {
   }
 }
 
+// "20% off", "R$ 50,00 off", "R$ 50,00 off × 3 meses" — null sem desconto.
+export function benefitLabel(c: Pick<AccessCodeRow, "discount_pct" | "discount_value" | "discount_months">): string | null {
+  var pct = c.discount_pct || 0;
+  var value = Number(c.discount_value || 0);
+  var months = c.discount_months || 1;
+  if (pct <= 0 && value <= 0) return null;
+  var off = pct > 0
+    ? pct + "% off"
+    : "R$ " + value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " off";
+  return months > 1 ? off + " × " + months + " meses" : off;
+}
+
 // ── Componente ────────────────────────────────────────────────
 export function AccessCodesCard() {
   var qc = useQueryClient();
@@ -63,6 +75,11 @@ export function AccessCodesCard() {
   var [formPlan, setFormPlan] = useState<"essencial" | "negocio" | "expansao" | "personalizado">("negocio");
   var [formTrialDays, setFormTrialDays] = useState("30");
   var [formDiscount, setFormDiscount] = useState("0");
+  // 11/09/2026 — desconto em reais, por varios meses, e trava de plano
+  // ("R$ 50 nas 3 primeiras mensalidades, so no Negocio").
+  var [formDiscountValue, setFormDiscountValue] = useState("0");
+  var [formMonths, setFormMonths] = useState("1");
+  var [formRestrictPlan, setFormRestrictPlan] = useState(false);
   var [formMaxUses, setFormMaxUses] = useState("1");
   var [formExpires, setFormExpires] = useState(""); // YYYY-MM-DD
 
@@ -102,6 +119,9 @@ export function AccessCodesCard() {
       setFormCode("");
       setFormTrialDays("30");
       setFormDiscount("0");
+      setFormDiscountValue("0");
+      setFormMonths("1");
+      setFormRestrictPlan(false);
       setFormMaxUses("1");
       setFormExpires("");
     },
@@ -131,6 +151,12 @@ export function AccessCodesCard() {
     var discount = parseInt(formDiscount, 10) || 0;
     var maxUses = parseInt(formMaxUses, 10) || 1;
     if (maxUses < 1) { toast.error("Max usos deve ser >= 1"); return; }
+    var discountValue = Math.round((parseFloat(formDiscountValue.replace(",", ".")) || 0) * 100) / 100;
+    var months = parseInt(formMonths, 10) || 1;
+    // Mesmas regras do backend, ditas antes de ir ao servidor.
+    if (discount > 0 && discountValue > 0) { toast.error("Use desconto em % OU em R$, não os dois"); return; }
+    if (months > 1 && discount === 0 && discountValue === 0) { toast.error("Informe o desconto (% ou R$) das mensalidades"); return; }
+    if (months > 1 && trialDays > 0) { toast.error("Desconto por vários meses não combina com dias grátis: zere os dias grátis"); return; }
 
     var body: CreateAccessCodeBody = {
       code: codeNormalized,
@@ -138,6 +164,9 @@ export function AccessCodesCard() {
       plan: formPlan,
       trial_days: trialDays,
       discount_pct: discount,
+      discount_value: discountValue,
+      discount_months: months,
+      restrict_to_plan: formRestrictPlan,
       max_uses: maxUses,
     };
     if (formExpires) {
@@ -242,6 +271,40 @@ export function AccessCodesCard() {
               </View>
             </View>
 
+            {/* Linha 2b: desconto em reais + meses + trava de plano */}
+            <View style={s.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>Desconto R$</Text>
+                <TextInput
+                  value={formDiscountValue}
+                  onChangeText={setFormDiscountValue}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={Colors.ink3}
+                  style={s.input}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>Mensalidades c/ desconto</Text>
+                <TextInput
+                  value={formMonths}
+                  onChangeText={setFormMonths}
+                  keyboardType="numeric"
+                  placeholder="1"
+                  placeholderTextColor={Colors.ink3}
+                  style={s.input}
+                />
+                <Text style={s.hint}>1 = só a 1ª. Mais de 1: só no mensal</Text>
+              </View>
+              <View style={{ flex: 2 }}>
+                <Text style={s.fieldLabel}>Vale em</Text>
+                <View style={s.chipRow}>
+                  <Chip label="Qualquer plano" active={!formRestrictPlan} onPress={function() { setFormRestrictPlan(false); }} />
+                  <Chip label="Só no plano escolhido" active={formRestrictPlan} onPress={function() { setFormRestrictPlan(true); }} />
+                </View>
+              </View>
+            </View>
+
             {/* Linha 3: max uses + expires */}
             <View style={s.row}>
               <View style={{ flex: 1 }}>
@@ -333,15 +396,15 @@ export function AccessCodesCard() {
                       <View style={[s.typeBadge, { backgroundColor: tb.bg }]}>
                         <Text style={[s.typeBadgeText, { color: tb.text }]}>{c.type}</Text>
                       </View>
-                      <Text style={s.codePlan}>{c.plan}</Text>
+                      <Text style={s.codePlan}>{c.restrict_to_plan ? "só " + c.plan : c.plan}</Text>
                     </View>
                   </View>
 
                   {/* Beneficio */}
                   <View style={{ flex: 1.2 }}>
                     {c.trial_days > 0 && <Text style={s.codeBenefit}>{c.trial_days}d gratis</Text>}
-                    {c.discount_pct > 0 && <Text style={s.codeBenefit}>{c.discount_pct}% off</Text>}
-                    {c.trial_days === 0 && c.discount_pct === 0 && <Text style={s.codeBenefitMuted}>sem beneficio</Text>}
+                    {benefitLabel(c) && <Text style={s.codeBenefit}>{benefitLabel(c)}</Text>}
+                    {c.trial_days === 0 && !benefitLabel(c) && <Text style={s.codeBenefitMuted}>sem beneficio</Text>}
                   </View>
 
                   {/* Usos */}
