@@ -8,6 +8,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useMembers } from "@/hooks/useMembers";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useMemberAudit, AUDIT_LABELS, type AuditAction, type AuditEntry } from "@/hooks/useMemberAudit";
 import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplates";
 import { useAuthStore } from "@/stores/auth";
@@ -25,6 +26,10 @@ const MODULE_GROUPS = [
       { key: "pdv",      label: "Caixa (PDV)",    hint: "Vender, abrir e fechar caixa" },
       { key: "estoque",  label: "Estoque",        hint: "Cadastrar e ajustar produtos" },
       { key: "clientes", label: "Clientes",       hint: "Cadastrar e ver histórico de clientes" },
+      // 15/09/2026 — umbrella da semi-vertical Ótica (useVisibleModules:
+      // otica.access -> laboratório, receitas, config). Só aparece com o
+      // módulo ligado na loja (filtro em ModuleGroupSelector).
+      { key: "otica.access", label: "Ótica",      hint: "Laboratório, receitas e OS de óculos", onlyWhen: "otica" as const },
     ],
   },
   {
@@ -198,13 +203,15 @@ function ModuleGroupSelector({ value, onChange }: {
   value: Record<string, boolean>;
   onChange: (next: Record<string, boolean>) => void;
 }) {
+  const { settings: pdvSettings } = usePdvSettings();
+  const oticaOn = pdvSettings.otica_enabled === true;
   return (
     <View style={{ gap: 12 }}>
       {MODULE_GROUPS.map(group => (
         <View key={group.label}>
           <Text style={s.groupHeader}>{group.label}</Text>
           <View style={s.groupBody}>
-            {group.modules.map(m => (
+            {group.modules.filter(m => !(m as any).onlyWhen || ((m as any).onlyWhen === "otica" && oticaOn)).map(m => (
               <ModuleToggleRow
                 key={m.key}
                 moduleKey={m.key}

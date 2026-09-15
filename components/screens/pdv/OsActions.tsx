@@ -40,7 +40,10 @@ export function OsActions({ companyId, saleId, customerId }: Props) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["service-orders", companyId, "pronta", customerId],
-    queryFn: () => serviceOrdersApi.list(companyId, { status: "pronta", customer_id: customerId }),
+    // kind='reparo': a OS de óculos tem sinal e saldo próprios (deposit_sale_id)
+    // e é entregue na tela da ótica — vincular uma segunda venda aqui cobraria
+    // o cliente duas vezes.
+    queryFn: () => serviceOrdersApi.list(companyId, { status: "pronta", customer_id: customerId, kind: "reparo" }),
     enabled,
     staleTime: 0, // tela de sucesso: o estado do balcão é agora, não cache
   });

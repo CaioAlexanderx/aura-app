@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { toast } from "@/components/Toast";
 import { creditApi } from "@/services/creditApi";
 import type { Customer } from "./types";
@@ -43,6 +45,8 @@ export function CustomerRow({
   const [busy, setBusy] = useState(false);
   const w = Platform.OS === "web";
   const tags = getStatus(c);
+  const { settings: pdvSettings } = usePdvSettings();
+  const oticaEnabled = pdvSettings.otica_enabled === true;
   const showBadge = showCompanyBadge && c.company_name;
   const hasCredit = (c.creditBalance || 0) > 0;
   const qc = useQueryClient();
@@ -177,6 +181,13 @@ export function CustomerRow({
             )}
             {["Enviar WhatsApp", "Pedir avaliação", "Ver histórico"].map(a =>
               <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
+            )}
+            {/* 15/09/2026 — Ótica: a receita é do cliente, então a porta de
+                entrada dela fica na ficha. Só aparece com o módulo ligado. */}
+            {oticaEnabled && (
+              <Pressable onPress={() => router.push(("/otica/receitas?customer_id=" + c.id) as any)} style={s.actionBtn} testID={`cliente-receitas-${c.id}`}>
+                <Text style={s.actionText}>Receitas (ótica)</Text>
+              </Pressable>
             )}
             {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}
             {onDelete && <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}><Text style={s.deleteText}>Excluir cliente</Text></Pressable>}

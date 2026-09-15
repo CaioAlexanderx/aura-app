@@ -108,6 +108,9 @@ export type PdvSettings = {
   // O backend bloqueia so a ESCRITA quando desligado; leitura e impressao
   // continuam, pra loja nao perder de vista os aparelhos ja no balcao.
   os_enabled?: boolean;
+  // 15/09/2026, migration 334 — semi-vertical Otica (receituario, OS de
+  // laboratorio, sinal na abertura). Mesmo modelo de opt-in da OS.
+  otica_enabled?: boolean;
 };
 
 export var authApi = {

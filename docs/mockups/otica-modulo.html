@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — módulo Ótica (laboratório, OS de óculos, receituário)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — módulo Ótica, 15/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+
+     A Ótica NÃO ganha shell próprio. Vive dentro de app/(tabs), no NAV
+     do varejo, como a Ordem de Serviço: liga por pdv_settings.otica_enabled.
+     Caixa, estoque, crediário, clientes e WhatsApp continuam os mesmos.
+
+     Quatro telas, e as decisões que cada uma existe para validar:
+
+     1. LABORATÓRIO (/otica) — a tela do dia a dia. Não é uma lista de OS:
+        é uma ESTEIRA. Cinco estações (aguardando envio → no laboratório →
+        recebidas → montagem → prontas) com contagem, e os óculos atrasados
+        em âmbar/vermelho por forma e texto, não só cor. O que o dono quer
+        saber de manhã é "quantos pares estão no laboratório e quais
+        atrasaram", e isso tem que caber numa olhada.
+
+     2. NOVA OS DE ÓCULOS (/otica/nova) — formulário ABERTO numa tela, não
+        wizard. O vendedor digita a receita com o papel do médico na mão;
+        a grade OD/OE em mono tabular espelha o papel. Passo de 0,25 nos
+        graus, eixo 0–180. Sinal e saldo aparecem no fim, com o saldo
+        vencendo na data prometida.
+
+     3. DETALHE DA OS (/otica/[id]) — a esteira vira linha do tempo. O
+        botão principal muda conforme a estação; refação é uma ação
+        secundária, nunca um status "normal". "Avisar cliente" só existe
+        depois de PRONTA e manda o link de acompanhamento — nunca a receita.
+
+     4. RECEITAS (/otica/receitas) — o livro de registro que o Decreto
+        24.492 exige, em versão digital: cliente, prescritor (CRM ou
+        optometrista), emissão, validade e as OS que usaram cada receita.
+        Receitas vencendo em 30 dias sobem para o topo.
+
+     Fora, de propósito: agenda de "exame de vista na loja", comissão a
+     médico e recomendação de lente ao cliente final (Decreto 24.492,
+     arts. 13, 16 e 17).
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 20px 64px; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+
+  /* ScreenHero */
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: .95; letter-spacing: -.025em; margin: 0; flex: 1; min-width: 0; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .hero .actions { display: flex; gap: 8px; padding-bottom: 6px; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 720px; line-height: 21px; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .btn { font: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .btn.ghost { background: transparent; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; }
+  .btn.danger { color: var(--red); border-color: rgba(248,113,113,.35); }
+
+  /* tabs / chips */
+  .tabs { display: flex; gap: 6px; margin: 18px 0 16px; }
+  .tab { padding: 9px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--ink3); font-size: 13px; }
+  .tab.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+
+  /* esteira */
+  .rail { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0 20px; }
+  .station { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; position: relative; }
+  .station .n { font-family: var(--serif); font-size: 34px; line-height: 1; }
+  .station .l { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-top: 6px; }
+  .station .late { font-size: 11px; color: var(--amber); margin-top: 4px; }
+  .station.on { border-color: var(--violet); background: var(--violetD); }
+  .station.ready { border-color: rgba(52,211,153,.4); }
+  .station.ready .n { color: var(--green); }
+  .station::after { content: "›"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%); color: var(--ink3); font-size: 18px; }
+  .station:last-child::after { content: ""; }
+
+  .search { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; color: var(--ink3); font-size: 13px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center; }
+  .card .num { font-weight: 800; font-size: 15px; letter-spacing: .3px; }
+  .card .num small { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink3); font-weight: 400; }
+  .card .who { font-weight: 600; }
+  .card .what { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+  .card .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .badge { border: 1px solid; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  .b-lab { color: #38bdf8; border-color: #38bdf8; }
+  .b-wait { color: var(--ink3); border-color: var(--ink3); }
+  .b-recv { color: var(--violet3); border-color: var(--violet3); }
+  .b-ready { color: var(--green); border-color: var(--green); }
+  .b-redo { color: var(--amber); border-color: var(--amber); }
+  .due { font-size: 11px; color: var(--ink3); }
+  .due.late { color: var(--red); font-weight: 700; }
+  .due.late::before { content: "▲ "; font-size: 9px; }
+  .card.late { border-left: 3px solid var(--red); }
+  .hover-actions { display: none; gap: 6px; }
+  .card:hover .hover-actions { display: flex; }
+  @media (hover: none) { .hover-actions { display: flex; } }
+
+  /* form */
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--ink3); font-weight: 600; }
+  .input { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; color: var(--ink); font-size: 13px; }
+  .input.mono { font-family: var(--mono); text-align: center; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .grid-rx { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  .grid-rx th { font-family: var(--sans); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); font-weight: 700; padding: 4px 6px; text-align: center; }
+  .grid-rx th:first-child { text-align: left; }
+  .grid-rx td { padding: 4px 3px; }
+  .grid-rx td:first-child { font-family: var(--sans); font-weight: 800; padding-left: 6px; width: 42px; }
+  .grid-rx td:first-child small { display: block; font-weight: 400; color: var(--ink3); font-size: 10px; }
+  .grid-rx .input { width: 100%; padding: 8px 4px; }
+  .stepper { font-size: 10px; color: var(--ink3); margin-top: 8px; }
+  .chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+  .customer-pick { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; font-weight: 800; color: var(--violet3); }
+  .link { color: var(--violet3); font-weight: 600; font-size: 12px; }
+  .money { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; font-size: 13px; }
+  .money .k { color: var(--ink3); }
+  .money .v { font-family: var(--mono); text-align: right; }
+  .money .total { font-weight: 800; font-size: 16px; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+  .money .saldo { color: var(--amber); }
+  .footer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* detalhe */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: start; padding: 10px 0; }
+  .tl .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border2); margin-top: 4px; background: var(--bg3); }
+  .tl.done .dot { background: var(--violet); border-color: var(--violet); }
+  .tl.now .dot { border-color: var(--violet); box-shadow: 0 0 0 4px var(--violetD); }
+  .tl .t { font-weight: 600; }
+  .tl .d { font-size: 12px; color: var(--ink3); }
+  .tl.now .t { color: var(--violet3); }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 13px; }
+  .kv .k { font-size: 11px; color: var(--ink3); }
+  .rx-view { font-family: var(--mono); font-size: 13px; width: 100%; border-collapse: collapse; }
+  .rx-view th { font-family: var(--sans); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); text-align: center; padding: 6px; border-bottom: 1px solid var(--border); }
+  .rx-view td { text-align: center; padding: 8px 6px; }
+  .rx-view td:first-child, .rx-view th:first-child { text-align: left; font-family: var(--sans); font-weight: 800; }
+  .warn { background: var(--amberD); border: 1px solid rgba(251,191,36,.35); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--amber); }
+  .ok { background: var(--greenD); border: 1px solid rgba(52,211,153,.35); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--green); }
+  .cols { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
+  @media (max-width: 760px) { .cols, .rail, .row3 { grid-template-columns: 1fr; } .rail { grid-template-columns: 1fr 1fr; } .hero h1 { font-size: 38px; } .card { grid-template-columns: 1fr; } .card .right { align-items: flex-start; } .station::after { content: ""; } }
+
+  /* receitas */
+  table.book { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.book th { text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table.book td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.book td.m { font-family: var(--mono); }
+  .tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--bg4); color: var(--ink3); }
+  .tag.exp { background: var(--amberD); color: var(--amber); }
+  .tag.venc { background: var(--redD); color: var(--red); }
+  .tag.med { background: var(--violetD); color: var(--violet3); }
+  .note { font-size: 11px; color: var(--ink3); margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · módulo Ótica · <b>4 telas</b> · shell Negócio, toggle em Configurações › Vendas <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button></div>
+
+<!-- ===================== 1. LABORATÓRIO ===================== -->
+<section class="screen" id="lab">
+  <div class="mock-label">1 · /otica — Laboratório</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Ótica <span class="pill">ao vivo</span></div>
+  <div class="hero">
+    <h1>Laboratório<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Receitas</button><button class="btn primary">+ Nova OS de óculos</button></div>
+  </div>
+  <p class="sub">14 pares em andamento · 9 no laboratório · <em>2 atrasados</em> · 3 prontos aguardando retirada · 4 receitas vencem em 30 dias</p>
+
+  <div class="rail">
+    <div class="station"><div class="n">2</div><div class="l">Aguardando envio</div></div>
+    <div class="station on"><div class="n">9</div><div class="l">No laboratório</div><div class="late">2 passaram do prazo</div></div>
+    <div class="station"><div class="n">1</div><div class="l">Recebidas</div></div>
+    <div class="station"><div class="n">2</div><div class="l">Montagem</div></div>
+    <div class="station ready"><div class="n">3</div><div class="l">Prontas</div></div>
+  </div>
+
+  <div class="search">🔍 &nbsp;Nº da OS, cliente ou pedido do laboratório</div>
+  <div class="chips"><span class="chip on">Em andamento</span><span class="chip">Atrasadas</span><span class="chip">Prontas</span><span class="chip">Entregues</span><span class="chip">Todas</span></div>
+
+  <div class="list">
+    <div class="card late">
+      <div class="num">#41<small>Zeiss · 88213</small></div>
+      <div><div class="who">Marlene Souza</div><div class="what">Multifocal · Varilux Comfort Max 1.59 · AR + Transitions · Ray-Ban RB5154 52-18</div></div>
+      <div class="right"><span class="badge b-lab">No laboratório · 11 dias</span><span class="due late">prometido 12/09</span><div class="hover-actions"><button class="btn sm">Ligar p/ laboratório</button><button class="btn sm">Abrir</button></div></div>
+    </div>
+    <div class="card late">
+      <div class="num">#39<small>Essilor · —</small></div>
+      <div><div class="who">Carlos Menezes</div><div class="what">Longe · lente pronta 1.56 AR · armação do cliente</div></div>
+      <div class="right"><span class="badge b-lab">No laboratório · 9 dias</span><span class="due late">prometido 13/09</span></div>
+    </div>
+    <div class="card">
+      <div class="num">#44<small>Zeiss · 88301</small></div>
+      <div><div class="who">Ana Paula Ferreira</div><div class="what">Perto · surfaçada 1.67 · Oakley OX8046 · <span style="color:var(--amber)">refação #1: eixo trocado</span></div></div>
+      <div class="right"><span class="badge b-redo">Refação</span><span class="due">prometido 22/09</span></div>
+    </div>
+    <div class="card">
+      <div class="num">#45<small>Hoya · 55019</small></div>
+      <div><div class="who">Beatriz Lima</div><div class="what">Multifocal · Hoya ID MyStyle 1.60 · Chilli Beans</div></div>
+      <div class="right"><span class="badge b-recv">Recebida · conferir</span><span class="due">prometido 19/09</span></div>
+    </div>
+    <div class="card">
+      <div class="num">#38<small>sem laboratório</small></div>
+      <div><div class="who">Roberto Alves</div><div class="what">Sol com grau · lente pronta 1.56 · Ray-Ban Aviator</div></div>
+      <div class="right"><span class="badge b-ready">Pronta · 3 dias no balcão</span><span class="due">saldo R$ 240,00</span><div class="hover-actions"><button class="btn sm primary">Avisar cliente</button></div></div>
+    </div>
+    <div class="card">
+      <div class="num">#46<small>—</small></div>
+      <div><div class="who">Juliana Prado</div><div class="what">Longe · Essilor Crizal Easy 1.59 · Vogue VO5239</div></div>
+      <div class="right"><span class="badge b-wait">Aguardando envio</span><span class="due">sinal R$ 300,00 pago</span><div class="hover-actions"><button class="btn sm primary">Enviar ao laboratório</button></div></div>
+    </div>
+  </div>
+  <p class="note">Atraso = prometido &lt; hoje e ainda não pronta. Faixa vermelha à esquerda + "▲" no texto: lê no modo claro e para daltônico. Ações aparecem no hover; no toque ficam sempre visíveis (regra 7).</p>
+</section>
+
+<!-- ===================== 2. NOVA OS ===================== -->
+<section class="screen" id="nova">
+  <div class="mock-label">2 · /otica/nova — Nova OS de óculos (formulário aberto, sem wizard)</div>
+  <div class="link">‹ Laboratório</div>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">Nova OS de óculos<i>.</i></h1></div>
+  <p class="sub">A receita fica congelada na OS. O sinal vira venda no caixa e o saldo entra no crediário com vencimento na data prometida.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Cliente</div>
+      <div class="box customer-pick"><div class="avatar">MS</div><div style="flex:1"><div style="font-weight:600">Marlene Souza</div><div class="due">(11) 98765-4321 · 3 compras · última receita 20/08/2026</div></div><span class="link">trocar</span></div>
+
+      <div class="section">Receita</div>
+      <div class="box">
+        <div class="chips" style="margin-bottom:12px"><span class="chip on">Usar receita de 20/08/2026 (válida até 20/08/2027)</span><span class="chip">Digitar nova</span></div>
+        <table class="grid-rx">
+          <tr><th></th><th>Esférico</th><th>Cilíndrico</th><th>Eixo</th><th>Adição</th><th>DNP</th><th>Altura</th></tr>
+          <tr><td>OD<small>direito</small></td><td><div class="input mono">−1,75</div></td><td><div class="input mono">−0,50</div></td><td><div class="input mono">180</div></td><td><div class="input mono">+2,00</div></td><td><div class="input mono">31,5</div></td><td><div class="input mono">20</div></td></tr>
+          <tr><td>OE<small>esquerdo</small></td><td><div class="input mono">−2,00</div></td><td><div class="input mono">−0,75</div></td><td><div class="input mono">175</div></td><td><div class="input mono">+2,00</div></td><td><div class="input mono">32,0</div></td><td><div class="input mono">20</div></td></tr>
+        </table>
+        <div class="stepper">Graus em passos de 0,25 · eixo de 0 a 180 · DNP e altura em mm. Sem DNP e altura por olho o laboratório assume DP/2 e o centro do aro — e a refação vira briga sem prova.</div>
+        <div class="row3" style="margin-top:12px">
+          <div class="field"><label>Prescritor</label><div class="chipset"><span class="chip on">Médico (CRM)</span><span class="chip">Optometrista</span></div></div>
+          <div class="field"><label>Nome</label><div class="input">Dra. Ana Lima</div></div>
+          <div class="field"><label>Registro</label><div class="input">CRM 12345/SP</div></div>
+        </div>
+        <div class="row3" style="margin-top:10px">
+          <div class="field"><label>Emitida em</label><div class="input">20/08/2026</div></div>
+          <div class="field"><label>Válida até</label><div class="input">20/08/2027</div></div>
+          <div class="field"><label>Foto da receita</label><div class="input" style="color:var(--ink3)">📎 anexar</div></div>
+        </div>
+      </div>
+
+      <div class="section">Armação</div>
+      <div class="box">
+        <div class="chips" style="margin-bottom:10px"><span class="chip on">Do estoque</span><span class="chip">Do cliente</span></div>
+        <div class="input">Ray-Ban RB5154 Clubmaster · preto · 52-18-140 · R$ 890,00</div>
+      </div>
+
+      <div class="section">Lentes</div>
+      <div class="box">
+        <div class="row2">
+          <div class="field"><label>Uso</label><div class="chipset"><span class="chip">Longe</span><span class="chip">Perto</span><span class="chip on">Multifocal</span><span class="chip">Bifocal</span></div></div>
+          <div class="field"><label>Tipo</label><div class="chipset"><span class="chip">Pronta (estoque)</span><span class="chip on">Surfaçada (sob encomenda)</span></div></div>
+        </div>
+        <div class="row3" style="margin-top:10px">
+          <div class="field"><label>Marca</label><div class="input">Essilor</div></div>
+          <div class="field"><label>Desenho</label><div class="input">Varilux Comfort Max</div></div>
+          <div class="field"><label>Material / índice</label><div class="input">1.59 policarbonato</div></div>
+        </div>
+        <div class="field" style="margin-top:10px"><label>Tratamentos</label><div class="chipset"><span class="chip on">Antirreflexo</span><span class="chip on">Fotossensível</span><span class="chip">Filtro azul</span><span class="chip">Antirrisco</span><span class="chip">Polarizada</span></div></div>
+      </div>
+
+      <div class="section">Laboratório e prazo</div>
+      <div class="box row3">
+        <div class="field"><label>Laboratório</label><div class="input">Zeiss (Visustore) · 7 dias úteis</div></div>
+        <div class="field"><label>Nº do pedido no laboratório</label><div class="input" style="color:var(--ink3)">preenche ao enviar</div></div>
+        <div class="field"><label>Prometido para</label><div class="input">24/09/2026</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Valores</div>
+      <div class="box money">
+        <span class="k">Armação RB5154</span><span class="v">890,00</span>
+        <span class="k">Lentes Varilux Comfort Max 1.59 AR + Transitions</span><span class="v">1.480,00</span>
+        <span class="k">Montagem</span><span class="v">0,00</span>
+        <span class="k total">Total</span><span class="v total">R$ 2.370,00</span>
+      </div>
+
+      <div class="section">Sinal</div>
+      <div class="box">
+        <div class="row2">
+          <div class="field"><label>Valor do sinal</label><div class="input mono">R$ 1.000,00</div></div>
+          <div class="field"><label>Forma</label><div class="chipset"><span class="chip on">Pix</span><span class="chip">Dinheiro</span><span class="chip">Cartão</span></div></div>
+        </div>
+        <div class="money" style="margin-top:12px">
+          <span class="k">Saldo na entrega</span><span class="v saldo">R$ 1.370,00</span>
+          <span class="k">Vence em</span><span class="v">24/09/2026 (data prometida)</span>
+        </div>
+        <div class="note">Sem sinal? Deixe em branco: a OS abre sem venda e o caixa fecha na entrega. O saldo pode virar carnê no crediário.</div>
+      </div>
+
+      <div class="section">Garantia</div>
+      <div class="box kv">
+        <div><div class="k">Adaptação (multifocal)</div><div>90 dias</div></div>
+        <div><div class="k">Laboratório</div><div>365 dias</div></div>
+      </div>
+
+      <div class="section">Observações</div>
+      <div class="box"><div class="input" style="min-height:64px;color:var(--ink3)">Cliente pediu haste mais curta…</div></div>
+
+      <div class="footer-actions"><button class="btn ghost">Cancelar</button><button class="btn primary">Abrir OS e receber sinal</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. DETALHE ===================== -->
+<section class="screen" id="detalhe">
+  <div class="mock-label">3 · /otica/[id] — OS #41</div>
+  <div class="link">‹ Laboratório</div>
+  <div class="hero" style="margin-top:8px">
+    <h1 style="font-size:38px">OS #41 · Marlene Souza<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Imprimir A4</button><button class="btn ghost">Link de acompanhamento</button></div>
+  </div>
+  <p class="sub">Aberta em 08/09 · Zeiss pedido 88213 · <em>prometido 12/09, 3 dias de atraso</em></p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Esteira</div>
+      <div class="box timeline">
+        <div class="tl done"><div class="dot"></div><div><div class="t">Aberta · sinal de R$ 1.000,00 recebido</div><div class="d">08/09 14:12 · Carla</div></div><div></div></div>
+        <div class="tl done"><div class="dot"></div><div><div class="t">Enviada ao laboratório</div><div class="d">08/09 17:40 · Zeiss · pedido 88213</div></div><div></div></div>
+        <div class="tl now"><div class="dot"></div><div><div class="t">No laboratório há 11 dias</div><div class="d">Prazo do laboratório: 7 dias úteis</div></div><div><button class="btn sm primary">Lentes chegaram</button></div></div>
+        <div class="tl"><div class="dot"></div><div><div class="t">Conferência e montagem</div><div class="d">Lensômetro · checklist de bancada</div></div><div></div></div>
+        <div class="tl"><div class="dot"></div><div><div class="t">Pronta</div><div class="d">Avisa o cliente pelo WhatsApp com o link de acompanhamento</div></div><div></div></div>
+        <div class="tl"><div class="dot"></div><div><div class="t">Entregue</div><div class="d">Recebe o saldo e fecha a OS</div></div><div></div></div>
+      </div>
+      <div class="warn" style="margin-top:10px">Atrasada: o prazo prometido ao cliente foi 12/09. Ao marcar as lentes como recebidas, a conferência ganha prioridade na fila.</div>
+
+      <div class="section">Receita congelada nesta OS</div>
+      <div class="box">
+        <table class="rx-view">
+          <tr><th></th><th>Esf</th><th>Cil</th><th>Eixo</th><th>Ad</th><th>DNP</th><th>Alt</th></tr>
+          <tr><td>OD</td><td>−1,75</td><td>−0,50</td><td>180</td><td>+2,00</td><td>31,5</td><td>20</td></tr>
+          <tr><td>OE</td><td>−2,00</td><td>−0,75</td><td>175</td><td>+2,00</td><td>32,0</td><td>20</td></tr>
+        </table>
+        <div class="note">Dra. Ana Lima · CRM 12345/SP · emitida 20/08/2026 · válida até 20/08/2027</div>
+      </div>
+    </div>
+    <div>
+      <div class="section">Armação e lentes</div>
+      <div class="box kv">
+        <div><div class="k">Armação</div><div>Ray-Ban RB5154 · preto · 52-18-140</div></div>
+        <div><div class="k">Uso</div><div>Multifocal</div></div>
+        <div><div class="k">Lente</div><div>Varilux Comfort Max 1.59</div></div>
+        <div><div class="k">Tratamentos</div><div>Antirreflexo · Fotossensível</div></div>
+      </div>
+      <div class="section">Financeiro</div>
+      <div class="box money">
+        <span class="k">Total</span><span class="v">R$ 2.370,00</span>
+        <span class="k">Sinal (Pix, 08/09)</span><span class="v" style="color:var(--green)">− 1.000,00</span>
+        <span class="k total">Saldo na entrega</span><span class="v total saldo">R$ 1.370,00</span>
+      </div>
+      <div class="note">Saldo vence 12/09 · o cliente paga por Pix no link de acompanhamento ou no caixa na retirada.</div>
+      <div class="section">Garantia</div>
+      <div class="box kv">
+        <div><div class="k">Adaptação</div><div>90 dias após a entrega</div></div>
+        <div><div class="k">Laboratório</div><div>365 dias</div></div>
+      </div>
+      <div class="section">Ações</div>
+      <div class="box" style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn">Refação (volta ao laboratório)</button>
+        <button class="btn danger">Cancelar OS</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. RECEITAS ===================== -->
+<section class="screen" id="receitas">
+  <div class="mock-label">4 · /otica/receitas — Receituário (livro de registro digital)</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Ótica</div>
+  <div class="hero">
+    <h1>Receitas<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Exportar livro (CSV)</button><button class="btn primary">+ Nova receita</button></div>
+  </div>
+  <p class="sub">128 receitas registradas · <em>4 vencem em 30 dias</em> · 2 vencidas com cliente sem retorno</p>
+  <div class="search">🔍 &nbsp;Cliente ou prescritor</div>
+  <div class="chips"><span class="chip on">Todas</span><span class="chip">Vencendo em 30 dias</span><span class="chip">Vencidas</span><span class="chip">Este mês</span></div>
+  <div class="box" style="padding:0;overflow:auto">
+    <table class="book">
+      <tr><th>Emitida</th><th>Cliente</th><th>Prescritor</th><th>OD / OE</th><th>Validade</th><th>OS</th></tr>
+      <tr><td class="m">10/09/26</td><td>Marlene Souza</td><td>Dra. Ana Lima <span class="tag med">CRM 12345/SP</span></td><td class="m">−1,75 −0,50 180 / −2,00 −0,75 175 · ad +2,00</td><td class="m">10/09/27</td><td class="m">#41</td></tr>
+      <tr><td class="m">02/09/26</td><td>Beatriz Lima</td><td>Dr. Paulo Reis <span class="tag med">CRM 8811/SP</span></td><td class="m">+0,50 −0,25 90 / +0,75 −0,25 85 · ad +1,75</td><td class="m">02/09/27</td><td class="m">#45</td></tr>
+      <tr><td class="m">14/10/25</td><td>Carlos Menezes</td><td>Opt. Renata Cruz <span class="tag">Optometrista</span></td><td class="m">−3,00 — / −3,25 —</td><td class="m">14/10/26 <span class="tag exp">vence em 29 dias</span></td><td class="m">#39</td></tr>
+      <tr><td class="m">30/08/25</td><td>Roberto Alves</td><td>Dra. Ana Lima <span class="tag med">CRM 12345/SP</span></td><td class="m">−1,00 −0,25 10 / −1,00 —</td><td class="m">30/08/26 <span class="tag venc">vencida</span></td><td class="m">#38, #22</td></tr>
+    </table>
+  </div>
+  <p class="note">Lembrete de revisão (30 dias antes de vencer) sai como template de marketing, com consentimento e cota, e diz "revise sua receita com seu oftalmologista" — nunca "agende seu exame aqui" (Decreto 24.492, art. 17). Prescritor aceita médico com CRM e optometrista de nível superior (STJ, AR 7.106, 05/2026).</p>
+</section>
+</body>
+</html>
