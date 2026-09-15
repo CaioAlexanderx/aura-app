@@ -79,6 +79,7 @@ import { Icon } from "@/components/Icon";
 import { creditApi, MAX_INSTALLMENTS_CEILING, type CreditAccount, type UnifyPlan } from "@/services/creditApi";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { InstallmentCountSelect } from "./InstallmentCountSelect";
+import { formatDueDateBr, localDateToIso, simulateInstallments } from "@/utils/creditSimulation";
 
 // ConfirmPayload ampliado: campo `unify` presente somente quando o toggle está ativo.
 export type ConfirmPayload = {
@@ -106,23 +107,13 @@ var fmtCur = function(n: number) {
   return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// 15/09/2026: datas 'YYYY-MM-DD' são lidas no calendário local — new Date(iso)
+// é meia-noite UTC e mostrava o dia anterior em São Paulo. Ver utils/creditSimulation.
 function fmtDateSafe(input: Date | string | null | undefined): string {
-  if (!input) return "—";
   try {
-    const d = input instanceof Date ? input : new Date(input);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    return formatDueDateBr(input);
   } catch {
     return "—";
-  }
-}
-
-function safeIsoDate(d: Date): string | null {
-  if (!d || Number.isNaN(d.getTime())) return null;
-  try {
-    return d.toISOString().split("T")[0];
-  } catch {
-    return null;
   }
 }
 
@@ -137,7 +128,7 @@ const SCORE_COLOR: Record<string, string> = {
 function nextMonthBrDate(): string {
   var d = new Date();
   d.setMonth(d.getMonth() + 1);
-  var iso = safeIsoDate(d);
+  var iso = localDateToIso(d);
   return formatIsoToBr(iso) || "";
 }
 
@@ -220,21 +211,10 @@ export function CreditInstallmentModal({ visible, companyId, customerId, custome
     return { openBalance: sum, openCount: list.length, openOverdueCount: overdue };
   }, [profile]);
 
-  const simInstallments = useMemo(() => {
-    if (!totalNum || numInstallments < 1) return [];
-    if (!firstDueDateIso) return [];
-    var base = Math.floor(totalNum / numInstallments * 100) / 100;
-    var remainder = Math.round((totalNum - base * numInstallments) * 100) / 100;
-    var firstDate = new Date(firstDueDateIso);
-    if (Number.isNaN(firstDate.getTime())) return [];
-    return Array.from({ length: numInstallments }, (_, i) => {
-      var amt = i === numInstallments - 1 ? base + remainder : base;
-      var d = new Date(firstDate);
-      d.setMonth(d.getMonth() + i);
-      var iso = safeIsoDate(d);
-      return { num: i + 1, amount: amt, date: iso, dateBr: fmtDateSafe(d) };
-    });
-  }, [totalNum, numInstallments, firstDueDateIso]);
+  const simInstallments = useMemo(
+    () => simulateInstallments(totalNum, numInstallments, firstDueDateIso),
+    [totalNum, numInstallments, firstDueDateIso],
+  );
 
   // Carregar preview do unify sempre que os parâmetros mudam
   useEffect(() => {

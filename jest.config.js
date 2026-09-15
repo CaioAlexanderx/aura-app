@@ -1,3 +1,8 @@
+// Fuso dos lojistas, fixo para os testes de data valerem em qualquer máquina.
+// Tem que ser aqui, no processo principal: process.env.TZ dentro do teste não
+// pega no sandbox do Jest (ver __tests__/creditSimulation.test.ts).
+process.env.TZ = 'America/Sao_Paulo';
+
 module.exports = {
   testEnvironment: 'jsdom',
   setupFiles: ['./jest.setup.js'],
