@@ -29,6 +29,11 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // (services/modules.js) ainda NAO conhece a chave: PUT de override com "os"
   // volta 400, entao ela fica fora do catalogo do ClientsAdmin por ora.
   os: 'essencial',
+  // 14/09/2026 -- Cupons ganha modulo proprio, mesmo racional da OS acima:
+  // o item /cupons do NAV usava mod "pdv" emprestado. Mesmo plano minimo do
+  // pdv; backend (services/modules.js) ainda NAO conhece "cupons", entao a
+  // chave fica fora do catalogo do ClientsAdmin por ora.
+  cupons: 'essencial',
   crediario: 'negocio',
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
@@ -73,7 +78,8 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 14/09/2026 -- "os" entra na permissao pdv: e exatamente quem via a OS
   // quando ela usava mod "pdv". Permissao granular propria fica pra quando o
   // produto pedir (e exige chave nova em MembersSection + backend).
-  pdv:           ['pdv', 'os'],
+  // 14/09/2026 -- "cupons" entra pelo mesmo motivo (usava mod "pdv").
+  pdv:           ['pdv', 'os', 'cupons'],
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   vendas:        ['vendas', 'crediario'],
   estoque:       ['estoque'],
@@ -110,8 +116,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
 // `true` no pdv nao muda nada porque pdv e os tem o mesmo plano minimo.
 // Remover quando o backend aceitar "os" em services/modules.js e as empresas
 // com pdv:false tiverem os:false gravado.
+// 14/09/2026 -- "cupons" segue o mesmo caminho: tambem saiu de dentro do pdv
+// e some junto com o Caixa ate ter override proprio gravado no backend.
 var OVERRIDE_HIDE_FALLBACK: Record<string, string> = {
   os: 'pdv',
+  cupons: 'pdv',
 };
 
 export function computeVisibleModules(

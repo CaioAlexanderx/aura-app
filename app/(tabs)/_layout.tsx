@@ -79,11 +79,12 @@ const NAV: NavSection[] = [
   // /cupons (24/08/2026 — F6): a rota ja existia mas nada linkava pra ela; a
   // unica porta de entrada era uma aba dentro do Financeiro, que reimplementava
   // o mesmo CRUD. Cupom e ferramenta de venda (aplicada no Caixa), nao dado
-  // financeiro — entra aqui, herdando a visibilidade do modulo pdv.
+  // financeiro — entra aqui. 14/09/2026: ganhou modulo proprio "cupons" (antes
+  // usava mod "pdv"), com a mesma visibilidade que tinha.
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
