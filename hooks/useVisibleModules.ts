@@ -63,6 +63,15 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'karate_dojo.eventos':      'essencial',
   'karate_dojo.certificados': 'essencial',
   'karate_dojo.config':       'essencial',
+  // 15/09/2026 -- semi-vertical Otica sobre o shell Negocio. Sem shell
+  // proprio: os itens entram no NAV do varejo e o opt-in e o toggle
+  // pdv_settings.otica_enabled (filtrado no _layout, como a OS). Laboratorio
+  // e Receitas sao Negocio (a otica vive de crediario e WhatsApp, que ja
+  // sao Negocio); Config e Essencial pra qualquer plano conseguir cadastrar
+  // laboratorio e ligar/desligar. Cada tela com chave PROPRIA (regra 3).
+  'otica.laboratorio': 'negocio',
+  'otica.receitas':    'negocio',
+  'otica.config':      'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -99,6 +108,9 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // granularidade (ex.: instrutor so ve Praticantes), adicionar chaves
   // especificas aqui. O shell do dojo consome a partir da F2.
   'karate_dojo.access': ['karate_dojo.praticantes','karate_dojo.financeiro','karate_dojo.eventos','karate_dojo.certificados','karate_dojo.config'],
+  // 15/09/2026 (Otica): mesma umbrella do food.access. Quando o produto pedir
+  // granularidade (ex.: montador so ve o Laboratorio), separar as chaves.
+  'otica.access': ['otica.laboratorio','otica.receitas','otica.config'],
 };
 
 // Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,

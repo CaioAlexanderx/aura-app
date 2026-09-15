@@ -127,9 +127,9 @@ export default function AcompanharEncomenda() {
         Oi, {dados.cliente}!
       </Text>
       <Text style={{ fontSize: 15.5, color: C.ink2, marginTop: 4, lineHeight: 22 }}>
-        {atual >= etapas.length - 1
-          ? "Sua encomenda está pronta."
-          : "Acompanhe sua encomenda por aqui."}
+        {(dados as any).tipo === "oculos"
+          ? (atual >= etapas.length - 1 ? "Seus óculos estão prontos para retirar." : "Acompanhe seus óculos por aqui.")
+          : (atual >= etapas.length - 1 ? "Sua encomenda está pronta." : "Acompanhe sua encomenda por aqui.")}
       </Text>
 
       {dados.imagem ? (

@@ -63,6 +63,9 @@ export default function OsListScreen() {
       return serviceOrdersApi.list(company.id, {
         status: status === "todas" ? undefined : status,
         q: q || undefined,
+        // Só reparo: os óculos têm tela própria (/otica), com etapa de
+        // laboratório e sinal. Sem isto uma loja mista veria os dois juntos.
+        kind: "reparo",
       });
     },
     enabled: !!company?.id,

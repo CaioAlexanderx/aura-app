@@ -224,6 +224,43 @@ export function PdvSettingsCard() {
 
       <View style={s.divider} />
 
+      {/* 15/09/2026: Otica (migration 334). Semi-vertical sobre o shell
+          Negocio, opt-in como a OS: ligada, aparece a secao "Otica" no menu
+          (Laboratorio e Receitas). Nao depende do toggle de OS acima — a
+          OS de oculos e um tipo proprio (kind='otica') com etapa de
+          laboratorio e sinal na abertura. */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Ótica</Text>
+          <Text style={s.rowDesc}>Receituário do cliente, OS de óculos com etapa de laboratório, sinal na abertura e aviso de "óculos prontos" pelo WhatsApp</Text>
+        </View>
+        <Switch
+          value={display.otica_enabled === true}
+          onValueChange={function(v) { toggle("otica_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.otica_enabled === true ? Colors.violet : Colors.ink3}
+          disabled={saving}
+          testID="pdv-settings-otica"
+        />
+      </View>
+
+      {display.otica_enabled === true && (
+        <>
+          <Pressable onPress={function() { router.push("/otica" as any); }} style={s.caixaLink}>
+            <Icon name="glasses" size={14} color={Colors.violet3} />
+            <Text style={s.caixaLinkText}>Abrir o laboratório</Text>
+            <Icon name="chevron_right" size={14} color={Colors.ink3} />
+          </Pressable>
+          <Pressable onPress={function() { router.push("/otica/config" as any); }} style={s.caixaLink}>
+            <Icon name="settings" size={14} color={Colors.violet3} />
+            <Text style={s.caixaLinkText}>Laboratórios, validade da receita e garantia</Text>
+            <Icon name="chevron_right" size={14} color={Colors.ink3} />
+          </Pressable>
+        </>
+      )}
+
+      <View style={s.divider} />
+
       {/* 17/08/2026: Taxa da maquininha.
           NAO e gated por vertical de proposito — vale pro shell Negocio e
           pro shell Studio. Ligada, toda venda no cartao lanca sozinha a

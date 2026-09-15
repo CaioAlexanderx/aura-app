@@ -19,7 +19,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-
 import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 // ============================================================
@@ -84,6 +84,9 @@ const NAV: NavSection[] = [
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
   { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "pdv" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
+  // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
+  { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
@@ -199,7 +202,7 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
@@ -209,6 +212,8 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // Configuracoes e so entao o item aparece no menu. Alem do toggle, o
       // item passa pelo modulo proprio "os" (14/09/2026 — antes usava "pdv").
       if (item.osToggle && osEnabled !== true) return false;
+      // 15/09/2026 — mesmo desenho para a Otica (pdv_settings.otica_enabled).
+      if (item.oticaToggle && oticaEnabled !== true) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
   })).filter(section => section.i.length > 0);
@@ -446,13 +451,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   // Ordem de Servico no menu so quando o toggle da loja esta ligado.
   const { settings: pdvSettingsNav } = usePdvSettings();
   const osEnabled = pdvSettingsNav.os_enabled === true;
+  const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -704,6 +710,7 @@ function MBar() {
   // Ordem de Servico no menu so quando o toggle da loja esta ligado.
   const { settings: pdvSettingsNav } = usePdvSettings();
   const osEnabled = pdvSettingsNav.os_enabled === true;
+  const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
@@ -717,8 +724,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled]
   );
 
   // filteredNav: aplica layout custom do cliente.

@@ -82,7 +82,15 @@ export type ServiceOrder = {
 
 export type CreateOsBody = {
   customer_id: string;
-  reported_issue: string;
+  // Opcional na OS de ótica: o backend gera "Óculos de grau — <uso>".
+  reported_issue?: string;
+  // 15/09/2026 — OS genérica com kind. 'otica' leva receita congelada,
+  // armação, lente e laboratório em `optical` (ver services/oticaApi.ts).
+  kind?: "reparo" | "otica";
+  optical?: any;
+  lab_id?: string | null;
+  lab_order_ref?: string | null;
+  deposit_sale_id?: string | null;
   items?: ServiceOrderItem[];
   equipment_type?: string;
   equipment_brand?: string;
@@ -102,11 +110,18 @@ export type OsListFilters = {
   q?: string;
   days?: number;
   limit?: number;
+  // 15/09/2026 — a lista de /os mostra só reparo; o Laboratório da ótica só
+  // kind='otica'. Sem o filtro, uma loja mista veria os óculos entre os
+  // notebooks.
+  kind?: "reparo" | "otica";
+  lab_status?: string;
 };
 
 function qs(filters: OsListFilters): string {
   const parts: string[] = [];
   if (filters.status) parts.push("status=" + filters.status);
+  if (filters.kind) parts.push("kind=" + filters.kind);
+  if (filters.lab_status) parts.push("lab_status=" + filters.lab_status);
   if (filters.customer_id) parts.push("customer_id=" + filters.customer_id);
   if (filters.q) parts.push("q=" + encodeURIComponent(filters.q));
   if (filters.days) parts.push("days=" + filters.days);
