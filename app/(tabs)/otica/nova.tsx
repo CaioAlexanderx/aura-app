@@ -107,6 +107,8 @@ export default function OticaNovaScreen() {
   const [rxMode, setRxMode] = useState<"existente" | "nova">("nova");
   const [rxId, setRxId] = useState<string | null>(null);
   const [rxDraft, setRxDraft] = useState<RxDraft>(() => emptyRxDraft(settings.prescription_validity_months));
+  // Receita registrada por ESTA tela numa tentativa que falhou depois.
+  const [createdRx, setCreatedRx] = useState<Prescription | null>(null);
   useEffect(() => {
     // Cliente com receita válida: usa a mais recente por padrão. Sem receita
     // (ou vencida), digita nova.
@@ -219,7 +221,12 @@ export default function OticaNovaScreen() {
       // (1) receita
       let prescriptionId = rxId;
       let rxSource: { saved: Prescription } | { draft: RxDraft } = rxSelected ? { saved: rxSelected } : { draft: rxDraft };
-      if (rxMode === "nova") {
+      if (rxMode === "nova" && createdRx) {
+        // A receita já foi salva numa tentativa anterior que falhou depois
+        // (ex.: venda ou OS recusada). Reusa em vez de registrar duas vezes.
+        prescriptionId = createdRx.id;
+        rxSource = { saved: createdRx };
+      } else if (rxMode === "nova") {
         const created = await oticaApi.createPrescription(company.id, {
           customer_id: customerId,
           ...eyesToColumns(rxDraft.od, rxDraft.oe),
@@ -232,6 +239,9 @@ export default function OticaNovaScreen() {
         });
         prescriptionId = created.prescription.id;
         rxSource = { saved: created.prescription };
+        setCreatedRx(created.prescription);
+        setRxMode("existente");
+        setRxId(created.prescription.id);
         qc.invalidateQueries({ queryKey: ["otica-prescriptions"] });
       }
 

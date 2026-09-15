@@ -185,7 +185,9 @@ export default function OticaOsDetailScreen() {
     else if (ls === "recebida") primary = { label: "Iniciar montagem", run: () => run(() => oticaApi.setLabStatus(company!.id, os.id, "em_montagem"), "Em montagem") };
     else if (ls === "em_montagem") primary = { label: "Marcar como pronta", run: () => run(() => serviceOrdersApi.setStatus(company!.id, os.id, "pronta"), "Óculos prontos! Avise o cliente.") };
   }
-  const canRedo = canWrite && (ls === "recebida" || ls === "em_montagem");
+  // Refação só enquanto a OS está na bancada: depois de "pronta" o backend
+  // responde OS_FECHADA (a volta é "Entregar" ou cancelar) — QA 15/09/2026.
+  const canRedo = canWrite && os.status !== "pronta" && (ls === "recebida" || ls === "em_montagem");
 
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
