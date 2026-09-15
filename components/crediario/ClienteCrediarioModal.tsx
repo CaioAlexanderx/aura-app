@@ -35,6 +35,7 @@ import {
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
 } from "@/services/creditApi";
 import { rescheduleApi } from "@/services/creditReschedule";
+import { installmentLabel } from "@/utils/creditInstallmentLabel";
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
@@ -830,7 +831,7 @@ export function ClienteCrediarioModal({
                     <Text style={m.previewTitle}>Parcelas pagas</Text>
                     {receiptResult.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>Parcela {line.number ?? "?"}</Text>
+                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           <Text style={m.previewVal}>{fmt((line.principal_paid || 0) + (line.charges_paid || 0))}</Text>
                           <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
@@ -959,9 +960,7 @@ export function ClienteCrediarioModal({
                     <Text style={m.previewTitle}>Como o valor vai ser aplicado</Text>
                     {freePreview.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>
-                          Parcela {line.number ?? "?"}
-                        </Text>
+                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           {line.charges_paid > 0 && (
                             <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
