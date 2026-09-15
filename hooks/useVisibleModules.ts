@@ -22,6 +22,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // Antes herdavam visibilidade de pdv (quem via Caixa via Vendas automaticamente).
   // Agora cada um tem sua chave de permissao independente.
   vendas: 'essencial',
+  // 14/09/2026 -- Ordem de Servico ganha modulo proprio. Antes o item /os do
+  // NAV usava mod "pdv" emprestado. Mesmo plano minimo do pdv (essencial) pra
+  // ninguem ganhar nem perder acesso; o opt-in continua sendo o toggle
+  // pdv_settings.os_enabled (filtrado no _layout, nao aqui). O backend
+  // (services/modules.js) ainda NAO conhece a chave: PUT de override com "os"
+  // volta 400, entao ela fica fora do catalogo do ClientsAdmin por ora.
+  os: 'essencial',
   crediario: 'negocio',
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
@@ -63,7 +70,10 @@ var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2
 // REGRA: toda nova tela/modulo deve ter entrada aqui E em MODULE_PLAN_MAP.
 var PERM_TO_MODULES: Record<string, string[]> = {
   painel:        ['painel'],
-  pdv:           ['pdv'],
+  // 14/09/2026 -- "os" entra na permissao pdv: e exatamente quem via a OS
+  // quando ela usava mod "pdv". Permissao granular propria fica pra quando o
+  // produto pedir (e exige chave nova em MembersSection + backend).
+  pdv:           ['pdv', 'os'],
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   vendas:        ['vendas', 'crediario'],
   estoque:       ['estoque'],
@@ -91,6 +101,66 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   'karate_dojo.access': ['karate_dojo.praticantes','karate_dojo.financeiro','karate_dojo.eventos','karate_dojo.certificados','karate_dojo.config'],
 };
 
+// Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,
+// um `false` explicito no modulo de origem ainda o esconde.
+//
+// 14/09/2026 -- "os" saiu de dentro do "pdv". Uma empresa com
+// module_overrides.pdv === false (Caixa escondido pelo admin) tambem perdia a
+// OS do menu; sem este fallback ela passaria a ve-la. So o `false` e herdado:
+// `true` no pdv nao muda nada porque pdv e os tem o mesmo plano minimo.
+// Remover quando o backend aceitar "os" em services/modules.js e as empresas
+// com pdv:false tiverem os:false gravado.
+var OVERRIDE_HIDE_FALLBACK: Record<string, string> = {
+  os: 'pdv',
+};
+
+export function computeVisibleModules(
+  plan: string | undefined | null,
+  overrides: Record<string, boolean> | undefined | null,
+  permData: any
+): Set<string> {
+  var ovs: Record<string, boolean> = overrides || {};
+  var level = PLAN_LEVEL[plan || 'essencial'] ?? 0;
+  var visible = new Set<string>();
+
+  // Step 1: plan-based visibility
+  for (var mod of Object.keys(MODULE_PLAN_MAP)) {
+    var minPlan = MODULE_PLAN_MAP[mod];
+    var minLevel = PLAN_LEVEL[minPlan] ?? 0;
+    var ov = ovs[mod];
+    if (ov === undefined && OVERRIDE_HIDE_FALLBACK[mod] && ovs[OVERRIDE_HIDE_FALLBACK[mod]] === false) continue;
+    if (ov === false) continue;
+    if (ov === true || level >= minLevel) visible.add(mod);
+  }
+
+  // Step 2: member permission filtering (non-owner only)
+  if (permData && !permData.is_owner && permData.permissions) {
+    var allowed = new Set<string>();
+
+    // FIX: painel is NO LONGER hardcoded -- controlled by permissions.painel
+    // If painel permission is not explicitly set, default to true for backward compat
+    var painelPerm = permData.permissions.painel;
+    if (painelPerm === undefined || painelPerm === true) {
+      allowed.add('painel');
+    }
+
+    for (var permKey of Object.keys(PERM_TO_MODULES)) {
+      if (permKey === 'painel') continue; // already handled above
+      if (permData.permissions[permKey]) {
+        var modules = PERM_TO_MODULES[permKey];
+        modules.forEach(function(m) { allowed.add(m); });
+      }
+    }
+
+    // Intersection: modulo precisa passar no plano E na permissao
+    for (var m of visible) {
+      if (!allowed.has(m)) visible.delete(m);
+    }
+  }
+
+  return visible;
+}
+
 export function useVisibleModules(): Set<string> {
   var { company, token, consolidatedView } = useAuthStore();
 
@@ -105,46 +175,7 @@ export function useVisibleModules(): Set<string> {
   });
 
   return useMemo(function() {
-    var plan = company?.plan || 'essencial';
-    var overrides = (company as any)?.module_overrides || {};
-    var level = PLAN_LEVEL[plan] ?? 0;
-    var visible = new Set<string>();
-
-    // Step 1: plan-based visibility
-    for (var mod of Object.keys(MODULE_PLAN_MAP)) {
-      var minPlan = MODULE_PLAN_MAP[mod];
-      var minLevel = PLAN_LEVEL[minPlan] ?? 0;
-      var ov = overrides[mod];
-      if (ov === false) continue;
-      if (ov === true || level >= minLevel) visible.add(mod);
-    }
-
-    // Step 2: member permission filtering (non-owner only)
-    if (permData && !permData.is_owner && permData.permissions) {
-      var allowed = new Set<string>();
-
-      // FIX: painel is NO LONGER hardcoded -- controlled by permissions.painel
-      // If painel permission is not explicitly set, default to true for backward compat
-      var painelPerm = permData.permissions.painel;
-      if (painelPerm === undefined || painelPerm === true) {
-        allowed.add('painel');
-      }
-
-      for (var permKey of Object.keys(PERM_TO_MODULES)) {
-        if (permKey === 'painel') continue; // already handled above
-        if (permData.permissions[permKey]) {
-          var modules = PERM_TO_MODULES[permKey];
-          modules.forEach(function(m) { allowed.add(m); });
-        }
-      }
-
-      // Intersection: modulo precisa passar no plano E na permissao
-      for (var m of visible) {
-        if (!allowed.has(m)) visible.delete(m);
-      }
-    }
-
-    return visible;
+    return computeVisibleModules(company?.plan, (company as any)?.module_overrides, permData);
   }, [company?.plan, (company as any)?.module_overrides, permData]);
 }
 
