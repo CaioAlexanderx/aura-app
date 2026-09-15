@@ -98,7 +98,7 @@ describe("config vazio ganha o padrão do tipo", () => {
     expect(texto.config.colors!.length).toBeGreaterThan(0);
   });
 
-  it("imagem sem config recebe formatos, tamanho e dpi", () => {
+  it("imagem sem config recebe formatos e tamanho, sem dpi", () => {
     const cfg = normalizeCustomizationConfig(configDaSheid());
     const img = cfg.fields.find((f) => f.id === "image")!;
     // MIME, nao extensao: FORMATS_PRESET e ["image/png", ...] e o proprio
@@ -106,7 +106,9 @@ describe("config vazio ganha o padrão do tipo", () => {
     // extensao so por causa de config antigo). O teste e que ficou velho.
     expect(img.config.formats).toContain("image/png");
     expect(img.config.max_mb).toBeGreaterThan(0);
-    expect(img.config.min_dpi).toBeGreaterThan(0);
+    // `min_dpi` saiu do padrao em 04/09/2026 (decisao 4 da rodada 1):
+    // nenhum codigo o lia, entao prometia uma validacao que nao existe.
+    expect(img.config.min_dpi).toBeUndefined();
   });
 
   it("cor e opção sem valor NÃO são inventadas", () => {
