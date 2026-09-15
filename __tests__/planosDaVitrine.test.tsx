@@ -99,6 +99,14 @@ describe("planos na vitrine", () => {
     expect(txt).not.toContain("WhatsApp Business com templates");
   });
 
+  it("a reativação aparece no Negócio, que é onde o gate a libera", async () => {
+    const tree = await montar();
+    const negocio = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
+    expect(negocio).toContain("Reativação automática de clientes inativos");
+    const essencial = textoDe(tree.root.findAllByProps({ testID: "plano-card-essencial" })[0]);
+    expect(essencial).not.toContain("Reativação");
+  });
+
   it("o Essencial diz a verdade: cobrança por WhatsApp é manual (wa.me)", async () => {
     const tree = await montar();
     const txt = textoDe(tree.root.findAllByProps({ testID: "plano-card-essencial" })[0]);

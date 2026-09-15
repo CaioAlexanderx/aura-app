@@ -9,7 +9,7 @@
 // do módulo é construído em cima de balance > 0 — no instante em que o
 // cliente quita, ele some da tela. Esta aba é o outro lado disso.
 //
-// Não confundir com Reativação (plano Expansão): lá o corte é dias desde
+// Não confundir com Reativação (plano Negócio): lá o corte é dias desde
 // a última VENDA, então quem acabou de quitar aparece como "ativo" e é
 // justamente excluído. Públicos quase disjuntos.
 //
