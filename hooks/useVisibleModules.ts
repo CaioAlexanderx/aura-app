@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
 
 var MODULE_PLAN_MAP: Record<string, string> = {
   painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
@@ -91,10 +92,12 @@ var PERM_TO_MODULES: Record<string, string[]> = {
 };
 
 export function useVisibleModules(): Set<string> {
-  var { company, token } = useAuthStore();
+  var { company, token, consolidatedView } = useAuthStore();
 
   var { data: permData } = useQuery({
-    queryKey: ['my-permissions'],
+    // Chave por empresa/modo: trocar de empresa busca de novo em vez de
+    // reaproveitar o cache da anterior (ver utils/permissionsQueryKey.ts).
+    queryKey: permissionsQueryKey(company?.id, consolidatedView),
     queryFn: function() { return request<any>('/auth/my-permissions'); },
     enabled: !!token,
     staleTime: 5 * 60000,
