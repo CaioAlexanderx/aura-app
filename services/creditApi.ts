@@ -327,6 +327,8 @@ export type CreditHistoryPage = { events: CreditHistoryEvent[]; next_cursor: str
 export type PaymentPlanLine = {
   installment_id: string; account_id: string | null; number: number | null;
   charges_paid: number; principal_paid: number; status_after: string | null;
+  /** 15/09/2026: total do cronograma e vencimento (AAAA-MM-DD). Ausentes em backend antigo. */
+  total_installments?: number | null; due_date?: string | null;
 };
 /** Shape canônico: o GET /payments/preview e o POST /payments retornam isto. */
 export type PaymentPlan = {
