@@ -25,7 +25,7 @@
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Switch } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -39,13 +39,17 @@ import {
   waPreviewSkippedSummary, waSkipReasonLabel,
 } from "@/components/whatsapp/waGuards";
 import { PreviaMarketingModal } from "@/components/whatsapp/PreviaMarketingModal";
+import { alvoParaDias, faixaInfo } from "@/components/screens/clientes/diasSemComprar";
 
 /** Teto do backend por disparo. Repetido aqui só para avisar ANTES do clique. */
 const MAX_POR_DISPARO = 50;
 
+// Os intervalos em dias vêm da régua única (diasSemComprar) — a mesma que
+// acende a tag "Inativo" na lista de clientes. Escrever "31 a 60" à mão
+// aqui foi como as duas réguas nasceram da primeira vez.
 const ALVOS: { key: ReactivationTarget; label: string; desc: string }[] = [
-  { key: "at_risk", label: "Em risco", desc: "sem comprar há 31 a 60 dias" },
-  { key: "dormant", label: "Inativo", desc: "sem comprar há 61 a 120 dias" },
+  { key: "at_risk", label: faixaInfo("em_risco").label, desc: faixaInfo("em_risco").desc },
+  { key: "dormant", label: faixaInfo("inativo").label, desc: faixaInfo("inativo").desc },
   { key: "both", label: "Os dois", desc: "em risco + inativo, dos que gastaram mais" },
 ];
 
@@ -58,6 +62,17 @@ export default function ReativacaoScreen() {
   const { company } = useAuthStore();
   const companyId = company?.id || "";
 
+  // `?dias=90` — o corte escolhido na entrada (Clientes/WhatsApp) chega
+  // aqui para a escolha não ser refeita duas vezes. A entrada pergunta
+  // "X dias ou mais"; os alvos daqui são fatias fechadas, então quem
+  // traduz é alvoParaDias (da régua única), e a tela diz de onde veio.
+  const params = useLocalSearchParams<{ dias?: string | string[] }>();
+  const diasParam = useMemo(() => {
+    const bruto = Array.isArray(params?.dias) ? params.dias[0] : params?.dias;
+    const n = parseInt(String(bruto ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [params?.dias]);
+
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState<string | null>(null);
   const [semAcesso, setSemAcesso] = useState(false);
@@ -67,7 +82,7 @@ export default function ReativacaoScreen() {
   const [waStatus, setWaStatus] = useState<WaStatus | null>(null);
   const [waLoading, setWaLoading] = useState(true);
 
-  const [alvo, setAlvo] = useState<ReactivationTarget>("at_risk");
+  const [alvo, setAlvo] = useState<ReactivationTarget>(() => alvoParaDias(diasParam));
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   const [previaEnvio, setPreviaEnvio] = useState(false);
@@ -307,6 +322,12 @@ export default function ReativacaoScreen() {
                 </Pressable>
               ))}
             </View>
+            {diasParam != null && (
+              <Text style={st.origem} testID="reativacao-filtro-origem">
+                Você veio do corte de {diasParam} dias sem comprar — marcamos o alvo mais próximo.
+                Troque acima se quiser outro.
+              </Text>
+            )}
             <Text style={st.hint}>
               {ALVOS.find((a) => a.key === alvo)?.desc}. A lista abaixo é a prioritária: os que mais
               gastaram entre os que sumiram. Sem marcar ninguém, o envio vale para o segmento inteiro
@@ -487,6 +508,7 @@ const st = StyleSheet.create({
   chipTxt: { fontSize: 13, fontWeight: "700", color: Colors.ink2 },
   chipTxtOn: { color: "#fff" },
   hint: { fontSize: 11, color: Colors.ink3, marginTop: 12, lineHeight: 16, maxWidth: 560 },
+  origem: { fontSize: 11, color: Colors.violet3, fontWeight: "600", marginTop: 12, lineHeight: 16, maxWidth: 560 },
 
   loadingBox: { paddingVertical: 26, alignItems: "center", gap: 6 },
   vazio: { fontSize: 12.5, color: Colors.ink3, marginTop: 16, lineHeight: 18 },
