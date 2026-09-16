@@ -37,6 +37,16 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   crediario: 'negocio',
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
+  // 16/09/2026 -- Reativacao por WhatsApp (app/clientes/reativacao.tsx) ganha
+  // chave PROPRIA (regra 3). A tela existia desde a Fase 7 mas era orfa: nao
+  // havia item de menu nenhum apontando pra ela, e o unico jeito de chegar era
+  // digitando a URL. Mesmo plano minimo do whatsapp/canal (negocio), porque
+  // ela DISPARA mensagem de marketing pela mesma conta da Meta. Nunca herda o
+  // mod de /clientes (que e essencial) -- seria vender disparo pra quem nao
+  // tem o canal. O backend (services/modules.js) ainda NAO conhece a chave:
+  // PUT de override com "clientes.reativacao" volta 400, entao ela fica fora
+  // do catalogo do ClientsAdmin por ora (mesmo caso de "os" e "cupons").
+  'clientes.reativacao': 'negocio',
   agentes: 'expansao',
   // 30/08/2026 -- Hub Social (Aurinha): secao "Atendimento" dentro da aba
   // Agentes, com chave PROPRIA (regra da casa) para poder ser vendida como
@@ -92,7 +102,15 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   vendas:        ['vendas', 'crediario'],
   estoque:       ['estoque'],
-  clientes:      ['clientes', 'canal'],
+  // 16/09/2026 -- o grupo "Clientes e WhatsApp" do menu passa a ser a casa das
+  // quatro telas de relacionamento. "whatsapp" ja tinha plano em
+  // MODULE_PLAN_MAP mas NAO tinha permissao aqui: na pratica, membro nao-dono
+  // nunca via o WhatsApp, por mais que a empresa estivesse no Negocio. Entra
+  // junto com "clientes.reativacao" na mesma chave, porque quem fala com o
+  // cliente e quem dispara a reativacao e a mesma pessoa. Granularidade
+  // propria (ex.: atendente que ve o WhatsApp mas nao dispara marketing) fica
+  // pra quando o produto pedir -- exige chave nova em MembersSection + backend.
+  clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal'],
   financeiro:    ['financeiro', 'nfe'],
   relatorios:    ['contabilidade', 'suporte'],
   folha:         ['folha', 'agendamento'],

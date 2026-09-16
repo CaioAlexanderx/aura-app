@@ -85,14 +85,36 @@ const NAV: NavSection[] = [
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
   { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  // ============================================================
+  // 16/09/2026 — "Clientes e WhatsApp" sobe para a quarta posição.
+  //
+  // O grupo era o penúltimo, depois de Ótica e Equipe, e num 1080p só
+  // cabiam ~9 dos 17 itens sem rolar: quem entrava nunca via que existe
+  // WhatsApp, e muito menos a Reativação. Duas das telas mais caras de
+  // construir eram, na prática, invisíveis — uma delas (/clientes/reativacao)
+  // estava órfã: nenhum item do NAV apontava para ela desde a Fase 7.
+  //
+  // A ordem interna é a da jornada: o cliente existe (Clientes), você fala
+  // com ele (WhatsApp), você traz de volta quem sumiu (Reativação), ele se
+  // serve sozinho (Canal Digital).
+  //
+  // Cada item com `mod` PRÓPRIO (regra 3 do CLAUDE.md): "whatsapp" já tinha
+  // plano em MODULE_PLAN_MAP e ganhou permissão em PERM_TO_MODULES;
+  // "clientes.reativacao" é chave nova nos dois mapas. Nenhum deles herda o
+  // "clientes", que é Essencial — disparo de mensagem é Negócio+.
+  // ============================================================
+  { s: "Clientes e WhatsApp", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", mod: "whatsapp" },{ r: "/clientes/reativacao", l: "Reativação", ic: "rotate_ccw", mod: "clientes.reativacao" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
-  { s: "Clientes", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
 ];
+
+// Rotas hasteadas pro topo do menu "Mais" no mobile, nesta ordem. Ver
+// comentario em MBar.filteredMore.
+const MORE_PRIORIDADE = ["/clientes", "/whatsapp", "/clientes/reativacao"];
 
 
 function useWebFonts() {
@@ -736,6 +758,17 @@ function MBar() {
   );
 
   // Items pro menu "Mais" = todos do filteredNav que NAO estao nas tabs fixas.
+  //
+  // 16/09/2026 — as tres primeiras vagas sao reservadas. No desktop o grupo
+  // "Clientes e WhatsApp" subiu pra quarta posicao e isso basta pra ele
+  // aparecer na primeira tela; aqui nao bastaria: o "Mais" e uma grade de 4
+  // colunas achatada a partir do NAV, e a ordem plana deixaria NF-e,
+  // Contabilidade, Seu Analista, Vendas, Cupons, Crediario e OS na frente —
+  // o WhatsApp cairia na terceira fileira, que e justamente o que ninguem
+  // rola no celular. Entao Clientes/WhatsApp/Reativacao sao hasteados pro
+  // topo, nessa ordem, e o resto segue a ordem do NAV. Item ausente (sem
+  // plano, sem permissao, escondido no editor) simplesmente nao entra: o
+  // hasteamento respeita o filteredNav, nao reintroduz nada.
   const filteredMore = useMemo(() => {
     const flat: NavItem[] = [];
     for (const section of filteredNav) {
@@ -743,8 +776,12 @@ function MBar() {
         if (!fixedTabKeys.has(item.r)) flat.push(item);
       }
     }
-    flat.push({ r: "/configuracoes", l: "Configurações", ic: "settings" });
-    return flat;
+    const ordenado = [
+      ...MORE_PRIORIDADE.map(r => flat.find(i => i.r === r)).filter(Boolean) as NavItem[],
+      ...flat.filter(i => !MORE_PRIORIDADE.includes(i.r)),
+    ];
+    ordenado.push({ r: "/configuracoes", l: "Configurações", ic: "settings" });
+    return ordenado;
   }, [filteredNav]);
 
   const filteredTabs = MTABS.filter(t => visibleMods.has(t.mod));
