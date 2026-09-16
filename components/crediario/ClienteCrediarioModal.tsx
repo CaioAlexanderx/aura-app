@@ -49,6 +49,8 @@ import { m } from "./ficha/fichaStyles";
 import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
+import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
+import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 
 function translateStatus(status: string | null | undefined): string {
   if (!status) return "";
@@ -70,11 +72,17 @@ type Props = {
   onClose: () => void;
   onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
   onChanged?: () => void;
+  /** Lojas do grupo que este usuário pode abrir (faixa "também deve na..."). */
+  accessibleCompanyIds?: string[];
+  /** Troca para outra loja do grupo e reabre esta ficha lá. */
+  onOpenInCompany?: (companyId: string, customerId: string) => void;
+  switchingCompany?: boolean;
 };
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged,
+  accessibleCompanyIds, onOpenInCompany, switchingCompany,
 }: Props) {
   const qc = useQueryClient();
 
@@ -533,7 +541,9 @@ export function ClienteCrediarioModal({
       onChanged?.();
     } catch (err: any) {
       console.error("[crediário] confirmFreePayment error:", err);
-      toast.error("Não foi possível registrar o recebimento. Confira os dados e tente de novo.");
+      // 16/09/2026: a mensagem genérica "Confira os dados" não dizia o que
+      // conferir (Davi / Mary Lucy). Cada causa conhecida diz o que fazer.
+      toast.error(mensagemErroRecebimento(err));
     } finally {
       setFreeSubmitting(false);
     }
@@ -614,6 +624,11 @@ export function ClienteCrediarioModal({
   }
 
   const name = detail?.customer?.name || customerName || "Cliente";
+  const outrasLojas = useMemo(
+    () => lojasComSaldo(detail?.group_open, companyId),
+    [detail?.group_open, companyId],
+  );
+  const lojasAcessiveis = useMemo(() => new Set(accessibleCompanyIds || []), [accessibleCompanyIds]);
   const phone = detail?.customer?.phone || null;
   const initial = (name.trim()[0] || "?").toUpperCase();
 
@@ -741,6 +756,18 @@ export function ClienteCrediarioModal({
               </View>
             ) : (
               <>
+                {tab === "parcelas" && (
+                  <GrupoEmAberto
+                    name={name}
+                    lojas={outrasLojas}
+                    storeName={storeName}
+                    acessiveis={lojasAcessiveis}
+                    abrindo={switchingCompany}
+                    onAbrirNaLoja={onOpenInCompany && customerId
+                      ? (cid) => onOpenInCompany(cid, customerId)
+                      : undefined}
+                  />
+                )}
                 {tab === "parcelas" && (
                   <TabParcelas
                     accounts={accounts} openInst={openInst}

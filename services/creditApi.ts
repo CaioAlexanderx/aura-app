@@ -24,6 +24,7 @@
 //   unificação de carnê existente + nova compra num cronograma único.
 // ============================================================
 import { request, BASE_URL } from "@/services/api";
+import type { GroupOpenItem } from "@/utils/creditoOutraLoja";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
 
@@ -74,7 +75,9 @@ export type CreditAccount = {
 };
 
 export type CreditCustomerDetail = {
-  customer: { id: string; name: string; phone: string; cpf_cnpj: string };
+  customer: { id: string; name: string; phone: string; cpf_cnpj: string; company_id?: string };
+  /** Saldo da mesma cliente nas outras lojas do dono (Aura-backend#717). */
+  group_open?: GroupOpenItem[];
   balance: number; total_debited: number; total_paid: number;
   last_activity_at: string | null; transactions: CreditTransaction[];
   open_installments?: CreditInstallment[];

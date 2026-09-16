@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Animated,
   ActivityIndicator, RefreshControl, useWindowDimensions,
   TextInput, Platform,
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { clienteDaRota, rotaFichaNaLoja } from "@/utils/creditoOutraLoja";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -242,6 +243,12 @@ function HeroStat({ dot, label, value, sub, color, onPress, active }: {
 
 export default function CrediarioScreen() {
   const { company, refreshMe, consolidatedView } = useAuthStore();
+  const availableCompanies = useAuthStore((st) => st.availableCompanies);
+  const companiesLoading = useAuthStore((st) => st.companiesLoading);
+  const loadCompanies = useAuthStore((st) => st.loadCompanies);
+  const switchCompany = useAuthStore((st) => st.switchCompany);
+  const switching = useAuthStore((st) => st.switching);
+  const params = useLocalSearchParams<{ cliente?: string }>();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   // Fase 2 do Credito Livre (02/08/2026): esta tela nao tinha abas -- era
@@ -252,6 +259,42 @@ export default function CrediarioScreen() {
   const [showCriar, setShowCriar] = useState(false);
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
+
+  // ── Cliente com dívida em outra loja do grupo (16/09/2026) ────────────
+  // A ficha mostra "também deve na Villa Branca" com um botão que troca de
+  // loja. No web a troca recarrega a página: o redirect pós-troca traz
+  // ?cliente=<id> e a ficha reabre sozinha na loja nova.
+  const accessibleCompanyIds = useMemo(
+    () => (availableCompanies || []).map((c) => c.id),
+    [availableCompanies],
+  );
+  useEffect(() => {
+    if (!availableCompanies?.length && !companiesLoading) loadCompanies().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const cid = clienteDaRota(params.cliente);
+    if (!cid || !company?.id) return;
+    setModalCust({ id: cid, name: "" });
+    try { router.setParams({ cliente: undefined } as any); } catch {}
+  }, [params.cliente, company?.id]);
+
+  async function handleOpenInCompany(targetCompanyId: string, customerId: string) {
+    const web = Platform.OS === "web" && typeof window !== "undefined";
+    if (web) {
+      try { window.sessionStorage.setItem("aura_post_switch_redirect", rotaFichaNaLoja(customerId)); } catch {}
+    }
+    try {
+      // No celular não há reload: a ficha continua aberta e recarrega com a
+      // empresa nova (companyId é chave das queries dela).
+      await switchCompany(targetCompanyId);
+    } catch {
+      if (web) {
+        try { window.sessionStorage.removeItem("aura_post_switch_redirect"); } catch {}
+      }
+      toast.error("Não foi possível abrir a outra loja. Troque pelo seletor de empresa.");
+    }
+  }
 
   // ── Refetch de plano no mount (combate armadilha_plano_stale_jwt) ──────
   useEffect(() => {
@@ -827,6 +870,9 @@ export default function CrediarioScreen() {
           qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
         }}
         onClose={() => setModalCust(null)}
+        accessibleCompanyIds={accessibleCompanyIds}
+        onOpenInCompany={handleOpenInCompany}
+        switchingCompany={switching}
       />
 
       {cobrancaPreview && (
