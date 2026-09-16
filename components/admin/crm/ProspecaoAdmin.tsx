@@ -224,7 +224,7 @@ export function ProspecaoAdmin() {
           pipeline={pipelineSimple}
           meta={list.meta}
           onSelectLead={setSelectedId}
-          onMoveStatus={(id, status) => mutations.moveStatus.mutate({ id, status })}
+          onMoveStatus={handleMoveStatus}
           waTemplate={waTemplate}
           onBatch={handleBatch}
           batchPending={mutations.batch.isPending}
