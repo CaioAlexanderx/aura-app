@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — ficha 360º do cliente (Fase 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 1, ficha 360º do cliente (regra 4).
+
+     Hoje a "ficha" é a linha da lista que expande: uma grade de oito
+     campos, os botões e dois modais (histórico de compras e receber
+     pagamento). A ficha do crediário (ClienteCrediarioModal +
+     components/crediario/ficha/*) já é a coisa mais próxima de uma
+     ficha de verdade — cabeçalho com avatar, faixa de métricas, abas,
+     linha do tempo com legenda — e é a base desta proposta.
+
+     A proposta: uma TELA própria, app/clientes/[id].tsx, com mod
+     próprio ("clientes.ficha", regra 3), aberta por clique na linha.
+     Tudo o que se sabe do cliente num lugar só, e toda ação escrita.
+
+     Tokens reais: constants/colors.ts (Dark) e constants/fonts.ts
+     (Instrument Serif · DM Sans · DM Mono). Fundo #0B0716 como nos
+     mockups da Fase 0.
+     ============================================================ */
+  :root {
+    --bg:  #0B0716;
+    --bg2: #090c1a;
+    --bg3: #0e1228;
+    --bg4: #141830;
+    --border:  rgba(255,255,255,0.07);
+    --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff;
+    --ink2: rgba(220,215,255,0.75);
+    --ink3: rgba(170,160,235,0.65);
+    --violet:  #7c3aed;
+    --violet2: #8b5cf6;
+    --violet3: #a78bfa;
+    --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;  --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24;  --amberD: rgba(251,191,36,0.10);
+    --red:   #f87171;  --redD:   rgba(248,113,113,0.10);
+    --orange: #f97316; --orangeD: rgba(251,146,60,0.14);
+    --teal: #2dd4bf;   --tealD: rgba(45,212,191,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 24px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink); font-family: var(--sans); min-height: 100vh;
+  }
+  button { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+
+  /* ── Moldura do documento (igual Fase 0) ───────────────── */
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05;
+           letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 820px; margin: 0 0 22px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px;
+          font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 22px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 38px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+           text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12px; color: var(--ink3); line-height: 1.65; max-width: 420px; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* Painel de controle do mockup — NÃO é interface do app */
+  .ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding: 12px 14px;
+         border: 1px solid var(--border2); border-radius: 12px; background: rgba(9,12,26,0.7);
+         margin: 0 0 16px; position: sticky; top: 8px; z-index: 50; backdrop-filter: blur(8px); }
+  .ctl-g { display: flex; align-items: center; gap: 6px; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+                  text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--border2);
+                background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: rgba(124,58,237,0.25); color: #fff; border-style: solid; }
+
+  /* ── Moldura desktop 1440 × 911 ────────────────────────── */
+  .scaler { width: 100%; overflow-x: auto; border-radius: 14px; }
+  .desk { width: 1440px; height: 911px; border: 1px solid var(--border); border-radius: 14px;
+          background: var(--bg); display: flex; overflow: hidden; position: relative;
+          box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .side { width: 232px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
+          padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .side-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 16px; }
+  .side-s { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+            color: var(--ink3); padding: 14px 10px 6px; }
+  .side-i { font-size: 13px; color: var(--ink2); padding: 8px 10px; border-radius: 9px; }
+  .side-i.on { background: var(--violetD); color: #fff; font-weight: 600; box-shadow: inset 2px 0 0 var(--violet); }
+  .main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 36px 40px; position: relative; }
+
+  /* Logo do lojista (fictícia) */
+  .logo { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+          background: #f6eee4; color: #3b1d2a; border-radius: 12px; font-family: var(--serif);
+          font-size: 17px; line-height: 1; letter-spacing: 0.01em; height: 44px; padding: 0 12px; }
+  .logo i { font-style: italic; color: #b0406a; font-size: 1.25em; margin-left: 3px; }
+
+  /* Eyebrow em mono — "LOJA DA LU · SEÇÃO" (padrão do Caixa da Fase 0) */
+  .eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px;
+             letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .badge-n { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg3);
+             font-size: 10px; letter-spacing: 0.06em; }
+
+  /* Voltar */
+  .back { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+          color: var(--violet3); background: none; border: 0; padding: 4px 0; cursor: pointer; }
+  .back small { color: var(--ink3); font-weight: 500; }
+
+  /* ── Cabeçalho da ficha ─────────────────────────────────── */
+  .fhead { display: flex; gap: 20px; align-items: flex-start; margin: 14px 0 18px; }
+  .av { width: 72px; height: 72px; border-radius: 20px; background: var(--violetD); border: 1px solid var(--border2);
+        display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700;
+        color: var(--violet3); flex-shrink: 0; }
+  .fname { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 0.95;
+           letter-spacing: -0.025em; margin: 6px 0 8px; }
+  .fname span { color: var(--violet); }
+  .fmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; color: var(--ink2); }
+  .fmeta .sep { color: var(--ink3); }
+  .fmeta .mono { font-family: var(--mono); font-size: 12.5px; }
+  .fmeta .falta { color: var(--amber); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .seg { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+         font-size: 11.5px; font-weight: 700; border: 1px solid transparent; }
+  .seg i { font-style: normal; font-weight: 500; opacity: 0.85; }
+  .seg.risco   { background: var(--amberD); color: var(--amber); border-color: rgba(251,191,36,0.3); }
+  .seg.vip     { background: var(--violetD); color: var(--violet4); border-color: var(--border2); }
+  .seg.novo    { background: rgba(96,165,250,0.12); color: #93c5fd; border-color: rgba(96,165,250,0.3); }
+  .seg.devendo { background: var(--orangeD); color: var(--orange); border-color: rgba(251,146,60,0.4); }
+  .seg.sumido  { background: var(--redD); color: #fca5a5; border-color: rgba(248,113,113,0.3); }
+  .seg.perdido { background: var(--redD); color: var(--red); border-color: rgba(248,113,113,0.45); }
+  .seg.pronto  { background: var(--greenD); color: var(--green); border-color: rgba(52,211,153,0.35); }
+  .seg.recorrente { background: var(--tealD); color: var(--teal); border-color: rgba(45,212,191,0.3); }
+  .tag { padding: 3px 9px; border-radius: 7px; background: var(--bg3); border: 1px solid var(--border);
+         font-size: 11px; color: var(--ink2); }
+  .tag.add { border-style: dashed; color: var(--violet3); background: transparent; cursor: pointer; }
+  .optin { position: relative; display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 9px 12px; border-radius: 11px;
+           background: var(--bg3); border: 1px solid var(--border); cursor: pointer; max-width: 460px; }
+  .optin input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .optin .box { width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--ink3); flex-shrink: 0; margin-top: 1px;
+                display: flex; align-items: center; justify-content: center; }
+  .optin.on .box { background: var(--green); border-color: var(--green); }
+  .optin.on .box::after { content: '✓'; color: #062b1e; font-size: 12px; font-weight: 800; line-height: 1; }
+  .optin b { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .optin small { display: block; font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .optin.on small { color: var(--green); }
+  .optin.dis { opacity: 0.55; cursor: default; }
+  .tagmenu { margin-top: 8px; padding: 10px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--border2); max-width: 460px; }
+  .tagmenu input { width: 100%; height: 34px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border); color: var(--ink); padding: 0 10px; font-size: 12.5px; font-family: inherit; }
+  .tagmenu .tm-l { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); margin-top: 8px; }
+  .tagmenu .tag { cursor: pointer; }
+  .consent { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 8px;
+             font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: var(--bg3); }
+  .consent .cd { width: 7px; height: 7px; border-radius: 50%; }
+  .consent.sim .cd { background: var(--green); } .consent.sim { color: var(--green); }
+  .consent.nao .cd { background: var(--red); }   .consent.nao { color: #fca5a5; }
+  .consent.sem .cd { background: var(--ink3); }  .consent.sem { color: var(--ink3); }
+
+  /* Ações escritas */
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+  .act { display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center;
+         min-height: 40px; padding: 7px 14px; border-radius: 10px; background: rgba(255,255,255,0.035);
+         border: 1px solid var(--border); color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+  .act:hover { border-color: var(--border2); }
+  .act.pri { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .act.pay { background: var(--orangeD); border-color: rgba(251,146,60,0.5); color: var(--orange); }
+  .act[disabled] { opacity: 0.55; cursor: default; }
+  .act[disabled]:hover { border-color: var(--border); }
+  .act small { display: block; font-size: 10.5px; font-weight: 500; color: var(--ink3); margin-top: 1px; }
+  .act.pri[disabled] { background: rgba(124,58,237,0.35); }
+  @media (hover: none) { .act:hover { border-color: var(--border); } }
+
+  /* Faixa de métricas */
+  .metr { display: grid; grid-template-columns: repeat(var(--n, 6), 1fr); background: var(--bg3); border: 1px solid var(--border);
+          border-radius: 16px; margin-bottom: 18px; }
+  .m { padding: 14px 16px; min-width: 0; }
+  .m + .m { border-left: 1px solid var(--border); }
+  .m .k { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+  .m .v { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 5px; white-space: nowrap; }
+  .m .v.green { color: var(--green); } .m .v.orange { color: var(--orange); } .m .v.muted { color: var(--ink3); font-size: 16px; }
+  .m .s { font-size: 11px; color: var(--ink3); margin-top: 3px; line-height: 1.35; }
+  .m .lock { font-size: 11px; color: var(--violet3); margin-top: 7px; }
+
+  /* Duas colunas: linha do tempo | perfil */
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+  .card + .card { margin-top: 14px; }
+  .ct { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .ct h3 { margin: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+  .link { background: none; border: 0; color: var(--violet3); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
+  .pref { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .pref:first-of-type { border-top: 0; }
+  .pref .pk { color: var(--ink3); }
+  .pref .pv { color: var(--ink); font-weight: 600; }
+  .pref .pv.vazio { color: var(--ink3); font-weight: 500; font-style: italic; }
+  .cats { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .cats-t { font-size: 12.5px; color: var(--ink3); margin-bottom: 8px; }
+  .cats-t small { font-size: 11px; }
+  .cat { margin-bottom: 9px; }
+  .cat-l { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; }
+  .cat-l b { color: var(--violet3); }
+  .bar { height: 6px; border-radius: 99px; background: var(--bg4); margin-top: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--violet), var(--violet3)); }
+  .cat-s { font-size: 10.5px; color: var(--ink3); margin-top: 3px; }
+  .data { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .data:first-of-type { border-top: 0; }
+  .data .dd { font-family: var(--mono); font-size: 12px; color: var(--violet3); width: 46px; }
+  .data .dt { flex: 1; }
+  .data .dq { font-size: 11px; color: var(--amber); }
+
+  /* Linha do tempo */
+  .pills { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
+  .pills, .p-scroll, .main { scrollbar-width: none; }
+  .pills::-webkit-scrollbar, .p-scroll::-webkit-scrollbar, .main::-webkit-scrollbar { width: 0; height: 0; }
+  .pill { flex-shrink: 0; padding: 7px 13px; border-radius: 10px; background: var(--bg4); border: 1px solid var(--border);
+          font-size: 12px; color: var(--ink3); font-weight: 500; cursor: pointer; }
+  .pill b { font-weight: 600; margin-left: 4px; opacity: 0.7; }
+  .pill.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .mes { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3);
+         padding: 12px 0 6px; }
+  .ev { display: flex; gap: 12px; padding: 10px 8px; border-radius: 10px; align-items: flex-start; }
+  .ev.click { cursor: pointer; }
+  .ev.click:hover { background: var(--bg4); }
+  @media (hover: none) { .ev.click:hover { background: transparent; } }
+  .ei { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .ei svg { width: 14px; height: 14px; }
+  .ei.compras   { background: var(--violetD); color: var(--violet3); }
+  .ei.crediario { background: var(--orangeD); color: var(--orange); }
+  .ei.mensagens { background: var(--greenD); color: var(--green); }
+  .ei.cupons    { background: var(--amberD); color: var(--amber); }
+  .ei.notas     { background: var(--bg4); color: var(--ink2); }
+  .eb { flex: 1; min-width: 0; }
+  .et { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+  .es { font-size: 11.5px; color: var(--ink3); margin-top: 2px; line-height: 1.4; }
+  .es .lj { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--violetD);
+            border: 1px solid rgba(124,58,237,0.28); color: var(--violet3); font-size: 10px; font-weight: 700; margin-right: 6px; }
+  .er { text-align: right; flex-shrink: 0; }
+  .ev-v { font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .ev-v.green { color: var(--green); } .ev-v.orange { color: var(--orange); } .ev-v.muted { color: var(--ink3); }
+  .ed { font-family: var(--mono); font-size: 10.5px; color: var(--ink3); margin-top: 2px; }
+  .ex { font-size: 10.5px; color: var(--violet3); margin-top: 2px; }
+  .itens { margin: 2px 8px 8px 46px; background: var(--bg4); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+  .it { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 0; }
+  .it + .it { border-top: 1px solid var(--border); }
+  .it .var { color: var(--ink3); }
+  .it.tot { font-weight: 700; }
+  .it-acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .mini { padding: 6px 10px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border);
+          font-size: 11px; font-weight: 600; color: var(--violet3); cursor: pointer; }
+  .aviso-plano { display: flex; align-items: center; gap: 10px; margin: 6px 0; padding: 10px 12px; border-radius: 10px;
+                 border: 1px dashed var(--border2); font-size: 12px; color: var(--ink3); line-height: 1.45; }
+  .aviso-plano b { color: var(--ink2); font-weight: 600; }
+  .aviso-plano .link { white-space: nowrap; margin-left: auto; }
+  .vazio { text-align: center; padding: 34px 16px; }
+  .vazio h4 { margin: 0 0 6px; font-size: 15px; }
+  .vazio p { margin: 0 auto 14px; font-size: 12.5px; color: var(--ink3); max-width: 340px; line-height: 1.5; }
+  .btn { display: inline-block; padding: 10px 16px; border-radius: 11px; background: var(--violet); color: #fff;
+         font-size: 12.5px; font-weight: 700; border: 0; cursor: pointer; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border2); color: var(--violet3); }
+  .mais { display: block; width: 100%; margin-top: 8px; padding: 9px; border-radius: 10px; background: transparent;
+          border: 1px solid var(--border); color: var(--ink2); font-size: 12px; cursor: pointer; }
+
+  /* Carregando */
+  .sk { background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+        background-size: 200% 100%; animation: sk 1.2s linear infinite; border-radius: 8px; }
+  @keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .ev-sk { display: flex; gap: 12px; padding: 12px 8px; }
+
+  /* Lista (só para mostrar o caminho lista → ficha) */
+  .hero-t { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: 0.95; letter-spacing: -0.025em; margin: 12px 0 8px; }
+  .hero-t span { color: var(--violet); }
+  .hero-s { font-size: 14px; color: var(--ink3); margin-bottom: 16px; }
+  .lrow { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border);
+          border-radius: 10px; cursor: pointer; }
+  .lrow:hover { background: var(--bg4); }
+  .lrow .av { width: 38px; height: 38px; border-radius: 19px; font-size: 13px; }
+  .lrow .n { font-size: 13.5px; font-weight: 600; }
+  .lrow .u { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+  .lrow .g { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--green); width: 110px; text-align: right; }
+  .lrow .seg { width: 104px; justify-content: center; }
+  .dica { position: absolute; right: 36px; top: 26px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--green);
+          color: var(--green); font-size: 12px; background: rgba(9,12,26,0.9); }
+
+  /* ── Celular 390 × 911 ─────────────────────────────────── */
+  .phone { width: 390px; height: 911px; border-radius: 26px; border: 1px solid var(--border);
+           background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.95)); overflow: hidden;
+           display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0,0,0,0.45); position: relative; }
+  .p-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+  .p-top .sino { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); }
+  .p-scroll { flex: 1; overflow-y: auto; padding: 0 14px 20px; min-height: 0; }
+  .p-bar { height: 59px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-around;
+           background: var(--bg2); border-top: 1px solid var(--border); font-size: 10px; color: var(--ink3); }
+  .p-bar span.on { color: var(--violet3); font-weight: 700; }
+  .phone .fhead { gap: 12px; margin: 6px 0 12px; }
+  .phone .av { width: 52px; height: 52px; border-radius: 15px; font-size: 18px; }
+  .phone .fname { font-size: 34px; margin: 2px 0 6px; }
+  .phone .fmeta { font-size: 12px; gap: 4px 8px; }
+  .phone .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .phone .act { width: 100%; min-height: 44px; font-size: 12.5px; }
+  .phone .act.pri { grid-column: 1 / -1; align-items: center; }
+  .phone .acts .act:nth-child(even):last-child { grid-column: 1 / -1; }
+  .phone .optin { margin-top: 10px; }
+  .p-edit { background: none; border: 1px solid var(--border); border-radius: 9px; color: var(--ink2);
+            font-size: 12px; font-weight: 600; padding: 7px 12px; cursor: pointer; }
+  .phone .metr { grid-template-columns: 1fr 1fr; }
+  .phone .m:nth-child(odd):last-child { grid-column: 1 / -1; border-right: 0 !important; }
+  .phone .m { padding: 11px 12px; border-left: 0 !important; border-top: 1px solid var(--border); }
+  .phone .m:nth-child(-n+2) { border-top: 0; }
+  .phone .m:nth-child(odd) { border-right: 1px solid var(--border); }
+  .phone .m .v { font-size: 18px; }
+  .phone .cols { display: block; }
+  .phone .card { padding: 14px 12px; }
+  .phone .ev { padding: 10px 2px; }
+  .phone .itens { margin-left: 38px; margin-right: 0; }
+  .phone .pref { grid-template-columns: 96px 1fr; }
+  .phone .perfil-m { margin-bottom: 14px; }
+
+  table.t { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 8px; }
+  table.t th, table.t td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t th { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); }
+  table.t td { color: var(--ink2); }
+  .decisoes { border: 1px solid var(--border2); border-radius: 16px; padding: 18px 22px; background: rgba(124,58,237,0.06); max-width: 1100px; }
+  .decisoes h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0 0 10px; }
+  .decisoes h2 span { color: var(--violet); }
+  .decisoes ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--ink2); }
+  .decisoes li { margin-bottom: 10px; }
+  .decisoes li b { color: var(--ink); }
+  .decisoes li i { color: var(--violet3); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Ficha do cliente<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 1 — tudo o que a loja sabe de uma cliente numa tela só: quem é, se aceita ofertas, quanto
+    gasta e com que frequência, o que prefere, e tudo o que já aconteceu entre ela e a loja.
+    Tela própria em <code>app/clientes/[id].tsx</code>, aberta por clique na linha da lista.
+  </p>
+  <div class="nota">
+    <b>O que não muda:</b> título em serifa com ponto final, eyebrow em mono, faixa de indicadores, abas
+    em pílula, detalhe por clique, tema escuro e tokens de <code>constants/colors.ts</code>. Os modais que
+    já funcionam (<code>ReceberPagamentoModal</code>, a ficha do crediário, <code>DevolucaoModal</code>) continuam
+    sendo abertos daqui, sem reescrita.<br>
+    <b>O que muda:</b> a linha da lista para de expandir e passa a abrir esta tela. A grade de oito campos e o
+    <code>HistoricoComprasModal</code> são substituídos pela faixa de métricas e pela linha do tempo. A estrutura vem da
+    ficha do crediário (cabeçalho com avatar, faixa de métricas, legenda por cor, eventos com valor à direita),
+    agora cobrindo compras, mensagens, cupons e notas, e não só o crediário.<br>
+    <b>Regra 3:</b> mod próprio <code>clientes.ficha</code>, com entrada em <code>MODULE_PLAN_MAP</code> (todos os planos)
+    e <code>PERM_TO_MODULES</code> (mesma permissão de ver clientes). <b>Regra 1:</b> a tela pede <code>/auth/me</code> no mount,
+    porque o que aparece depende do plano.<br>
+    <b>Essencial (decidido em 16/09):</b> o que o plano não tem <i>some</i> — nada de botão desabilitado nem aviso de plano no lugar.
+    Troque o plano no painel abaixo para ver.
+  </div>
+
+  <div class="ctl" id="ctl">
+    <div class="ctl-g"><span>Cliente</span>
+      <button data-k="cli" data-v="mariana" class="on">Mariana · completa</button>
+      <button data-k="cli" data-v="renata">Renata · VIP, respondeu SAIR</button>
+      <button data-k="cli" data-v="beatriz">Beatriz · sem telefone, sem compra</button>
+    </div>
+    <div class="ctl-g"><span>Plano</span>
+      <button data-k="plano" data-v="negocio" class="on">Negócio</button>
+      <button data-k="plano" data-v="essencial">Essencial</button>
+    </div>
+    <div class="ctl-g"><span>Visão</span>
+      <button data-k="visao" data-v="loja" class="on">Uma loja</button>
+      <button data-k="visao" data-v="cons">Consolidado · 2 lojas</button>
+    </div>
+    <div class="ctl-g"><span>Desktop</span>
+      <button data-fit="1" class="on">Ajustar à largura</button>
+      <button data-fit="0">100%</button>
+    </div>
+    <div class="ctl-g"><span>Estado</span>
+      <button data-k="estado" data-v="ok" class="on">Carregado</button>
+      <button data-k="estado" data-v="load">Carregando</button>
+    </div>
+  </div>
+
+  <div class="secao" style="margin-top:6px">A · Desktop 1440 × 911 — clique em “‹ Clientes” para ver a lista e numa linha para voltar à ficha</div>
+  <div class="scaler"><div class="desk" id="desk">
+    <aside class="side">
+      <div class="side-brand"><span class="logo">Loja da <i>Lu</i></span></div>
+      <div class="side-s">Vendas</div>
+      <div class="side-i">Caixa</div><div class="side-i">Vendas</div><div class="side-i">Cupons</div>
+      <div class="side-i">Crediário</div><div class="side-i">Estoque</div>
+      <div class="side-s">Clientes e WhatsApp</div>
+      <div class="side-i on">Clientes</div><div class="side-i">WhatsApp</div>
+      <div class="side-i">Reativação</div><div class="side-i">Canal Digital</div>
+      <div style="flex:1"></div>
+      <div class="side-i">Configurações</div>
+    </aside>
+    <main class="main" id="d-main"></main>
+  </div></div>
+
+  <div class="secao">B · Celular 390 × 911 — a mesma ficha empilhada (role dentro da moldura)</div>
+  <div class="telas">
+    <div class="phone" id="phone">
+      <div class="p-top" id="p-top"></div>
+      <div class="p-scroll" id="p-main"></div>
+      <div class="p-bar"><span>Painel</span><span>Caixa</span><span class="on">Clientes</span><span>WhatsApp</span><span>Mais</span></div>
+    </div>
+    <div class="legenda">
+      <b>Ordem no celular.</b> Identidade → ações → métricas → linha do tempo → preferências e datas.
+      No celular, preferências vêm depois da linha do tempo: quem abre a ficha no balcão quer ver primeiro o que
+      aconteceu. No desktop elas ficam na coluna da direita, sempre à vista.<br><br>
+      <b>Ações em grade de dois.</b> Botões escritos, “Enviar WhatsApp” na largura toda; “Editar” sobe para a barra de cima. Nada de barra de ícones.
+      O motivo de um botão desabilitado fica escrito embaixo do rótulo (“sem telefone”), nunca num tooltip —
+      toque não tem hover (regra 7).<br><br>
+      <b>Voltar.</b> “‹ Clientes” na barra de cima volta para a lista <i>com o mesmo segmento, busca e rolagem</i>
+      (o filtro viaja em query param, como o <code>?dias=</code> da Fase 0). O gesto de voltar do navegador faz o mesmo.<br><br>
+      <b>Compra expande no lugar.</b> Um toque abre os itens com a variante (tamanho · cor) e as ações da venda
+      (recibo, troca). Não abre modal por cima de tela.
+    </div>
+  </div>
+
+  <div class="secao">C · De onde vem cada pedaço</div>
+  <table class="t" style="max-width:1100px">
+    <tr><th>Bloco</th><th>Fonte hoje</th><th>Observação</th></tr>
+    <tr><td>Nome, telefone, e-mail, aniversário, notas</td><td><code>useCustomers</code> (linha da lista)</td><td>Já existe. Tags e preferências são campos novos no cliente.</td></tr>
+    <tr><td>Segmento (um só)</td><td><code>diasSemComprar.ts</code> + saldo do crediário</td><td>Em risco 31–60, Sumido 61–120, Perdido 121+ (a régua da Fase 0). Sumido é o antigo “Inativo”, com o nome que o lojista usa.</td></tr>
+    <tr><td>Consentimento de marketing (Negócio+)</td><td>—</td><td>Novo registro: aceite ou recusa, com data, canal (balcão, manual, loja online) e quem marcou. “SAIR” no WhatsApp grava a recusa sozinho e desmarca a caixa.</td></tr>
+    <tr><td>Categorias que mais compra</td><td>itens das vendas × categoria do produto no Estoque</td><td>Top 3 pela fatia do gasto da cliente, com as mesmas categorias do Caixa e da vitrine. Sem compra, a tela diz isso.</td></tr>
+    <tr><td>Métricas e compras</td><td><code>HistoricoComprasModal</code> (vendas por cliente)</td><td>Intervalo médio precisa de duas compras ou mais; com uma só, a tela escreve isso em vez de mostrar “—”.</td></tr>
+    <tr><td>Crediário</td><td><code>creditApi</code> (a mesma da ficha do crediário)</td><td>Pagamentos, aberturas e ajustes entram na linha do tempo; “Receber pagamento” abre o modal que já existe.</td></tr>
+    <tr><td>Mensagens e cupons</td><td>Reativação, régua de cobrança, pedidos de avaliação</td><td>Eventos já gravados pelo backend; falta a rota por cliente.</td></tr>
+    <tr><td>Loja de origem</td><td><code>company_name</code> (Multi-CNPJ Onda 2.3)</td><td>O cliente é do dono. Com uma loja selecionada, a ficha ainda mostra o que aconteceu nas outras, com o selo da loja.</td></tr>
+  </table>
+
+  <div class="secao">D · Essencial × Negócio — o que some</div>
+  <table class="t" style="max-width:1100px">
+    <tr><th>Pedaço da ficha</th><th>Essencial</th><th>Negócio e acima</th></tr>
+    <tr><td>Identidade, tags, segmento, preferências, datas, notas, “Editar”</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>“Enviar WhatsApp” e “Pedir avaliação” (abrem a conversa no WhatsApp do celular)</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Métricas de compra (total, compras, ticket, última, intervalo)</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>“Receber pagamento” e a métrica “Saldo do crediário”</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>Caixa “Aceita receber ofertas pelo WhatsApp”</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>Pílulas e eventos de Crediário e Mensagens na linha do tempo, e cupons enviados pelo WhatsApp</td><td><b>somem</b></td><td>aparecem</td></tr>
+  </table>
+
+  <div class="secao">E · Decidido em 16/09</div>
+  <div class="decisoes">
+    <h2>Decidido em 16/09<span>.</span></h2>
+    <ol>
+      <li><b>Segmento único por precedência:</b> Devendo › Pronto pra comprar › Perdido › Sumido › Em risco › VIP › Recorrente › Novo.
+        Vale para a ficha e para a tag da linha na lista.</li>
+      <li><b>Essencial: o que o plano não tem some.</b> Na ficha somem “Receber pagamento”, o saldo do crediário, os eventos e as
+        pílulas de crediário e de mensagens, e a caixa de consentimento de marketing (WhatsApp é Negócio). Sem aviso de plano no lugar.</li>
+      <li><b>Com uma loja selecionada, a ficha mostra as compras das outras lojas do dono</b>, com o selo da loja. Hoje o app não
+        tem essa amostragem; entra como parte desta tela.</li>
+      <li><b>Tags livres</b>, com sugestão das já usadas na loja (clique em “+ tag” para ver).</li>
+      <li><b>Consentimento é uma caixa de marcar</b>, sem botão, aba, tela ou modal: “Aceita receber ofertas pelo WhatsApp”, com a origem
+        em letra pequena embaixo (“desde 12/09 · no balcão · por Simone”, “respondeu SAIR em 02/07”). Marcar grava o aceite (canal
+        manual), desmarcar grava a recusa. Qualquer vendedora pode marcar, e o nome de quem marcou fica gravado e aparece na linha do tempo.
+        A mesma caixa, desmarcada por padrão e com o texto padrão embaixo, está no cadastro rápido do Caixa e no cadastro/edição de cliente.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Ícones pequenos (14px) — apoio ao texto, nunca identidade ──
+  var IC = {
+    compras: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>',
+    crediario: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>',
+    mensagens: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>',
+    cupons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12l-8 8-9-9V3h8l9 9z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>',
+    notas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>'
+  };
+  var FILTROS = [
+    ['tudo', 'Tudo'], ['compras', 'Compras'], ['crediario', 'Crediário'],
+    ['mensagens', 'Mensagens'], ['cupons', 'Cupons'], ['notas', 'Notas']
+  ];
+  var PAGO = { crediario: 1, mensagens: 1 }; // categorias do plano Negócio
+
+  var C = {
+    mariana: {
+      nome: 'Mariana Couto', ini: 'MC', tel: '(11) 98765-4321', origem: 'Centro', desde: 'mar/2024',
+      seg: ['risco', 'Em risco', '44 dias sem comprar'],
+      tags: ['Gosta de novidades', 'Indicou amigas'],
+      consent: ['sim', 'desde 12/09 · no balcão · por Simone'],
+      saldo: 186,
+      metr: [
+        ['Total gasto', 'R$ 3.482,40', 'green', 'desde mar/2024'],
+        ['Compras', '11', '', '2 na loja Shopping'],
+        ['Ticket médio', 'R$ 316,58', '', 'acima da média da loja (R$ 214)'],
+        ['Última compra', 'há 44 dias', '', '03/08/2026 · Centro'],
+        ['Intervalo médio', '~60 dias', '', 'compra a cada ~60 dias · deve voltar até 02/10'],
+        ['Saldo do crediário', 'R$ 186,00', 'orange', 'próxima parcela 20/09 · em dia', 'cred']
+      ],
+      prefs: [['Tamanho', 'M (blusas e vestidos) · 40 (calças)'], ['Calçado', '36'],
+              ['Marcas', 'Linha própria Lu, Jeans Aurora'], ['Estilo', 'Romântico, estampa floral, midi'],
+              ['Evita', 'Amarelo, tecido sintético']],
+      cats: [['Vestidos', 41, 'R$ 1.427,78'], ['Blusas', 29, 'R$ 1.009,90'], ['Acessórios', 12, 'R$ 417,89']],
+      datas: [['14/10', 'Aniversário', 'em 28 dias'], ['03/03', 'Primeira compra (2024)', ''], ['maio', 'Compra presente de Dia das Mães', '']],
+      eventos: [
+        { c: 'mensagens', mes: 'Setembro de 2026', d: '12/09', l: 'Centro', t: 'Aceitou receber ofertas', s: 'No balcão · registrado por Simone' },
+        { c: 'mensagens', mes: 'Setembro de 2026', d: '10/09', l: 'Centro', t: 'Lembrete de parcela enviado', s: 'Parcela 2/3 vence em 20/09 · entregue e lida' },
+        { c: 'cupons', neg: 1, mes: 'Agosto de 2026', d: '28/08', l: 'Centro', t: 'Cupom VOLTA15 enviado pelo WhatsApp', s: '15% até 30/09 · ainda não usado', v: '15%', vc: 'muted' },
+        { c: 'crediario', mes: 'Agosto de 2026', d: '20/08', l: 'Centro', t: 'Pagou a parcela 1/3', s: 'Pix · recibo R-0412', v: '+ R$ 93,00', vc: 'green' },
+        { c: 'notas', mes: 'Agosto de 2026', d: '15/08', l: 'Centro', t: '“Quer a calça wide leg preta no 40. Avisar quando chegar.”', s: 'Nota de Simone' },
+        { c: 'compras', mes: 'Agosto de 2026', d: '03/08', l: 'Centro', t: 'Compra #1284 · 3 itens', s: 'Crediário em 3x · vendedora Simone', v: 'R$ 279,00',
+          itens: [['Vestido midi floral', 'M · Azul', 'R$ 189,90'], ['Blusa canelada', 'M · Off-white', 'R$ 89,90'], ['Brinco argola', 'Único · Dourado', 'R$ 39,90'], ['Desconto da vitrine', '', '− R$ 40,70']] },
+        { c: 'crediario', mes: 'Agosto de 2026', d: '03/08', l: 'Centro', t: 'Crediário aberto na compra #1284', s: '3 parcelas de R$ 93,00 · 20/08, 20/09, 20/10', v: 'R$ 279,00', vc: 'orange' },
+        { c: 'mensagens', mes: 'Junho de 2026', d: '20/06', l: 'Shopping', t: 'Pedido de avaliação enviado', s: 'Respondeu com 5 estrelas' },
+        { c: 'compras', mes: 'Junho de 2026', d: '18/06', l: 'Shopping', t: 'Compra #1102 · 2 itens', s: 'Pix · vendedora Camila', v: 'R$ 412,80',
+          itens: [['Jaqueta jeans', 'M · Azul médio', 'R$ 299,90'], ['Camiseta básica', 'M · Branca', 'R$ 112,90']] },
+        { c: 'cupons', mes: 'Maio de 2026', d: '04/05', l: 'Centro', t: 'Usou o cupom MAES10', s: 'Na compra #0987', v: '− R$ 28,40', vc: 'muted' },
+        { c: 'compras', mes: 'Maio de 2026', d: '04/05', l: 'Centro', t: 'Compra #0987 · 2 itens', s: 'Cartão de crédito em 2x · vendedora Simone', v: 'R$ 255,60',
+          itens: [['Blusa de linho', 'M · Verde-oliva', 'R$ 149,90'], ['Cinto de couro fino', 'Único · Caramelo', 'R$ 134,10'], ['Cupom MAES10', '', '− R$ 28,40']] }
+      ],
+      maisTxt: 'Ver mais 8 compras desde mar/2024'
+    },
+    renata: {
+      nome: 'Renata Pires', ini: 'RP', tel: '(11) 99876-1234', origem: 'Shopping', desde: 'nov/2023',
+      seg: ['vip', 'VIP', 'R$ 8.910 em 27 compras'],
+      tags: ['Alfaiataria'],
+      consent: ['nao', 'respondeu SAIR em 02/07'],
+      saldo: 0,
+      metr: [
+        ['Total gasto', 'R$ 8.910,00', 'green', 'desde nov/2023'],
+        ['Compras', '27', '', 'todas na loja Shopping'],
+        ['Ticket médio', 'R$ 330,00', '', 'acima da média da loja (R$ 214)'],
+        ['Última compra', 'há 9 dias', '', '07/09/2026 · Shopping'],
+        ['Intervalo médio', '~21 dias', '', 'compra a cada ~21 dias'],
+        ['Saldo do crediário', 'R$ 0,00', 'muted', 'sem crediário aberto', 'cred']
+      ],
+      prefs: [['Tamanho', 'P · 36 (calças)'], ['Calçado', '35'], ['Marcas', 'Linha própria Lu'],
+              ['Estilo', 'Alfaiataria, tons neutros'], ['Evita', 'Estampas grandes']],
+      cats: [['Alfaiataria', 46, 'R$ 4.098,60'], ['Calças', 31, 'R$ 2.762,10'], ['Camisas', 18, 'R$ 1.603,80']],
+      datas: [['22/01', 'Aniversário', ''], ['nov', 'Compra para o fim de ano da empresa', '']],
+      eventos: [
+        { c: 'compras', mes: 'Setembro de 2026', d: '07/09', l: 'Shopping', t: 'Compra #1331 · 2 itens', s: 'Cartão de débito · vendedora Camila', v: 'R$ 489,00',
+          itens: [['Blazer de alfaiataria', 'P · Cru', 'R$ 339,00'], ['Calça reta', '36 · Preta', 'R$ 150,00']] },
+        { c: 'compras', mes: 'Agosto de 2026', d: '16/08', l: 'Shopping', t: 'Compra #1240 · 1 item', s: 'Pix · vendedora Camila', v: 'R$ 298,00',
+          itens: [['Camisa de seda', 'P · Off-white', 'R$ 298,00']] },
+        { c: 'notas', mes: 'Julho de 2026', d: '02/07', l: 'Shopping', t: '“Prefere que a gente ligue antes de separar peça.”', s: 'Nota de Camila' },
+        { c: 'mensagens', mes: 'Julho de 2026', d: '02/07', l: 'Shopping', t: 'Respondeu SAIR', s: 'Não recebe mais ofertas. Cobranças e avisos da compra continuam.' }
+
+      ],
+      maisTxt: 'Ver mais 25 compras desde nov/2023'
+    },
+    beatriz: {
+      nome: 'Beatriz Nogueira', ini: 'BN', tel: null, origem: 'Shopping', desde: 'set/2026',
+      seg: ['novo', 'Novo', 'cadastrada há 2 dias'],
+      tags: [],
+      consent: ['sem', 'sem registro'],
+      saldo: 0,
+      metr: [
+        ['Total gasto', 'R$ 0,00', 'muted', 'nenhuma compra ainda'],
+        ['Compras', '0', 'muted', ''],
+        ['Ticket médio', '—', 'muted', 'aparece depois da primeira compra'],
+        ['Última compra', 'nenhuma', 'muted', ''],
+        ['Intervalo médio', '—', 'muted', 'precisa de duas compras'],
+        ['Saldo do crediário', 'R$ 0,00', 'muted', 'sem crediário aberto', 'cred']
+      ],
+      prefs: [['Tamanho', 'G'], ['Calçado', ''], ['Marcas', ''], ['Estilo', ''], ['Evita', '']],
+      cats: [],
+      datas: [['', 'Aniversário', 'não informado']],
+      eventos: [
+        { c: 'notas', mes: 'Setembro de 2026', d: '14/09', l: 'Shopping', t: 'Cadastro feito no Caixa', s: 'Por Camila · sem telefone · não quis informar' }
+      ],
+      maisTxt: ''
+    }
+  };
+
+  var S = { cli: 'mariana', plano: 'negocio', visao: 'loja', estado: 'ok' };
+  var V = { d: 'ficha', m: 'ficha' };           // ficha | lista
+  var F = { d: 'tudo', m: 'tudo' };             // filtro da linha do tempo
+  var OPEN = { d: {}, m: {} };                  // compras expandidas
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function lojaNome(l) { return 'Loja da Lu · ' + l; }
+
+  function acoes(c, m) {
+    var semTel = !c.tel;
+    var ess = S.plano === 'essencial';
+    var btn = function (cls, txt, dis, motivo) {
+      return '<button class="act ' + cls + '"' + (dis ? ' disabled' : '') + '>' + esc(txt) +
+        (motivo ? '<small>' + esc(motivo) + '</small>' : '') + '</button>';
+    };
+    var waMot = semTel ? 'sem telefone' : (!ess && c.consent[0] === 'nao' ? 'conversa, sem oferta' : '');
+    var h = btn('pri', 'Enviar WhatsApp', semTel, waMot);
+    // Essencial: crediário não faz parte do plano, então o botão some (não desabilita).
+    if (!ess) h += btn(c.saldo > 0 ? 'pay' : '', 'Receber pagamento', c.saldo <= 0, c.saldo <= 0 ? 'sem saldo em aberto' : 'R$ 186,00 em aberto');
+    h += btn('', 'Pedir avaliação', semTel, semTel ? 'sem telefone' : '');
+    h += btn('', 'Adicionar nota', false, '');
+    if (!m) h += btn('', 'Editar', false, '');
+    return '<div class="acts">' + h + '</div>';
+  }
+
+  // A caixa de marcar do consentimento — Negócio para cima. Não é botão,
+  // não abre modal: marcar grava o aceite (canal "manual", com o nome de
+  // quem marcou); desmarcar grava a recusa.
+  function optin(c) {
+    if (S.plano === 'essencial') return '';
+    var semTel = !c.tel;
+    var on = c.consent[0] === 'sim';
+    var origem = semTel ? 'precisa de telefone para valer' : c.consent[1];
+    return '<label class="optin' + (semTel ? ' dis' : '') + (on ? ' on' : '') + '">' +
+      '<input type="checkbox" data-optin' + (on ? ' checked' : '') + (semTel ? ' disabled' : '') + '>' +
+      '<span class="box"></span><span><b>Aceita receber ofertas pelo WhatsApp</b><small>' + esc(origem) + '</small></span></label>';
+  }
+
+  function cabecalho(c, m) {
+    var cons = S.visao === 'cons';
+    return '<div class="fhead">' +
+      '<div class="av">' + c.ini + '</div>' +
+      '<div style="min-width:0;flex:1">' +
+        '<div class="eyebrow"><span class="dot"></span>Loja da Lu · Ficha do cliente' + (cons ? ' <span class="badge-n">Consolidado · 2 lojas</span>' : '') + '</div>' +
+        '<h2 class="fname">' + esc(c.nome) + '<span>.</span></h2>' +
+        '<div class="fmeta">' +
+          (c.tel ? '<span class="mono">' + c.tel + '</span>' : '<span class="falta">Sem telefone · <u>adicionar</u></span>') +
+          '<span class="sep">·</span><span>Cadastrada na ' + esc(lojaNome(c.origem)) + '</span>' +
+          (m ? '' : '<span class="sep">·</span><span>cliente desde ' + c.desde + '</span>') +
+        '</div>' +
+        '<div class="chips">' +
+          '<span class="seg ' + c.seg[0] + '">' + c.seg[1] + ' <i>· ' + c.seg[2] + '</i></span>' +
+          c.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') +
+          '<span class="tag add" data-addtag>+ tag</span>' +
+        '</div>' +
+        (TAGMENU[m ? 'm' : 'd'] ? tagMenu(c) : '') +
+        optin(c) +
+      '</div></div>';
+  }
+
+  // Tags livres, com sugestão das já usadas na loja (decidido em 16/09).
+  var TAGMENU = { d: false, m: false };
+  var TAGS_USADAS = ['Gosta de novidades', 'Indicou amigas', 'Alfaiataria', 'Plus size', 'Revende', 'Presente'];
+  function tagMenu(c) {
+    return '<div class="tagmenu"><input placeholder="Escreva uma tag nova e aperte Enter" data-tagin>' +
+      '<div class="tm-l">Já usadas na loja</div><div class="chips" style="margin-top:4px">' +
+      TAGS_USADAS.filter(function (t) { return c.tags.indexOf(t) < 0; }).map(function (t) { return '<span class="tag" data-tagpick="' + esc(t) + '">' + esc(t) + '</span>'; }).join('') +
+      '</div></div>';
+  }
+
+  function metricas(c) {
+    var ess = S.plano === 'essencial';
+    var itens = c.metr.filter(function (x) { return !(ess && x[4] === 'cred'); });
+    return '<div class="metr" style="--n:' + itens.length + '">' + itens.map(function (x) {
+      return '<div class="m"><div class="k">' + x[0] + '</div><div class="v ' + x[2] + '">' + x[1] + '</div>' +
+        (x[3] ? '<div class="s">' + x[3] + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function perfil(c) {
+    var p = c.prefs.map(function (x) {
+      return '<div class="pref"><span class="pk">' + x[0] + '</span><span class="pv' + (x[1] ? '' : ' vazio') + '">' +
+        (x[1] ? esc(x[1]) : 'não informado') + '</span></div>';
+    }).join('');
+    var d = c.datas.map(function (x) {
+      return '<div class="data"><span class="dd">' + (x[0] || '—') + '</span><span class="dt">' + esc(x[1]) + '</span>' +
+        (x[2] ? '<span class="dq">' + x[2] + '</span>' : '') + '</div>';
+    }).join('');
+    // Categorias do Estoque (as mesmas do Caixa e da vitrine), calculadas
+    // das compras da cliente: top 3 pela fatia do gasto DELA.
+    var cat = c.cats.length
+      ? c.cats.map(function (x) {
+          return '<div class="cat"><div class="cat-l"><span>' + esc(x[0]) + '</span><b>' + x[1] + '%</b></div>' +
+            '<div class="bar"><i style="width:' + x[1] + '%"></i></div><div class="cat-s">' + x[2] + ' do gasto dela</div></div>';
+        }).join('')
+      : '<div class="pref" style="border-top:0"><span class="pv vazio">aparece depois da primeira compra</span></div>';
+    return '<div class="card"><div class="ct"><h3>Preferências</h3><button class="link">Editar</button></div>' + p +
+      '<div class="cats"><div class="cats-t">Categorias que mais compra <small>· categorias do Estoque</small></div>' + cat + '</div></div>' +
+      '<div class="card"><div class="ct"><h3>Datas importantes</h3><button class="link">+ Data</button></div>' + d + '</div>';
+  }
+
+  function eventoHtml(e, k, i) {
+    var cons = S.visao === 'cons';
+    var aberto = OPEN[k][S.cli + i];
+    var h = '<div class="ev' + (e.itens ? ' click' : '') + '" data-open="' + i + '">' +
+      '<div class="ei ' + e.c + '">' + IC[e.c] + '</div>' +
+      '<div class="eb"><div class="et">' + esc(e.t) + '</div>' +
+      '<div class="es">' + (cons ? '<span class="lj">' + esc(e.l) + '</span>' : '') + esc(e.s) + '</div></div>' +
+      '<div class="er">' + (e.v ? '<div class="ev-v ' + (e.vc || '') + '">' + e.v + '</div>' : '') +
+      '<div class="ed">' + e.d + '</div>' +
+      (e.itens ? '<div class="ex">' + (aberto ? 'fechar' : 'ver itens') + '</div>' : '') + '</div></div>';
+    if (e.itens && aberto) {
+      h += '<div class="itens">' + e.itens.map(function (it) {
+        return '<div class="it"><span>' + esc(it[0]) + (it[1] ? ' <span class="var">· ' + esc(it[1]) + '</span>' : '') + '</span><span>' + it[2] + '</span></div>';
+      }).join('') + '<div class="it tot"><span>Total</span><span>' + e.v + '</span></div>' +
+      '<div class="it-acts"><button class="mini">Ver recibo</button><button class="mini">Iniciar troca</button><button class="mini">Abrir venda</button></div></div>';
+    }
+    return h;
+  }
+
+  function linhaDoTempo(c, k) {
+    var ess = S.plano === 'essencial';
+    if (ess && PAGO[F[k]]) F[k] = 'tudo';
+    var f = F[k];
+    if (S.estado === 'load') {
+      var sk = '';
+      for (var j = 0; j < 5; j++) sk += '<div class="ev-sk"><div class="sk" style="width:26px;height:26px"></div><div style="flex:1"><div class="sk" style="height:12px;width:' + (50 + j * 8) + '%"></div><div class="sk" style="height:10px;width:35%;margin-top:7px"></div></div><div class="sk" style="width:70px;height:12px"></div></div>';
+      return '<div class="card"><div class="ct"><h3>Linha do tempo</h3></div>' + pills(c, k) + sk + '</div>';
+    }
+    var h = '<div class="card"><div class="ct"><h3>Linha do tempo</h3><span style="font-size:11px;color:var(--ink3)">mais recentes primeiro</span></div>' + pills(c, k);
+
+    var lista = c.eventos.map(function (e, i) { return { e: e, i: i }; }).filter(function (x) { return f === 'tudo' || x.e.c === f; });
+    if (ess) lista = lista.filter(function (x) { return !PAGO[x.e.c] && !x.e.neg; });
+    if (!lista.length) {
+      if (f === 'compras') {
+        return h + '<div class="vazio"><h4>Nenhuma compra ainda</h4><p>Quando ' + c.nome.split(' ')[0] + ' comprar, cada venda aparece aqui com os itens, o tamanho e a cor.</p><button class="btn">Abrir o Caixa com ela</button></div></div>';
+      }
+      return h + '<div class="vazio"><h4>Nada por aqui</h4><p>Nenhum evento deste tipo com ' + c.nome.split(' ')[0] + '.</p></div></div>';
+    }
+    var mesAtual = '';
+    lista.forEach(function (x, idx) {
+      if (x.e.mes !== mesAtual) { mesAtual = x.e.mes; h += '<div class="mes">' + mesAtual + '</div>'; }
+      h += eventoHtml(x.e, k, x.i);
+    });
+    if (f === 'tudo' && !c.eventos.some(function (e) { return e.c === 'compras'; })) {
+      h += '<div class="vazio" style="padding:22px 10px 8px"><h4>Nenhuma compra ainda</h4><p>A primeira venda para ' + c.nome.split(' ')[0] + ' abre a faixa de métricas.</p><button class="btn">Abrir o Caixa com ela</button></div>';
+    }
+    if (c.maisTxt && (f === 'tudo' || f === 'compras')) h += '<button class="mais">' + c.maisTxt + '</button>';
+    return h + '</div>';
+  }
+
+  function pills(c, k) {
+    var ess = S.plano === 'essencial';
+    // Essencial: as pílulas de Crediário e Mensagens não existem.
+    return '<div class="pills">' + FILTROS.filter(function (p) { return !(ess && PAGO[p[0]]); }).map(function (p) {
+      var n = p[0] === 'tudo'
+        ? c.eventos.filter(function (e) { return !(ess && (PAGO[e.c] || e.neg)); }).length
+        : c.eventos.filter(function (e) { return e.c === p[0] && !(ess && e.neg); }).length;
+      return '<button class="pill' + (F[k] === p[0] ? ' on' : '') + '" data-f="' + p[0] + '">' + p[1] + '<b>' + n + '</b></button>';
+    }).join('') + '</div>';
+  }
+
+  function skeletonTopo() {
+    return '<div class="fhead"><div class="av sk" style="border:0"></div><div style="flex:1"><div class="sk" style="height:11px;width:200px"></div>' +
+      '<div class="sk" style="height:40px;width:320px;margin:12px 0"></div><div class="sk" style="height:12px;width:260px"></div></div></div>' +
+      '<div class="acts">' + [150, 150, 120, 120, 70].map(function (w) { return '<div class="sk" style="height:40px;width:' + w + 'px"></div>'; }).join('') + '</div>' +
+      '<div class="sk" style="height:84px;border-radius:16px;margin-bottom:18px"></div>';
+  }
+
+  function ficha(k) {
+    var c = C[S.cli];
+    var m = k === 'm';
+    var topo = S.estado === 'load' ? skeletonTopo() : cabecalho(c, m) + acoes(c, m) + metricas(c);
+    var voltar = m ? '' : '<button class="back" data-go="lista">‹ Clientes <small>· voltar para a lista (Em risco · 47)</small></button>';
+    if (m) {
+      return topo + linhaDoTempo(c, k) + '<div style="height:14px"></div>' + (S.estado === 'load' ? '' : perfil(c));
+    }
+    return voltar + topo + '<div class="cols"><div>' + linhaDoTempo(c, k) + '</div><div>' +
+      (S.estado === 'load' ? '<div class="sk" style="height:220px;border-radius:16px"></div>' : perfil(c)) + '</div></div>';
+  }
+
+  var LINHAS = [
+    ['mariana', 'MC', 'Mariana Couto', 'última compra há 44 dias', 'R$ 3.482,40', 'risco', 'Em risco'],
+    ['renata', 'RP', 'Renata Pires', 'última compra há 9 dias', 'R$ 8.910,00', 'vip', 'VIP'],
+    ['beatriz', 'BN', 'Beatriz Nogueira', 'nenhuma compra ainda', 'R$ 0,00', 'novo', 'Novo']
+  ];
+  function lista(k) {
+    var m = k === 'm';
+    return '<div class="eyebrow"><span class="dot"></span>Loja da Lu · Clientes</div>' +
+      '<h2 class="hero-t"' + (m ? ' style="font-size:38px"' : '') + '>Clientes<span>.</span></h2>' +
+      '<div class="hero-s">312 clientes · segmento <b style="color:var(--amber)">Em risco</b> selecionado</div>' +
+      '<div class="card" style="padding:6px">' + LINHAS.map(function (r) {
+        return '<div class="lrow" data-abrir="' + r[0] + '"><div class="av">' + r[1] + '</div><div style="min-width:0"><div class="n">' + r[2] + '</div><div class="u">' + r[3] + '</div></div>' +
+          (m ? '' : '<div class="g">' + r[4] + '</div>') + '<span class="seg ' + r[5] + '"' + (m ? ' style="margin-left:auto;width:auto"' : '') + '>' + r[6] + '</span></div>';
+      }).join('') + '</div>' +
+      '<p style="font-size:12px;color:var(--ink3);margin-top:12px">A lista completa, com a faixa de segmentos, está em <code>fase1-lista-clientes-segmentos.html</code>.</p>';
+  }
+
+  function render() {
+    var dm = document.getElementById('d-main');
+    var st = dm.scrollTop;
+    dm.innerHTML = (V.d === 'ficha' ? ficha('d') : lista('d') + '<div class="dica">Clique numa linha para abrir a ficha</div>');
+    dm.scrollTop = st;
+    var pm = document.getElementById('p-main');
+    var st2 = pm.scrollTop;
+    pm.innerHTML = V.m === 'ficha' ? ficha('m') : lista('m');
+    pm.scrollTop = st2;
+    document.getElementById('p-top').innerHTML = V.m === 'ficha'
+      ? '<button class="back" data-go-m="lista">‹ Clientes</button><button class="p-edit">Editar</button>'
+      : '<span></span><span class="sino"></span>';
+  }
+
+  var FIT = true;
+  function fit() {
+    document.querySelectorAll('.desk').forEach(function (d) {
+      var w = d.parentElement.clientWidth;
+      d.style.zoom = FIT ? Math.min(1, w / 1442) : 1;
+    });
+  }
+  window.addEventListener('resize', fit);
+  document.getElementById('ctl').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.fit) {
+      FIT = b.dataset.fit === '1';
+      this.querySelectorAll('[data-fit]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      fit(); return;
+    }
+    S[b.dataset.k] = b.dataset.v;
+    this.querySelectorAll('[data-k="' + b.dataset.k + '"]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    V.d = 'ficha'; V.m = 'ficha';
+    render();
+  });
+
+  function wire(rootId, k) {
+    document.getElementById(rootId).addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t.matches('[data-optin]')) {
+        var cc = C[S.cli];
+        if (t.checked) {
+          cc.consent = ['sim', 'desde 16/09 · marcado na ficha · por Simone'];
+          cc.eventos.unshift({ c: 'mensagens', mes: 'Setembro de 2026', d: '16/09', l: cc.origem, t: 'Marcou: aceita receber ofertas', s: 'Caixa de marcar na ficha · por Simone' });
+        } else {
+          cc.consent = ['nao', 'desmarcado em 16/09 · por Simone'];
+          cc.eventos.unshift({ c: 'mensagens', mes: 'Setembro de 2026', d: '16/09', l: cc.origem, t: 'Desmarcou: não aceita receber ofertas', s: 'Caixa de marcar na ficha · por Simone' });
+        }
+        OPEN.d = {}; OPEN.m = {};
+        render(); return;
+      }
+      if (t.closest('[data-addtag]')) { TAGMENU[k] = !TAGMENU[k]; render(); return; }
+      var tp = t.closest('[data-tagpick]');
+      if (tp) { C[S.cli].tags.push(tp.dataset.tagpick); TAGMENU[k] = false; render(); return; }
+      var p = t.closest('[data-f]');
+      if (p) { F[k] = p.dataset.f; render(); return; }
+      var o = t.closest('.ev.click');
+      if (o) { var key = S.cli + o.dataset.open; OPEN[k][key] = !OPEN[k][key]; render(); return; }
+      if (t.closest('[data-go]') || t.closest('[data-go-m]')) { V[k] = 'lista'; render(); return; }
+      var r = t.closest('[data-abrir]');
+      if (r) {
+        S.cli = r.dataset.abrir; V[k] = 'ficha'; F[k] = 'tudo';
+        document.querySelectorAll('[data-k="cli"]').forEach(function (x) { x.classList.toggle('on', x.dataset.v === S.cli); });
+        render();
+        if (k === 'd') document.getElementById('d-main').scrollTop = 0; else document.getElementById('p-main').scrollTop = 0;
+      }
+    });
+  }
+  ['desk', 'phone'].forEach(function (id, n) {
+    document.getElementById(id).addEventListener('keydown', function (ev) {
+      var v = ev.target.value && ev.target.value.trim();
+      if (ev.key === 'Enter' && ev.target.matches('[data-tagin]') && v) {
+        C[S.cli].tags.push(v);
+        if (TAGS_USADAS.indexOf(v) < 0) TAGS_USADAS.push(v);
+        TAGMENU[n ? 'm' : 'd'] = false; render();
+      }
+    });
+  });
+  wire('desk', 'd');
+  wire('phone', 'm');
+
+  // Abrir a compra mais recente por padrão, para o item com variante aparecer sem clique.
+  OPEN.d['mariana5'] = true;
+  OPEN.m['mariana5'] = true;
+  render();
+  fit();
+})();
+</script>
+</body>
+</html>
