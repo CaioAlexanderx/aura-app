@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — lista de clientes com faixa de segmentos (Fase 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 1, lista de clientes com segmentos.
+
+     Hoje a aba Lista abre com: cabeçalho editorial, cartão de
+     retenção, abas, linha Exportar/Importar/Selecionar, a entrada
+     compacta da reativação (Fase 0), a busca e a lista. A linha do
+     cliente mostra o TELEFONE (informação que ninguém usa para
+     decidir nada) e até duas tags.
+
+     A proposta: uma faixa de segmentos sempre visível, cada um com
+     contagem e R$ em jogo, clicável como filtro; a linha passa a
+     dizer há quanto tempo a pessoa não compra, uma tag só e uma ação
+     escrita quando houver o que fazer. Exportar, Importar e
+     Selecionar vão para "Mais ações"; a busca sobe.
+
+     Medição da dobra de 911px no celular, como na Fase 0: o script
+     no fim mede de verdade onde termina a primeira linha de cliente.
+     ============================================================ */
+  :root {
+    --bg:  #0B0716; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border:  rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;  --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24;  --amberD: rgba(251,191,36,0.10);
+    --red:   #f87171;  --redD:   rgba(248,113,113,0.10);
+    --orange: #f97316; --orangeD: rgba(251,146,60,0.14);
+    --teal: #2dd4bf;   --tealD: rgba(45,212,191,0.10);
+    --pink: #f472b6;   --pinkD: rgba(244,114,182,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 24px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink); font-family: var(--sans); min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 820px; margin: 0 0 22px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 22px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 38px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12px; color: var(--ink3); line-height: 1.65; max-width: 400px; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  .ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border2); border-radius: 12px; background: rgba(9,12,26,0.85); margin: 0 0 16px; position: sticky; top: 8px; z-index: 60; backdrop-filter: blur(8px); }
+  .ctl-g { display: flex; align-items: center; gap: 6px; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--border2); background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: rgba(124,58,237,0.25); color: #fff; border-style: solid; }
+
+  /* Desktop */
+  .scaler { width: 100%; overflow-x: auto; }
+  .desk { width: 1440px; height: 911px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); display: flex; overflow: hidden; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .side { width: 232px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .side-brand { padding: 4px 6px 16px; }
+  .side-s { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink3); padding: 14px 10px 6px; }
+  .side-i { font-size: 13px; color: var(--ink2); padding: 8px 10px; border-radius: 9px; }
+  .side-i.on { background: var(--violetD); color: #fff; font-weight: 600; box-shadow: inset 2px 0 0 var(--violet); }
+  .main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 36px 40px; position: relative; scrollbar-width: none; }
+  .main::-webkit-scrollbar { width: 0; }
+  .logo { display: inline-flex; align-items: center; background: #f6eee4; color: #3b1d2a; border-radius: 12px; font-family: var(--serif); font-size: 17px; line-height: 1; height: 44px; padding: 0 12px; }
+  .logo i { font-style: italic; color: #b0406a; font-size: 1.25em; margin-left: 3px; }
+
+  /* Cabeçalho (ScreenHero) */
+  .eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-bottom: 10px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .badge-n { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg3); font-size: 10px; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; }
+  .hero-t { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: 0.95; letter-spacing: -0.025em; margin: 0; flex: 1; }
+  .hero-t span { color: var(--violet); }
+  .hero-s { font-size: 14px; color: var(--ink3); margin: 10px 0 16px; line-height: 1.5; }
+  .hero-a { display: flex; gap: 8px; padding-bottom: 6px; position: relative; }
+  .b { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.035); color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .b.pri { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .b.on { border-color: var(--violet); background: var(--violetD); }
+  .b .n { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--violet); color: #fff; }
+  .menu { position: absolute; right: 0; top: 46px; z-index: 30; min-width: 230px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; padding: 6px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); }
+  .menu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--ink); font-size: 13px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+  .menu button small { display: block; color: var(--ink3); font-size: 11px; margin-top: 1px; }
+  .menu button:hover { background: var(--bg4); }
+  .menu .sep { height: 1px; background: var(--border); margin: 4px 6px; }
+  .menu .ttl { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); padding: 8px 10px 4px; }
+
+  .abas { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
+  .aba { flex-shrink: 0; padding: 8px 14px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); font-size: 12.5px; color: var(--ink3); font-weight: 500; }
+  .aba.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+
+  .busca-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .busca { flex: 1; max-width: 560px; min-width: 0; height: 40px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); color: var(--ink); padding: 0 14px; font-size: 13px; outline: none; }
+  .busca:focus { border-color: var(--border2); }
+  .fchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--violetD); border: 1px solid var(--border2); color: var(--violet4); font-size: 11.5px; cursor: pointer; }
+
+  /* Faixa de segmentos */
+  .faixa { display: flex; gap: 8px; margin-bottom: 14px; }
+  .faixa .sg { flex: 1 1 0; }
+  .faixa .sg.mais { flex: 0 0 150px; }
+  .sg { text-align: left; background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px 10px; cursor: pointer; color: var(--ink); position: relative; min-width: 0; }
+  .sg:hover { border-color: var(--border2); }
+  @media (hover: none) { .sg:hover { border-color: var(--border); } }
+  .sg .l { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .sg .l i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sg .c { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; line-height: 1.05; }
+  .sg .r { font-size: 11px; color: var(--ink3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sg .r small { display: block; font-size: 10.5px; }
+  .sg .r b { color: var(--green); font-weight: 700; }
+  .sg .r b.o { color: var(--orange); }
+  .sg.on { border-color: var(--violet); background: linear-gradient(180deg, rgba(124,58,237,0.22), rgba(124,58,237,0.08)); }
+  .sg.mais { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; border-style: dashed; }
+  .sg.mais .c { font-size: 13px; font-weight: 700; }
+  .sg.salvo { border-style: dashed; border-color: var(--border2); }
+  .faixa-wrap { position: relative; }
+
+  /* Barra do segmento selecionado (é aqui que mora a reativação da Fase 0) */
+  .selbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 11px 14px; border-radius: 14px; background: var(--violetD); border: 1px solid var(--border2); margin-bottom: 12px; }
+  .selbar .t { font-size: 13px; font-weight: 700; }
+  .selbar .t span { color: var(--ink3); font-weight: 500; }
+  .selbar .s { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+  .selbar .sp { flex: 1; }
+  .dias { display: flex; gap: 5px; }
+  .dias button { padding: 5px 10px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--border); color: var(--ink2); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .dias button.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+
+  /* Lista */
+  .lista { background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 6px; }
+  .lhead { display: grid; grid-template-columns: minmax(0, 1fr) 120px 130px 120px 150px; gap: 12px; padding: 8px 12px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+  .lista.cons .lhead, .lista.cons .row { grid-template-columns: minmax(0, 1fr) 110px 120px 130px 120px 150px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 130px 120px 150px; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; border-top: 1px solid var(--border); cursor: pointer; text-decoration: none; color: inherit; }
+  .row:hover { background: var(--bg4); }
+  .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .av { width: 36px; height: 36px; border-radius: 18px; background: var(--violetD); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--violet3); flex-shrink: 0; }
+  .nm { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ul { font-size: 11.5px; color: var(--ink3); margin-top: 2px; white-space: nowrap; }
+  .ul.risco { color: var(--amber); } .ul.sumido { color: #fca5a5; } .ul.perdido { color: var(--red); }
+  .gs { font-size: 13px; font-weight: 700; color: var(--green); text-align: right; }
+  .lj { font-size: 11px; color: var(--violet3); }
+  .tg { justify-self: start; display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; border: 1px solid transparent; white-space: nowrap; }
+  .tg.risco   { background: var(--amberD); color: var(--amber); border-color: rgba(251,191,36,0.3); }
+  .tg.sumido  { background: var(--redD); color: #fca5a5; border-color: rgba(248,113,113,0.3); }
+  .tg.perdido { background: var(--redD); color: var(--red); border-color: rgba(248,113,113,0.45); }
+  .tg.vip     { background: var(--violetD); color: var(--violet4); border-color: var(--border2); }
+  .tg.devendo { background: var(--orangeD); color: var(--orange); border-color: rgba(251,146,60,0.4); }
+  .tg.pronto  { background: var(--greenD); color: var(--green); border-color: rgba(52,211,153,0.35); }
+  .tg.novo    { background: rgba(96,165,250,0.12); color: #93c5fd; border-color: rgba(96,165,250,0.3); }
+  .tg.recorrente { background: var(--tealD); color: var(--teal); border-color: rgba(45,212,191,0.3); }
+  .ra { justify-self: end; height: 32px; padding: 0 12px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--violet3); white-space: nowrap; }
+  .ra.cobrar { border-color: rgba(251,146,60,0.5); color: var(--orange); background: var(--orangeD); }
+  /* Regra 7: no desktop com mouse a ação pode aparecer só no hover;
+     sem hover (toque) ela fica sempre visível. */
+  .modo-hover .row .ra { visibility: hidden; }
+  .modo-hover .row:hover .ra, .modo-hover .row:focus-within .ra { visibility: visible; }
+  @media (hover: none) { .modo-hover .row .ra { visibility: visible; } .row:hover { background: transparent; } }
+  .touch .row .ra { visibility: visible !important; }
+  .mais-l { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 10px; background: transparent; border: 1px solid var(--border); color: var(--ink2); font-size: 12px; cursor: pointer; }
+  .nada { text-align: center; padding: 30px; color: var(--ink3); font-size: 13px; }
+
+  /* Painel de filtros */
+  .scrim { position: absolute; inset: 0; background: rgba(3,5,14,0.6); z-index: 40; }
+  .painel { position: absolute; top: 0; right: 0; bottom: 0; width: 420px; background: var(--bg2); border-left: 1px solid var(--border2); z-index: 41; display: flex; flex-direction: column; }
+  .painel.sheet { top: auto; left: 0; width: auto; max-height: 86%; border-left: 0; border-top: 1px solid var(--border2); border-radius: 20px 20px 0 0; }
+  .ph { padding: 18px 20px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .ph h3 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; }
+  .ph h3 span { color: var(--violet); }
+  .pb { flex: 1; overflow-y: auto; padding: 0 20px 10px; scrollbar-width: none; }
+  .fg { padding: 12px 0; border-top: 1px solid var(--border); }
+  .fg .k { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); margin-bottom: 8px; }
+  .fg .k small { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .ops { display: flex; flex-wrap: wrap; gap: 6px; }
+  .op { padding: 6px 11px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--border); color: var(--ink2); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .op.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .op[disabled] { opacity: 0.4; cursor: default; }
+  .pf { padding: 14px 20px 18px; border-top: 1px solid var(--border); }
+  .res { font-size: 13px; margin-bottom: 10px; }
+  .res b { font-size: 18px; }
+  .res span { color: var(--ink3); }
+  .pf-row { display: flex; gap: 8px; }
+  .pf-row .b { flex: 1; justify-content: center; }
+  .salvar { display: flex; gap: 8px; margin-top: 8px; }
+  .salvar input { flex: 1; height: 40px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border2); color: var(--ink); padding: 0 12px; font-size: 13px; }
+  .x { background: none; border: 1px solid var(--border); color: var(--ink2); border-radius: 9px; height: 32px; padding: 0 10px; cursor: pointer; font-size: 12px; }
+
+  /* Celular */
+  .phone { width: 390px; height: 911px; border-radius: 26px; border: 1px solid var(--border); background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.95)); overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .p-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; }
+  .sino { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); }
+  .p-scroll { flex: 1; overflow-y: auto; padding: 0 14px; min-height: 0; scrollbar-width: none; }
+  .p-scroll::-webkit-scrollbar { width: 0; }
+  .p-bar { height: 59px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-around; background: var(--bg2); border-top: 1px solid var(--border); font-size: 10px; color: var(--ink3); }
+  .p-bar .on { color: var(--violet3); font-weight: 700; }
+  .dobra { position: absolute; left: 0; right: 0; bottom: 59px; border-top: 1px dashed var(--red); pointer-events: none; z-index: 45; }
+  .dobra span { position: absolute; right: 8px; top: -8px; font-size: 9px; color: var(--red); background: var(--bg); padding: 0 6px; letter-spacing: 0.06em; }
+  .rotulo-frame { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+  .rotulo-frame.ruim { color: var(--red); }
+  .phone .eyebrow { font-size: 10px; margin: 6px 0 8px; }
+  .phone .hero { align-items: center; }
+  .phone .hero-t { font-size: 38px; }
+  .phone .hero-s { font-size: 12px; margin: 6px 0 10px; }
+  .phone .hero-a { padding: 0; }
+  .phone .b { height: 36px; padding: 0 11px; font-size: 12px; }
+  .phone .abas { margin-bottom: 10px; }
+  .phone .aba { padding: 7px 12px; font-size: 11.5px; }
+  .phone .busca-row { margin-bottom: 10px; flex-wrap: nowrap; }
+  .phone .busca { height: 38px; font-size: 12.5px; }
+  .phone .faixa { display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 10px; padding: 0 14px; gap: 7px; }
+  .phone .faixa::-webkit-scrollbar { height: 0; }
+  .phone .sg { flex: 0 0 128px; padding: 9px 10px 8px; border-radius: 12px; }
+  .phone .sg .c { font-size: 20px; }
+  .phone .sg .l { font-size: 11px; }
+  .phone .sg.mais { flex-basis: 110px; }
+  .phone .selbar { padding: 10px 12px; gap: 8px; position: relative; }
+  .phone .selbar > div:first-child { padding-right: 64px; }
+  .phone .selbar .x { position: absolute; top: 9px; right: 10px; }
+  .phone .selbar .b { width: 100%; justify-content: center; }
+  .phone .lista { padding: 4px; }
+  .phone .lhead { display: none; }
+  .phone .row { display: flex; gap: 10px; padding: 10px 8px; }
+  .phone .row .who { flex: 1; }
+  .phone .row .col-r { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+  .phone .row .ra { height: 30px; padding: 0 10px; font-size: 11.5px; }
+  .phone .nm { font-size: 13px; }
+  .phone .ul { font-size: 11px; }
+  .phone .tg { font-size: 10px; padding: 2px 8px; }
+  .phone .menu { right: 0; }
+  .phone .mini-tg { margin-top: 4px; }
+
+  /* Frame "hoje" — reprodução da aba Lista pós-Fase 0 */
+  .old .retencao { background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .old .retencao .rt { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .old .retencao .rr { display: flex; gap: 10px; }
+  .old .retencao .rr div { flex: 1; }
+  .old .retencao b { display: block; font-size: 20px; font-weight: 800; }
+  .old .retencao i { display: block; font-style: normal; font-size: 10.5px; color: var(--ink3); margin-top: 2px; }
+  .old .imp { display: flex; gap: 8px; margin-bottom: 12px; }
+  .old .imp span { padding: 8px 12px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); font-size: 11.5px; color: var(--ink2); font-weight: 600; }
+  .old .entrada { background: var(--violetD); border: 1px solid var(--border2); border-radius: 16px; padding: 13px 13px 12px; margin-bottom: 14px; }
+  .old .entrada .et { font-size: 13.5px; font-weight: 800; }
+  .old .chips { display: flex; gap: 6px; margin: 10px 0 13px; }
+  .old .chips span { padding: 6px 11px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--border); font-size: 11.5px; color: var(--ink2); font-weight: 600; }
+  .old .chips span.on { background: var(--violet); color: #fff; }
+  .old .nums { display: flex; gap: 10px; background: rgba(9,12,26,0.55); border: 1px solid var(--border); border-radius: 13px; padding: 10px 12px; margin-bottom: 10px; }
+  .old .nums div { flex: 1; }
+  .old .nums b { display: block; font-size: 22px; font-weight: 700; }
+  .old .nums i { display: block; font-style: normal; font-size: 10.5px; color: var(--ink3); margin-top: 4px; }
+  .old .btnw { display: block; text-align: center; padding: 11px; border-radius: 12px; background: var(--violet); font-size: 12.5px; font-weight: 700; }
+  .old .bs { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 13px; color: var(--ink3); margin-bottom: 16px; }
+  .old .lin { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
+  .old .lin b { display: block; font-size: 13px; }
+  .old .lin i { display: block; font-style: normal; font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .old .lin .rgt { margin-left: auto; text-align: right; }
+  .old .lin .rgt b { color: var(--green); }
+
+  .medidas { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--border2); border-radius: 12px; background: rgba(9,12,26,0.6); font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--ink2); white-space: pre-line; }
+  table.t { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 8px; max-width: 1100px; }
+  table.t th, table.t td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t th { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); }
+  table.t td { color: var(--ink2); }
+  .decisoes { border: 1px solid var(--border2); border-radius: 16px; padding: 18px 22px; background: rgba(124,58,237,0.06); max-width: 1100px; }
+  .decisoes h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0 0 10px; }
+  .decisoes h2 span { color: var(--violet); }
+  .decisoes ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--ink2); }
+  .decisoes li { margin-bottom: 10px; }
+  .decisoes li b { color: var(--ink); }
+  .decisoes li i { color: var(--violet3); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Clientes por segmento<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 1 — a aba Lista passa a abrir com a pergunta que o lojista faz todo dia: <i>com quem eu falo hoje?</i>
+    Uma faixa de segmentos, sempre à vista, diz quantos são e quanto dinheiro está em jogo em cada um.
+    Um clique filtra a lista; cada linha mostra há quanto tempo a pessoa não compra e o que fazer com ela.
+  </p>
+  <div class="nota">
+    <b>O que não muda:</b> cabeçalho editorial, abas Lista · Ranking · Retenção · Avaliações, busca por nome/telefone/e-mail/Instagram,
+    cadastro, importação, exportação, seleção em lote e a tela de reativação (<code>/clientes/reativacao</code>).<br>
+    <b>O que muda:</b> (1) a faixa de segmentos entra acima da lista; (2) a linha troca o telefone por
+    <b>“última compra há 44 dias”</b>, mostra <b>uma tag só</b> e ganha uma <b>ação escrita</b> quando há o que fazer;
+    (3) Exportar, Importar e Selecionar vão para <b>“Mais ações”</b>, e a busca sobe para logo abaixo das abas;
+    (4) o <code>RetentionCard</code> sai da Lista e fica só na aba Retenção — a faixa já responde “quantos sumiram”;
+    (5) “Filtrar” abre filtros combinados, e o resultado pode virar um segmento salvo.<br>
+    <b>Essencial (premissa de 16/09: o que o plano não tem some).</b> Segmentos com ação são Negócio, então no Essencial
+    <i>não aparecem</i> a faixa, “Filtrar”, os segmentos salvos, a barra da reativação nem as ações “Cobrar” / “Mandar cupom”.
+    Ficam a busca, “Mais ações”, a tag única e “última compra há N dias”, que são o básico de uma lista de clientes.
+    Troque o plano no painel abaixo; no celular os dois estão lado a lado.<br>
+    <b>A entrada da reativação (Fase 0) vira a barra do segmento.</b> Ela não continua como bloco próprio: “Em risco” e
+    “Sumidos” <i>são</i> a reativação. Com um deles selecionado, a barra acima da lista mostra o número, o R$, o corte de dias
+    e o mesmo botão “Ver e mandar cupom”, que leva a <code>/clientes/reativacao?dias=</code>. Motivo: bloco e faixa
+    responderiam a mesma pergunta com números diferentes (“60 ou mais” no bloco, “31 a 60” no segmento) — duas contas para o
+    mesmo grupo é o erro que a régua única da Fase 0 corrigiu. E o bloco custava 170px na dobra do celular.
+  </div>
+
+  <div class="ctl" id="ctl">
+    <div class="ctl-g"><span>Plano (desktop)</span>
+      <button data-k="plano" data-v="negocio" class="on">Negócio</button>
+      <button data-k="plano" data-v="essencial">Essencial</button>
+    </div>
+    <div class="ctl-g"><span>Visão</span>
+      <button data-k="visao" data-v="loja" class="on">Uma loja</button>
+      <button data-k="visao" data-v="cons">Consolidado · 2 lojas</button>
+    </div>
+    <div class="ctl-g"><span>Ação da linha no desktop</span>
+      <button data-k="acao" data-v="hover" class="on">No hover</button>
+      <button data-k="acao" data-v="sempre">Sempre</button>
+    </div>
+    <div class="ctl-g"><span>Desktop</span>
+      <button data-fit="1" class="on">Ajustar à largura</button>
+      <button data-fit="0">100%</button>
+    </div>
+  </div>
+
+  <div class="secao" style="margin-top:6px">A · Desktop 1440 × 911 — clique nos segmentos, em “Filtrar”, em “Mais ações” e numa linha</div>
+  <div class="scaler"><div class="desk" id="desk">
+    <aside class="side">
+      <div class="side-brand"><span class="logo">Loja da <i>Lu</i></span></div>
+      <div class="side-s">Vendas</div>
+      <div class="side-i">Caixa</div><div class="side-i">Vendas</div><div class="side-i">Cupons</div><div class="side-i">Crediário</div><div class="side-i">Estoque</div>
+      <div class="side-s">Clientes e WhatsApp</div>
+      <div class="side-i on">Clientes</div><div class="side-i">WhatsApp</div><div class="side-i">Reativação</div><div class="side-i">Canal Digital</div>
+      <div style="flex:1"></div>
+      <div class="side-i">Configurações</div>
+    </aside>
+    <main class="main" id="d-app"></main>
+  </div></div>
+
+  <div class="secao">B · Celular 390 × 911 — a dobra medida</div>
+  <div class="telas">
+    <div>
+      <div class="rotulo-frame ruim">Hoje (depois da Fase 0)</div>
+      <div class="phone old" data-frame="hoje">
+        <div class="p-top"><span class="sino"></span></div>
+        <div class="p-scroll">
+          <div class="eyebrow" style="font-family:var(--sans);font-weight:700;letter-spacing:.14em;font-size:9.5px">Aura. · Base de clientes</div>
+          <div class="hero"><h2 class="hero-t" style="font-size:38px">Clientes<span>.</span></h2></div>
+          <div class="hero-s" style="font-size:12px;margin:6px 0 14px">312 clientes cadastrados de 5.000 do plano · <span id="hoje-total">—</span> de faturamento acumulado</div>
+          <div class="retencao"><div class="rt">Retenção dos últimos 30 dias</div><div class="rr"><div><b>68%</b><i>voltaram</i></div><div><b>24</b><i>novos</i></div><div><b>47</b><i>sumiram</i></div></div></div>
+          <div class="abas"><span class="aba on">Lista</span><span class="aba">Ranking</span><span class="aba">Retenção</span><span class="aba">Avaliações</span></div>
+          <div class="imp"><span>Exportar</span><span>Importar</span><span>Selecionar</span></div>
+          <div class="entrada"><div class="et">Reativação por WhatsApp</div>
+            <div class="chips"><span>30</span><span class="on">60</span><span>90</span><span>120</span><span>180</span><span>outro</span></div>
+            <div class="nums"><div><b id="hoje-n">—</b><i>clientes sem comprar há 60 dias ou mais</i></div><div><b id="hoje-r" style="color:var(--green);font-size:18px">—</b><i>já gastaram na loja</i></div></div>
+            <div class="btnw">Ver e mandar cupom</div></div>
+          <div class="bs">Buscar por nome, telefone, e-mail ou Instagram…</div>
+          <div class="lista" style="padding:4px">
+            <div class="lin" data-primeira-linha><div class="av">A</div><div><b>Ana Beatriz Souza</b><i>(11) 98111-2233 / @anabsouza</i></div><div class="rgt"><b>R$ 1.240,00</b><span class="tg vip" style="margin-top:4px">VIP</span></div></div>
+            <div class="lin"><div class="av">B</div><div><b>Bianca Lima</b><i>(11) 97444-1020</i></div><div class="rgt"><b>R$ 430,00</b><span class="tg sumido" style="margin-top:4px">Inativo</span></div></div>
+            <div class="lin"><div class="av">C</div><div><b>Carla Duarte</b><i>(11) 99300-4411</i></div><div class="rgt"><b>R$ 2.980,00</b><span class="tg vip" style="margin-top:4px">VIP</span></div></div>
+            <div class="lin"><div class="av">D</div><div><b>Daniela Prado</b><i>(11) 98220-7788</i></div><div class="rgt"><b>R$ 612,00</b><span class="tg novo" style="margin-top:4px">Novo</span></div></div>
+            <div class="lin"><div class="av">E</div><div><b>Elaine Moura</b><i>(11) 97010-3321</i></div><div class="rgt"><b>R$ 1.105,00</b><span class="tg devendo" style="margin-top:4px">Devendo</span></div></div>
+          </div>
+        </div>
+        <div class="dobra"><span>dobra — 911px</span></div>
+        <div class="p-bar"><span>Painel</span><span>Caixa</span><span class="on">Clientes</span><span>WhatsApp</span><span>Mais</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="rotulo-frame">Proposto · Negócio</div>
+      <div class="phone touch" data-frame="novo" id="phoneN">
+        <div class="p-top"><span class="sino"></span></div>
+        <div class="p-scroll" id="m-app"></div>
+        <div class="dobra"><span>dobra — 911px</span></div>
+        <div class="p-bar"><span>Painel</span><span>Caixa</span><span class="on">Clientes</span><span>WhatsApp</span><span>Mais</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="rotulo-frame">Proposto · Essencial</div>
+      <div class="phone touch" data-frame="essencial" id="phoneE">
+        <div class="p-top"><span class="sino"></span></div>
+        <div class="p-scroll" id="e-app"></div>
+        <div class="dobra"><span>dobra — 911px</span></div>
+        <div class="p-bar"><span>Painel</span><span>Caixa</span><span class="on">Clientes</span><span>WhatsApp</span><span>Mais</span></div>
+      </div>
+    </div>
+
+    <div class="legenda">
+      <b>Ordem da tela.</b> Cabeçalho → abas → busca e “Filtrar” → faixa de segmentos → (barra do segmento, se houver um
+      selecionado) → lista. O cartão de retenção, a linha Exportar/Importar/Selecionar e o bloco da reativação saem da frente
+      da lista.<br><br>
+      <b>Faixa no celular.</b> Rola na horizontal, com o sétimo cartão parcialmente visível para avisar que tem mais.
+      Os cartões têm 128px: o bastante para “Prontos pra comprar” em uma linha.<br><br>
+      <b>Essencial.</b> Sem a faixa, a lista sobe: o que o plano não tem não ocupa a tela, e a tag e a
+      última compra continuam lá.<br><br>
+      <b>Ação sempre visível no toque</b> (regra 7): no celular o botão “Cobrar” / “Mandar cupom” fica na linha, sem hover.<br><br>
+      <b>“Última compra há 44 dias”</b> ganha a cor da faixa (âmbar em risco, rosa sumido, vermelho perdido): a mesma régua de
+      <code>diasSemComprar.ts</code>.
+      <div class="medidas" id="medidas">medindo…</div>
+    </div>
+  </div>
+
+  <div class="secao">C · Os segmentos e o que cada R$ quer dizer</div>
+  <table class="t">
+    <tr><th>Segmento</th><th>Quem entra</th><th>R$ em jogo</th><th>Ação da linha</th><th>Onde fica</th></tr>
+    <tr><td>Em risco</td><td>31 a 60 dias sem comprar</td><td>quanto já gastaram</td><td>Mandar cupom (se aceita ofertas)</td><td>Faixa</td></tr>
+    <tr><td>Sumidos</td><td>61 a 120 dias (o antigo “Inativo”)</td><td>quanto já gastaram</td><td>Mandar cupom (se aceita ofertas)</td><td>Faixa</td></tr>
+    <tr><td>VIP</td><td>R$ 2.000 ou mais gastos</td><td>quanto já gastaram</td><td>—</td><td>Faixa</td></tr>
+    <tr><td>Devendo</td><td>parcela do crediário vencida</td><td>quanto está vencido</td><td>Cobrar (mensagem de cobrança não depende de aceite)</td><td>Faixa</td></tr>
+    <tr><td>Prontos pra comprar</td><td>chegaram ao intervalo de compra de costume (± 7 dias)</td><td>ticket médio somado</td><td>Mandar novidade (se aceita ofertas)</td><td>Faixa</td></tr>
+    <tr><td>Aniversariantes do mês</td><td>fazem aniversário em setembro</td><td>ticket médio somado</td><td>Dar parabéns</td><td>Faixa</td></tr>
+    <tr><td>Novos · Recorrentes · Perdidos · Sem registro de consentimento</td><td>1 compra nos últimos 30 dias · 3+ compras e ativo · 121+ dias · tem telefone e nunca respondeu</td><td>—</td><td>—</td><td>Mais segmentos</td></tr>
+  </table>
+  <p class="legenda" style="max-width:1100px;margin-top:10px">
+    As contagens da faixa se sobrepõem (uma VIP pode estar em risco). A tag da linha é uma só, pela precedência proposta na
+    ficha: Devendo › Pronto pra comprar › Perdido › Sumido › Em risco › VIP › Recorrente › Novo. <b>Multi-CNPJ:</b> a lista é do dono;
+    no consolidado entra a coluna Loja e o filtro por loja. <b>Regra 1:</b> a faixa depende do plano, então a tela pede
+    <code>/auth/me</code> no mount (como a <code>ReativacaoEntrada</code> já faz).
+  </p>
+
+  <div class="secao">D · Essencial × Negócio — o que some</div>
+  <table class="t">
+    <tr><th>Pedaço da lista</th><th>Essencial</th><th>Negócio e acima</th></tr>
+    <tr><td>Busca, “+ Adicionar cliente”, “Mais ações” (Exportar, Importar, Selecionar)</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Linha: nome, “última compra há N dias”, total gasto, tag única</td><td>aparece (a tag vem só da régua de dias, VIP, Recorrente e Novo)</td><td>aparece (inclui Devendo e Pronto pra comprar)</td></tr>
+    <tr><td>Faixa de segmentos e “Mais segmentos”</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>“Filtrar”, filtros combinados e “Salvar como segmento”</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>Barra do segmento com a reativação (“Ver e mandar cupom”)</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>Ações da linha (“Cobrar”, “Mandar cupom”, “Mandar novidade”, “Dar parabéns”) e “aceita ofertas”</td><td><b>somem</b></td><td>aparecem</td></tr>
+  </table>
+  <p class="legenda" style="max-width:1100px;margin-top:10px">
+    A entrada compacta da reativação que a Fase 0 pôs na Lista para todos os planos passa a ser Negócio, pela mesma premissa.
+  </p>
+
+  <div class="secao">E · Decisões para o Caio</div>
+  <div class="decisoes">
+    <h2>Decisões para o Caio<span>.</span></h2>
+    <ol>
+      <li><b>O cartão “Retenção dos últimos 30 dias” sai da aba Lista?</b> <i>Proposta:</i> sai; continua na aba Retenção.</li>
+      <li><b>No desktop, a ação da linha aparece só no hover ou sempre?</b> (troque no painel acima)
+        <i>Proposta:</i> sempre — só aparece nas linhas que têm o que fazer, então não polui, e é igual ao celular.</li>
+      <li><b>“R$ em jogo” de Prontos pra comprar e Aniversariantes soma o ticket médio?</b> <i>Proposta:</i> sim, com a
+        legenda escrita no cartão; somar o gasto histórico inflaria o número.</li>
+      <li><b>Segmentos salvos valem para todas as lojas do dono ou por loja?</b> <i>Proposta:</i> do dono, com o filtro
+        de loja guardado dentro do segmento quando ele foi usado.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Base de exemplo: 312 clientes fictícios ────────────────
+  var NOMES = ['Mariana', 'Renata', 'Beatriz', 'Juliana', 'Patrícia', 'Camila', 'Fernanda', 'Larissa', 'Aline', 'Gabriela',
+    'Tatiane', 'Vanessa', 'Priscila', 'Luana', 'Débora', 'Carolina', 'Isabela', 'Letícia', 'Natália', 'Simone',
+    'Rafaela', 'Viviane', 'Cláudia', 'Helena', 'Sabrina', 'Bruna', 'Jéssica', 'Thaís', 'Eduarda', 'Rodrigo'];
+  var SOBRE = ['Couto', 'Pires', 'Nogueira', 'Andrade', 'Lemos', 'Rocha', 'Teixeira', 'Barros', 'Moraes', 'Cardoso',
+    'Freitas', 'Campos', 'Vieira', 'Duarte', 'Siqueira', 'Macedo', 'Paiva', 'Rezende', 'Toledo', 'Aguiar',
+    'Brandão', 'Fontes', 'Guerra', 'Moura', 'Prado', 'Queiroz', 'Sales', 'Tavares', 'Valente', 'Xavier'];
+  var TAGS = ['Gosta de novidades', 'Indicou amigas', 'Alfaiataria', 'Plus size', 'Revende'];
+  var TAM = ['PP', 'P', 'M', 'G', 'GG'];
+  var seed = 20260916;
+  function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+  var BASE = [];
+  for (var i = 0; i < 312; i++) {
+    var r = rnd();
+    var dias = r < 0.04 ? null :
+      r < 0.46 ? Math.floor(rnd() * 31) :
+      r < 0.61 ? 31 + Math.floor(rnd() * 30) :
+      r < 0.79 ? 61 + Math.floor(rnd() * 60) :
+      r < 0.92 ? 121 + Math.floor(rnd() * 120) : 241 + Math.floor(rnd() * 400);
+    var compras = dias == null ? 0 : 1 + Math.floor(Math.pow(rnd(), 2) * 22);
+    var ticket = 90 + Math.round(rnd() * 180);
+    var gasto = compras * ticket;
+    var n = NOMES[i % 30], s = SOBRE[(i * 7 + Math.floor(i / 30) * 13 + 3) % 30];
+    var c = {
+      id: i, nome: n + ' ' + s, ini: n[0] + s[0], dias: dias, compras: compras, ticket: ticket, gasto: gasto,
+      vencido: (dias != null && rnd() < 0.07) ? Math.round(60 + rnd() * 420) : 0,
+      aniver: rnd() < 0.085,
+      pronto: dias != null && compras >= 3 && dias >= 18 && dias <= 60 && rnd() < 0.3,
+      tam: TAM[Math.floor(rnd() * 5)],
+      tag: rnd() < 0.35 ? TAGS[Math.floor(rnd() * TAGS.length)] : null,
+      loja: rnd() < 0.62 ? 'Centro' : 'Shopping',
+      tel: rnd() < 0.83,
+      consent: 'sem'
+    };
+    if (c.tel) { var k = rnd(); c.consent = k < 0.38 ? 'sim' : (k < 0.46 ? 'nao' : 'sem'); }
+    BASE.push(c);
+  }
+  // A primeira linha é a cliente da ficha, para os dois mockups conversarem.
+  Object.assign(BASE[0], { nome: 'Mariana Couto', ini: 'MC', dias: 44, compras: 11, ticket: 317, gasto: 3482.4, vencido: 0, aniver: false, pronto: false, tag: 'Gosta de novidades', loja: 'Centro', tel: true, consent: 'sim', tam: 'M' });
+  Object.assign(BASE[1], { nome: 'Renata Pires', ini: 'RP', dias: 9, compras: 27, ticket: 330, gasto: 8910, vencido: 0, aniver: false, pronto: false, loja: 'Shopping', consent: 'nao', tam: 'P' });
+
+  var SEG = {
+    risco:   { nome: 'Em risco', cor: 'var(--amber)', f: function (c) { return c.dias != null && c.dias >= 31 && c.dias <= 60; }, r: 'gasto', desc: 'sem comprar há 31 a 60 dias' },
+    sumido:  { nome: 'Sumidos', cor: '#fca5a5', f: function (c) { return c.dias != null && c.dias >= 61 && c.dias <= 120; }, r: 'gasto', desc: 'sem comprar há 61 a 120 dias' },
+    vip:     { nome: 'VIP', cor: 'var(--violet3)', f: function (c) { return c.gasto >= 2000; }, r: 'gasto', desc: 'R$ 2.000 ou mais gastos na loja' },
+    devendo: { nome: 'Devendo', cor: 'var(--orange)', f: function (c) { return c.vencido > 0; }, r: 'vencido', desc: 'parcela do crediário vencida' },
+    pronto:  { nome: 'Prontos pra comprar', cor: 'var(--green)', f: function (c) { return c.pronto; }, r: 'ticket', desc: 'chegaram ao intervalo de compra de costume' },
+    aniver:  { nome: 'Aniversariantes', cor: 'var(--pink)', f: function (c) { return c.aniver; }, r: 'ticket', desc: 'fazem aniversário em setembro' },
+    novo:    { nome: 'Novos', cor: '#93c5fd', f: function (c) { return c.compras === 1 && c.dias <= 30; }, r: 'gasto', desc: 'primeira compra nos últimos 30 dias', mais: 1 },
+    recorrente: { nome: 'Recorrentes', cor: 'var(--teal)', f: function (c) { return c.compras >= 3 && c.dias != null && c.dias <= 30; }, r: 'gasto', desc: '3 compras ou mais e ativos', mais: 1 },
+    perdido: { nome: 'Perdidos', cor: 'var(--red)', f: function (c) { return c.dias != null && c.dias >= 121; }, r: 'gasto', desc: 'sem comprar há mais de 120 dias', mais: 1 },
+    semreg:  { nome: 'Sem registro de consentimento', cor: 'var(--ink3)', f: function (c) { return c.tel && c.consent === 'sem'; }, r: 'gasto', desc: 'têm telefone e nunca disseram sim ou não', mais: 1 }
+  };
+  var FAIXA = ['risco', 'sumido', 'vip', 'devendo', 'pronto', 'aniver'];
+  var RLBL = { gasto: 'já gastaram', vencido: 'vencido', ticket: 'ticket médio somado' };
+  var SALVOS = [];
+
+  function tagDe(c) {
+    var ess = G.plano === 'essencial';
+    // Essencial: sem crediário e sem segmentos com ação, então Devendo e
+    // Pronto pra comprar não existem como tag.
+    if (!ess && c.vencido > 0) return ['devendo', 'Devendo'];
+    if (!ess && c.pronto) return ['pronto', 'Pronto pra comprar'];
+    if (c.dias != null && c.dias >= 121) return ['perdido', 'Perdido'];
+    if (c.dias != null && c.dias >= 61) return ['sumido', 'Sumido'];
+    if (c.dias != null && c.dias >= 31) return ['risco', 'Em risco'];
+    if (c.gasto >= 2000) return ['vip', 'VIP'];
+    if (c.compras >= 3) return ['recorrente', 'Recorrente'];
+    if (c.compras <= 1) return ['novo', 'Novo'];
+    return null;
+  }
+  function acaoDe(c, seg) {
+    if (G.plano === 'essencial') return null;
+    if (c.vencido > 0 && (!seg || seg === 'devendo')) return ['cobrar', 'Cobrar'];
+    if (seg === 'aniver') return ['', 'Dar parabéns'];
+    if (!c.tel || c.consent !== 'sim') return null;
+    var t = tagDe(c);
+    if (t && (t[0] === 'risco' || t[0] === 'sumido')) return ['', 'Mandar cupom'];
+    if (t && t[0] === 'pronto') return ['', 'Mandar novidade'];
+    return null;
+  }
+  function brl(v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function brl0(v) { return 'R$ ' + Math.round(v).toLocaleString('pt-BR'); }
+  function ult(c) {
+    if (c.dias == null) return ['', 'nenhuma compra ainda'];
+    var cls = c.dias >= 121 ? 'perdido' : c.dias >= 61 ? 'sumido' : c.dias >= 31 ? 'risco' : '';
+    var t = c.dias === 0 ? 'última compra hoje' : c.dias === 1 ? 'última compra ontem' : 'última compra há ' + c.dias + ' dias';
+    return [cls, t];
+  }
+  function soma(lista, tipo) { return lista.reduce(function (s, c) { return s + (tipo === 'vencido' ? c.vencido : tipo === 'ticket' ? c.ticket : c.gasto); }, 0); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (x) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]; }); }
+
+  var G = { plano: 'negocio', visao: 'loja', acao: 'hover' };
+
+  function novoEstado() {
+    return { seg: null, busca: '', menu: false, maisSeg: false, painel: false, convite: null, limite: 12, dias: 31,
+      f: { dias: null, gasto: null, tag: null, tam: null, loja: null, consent: null }, salvando: false, nomeSalvo: '' };
+  }
+
+  function filtrosAtivos(f) { return Object.keys(f).filter(function (k) { return f[k] != null; }).length; }
+
+  function aplicaFiltros(lista, f) {
+    return lista.filter(function (c) {
+      if (f.dias != null && !(c.dias != null && c.dias >= f.dias)) return false;
+      if (f.gasto != null && c.gasto < f.gasto) return false;
+      if (f.tag != null && c.tag !== f.tag) return false;
+      if (f.tam != null && c.tam !== f.tam) return false;
+      if (f.loja != null && c.loja !== f.loja) return false;
+      if (f.consent != null && c.consent !== f.consent) return false;
+      return true;
+    });
+  }
+
+  function segFn(key) {
+    if (SEG[key]) return SEG[key].f;
+    var s = SALVOS.filter(function (x) { return x.id === key; })[0];
+    var base = s.base ? segFn(s.base) : null;
+    return function (c) { return (!base || base(c)) && aplicaFiltros([c], s.f).length === 1; };
+  }
+  function segInfo(key) {
+    if (SEG[key]) return SEG[key];
+    var s = SALVOS.filter(function (x) { return x.id === key; })[0];
+    return { nome: s.nome, cor: 'var(--violet4)', r: 'gasto', desc: s.desc };
+  }
+
+  function visiveis(st) {
+    var l = BASE;
+    if (st.seg) l = l.filter(segFn(st.seg));
+    if ((st.seg === 'risco' || st.seg === 'sumido') && st.dias > (st.seg === 'risco' ? 31 : 61)) {
+      l = l.filter(function (c) { return c.dias >= st.dias; });
+    }
+    l = aplicaFiltros(l, st.f);
+    if (st.busca) { var q = st.busca.toLowerCase(); l = l.filter(function (c) { return c.nome.toLowerCase().indexOf(q) >= 0; }); }
+    if (!st.seg && !filtrosAtivos(st.f)) return l; // ordem da lista de hoje: cadastro mais recente primeiro
+    var ord = st.seg === 'devendo' ? 'vencido' : 'gasto';
+    return l.slice().sort(function (a, b) { return (b[ord] - a[ord]); });
+  }
+
+  function cardSeg(key, st, m) {
+    var info = segInfo(key);
+    var lista = BASE.filter(segFn(key));
+    var r = soma(lista, info.r);
+    return '<button class="sg' + (st.seg === key ? ' on' : '') + (SEG[key] ? '' : ' salvo') + '" data-seg="' + key + '">' +
+      '<div class="l"><i style="background:' + info.cor + '"></i>' + esc(info.nome) + '</div>' +
+      '<div class="c">' + lista.length + '</div>' +
+      '<div class="r"><b class="' + (info.r === 'vencido' ? 'o' : '') + '">' + brl0(r) + '</b><small>' + RLBL[info.r] + '</small></div></button>';
+  }
+
+  function menuMais() {
+    return '<div class="menu" data-stop>' +
+      '<button data-acao="exportar">Exportar lista<small>planilha CSV com os clientes filtrados</small></button>' +
+      '<button data-acao="importar">Importar clientes<small>de outro sistema, por planilha</small></button>' +
+      '<div class="sep"></div>' +
+      '<button data-acao="selecionar">Selecionar vários<small>para excluir ou mandar mensagem em lote</small></button></div>';
+  }
+
+  function menuMaisSeg(st) {
+    var h = '<div class="menu" data-stop style="top:auto;right:0;margin-top:6px">' + '<div class="ttl">Mais segmentos</div>';
+    ['novo', 'recorrente', 'perdido', 'semreg'].forEach(function (k) {
+      h += '<button data-seg="' + k + '">' + SEG[k].nome + ' · ' + BASE.filter(SEG[k].f).length + '<small>' + SEG[k].desc + '</small></button>';
+    });
+    h += '<div class="sep"></div><div class="ttl">Seus segmentos</div>';
+    if (!SALVOS.length) h += '<button data-abrir-painel>Nenhum ainda<small>Use “Filtrar” e depois “Salvar como segmento”</small></button>';
+    SALVOS.forEach(function (s) { h += '<button data-seg="' + s.id + '">' + esc(s.nome) + '<small>' + esc(s.desc) + '</small></button>'; });
+    return h + '</div>';
+  }
+
+  function selbar(st, m) {
+    if (!st.seg) return '';
+    var info = segInfo(st.seg);
+    var l = visiveis(st);
+    var aceitam = l.filter(function (c) { return c.consent === 'sim'; }).length;
+    var r = soma(l, info.r);
+    var reat = st.seg === 'risco' || st.seg === 'sumido';
+    var extra = '';
+    if (reat) {
+      var cortes = st.seg === 'risco' ? [31, 45] : [61, 90, 120];
+      extra = '<div class="dias">' + cortes.map(function (d, i) {
+        return '<button data-dias="' + d + '" class="' + (st.dias === d || (i === 0 && st.dias < cortes[0]) ? 'on' : '') + '">' + (i === 0 ? 'todos' : d + '+ dias') + '</button>';
+      }).join('') + '</div>';
+    }
+    var btn = reat ? '<button class="b pri">Ver e mandar cupom</button>' :
+      st.seg === 'devendo' ? '<button class="b pri">Cobrar pela régua</button>' :
+      st.seg === 'aniver' ? '<button class="b pri">Mandar parabéns</button>' :
+      st.seg === 'pronto' ? '<button class="b pri">Mandar novidade</button>' : '';
+    var sub = info.desc + (reat || st.seg === 'pronto' ? ' · a mensagem só vai para os ' + aceitam + ' que aceitam ofertas' : '');
+    return '<div class="selbar"><div><div class="t">' + esc(info.nome) + ' <span>· ' + l.length + ' clientes · ' + brl0(r) + ' ' + RLBL[info.r] + '</span></div>' +
+      '<div class="s">' + esc(sub) + '</div></div>' + extra + '<div class="sp"></div>' + btn +
+      '<button class="x" data-limpar-seg>Limpar</button></div>';
+  }
+
+  function linhas(st, m) {
+    var l = visiveis(st);
+    var cons = G.visao === 'cons';
+    if (!l.length) return '<div class="lista"><div class="nada">Nenhum cliente com esses filtros.</div></div>';
+    var h = '<div class="lista' + (cons ? ' cons' : '') + '">';
+    if (!m) h += '<div class="lhead"><span>Cliente</span>' + (cons ? '<span>Loja</span>' : '') + '<span style="text-align:right">Total gasto</span><span>Tag</span><span></span><span style="text-align:right">Ação</span></div>';
+    l.slice(0, st.limite).forEach(function (c, idx) {
+      var u = ult(c), t = tagDe(c), a = acaoDe(c, st.seg);
+      var tagH = t ? '<span class="tg ' + t[0] + '">' + t[1] + '</span>' : '<span></span>';
+      var actH = a ? '<button class="ra ' + a[0] + '" data-ra="' + a[1] + '">' + a[1] + '</button>' : '<span></span>';
+      var href = idx === 0 && c.id === 0 ? 'fase1-ficha-cliente.html' : 'fase1-ficha-cliente.html';
+      if (m) {
+        h += '<a class="row" href="' + href + '"' + (idx === 0 ? ' data-primeira-linha' : '') + '><div class="who"><div class="av">' + c.ini + '</div><div style="min-width:0">' +
+          '<div class="nm">' + esc(c.nome) + '</div><div class="ul ' + u[0] + '">' + u[1] + '</div>' +
+          (cons ? '<div class="lj">' + c.loja + '</div>' : '') + '<div class="mini-tg">' + tagH + '</div></div></div>' +
+          '<div class="col-r">' + (st.seg === 'devendo'
+            ? '<div class="gs" style="color:var(--orange)">' + brl(c.vencido) + '</div><div class="ul">vencido</div>'
+            : '<div class="gs">' + brl(c.gasto) + '</div>') + actH + '</div></a>';
+      } else {
+        h += '<a class="row" href="' + href + '"><div class="who"><div class="av">' + c.ini + '</div><div style="min-width:0">' +
+          '<div class="nm">' + esc(c.nome) + '</div><div class="ul ' + u[0] + '">' + u[1] + '</div></div></div>' +
+          (cons ? '<span class="lj">Loja da Lu · ' + c.loja + '</span>' : '') +
+          '<div class="gs">' + brl(c.gasto) + '</div>' + tagH +
+          '<span style="font-size:11px;color:var(--ink3)">' + (G.plano === 'essencial' ? '' : c.vencido ? '<b style="color:var(--orange)">' + brl(c.vencido) + '</b> vencido' : (c.consent === 'sim' ? 'aceita ofertas' : c.consent === 'nao' ? 'não aceita ofertas' : '')) + '</span>' + actH + '</a>';
+      }
+    });
+    if (l.length > st.limite) h += '<button class="mais-l" data-mais-linhas>Mostrar mais ' + Math.min(20, l.length - st.limite) + ' de ' + (l.length - st.limite) + '</button>';
+    return h + '</div>';
+  }
+
+  function painel(st, m) {
+    if (!st.painel) return '';
+    var f = st.f;
+    var cons = G.visao === 'cons';
+    function grupo(k, titulo, ops, extra) {
+      return '<div class="fg"><div class="k">' + titulo + (extra ? ' <small>' + extra + '</small>' : '') + '</div><div class="ops">' +
+        ops.map(function (o) {
+          var dis = o[2];
+          return '<button class="op' + (f[k] === o[0] ? ' on' : '') + '" data-f="' + k + '" data-v="' + (o[0] == null ? '' : o[0]) + '"' + (dis ? ' disabled' : '') + '>' + o[1] + '</button>';
+        }).join('') + '</div></div>';
+    }
+    var prev = aplicaFiltros(st.seg ? BASE.filter(segFn(st.seg)) : BASE, f);
+    var desc = descFiltros(f);
+    var h = '<div class="scrim" data-fechar-painel></div><div class="painel' + (m ? ' sheet' : '') + '" data-stop>' +
+      '<div class="ph"><h3>Filtrar<span>.</span></h3><button class="x" data-fechar-painel>Fechar</button></div><div class="pb">' +
+      grupo('dias', 'Dias sem comprar', [[null, 'Qualquer'], [30, '30+'], [60, '60+'], [90, '90+'], [120, '120+'], [180, '180+']]) +
+      grupo('gasto', 'Total gasto', [[null, 'Qualquer'], [500, 'R$ 500+'], [1000, 'R$ 1.000+'], [2000, 'R$ 2.000+'], [5000, 'R$ 5.000+']]) +
+      grupo('tag', 'Tag', [[null, 'Qualquer']].concat(TAGS.map(function (t) { return [t, t]; }))) +
+      grupo('tam', 'Preferência · tamanho', [[null, 'Qualquer']].concat(TAM.map(function (t) { return [t, t]; }))) +
+      grupo('consent', 'Aceita ofertas', [[null, 'Qualquer'], ['sim', 'Aceita'], ['sem', 'Sem registro'], ['nao', 'Não aceita']]) +
+      grupo('loja', 'Loja de origem', [[null, 'Todas'], ['Centro', 'Loja da Lu · Centro', !cons], ['Shopping', 'Loja da Lu · Shopping', !cons]], cons ? '' : '· disponível na visão consolidada') +
+      '</div><div class="pf"><div class="res"><b>' + prev.length + '</b> clientes <span>· ' + brl0(soma(prev, 'gasto')) + ' já gastaram' + (st.seg ? ' · dentro de ' + segInfo(st.seg).nome : '') + '</span></div>' +
+      (st.salvando
+        ? '<div class="salvar"><input data-nome-seg placeholder="Nome do segmento, ex.: Clientes M que sumiram" value="' + esc(st.nomeSalvo) + '"><button class="b pri" data-confirma-salvar>Salvar</button></div>' +
+          '<div style="font-size:11px;color:var(--ink3);margin-top:6px">Guarda os filtros, não a lista: o segmento se atualiza sozinho. ' + esc(desc) + '</div>'
+        : '<div class="pf-row"><button class="b" data-limpar-f>Limpar</button><button class="b" data-salvar-seg' + (filtrosAtivos(f) ? '' : ' disabled style="opacity:.45"') + '>Salvar como segmento</button><button class="b pri" data-fechar-painel>Ver ' + prev.length + ' clientes</button></div>') +
+      '</div></div>';
+    return h;
+  }
+
+  function descFiltros(f) {
+    var p = [];
+    if (f.dias != null) p.push(f.dias + '+ dias sem comprar');
+    if (f.gasto != null) p.push('gasto ' + brl0(f.gasto) + '+');
+    if (f.tag != null) p.push('tag ' + f.tag);
+    if (f.tam != null) p.push('tamanho ' + f.tam);
+    if (f.consent != null) p.push({ sim: 'aceita ofertas', sem: 'sem registro', nao: 'não aceita' }[f.consent]);
+    if (f.loja != null) p.push('loja ' + f.loja);
+    return p.join(' · ');
+  }
+
+  function app(st, m) {
+    var cons = G.visao === 'cons';
+    var ess = G.plano === 'essencial';
+    if (ess) { st.seg = null; st.painel = false; st.maisSeg = false; Object.keys(st.f).forEach(function (x) { st.f[x] = null; }); }
+    var nf = filtrosAtivos(st.f);
+    var chips = '';
+    if (nf) chips = descFiltros(st.f).split(' · ').map(function (t) { return '<span class="fchip" data-limpar-f>' + esc(t) + ' ×</span>'; }).join('');
+    var h = '<div class="eyebrow"><span class="dot"></span>Loja da Lu · Clientes' + (cons ? ' <span class="badge-n">Consolidado · 2 lojas</span>' : '') + '</div>' +
+      '<div class="hero"><h2 class="hero-t">Clientes<span>.</span></h2>' +
+      (m ? '' : '<div class="hero-a"><button class="b pri">+ Adicionar cliente</button><button class="b' + (st.menu ? ' on' : '') + '" data-menu>Mais ações ▾</button>' + (st.menu ? menuMais() : '') + '</div>') +
+      '</div>' +
+      '<div class="hero-s">' + BASE.length + ' clientes' + (m ? '' : ' cadastrados de 5.000 do plano') + ' · ' + brl0(soma(BASE, 'gasto')) + ' acumulado' + (cons ? ' nas 2 lojas' : '') + '</div>' +
+      (m ? '<div class="hero-a" style="margin-bottom:10px"><button class="b pri">+ Adicionar</button><button class="b' + (st.menu ? ' on' : '') + '" data-menu>Mais ações ▾</button>' + (st.menu ? menuMais() : '') + '</div>' : '') +
+      '<div class="abas"><span class="aba on">Lista</span><span class="aba">Ranking</span><span class="aba">Retenção</span><span class="aba">Avaliações</span></div>' +
+      '<div class="busca-row"><input class="busca" data-busca placeholder="Buscar por nome, telefone, e-mail ou Instagram…" value="' + esc(st.busca) + '">' +
+      (ess ? '' : '<button class="b' + (nf ? ' on' : '') + '" data-abrir-painel>Filtrar' + (nf ? ' <span class="n">' + nf + '</span>' : '') + '</button>' + (m ? '' : chips)) + '</div>' +
+      (ess ? '' : '<div class="faixa-wrap"><div class="faixa">' + FAIXA.map(function (k) { return cardSeg(k, st, m); }).join('') +
+      SALVOS.map(function (s) { return cardSeg(s.id, st, m); }).join('') +
+      '<button class="sg mais' + (st.maisSeg ? ' on' : '') + '" data-mais-seg><div class="c">Mais segmentos ▾</div><div class="r">' + (4 + SALVOS.length) + ' outros<small>e os seus</small></div></button></div>' +
+      (st.maisSeg ? menuMaisSeg(st) : '') + '</div>') +
+      selbar(st, m) + linhas(st, m) + painel(st, m);
+    return h;
+  }
+
+  var INST = [
+    { el: document.getElementById('d-app'), st: novoEstado(), m: false, host: document.getElementById('desk') },
+    { el: document.getElementById('m-app'), st: novoEstado(), m: true, host: document.getElementById('phoneN'), negocio: true },
+    { el: document.getElementById('e-app'), st: novoEstado(), m: true, host: document.getElementById('phoneE'), essencial: true }
+  ];
+
+  function renderUm(it) {
+    var planoSalvo = G.plano;
+    // O terceiro celular é sempre Essencial; o segundo, sempre Negócio.
+    if (it.essencial) G.plano = 'essencial';
+    else if (it.m) G.plano = 'negocio';
+    var foco = document.activeElement && it.el.contains(document.activeElement) ? document.activeElement.getAttribute('data-busca') != null ? 'busca' : document.activeElement.getAttribute('data-nome-seg') != null ? 'nome' : null : null;
+    var top = it.el.scrollTop;
+    // Painel e convite ficam presos à moldura, não ao conteúdo que rola.
+    var html = app(it.st, it.m);
+    var corte = html.indexOf('<div class="scrim"');
+    it.el.innerHTML = corte >= 0 ? html.slice(0, corte) : html;
+    var ov = it.host.querySelector(':scope > .ov');
+    if (!ov) { ov = document.createElement('div'); ov.className = 'ov'; it.host.appendChild(ov); }
+    ov.innerHTML = corte >= 0 ? html.slice(corte) : '';
+    it.host.classList.toggle('modo-hover', !it.m && G.acao === 'hover');
+    it.el.scrollTop = top;
+    if (foco === 'busca') { var b = it.el.querySelector('[data-busca]'); b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
+    if (foco === 'nome' || (it.st.salvando && !foco)) { var n = ov.querySelector('[data-nome-seg]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
+    G.plano = planoSalvo;
+  }
+  function render() { INST.forEach(renderUm); medir(); }
+
+  INST.forEach(function (it) {
+    it.host.addEventListener('click', function (ev) {
+      var t = ev.target, st = it.st;
+      var q = function (sel) { return t.closest(sel); };
+      if (q('.row') && !q('[data-ra]')) { return; } // o link abre a ficha
+      if (q('[data-ra]')) { ev.preventDefault(); return; }
+      if (q('[data-menu]')) { st.menu = !st.menu; st.maisSeg = false; render(); return; }
+      if (q('[data-acao]')) { st.menu = false; render(); return; }
+      if (q('[data-mais-seg]')) { st.maisSeg = !st.maisSeg; st.menu = false; render(); return; }
+      if (q('[data-seg]')) {
+        var k = q('[data-seg]').dataset.seg;
+        st.maisSeg = false;
+        st.seg = st.seg === k ? null : k; st.dias = 0; st.limite = 12; render(); return;
+      }
+      if (q('[data-limpar-seg]')) { st.seg = null; render(); return; }
+      if (q('[data-dias]')) { st.dias = +q('[data-dias]').dataset.dias; render(); return; }
+      if (q('[data-abrir-painel]')) {
+        st.maisSeg = false;
+        st.painel = true;
+        render(); return;
+      }
+      if (q('[data-fechar-painel]')) { st.painel = false; st.salvando = false; render(); return; }
+      if (q('[data-f]')) {
+        var b = q('[data-f]'); if (b.disabled) return;
+        var v = b.dataset.v; var key = b.dataset.f;
+        st.f[key] = v === '' ? null : (isNaN(+v) ? v : +v);
+        render(); return;
+      }
+      if (q('[data-limpar-f]')) { Object.keys(st.f).forEach(function (x) { st.f[x] = null; }); render(); return; }
+      if (q('[data-salvar-seg]')) { if (!filtrosAtivos(st.f)) return; st.salvando = true; st.nomeSalvo = ''; render(); return; }
+      if (q('[data-confirma-salvar]')) {
+        var nome = (st.nomeSalvo || '').trim() || 'Meu segmento ' + (SALVOS.length + 1);
+        var id = 'salvo' + SALVOS.length;
+        SALVOS.push({ id: id, nome: nome, base: st.seg, f: JSON.parse(JSON.stringify(st.f)),
+          desc: (st.seg ? segInfo(st.seg).nome + ' · ' : '') + descFiltros(st.f) });
+        Object.keys(st.f).forEach(function (x) { st.f[x] = null; });
+        st.salvando = false; st.painel = false; st.seg = id;
+        render(); return;
+      }
+      if (q('[data-mais-linhas]')) { st.limite += 20; render(); return; }
+      if (!q('[data-stop]') && (st.menu || st.maisSeg)) { st.menu = false; st.maisSeg = false; render(); }
+    });
+    it.host.addEventListener('input', function (ev) {
+      if (ev.target.hasAttribute('data-busca')) { it.st.busca = ev.target.value; renderUm(it); }
+      if (ev.target.hasAttribute('data-nome-seg')) { it.st.nomeSalvo = ev.target.value; }
+    });
+    it.host.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.target.hasAttribute('data-nome-seg')) { it.host.querySelector('[data-confirma-salvar]').click(); }
+    });
+  });
+
+  var FIT = true;
+  function fit() {
+    document.querySelectorAll('.desk').forEach(function (d) { d.style.zoom = FIT ? Math.min(1, d.parentElement.clientWidth / 1442) : 1; });
+  }
+  window.addEventListener('resize', fit);
+
+  document.getElementById('ctl').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.fit) {
+      FIT = b.dataset.fit === '1';
+      this.querySelectorAll('[data-fit]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      fit(); return;
+    }
+    G[b.dataset.k] = b.dataset.v;
+    this.querySelectorAll('[data-k="' + b.dataset.k + '"]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    if (b.dataset.k === 'plano') { INST[0].st.seg = null; INST[0].st.painel = false; }
+    if (b.dataset.k === 'visao') { INST.forEach(function (it) { it.st.f.loja = null; }); }
+    render();
+  });
+
+  // ── Medição da dobra (igual à Fase 0) ──────────────────────
+  function medir() {
+    var out = document.getElementById('medidas');
+    if (!out) return;
+    function frame(nome) {
+      var f = document.querySelector('[data-frame="' + nome + '"]');
+      var scroll = f.querySelector('.p-scroll');
+      var linhasEl = f.querySelectorAll('.row, .lin');
+      var topo = scroll.getBoundingClientRect().top - scroll.scrollTop;
+      var disp = scroll.getBoundingClientRect().height;
+      var primeira = f.querySelector('[data-primeira-linha]');
+      var fim = primeira.getBoundingClientRect().bottom - topo;
+      var inteiras = 0;
+      linhasEl.forEach(function (l) { if (l.getBoundingClientRect().bottom - topo <= disp) inteiras++; });
+      return { disp: Math.round(disp), fim: Math.round(fim), cabe: fim <= disp, inteiras: inteiras };
+    }
+    var h = frame('hoje'), n = frame('novo'), e = frame('essencial');
+    out.textContent =
+      'MEDIDO EM 390 × 911\n' +
+      'área rolável (911 − 48 do topo − 59 da barra): ' + n.disp + 'px\n\n' +
+      'HOJE\n' +
+      'fim da 1ª linha ........ ' + h.fim + 'px  ' + (h.cabe ? '✓ acima da dobra' : '✗ abaixo da dobra') + '\n' +
+      'linhas inteiras visíveis  ' + h.inteiras + '\n\n' +
+      'PROPOSTO (com a faixa de segmentos)\n' +
+      'fim da 1ª linha ........ ' + n.fim + 'px  ' + (n.cabe ? '✓ acima da dobra' : '✗ abaixo da dobra') + '\n' +
+      'linhas inteiras visíveis  ' + n.inteiras + '\n\n' +
+      'PROPOSTO · ESSENCIAL (sem a faixa)\n' +
+      'fim da 1ª linha ........ ' + e.fim + 'px  ' + (e.cabe ? '✓ acima da dobra' : '✗ abaixo da dobra') + '\n' +
+      'linhas inteiras visíveis  ' + e.inteiras;
+  }
+
+  (function () {
+    var alvo = BASE.filter(function (c) { return c.dias != null && c.dias >= 60; });
+    document.getElementById('hoje-total').textContent = brl(soma(BASE, 'gasto'));
+    document.getElementById('hoje-n').textContent = alvo.length;
+    document.getElementById('hoje-r').textContent = brl0(soma(alvo, 'gasto'));
+  })();
+  render();
+  fit();
+  window.addEventListener('load', function () { medir(); fit(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(medir);
+})();
+</script>
+</body>
+</html>
