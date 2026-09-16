@@ -6,9 +6,13 @@ import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { toast } from "@/components/Toast";
-import { creditApi } from "@/services/creditApi";
 import type { Customer } from "./types";
 import { fmt, getStatus } from "./types";
+import {
+  hasUsablePhone, buildGreetingWaLink, buildReviewRequestWaLink, openExternalUrl,
+} from "./customerActions";
+import { ReceberPagamentoModal } from "./ReceberPagamentoModal";
+import { HistoricoComprasModal } from "./HistoricoComprasModal";
 
 function Tag({ tag }: { tag: string }) {
   const m: Record<string, { b: string; f: string }> = {
@@ -42,7 +46,6 @@ export function CustomerRow({
   showCompanyBadge?: boolean;
 }) {
   const [h, sH] = useState(false);
-  const [busy, setBusy] = useState(false);
   const w = Platform.OS === "web";
   const tags = getStatus(c);
   const { settings: pdvSettings } = usePdvSettings();
@@ -52,54 +55,36 @@ export function CustomerRow({
   const qc = useQueryClient();
   const { company } = useAuthStore();
 
-  // Receber pagamento — MVP via window.prompt (web). Em mobile a UX e parecida,
-  // mas falla pra browser-only por ora. Modal completo vira numa V2 quando o
-  // fluxo estiver validado pelo Davi.
-  async function handleReceivePayment() {
-    if (!hasCredit) return;
-    // Crediario e por (cliente, empresa) — usar a empresa onde o cliente
-    // foi cadastrado (que e onde o saldo existe), nao a current.
-    const targetCompanyId = c.company_id || company?.id;
-    if (!targetCompanyId) {
-      toast.error("Empresa do cliente não identificada");
-      return;
-    }
-    if (typeof window === "undefined" || typeof window.prompt !== "function") {
-      toast.error("Receber pagamento disponível apenas no navegador");
-      return;
-    }
-    const raw = window.prompt(
-      `Receber pagamento de ${c.name}\n` +
-      `Saldo em aberto: ${fmt(c.creditBalance)}\n\n` +
-      `Quanto recebeu? (R$)`,
-      c.creditBalance.toFixed(2).replace(".", ",")
-    );
-    if (raw === null) return;
-    const cleaned = String(raw).replace(",", ".").replace(/[^\d.]/g, "");
-    const amount = parseFloat(cleaned);
-    if (!isFinite(amount) || amount <= 0) {
-      toast.error("Valor inválido");
-      return;
-    }
-    if (amount > c.creditBalance + 0.01) {
-      const ok = window.confirm(
-        `O valor recebido (${fmt(amount)}) e maior que o saldo em aberto (${fmt(c.creditBalance)}).\n\n` +
-        `Isso vai gerar credito a favor do cliente. Confirmar?`
-      );
-      if (!ok) return;
-    }
-    setBusy(true);
-    try {
-      const res = await creditApi.receivePayment(targetCompanyId, c.id, { amount });
-      toast.success(`Pagamento registrado. Novo saldo: ${fmt(res.new_balance)}`);
-      // Invalida lista de clientes (tem credit_balance) + saldos de credit
-      qc.invalidateQueries({ queryKey: ["customers"] });
-      qc.invalidateQueries({ queryKey: ["credit-balances"] });
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao registrar pagamento");
-    } finally {
-      setBusy(false);
-    }
+  // Crediario e vendas sao por (cliente, empresa) — usar a empresa onde o
+  // cliente foi cadastrado (multi-CNPJ: e onde o saldo/historico existem),
+  // nao a current da sessao.
+  const targetCompanyId = c.company_id || company?.id || "";
+  const storeName = company?.name || "nossa loja";
+  const phoneOk = hasUsablePhone(c.phone);
+
+  const [showPagamento, setShowPagamento] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
+
+  function handleSendWhatsapp() {
+    const url = buildGreetingWaLink(c.phone, c.name, storeName);
+    if (!url) { toast.error("Telefone do cliente inválido"); return; }
+    openExternalUrl(url);
+  }
+
+  function handleRequestReview() {
+    // Sem endpoint manual de avaliação alimentável a partir da lista de
+    // clientes (companiesApi.requestReview exige sale_id — ver nota em
+    // customerActions.ts). Fallback: wa.me, mesmo padrão do WhatsApp acima.
+    const url = buildReviewRequestWaLink(c.phone, c.name, storeName);
+    if (!url) { toast.error("Telefone do cliente inválido"); return; }
+    openExternalUrl(url);
+  }
+
+  function handlePaymentSuccess(newBalance: number) {
+    toast.success(`Pagamento registrado. Novo saldo: ${fmt(newBalance)}`);
+    // Invalida lista de clientes (tem credit_balance) + saldos de credit
+    qc.invalidateQueries({ queryKey: ["customers"] });
+    qc.invalidateQueries({ queryKey: ["credit-balances"] });
   }
 
   return (
@@ -170,18 +155,38 @@ export function CustomerRow({
           <View style={s.actions}>
             {hasCredit && (
               <Pressable
-                onPress={handleReceivePayment}
-                disabled={busy}
-                style={[s.receiveBtn, busy && { opacity: 0.5 }]}
+                onPress={() => setShowPagamento(true)}
+                style={s.receiveBtn}
+                testID={`cliente-receber-pagamento-${c.id}`}
               >
-                <Text style={s.receiveText}>
-                  {busy ? "Registrando..." : "Receber pagamento"}
-                </Text>
+                <Text style={s.receiveText}>Receber pagamento</Text>
               </Pressable>
             )}
-            {["Enviar WhatsApp", "Pedir avaliação", "Ver histórico"].map(a =>
-              <Pressable key={a} style={s.actionBtn}><Text style={s.actionText}>{a}</Text></Pressable>
-            )}
+            <Pressable
+              onPress={handleSendWhatsapp}
+              disabled={!phoneOk}
+              style={[s.actionBtn, !phoneOk && s.actionBtnDisabled]}
+              testID={`cliente-wa-${c.id}`}
+            >
+              <Text style={[s.actionText, !phoneOk && s.actionTextDisabled]}>Enviar WhatsApp</Text>
+              {!phoneOk && <Text style={s.actionHint}>sem telefone</Text>}
+            </Pressable>
+            <Pressable
+              onPress={handleRequestReview}
+              disabled={!phoneOk}
+              style={[s.actionBtn, !phoneOk && s.actionBtnDisabled]}
+              testID={`cliente-avaliacao-${c.id}`}
+            >
+              <Text style={[s.actionText, !phoneOk && s.actionTextDisabled]}>Pedir avaliação</Text>
+              {!phoneOk && <Text style={s.actionHint}>sem telefone</Text>}
+            </Pressable>
+            <Pressable
+              onPress={() => setShowHistorico(true)}
+              style={s.actionBtn}
+              testID={`cliente-historico-${c.id}`}
+            >
+              <Text style={s.actionText}>Ver histórico</Text>
+            </Pressable>
             {/* 15/09/2026 — Ótica: a receita é do cliente, então a porta de
                 entrada dela fica na ficha. Só aparece com o módulo ligado. */}
             {oticaEnabled && (
@@ -192,6 +197,24 @@ export function CustomerRow({
             {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}
             {onDelete && <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}><Text style={s.deleteText}>Excluir cliente</Text></Pressable>}
           </View>
+          {hasCredit && (
+            <ReceberPagamentoModal
+              visible={showPagamento}
+              onClose={() => setShowPagamento(false)}
+              companyId={targetCompanyId}
+              customerId={c.id}
+              customerName={c.name}
+              balance={c.creditBalance}
+              onSuccess={handlePaymentSuccess}
+            />
+          )}
+          <HistoricoComprasModal
+            visible={showHistorico}
+            onClose={() => setShowHistorico(false)}
+            companyId={targetCompanyId}
+            customerId={c.id}
+            customerName={c.name}
+          />
         </View>
       )}
     </View>
@@ -252,6 +275,11 @@ const s = StyleSheet.create({
   actions: { flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, flexWrap: "wrap" },
   actionBtn: { backgroundColor: Colors.bg3, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   actionText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
+  // Botão desabilitado (ex.: sem telefone p/ WhatsApp) — hint sempre visível,
+  // nunca dependente de hover (armadilha 7 do CLAUDE.md: touch não tem hover).
+  actionBtnDisabled: { opacity: 0.5 },
+  actionTextDisabled: { color: Colors.ink3 },
+  actionHint: { fontSize: 9, color: Colors.ink3, marginTop: 1 },
   // Botao "Receber pagamento" — destaque laranja, mesmo tom do badge
   receiveBtn: {
     backgroundColor: "rgba(251,146,60,0.16)",
