@@ -2,14 +2,18 @@ import { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE, fmt } from "@/constants/helpers";
-import { TabBar } from "@/components/TabBar";
 import { HoverCard } from "@/components/HoverCard";
-import { PageHeader } from "@/components/PageHeader";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAppointments } from "@/hooks/useAppointments";
+import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
+import { SummaryCard } from "@/components/SummaryCard";
 
-const TABS = ["Agenda", "Horários", "Configurações"];
+const TABS: ScreenTabItem[] = [
+  { key: "0", label: "Agenda" },
+  { key: "1", label: "Horários" },
+  { key: "2", label: "Configurações" },
+];
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
 
@@ -92,21 +96,11 @@ function DayView({ appointments, onConfirm, onCancel }: { appointments: any[]; o
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [appointments]);
 
-  const totalRevenue = appointments.filter(a => a.status !== 'cancelado' && a.status !== 'cancelled').reduce((s, a) => s + (parseFloat(a.total_amount) || 0), 0);
-  const confirmed = appointments.filter(a => a.status === 'confirmado' || a.status === 'confirmed' || a.status === 'concluido').length;
-  const pending = appointments.filter(a => a.status === 'pendente' || a.status === 'pending' || a.status === 'agendado').length;
-
   return (
     <View>
-      <View style={dv.kpis}>
-        <View style={dv.kpi}><Text style={dv.kv}>{appointments.length}</Text><Text style={dv.kl}>Agendamentos</Text></View>
-        <View style={dv.kpi}><Text style={[dv.kv, { color: Colors.green }]}>{confirmed}</Text><Text style={dv.kl}>Confirmados</Text></View>
-        <View style={dv.kpi}><Text style={[dv.kv, { color: Colors.amber }]}>{pending}</Text><Text style={dv.kl}>Pendentes</Text></View>
-        <View style={dv.kpi}><Text style={[dv.kv, { color: Colors.green }]}>{fmt(totalRevenue)}</Text><Text style={dv.kl}>Receita estimada</Text></View>
-      </View>
       {grouped.length === 0 && (
         <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
-          <Text style={{ fontSize: 28 }}>📅</Text>
+          <View style={dv.emptyIcon}><Icon name="calendar" size={22} color={Colors.ink3} /></View>
           <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.ink }}>Nenhum agendamento</Text>
           <Text style={{ fontSize: 12, color: Colors.ink3 }}>Os agendamentos aparecerão aqui quando forem criados.</Text>
         </View>
@@ -125,11 +119,14 @@ function DayView({ appointments, onConfirm, onCancel }: { appointments: any[]; o
   );
 }
 const dv = StyleSheet.create({
-  kpis: { flexDirection: "row", gap: 10, marginBottom: 20, flexWrap: "wrap" },
-  kpi: { flex: 1, minWidth: IS_WIDE ? 120 : "45%", backgroundColor: Colors.bg3, borderRadius: 14, padding: IS_WIDE ? 16 : 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 4 },
-  kv: { fontSize: IS_WIDE ? 20 : 16, fontWeight: "700", color: Colors.ink },
-  kl: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
+  // I1.3 — os quatro contadores (Agendamentos/Confirmados/Pendentes/Receita)
+  // saíram daqui: viraram a faixa de indicadores padrão (SummaryCard) no
+  // cabeçalho, visível em toda a tela, não só na aba Agenda.
   dayTitle: { fontSize: 14, fontWeight: "600", color: Colors.ink, marginBottom: 10, marginTop: 16 },
+  emptyIcon: {
+    width: 48, height: 48, borderRadius: 16, backgroundColor: Colors.bg3,
+    borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center",
+  },
 });
 
 function TimeSlots() {
@@ -209,10 +206,28 @@ export default function AgendamentoScreen() {
     try { await cancelAppointment(id); } catch {}
   }
 
+  // I1.3 — subtítulo com os números, igual ao resto do padrão editorial.
+  const heroSub = isLoading
+    ? "Carregando a agenda…"
+    : `${kpis.total} ${kpis.total === 1 ? "agendamento" : "agendamentos"} nos próximos dias · ${kpis.confirmed} confirmados · ${kpis.pending} pendentes`;
+
   return (
     <ScrollView style={z.scr} contentContainerStyle={z.cnt}>
-      <PageHeader title="Agendamento" />
-      <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+      {/* I1.3 — mesmo cabeçalho editorial (ScreenHero) das outras telas do
+          padrão; era um PageHeader simples sem sobrancelha nem serifa. */}
+      <ScreenHero eyebrow="Equipe · horários" title="Agenda" subtitle={heroSub} />
+
+      {/* Faixa de indicadores padrão: os quatro contadores que antes
+          viviam soltos dentro da aba Agenda, agora visíveis em toda a
+          tela (mesmo SummaryCard que /estoque usa). */}
+      <View style={z.kpis}>
+        <SummaryCard label="AGENDAMENTOS" value={String(kpis.total)} />
+        <SummaryCard label="CONFIRMADOS" value={String(kpis.confirmed)} color={Colors.green} />
+        <SummaryCard label="PENDENTES" value={String(kpis.pending)} color={Colors.amber} />
+        <SummaryCard label="RECEITA ESTIMADA" value={fmt(kpis.revenue)} color={Colors.green} />
+      </View>
+
+      <ScreenTabs tabs={TABS} active={String(tab)} onSelect={(k) => setTab(Number(k))} />
       {tab === 0 && <DayView appointments={appointments} onConfirm={handleConfirm} onCancel={handleCancel} />}
       {tab === 1 && <TimeSlots />}
       {tab === 2 && <ScheduleConfig />}
@@ -223,4 +238,5 @@ export default function AgendamentoScreen() {
 const z = StyleSheet.create({
   scr: { flex: 1 },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
 });
