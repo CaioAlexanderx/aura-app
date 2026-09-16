@@ -18,12 +18,11 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 // 29/08/2026: helper compartilhado de plural (o ranking mostrava "1 vendas").
 import { pluralize } from "@/utils/plural";
 
-import { IS_WIDE, IS_WEB, MOCK_DASHBOARD, EMPTY_DATA, greeting, brToday, monthNameBR, daysInMonth, webOnly, fmt } from "@/components/screens/dashboard/types";
+import { IS_WIDE, IS_WEB, MOCK_DASHBOARD, EMPTY_DATA, greeting, brToday, monthNameBR, daysInMonth, webOnly, fmt, formatTransactionDescription } from "@/components/screens/dashboard/types";
 import { Avatar } from "@/components/screens/dashboard/Avatar";
 import { PlanBadge } from "@/components/screens/dashboard/PlanBadge";
 import { HeroCard } from "@/components/screens/dashboard/HeroCard";
 import { KPIGrid } from "@/components/screens/dashboard/KPIGrid";
-import { QuickAction } from "@/components/screens/dashboard/QuickAction";
 import { SaleRow } from "@/components/screens/dashboard/SaleRow";
 import { ObligationRow } from "@/components/screens/dashboard/ObligationRow";
 import { SalesAnalyticsCard } from "@/components/screens/dashboard/SalesAnalyticsCard";
@@ -62,12 +61,14 @@ function AuraDesignStyle() {
     @keyframes auraFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes auraRingExpand { 0% { r: 6; opacity: 0.8; } 100% { r: 18; opacity: 0; } }
 
-    /* 01/09/2026 — QA de tato. A sidebar respondia ao mouse; os cards de KPI
-       e os de Acesso rápido, não: elementos clicáveis que não pareciam
-       clicáveis. A regra abaixo só REALÇA o que já está na tela (elevação
-       de 2px + sombra + borda). Nada é revelado por hover, então em touch,
-       onde hover não existe, não se perde nenhuma informação nem nenhuma
-       ação — CLAUDE.md item 7. */
+    /* 01/09/2026 — QA de tato. A sidebar respondia ao mouse; os cards de KPI,
+       não: elementos clicáveis que não pareciam clicáveis. A regra abaixo só
+       REALÇA o que já está na tela (elevação de 2px + sombra + borda). Nada é
+       revelado por hover, então em touch, onde hover não existe, não se perde
+       nenhuma informação nem nenhuma ação — CLAUDE.md item 7.
+       16/09/2026 (Fase 0): o bloco "Acesso rápido" que também usava esta
+       regra foi removido (duplicava o menu lateral); [data-aura-hover="card"]
+       continua servindo os cards de KPI. */
     [data-aura-hover="card"] {
       transition: transform 0.16s cubic-bezier(0.3, 0, 0.2, 1),
                   box-shadow 0.16s cubic-bezier(0.3, 0, 0.2, 1),
@@ -293,42 +294,27 @@ export default function DashboardScreen() {
             </View>
             <KPIGrid d={d} onNavigate={go} />
 
-            {/* ---- CALENDARIO COMERCIAL (datas que movimentam o comercio) ----
-                Posicao: abaixo dos KPIs e acima de Vendas. Per-company
-                (escondido em consolidado e demo). */}
-            {!isDemo && !consolidatedView && <CalendarioComercialCard />}
-
-            {/* ---- VENDAS (analytics) ---- */}
-            {/* MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
+            {/* ---- VENDAS (analytics) ----
+                16/09/2026 (Fase 0): Vendas do dia, Aniversariantes e Top
+                vendedores pedem ação hoje — sobem pra cima do Calendário
+                comercial, que é mais consulta do que ação.
+                MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
                 via /me/sales/analytics (useSalesAnalytics ramifica internamente).
                 TopSellersCard e BirthdaysCard ainda per-company (escondidos em
                 consolidated por ora — proxima onda de polish, se houver demanda).
                 06/05/2026: "Ver análise completa" deep-linka pra Curva ABC dentro
                 da aba Receitas (foco abc -> auto-scroll na tela de Financeiro). */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro?tab=receitas&focus=abc"); }} />}
+            {!isDemo && !consolidatedView && <BirthdaysCard />}
             {/* 02/08/2026: ranking completo migrou de /folha pra aba propria em
                 /vendas — deep-link direto na aba pra nao cair na listagem. */}
             {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/vendas?tab=ranking"); }} />}
-            {!isDemo && !consolidatedView && <BirthdaysCard />}
 
-            {/* ---- QUICK ACTIONS ---- */}
-            <View style={s.secTitleRow}>
-              <View style={s.secBar} />
-              <Text style={s.secTitle}>Acesso rápido</Text>
-            </View>
-            <ScrollView
-              horizontal={!IS_WIDE}
-              showsHorizontalScrollIndicator={false}
-              style={IS_WIDE ? s.qaScrollWide : s.qaScroll}
-              contentContainerStyle={IS_WIDE ? s.qaGridWide : s.qaGrid}
-            >
-              <QuickAction ic="cart" iconColor={Colors.green} label="Caixa" onPress={function() { go("/pdv"); }} />
-              <QuickAction ic="wallet" iconColor={Colors.violet3} label="Financeiro" onPress={function() { go("/financeiro"); }} />
-              <QuickAction ic="package" iconColor={Colors.amber} label="Estoque" onPress={function() { go("/estoque"); }} />
-              <QuickAction ic="file_text" iconColor={Colors.red} label="NF-e" onPress={function() { go("/nfe"); }} />
-              <QuickAction ic="calculator" iconColor={"#8b5cf6"} label="Contábil" onPress={function() { go("/contabilidade"); }} />
-              <QuickAction ic="users" iconColor={Colors.violet3} label="Clientes" onPress={function() { go("/clientes"); }} />
-            </ScrollView>
+            {/* ---- CALENDARIO COMERCIAL (datas que movimentam o comercio) ----
+                Posicao: abaixo do Top vendedores e acima de Obrigações/Últimas
+                transações — é consulta, não pede ação no dia. Per-company
+                (escondido em consolidado e demo). */}
+            {!isDemo && !consolidatedView && <CalendarioComercialCard />}
 
             {/* ---- OBRIGACOES ---- */}
             {d.obligations && d.obligations.length > 0 && (
@@ -365,11 +351,15 @@ export default function DashboardScreen() {
                 </View>
                 <View style={s.panel}>
                   {d.recentSales.map(function(sl: any) {
+                    // 16/09/2026 (Fase 0): descrição sem o id do sistema — o
+                    // backend cai em "Crediario – venda <uuid>" quando não
+                    // tem nome melhor pra mostrar.
+                    var description = formatTransactionDescription(sl);
                     // Em consolidated, mostra de qual empresa veio.
                     var customerWithCompany = consolidatedView && sl.company_name
-                      ? sl.customer + " · " + sl.company_name
-                      : sl.customer;
-                    return <SaleRow key={sl.id} customer={customerWithCompany} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />;
+                      ? description + " · " + sl.company_name
+                      : description;
+                    return <SaleRow key={sl.id || description + sl.time} customer={customerWithCompany} amount={sl.amount} time={sl.time} method={sl.method} type={sl.type} />;
                   })}
                 </View>
               </>
@@ -421,11 +411,6 @@ var s = StyleSheet.create({
   },
   secCountText: { fontSize: 10, color: Colors.ink3, letterSpacing: 0.5, fontFamily: (Platform.OS === "web" ? "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace" : undefined) },
   secCta: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-
-  qaScroll: { flexGrow: 0, marginBottom: 28 },
-  qaGrid: { flexDirection: "row", gap: 10, paddingVertical: 4, paddingRight: 20 },
-  qaScrollWide: { marginBottom: 28 },
-  qaGridWide: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
 
   panel: {
     backgroundColor: Colors.bg3, borderRadius: 20, padding: 16,

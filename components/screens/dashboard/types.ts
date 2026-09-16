@@ -145,3 +145,46 @@ export const EMPTY_DATA = {
   sparkRevenue: [], sparkExpenses: [], sparkNet: [],
   recentSales: [], obligations: [],
 };
+
+// ── Últimas transações: descrição sem o id do sistema ──────────────
+// 16/09/2026 (Fase 0 do Painel enxuto) — QA em produção achou
+// "Crediario – venda a8e5ee97-86ba-4574-bffd-93dc12531c49" nas Últimas
+// transações: o backend monta essa string quando não tem um nome melhor
+// pra mostrar, e o id do sistema vazava pro lojista. Quando o payload traz
+// nome do cliente ou dado de parcela (campos ainda não usados aqui, mas já
+// previstos: customer_name/client_name, installment_number/
+// total_installments), usa isso; senão troca o id por "venda" mesmo, e se
+// sobrar algo legível depois de tirar o id (ex.: um nome que já veio junto
+// na própria string), usa esse resto.
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+export type RecentSaleDescriptionInput = {
+  customer?: string | null;
+  customer_name?: string | null;
+  client_name?: string | null;
+  installment_number?: number | null;
+  total_installments?: number | null;
+};
+
+export function formatTransactionDescription(sale: RecentSaleDescriptionInput): string {
+  const raw = (sale.customer || "").trim();
+  if (!raw || !UUID_RE.test(raw)) return raw;
+
+  // "Crediario – venda <uuid>" → label = "Crediario", resto = "venda <uuid>".
+  // O hífen do meio do uuid não tem espaço ao redor, então não confunde
+  // esse split (que exige espaço-hífen-espaço).
+  const dashSplit = raw.match(/^(.*?)\s+[–-]\s+(.*)$/);
+  const label = dashSplit ? dashSplit[1].trim() : raw.replace(UUID_RE, "").trim();
+  const displayLabel = /crediario/i.test(label) ? "Crediário" : (label || "Venda");
+
+  const bestName = (sale.customer_name || sale.client_name || "").trim();
+  if (bestName) return displayLabel + " · " + bestName;
+
+  if (sale.installment_number && sale.total_installments) {
+    return displayLabel + " · parcela " + sale.installment_number + "/" + sale.total_installments;
+  }
+
+  const rest = dashSplit ? dashSplit[2] : raw;
+  const restWithoutId = rest.replace(UUID_RE, "").replace(/^venda\b/i, "").trim();
+  return restWithoutId ? displayLabel + " · " + restWithoutId : displayLabel + " · venda";
+}
