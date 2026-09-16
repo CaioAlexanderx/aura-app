@@ -22,6 +22,16 @@
 // O teto de 50 por disparo é do backend e é de propósito: marketing em
 // volume derruba a qualidade do número na Meta, e número rebaixado deixa
 // de mandar até a cobrança.
+//
+// I1.3 (16/09/2026) — a tela ganhou o shell padrão do app. Ela morava em
+// app/clientes/reativacao.tsx, FORA do grupo (tabs): sem Slot do layout,
+// sem sidebar/barra inferior, sem o cabeçalho editorial (ScreenHero) que
+// as outras onze telas já usam. A rota /clientes/reativacao não muda —
+// (tabs) é grupo de rota, não segmento de URL — só o arquivo se aninha em
+// app/(tabs)/clientes/reativacao.tsx (mesmo padrão de app/studio/(estudio)/
+// configuracoes.tsx + configuracoes/precificacao.tsx). O item já existia
+// no NAV desde a Fase 0 (mod "clientes.reativacao"); o realce agora funciona
+// porque a tela passa a renderizar dentro do <Slot/> do (tabs)/_layout.
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Switch } from "react-native";
@@ -40,6 +50,8 @@ import {
 } from "@/components/whatsapp/waGuards";
 import { PreviaMarketingModal } from "@/components/whatsapp/PreviaMarketingModal";
 import { alvoParaDias, faixaInfo } from "@/components/screens/clientes/diasSemComprar";
+import { ScreenHero } from "@/components/ScreenHero";
+import { SummaryCard } from "@/components/SummaryCard";
 
 /** Teto do backend por disparo. Repetido aqui só para avisar ANTES do clique. */
 const MAX_POR_DISPARO = 50;
@@ -57,6 +69,19 @@ function fmtBRL(v: number | null | undefined): string {
   const n = typeof v === "number" && Number.isFinite(v) ? v : 0;
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+// I1.3 — os avisos "conecte o número" e "template não aprovado" são os
+// dois casos de "ainda não configurou nada", e juntos ocupavam a dobra
+// inteira em duas linhas de card. Viram UMA linha de checklist. Os demais
+// bloqueios (token expirado, consentimento, cota, qualidade) são estado
+// de quem já configurou e algo mudou — continuam com a frase completa,
+// porque cada um pede uma ação diferente (reconectar, marcar consentimento,
+// comprar pacote…) e resumir demais esconderia qual é.
+const CODIGOS_FALTA_CONFIGURAR = new Set(["CONEXAO", "TEMPLATE"]);
+const LABEL_CURTO_FALTA_CONFIGURAR: Record<string, string> = {
+  CONEXAO: "número da loja",
+  TEMPLATE: "template aprovado",
+};
 
 export default function ReativacaoScreen() {
   const { company } = useAuthStore();
@@ -156,6 +181,12 @@ export default function ReativacaoScreen() {
   });
   const podeEnviar = !waLoading && blockers.length === 0;
 
+  // I1.3 — "falta configurar" (número/template, os dois casos de conta
+  // nova) vira uma linha só; o resto (token, consentimento, cota…) segue
+  // com a frase inteira, um bloco por motivo.
+  const blockersConfigurar = blockers.filter((b) => CODIGOS_FALTA_CONFIGURAR.has(b.code));
+  const blockersOutros = blockers.filter((b) => !CODIGOS_FALTA_CONFIGURAR.has(b.code));
+
   const doAlvo = useMemo(() => {
     return clientes.filter((c) => {
       const seg = String(c.segment || "");
@@ -248,12 +279,23 @@ export default function ReativacaoScreen() {
         </Pressable>
       </View>
 
-      <Text style={st.pageTitle}>Reativação por WhatsApp</Text>
-      <Text style={st.pageSubtitle}>
-        Um cupom com prazo curto para quem parou de comprar. A mensagem é de marketing: custa mais
-        que a cobrança, depende da autorização do cliente e cada pessoa recebe no máximo uma a cada
-        7 dias.
-      </Text>
+      {/* I1.3 — mesmo cabeçalho editorial das outras onze telas (ScreenHero).
+          A tela era uma página de configuração sem sobrancelha nem título
+          serifado; agora "Reativação." segue o mesmo desenho de /clientes,
+          /crediario etc. — só o link "‹ Clientes" acima é próprio daqui,
+          porque a Reativação é uma sub-rota, não um destino de primeiro
+          nível no menu. */}
+      <ScreenHero
+        eyebrow="Base de clientes · Reativação"
+        title="Reativação"
+        subtitle={
+          <>
+            {metrics.at_risk ?? 0} em risco · {metrics.dormant ?? 0} inativos · {metrics.lost ?? 0} perdidos —
+            {" "}um cupom com prazo curto para quem parou de comprar. Mensagem de marketing: custa mais
+            que a cobrança e cada pessoa recebe no máximo uma a cada 7 dias.
+          </>
+        }
+      />
 
       {semAcesso && (
         <View style={st.card} testID="reativacao-sem-plano">
@@ -270,26 +312,33 @@ export default function ReativacaoScreen() {
 
       {!semAcesso && (
         <>
-          {/* ── Resumo dos segmentos ── */}
+          {/* ── Resumo dos segmentos — faixa de indicadores padrão
+              (mesmo SummaryCard que /estoque usa na variante estreita),
+              no lugar dos três cards escritos à mão que já diziam a
+              mesma coisa que o subtítulo do cabeçalho acima. ── */}
           <View style={st.metrics} testID="reativacao-metricas">
-            <View style={st.metric}>
-              <Text style={st.metricNum}>{metrics.at_risk ?? 0}</Text>
-              <Text style={st.metricTxt}>em risco</Text>
-            </View>
-            <View style={st.metric}>
-              <Text style={st.metricNum}>{metrics.dormant ?? 0}</Text>
-              <Text style={st.metricTxt}>inativos</Text>
-            </View>
-            <View style={st.metric}>
-              <Text style={st.metricNum}>{metrics.lost ?? 0}</Text>
-              <Text style={st.metricTxt}>perdidos</Text>
-            </View>
+            <SummaryCard label="EM RISCO" value={String(metrics.at_risk ?? 0)} color={Colors.amber} />
+            <SummaryCard label="INATIVOS" value={String(metrics.dormant ?? 0)} color={Colors.ink2} />
+            <SummaryCard label="PERDIDOS" value={String(metrics.lost ?? 0)} color={Colors.red} />
           </View>
 
-          {/* ── Bloqueios do canal ── */}
+          {/* ── Bloqueios do canal ──
+              I1.3 — "conecte o número" + "template não aprovado" (os dois
+              avisos de quem ainda não configurou nada) ocupavam a dobra
+              inteira em dois cards; agora é uma linha de checklist só.
+              Os demais motivos (token, consentimento, cota…) continuam
+              com a frase inteira: cada um pede uma ação diferente. */}
           {!waLoading && blockers.length > 0 && (
             <View style={st.blockBox} testID="reativacao-bloqueios">
-              {blockers.map((b) => (
+              {blockersConfigurar.length > 0 && (
+                <View style={st.blockRow}>
+                  <Icon name="alert" size={12} color={Colors.amber} />
+                  <Text style={st.blockTxt}>
+                    Falta configurar: {blockersConfigurar.map((b) => LABEL_CURTO_FALTA_CONFIGURAR[b.code] || b.label).join(" · ")}
+                  </Text>
+                </View>
+              )}
+              {blockersOutros.map((b) => (
                 <View key={b.code} style={st.blockRow}>
                   <Icon name="alert" size={12} color={Colors.amber} />
                   <Text style={st.blockTxt}>{b.label}</Text>
@@ -479,22 +528,16 @@ const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: 20, paddingBottom: 56, maxWidth: 720, alignSelf: "center", width: "100%" },
 
-  headerRow: { marginBottom: 16 },
+  headerRow: { marginBottom: 4 },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   backText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-
-  pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, marginBottom: 6, letterSpacing: -0.4 },
-  pageSubtitle: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 20, maxWidth: 620 },
 
   sectionTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 10, marginTop: 20 },
   card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   cardTitle: { fontSize: 14, fontWeight: "800", color: Colors.ink },
   cardSub: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginTop: 6, maxWidth: 520 },
 
-  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  metric: { flex: 1, minWidth: 110, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 13 },
-  metricNum: { fontSize: 20, fontWeight: "800", color: Colors.ink },
-  metricTxt: { fontSize: 11.5, fontWeight: "600", color: Colors.ink2, marginTop: 2 },
+  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 4 },
 
   blockBox: { marginTop: 14, backgroundColor: Colors.amberD, borderRadius: 12, borderWidth: 1, borderColor: Colors.amber + "33", padding: 12, gap: 6 },
   blockRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
