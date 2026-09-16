@@ -11,6 +11,7 @@ import { Icon } from "@/components/Icon";
 import { crmStyles as cs } from "../shared/styles";
 import { STATUSES, PLANS } from "../shared/constants";
 import { todayIso } from "../shared/helpers";
+import { LossReasonModal } from "./LossReasonModal";
 import type { LeadStatus, Cadence, ExpectedPlan } from "@/services/crmApi";
 
 type BatchAction = "update_status" | "set_expected_plan" | "assign_cadence" | "mark_rotten" | "unmark_rotten" | "set_followup" | "delete";
@@ -26,6 +27,10 @@ type Props = {
 export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cadences = [] }: Props) {
   const [open, setOpen] = useState<null | "status" | "plan" | "cadence" | "followup" | "delete">(null);
   const [followupDate, setFollowupDate] = useState("");
+  // Fase 0 (C0.1, 16/09/2026): "Perdido" em lote tambem exige motivo — um so
+  // motivo pra todo o lote selecionado (nao cria nota por lead: batch nunca
+  // criou interactions, so mexe nos campos do lead mesmo).
+  const [showLostReason, setShowLostReason] = useState(false);
 
   if (selectedCount === 0) return null;
 
@@ -33,6 +38,14 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
   function doAction(action: BatchAction, payload?: Record<string, any>) {
     onBatch(action, payload);
     close();
+  }
+  function handleStatusChipPress(statusKey: LeadStatus) {
+    if (statusKey === "lost") {
+      close();
+      setShowLostReason(true);
+      return;
+    }
+    doAction("update_status", { status: statusKey });
   }
 
   return (
@@ -73,7 +86,7 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
                   {STATUSES.map((st) => (
                     <Pressable
                       key={st.key}
-                      onPress={() => doAction("update_status", { status: st.key })}
+                      onPress={() => handleStatusChipPress(st.key)}
                       style={[cs.actionBtn, { borderColor: st.color + "44" }]}
                     >
                       <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: st.color }} />
@@ -180,6 +193,18 @@ export function BatchActionBar({ selectedCount, onClear, onBatch, isPending, cad
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Motivo de perda em lote (Fase 0 — C0.1) */}
+      <LossReasonModal
+        visible={showLostReason}
+        count={selectedCount}
+        onCancel={() => setShowLostReason(false)}
+        onConfirm={(result) => {
+          doAction("update_status", { status: "lost", lost_reason: result.reason });
+          setShowLostReason(false);
+        }}
+        isPending={isPending}
+      />
     </>
   );
 }

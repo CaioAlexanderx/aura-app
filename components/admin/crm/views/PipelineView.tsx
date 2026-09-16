@@ -2,13 +2,14 @@
 // Funil de conversao + cards por status + quick stats.
 // ============================================================================
 
+import { useMemo } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import { crmStyles as cs } from "../shared/styles";
 import { isWeb } from "../shared/styles";
-import { STATUSES } from "../shared/constants";
+import { STATUSES, LOST_REASONS } from "../shared/constants";
 import { fmtMoney } from "../shared/helpers";
-import type { LeadStats } from "@/services/crmApi";
+import type { Lead, LeadStats } from "@/services/crmApi";
 
 type MetaStats = {
   with_phone: number;
@@ -25,9 +26,30 @@ type Props = {
   metaStats?: MetaStats;
   pipeline?: Record<string, { count: number; potential_mrr: number }>;
   onStatusClick: (status: string) => void;
+  // Fase 0 (C0.1, 16/09/2026): leads carregados no front (mesmo conjunto da
+  // Lista/Kanban, respeitando os filtros ativos) — usados so pra somar
+  // "Motivos de perda no período". Sem endpoint dedicado ainda; ver PR.
+  leads?: Lead[];
 };
 
-export function PipelineView({ stats, metaStats, pipeline, onStatusClick }: Props) {
+export function PipelineView({ stats, metaStats, pipeline, onStatusClick, leads = [] }: Props) {
+  // Contagem de motivos de perda, calculada no front a partir dos leads ja
+  // carregados (mesmo filtro que Lista/Kanban/Fila usam).
+  const lostByReason = useMemo(() => {
+    const lostLeads = leads.filter((l) => l.status === "lost");
+    const counts = new Map<string, number>();
+    let semMotivo = 0;
+    lostLeads.forEach((l) => {
+      if (!l.lost_reason) { semMotivo++; return; }
+      counts.set(l.lost_reason, (counts.get(l.lost_reason) || 0) + 1);
+    });
+    const rows = LOST_REASONS
+      .map((r) => ({ key: r.key, label: r.label, count: counts.get(r.key) || 0 }))
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.count - a.count);
+    return { total: lostLeads.length, rows, semMotivo };
+  }, [leads]);
+
   return (
     <View>
       {/* Funil de conversao */}
@@ -96,6 +118,35 @@ export function PipelineView({ stats, metaStats, pipeline, onStatusClick }: Prop
           );
         })}
       </View>
+
+      {/* Motivos de perda no período (Fase 0 — C0.1) */}
+      {lostByReason.total > 0 && (
+        <View style={cs.section}>
+          <Text style={cs.sectionTitle}>Motivos de perda no período</Text>
+          <Text style={[cs.hintText, { marginTop: -6 }]}>
+            Calculado a partir dos {lostByReason.total} lead(s) perdidos carregados agora (respeita os filtros ativos).
+          </Text>
+          {lostByReason.rows.map((r) => {
+            const pct = lostByReason.total ? Math.round((r.count / lostByReason.total) * 100) : 0;
+            return (
+              <View key={r.key} style={s_funnel.row}>
+                <View style={[s_funnel.dot, { backgroundColor: Colors.red }]} />
+                <Text style={s_funnel.label}>{r.label}</Text>
+                <View style={{ flex: 1 }} />
+                <Text style={[s_funnel.count, { color: Colors.red }]}>{r.count}</Text>
+                <Text style={s_funnel.rate}>{pct}%</Text>
+              </View>
+            );
+          })}
+          {lostByReason.semMotivo > 0 && (
+            <View style={[s_funnel.row, { marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border }]}>
+              <Text style={[s_funnel.label, { color: Colors.ink3, fontStyle: "italic" }]}>Sem motivo registrado</Text>
+              <View style={{ flex: 1 }} />
+              <Text style={[s_funnel.count, { color: Colors.ink3 }]}>{lostByReason.semMotivo}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Quick stats */}
       {metaStats && (

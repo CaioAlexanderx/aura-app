@@ -37,6 +37,8 @@ import { WorkModeView }  from "./views/WorkModeView";
 
 import { InteractionModal } from "./components/InteractionModal";
 import { SaveViewModal }    from "./components/SaveViewModal";
+import { LossReasonModal }  from "./components/LossReasonModal";
+import { useLossReasonGate } from "./hooks/useLossReasonGate";
 
 const TABS: { key: ViewMode; label: string }[] = [
   { key: "fila",      label: "Fila" },     // Fase 5: nova tab default
@@ -63,6 +65,7 @@ export function ProspecaoAdmin() {
   const mutations = useLeadMutations(selectedId);
   const cad       = useCadences(true);
   const views     = useLeadViews();
+  const lossGate  = useLossReasonGate(); // Fase 0 (C0.1): gate de motivo de perda (Kanban DnD)
 
   // Pipeline derivado (somente count pros chips)
   const pipelineSimple = useMemo(() => {
@@ -84,11 +87,33 @@ export function ProspecaoAdmin() {
     });
   }
 
-  function handleInteractionSubmit(p: { body: string; channel: any; new_status?: any; next_followup_at?: string; advance_cadence?: boolean }) {
+  function handleInteractionSubmit(p: { body: string; channel: any; new_status?: any; next_followup_at?: string; advance_cadence?: boolean; lost_reason?: string }) {
     if (!interactionLead) return;
-    mutations.interaction.mutate({ id: interactionLead.id, ...p }, {
+    const { lost_reason, ...interactionBody } = p;
+    mutations.interaction.mutate({ id: interactionLead.id, ...interactionBody }, {
       onSuccess: () => setInteractionLead(null),
     });
+    // Fase 0 (C0.1): lost_reason nao faz parte do payload de interactions —
+    // persiste no proprio lead, em chamada separada.
+    if (lost_reason) {
+      mutations.update.mutate({ id: interactionLead.id, body: { lost_reason } });
+    }
+  }
+
+  // ── Motivo de perda (Fase 0 — C0.1) ────────────────────────────────────────
+  // Chamado pelo Kanban (drop na coluna "Perdido") e por qualquer outro
+  // caller que precise mudar status sem passar pelo InteractionModal.
+  // Sem motivo, o lead NAO se move (a Promise resolve null e a gente sai).
+  async function handleMoveStatus(id: string, status: LeadStatus) {
+    const lead = list.leads.find((l) => l.id === id);
+    if (status !== "lost" || lead?.status === "lost") {
+      mutations.moveStatus.mutate({ id, status });
+      return;
+    }
+    const result = await lossGate.requestReason({ leadName: lead?.name });
+    if (!result) return; // cancelado — lead continua onde estava
+    mutations.moveStatus.mutate({ id, status: "lost", lost_reason: result.reason });
+    mutations.interaction.mutate({ id, body: result.note, channel: "outro" });
   }
 
   // ── Saved Views handlers ──────────────────────────────────────────────────
@@ -199,7 +224,7 @@ export function ProspecaoAdmin() {
           pipeline={pipelineSimple}
           meta={list.meta}
           onSelectLead={setSelectedId}
-          onMoveStatus={(id, status) => mutations.moveStatus.mutate({ id, status })}
+          onMoveStatus={handleMoveStatus}
           waTemplate={waTemplate}
           onBatch={handleBatch}
           batchPending={mutations.batch.isPending}
@@ -213,6 +238,7 @@ export function ProspecaoAdmin() {
           stats={list.stats}
           metaStats={list.meta?.stats}
           pipeline={pipelineSimple}
+          leads={list.leads}
           onStatusClick={(status) => {
             list.setFilter("status", status as LeadStatus);
             setView("lista");
@@ -249,6 +275,15 @@ export function ProspecaoAdmin() {
         activeFilterCount={list.activeFilterCount}
         onSave={handleSaveView}
         isSaving={views.create.isPending}
+      />
+
+      {/* Modal motivo de perda (Fase 0 — C0.1) — Kanban DnD */}
+      <LossReasonModal
+        visible={lossGate.isOpen}
+        leadName={lossGate.target?.leadName}
+        onCancel={lossGate.cancel}
+        onConfirm={lossGate.confirm}
+        isPending={mutations.moveStatus.isPending}
       />
     </View>
   );

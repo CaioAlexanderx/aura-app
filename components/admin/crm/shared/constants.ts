@@ -16,6 +16,45 @@ export const STATUSES: StatusMeta[] = [
 
 export const CHANNELS: LeadChannel[] = ["whatsapp", "ligacao", "email", "visita", "sem_resposta", "outro"];
 
+// ── Motivo de perda (Fase 0 — C0.1, 16/09/2026) ──────────────────────────────
+// Lista fechada pra sempre sabermos POR QUE um lead foi perdido. Nasceu do
+// primeiro trial perdido pra concorrente (15/09/2026) por nao achar uma
+// funcao que existia — daí a chave `nao_encontrou_funcao`.
+// O backend ja tem a coluna `lost_reason` (services/crmApi.ts::Lead), livre
+// (string), entao gravamos a CHAVE aqui (nao o label) pra poder trocar o
+// texto sem migrar dado antigo.
+export type LostReasonKey =
+  | "sem_resposta"
+  | "preco"
+  | "ja_tem_sistema"
+  | "sem_tempo"
+  | "fora_do_perfil"
+  | "falta_funcionalidade"
+  | "concorrente"
+  | "nao_encontrou_funcao"
+  | "travou_no_cadastro"
+  | "outro";
+
+export type LostReasonMeta = { key: LostReasonKey; label: string };
+
+export const LOST_REASONS: LostReasonMeta[] = [
+  { key: "sem_resposta",          label: "Sem resposta" },
+  { key: "preco",                 label: "Preço" },
+  { key: "ja_tem_sistema",        label: "Já tem sistema" },
+  { key: "sem_tempo",             label: "Sem tempo para implantar" },
+  { key: "fora_do_perfil",        label: "Fora do perfil" },
+  { key: "falta_funcionalidade",  label: "Falta funcionalidade" },
+  { key: "concorrente",           label: "Foi para concorrente" },
+  { key: "nao_encontrou_funcao",  label: "Não encontrou a função no app" },
+  { key: "travou_no_cadastro",    label: "Travou no cadastro" },
+  { key: "outro",                 label: "Outro" },
+];
+
+export function lostReasonLabel(key: string | null | undefined): string {
+  if (!key) return "";
+  return LOST_REASONS.find((r) => r.key === key)?.label || key;
+}
+
 export const PLANS: { key: ExpectedPlan; label: string; price: number }[] = [
   { key: "essencial", label: "Essencial", price: 89 },
   { key: "negocio",   label: "Negócio",   price: 169.90 },

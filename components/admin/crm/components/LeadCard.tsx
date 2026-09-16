@@ -14,6 +14,7 @@ import { Colors } from "@/constants/colors";
 import type { Lead } from "@/services/crmApi";
 import { statusMeta, fmtRelative, waLink, fillWaTemplate, copyToClipboard, fmtMoney } from "../shared/helpers";
 import { crmStyles as cs } from "../shared/styles";
+import { lostReasonLabel } from "../shared/constants";
 import { ScoreBadge } from "./ScoreBadge";
 import { useDraggableCardRef } from "../kanban/useDragAndDrop";
 
@@ -50,6 +51,8 @@ export function LeadCard(props: Props) {
   const sm = statusMeta(lead.status);
   const wa = waLink(lead.phone);
   const rel = fmtRelative(lead.last_contact_at);
+  // Fase 0 (C0.1): chip discreto com o motivo, so quando ha o que mostrar.
+  const lostReasonText = lead.status === "lost" ? lostReasonLabel(lead.lost_reason) : "";
 
   const isKanban = props.layout === "kanban";
   const isDraggable = isKanban && !!(props as KanbanProps).draggable && isWeb;
@@ -116,6 +119,13 @@ export function LeadCard(props: Props) {
           )}
           {rel && <Text style={{ fontSize: 9, color: Colors.ink3 }} selectable={false}>{rel}</Text>}
         </View>
+        {lostReasonText && (
+          <View style={{ marginTop: 6, alignSelf: "flex-start", backgroundColor: Colors.red + "18", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <Text style={{ fontSize: 9, color: Colors.red, fontWeight: "700" }} selectable={false} numberOfLines={1}>
+              {lostReasonText}
+            </Text>
+          </View>
+        )}
       </>
     );
 
@@ -184,7 +194,13 @@ export function LeadCard(props: Props) {
             <View style={[cs.badge, { backgroundColor: sm.color + "18" }]}>
               <Text style={[cs.badgeText, { color: sm.color }]}>{sm.label}</Text>
             </View>
-            <ScoreBadge score={lead.dynamic_score} variant="compact" />
+            {lostReasonText ? (
+              <Text style={{ fontSize: 9, color: Colors.red, fontWeight: "700", maxWidth: 140, textAlign: "right" }} numberOfLines={1}>
+                {lostReasonText}
+              </Text>
+            ) : (
+              <ScoreBadge score={lead.dynamic_score} variant="compact" />
+            )}
           </View>
         </View>
       </Pressable>

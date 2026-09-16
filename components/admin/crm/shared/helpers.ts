@@ -2,7 +2,7 @@
 import { Clipboard } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
-import { STATUSES, type StatusMeta } from "./constants";
+import { STATUSES, lostReasonLabel, type StatusMeta, type LostReasonKey } from "./constants";
 import type { LeadStatus } from "@/services/crmApi";
 
 // ── Datas ────────────────────────────────────────────────────────────────────
@@ -96,4 +96,40 @@ export function pluralize(n: number, singular: string, plural?: string): string 
 /** Indice do status no funil (pra evitar arrastar pra tras sem confirmacao). */
 export function statusIndex(status: LeadStatus): number {
   return STATUSES.findIndex((s) => s.key === status);
+}
+
+// ── Motivo de perda (Fase 0 — C0.1) ──────────────────────────────────────────
+// Funcoes puras (sem React/rede) pra serem testadas isoladamente e reusadas
+// tanto pelo LossReasonModal (kanban/fila/batch) quanto pelo seletor de
+// status "Perdido" embutido no InteractionModal.
+
+export const LOST_REASON_NOTE_PREFIX = "Motivo de perda:";
+
+/**
+ * So libera confirmar quando ha motivo escolhido E, se o motivo for "outro",
+ * o texto livre foi preenchido (regra: sem isso a gente nao aprende nada
+ * com o "outro" — vira uma gaveta vazia).
+ */
+export function canConfirmLossReason(reason: LostReasonKey | "", detail: string): boolean {
+  if (!reason) return false;
+  if (reason === "outro") return detail.trim().length > 0;
+  return true;
+}
+
+/**
+ * Monta a nota padronizada da perda: "Motivo de perda: <label>" + extras
+ * opcionais (concorrente / detalhe do "outro"). Usada tanto como body de uma
+ * interaction dedicada (kanban/fila/batch) quanto como prefixo da observacao
+ * digitada no InteractionModal.
+ */
+export function buildLostReasonNote(
+  reason: LostReasonKey,
+  opts?: { competitor?: string; detail?: string },
+): string {
+  let note = `${LOST_REASON_NOTE_PREFIX} ${lostReasonLabel(reason)}`;
+  const competitor = opts?.competitor?.trim();
+  const detail = opts?.detail?.trim();
+  if (reason === "concorrente" && competitor) note += ` (concorrente: ${competitor})`;
+  if (reason === "outro" && detail) note += ` — ${detail}`;
+  return note;
 }
