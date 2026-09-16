@@ -36,13 +36,15 @@ function drawEligibility(total: number, eligible: number, pending: number) {
     : eligible === 1
       ? "1 atleta entra na chave"
       : `${eligible} atletas entram na chave`;
+  // Quem lê esta tela É a federação — por isso "confirme você", e dizendo
+  // em que aba se confirma, em vez de falar da federação em terceira pessoa.
   const blockedReason = eligible === 0
     ? pending > 0
-      ? `Nenhum inscrito está com a taxa paga. ${pending} inscrito${pending > 1 ? "s" : ""} ${pending > 1 ? "entram" : "entra"} na chave depois que a federação confirmar o pagamento.`
-      : "Nenhum atleta inscrito nesta categoria até agora."
+      ? `Ninguém está com a taxa paga ainda. Confirme os pagamentos em Delegações e ${pending > 1 ? `os ${pending} inscritos entram` : "o inscrito entra"} na chave.`
+      : "Ninguém inscrito nesta categoria ainda."
     : pending > 0
-      ? `Só 1 inscrito está com a taxa paga — o sorteio precisa de pelo menos 2. ${pending > 1 ? `Os outros ${pending} entram` : "O outro entra"} assim que a federação confirmar o pagamento.`
-      : "Só 1 atleta inscrito — o sorteio precisa de pelo menos 2.";
+      ? `Só 1 inscrito está com a taxa paga e o sorteio precisa de pelo menos 2. Confirme os pagamentos em Delegações para liberar ${pending > 1 ? `os outros ${pending}` : "o outro"}.`
+      : "Só 1 atleta inscrito e o sorteio precisa de pelo menos 2.";
   const blockedIcon = pending > 0 ? "clock" : "users";
   return { canDraw, countLabel, blockedReason, blockedIcon, leftOut };
 }
@@ -67,7 +69,7 @@ export function SorteioPanel({
   onGenerate: () => void; onLock: () => void;
 }) {
   const hasDraft = bracket?.status === "draft";
-  const statusLabel = hasDraft ? "Pré-visualização gerada" : "Chave não gerada";
+  const statusLabel = hasDraft ? "Sorteio provisório" : "Chave ainda não sorteada";
   const el = drawEligibility(athletesCount, eligibleCount, pendingPayment);
 
   return (
@@ -76,7 +78,7 @@ export function SorteioPanel({
       <View style={S.card}>
         <View style={S.cardHead}>
           <View>
-            <Text style={S.cardTitle}>Gerar chave</Text>
+            <Text style={S.cardTitle}>Sortear chave</Text>
             <Text style={S.cardSub}>{catName} · eliminatório simples</Text>
           </View>
           <ShojiBadge status={hasDraft ? "ok" : "neutral"} label={statusLabel} />
@@ -91,15 +93,15 @@ export function SorteioPanel({
               onPress={() => setMethod(m)}
             >
               <Text style={[S.segBtnText, method === m && S.segBtnTextActive]}>
-                {m === "ranking" ? "Sementes por ranking" : "Aleatório"}
+                {m === "ranking" ? "Cabeças de chave" : "Aleatório"}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         <Text style={S.methodDesc}>
           {method === "ranking"
-            ? "Cabeças posicionadas pelo ranking; os 2 primeiros recebem bye."
-            : "Posições totalmente aleatórias; byes distribuídos no sorteio."}
+            ? "Os melhores do ranking ficam em lados opostos da chave e os 2 primeiros recebem bye."
+            : "Posições totalmente aleatórias e os byes saem no sorteio."}
         </Text>
 
         <ConfigRow
@@ -137,7 +139,7 @@ export function SorteioPanel({
             accessibilityState={{ disabled: !el.canDraw }}
           >
             <ShojiButton
-              label={generating ? "Gerando..." : "Gerar chave"}
+              label={generating ? "Sorteando..." : "Sortear chave"}
               variant="sumi"
               onPress={onGenerate}
               style={S.fullBtn}
@@ -146,13 +148,13 @@ export function SorteioPanel({
         ) : (
           <View style={S.draftActions}>
             <ShojiButton
-              label="Regenerar"
+              label="Sortear de novo"
               variant="ghost"
               onPress={onGenerate}
               style={{ flex: 1 }}
             />
             <ShojiButton
-              label={locking ? "Travando..." : "Travar chave"}
+              label={locking ? "Oficializando..." : "Oficializar chave"}
               variant="sumi"
               onPress={onLock}
               style={{ flex: 1 }}
@@ -164,7 +166,7 @@ export function SorteioPanel({
           <View style={S.infoRow}>
             <Icon name="info" size={13} color={C.ink3} />
             <Text style={S.infoText}>
-              Pode regenerar quantas vezes quiser. Travar torna a chave oficial e libera o lançamento de resultados.
+              Pode sortear de novo quantas vezes quiser. Ao oficializar, a chave passa a valer e a mesa já pode lançar os resultados.
             </Text>
           </View>
         )}
@@ -174,11 +176,11 @@ export function SorteioPanel({
       {hasDraft && bracket ? (
         <View style={S.card}>
           <Text style={S.cardTitle}>Resultado do sorteio</Text>
-          <Text style={S.cardSub}>Pré-visualização — confrontos da 1ª rodada</Text>
+          <Text style={S.cardSub}>Confrontos da 1ª rodada — ainda dá para sortear de novo</Text>
           <View style={S.pills}>
             <Pill label={`${bracket.athletes_count} atletas`} />
             <Pill label={`${bracket.bye_count} byes`} />
-            {bracket.options.thirdPlace && <Pill label="3º lugar: Incluída" />}
+            {bracket.options.thirdPlace && <Pill label="Com disputa de 3º lugar" />}
           </View>
           {(bracket.rounds[0] || []).map((m, i) => (
             <DraftMatchCard key={m.id} match={m} idx={i + 1} />
@@ -187,10 +189,10 @@ export function SorteioPanel({
       ) : (
         <View style={S.card}>
           <Text style={S.cardTitle}>Inscritos</Text>
-          <Text style={S.cardSub}>Os atletas aparecerão aqui após gerar o sorteio</Text>
+          <Text style={S.cardSub}>Os confrontos aparecem aqui depois do sorteio</Text>
           <View style={S.emptyBox}>
             <Icon name="users" size={32} color={C.ink4} />
-            <Text style={S.emptyText}>Gere o sorteio para ver os confrontos</Text>
+            <Text style={S.emptyText}>Sorteie a chave para ver quem enfrenta quem</Text>
           </View>
         </View>
       )}
@@ -220,7 +222,7 @@ export function KataDrawPanel({
   const el = drawEligibility(athletesCount, eligibleCount, pendingPayment);
   // Estado vazio honesto: o texto diz o motivo REAL de não dar para sortear.
   const helper = el.canDraw
-    ? "O sorteio define a ordem em que os atletas se apresentam na eliminatória. Depois de sortear, a ordem pode ser ajustada à mão em \"Ordem de apresentação\"."
+    ? "O sorteio define a ordem em que os atletas se apresentam na eliminatória. Depois de sortear, você ainda pode ajustar a ordem à mão."
     : el.blockedReason;
   const helperIcon = el.canDraw ? "info" : el.blockedIcon;
 
@@ -229,9 +231,9 @@ export function KataDrawPanel({
       <View style={S.cardHead}>
         <View style={K.headText}>
           <Text style={S.cardTitle}>Ordem de apresentação</Text>
-          <Text style={S.cardSub}>{catName} · apuração por notas</Text>
+          <Text style={S.cardSub}>{catName} · decidido por notas</Text>
         </View>
-        <ShojiBadge status="neutral" label="Chave não gerada" />
+        <ShojiBadge status="neutral" label="Ordem ainda não sorteada" />
       </View>
 
       {athletesCount > 0 && (

@@ -312,7 +312,7 @@ export function BracketView({
   const handleReset = useCallback(async () => {
     const ok = await confirmAsync({
       title: "Limpar resultados?",
-      message: "Os vencedores e placares lançados serão apagados. As posições dos atletas nos slots são mantidas. Esta ação não pode ser desfeita.",
+      message: "Apaga os vencedores e placares já lançados. Os atletas continuam nas mesmas posições da chave. Não dá para desfazer.",
       confirmLabel: "Limpar",
       destructive: true,
     });
@@ -320,7 +320,7 @@ export function BracketView({
     setResetting(true);
     try {
       await karateBracketsApi.resetBracket(federationId, cid, catId);
-      toast.success("Resultados limpos.");
+      toast.success("Resultados apagados.");
       await onReloaded();
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível limpar os resultados.");
@@ -332,19 +332,19 @@ export function BracketView({
   // ── Destravar para editar ───────────────────────────────────────────
   const handleUnlock = useCallback(async () => {
     const ok = await confirmAsync({
-      title: "Destravar a chave?",
-      message: "A chave volta para rascunho e pode ser regenerada/editada. Resultados já lançados são preservados até uma nova ação.",
-      confirmLabel: "Destravar",
+      title: "Reabrir a chave?",
+      message: "A chave deixa de ser oficial e volta a aceitar mudanças. Os resultados já lançados continuam lá.",
+      confirmLabel: "Reabrir",
       destructive: false,
     });
     if (!ok) return;
     setUnlocking(true);
     try {
       await karateBracketsApi.unlockBracket(federationId, cid, catId);
-      toast.success("Chave destravada — voltou para rascunho.");
+      toast.success("Chave reaberta. Ela não está mais oficial.");
       await onReloaded();
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível destravar a chave.");
+      toast.error(e?.message || "Não foi possível reabrir a chave.");
     } finally {
       setUnlocking(false);
     }
@@ -376,7 +376,7 @@ export function BracketView({
   // com fallback document.write se o popup for bloqueado. Web-only.
   const handlePrint = useCallback(() => {
     if (!isWeb) {
-      toast.error("Impressão da chave disponível apenas na versão web");
+      toast.error("A chave só pode ser impressa pelo computador.");
       return;
     }
     try {
@@ -387,12 +387,12 @@ export function BracketView({
       if (!w) {
         const w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo."); return; }
       }
       toast.success("Chave aberta para impressão");
     } catch (e: any) {
       console.error("[BracketView] Erro ao gerar impressão da chave:", e);
-      toast.error(e?.message || "Erro ao gerar a chave para impressão");
+      toast.error(e?.message || "Não foi possível preparar a chave para impressão.");
     }
   }, [bracket, competitionName, catName, federationName]);
 
@@ -405,7 +405,7 @@ export function BracketView({
           <Text style={S.cardSub}>{catName}</Text>
         </View>
         <View style={S.sectionHeadRight}>
-          <ShojiBadge status={locked ? "ok" : "warn"} label={locked ? "Oficial · travada" : "Rascunho"} />
+          <ShojiBadge status={locked ? "ok" : "warn"} label={locked ? "Oficial" : "Sorteio provisório"} />
         </View>
       </View>
 
@@ -470,7 +470,7 @@ export function BracketView({
             )}
             {locked && (
               <ShojiButton
-                label={unlocking ? "Destravando..." : "Destravar para editar"}
+                label={unlocking ? "Reabrindo..." : "Reabrir para editar"}
                 icon="unlock"
                 variant="ghost"
                 onPress={handleUnlock}
@@ -507,10 +507,10 @@ export function BracketView({
             ? "Chave grande — reorganize por \"Refazer sorteio\"; edição por arrasto fica para chaves menores. Clique no vencedor e a impressão continuam disponíveis normalmente."
             : editMode
               ? (selectedSlot
-                ? "Atleta selecionado — clique no slot de destino para trocar as posições (ou clique nele de novo para cancelar)."
+                ? "Atleta selecionado — clique na posição de destino para trocar os dois de lugar (ou clique nele de novo para cancelar)."
                 : (isWeb
                   ? "Arraste um atleta pelo punho, ou clique nele e depois no destino — as duas posições trocam de lugar. Salve com \"Salvar chave\"."
-                  : "Toque num atleta para selecioná-lo e toque no slot de destino para trocar as posições. Salve com \"Salvar chave\"."))
+                  : "Toque num atleta para selecioná-lo e toque na posição de destino para trocar os dois de lugar. Salve com \"Salvar chave\"."))
               : "Clique no vencedor para lançar o resultado."}
         </Text>
       </View>

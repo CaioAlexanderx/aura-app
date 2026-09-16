@@ -46,7 +46,7 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
     try {
       setBoard(await karateCompetitionP1Api.getScheduleBoard(federationId, competitionId));
     } catch (e: any) {
-      setError(e?.message || "Não foi possível carregar o board do dia.");
+      setError(e?.message || "Não foi possível carregar os kotos.");
     }
   }, [federationId, competitionId]);
 
@@ -89,7 +89,7 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
       toast.success(`${name} criado.`);
       await load();
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível criar a área.");
+      toast.error(e?.message || "Não foi possível criar o koto.");
     } finally {
       setBusy(false);
     }
@@ -99,18 +99,18 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
     const ok = await confirmAsync({
       title: `Excluir ${area.name}?`,
       message: area.categories.length
-        ? `As ${area.categories.length} categoria(s) deste koto voltam para "Não alocadas".`
-        : "O koto será removido do evento.",
+        ? `As ${area.categories.length} categoria(s) deste koto voltam para "Ainda sem koto".`
+        : "O koto sai do evento.",
       confirmLabel: "Excluir",
       destructive: true,
     });
     if (!ok) return;
     try {
       await karateCompetitionP1Api.deleteArea(federationId, competitionId, area.id);
-      toast.success("Área excluída.");
+      toast.success("Koto excluído.");
       await load();
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível excluir a área.");
+      toast.error(e?.message || "Não foi possível excluir o koto.");
     }
   };
 
@@ -130,8 +130,8 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Kotos e ordem do dia</Text>
           <Text style={s.hint}>
-            {board.totals.assigned} de {board.totals.categories} categorias alocadas · {board.totals.entry_count} inscritos
-            {dnd.isWeb ? " · arraste os cards entre as áreas" : " · use “Mover” em cada card"}
+            {board.totals.assigned} de {board.totals.categories} categorias distribuídas · {board.totals.entry_count} inscritos
+            {dnd.isWeb ? " · arraste as categorias entre os kotos" : " · use “Mover” em cada categoria"}
           </Text>
         </View>
         <View style={s.newArea}>
@@ -139,7 +139,7 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
             style={s.newAreaInput}
             value={newAreaName}
             onChangeText={setNewAreaName}
-            placeholder='Nova área (ex.: "Koto A")'
+            placeholder='Novo koto (ex.: "Koto A")'
             placeholderTextColor={C.ink4}
           />
           <KarateButton label={busy ? "..." : "Criar"} variant="sumi" size="sm" onPress={createArea} disabled={busy || !newAreaName.trim()} />
@@ -157,7 +157,7 @@ export function KotosTab({ federationId, competitionId }: { federationId: string
         <View style={s.emptyBox}>
           <Icon name="grid" size={16} color={C.ink3} />
           <Text style={s.emptyTxt}>
-            Crie as áreas do evento (Koto A, B, C…) e distribua as categorias — a carga estimada de cada koto aparece no cabeçalho.
+            Crie os kotos do evento (Koto A, B, C…) e distribua as categorias entre eles. O tempo estimado de cada koto aparece no topo da coluna.
           </Text>
         </View>
       )}
@@ -214,7 +214,7 @@ function ConflictBanner({ conflicts, count }: { conflicts: BoardConflict[]; coun
       {open && (
         <View style={s.conflictBody}>
           <Text style={s.conflictHint}>
-            Sequencie as chamadas na mesa central ou mova uma das categorias para o mesmo koto.
+            Combine a ordem das chamadas na mesa central ou mova uma das categorias para o mesmo koto.
           </Text>
           {conflicts.map((c) => (
             <View key={c.student_id} style={s.conflictRow}>
@@ -253,7 +253,7 @@ function BoardColumn({
       <View style={s.colHead}>
         <View style={{ flex: 1 }}>
           <Text style={s.colTitle} numberOfLines={1}>
-            {isUnassigned ? "Não alocadas" : area!.name}
+            {isUnassigned ? "Ainda sem koto" : area!.name}
           </Text>
           <Text style={s.colMeta}>
             {isUnassigned
@@ -347,7 +347,7 @@ function CategoryCard({
           ))}
           {column !== null && (
             <TouchableOpacity style={s.menuItem} onPress={() => { setMenuOpen(false); onMove(cat.id, null); }}>
-              <Text style={[s.menuTxt, { color: C.ink3 }]}>Não alocadas</Text>
+              <Text style={[s.menuTxt, { color: C.ink3 }]}>Ainda sem koto</Text>
             </TouchableOpacity>
           )}
           {areas.length === 0 && <Text style={s.menuEmpty}>Crie uma área primeiro.</Text>}

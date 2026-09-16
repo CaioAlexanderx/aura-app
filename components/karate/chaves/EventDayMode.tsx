@@ -151,7 +151,7 @@ export function EventDayMode({
       if (!w) {
         const w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo."); return; }
       }
       toast.success("Chave aberta para impressão");
     } catch (e: any) {
@@ -174,7 +174,7 @@ export function EventDayMode({
               <Text style={styles.headerTitle} numberOfLines={1}>{catName}</Text>
             </View>
             <View style={styles.headerRight}>
-              <ShojiBadge status={bracket.status === "locked" ? "ok" : "warn"} label={bracket.status === "locked" ? "Oficial · travada" : "Rascunho"} />
+              <ShojiBadge status={bracket.status === "locked" ? "ok" : "warn"} label={bracket.status === "locked" ? "Oficial" : "Sorteio provisório"} />
               <TouchableOpacity style={styles.iconBtn} onPress={handlePrint} accessibilityLabel="Imprimir chave">
                 <Icon name="print" size={16} color={C.ink2} />
               </TouchableOpacity>

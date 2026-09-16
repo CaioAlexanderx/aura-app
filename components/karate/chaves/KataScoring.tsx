@@ -148,7 +148,7 @@ export function KataView({
   // ── Salvar ordem (PUT .../kata-scores/order) ──────────────────────────
   const handleSaveOrder = useCallback(async () => {
     if (!federationId || !cid || !catId) {
-      toast.error("Não foi possível salvar a ordem — contexto da competição ausente.");
+      toast.error("Não foi possível salvar a ordem. Recarregue a página e tente de novo.");
       return;
     }
     const list = draftOrder ?? orderedByPhase;
@@ -171,7 +171,7 @@ export function KataView({
   // ── Imprimir bateria — Fase 4 ──────────────────────────────────────────
   const handlePrint = useCallback(() => {
     if (!isWeb) {
-      toast.error("Impressão da bateria disponível apenas na versão web");
+      toast.error("A bateria só pode ser impressa pelo computador.");
       return;
     }
     try {
@@ -182,12 +182,12 @@ export function KataView({
       if (!w) {
         const w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo."); return; }
       }
       toast.success("Bateria aberta para impressão");
     } catch (e: any) {
       console.error("[KataView] Erro ao gerar impressão da bateria:", e);
-      toast.error(e?.message || "Erro ao gerar a bateria para impressão");
+      toast.error(e?.message || "Não foi possível preparar a bateria para impressão.");
     }
   }, [scores, competitionName, catName, federationName]);
 

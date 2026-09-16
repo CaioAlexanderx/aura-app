@@ -42,7 +42,7 @@ const SOURCE_LABEL: Record<CheckInSource, string> = {
 };
 
 const PORTAL_NOTICE =
-  "O portal do dojô é somente leitura. Entre com a conta do dojô para marcar presença.";
+  "Por aqui você só consulta. Entre com a conta do dojô para marcar presença.";
 
 /** ISO → "14:32" (só a hora; a data é sempre a do evento). */
 function fmtHora(iso: string | null | undefined): string {
@@ -299,7 +299,7 @@ function AthleteRow({ entry, busy, disabled, onMark }: {
 }) {
   const tone = STATUS_TONE[entry.status];
   const trace = traceText(entry);
-  const provas = entry.categories.length ? entry.categories.join(" · ") : "Sem prova nas listagens";
+  const provas = entry.categories.length ? entry.categories.join(" · ") : "Sem prova neste campeonato";
   return (
     <View style={[s.card, entry.status === "presente" && s.cardPresente, entry.status === "ausente" && s.cardAusente]}>
       <View style={s.cardHead}>

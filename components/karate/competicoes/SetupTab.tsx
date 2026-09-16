@@ -134,7 +134,7 @@ function DivisionsBlock({ federationId, competitionId, divisions, onChanged }: {
 
   const remove = async (d: CompetitionDivision) => {
     if (d.category_count > 0) {
-      toast.error(`"${d.name}" tem ${d.category_count} categoria(s) vinculada(s) — mova-as antes.`);
+      toast.error(`"${d.name}" ainda tem ${d.category_count} categoria(s). Mova para outra divisão antes de excluir.`);
       return;
     }
     const ok = await confirmAsync({
@@ -166,7 +166,7 @@ function DivisionsBlock({ federationId, competitionId, divisions, onChanged }: {
               <Text style={s.divMeta}>{d.category_count} categoria{d.category_count === 1 ? "" : "s"}</Text>
             </View>
             <View style={s.quotaField}>
-              <Text style={s.quotaLabel}>Atletas/clube/prova</Text>
+              <Text style={s.quotaLabel}>Atletas por clube em cada prova</Text>
               <TextInput
                 style={s.quotaInput}
                 value={cur.ind}
@@ -175,7 +175,7 @@ function DivisionsBlock({ federationId, competitionId, divisions, onChanged }: {
               />
             </View>
             <View style={s.quotaField}>
-              <Text style={s.quotaLabel}>Equipes/clube</Text>
+              <Text style={s.quotaLabel}>Equipes por clube</Text>
               <TextInput
                 style={s.quotaInput}
                 value={cur.team}
@@ -232,7 +232,7 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
           .map((b) => ({ max_age: toIntOrNull(b.maxAge), amount: moneyToNumber(b.amount) }))
           .filter((b) => b.amount != null) as { max_age: number | null; amount: number }[];
         if (!parsedBands.length) {
-          toast.error("Informe ao menos uma banda de preço individual.");
+          toast.error("Informe pelo menos um valor por idade.");
           setSaving(false);
           return;
         }
@@ -247,10 +247,10 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
         if (pe != null) config.exemptions = { officials_per_exemption: pe, max_exemptions: me ?? 0 };
       }
       await karateCompetitionSetupApi.updatePricing(federationId, competitionId, { pricing_config: config });
-      toast.success(enabled ? "Precificação salva." : "Precificação desativada (modo legado).");
+      toast.success(enabled ? "Preços salvos." : "Preços por idade desligados. Vale a taxa simples.");
       onChanged();
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível salvar a precificação.");
+      toast.error(e?.message || "Não foi possível salvar os preços.");
     } finally {
       setSaving(false);
     }
@@ -259,20 +259,20 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
   return (
     <View style={s.block}>
       <View style={s.blockHead}>
-        <Text style={s.blockTitle}>Precificação da delegação</Text>
+        <Text style={s.blockTitle}>Preços da inscrição</Text>
         <TouchableOpacity
           style={[s.toggle, enabled && s.toggleOn]}
           onPress={() => setEnabled((v) => !v)}
           accessibilityRole="switch"
           accessibilityState={{ checked: enabled }}
         >
-          <Text style={[s.toggleTxt, enabled && s.toggleTxtOn]}>{enabled ? "Ativa" : "Modo legado"}</Text>
+          <Text style={[s.toggleTxt, enabled && s.toggleTxtOn]}>{enabled ? "Preço por idade" : "Taxa simples"}</Text>
         </TouchableOpacity>
       </View>
       <Text style={s.blockHint}>
         {enabled
-          ? "Taxa por atleta com bandas de idade (na data do evento), equipes por prova e isenções por contrapartida de oficiais."
-          : "Sem configuração, vale o modo legado: taxa da categoria (ou da competição) por inscrição."}
+          ? "Valor por atleta conforme a idade no dia do evento, valor de equipe por prova e isenção para dojô que cede oficiais."
+          : "Vale a taxa simples: a taxa da categoria (ou a do campeonato) em cada inscrição."}
       </Text>
 
       {enabled && (
@@ -285,7 +285,7 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
             ))}
           </View>
 
-          <Text style={s.subLabel}>Bandas por idade (avaliadas na ordem; deixe "até" vazio na última)</Text>
+          <Text style={s.subLabel}>Valor por idade (as linhas valem na ordem; deixe "até" vazio na última)</Text>
           {bands.map((b, i) => (
             <View key={i} style={s.bandRow}>
               <Text style={s.bandTxt}>até</Text>
@@ -309,7 +309,7 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
           ))}
           <TouchableOpacity style={s.addBand} onPress={() => setBands((p) => [...p, { maxAge: "", amount: "" }])}>
             <Icon name="plus" size={13} color={C.primary} />
-            <Text style={s.addBandTxt}>Adicionar banda</Text>
+            <Text style={s.addBandTxt}>Adicionar linha</Text>
           </TouchableOpacity>
 
           <Text style={s.subLabel}>Equipes</Text>
@@ -324,14 +324,14 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
             </View>
           </View>
 
-          <Text style={s.subLabel}>Isenções por contrapartida</Text>
+          <Text style={s.subLabel}>Isenção para quem cede oficiais</Text>
           <View style={s.pairRow}>
             <View style={s.pairField}>
               <Text style={s.quotaLabel}>A cada N oficiais</Text>
               <TextInput style={s.quotaInput} value={perExemption} keyboardType="numeric" maxLength={2} onChangeText={(v) => setPerExemption(v.replace(/\D/g, ""))} placeholder="2" placeholderTextColor={C.ink4} />
             </View>
             <View style={s.pairField}>
-              <Text style={s.quotaLabel}>Máx. isenções/dojô</Text>
+              <Text style={s.quotaLabel}>Máximo de isenções por dojô</Text>
               <TextInput style={s.quotaInput} value={maxExemptions} keyboardType="numeric" maxLength={2} onChangeText={(v) => setMaxExemptions(v.replace(/\D/g, ""))} placeholder="3" placeholderTextColor={C.ink4} />
             </View>
           </View>
@@ -339,7 +339,7 @@ function PricingBlock({ federationId, competitionId, pricing, onChanged }: {
       )}
 
       <View style={{ alignItems: "flex-end" }}>
-        <KarateButton label={saving ? "Salvando..." : "Salvar precificação"} variant="sumi" size="md" onPress={save} disabled={saving} />
+        <KarateButton label={saving ? "Salvando..." : "Salvar preços"} variant="sumi" size="md" onPress={save} disabled={saving} />
       </View>
     </View>
   );
@@ -364,7 +364,7 @@ function CycleBlock({
   const saveDeadline = async () => {
     const iso = deadlineBr.trim() ? parseBrDate(deadlineBr) : null;
     if (deadlineBr.trim() && !iso) {
-      toast.error("Data inválida — use dd/mm/aaaa ou deixe vazio.");
+      toast.error("Data inválida. Use dd/mm/aaaa ou deixe em branco.");
       return;
     }
     setSavingDeadline(true);
@@ -384,7 +384,7 @@ function CycleBlock({
     if (isOn) {
       const ok = await confirmAsync({
         title: kind === "conf" ? "Despublicar conferência?" : "Despublicar chaves?",
-        message: "A página pública deixa de existir até você publicar de novo (retificação é operação normal do ciclo).",
+        message: "A página pública sai do ar até você publicar de novo. Isso é normal durante a retificação.",
         confirmLabel: "Despublicar",
         destructive: true,
       });
@@ -394,7 +394,7 @@ function CycleBlock({
     try {
       if (kind === "conf") await karateCompetitionSetupApi.publishConference(federationId, competitionId, !isOn);
       else await karateCompetitionSetupApi.publishBrackets(federationId, competitionId, !isOn);
-      toast.success(isOn ? "Despublicado." : "Publicado no portal.");
+      toast.success(isOn ? "Saiu do portal." : "Publicado no portal.");
       onChanged();
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível publicar.");
@@ -405,7 +405,7 @@ function CycleBlock({
 
   return (
     <View style={s.block}>
-      <Text style={s.blockTitle}>Ciclo operacional</Text>
+      <Text style={s.blockTitle}>Publicação e prazos</Text>
 
       <View style={s.cycleRow}>
         <View style={{ flex: 1, minWidth: 180 }}>
@@ -422,7 +422,7 @@ function CycleBlock({
       </View>
 
       <PublishRow
-        label="Conferência de inscrições"
+        label="Lista de inscritos para conferência"
         hint="A lista pública que substitui o PDF por e-mail — os clubes conferem nome, categoria e faixa."
         publishedAt={conferencePublishedAt}
         busy={pubBusy === "conf"}

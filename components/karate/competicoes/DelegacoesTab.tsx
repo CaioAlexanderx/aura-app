@@ -88,7 +88,7 @@ export function DelegacoesTab({ federationId, competitionId }: { federationId: s
   const doConfirm = async (o: FedDelegationSummary) => {
     const ok = await confirmAsync({
       title: "Confirmar pagamento?",
-      message: `Confirmar o pedido de ${o.dojo_name || "dojô"} (${formatBRL(o.total_amount)})? Todas as inscrições do pedido serão marcadas como pagas.`,
+      message: `Confirmar o pedido de ${o.dojo_name || "dojô"} (${formatBRL(o.total_amount)})? Todas as inscrições desse pedido passam a contar como pagas.`,
       confirmLabel: "Confirmar",
     });
     if (!ok) return;
@@ -108,7 +108,7 @@ export function DelegacoesTab({ federationId, competitionId }: { federationId: s
   const doReject = async (o: FedDelegationSummary) => {
     const ok = await confirmAsync({
       title: "Recusar pedido?",
-      message: `Recusar o pedido de ${o.dojo_name || "dojô"}? As inscrições saem das listagens e chaves (nada é apagado).`,
+      message: `Recusar o pedido de ${o.dojo_name || "dojô"}? As inscrições saem das listas e das chaves, mas nada é apagado.`,
       confirmLabel: "Recusar",
       destructive: true,
     });
@@ -152,7 +152,7 @@ export function DelegacoesTab({ federationId, competitionId }: { federationId: s
         <KarateEmptyState
           icon="receipt"
           title="Nenhuma delegação aqui"
-          subtitle="Os pedidos consolidados dos dojôs aparecem nesta fila."
+          subtitle="Os pedidos de inscrição dos dojôs aparecem aqui."
           style={{ paddingVertical: 28 }}
         />
       ) : (

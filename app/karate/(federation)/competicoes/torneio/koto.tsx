@@ -446,7 +446,7 @@ function KumitePanel({
       } else if (code === "TERCEIRO_PENDENTE") {
         toast.error("A disputa de 3º lugar ainda não foi decidida — lance esse resultado antes de fechar.");
       } else if (code === "BRACKET_NOT_LOCKED" || e?.status === 409) {
-        toast.error("A chave precisa estar travada (oficial) para fechar o resultado. Trave a chave na tela do torneio.");
+        toast.error("Para fechar o resultado, a chave precisa estar oficializada. Oficialize a chave na tela do campeonato.");
       } else {
         toast.error(e?.message || "Não foi possível fechar o resultado.");
       }
@@ -474,10 +474,10 @@ function KumitePanel({
           <Icon name="lock" size={16} color={C.ink3} />
           <View style={{ flex: 1 }}>
             <Text style={s.noticeTitle}>
-              {notGenerated || !bracket ? "Chave ainda não gerada" : "Chave em rascunho (não travada)"}
+              {notGenerated || !bracket ? "Chave ainda não sorteada" : "Chave ainda não oficializada"}
             </Text>
             <Text style={s.noticeTxt}>
-              O Modo Mesário opera sobre a chave oficial (travada). Gere e trave a chave na tela do torneio.
+              O Modo Mesário só funciona com a chave oficializada. Sorteie e oficialize a chave na tela do campeonato.
             </Text>
           </View>
         </View>
@@ -873,7 +873,7 @@ function KataPanel({
       if (code === "FINAL_PENDENTE") {
         toast.error("Nenhuma nota lançada na fase final ainda — lance as notas da final antes de fechar.");
       } else if (code === "BRACKET_NOT_LOCKED" || e?.status === 409) {
-        toast.error("A apuração precisa estar travada (oficial) para fechar o resultado. Trave na tela do torneio.");
+        toast.error("Para fechar o resultado, a ordem precisa estar oficializada. Oficialize na tela do campeonato.");
       } else {
         toast.error(e?.message || "Não foi possível fechar o resultado.");
       }
@@ -913,7 +913,7 @@ function KataPanel({
       {scores.length === 0 ? (
         <View style={s.emptyBox}>
           <Icon name="layers" size={16} color={C.ink3} />
-          <Text style={s.emptyTitle}>Ordem de apresentação ainda não gerada</Text>
+          <Text style={s.emptyTitle}>Ordem de apresentação ainda não sorteada</Text>
           <Text style={s.emptyTxt}>Gere a ordem na tela do torneio para começar a bateria.</Text>
         </View>
       ) : (

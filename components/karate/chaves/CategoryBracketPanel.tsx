@@ -71,7 +71,7 @@ function CategoryQuickNav({ nav }: { nav: CategoryNav }) {
       >
         <Icon name="chevron-left" size={14} color={prev ? C.ink2 : C.ink4} />
         <Text style={[styles.quickNavBtnText, !prev && styles.quickNavBtnTextDisabled]} numberOfLines={1}>
-          {prev ? prev.name : "Início"}
+          {prev ? prev.name : "Primeira"}
         </Text>
       </TouchableOpacity>
       <View style={styles.quickNavCenter}>
@@ -86,7 +86,7 @@ function CategoryQuickNav({ nav }: { nav: CategoryNav }) {
         accessibilityLabel={next ? `Próxima chave: ${next.name}` : "Não há próxima chave"}
       >
         <Text style={[styles.quickNavBtnText, !next && styles.quickNavBtnTextDisabled]} numberOfLines={1}>
-          {next ? next.name : "Fim"}
+          {next ? next.name : "Última"}
         </Text>
         <Icon name="chevron-right" size={14} color={next ? C.ink2 : C.ink4} />
       </TouchableOpacity>
@@ -245,7 +245,7 @@ export function CategoryBracketPanel({
       );
       if (isKataMode) await loadKata(); else await loadBracket();
     } catch (e: any) {
-      const title = isKataMode ? "Não foi possível sortear a ordem" : "Não foi possível gerar a chave";
+      const title = isKataMode ? "Não foi possível sortear a ordem" : "Não foi possível sortear a chave";
       // 422 PAGAMENTO_PENDENTE: o backend manda o texto pronto em pt-BR e já
       // diz onde resolver. Repetir com palavra nossa só confundiria — e o
       // estado local está velho, então recarrega a contagem junto.
@@ -266,7 +266,7 @@ export function CategoryBracketPanel({
       await karateBracketsApi.lockBracket(federationId, cid || "", catId);
       await loadBracket();
     } catch (e: any) {
-      notify("Não foi possível travar a chave", e?.message ?? "Tente novamente.");
+      notify("Não foi possível oficializar a chave", e?.message ?? "Tente novamente.");
     } finally {
       setLocking(false);
     }
@@ -340,7 +340,7 @@ export function CategoryBracketPanel({
         <View style={styles.pendingBanner}>
           <Icon name="time-outline" size={16} color={P.red} />
           <Text style={styles.pendingText}>
-            {pendingPayment} inscrito{pendingPayment > 1 ? "s" : ""} aguardando confirmação de pagamento — {pendingPayment > 1 ? "entram" : "entra"} na chave após a federação confirmar.
+            {pendingPayment} inscrito{pendingPayment > 1 ? "s" : ""} ainda sem pagamento confirmado. Confirme em Delegações para {pendingPayment > 1 ? "que entrem" : "que entre"} na chave.
           </Text>
         </View>
       )}
