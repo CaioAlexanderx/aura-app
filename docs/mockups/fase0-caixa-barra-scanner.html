@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Caixa — logo no cabeçalho, leitor na busca, ações escritas (Fase 0 · I0.3)</title>
+<style>
+  :root {
+    --bg: #0B0716;
+    --bg3: #0e1228;
+    --ink: #f0edff;
+    --ink2: rgba(220,215,255,0.75);
+    --ink3: rgba(170,160,235,0.65);
+    --line: rgba(255,255,255,0.07);
+    --line2: rgba(120,100,240,0.22);
+    --violet: #7c3aed;
+    --violet2: #8b5cf6;
+    --violet3: #a78bfa;
+    --violetD: rgba(124,58,237,0.12);
+    --green: #34d399;
+    --amber: #f59e0b;
+    --red: #f87171;
+    --glass: rgba(255,255,255,0.035);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px 80px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.14) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.09) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  h1 { font-size: 26px; letter-spacing: -0.4px; margin: 0 0 6px; }
+  .sub { color: var(--ink3); font-size: 13px; margin: 0 0 4px; line-height: 1.6; max-width: 1100px; }
+  .sub b { color: var(--ink2); font-weight: 600; }
+  .sub code, .note code, td code { color: var(--violet3); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+  h2 {
+    font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--violet3); margin: 40px 0 14px; font-weight: 700;
+  }
+  .wrap { max-width: 1520px; margin: 0 auto; }
+  .pair { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; }
+  .col { flex: 1 1 440px; min-width: 360px; }
+  .colhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tag { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; }
+  .tag.hoje { background: rgba(248,113,113,0.14); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .tag.novo { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .colhead .m { font-size: 11px; color: var(--ink3); font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .frame { position: relative; border-radius: 16px; padding: 24px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); overflow: hidden; }
+  .frame.hoje { padding: 28px; }
+  .frame.mob { padding: 16px; width: 390px; }
+  .third { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(52,211,153,0.6); }
+  .third.bad { border-color: rgba(248,113,113,0.6); }
+  .third::after {
+    content: attr(data-l); position: absolute; right: 6px; top: -15px;
+    font-size: 9px; letter-spacing: 0.6px; text-transform: uppercase;
+    font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--green);
+  }
+  .third.bad::after { color: var(--red); }
+
+  .blk { position: relative; }
+  .blk > .h {
+    position: absolute; left: -24px; top: 50%; transform: translateY(-50%) rotate(180deg);
+    writing-mode: vertical-rl; font-size: 9px; color: var(--ink3);
+    font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.4px; white-space: nowrap;
+  }
+
+  /* ─ cabeçalho ─ */
+  .head { display: flex; align-items: center; gap: 14px; }
+  .title { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; line-height: 31px; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); flex: 0 0 auto; }
+  .eyebrow .t { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--ink3); letter-spacing: 0.6px; text-transform: uppercase; }
+  .spacer { flex: 1; }
+
+  /* logo do lojista */
+  .logoimg {
+    height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    padding: 0 10px; flex: 0 0 auto; overflow: hidden;
+    background: #fff5; color: #1b1030; font-weight: 800; font-size: 19px; letter-spacing: 1.5px;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .logoimg.mob { height: 44px; font-size: 17px; }
+  .logoimg.big { height: 120px; font-size: 40px; padding: 0 22px; border-radius: 18px; opacity: 0.75; }
+  .tile {
+    width: 48px; height: 48px; border-radius: 12px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #c4b5fd 0%, #7c3aed 60%, #5b21b6 100%);
+    box-shadow: 0 4px 12px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 20px; letter-spacing: -0.5px;
+  }
+  .tile.big { width: 120px; height: 120px; border-radius: 28px; font-size: 50px; opacity: 0.75; }
+
+  .caixabtn { display: flex; height: 44px; border-radius: 12px; overflow: hidden; background: var(--violet); border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 4px 14px -3px rgba(124,58,237,0.3); flex: 0 0 auto; }
+  .caixabtn .ico { width: 44px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.18); }
+  .caixabtn .body { padding: 5px 14px; display: flex; flex-direction: column; justify-content: center; min-width: 140px; }
+  .caixabtn .l { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; color: #fff; line-height: 14px; }
+  .caixabtn .m { font-size: 10px; line-height: 12px; color: rgba(255,255,255,0.78); font-family: ui-monospace, Menlo, Consolas, monospace; margin-top: 2px; }
+
+  /* ─ busca + chip do leitor ─ */
+  .searchrow { display: flex; align-items: center; gap: 10px; }
+  .search { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); flex: 1; min-width: 0; max-width: 560px; }
+  .search .ph { flex: 1; font-size: 13px; color: var(--ink3); }
+  .kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--ink3); }
+  .leitor {
+    display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 8px;
+    background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.30); flex: 0 0 auto;
+  }
+  .leitor .d { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .leitor .t { font-size: 11.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .leitor.off { background: rgba(255,255,255,0.04); border-color: var(--line); }
+  .leitor.off .d { background: var(--ink3); box-shadow: none; }
+  .leitor.off .t { color: var(--ink3); }
+  .leitor.codigo .t { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--ink2); letter-spacing: 0.4px; }
+
+  /* ─ botões de ação escritos ─ */
+  .actbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .abtn {
+    display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px;
+    border-radius: 10px; background: var(--glass); border: 1px solid var(--line);
+    font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap;
+  }
+  .abtn.filled { background: rgba(124,58,237,0.14); border-color: rgba(124,58,237,0.45); }
+  .abtn.filled .rot { color: var(--ink3); font-weight: 500; }
+  .abtn .val { font-weight: 700; color: var(--ink); }
+  .abtn .sc { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 9px; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--ink3); font-weight: 400; }
+  .abtn .pend { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px rgba(245,158,11,0.6); flex: 0 0 auto; }
+  .abtn.discreto { background: transparent; border-color: rgba(255,255,255,0.05); color: var(--ink3); font-weight: 500; font-size: 12px; }
+
+  /* ─ chips antigos (coluna "hoje") ─ */
+  .chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); min-width: 0; height: 52px; }
+  .chip.on { background: rgba(124,58,237,0.14); border-color: rgba(124,58,237,0.45); }
+  .chip .ico { width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; }
+  .chip .body { flex: 1; min-width: 0; }
+  .chip .k { font-size: 9px; font-weight: 700; color: var(--ink3); letter-spacing: 1.1px; text-transform: uppercase; }
+  .chip .v { font-size: 12px; color: var(--ink); font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .v.empty { color: var(--ink3); font-weight: 500; }
+  .chip .sc { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 9px; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--ink3); flex: 0 0 auto; }
+  .chip.compact { flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 64px; padding: 8px; }
+  .chip.compact .ico { width: 36px; height: 36px; }
+  .banner { position: relative; height: 200px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(124,58,237,0.16), rgba(139,92,246,0.06)); border: 1px solid var(--line2); }
+  .banner.sm { height: 160px; }
+  .banner::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(124,58,237,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.08) 1px, transparent 1px); background-size: 28px 28px; -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 80%); mask-image: radial-gradient(ellipse at center, #000 20%, transparent 80%); }
+
+  /* ─ categorias ─ */
+  .catrow { display: flex; align-items: center; gap: 8px; height: 32px; }
+  .cat { font-size: 11px; font-weight: 600; color: var(--ink3); padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); white-space: nowrap; }
+  .cat.on { color: #fff; background: var(--violet); border-color: var(--violet2); }
+
+  /* ─ grade ─ */
+  .grid { display: grid; gap: 14px; }
+  .pcard { border-radius: 16px; padding: 14px; background: var(--glass); border: 1px solid var(--line); }
+  .pcard.dense { padding: 10px; }
+  .pimg { height: 120px; border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, rgba(167,139,250,0.35), rgba(167,139,250,0.07) 70%); border: 1px solid rgba(167,139,250,0.25); font-size: 34px; font-weight: 700; color: rgba(255,255,255,0.92); }
+  .pcard.dense .pimg { height: 72px; font-size: 24px; }
+  .pname { font-size: 13px; font-weight: 600; line-height: 17px; min-height: 36px; }
+  .pcard.dense .pname { font-size: 12px; min-height: 30px; line-height: 15px; }
+  .pstock-old { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10px; color: var(--ink3); letter-spacing: 0.4px; text-transform: uppercase; margin-top: 3px; }
+  .pstock-new { font-size: 11px; color: var(--ink2); margin-top: 3px; }
+  .pfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .pprice { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; color: var(--violet3); }
+  .padd { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; }
+  .pcard.dense .padd { width: 26px; height: 26px; }
+
+  /* ─ carrinho ─ */
+  .cart { width: 380px; border-radius: 18px; border: 1px solid var(--line2); background: rgba(255,255,255,0.02); overflow: hidden; }
+  .carthead { padding: 18px; background: linear-gradient(135deg, rgba(124,58,237,0.85), rgba(109,40,217,0.75)); }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.65); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; color: #fff; letter-spacing: -1px; margin-top: 2px; }
+  .cartempty { display: flex; flex-direction: column; align-items: center; padding: 40px 20px; gap: 4px; }
+  .cartempty .loja { font-size: 14px; font-weight: 700; color: var(--ink); margin-top: 12px; margin-bottom: 6px; }
+  .cartempty .t { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; letter-spacing: 0.6px; text-transform: uppercase; font-weight: 700; color: var(--ink2); text-align: center; }
+  .cartempty .t.dim { font-weight: 400; color: var(--ink3); }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink3); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; }
+  td.n { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--ink2); }
+  td.win { color: var(--green); font-family: ui-monospace, Menlo, Consolas, monospace; }
+  tr.tot td { border-top: 1px solid var(--line2); border-bottom: none; font-weight: 700; color: var(--ink); }
+  .note { font-size: 12px; color: var(--ink3); line-height: 1.7; margin-top: 10px; max-width: 1100px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Caixa — a marca no cabeçalho, o leitor na busca, as ações escritas</h1>
+  <p class="sub">
+    Fase 0 · I0.3 — <b>aproveitamento de espaço, não redesenho</b>. Mesmos tokens, mesmo violeta
+    <code>#7c3aed</code>, mesmos atalhos F1–F5 e ⌘K, mesmo fluxo de venda e mesmo comportamento do leitor.
+  </p>
+  <p class="sub">
+    Quatro correções: (1) o painel roxo de 200px sai e a <b>logo do lojista abre o cabeçalho em 48px</b>, ao lado de
+    “Caixa” e do eyebrow <code>NOME DA LOJA · NOVA VENDA</code>; (2) o estado do leitor vira um <b>chip verde na linha da busca</b>
+    (“Lendo · pode bipar”), porque o leitor lê, não escuta; (3) a barra de ações vira <b>botões escritos</b> de 40px —
+    ícone nenhum serve de identidade, nem para quem conhece o app; (4) <code>EST. 11 UN</code> vira <b>11 em estoque</b>.
+    A marca ganha destaque de verdade no <b>carrinho vazio</b>, com a logo a 120px, onde não custa um pixel da grade.
+  </p>
+
+  <!-- ══════════════ 1440 ══════════════ -->
+  <h2>1 · Desktop — a área acima da grade (catálogo ≈ 1440px de conteúdo)</h2>
+  <div class="pair">
+
+    <!-- HOJE -->
+    <div class="col">
+      <div class="colhead">
+        <span class="tag hoje">Hoje</span>
+        <span class="m">a grade começa em 428px · 47% da altura útil</span>
+      </div>
+      <div class="frame hoje" style="height: 520px;">
+        <div class="third bad" style="top: 288px;" data-l="primeiro terço (288px)"></div>
+
+        <div class="blk" style="margin-bottom: 22px;"><span class="h">48 + 22</span>
+          <div class="head">
+            <div class="caixabtn"><div class="ico">🔓</div><div class="body"><span class="l">ABRIR CAIXA</span><span class="m">vendas bloqueadas</span></div></div>
+            <div>
+              <div class="title">Caixa</div>
+              <div class="eyebrow"><span class="dot"></span><span class="t">Finesse · nova venda</span></div>
+            </div>
+            <div class="search"><span>🔍</span><span class="ph">Buscar produto ou código…</span><span class="kbd">⌘K</span></div>
+          </div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 18px;"><span class="h">200 + 18</span>
+          <div class="banner"><div class="logoimg" style="height:120px;font-size:40px;padding:0 22px;">FINESSE</div></div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 18px;"><span class="h">52 + 18</span>
+          <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+            <div class="chip on"><div class="ico">▥</div><div class="body"><div class="k">Scanner</div><div class="v">Escutando · pode b…</div></div><span class="sc">F1</span></div>
+            <div class="chip"><div class="ico">👥</div><div class="body"><div class="k">Vendedora</div><div class="v empty">Selecionar vended…</div></div><span class="sc">F2</span></div>
+            <div class="chip"><div class="ico">👤</div><div class="body"><div class="k">Cliente</div><div class="v empty">Vincular cliente</div></div><span class="sc">F3</span></div>
+            <div class="chip"><div class="ico">🏷</div><div class="body"><div class="k">Cupom</div><div class="v empty">Inserir código</div></div><span class="sc">F4</span></div>
+            <div class="chip"><div class="ico">🔁</div><div class="body"><div class="k">Trocar / Devol…</div><div class="v empty">Iniciar troca ou dev…</div></div><span class="sc">F5</span></div>
+          </div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 10px;"><span class="h">32 + 10</span>
+          <div class="catrow"><span class="cat on">Todos</span><span class="cat">Vestuário</span><span class="cat">Calçados</span><span class="cat">Acessórios</span></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="pcard"><div class="pimg">VE</div><div class="pname">Vestido midi floral manga curta</div><div class="pstock-old">Est. 11 un</div><div class="pfoot"><span class="pprice">R$ 189,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">BL</div><div class="pname">Blusa canelada</div><div class="pstock-old">Est. 1 un</div><div class="pfoot"><span class="pprice">R$ 89,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">CA</div><div class="pname">Calça wide leg</div><div class="pstock-old">Est. 6 un</div><div class="pfoot"><span class="pprice">R$ 229,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">TE</div><div class="pname">Tecido avulso</div><div class="pstock-old">Est. 3 kg</div><div class="pfoot"><span class="pprice">R$ 42,00</span><span class="padd">+</span></div></div>
+        </div>
+      </div>
+      <p class="note" style="max-width: 560px;">
+        Três ícones que o lojista não distingue, quatro rótulos truncados e um painel de 200px cuja única função é
+        segurar a logo. A grade nasce depois da metade da tela.
+      </p>
+    </div>
+
+    <!-- PROPOSTO -->
+    <div class="col">
+      <div class="colhead">
+        <span class="tag novo">Proposto</span>
+        <span class="m">a grade começa em 244px · 28% da altura útil</span>
+      </div>
+      <div class="frame" style="height: 520px;">
+        <div class="third" style="top: 288px;" data-l="primeiro terço (288px)"></div>
+
+        <div class="blk" style="margin-bottom: 14px;"><span class="h">56 + 14</span>
+          <div class="head">
+            <div class="logoimg">FINESSE</div>
+            <div>
+              <div class="title">Caixa</div>
+              <div class="eyebrow"><span class="dot"></span><span class="t">Finesse · nova venda</span></div>
+            </div>
+            <div class="spacer"></div>
+            <div class="caixabtn"><div class="ico">🔓</div><div class="body"><span class="l">ABRIR CAIXA</span><span class="m">vendas bloqueadas</span></div></div>
+          </div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">44 + 12</span>
+          <div class="searchrow">
+            <div class="search"><span>🔍</span><span class="ph">Buscar produto ou código…</span><span class="kbd">⌘K</span></div>
+            <div class="leitor"><span class="d"></span><span class="t">Lendo · pode bipar</span></div>
+          </div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">40 + 12</span>
+          <div class="actbar">
+            <div class="abtn" title="Vincular cliente à venda (F3)"><span class="pend"></span><span class="rot">Cliente</span><span class="sc">F3</span></div>
+            <div class="abtn filled" title="Selecionar a vendedora da venda (F2). Agora: Simone"><span class="rot">Vendedora:</span><span class="val">Simone</span><span class="sc">F2</span></div>
+            <div class="abtn" title="Aplicar cupom de desconto (F4)"><span class="rot">Cupom</span><span class="sc">F4</span></div>
+            <div class="abtn" title="Iniciar uma troca ou devolução (F5)"><span class="rot">Troca ou devolução</span><span class="sc">F5</span></div>
+            <div class="spacer"></div>
+            <div class="abtn discreto" title="Digitar um código de barras à mão (F1)"><span class="rot">Digitar código</span><span class="sc">F1</span></div>
+          </div>
+        </div>
+
+        <div class="blk" style="margin-bottom: 10px;"><span class="h">32 + 10</span>
+          <div class="catrow"><span class="cat on">Todos</span><span class="cat">Vestuário</span><span class="cat">Calçados</span><span class="cat">Acessórios</span></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="pcard"><div class="pimg">VE</div><div class="pname">Vestido midi floral manga curta</div><div class="pstock-new">11 em estoque</div><div class="pfoot"><span class="pprice">R$ 189,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">BL</div><div class="pname">Blusa canelada</div><div class="pstock-new">1 em estoque</div><div class="pfoot"><span class="pprice">R$ 89,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">CA</div><div class="pname">Calça wide leg</div><div class="pstock-new">6 em estoque</div><div class="pfoot"><span class="pprice">R$ 229,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">TE</div><div class="pname">Tecido avulso</div><div class="pstock-new">3 kg em estoque</div><div class="pfoot"><span class="pprice">R$ 42,00</span><span class="padd">+</span></div></div>
+        </div>
+      </div>
+      <p class="note" style="max-width: 560px;">
+        Ponto âmbar = campo exigido pelas políticas do Caixa e ainda vazio. Preenchido, o botão passa a mostrar o valor
+        (“Vendedora: Simone”). O texto longo de cada ação vive no <code>accessibilityLabel</code> e no tooltip.
+      </p>
+    </div>
+  </div>
+
+  <h2>Alturas — desktop (viewport 1920×911; área útil 865px depois da topbar de 46px)</h2>
+  <table>
+    <tr><th>Bloco</th><th>Hoje</th><th>Proposto</th><th>Ganho</th></tr>
+    <tr><td>padding do catálogo</td><td class="n">28</td><td class="n">24</td><td class="win">−4</td></tr>
+    <tr><td>cabeçalho (logo + título + eyebrow + Abrir caixa)</td><td class="n">70</td><td class="n">70</td><td class="n">—</td></tr>
+    <tr><td><b>painel roxo do lojista</b></td><td class="n">218</td><td class="n">0</td><td class="win">−218</td></tr>
+    <tr><td>linha da busca + chip do leitor</td><td class="n">0 (busca estava no topo)</td><td class="n">56</td><td class="n">+56</td></tr>
+    <tr><td>barra de ações</td><td class="n">70 (cards de 52)</td><td class="n">52 (botões de 40)</td><td class="win">−18</td></tr>
+    <tr><td>chips de categoria</td><td class="n">42</td><td class="n">42</td><td class="n">—</td></tr>
+    <tr class="tot"><td>a grade começa em</td><td class="n">428px (47%)</td><td class="n">244px (28%)</td><td class="win">−184</td></tr>
+  </table>
+  <p class="note">O primeiro terço de 865px é <b>288px</b>. Hoje a grade nasce em 428px, fora; proposto, em 244px — dentro, com 44px de folga.</p>
+
+  <!-- ══════════════ 390 ══════════════ -->
+  <h2>2 · Mobile 390×780 — a primeira dobra</h2>
+  <div class="pair">
+
+    <div class="col" style="flex: 0 0 auto;">
+      <div class="colhead"><span class="tag hoje">Hoje</span><span class="m">grade em 610px · sobra meio card</span></div>
+      <div class="frame mob" style="height: 669px;">
+        <div class="blk" style="margin-bottom: 8px;"><span class="h">31 + 8</span><div class="title">Caixa</div></div>
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">44 + 12</span>
+          <div class="caixabtn" style="width: 100%;"><div class="ico">🔓</div><div class="body"><span class="l">ABRIR CAIXA</span><span class="m">vendas bloqueadas</span></div></div>
+        </div>
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">43 + 12</span>
+          <div class="search" style="max-width:none;"><span>🔍</span><span class="ph">Buscar produto…</span></div>
+        </div>
+        <div class="blk" style="margin-bottom: 18px;"><span class="h">160 + 18</span>
+          <div class="banner sm"><div class="logoimg" style="height:96px;font-size:30px;">FINESSE</div></div>
+        </div>
+        <div class="blk" style="margin-bottom: 16px;"><span class="h">208 + 16</span>
+          <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+            <div class="chip compact on"><div class="ico">▥</div><span class="sc">F1</span></div>
+            <div class="chip compact"><div class="ico">👥</div><span class="sc">F2</span></div>
+            <div class="chip compact"><div class="ico">👤</div><span class="sc">F3</span></div>
+            <div class="chip compact"><div class="ico">🏷</div><span class="sc">F4</span></div>
+            <div class="chip compact"><div class="ico">🔁</div><span class="sc">F5</span></div>
+          </div>
+        </div>
+        <div class="blk" style="margin-bottom: 10px;"><span class="h">32 + 10</span>
+          <div class="catrow"><span class="cat on">Todos</span><span class="cat">Vestuário</span><span class="cat">Calçados</span></div>
+        </div>
+        <div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="pcard"><div class="pimg">VE</div><div class="pname">Vestido midi floral</div><div class="pstock-old">Est. 11 un</div><div class="pfoot"><span class="pprice">R$ 189,90</span><span class="padd">+</span></div></div>
+          <div class="pcard"><div class="pimg">BL</div><div class="pname">Blusa canelada</div><div class="pstock-old">Est. 1 un</div><div class="pfoot"><span class="pprice">R$ 89,90</span><span class="padd">+</span></div></div>
+        </div>
+      </div>
+      <p class="note" style="width: 390px;">Cinco ícones sem nome ocupam três linhas e a dobra corta no primeiro par de produtos.</p>
+    </div>
+
+    <div class="col" style="flex: 0 0 auto;">
+      <div class="colhead"><span class="tag novo">Proposto</span><span class="m">grade em 272px · 2 pares inteiros</span></div>
+      <div class="frame mob" style="height: 669px;">
+        <div class="blk" style="margin-bottom: 10px;"><span class="h">48 + 10</span>
+          <div class="head" style="gap: 12px;">
+            <div class="logoimg mob">FINESSE</div>
+            <div style="min-width:0;">
+              <div class="title">Caixa</div>
+              <div class="eyebrow"><span class="dot"></span><span class="t">Finesse · nova venda</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="blk" style="margin-bottom: 10px;"><span class="h">44 + 10</span>
+          <div class="caixabtn" style="width: 100%;"><div class="ico">🔓</div><div class="body"><span class="l">ABRIR CAIXA</span><span class="m">vendas bloqueadas</span></div></div>
+        </div>
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">44 + 12</span>
+          <div class="searchrow">
+            <div class="search" style="max-width:none;"><span>🔍</span><span class="ph">Buscar…</span></div>
+            <div class="leitor"><span class="d"></span><span class="t">Lendo</span></div>
+          </div>
+        </div>
+        <div class="blk" style="margin-bottom: 12px;"><span class="h">40 + 12</span>
+          <div class="actbar">
+            <div class="abtn"><span class="pend"></span><span class="rot">Cliente</span><span class="sc">F3</span></div>
+            <div class="abtn"><span class="rot">Vendedora</span><span class="sc">F2</span></div>
+            <div class="spacer"></div>
+            <div class="abtn"><span class="rot">Mais…</span></div>
+          </div>
+        </div>
+        <div class="blk" style="margin-bottom: 8px;"><span class="h">32 + 8</span>
+          <div class="catrow"><span class="cat on">Todos</span><span class="cat">Vestuário</span><span class="cat">Calçados</span></div>
+        </div>
+        <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div class="pcard dense"><div class="pimg">VE</div><div class="pname">Vestido midi floral</div><div class="pstock-new">11 em estoque</div><div class="pfoot"><span class="pprice">R$ 189,90</span><span class="padd">+</span></div></div>
+          <div class="pcard dense"><div class="pimg">BL</div><div class="pname">Blusa canelada</div><div class="pstock-new">1 em estoque</div><div class="pfoot"><span class="pprice">R$ 89,90</span><span class="padd">+</span></div></div>
+          <div class="pcard dense"><div class="pimg">CA</div><div class="pname">Calça wide leg</div><div class="pstock-new">6 em estoque</div><div class="pfoot"><span class="pprice">R$ 229,90</span><span class="padd">+</span></div></div>
+          <div class="pcard dense"><div class="pimg">TE</div><div class="pname">Tecido avulso</div><div class="pstock-new">3 kg em estoque</div><div class="pfoot"><span class="pprice">R$ 42,00</span><span class="padd">+</span></div></div>
+        </div>
+      </div>
+      <p class="note" style="width: 390px;">Cupom, troca e digitação manual do código moram dentro de “Mais…”, escritos. Os atalhos F1/F4/F5 continuam valendo.</p>
+    </div>
+  </div>
+
+  <h2>Alturas — mobile (390×780; útil 669px = 780 − 52 da topbar do sino − 59 da barra de abas)</h2>
+  <table>
+    <tr><th>Bloco</th><th>Hoje</th><th>Proposto</th><th>Ganho</th></tr>
+    <tr><td>padding</td><td class="n">16</td><td class="n">16</td><td class="n">—</td></tr>
+    <tr><td>cabeçalho (com a logo em 44px)</td><td class="n">39</td><td class="n">58</td><td class="n">+19</td></tr>
+    <tr><td>Abrir caixa</td><td class="n">56</td><td class="n">54</td><td class="win">−2</td></tr>
+    <tr><td>busca (+ chip do leitor)</td><td class="n">55</td><td class="n">56</td><td class="n">+1</td></tr>
+    <tr><td><b>painel roxo do lojista</b></td><td class="n">178</td><td class="n">0</td><td class="win">−178</td></tr>
+    <tr><td>barra de ações</td><td class="n">224 (3 linhas de ícone)</td><td class="n">52 (1 linha escrita)</td><td class="win">−172</td></tr>
+    <tr><td>chips de categoria</td><td class="n">42</td><td class="n">40</td><td class="win">−2</td></tr>
+    <tr class="tot"><td>a grade começa em</td><td class="n">610px</td><td class="n">272px</td><td class="win">−338</td></tr>
+    <tr class="tot"><td>cabe na dobra</td><td class="n">meio par</td><td class="n">2 pares (2 × 174 + 12 = 360 ≤ 397)</td><td class="win">✓</td></tr>
+  </table>
+
+  <!-- ══════════════ marca ══════════════ -->
+  <h2>3 · A marca — sem logo, e no carrinho vazio</h2>
+  <div class="pair">
+    <div class="col" style="flex: 0 0 auto;">
+      <div class="colhead"><span class="tag novo">Loja sem logo</span><span class="m">tile violeta com a inicial, o mesmo do menu lateral</span></div>
+      <div class="frame" style="width: 520px;">
+        <div class="head">
+          <div class="tile">B</div>
+          <div>
+            <div class="title">Caixa</div>
+            <div class="eyebrow"><span class="dot"></span><span class="t">Bella Moda · nova venda</span></div>
+          </div>
+        </div>
+        <div class="searchrow" style="margin-top: 14px;">
+          <div class="search" style="max-width:none;"><span>🔍</span><span class="ph">Buscar produto ou código…</span><span class="kbd">⌘K</span></div>
+          <div class="leitor off"><span class="d"></span><span class="t">Leitor pausado</span></div>
+        </div>
+        <p class="note">Nunca a logo da Aura: quem está na tela é a loja. O chip cinza é o leitor pausado — acontece enquanto outra janela do Caixa está aberta.</p>
+        <div class="searchrow" style="margin-top: 6px;">
+          <div class="search" style="max-width:none;"><span>🔍</span><span class="ph">Buscar produto ou código…</span><span class="kbd">⌘K</span></div>
+          <div class="leitor codigo"><span class="d"></span><span class="t">7891000315507</span></div>
+        </div>
+        <p class="note">Bipou: o código aparece no chip por 4 segundos e o estado volta ao normal.</p>
+      </div>
+    </div>
+
+    <div class="col" style="flex: 0 0 auto;">
+      <div class="colhead"><span class="tag novo">Carrinho vazio</span><span class="m">logo a 120px, como cabeçalho de recibo</span></div>
+      <div class="cart">
+        <div class="carthead">
+          <div class="k">Total da venda</div>
+          <div class="tot">R$ 0,00</div>
+        </div>
+        <div class="cartempty">
+          <div class="logoimg big">FINESSE</div>
+          <div class="loja">Finesse</div>
+          <div class="t">Carrinho vazio</div>
+          <div class="t dim">Clique em um produto para adicionar</div>
+        </div>
+      </div>
+      <p class="note" style="width: 380px;">
+        Some no instante em que o primeiro item entra — e não custa um pixel da altura da grade.
+        Sem logo, entra o mesmo tile violeta com a inicial.
+      </p>
+    </div>
+  </div>
+
+  <h2>4 · De onde vem a logo</h2>
+  <table>
+    <tr><th>Fonte</th><th>Quem escreve</th><th>Usada aqui?</th></tr>
+    <tr><td><code>companies/:id/profile.logo_url</code></td><td>Configurações › Perfil (<code>useConfigProfile</code> → <code>companiesApi.updateProfile</code>), depois de subir o arquivo pro storage da empresa</td><td>Sim — fonte canônica, chega pelo <code>useCompanyProfile</code>, o mesmo hook que a BrandBanner já usava</td></tr>
+    <tr><td><code>useAuthStore().companyLogo</code></td><td>Espelho do mesmo <code>logo_url</code>, hidratado do <code>/auth/me</code></td><td>Sim, como fallback enquanto o profile não respondeu (igual à ProfileBanner)</td></tr>
+    <tr><td><code>localStorage["aura_company_logo"]</code></td><td>Cache de escrita do ProfileHero</td><td>Não — hoje <b>ninguém lê essa chave de volta</b>; é só escrita e remoção</td></tr>
+    <tr><td>Logo do Canal Digital (<code>site.logo_url</code>)</td><td>Canal Digital › Meu site</td><td>Não — é a marca do site/vitrine, outro registro; o Caixa mostra a da empresa</td></tr>
+  </table>
+  <p class="note">
+    O gate de plano é o mesmo de antes (Negócio, Expansão, Personalizado): fora dele, entra o tile da inicial em vez da
+    imagem — que é melhor que o painel roxo vazio que esses planos viam até agora.
+  </p>
+
+  <h2>5 · O que não muda</h2>
+  <table>
+    <tr><th>Item</th><th>Estado</th></tr>
+    <tr><td>Atalhos F1 (digitar código), F2 vendedora, F3 cliente, F4 cupom, F5 troca, ⌘K busca</td><td>Idênticos</td></tr>
+    <tr><td>Leitor USB/Bluetooth global</td><td>Idêntico — segue lendo sozinho, sem foco em campo nenhum</td></tr>
+    <tr><td>Fluxo de venda, formas de pagamento, split, crediário, NFC-e</td><td>Intocados</td></tr>
+    <tr><td>Linguagem visual (glass, violeta, animações do Caixa)</td><td>Mesmos tokens</td></tr>
+  </table>
+  <p class="note">
+    Toque (regra 7 do CLAUDE.md): tooltip é reforço, nunca o único caminho — o texto longo está no
+    <code>accessibilityLabel</code> e se repete no título do popover que o toque abre. Em
+    <code>@media (hover: none)</code> o realce de hover dá lugar a um realce de toque, senão o botão fica aceso depois do toque.
+  </p>
+</div>
+</body>
+</html>

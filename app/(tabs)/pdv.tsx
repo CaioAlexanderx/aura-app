@@ -24,6 +24,23 @@
 // (catálogo + carrinho) usam height/maxHeight: 100%.
 // O carrinho desktop recebe `fill` (corpo rola + checkout ancora no fundo);
 // o mobile NÃO recebe fill → altura natural, a página rola (sem vazio).
+//
+// 16/09/2026 (Fase 0 · I0.3) — a grade só começava na metade da tela:
+//   · O MerchantBanner era um painel roxo de 200px (+18 de margem) que só
+//     segurava a logo do lojista. Saiu. A logo agora abre o cabeçalho, em
+//     48px ao lado do título, e reaparece grande (120px) no carrinho vazio —
+//     em evidência, sem custar altura da grade.
+//   · O estado do leitor saiu do card de 52px da barra de ações (onde
+//     truncava em "Escutando · pode b…") e virou chip na linha da busca.
+//   · A barra de ações virou botões de TEXTO de 40px com largura natural.
+//   Alturas acima da grade, catálogo desktop (viewport 1920×911 → 865 úteis):
+//     antes  28 + 70 (topo) + 218 (painel roxo) + 70 (ações) + 42 (categorias)
+//            = 428px, 47% da altura útil — fora do primeiro terço (288px).
+//     agora  24 + 70 (topo) + 56 (busca) + 52 (ações) + 42 (categorias)
+//            = 244px, 28% — dentro do primeiro terço.
+//   Mobile 390×780 (669 úteis, fora topbar do sino e barra de abas):
+//     antes 610px até a grade (entrava meio par de produtos);
+//     agora 272px, e os cards `dense` deixam dois pares inteiros na dobra.
 // ============================================================
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -38,9 +55,10 @@ import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
 import { CaixaDesignStyle, IS_WEB } from "@/components/screens/pdv/types";
 import { SearchBox } from "@/components/screens/pdv/SearchBox";
-import { MerchantBanner } from "@/components/screens/pdv/MerchantBanner";
+import { MerchantLogo } from "@/components/screens/pdv/MerchantLogo";
+import { ScannerStatusChip } from "@/components/screens/pdv/ScannerStatusChip";
 import {
-  ActBarcode, ActPerson, ActCoupon, ActTroca,
+  ActBarcode, ActPerson, ActCoupon, ActTroca, ActMais,
 } from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
@@ -80,6 +98,11 @@ function CaixaScreenInner() {
   // 16/06/2026: grid de produtos fluido + crediário só como modalidade de
   // pagamento (card removido da toolbar). Gateamos o chip por crediarioEnabled.
   const productMinCard = productMinCardFor(vp);
+  // As políticas do Caixa (Configurações) viram ponto âmbar no botão: o
+  // usePdvState só cria o `requiredHint` quando o campo é exigido E está
+  // vazio — que é exatamente quando o ponto deve aparecer.
+  const precisaCliente   = st.requiredHints.some(h => h.label === "Cliente obrigatório");
+  const precisaVendedora = st.requiredHints.some(h => h.label === "Vendedora obrigatória");
   const pdvPayMethods = crediarioEnabled
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
@@ -145,7 +168,7 @@ function CaixaScreenInner() {
     );
   }
 
-  function ProductSection({ columns, minCard }: { columns: number; minCard?: number }) {
+  function ProductSection({ columns, minCard, dense }: { columns: number; minCard?: number; dense?: boolean }) {
     if (st.products.length === 0)
       return (
         <EmptyState icon="package" iconColor={Colors.amber}
@@ -172,6 +195,7 @@ function CaixaScreenInner() {
           columns={columns}
           minCard={minCard}
           compact={vp.compact}
+          dense={dense}
         />
         <Pagination page={page} totalPages={totalPages} total={filteredTotal}
           pageSize={PAGE_SIZE} onPage={goTo} />
@@ -190,22 +214,17 @@ function CaixaScreenInner() {
 
           <ScrollView
             style={[s.catalog, IS_WEB && ({ maxHeight: "100%", overflow: "auto" } as any)]}
-            contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingBottom: 48 }}
+            contentContainerStyle={{ padding: vp.sm ? 16 : 28, paddingTop: vp.sm ? 14 : 24, paddingBottom: 48 }}
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
 
+              {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
+                  (ou plano sem direito a ela) entra o tile violeta com a
+                  inicial da loja — o mesmo do menu lateral, nunca a da Aura. */}
               <View style={s.topRow}>
-                {caixaEnabled && (
-                  <CaixaButton
-                    isAberto={isAberto}
-                    isLoading={caixaLoading}
-                    openedByName={sessaoAtiva?.opened_by?.name || null}
-                    openedAtIso={sessaoAtiva?.opened_at || null}
-                    onClick={st.openCaixaModal}
-                  />
-                )}
-                <View>
+                <MerchantLogo size={48} />
+                <View style={{ minWidth: 0 }}>
                   <Text style={s.title}>Caixa</Text>
                   <View style={s.titleSub}>
                     {IS_WEB && (
@@ -217,7 +236,7 @@ function CaixaScreenInner() {
                         animation:   caixaEnabled && !isAberto ? "none" : "caixaPulse 1.8s ease-in-out infinite",
                       } as any} />
                     )}
-                    <Text style={s.titleSubTxt}>
+                    <Text style={s.titleSubTxt} numberOfLines={1}>
                       {/* 29/08/2026: era "· venda #12345" com um numero
                           aleatorio que trocava a cada render. Enquanto a venda
                           e rascunho nao ha numero real pra mostrar. */}
@@ -226,24 +245,42 @@ function CaixaScreenInner() {
                     </Text>
                   </View>
                 </View>
-                <SearchBox value={query} onChange={setQuery} />
+                <View style={{ flex: 1, minWidth: 8 }} />
+                {caixaEnabled && (
+                  <CaixaButton
+                    isAberto={isAberto}
+                    isLoading={caixaLoading}
+                    openedByName={sessaoAtiva?.opened_by?.name || null}
+                    openedAtIso={sessaoAtiva?.opened_at || null}
+                    onClick={st.openCaixaModal}
+                  />
+                )}
               </View>
 
-              <MerchantBanner height={vp.sm ? 120 : 200} />
+              {/* Busca + estado do leitor: o lojista já está olhando pra cá
+                  quando vai bipar, então o status mora aqui. */}
+              <View style={s.searchRow}>
+                <SearchBox value={query} onChange={setQuery} maxWidth={560} />
+                <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
+              </View>
 
-              {/* Action toolbar — auto-fit grid: quebra em 2/3 linhas se não couber */}
-              <View style={[s.actBar, IS_WEB && ({
-                display: "grid",
-                // 17/05/2026: era `repeat(${actCols}, 1fr)` — forçava N colunas e
-                // truncava labels em viewports menores. auto-fit + minmax(140px)
-                // mantém cards com largura mínima legível e wrap em múltiplas
-                // linhas conforme a largura disponível.
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                gap: vp.sm ? 6 : 10,
-                position: "relative",
-                zIndex: 50,
-              } as any)]}>
-                <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
+              {/* Barra de ações — botões de TEXTO com largura natural. Nada de
+                  grid de colunas iguais (era o que truncava os rótulos). */}
+              <View style={[s.actBar, IS_WEB && ({ position: "relative", zIndex: 50 } as any)]}>
+                <ActPerson
+                  ref={customerPickerRef}
+                  kind="cliente" shortcut="F3"
+                  value={activeCustomerValue}
+                  onChange={pickCustomerWithPhone}
+                  options={customerOptions}
+                  recentCount={customerRecentCount}
+                  required={precisaCliente}
+                  searchable
+                  addable={clientesEnabled}
+                  onAddNew={st.openNewCustomer}
+                  disabled={!clientesEnabled}
+                  disabledHint="Disponível no plano Negócio"
+                />
                 <ActPerson
                   ref={sellerPickerRef}
                   kind="vendedora" shortcut="F2"
@@ -254,20 +291,8 @@ function CaixaScreenInner() {
                     else { selectEmployee(v.id, v.name); setSellerName(v.name); }
                   }}
                   options={employees}
+                  required={precisaVendedora}
                   searchable={employees.length > 5}
-                />
-                <ActPerson
-                  ref={customerPickerRef}
-                  kind="cliente" shortcut="F3"
-                  value={activeCustomerValue}
-                  onChange={pickCustomerWithPhone}
-                  options={customerOptions}
-                  recentCount={customerRecentCount}
-                  searchable
-                  addable={clientesEnabled}
-                  onAddNew={st.openNewCustomer}
-                  disabled={!clientesEnabled}
-                  disabledHint="Disponível no plano Negócio"
                 />
                 <ActCoupon
                   value={couponApplied}
@@ -275,6 +300,8 @@ function CaixaScreenInner() {
                   onValidate={handleValidateCoupon}
                 />
                 <ActTroca onOpen={st.openTroca} />
+                <View style={{ flex: 1, minWidth: 8 }} />
+                <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
               </View>
 
               <View style={s.catRow}>
@@ -318,10 +345,18 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        <Text style={s.title}>Caixa</Text>
+        <View style={s.topRowMobile}>
+          <MerchantLogo size={44} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.title}>Caixa</Text>
+            <Text style={s.titleSubTxt} numberOfLines={1}>
+              {(company?.name || "Sua loja") + " · " + orderLabel}
+            </Text>
+          </View>
+        </View>
 
         {caixaEnabled && (
-          <View style={{ marginTop: 8, marginBottom: 12 }}>
+          <View style={{ marginBottom: 10 }}>
             <CaixaButton
               isAberto={isAberto}
               isLoading={caixaLoading}
@@ -332,26 +367,28 @@ function CaixaScreenInner() {
           </View>
         )}
 
-        <View style={{ marginBottom: 12 }}>
+        <View style={s.searchRow}>
           <SearchBox value={query} onChange={setQuery} />
+          <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
 
-        <MerchantBanner height={160} />
-
-        {/* Action toolbar mobile — grid 2-3 colunas com wrap */}
-        <View style={[
-          { marginBottom: 16 },
-          IS_WEB
-            ? ({
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                gap: 8,
-                position: "relative",
-                zIndex: 50,
-              } as any)
-            : { gap: 10 },
-        ]}>
-          <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
+        {/* Mobile: Cliente, Vendedora e "Mais…". Cupom, troca e digitação
+            manual do código moram dentro do Mais — escritos, não em ícones. */}
+        <View style={[s.actBar, IS_WEB && ({ position: "relative", zIndex: 50 } as any)]}>
+          <ActPerson
+            ref={customerPickerRef}
+            kind="cliente" shortcut="F3"
+            value={activeCustomerValue}
+            onChange={pickCustomerWithPhone}
+            options={customerOptions}
+            recentCount={customerRecentCount}
+            required={precisaCliente}
+            searchable
+            addable={clientesEnabled}
+            onAddNew={st.openNewCustomer}
+            disabled={!clientesEnabled}
+            disabledHint="Disponível no plano Negócio"
+          />
           <ActPerson
             ref={sellerPickerRef}
             kind="vendedora" shortcut="F2"
@@ -362,37 +399,29 @@ function CaixaScreenInner() {
               else { selectEmployee(v.id, v.name); setSellerName(v.name); }
             }}
             options={employees}
+            required={precisaVendedora}
             searchable={employees.length > 5}
           />
-          <ActPerson
-            ref={customerPickerRef}
-            kind="cliente" shortcut="F3"
-            value={activeCustomerValue}
-            onChange={pickCustomerWithPhone}
-            options={customerOptions}
-            recentCount={customerRecentCount}
-            searchable
-            addable={clientesEnabled}
-            onAddNew={st.openNewCustomer}
-            disabled={!clientesEnabled}
-            disabledHint="Disponível no plano Negócio"
+          <View style={{ flex: 1, minWidth: 4 }} />
+          <ActMais
+            coupon={couponApplied}
+            onCouponChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
+            onValidateCoupon={handleValidateCoupon}
+            onTroca={st.openTroca}
+            onScan={handleScan}
+            listening={scannerListening}
+            lastCode={lastScannedCode}
           />
-          <ActCoupon
-            value={couponApplied}
-            onChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
-            onValidate={handleValidateCoupon}
-          />
-          <ActTroca onOpen={st.openTroca} />
         </View>
 
-        <View style={s.catRow}>
+        <View style={[s.catRow, { marginBottom: 8 }]}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <CategoryChips items={categories} active={cat} onSelect={setCat} />
           </View>
           <StockToggle />
         </View>
 
-        <ProductSection columns={2} />
+        <ProductSection columns={2} dense />
 
         <View style={{ marginTop: 20 }}>
           <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
@@ -417,14 +446,16 @@ const s = StyleSheet.create({
   main:        { flex: 1, flexDirection: "row", minWidth: 0 },
   catalog:     { flex: 1, minWidth: 0 },
   cartWrap:    { overflow: "hidden" },
-  topRow:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 22 },
+  topRow:      { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 },
+  topRowMobile:{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   title:       { fontSize: 26, color: Colors.ink, letterSpacing: -0.4, fontWeight: "700" },
   titleSub:    { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
   titleSubTxt: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
     fontSize: 11, color: Colors.ink3, letterSpacing: 0.6, textTransform: "uppercase",
   },
-  actBar:      { flexDirection: "row", gap: 10, marginBottom: 18, flexWrap: "wrap" },
+  searchRow:   { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  actBar:      { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" },
   catRow:      { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   demoBanner:  { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 16 },
   demoTxt:     { fontSize: 11, color: Colors.violet3, fontWeight: "600" },

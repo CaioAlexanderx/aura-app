@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
+import { stockLabel } from "./ProductGrid";
 
 var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
 var isWeb = Platform.OS === "web";
@@ -95,7 +96,7 @@ export function ProductCard({ product, onAdd, isWide, variantBadge }: {
       <View style={s.bottomRow}>
         {product.stock != null && (
           <Text style={[s.stock, product.stock < 5 && { color: Colors.red }]}>
-            {product.stock} un
+            {stockLabel(product.stock)}
           </Text>
         )}
       </View>

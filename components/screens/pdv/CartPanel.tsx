@@ -36,6 +36,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndica
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
+import { MerchantLogo, useMerchantBrand } from "./MerchantLogo";
 import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
 
 export type CartDisplayItem = {
@@ -120,6 +121,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
   } = props;
 
+  const marca = useMerchantBrand();
   const showCpfInput = onCpfNaNotaChange !== undefined;
   const splitAvailable = onToggleSplit !== undefined; // fica off quando o pai não wireou
   const splitOn = !!splitMode && splitAvailable;
@@ -239,9 +241,12 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
       <ScrollView style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
-            <View style={s.emptyIco}>
-              <Icon name="cart" size={30} color={Colors.violet3} />
-            </View>
+            {/* 16/09/2026 (Fase 0 · I0.3): é aqui que a marca da loja fica em
+                destaque de verdade — cabeçalho de recibo no carrinho vazio.
+                Sai assim que o primeiro item entra, e não custa um pixel da
+                altura da grade de produtos. */}
+            <MerchantLogo size={120} dim />
+            {marca.name ? <Text style={s.emptyLoja}>{marca.name}</Text> : null}
             <Text style={s.emptyTxt}>Carrinho vazio</Text>
             <Text style={[s.emptyTxt, { marginTop: 4, fontWeight: "400", color: Colors.ink3 }]}>
               {emptyCta || "Clique em um produto para adicionar"}
@@ -834,8 +839,8 @@ const s = StyleSheet.create({
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
   body: { flex: 1, minHeight: 0 },
-  empty: { alignItems: "center", padding: 60, paddingHorizontal: 20 },
-  emptyIco: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(124,58,237,0.1)", borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  empty: { alignItems: "center", padding: 40, paddingHorizontal: 20, gap: 4 },
+  emptyLoja: { color: Colors.ink, fontSize: 14, fontWeight: "700", letterSpacing: 0.2, textAlign: "center", marginTop: 12, marginBottom: 6 },
   emptyTxt: { color: Colors.ink2, fontSize: 12, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", letterSpacing: 0.6, textTransform: "uppercase", fontWeight: "700", textAlign: "center" },
   // Bloco de checkout que agora rola junto com os itens (pagamento+resumo+CPF).
   // Separador no topo pra destacar do fim da lista de itens.

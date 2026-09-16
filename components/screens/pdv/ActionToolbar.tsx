@@ -1,6 +1,6 @@
 // ============================================================
-// AURA. -- PDV/Caixa · Action Toolbar (5–6 cards)
-// Scanner · Vendedora · Cliente · Cupom · Troca · [Crediário]
+// AURA. -- PDV/Caixa · Barra de ações
+// Cliente · Vendedora · Cupom · Troca ou devolução · [Crediário]
 //
 // 24/04 · theme-aware glass bg + dropdown z-index hardening.
 // 05/05 · popover ganha minWidth 320 + right:0.
@@ -10,10 +10,7 @@
 // 11/05 · ActBarcode redesenhado — scanner GLOBAL, card vira indicador.
 // 14/05 · ActCrediario — 6º card opcional (crediario_enabled), F6.
 // 16/05 · COMPACT MODE em viewports estreitos (<960px).
-// 17/05 · Threshold ajustado para <480px (só mobile portrait). Em viewports
-//          médios (480-960px) o grid `auto-fit, minmax(140px, 1fr)` no
-//          pdv.tsx quebra cards em 2 linhas automaticamente — não precisa
-//          mais colapsar pro modo compact. Caso Davi 13/14".
+// 17/05 · Threshold ajustado para <480px (só mobile portrait).
 // 13/06 · ActTroca: label "Trocar" → "Trocar / Devolver".
 // 29/08 · ActPerson vira forwardRef e expõe `open()` (PersonPickerHandle) —
 //          é o mesmo popover de sempre, só com um jeito do rodapé do carrinho
@@ -22,101 +19,176 @@
 // 29/08 · ActPerson ganha `recentCount`: com a busca vazia, os N primeiros
 //          options entram sob "Atendidos recentemente" e o resto sob
 //          "Todos os clientes". A ordenação em si vem pronta do usePdvState.
+//
+// 16/09/2026 (Fase 0 · I0.3) — os cards viram BOTÕES DE TEXTO:
+//   - Os cards de 52px tinham ícone grande + rótulo em duas linhas e
+//     truncavam em qualquer viewport real ("Selecionar vended…",
+//     "Iniciar troca ou dev…"). Pior: o Caio, que conhece o app de cor, não
+//     distinguia um ícone do outro — pro lojista era ainda pior.
+//   - Agora cada ação é um botão de 40px escrito por extenso, com largura
+//     natural (nada de grid de colunas iguais, que era a origem do truncamento)
+//     e o atalho F2–F5 ao lado.
+//   - O que é obrigatório pela política do Caixa ganha um ponto âmbar até ser
+//     preenchido; depois o botão passa a mostrar o valor ("Cliente: Simone").
+//   - O leitor de código sai da barra: o estado virou chip na linha da busca
+//     (ScannerStatusChip) e sobra aqui só o acesso discreto à digitação manual.
+//   - Mobile: Cliente, Vendedora e "Mais…" — Cupom e Troca moram no Mais.
 // ============================================================
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, Fragment } from "react";
-import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
 
-// ─── Layout breakpoint ───────────────────────────────────────
-// Apenas mobile portrait (<480px) colapsa pra icon+shortcut. Acima disso,
-// o grid auto-fit do pdv.tsx faz wrap em múltiplas linhas mantendo cards
-// horizontais completos com labels K/V legíveis.
-function useCompactMode(): boolean {
-  const { width } = useWindowDimensions();
-  return width < 480;
+// ─── Rótulos ─────────────────────────────────────────────────
+// `curto` é o que aparece escrito no botão (largura natural, nunca trunca);
+// `longo` é a frase inteira, que vai pro accessibilityLabel e pro tooltip.
+export const ACT_LABELS = {
+  cliente:   { curto: "Cliente",             longo: "Vincular cliente à venda" },
+  vendedora: { curto: "Vendedora",           longo: "Selecionar a vendedora da venda" },
+  cupom:     { curto: "Cupom",               longo: "Aplicar cupom de desconto" },
+  troca:     { curto: "Troca ou devolução",  longo: "Iniciar uma troca ou devolução" },
+  crediario: { curto: "Crediário",           longo: "Parcelar a venda no crediário" },
+  leitor:    { curto: "Digitar código",      longo: "Digitar um código de barras à mão (o leitor USB/Bluetooth continua ativo)" },
+  mais:      { curto: "Mais…",               longo: "Mais ações do caixa: cupom e troca ou devolução" },
+} as const;
+
+/** Botão preenchido mostra o valor: "Cliente: Simone". Vazio, só o rótulo. */
+export function rotuloDoBotao(rotulo: string, valor?: string | null): string {
+  const v = String(valor || "").trim();
+  return v ? rotulo + ": " + v : rotulo;
 }
 
-// ─── Shared card shell ───────────────────────────────────────
-function ActCard({
-  active, empty, children, onClick, scanning, accent, compact,
+/** Texto lido por leitor de tela / tooltip: frase inteira + atalho. */
+export function a11yDoBotao(longo: string, atalho?: string | null, valor?: string | null): string {
+  const v = String(valor || "").trim();
+  const base = v ? longo + ". Agora: " + v : longo;
+  return atalho ? base + " (" + atalho + ")" : base;
+}
+
+// ─── Shell do botão de texto ─────────────────────────────────
+function ActBtn({
+  rotulo, valor, pendente, atalho, onClick, disabled, a11y, ativo, discreto,
 }: {
-  active?: boolean;
-  empty?: boolean;
-  children: React.ReactNode;
+  rotulo: string;
+  valor?: string | null;
+  /** Obrigatório pela política do Caixa e ainda vazio → ponto âmbar. */
+  pendente?: boolean;
+  atalho?: string | null;
   onClick?: () => void;
-  scanning?: boolean;
-  accent?: string;
-  compact?: boolean;
+  disabled?: boolean;
+  a11y: string;
+  ativo?: boolean;
+  /** Ação secundária (entrada manual do leitor): sem preenchimento. */
+  discreto?: boolean;
 }) {
+  const temValor = !!String(valor || "").trim();
   const webBox = webOnly({
-    background: active ? "rgba(124,58,237,0.14)" : Glass.card,
-    border: active ? "1px solid rgba(124,58,237,0.45)" : "1px solid " + Glass.lineBorderCard,
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-    boxShadow: active ? "0 6px 18px -6px rgba(124,58,237,0.5)" : "none",
-    overflow: "hidden",
-    transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
-    cursor: onClick ? "pointer" : "default",
+    background: discreto ? "transparent" : ativo || temValor ? "rgba(124,58,237,0.14)" : Glass.card,
+    border: "1px solid " + (discreto ? Glass.lineFaint : ativo || temValor ? "rgba(124,58,237,0.45)" : Glass.lineBorderCard),
+    backdropFilter: discreto ? "none" : "blur(10px)",
+    WebkitBackdropFilter: discreto ? "none" : "blur(10px)",
+    transition: "all 0.18s cubic-bezier(0.4,0,0.2,1)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    whiteSpace: "nowrap",
   });
+
   return (
-    <Pressable onPress={onClick}
-      style={[s.actBtn, compact && s.actBtnCompact, active && s.actBtnActive,
-              Platform.OS === "web" ? (webBox as any) : null] as any}>
-      {IS_WEB && active && (
-        <span aria-hidden style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 2,
-          background: "linear-gradient(90deg, transparent, " + (accent || "#7c3aed") + ", transparent)",
-          pointerEvents: "none",
-        } as any} />
+    <Pressable
+      onPress={() => { if (!disabled && onClick) onClick(); }}
+      accessibilityLabel={a11y}
+      accessibilityRole="button"
+      // RNW repassa className; a regra @media (hover: none) que neutraliza o
+      // realce de hover em touch vive no CaixaDesignStyle (regra 7 do CLAUDE.md).
+      {...(IS_WEB ? ({ className: "caixa-chip" } as any) : {})}
+      style={[
+        s.btn,
+        disabled && s.btnDisabled,
+        Platform.OS === "web"
+          ? (webBox as any)
+          : { backgroundColor: temValor ? Colors.violetD : Colors.bg3, borderWidth: 1, borderColor: temValor ? Colors.border2 : Colors.border },
+      ] as any}
+    >
+      {pendente && (
+        <View style={s.pendente}>
+          {IS_WEB && (
+            <span aria-hidden style={{
+              position: "absolute", inset: -2, borderRadius: "50%",
+              background: "rgba(245,158,11,0.45)",
+              animation: "caixaPulse 2s ease-in-out infinite",
+              pointerEvents: "none",
+            } as any} />
+          )}
+        </View>
       )}
-      {IS_WEB && scanning && (
-        <span aria-hidden style={{
-          position: "absolute", left: 18, width: 20, top: "50%", height: 1.5,
-          background: "linear-gradient(90deg, transparent, #34d399, transparent)",
-          boxShadow: "0 0 8px #34d399",
-          animation: "caixaScanLine 1.4s ease-in-out infinite",
-          pointerEvents: "none",
-        } as any} />
+      <Text style={[s.rotulo, temValor && s.rotuloComValor, discreto && s.rotuloDiscreto]}>
+        {temValor ? rotulo + ":" : rotulo}
+      </Text>
+      {temValor && (
+        <Text numberOfLines={1} style={s.valor}>{String(valor).trim()}</Text>
       )}
-      {children}
+      {atalho ? <Text style={s.atalho}>{atalho}</Text> : null}
     </Pressable>
   );
 }
 
-function ActBody({ k, v, isActive, isEmpty }: { k: string; v: string; isActive?: boolean; isEmpty?: boolean }) {
+// ─── Entrada manual de código (botão F1 e "Mais…" do mobile) ──
+function CodigoManualForm({
+  onScan, listening, lastCode, onDone, autoFocus = true,
+}: {
+  onScan: (code: string) => void;
+  listening?: boolean;
+  lastCode?: string | null;
+  onDone?: () => void;
+  /** No "Mais…" quem recebe o foco é o campo do cupom, não este. */
+  autoFocus?: boolean;
+}) {
+  const [manual, setManual] = useState("");
+  const inputRef = useRef<TextInput | null>(null);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const t = setTimeout(() => {
+      const el: any = inputRef.current;
+      if (el && typeof el.focus === "function") el.focus();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
+
+  function submit() {
+    const code = manual.trim();
+    if (!code) return;
+    onScan(code); setManual(""); onDone?.();
+  }
+
   return (
-    <View style={s.actBody}>
-      <Text style={s.actK} numberOfLines={1}>{k}</Text>
-      <Text numberOfLines={1} style={[s.actV, isEmpty && { color: Colors.ink3, fontWeight: "500" }, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>
-        {v}
+    <>
+      <Text style={popS.manualHint}>
+        {listening
+          ? "O leitor USB/Bluetooth está lendo — pode bipar a qualquer momento. Use este campo só pra digitar um código à mão."
+          : "O leitor está pausado enquanto outra janela está aberta. Você ainda pode digitar o código aqui."}
+        {lastCode ? " Último código lido: " + lastCode + "." : ""}
       </Text>
-    </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <TextInput
+          ref={inputRef} value={manual} onChangeText={setManual}
+          onSubmitEditing={submit}
+          placeholder="Digite o código…" placeholderTextColor={Colors.ink3}
+          style={[popS.input, { flex: 1 }] as any} returnKeyType="search"
+        />
+        <Pressable onPress={submit} disabled={!manual.trim()}
+          style={[popS.applyWide, !manual.trim() && { opacity: 0.5 }]}>
+          <Text style={popS.applyWideTxt}>Adicionar</Text>
+        </Pressable>
+      </View>
+    </>
   );
 }
 
-function ActIco({ active, children, compact }: { active?: boolean; children: React.ReactNode; compact?: boolean }) {
-  const webBox = webOnly({
-    background: active ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(109,40,217,0.2))" : Glass.lineFaint,
-    border: active ? "1px solid rgba(167,139,250,0.35)" : "none",
-  });
-  return (
-    <View style={[
-      s.actIco,
-      compact && s.actIcoCompact,
-      Platform.OS === "web" ? (webBox as any) : { backgroundColor: active ? Colors.violetD : Glass.lineFaint }
-    ] as any}>
-      {children}
-    </View>
-  );
-}
-
-function Shortcut({ k, compact }: { k: string; compact?: boolean }) {
-  return <Text style={[s.shortcut, compact && s.shortcutCompact]}>{k}</Text>;
-}
-
-// ═══════════ 1) Barcode scanner card ═══════════
+// ═══════════ 1) Leitor — entrada manual de código ═══════════
+// O leitor USB/Bluetooth é global e continua escutando sozinho; o estado dele
+// virou chip na linha da busca. Aqui fica só o acesso discreto à digitação
+// manual, com o F1 de sempre.
 export function ActBarcode({
   onScan, listening = true, lastCode = null,
 }: {
@@ -124,9 +196,7 @@ export function ActBarcode({
   listening?: boolean;
   lastCode?: string | null;
 }) {
-  const compact = useCompactMode();
   const [open, setOpen] = useState(false);
-  const [manual, setManual] = useState("");
 
   useEffect(() => {
     if (!IS_WEB) return;
@@ -137,73 +207,28 @@ export function ActBarcode({
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const manualInputRef = useRef<TextInput | null>(null);
-  useEffect(() => {
-    if (open && manualInputRef.current) {
-      const t = setTimeout(() => {
-        const el: any = manualInputRef.current;
-        if (el && typeof el.focus === "function") el.focus();
-      }, 50);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  const showingLastCode = !!lastCode;
-  const active = listening || showingLastCode;
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
-
-  const subtitle = showingLastCode ? lastCode!
-    : listening ? "Escutando · pode bipar"
-    : "Scanner pausado";
-
-  function submitManual() {
-    const code = manual.trim();
-    if (!code) return;
-    onScan(code); setManual(""); setOpen(false);
-  }
 
   return (
     <View style={wrapStyle}>
-      <ActCard active={active} empty={!active} scanning={showingLastCode} compact={compact}
-        onClick={() => setOpen(o => !o)}>
-        <ActIco active={active} compact={compact}>
-          <Icon name="barcode" size={compact ? 20 : 18} color={active ? "#a78bfa" : Colors.ink3} />
-          {IS_WEB && listening && !showingLastCode && (
-            <span aria-hidden style={{
-              position: "absolute", top: -2, right: -2,
-              width: 8, height: 8, borderRadius: "50%",
-              background: "#22c55e", boxShadow: "0 0 6px #22c55e",
-              animation: "caixaPulse 1.6s ease-in-out infinite",
-              pointerEvents: "none",
-            } as any} />
-          )}
-        </ActIco>
-        {!compact && <ActBody k="Scanner" v={subtitle} isActive={active} isEmpty={!active} />}
-        <Shortcut k="F1" compact={compact} />
-      </ActCard>
+      <ActBtn
+        rotulo={ACT_LABELS.leitor.curto}
+        atalho="F1"
+        discreto
+        ativo={open}
+        onClick={() => setOpen(o => !o)}
+        a11y={a11yDoBotao(ACT_LABELS.leitor.longo, "F1")}
+      />
       {open && (
-        <PopShell align="left">
+        <PopShell align="right">
           <View style={popS.scannerHeader}>
             <Text style={popS.title}>Entrada manual</Text>
-            <Pressable onPress={() => setOpen(false)} style={popS.closeBtn}>
+            <Pressable onPress={() => setOpen(false)} style={popS.closeBtn} accessibilityLabel="Fechar">
               <Icon name="x" size={14} color={Colors.ink3} />
             </Pressable>
           </View>
-          <Text style={popS.manualHint}>
-            Scanner USB/Bluetooth funciona automaticamente — bipe a qualquer momento. Use este campo apenas para digitar um código manualmente.
-          </Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TextInput
-              ref={manualInputRef} value={manual} onChangeText={setManual}
-              onSubmitEditing={submitManual}
-              placeholder="Digite o código…" placeholderTextColor={Colors.ink3}
-              style={[popS.input, { flex: 1 }] as any} returnKeyType="search"
-            />
-            <Pressable onPress={submitManual} disabled={!manual.trim()}
-              style={[popS.applyWide, !manual.trim() && { opacity: 0.5 }]}>
-              <Text style={popS.applyWideTxt}>Adicionar</Text>
-            </Pressable>
-          </View>
+          <CodigoManualForm onScan={onScan} listening={listening} lastCode={lastCode}
+            onDone={() => setOpen(false)} />
         </PopShell>
       )}
     </View>
@@ -228,21 +253,21 @@ type ActPersonProps = {
   addable?: boolean;
   disabled?: boolean;
   disabledHint?: string;
+  /** Obrigatório pelas políticas do Caixa (Configurações) e ainda vazio. */
+  required?: boolean;
   /** Quantos dos primeiros `options` são "recentes" (só vale com busca vazia). */
   recentCount?: number;
 };
 
 export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function ActPerson({
   kind, shortcut, value, onChange, options,
-  onAddNew, fallbackText, searchable, addable, disabled, disabledHint, recentCount,
+  onAddNew, fallbackText, searchable, addable, disabled, disabledHint, required, recentCount,
 }, handleRef) {
-  const compact = useCompactMode();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [freeText, setFreeText] = useState("");
   const wrapRef = useRef<any>(null);
-  const label = kind === "vendedora" ? "Vendedora" : "Cliente";
-  const placeholder = kind === "vendedora" ? "Selecionar vendedora" : "Vincular cliente";
+  const rot = kind === "vendedora" ? ACT_LABELS.vendedora : ACT_LABELS.cliente;
 
   // Mesma porta que o atalho de teclado já usava — só exposta pra fora.
   useImperativeHandle(handleRef, () => ({
@@ -280,7 +305,6 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
     return () => window.removeEventListener("keydown", handler);
   }, [shortcut, disabled]);
 
-  const active = !!value;
   // 29/08/2026: com busca vazia a lista NÃO é alfabética — o pai manda os
   // recentes primeiro (01/09/2026: agora ordenados pelo servidor, ?sort=recent).
   // `nRecent` marca onde termina esse bloco pra desenhar os dois cabeçalhos.
@@ -299,21 +323,20 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
     : options.slice(0, nRecent + 10);
 
   const wrapStyle: any = { position: "relative", opacity: disabled ? 0.5 : 1, zIndex: open ? 500 : 1 };
+  const valorNoBotao = disabled ? null : value ? value.name : fallbackText || null;
 
   return (
     <View style={wrapStyle} ref={wrapRef as any}>
-      <ActCard active={active} empty={!active} compact={compact}
-        onClick={() => { if (disabled) return; setOpen(o => !o); }}>
-        <ActIco active={active} compact={compact}>
-          <Icon name={kind === "vendedora" ? "users" : "user_plus"} size={compact ? 20 : 18} color={active ? "#a78bfa" : Colors.ink3} />
-        </ActIco>
-        {!compact && (
-          <ActBody k={label}
-            v={disabled ? (disabledHint || placeholder) : value ? value.name : (fallbackText || placeholder)}
-            isActive={active} isEmpty={!active} />
-        )}
-        <Shortcut k={shortcut} compact={compact} />
-      </ActCard>
+      <ActBtn
+        rotulo={rot.curto}
+        valor={valorNoBotao}
+        pendente={!!required && !value && !disabled}
+        atalho={shortcut}
+        ativo={open}
+        disabled={!!disabled}
+        onClick={() => { if (disabled) return; setOpen(o => !o); }}
+        a11y={a11yDoBotao(disabled ? disabledHint || rot.longo : rot.longo, shortcut, valorNoBotao)}
+      />
 
       {open && !disabled && (
         <PopShell align="left">
@@ -395,7 +418,7 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
 
           {value && (
             <Pressable onPress={() => { onChange(null); setOpen(false); }} style={popS.removeBtn}>
-              <Text style={popS.removeTxt}>Remover {label.toLowerCase()}</Text>
+              <Text style={popS.removeTxt}>Remover {rot.curto.toLowerCase()}</Text>
             </Pressable>
           )}
         </PopShell>
@@ -404,26 +427,69 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
   );
 });
 
-// ═══════════ 3) Coupon input card ═══════════
-export function ActCoupon({
-  value, onChange, onValidate, loading,
-}: {
+// ─── Formulário do cupom (usado pelo botão Cupom e pelo "Mais…") ──
+type CupomProps = {
   value: { code: string; discount: number } | null;
   onChange: (v: { code: string; discount: number } | null) => void;
   onValidate: (code: string) => Promise<{ ok: boolean; code?: string; discount?: number; error?: string }>;
   loading?: boolean;
-}) {
-  const compact = useCompactMode();
-  const [open, setOpen] = useState(false);
+  onDone?: () => void;
+};
+
+function CupomForm({ value, onChange, onValidate, loading, onDone }: CupomProps) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    if (!code.trim()) return;
+    setBusy(true); setErr("");
+    try {
+      const res = await onValidate(code.trim().toUpperCase());
+      if (res.ok && res.code) {
+        onChange({ code: res.code, discount: res.discount || 0 });
+        setCode(""); onDone?.();
+      } else {
+        setErr(res.error || "Código inválido ou expirado");
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao validar cupom");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <Text style={popS.title}>Aplicar cupom de desconto</Text>
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+        <TextInput autoFocus value={code}
+          onChangeText={v => { setCode(v.toUpperCase()); setErr(""); }}
+          placeholder="DIGITE O CÓDIGO" placeholderTextColor={Colors.ink3}
+          style={[popS.input, { flex: 1, letterSpacing: 1.2 }] as any}
+          onSubmitEditing={apply} autoCapitalize="characters" />
+        <Pressable onPress={apply} disabled={busy || !code.trim()}
+          style={[popS.applyWide, (!code.trim() || busy) && { opacity: 0.5 }]}>
+          {busy || loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={popS.applyWideTxt}>Aplicar</Text>}
+        </Pressable>
+      </View>
+      {err ? <Text style={[popS.hint, { color: Colors.red }]}>{err}</Text> : null}
+      {value && (
+        <Pressable onPress={() => { onChange(null); onDone?.(); }} style={popS.removeBtn}>
+          <Text style={popS.removeTxt}>Remover cupom</Text>
+        </Pressable>
+      )}
+    </>
+  );
+}
+
+// ═══════════ 3) Cupom ═══════════
+export function ActCoupon({ value, onChange, onValidate, loading }: CupomProps) {
+  const [open, setOpen] = useState(false);
   const ref = useRef<any>(null);
 
   useEffect(() => {
     if (!IS_WEB) return;
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setErr(""); }
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -438,63 +504,30 @@ export function ActCoupon({
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  async function apply() {
-    if (!code.trim()) return;
-    setBusy(true); setErr("");
-    try {
-      const res = await onValidate(code.trim().toUpperCase());
-      if (res.ok && res.code) {
-        onChange({ code: res.code, discount: res.discount || 0 });
-        setOpen(false); setCode("");
-      } else {
-        setErr(res.error || "Código inválido ou expirado");
-      }
-    } catch (e: any) {
-      setErr(e?.message || "Erro ao validar cupom");
-    } finally { setBusy(false); }
-  }
-
-  const active = !!value;
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
   return (
     <View style={wrapStyle} ref={ref as any}>
-      <ActCard active={active} empty={!active} compact={compact} onClick={() => setOpen(o => !o)}>
-        <ActIco active={active} compact={compact}>
-          <Icon name="tag" size={compact ? 20 : 18} color={active ? "#a78bfa" : Colors.ink3} />
-        </ActIco>
-        {!compact && <ActBody k="Cupom" v={value ? value.code : "Inserir código"} isActive={active} isEmpty={!active} />}
-        <Shortcut k="F4" compact={compact} />
-      </ActCard>
+      <ActBtn
+        rotulo={ACT_LABELS.cupom.curto}
+        valor={value ? value.code : null}
+        atalho="F4"
+        ativo={open}
+        onClick={() => setOpen(o => !o)}
+        a11y={a11yDoBotao(ACT_LABELS.cupom.longo, "F4", value ? value.code : null)}
+      />
       {open && (
-        <PopShell align="right">
-          <Text style={popS.title}>Aplicar cupom de desconto</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TextInput autoFocus value={code}
-              onChangeText={v => { setCode(v.toUpperCase()); setErr(""); }}
-              placeholder="DIGITE O CÓDIGO" placeholderTextColor={Colors.ink3}
-              style={[popS.input, { flex: 1, letterSpacing: 1.2 }] as any}
-              onSubmitEditing={apply} autoCapitalize="characters" />
-            <Pressable onPress={apply} disabled={busy || !code.trim()}
-              style={[popS.applyWide, (!code.trim() || busy) && { opacity: 0.5 }]}>
-              {busy || loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={popS.applyWideTxt}>Aplicar</Text>}
-            </Pressable>
-          </View>
-          {err ? <Text style={[popS.hint, { color: Colors.red }]}>{err}</Text> : null}
-          {value && (
-            <Pressable onPress={() => { onChange(null); setOpen(false); }} style={popS.removeBtn}>
-              <Text style={popS.removeTxt}>Remover cupom</Text>
-            </Pressable>
-          )}
+        <PopShell align="left">
+          <CupomForm value={value} onChange={onChange} onValidate={onValidate} loading={loading}
+            onDone={() => setOpen(false)} />
         </PopShell>
       )}
     </View>
   );
 }
 
-// ═══════════ 4) Troca / Devolver card ═══════════
+// ═══════════ 4) Troca / Devolução ═══════════
 export function ActTroca({ onOpen }: { onOpen: () => void }) {
-  const compact = useCompactMode();
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
@@ -505,24 +538,17 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
   }, [onOpen]);
 
   return (
-    <ActCard onClick={onOpen} compact={compact}>
-      <ActIco compact={compact}>
-        <Icon name="repeat" size={compact ? 20 : 18} color={Colors.ink3} />
-      </ActIco>
-      {!compact && <ActBody k="Trocar / Devolver" v="Iniciar troca ou devolução" isEmpty />}
-      <Shortcut k="F5" compact={compact} />
-    </ActCard>
+    <ActBtn
+      rotulo={ACT_LABELS.troca.curto}
+      atalho="F5"
+      onClick={onOpen}
+      a11y={a11yDoBotao(ACT_LABELS.troca.longo, "F5")}
+    />
   );
 }
 
-// ═══════════ 5) Crediário parcelado card ═══════════
-export function ActCrediario({
-  onOpen, hasCustomer = false,
-}: {
-  onOpen: () => void;
-  hasCustomer?: boolean;
-}) {
-  const compact = useCompactMode();
+// ═══════════ 5) Crediário parcelado ═══════════
+export function ActCrediario({ onOpen, hasCustomer = false }: { onOpen: () => void; hasCustomer?: boolean }) {
   useEffect(() => {
     if (!IS_WEB) return;
     function handler(e: KeyboardEvent) {
@@ -533,17 +559,85 @@ export function ActCrediario({
   }, [onOpen]);
 
   return (
-    <ActCard active={hasCustomer} onClick={onOpen} compact={compact}>
-      <ActIco active={hasCustomer} compact={compact}>
-        <Icon name="percent" size={compact ? 20 : 18} color={hasCustomer ? "#a78bfa" : Colors.ink3} />
-      </ActIco>
-      {!compact && (
-        <ActBody k="Crediário"
-          v={hasCustomer ? "Pronto para parcelar" : "Selecione um cliente"}
-          isActive={hasCustomer} isEmpty={!hasCustomer} />
+    <ActBtn
+      rotulo={ACT_LABELS.crediario.curto}
+      atalho="F6"
+      ativo={hasCustomer}
+      onClick={onOpen}
+      a11y={a11yDoBotao(ACT_LABELS.crediario.longo, "F6", hasCustomer ? "cliente selecionado" : null)}
+    />
+  );
+}
+
+// ═══════════ 6) "Mais…" — overflow do mobile ═══════════
+// Cupom e Troca não cabem escritos numa tela de 390px junto com Cliente e
+// Vendedora. Em vez de voltar pros ícones indistinguíveis, eles entram aqui.
+export function ActMais({
+  coupon, onCouponChange, onValidateCoupon, onTroca, onScan, listening, lastCode,
+}: {
+  coupon: { code: string; discount: number } | null;
+  onCouponChange: (v: { code: string; discount: number } | null) => void;
+  onValidateCoupon: CupomProps["onValidate"];
+  onTroca: () => void;
+  onScan: (code: string) => void;
+  listening?: boolean;
+  lastCode?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<any>(null);
+
+  useEffect(() => {
+    if (!IS_WEB) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  // Os atalhos continuam valendo mesmo com as ações dentro do "Mais".
+  useEffect(() => {
+    if (!IS_WEB) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "F4") { e.preventDefault(); setOpen(true); }
+      if (e.key === "F5") { e.preventDefault(); setOpen(false); onTroca(); }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onTroca]);
+
+  const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
+
+  return (
+    <View style={wrapStyle} ref={ref as any}>
+      <ActBtn
+        rotulo={ACT_LABELS.mais.curto}
+        valor={coupon ? coupon.code : null}
+        ativo={open}
+        onClick={() => setOpen(o => !o)}
+        a11y={a11yDoBotao(ACT_LABELS.mais.longo, null, coupon ? "cupom " + coupon.code : null)}
+      />
+      {open && (
+        <PopShell align="right">
+          <CupomForm value={coupon} onChange={onCouponChange} onValidate={onValidateCoupon}
+            onDone={() => setOpen(false)} />
+          <Pressable
+            onPress={() => { setOpen(false); onTroca(); }}
+            style={popS.maisRow}
+            accessibilityLabel={a11yDoBotao(ACT_LABELS.troca.longo, "F5")}
+          >
+            <Text style={popS.maisTxt}>{ACT_LABELS.troca.curto}</Text>
+            <Text style={s.atalho}>F5</Text>
+          </Pressable>
+          <View style={popS.maisRow}>
+            <Text style={popS.maisTxt}>{ACT_LABELS.leitor.curto}</Text>
+            <Text style={s.atalho}>F1</Text>
+          </View>
+          <CodigoManualForm onScan={onScan} listening={listening} lastCode={lastCode}
+            autoFocus={false} onDone={() => setOpen(false)} />
+        </PopShell>
       )}
-      <Shortcut k="F6" compact={compact} />
-    </ActCard>
+    </View>
   );
 }
 
@@ -568,44 +662,26 @@ function PopShell({ children, align = "left" }: { children: React.ReactNode; ali
 
 // ─── Styles ─────────────────────────────────────────────────
 const s = StyleSheet.create({
-  actBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    padding: 10, paddingHorizontal: 12,
-    borderRadius: 12, position: "relative", minWidth: 0,
+  btn: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    height: 40, paddingHorizontal: 12,
+    borderRadius: 10, position: "relative",
+    alignSelf: "flex-start",
   },
-  actBtnCompact: {
-    flexDirection: "column", alignItems: "center", justifyContent: "center",
-    gap: 4, padding: 8, paddingHorizontal: 8,
-    minWidth: 56, minHeight: 64,
+  btnDisabled: { opacity: 0.55 },
+  pendente: {
+    width: 7, height: 7, borderRadius: 4,
+    backgroundColor: Colors.amber, position: "relative", flexShrink: 0,
   },
-  actBtnActive: {
-    backgroundColor: Colors.violetD,
-    borderWidth: 1, borderColor: Colors.border2,
-  },
-  actIco: {
-    width: 32, height: 32, borderRadius: 9,
-    alignItems: "center", justifyContent: "center",
-    flexShrink: 0, position: "relative",
-  },
-  actIcoCompact: {
-    width: 36, height: 36, borderRadius: 10,
-  },
-  actBody: { flex: 1, minWidth: 0 },
-  actK: {
-    fontSize: 9, fontWeight: "700", color: Colors.ink3,
-    letterSpacing: 1.1, textTransform: "uppercase", opacity: 0.85,
-  },
-  actV: {
-    fontSize: 12, color: Colors.ink, fontWeight: "600", marginTop: 2,
-  },
-  shortcut: {
+  rotulo: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  rotuloComValor: { color: Colors.ink3, fontWeight: "500" },
+  rotuloDiscreto: { color: Colors.ink3, fontWeight: "500", fontSize: 12 },
+  valor: { fontSize: 13, color: Colors.ink, fontWeight: "700", maxWidth: 180 },
+  atalho: {
     fontFamily: Platform.OS === "web" ? ("ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" as any) : "monospace",
     fontSize: 9, paddingHorizontal: 5, paddingVertical: 2,
     borderRadius: 4, backgroundColor: Glass.lineSoft, color: Colors.ink3,
     letterSpacing: 0.4, flexShrink: 0,
-  },
-  shortcutCompact: {
-    fontSize: 10, paddingHorizontal: 6, paddingVertical: 2,
   },
 });
 
@@ -645,6 +721,8 @@ const popS = StyleSheet.create({
   addTxt:     { color: Colors.violet3, fontSize: 12, fontWeight: "600" },
   removeBtn:  { paddingVertical: 8, alignItems: "center", marginTop: 4 },
   removeTxt:  { color: Colors.red, fontSize: 11, fontWeight: "600" },
+  maisRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingVertical: 12, marginTop: 8, borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.2)" },
+  maisTxt:    { color: Colors.ink, fontSize: 13, fontWeight: "600" },
 });
 
 export default null;

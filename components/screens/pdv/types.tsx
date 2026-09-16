@@ -74,6 +74,16 @@ export function CaixaDesignStyle() {
     .caixa-scrollable::-webkit-scrollbar-track { background: transparent; }
     .caixa-scrollable::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 4px; }
     .caixa-scrollable::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); }
+    .caixa-chip:hover { border-color: rgba(124,58,237,0.45); }
+    /* Regra 7 do CLAUDE.md — em touch não existe hover: o realce ficaria
+       "grudado" no último botão tocado e o tooltip (title) nunca aparece.
+       Por isso o texto longo de cada botão vive no accessibilityLabel e se
+       repete no título do popover que o toque abre; aqui o hover dá lugar a
+       um feedback de toque. */
+    @media (hover: none) {
+      .caixa-chip:hover { border-color: inherit; }
+      .caixa-chip:active { opacity: 0.75; }
+    }
   `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
