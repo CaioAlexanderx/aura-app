@@ -170,7 +170,7 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
       {scale.length === 0 ? (
         <KarateEmptyState
           icon="users" title="Ninguém convocado ainda"
-          subtitle="Convoque árbitros e mesários do cadastro da federação (abaixo)."
+          subtitle="Convoque árbitros e mesários da lista da federação, logo abaixo."
           style={{ paddingVertical: 20 }}
         />
       ) : (
@@ -263,7 +263,7 @@ function EscalaSection({ federationId, competitionId }: { federationId: string; 
         <View style={s.newRow}>
           <TextInput
             style={s.newInput} value={newName} onChangeText={setNewName}
-            placeholder="Nome do árbitro/mêsário" placeholderTextColor={C.ink4}
+            placeholder="Nome do árbitro ou mesário" placeholderTextColor={C.ink4}
           />
           <View style={{ flexDirection: "row", gap: 4 }}>
             {(["arbitro", "mesario", "staff"] as OfficialRole[]).map((r) => (
@@ -353,7 +353,7 @@ function MesaLinkModal({
     if (active) {
       const ok = await confirmAsync({
         title: "Gerar um novo link?",
-        message: `${row.name} já tem um link de mesa ativo. Gerar um novo SUBSTITUI o anterior — o link antigo para de funcionar na hora.`,
+        message: `${row.name} já tem um link de mesa ativo. O link novo substitui o antigo, que para de funcionar na hora.`,
         confirmLabel: "Gerar novo link",
       });
       if (!ok) return;
@@ -367,7 +367,7 @@ function MesaLinkModal({
       await onChanged();
     } catch (e: any) {
       if (e?.data?.code === "SCHEMA_PENDING") {
-        toast.error("Link da mesa ainda indisponível — atualização do servidor pendente (migration 302).");
+        toast.error("Ainda não dá para gerar o link da mesa. Estamos atualizando o sistema, tente de novo em alguns minutos.");
       } else {
         toast.error(e?.message || "Não foi possível gerar o link da mesa.");
       }
@@ -379,7 +379,7 @@ function MesaLinkModal({
   const revoke = async () => {
     const ok = await confirmAsync({
       title: "Revogar o acesso da mesa?",
-      message: `${row.name} perde o acesso à mesa imediatamente. Para devolver o acesso será preciso gerar (e enviar) um novo link.`,
+      message: `${row.name} perde o acesso à mesa na hora. Para devolver o acesso, gere e envie um link novo.`,
       confirmLabel: "Revogar acesso",
       destructive: true,
     });
@@ -543,7 +543,7 @@ function TermosSection({ federationId, competitionId }: { federationId: string; 
   if (!data) return null;
 
   if (data.schema_pending) {
-    return <Text style={s.hint}>Termos indisponíveis — migração pendente no servidor.</Text>;
+    return <Text style={s.hint}>Os termos ainda não estão disponíveis. Estamos atualizando o sistema.</Text>;
   }
 
   return (

@@ -65,7 +65,7 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
     try {
       const next = !item.awards_delivered;
       await karateCompetitionP1Api.setAwardsDelivered(federationId, competitionId, item.category_id, next);
-      toast.success(next ? "Medalhas marcadas como entregues." : "Entrega desfeita — a categoria voltou à fila.");
+      toast.success(next ? "Medalhas entregues." : "Entrega desfeita. A categoria voltou para a fila.");
       await load(true);
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível atualizar a entrega.");
@@ -91,8 +91,8 @@ export function PremiacaoTab({ federationId, competitionId }: { federationId: st
       <View style={s.panel}>
         <View style={s.emptyBox}>
           <Icon name="clock" size={18} color={C.ink3} />
-          <Text style={s.emptyTitle}>Fila de premiação ainda não disponível</Text>
-          <Text style={s.emptyTxt}>O sistema está sendo atualizado (migração pendente). Tente novamente em instantes.</Text>
+          <Text style={s.emptyTitle}>A premiação ainda não está disponível</Text>
+          <Text style={s.emptyTxt}>Estamos atualizando o sistema. Tente de novo em alguns minutos.</Text>
         </View>
       </View>
     );

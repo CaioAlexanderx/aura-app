@@ -194,10 +194,10 @@ export default function TorneioDetalhe() {
     try {
       const sheet = await karateCompetitionP1Api.getScoresheet(federationId, cid, categoryId);
       const ok = printScoresheet(sheet);
-      if (!ok) toast.error("Popup bloqueado — permita popups para app.getaura.com.br");
+      if (!ok) toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo.");
       else toast.success("Súmula aberta para impressão");
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao gerar a súmula");
+      toast.error(e?.message || "Não foi possível preparar a súmula.");
     } finally {
       setPrintingSheet(false);
     }
@@ -244,7 +244,7 @@ export default function TorneioDetalhe() {
     try {
       await karateCompetitionsApi.patchCompetition(federationId, cid, { status: "open" });
       setComp((prev) => (prev ? { ...prev, status: "open" } : prev));
-      notify("Inscrições abertas", "O campeonato foi publicado e já aceita inscrições.");
+      notify("Inscrições abertas", "Os dojôs já podem inscrever seus atletas.");
       setJustPublished(true);
       celebrateAnim.setValue(0);
       Animated.sequence([
@@ -265,7 +265,7 @@ export default function TorneioDetalhe() {
   const handleClose = async () => {
     const ok = await confirmAsync({
       title: "Encerrar campeonato?",
-      message: "O campeonato será marcado como concluído. Nenhum novo resultado poderá ser lançado depois disso.",
+      message: "O campeonato passa a concluído. Depois disso ninguém mais consegue lançar resultado.",
       confirmLabel: "Encerrar",
     });
     if (!ok || !comp) return;
@@ -273,7 +273,7 @@ export default function TorneioDetalhe() {
     try {
       await karateCompetitionsApi.closeCompetition(federationId, cid);
       setComp((prev) => (prev ? { ...prev, status: "done" } : prev));
-      notify("Campeonato encerrado", "O campeonato foi marcado como concluído.");
+      notify("Campeonato encerrado", "Os resultados estão fechados. O ranking geral já pode ser impresso.");
     } catch (e: any) {
       notify("Não foi possível encerrar", e?.message ?? "Tente novamente.");
     } finally {
@@ -285,7 +285,7 @@ export default function TorneioDetalhe() {
   const handleCancel = async () => {
     const ok = await confirmAsync({
       title: "Cancelar campeonato?",
-      message: "O campeonato será marcado como cancelado. Essa ação não pode ser desfeita pelo app.",
+      message: "O campeonato sai do ar para os dojôs e para o portal. Você não consegue desfazer isso pelo app.",
       confirmLabel: "Cancelar campeonato",
       destructive: true,
     });
@@ -294,7 +294,7 @@ export default function TorneioDetalhe() {
     try {
       await karateCompetitionsApi.patchCompetition(federationId, cid, { status: "cancelled" });
       setComp((prev) => (prev ? { ...prev, status: "cancelled" } : prev));
-      notify("Campeonato cancelado", "O campeonato foi cancelado.");
+      notify("Campeonato cancelado", "Os dojôs e o portal já não veem este campeonato.");
     } catch (e: any) {
       notify("Não foi possível cancelar", e?.message ?? "Tente novamente.");
     } finally {
@@ -309,7 +309,7 @@ export default function TorneioDetalhe() {
     const ok = await confirmAsync({
       title: "Excluir campeonato?",
       message:
-        "O campeonato e tudo que estiver vinculado a ele (categorias, inscrições, chaveamento e resultados) serão apagados definitivamente. Esta ação não pode ser desfeita.",
+        "Apaga o campeonato e tudo que está nele: categorias, inscrições, chaves e resultados. Não dá para recuperar depois.",
       confirmLabel: "Excluir campeonato",
       destructive: true,
     });
@@ -317,7 +317,7 @@ export default function TorneioDetalhe() {
     setDeleting(true);
     try {
       await karateCompetitionsApi.deleteCompetition(federationId, cid);
-      notify("Campeonato excluído", "O campeonato foi removido definitivamente.");
+      notify("Campeonato excluído", "O campeonato e tudo que estava nele foram apagados.");
       router.replace("/karate/competicoes");
     } catch (e: any) {
       notify("Não foi possível excluir", e?.message ?? "Tente novamente.");
@@ -364,11 +364,11 @@ export default function TorneioDetalhe() {
       if (!w) {
         const w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo."); return; }
       }
       toast.success("Lista aberta para impressão");
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao gerar a lista para impressão");
+      toast.error(e?.message || "Não foi possível preparar a lista para impressão.");
     } finally {
       setPrintingRoster(false);
     }
@@ -494,11 +494,11 @@ export default function TorneioDetalhe() {
       if (!w) {
         const w2 = window.open("", "_blank");
         if (w2) { w2.document.write(html); w2.document.close(); }
-        else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; }
+        else { toast.error("O navegador bloqueou a janela de impressão. Libere pop-ups para app.getaura.com.br e tente de novo."); return; }
       }
       toast.success("Ranking aberto para impressão");
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao gerar o ranking para impressão");
+      toast.error(e?.message || "Não foi possível preparar o ranking para impressão.");
     } finally {
       setPrintingRanking(false);
     }
@@ -513,7 +513,7 @@ export default function TorneioDetalhe() {
   }
   if (error || !comp) return <KarateErrorState onRetry={load} />;
 
-  const chavesTabLabel = selectedCategory && isKataModality(selectedCategory.modality) ? "Apuração Kata" : "Chaves & Resultados";
+  const chavesTabLabel = selectedCategory && isKataModality(selectedCategory.modality) ? "Ordem e notas" : "Chave e resultados";
 
   return (
     <View style={styles.screen}>
@@ -570,7 +570,7 @@ export default function TorneioDetalhe() {
           <View style={styles.headerActions}>
             {comp.status === "draft" && (
               <KarateButton
-                label={publishing ? "Publicando..." : "Publicar / Abrir inscrições"}
+                label={publishing ? "Abrindo..." : "Abrir inscrições"}
                 variant="sumi"
                 size="sm"
                 loading={publishing}
@@ -595,7 +595,7 @@ export default function TorneioDetalhe() {
             )}
             {(comp.status === "draft" || comp.status === "open") && (
               <KarateButton
-                label={cancelling ? "Cancelando..." : "Cancelar"}
+                label={cancelling ? "Cancelando..." : "Cancelar campeonato"}
                 variant="ghost"
                 size="sm"
                 loading={cancelling}
@@ -1043,6 +1043,7 @@ function CategoryRail({
         isWide={isWide}
         icon="grid"
         label="Kotos"
+        sub="Áreas e ordem do dia"
         active={selection.kind === "kotos"}
         onPress={() => onSelect({ kind: "kotos" })}
       />
@@ -1088,7 +1089,7 @@ function CategoryRail({
         );
       })}
       {categories.length === 0 && (
-        <Text style={styles.railEmpty}>Sem categorias cadastradas.</Text>
+        <Text style={styles.railEmpty}>Nenhuma categoria ainda.</Text>
       )}
     </>
   );
@@ -1186,7 +1187,6 @@ function VisaoGeral({
   const totalCategorias = comp.categories.length;
   const progressValues = comp.categories.map((c) => catProgress[c.id]);
   const geradas = progressValues.filter((v) => v === true).length;
-  const naoGeradas = progressValues.filter((v) => v === false).length;
   const desconhecidas = progressValues.filter((v) => v === undefined || v === null).length;
 
   const totalInscritos = comp.entry_count ?? comp.categories.reduce(
@@ -1211,9 +1211,10 @@ function VisaoGeral({
   const metrics: MetricDef[] = [
     { label: "Categorias", value: totalCategorias, glyph: "grid", accent: "ink",
       meta: totalCategorias > 0 ? `${kataCount} Kata · ${kumiteCount} Kumite` : undefined },
-    { label: "Chaves geradas", value: geradas, glyph: "layers", accent: "ink",
-      meta: totalCategorias > 0 ? `${naoGeradas} pendente${naoGeradas === 1 ? "" : "s"}` : undefined,
-      metaWarn: naoGeradas > 0 },
+    // Conta Kata e Kumite juntos, por isso "Sorteadas" e não "Chaves": em Kata
+    // o que se sorteia é a ordem de apresentação, não uma chave.
+    { label: "Sorteadas", value: geradas, glyph: "layers", accent: "ink",
+      meta: totalCategorias > 0 ? `de ${totalCategorias} categoria${totalCategorias === 1 ? "" : "s"}` : undefined },
     { label: "Inscritos", value: totalInscritos, glyph: "people", accent: "red",
       meta: totalCategorias > 0 ? `em ${totalCategorias} categoria${totalCategorias === 1 ? "" : "s"}` : undefined },
   ];
@@ -1223,7 +1224,7 @@ function VisaoGeral({
       value: pendentesPagamento,
       glyph: "card",
       accent: pendentesPagamento > 0 ? "red" : "ink",
-      meta: pendenciaParcial ? "parcial — categorias abertas" : undefined,
+      meta: pendenciaParcial ? "só das categorias que você abriu" : undefined,
       metaWarn: pendentesPagamento > 0,
     });
   }
@@ -1238,25 +1239,38 @@ function VisaoGeral({
 
       <Card flush>
         <View style={styles.cardHead}>
-          <Text style={styles.cardTitle}>Progresso por categoria</Text>
+          <Text style={styles.cardTitle}>Como está cada categoria</Text>
+          {/* A contagem já está no card "Sorteadas" acima. Aqui vale a dica do
+              próximo passo — repetir o número em outra forma ("0 de 7 prontas")
+              obrigava o leitor a reconciliar dois placares da mesma coisa. */}
           {totalCategorias > 0 && (
-            <Text style={styles.cardHint}>{geradas} de {totalCategorias} pronta{geradas === 1 ? "" : "s"}</Text>
+            <Text style={styles.cardHint}>
+              {geradas === 0
+                ? "Comece pelo sorteio de cada uma"
+                : geradas < totalCategorias
+                  ? "Continue pelas que ainda não foram sorteadas"
+                  : "Todas sorteadas"}
+            </Text>
           )}
         </View>
         {totalCategorias === 0 ? (
-          <Text style={styles.emptyEntries}>Sem categorias cadastradas.</Text>
+          <Text style={styles.emptyEntries}>Este campeonato ainda não tem categorias.</Text>
         ) : (
           comp.categories.map((cat) => {
             const kata = isKataModality(cat.modality);
             const status = catProgress[cat.id];
-            const label = kata ? "Apuração" : "Chave";
             const count = cat.entry_count ?? (entriesByCat[cat.id]?.length ?? 0);
+            // O chip diz o PRÓXIMO ATO, não o estado interno da linha: a linha
+            // é clicável e leva exatamente para onde esse ato acontece.
+            // Em Kata o que falta é sortear a ORDEM de apresentação — o chip
+            // antigo dizia "Apuração pendente", que é o ato seguinte (lançar as
+            // notas) e só existe depois do sorteio.
             let statusText = "—";
             let tone: ProgressTone = "pend";
             if (loadingProgress && status === undefined) { statusText = "Verificando..."; tone = "loading"; }
-            else if (status === true) { statusText = `${label} gerada`; tone = "done"; }
-            else if (status === false) { statusText = `${label} pendente`; tone = "pend"; }
-            else if (status === null) { statusText = "Indisponível"; tone = "unknown"; }
+            else if (status === true) { statusText = kata ? "Ordem sorteada" : "Chave sorteada"; tone = "done"; }
+            else if (status === false) { statusText = kata ? "Sortear ordem" : "Sortear chave"; tone = "pend"; }
+            else if (status === null) { statusText = "Não deu para verificar"; tone = "unknown"; }
             return (
               <ProgressRow
                 key={cat.id}
@@ -1319,7 +1333,7 @@ function RankingGeral({
         />
       </View>
       {rows.length === 0 ? (
-        <Text style={styles.emptyEntries}>Nenhum resultado lançado ainda.</Text>
+        <Text style={styles.emptyEntries}>O ranking aparece assim que os primeiros resultados forem lançados.</Text>
       ) : (
         rows.map((r, i) => (
           <View key={r.student_id} style={styles.entryRow}>
