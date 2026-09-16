@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator, TextInput, Linking } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
@@ -8,6 +9,7 @@ import { billingApi, ApiError } from "@/services/api";
 import type { ValidateCouponResponse } from "@/services/billingApi";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { describeCoupon, discountInEffectText, DISCOUNT_LOSS_TEXT, pickOpenInvoice } from "@/components/billing/couponText";
 
 var isWeb = Platform.OS === "web";
 
@@ -177,13 +179,29 @@ export default function CheckoutScreen() {
 
   // Com cupom, o backend e a fonte da verdade do valor (ele recalcula com o
   // plano/ciclo/seats reais da empresa). A tela so exibe o que ele devolveu.
-  var couponDiscountPct = couponApplied?.discount_pct || 0;
+  // 11/09/2026: os textos saem de couponText (dias gratis / 1a mensalidade /
+  // N primeiras mensalidades).
+  var couponView = couponApplied ? describeCoupon(couponApplied, totalPrice) : null;
   var couponTrialDays = couponApplied?.trial_days || 0;
-  var chargedNow = couponApplied
-    ? (couponApplied.first_charge_value ?? totalPrice)
-    : totalPrice;
-  var couponSavings = Math.round((totalPrice - chargedNow) * 100) / 100;
+  var chargedNow = couponView ? couponView.chargedNow : totalPrice;
   var isFreeTrialCoupon = couponTrialDays > 0;
+
+  // 11/09/2026 — desconto de varios meses EM ANDAMENTO. Assinar de novo aqui
+  // (a unica forma de trocar plano/ciclo/pagamento no app) encerra o desconto;
+  // o backend faz isso sozinho, a tela so nao deixa acontecer sem o cliente
+  // saber. E, se ha mensalidade em aberto (Pix vencido, cartao recusado), o
+  // caminho que MANTEM o desconto e pagar essa mensalidade, nao assinar de novo.
+  var { data: billingStatusData } = useQuery({
+    queryKey: ["billing-status", company?.id],
+    queryFn: function () { return billingApi.status(company!.id); },
+    enabled: !!company?.id && !isDemo,
+    retry: 1, staleTime: 60000,
+  });
+  var activeDiscount = billingStatusData?.discount || null;
+  var billingNotActive = !!billingStatusData && billingStatusData.billing_status !== "active";
+  var [discountLossAck, setDiscountLossAck] = useState(false);
+  var [openInvoiceLoading, setOpenInvoiceLoading] = useState(false);
+  var blockedByDiscount = !!activeDiscount && !discountLossAck;
 
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
@@ -205,7 +223,7 @@ export default function CheckoutScreen() {
       if (res.valid) {
         setCouponApplied(res);
         setCouponError(null);
-        toast.success(res.trial_days ? res.trial_days + " dias grátis aplicados!" : "Cupom de " + res.discount_pct + "% aplicado!");
+        toast.success(describeCoupon(res, totalPrice).toast);
       } else {
         setCouponApplied(null);
         setCouponError(res.error || "Cupom inválido");
@@ -300,6 +318,28 @@ export default function CheckoutScreen() {
     } catch (err: any) {
       toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartão");
     } finally { setTokenizing(false); }
+  }
+
+  // Paga a mensalidade em aberto na fatura do Asaas (Pix, boleto ou cartao,
+  // conforme a cobranca) e fica esperando o webhook ativar a conta — sem criar
+  // assinatura nova, entao o desconto continua.
+  async function handlePayOpenInvoice() {
+    if (!company?.id) return;
+    setOpenInvoiceLoading(true);
+    try {
+      var res = await billingApi.invoices(company.id);
+      var invoice = pickOpenInvoice(res.invoices);
+      if (!invoice || !invoice.invoice_url) {
+        toast.error("Não encontramos mensalidade em aberto. Fale com a gente em contato@getaura.com.br");
+        return;
+      }
+      if (isWeb && typeof window !== "undefined") window.open(invoice.invoice_url, "_blank");
+      else await Linking.openURL(invoice.invoice_url);
+      toast.info("Assim que o pagamento cair, sua conta volta ao normal.");
+      if (!pollRef.current) startPolling();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Erro ao buscar a mensalidade em aberto");
+    } finally { setOpenInvoiceLoading(false); }
   }
 
   function startPolling() {
@@ -411,6 +451,44 @@ export default function CheckoutScreen() {
       <Text style={z.title}>Escolha seu plano</Text>
       <Text style={z.subtitle}>Sem contratos. Cancele quando quiser.</Text>
 
+      {activeDiscount && (
+        <View style={z.discountCard}>
+          <Text style={z.discountTitle}>Você tem um desconto em andamento</Text>
+          <Text style={z.discountText}>{discountInEffectText(activeDiscount)}</Text>
+
+          {billingNotActive && (
+            <>
+              <Text style={[z.discountText, { marginTop: 10 }]}>
+                Para manter o desconto, pague a mensalidade em aberto em vez de assinar de novo:
+              </Text>
+              <Pressable
+                onPress={handlePayOpenInvoice}
+                disabled={openInvoiceLoading}
+                style={[z.payBtn, { marginTop: 10 }, openInvoiceLoading && { opacity: 0.6 }]}
+              >
+                {openInvoiceLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={z.payBtnText}>Pagar mensalidade em aberto</Text>}
+              </Pressable>
+              {polling && <ActivityIndicator color={Colors.violet3} style={{ marginTop: 10 }} />}
+            </>
+          )}
+
+          <Text style={[z.discountText, z.discountWarn]}>{DISCOUNT_LOSS_TEXT}</Text>
+          <Pressable
+            onPress={function () { setDiscountLossAck(!discountLossAck); }}
+            style={z.ackRow}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: discountLossAck }}
+          >
+            <View style={[z.ackBox, discountLossAck && z.ackBoxOn]}>
+              {discountLossAck && <Icon name="check" size={12} color="#fff" />}
+            </View>
+            <Text style={z.ackText}>Entendi. Quero assinar de novo sem o desconto.</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Ciclo */}
       <View style={z.cycleRow}>
         <Pressable onPress={function () { userPickedRef.current = true; setCycle("monthly"); }} style={[z.cycleBtn, cycle === "monthly" && z.cycleBtnActive]}>
@@ -485,16 +563,8 @@ export default function CheckoutScreen() {
         ) : (
           <View style={z.couponAppliedRow}>
             <View style={{ flex: 1 }}>
-              <Text style={z.couponAppliedTitle}>
-                {isFreeTrialCoupon
-                  ? couponTrialDays + " dias grátis · " + couponApplied.code
-                  : couponApplied.code + " · " + couponDiscountPct + "% na 1ª mensalidade"}
-              </Text>
-              <Text style={z.couponAppliedSub}>
-                {isFreeTrialCoupon
-                  ? "Cartão fica salvo. 1ª cobrança em " + fmtDate(couponApplied.first_charge_date)
-                  : "Você economiza " + fmt(couponSavings) + " hoje"}
-              </Text>
+              <Text style={z.couponAppliedTitle}>{couponView?.title}</Text>
+              <Text style={z.couponAppliedSub}>{couponView?.subtitle}</Text>
             </View>
             <Pressable onPress={handleRemoveCoupon} style={z.couponRemove}>
               <Text style={z.couponRemoveText}>Remover</Text>
@@ -517,10 +587,10 @@ export default function CheckoutScreen() {
             <Text style={z.summaryValue}>{fmtMo(seatsPrice)}</Text>
           </View>
         )}
-        {couponApplied && !isFreeTrialCoupon && (
+        {couponView && couponView.summaryLabel && (
           <View style={z.summaryRow}>
-            <Text style={z.summaryLabel}>Cupom {couponApplied.code} (-{couponDiscountPct}% no plano)</Text>
-            <Text style={z.couponDiscountValue}>- {fmt(couponSavings)}</Text>
+            <Text style={z.summaryLabel}>{couponView.summaryLabel}</Text>
+            <Text style={z.couponDiscountValue}>- {fmt(couponView.savings)}</Text>
           </View>
         )}
 
@@ -528,20 +598,16 @@ export default function CheckoutScreen() {
           <Text style={z.summaryTotalLabel}>{isFreeTrialCoupon ? "Você paga hoje" : "Total hoje"}</Text>
           <Text style={z.summaryTotalValue}>{isFreeTrialCoupon ? "R$ 0,00" : fmt(chargedNow)}</Text>
         </View>
-        {(couponApplied || extraSeats > 0) && (
+        {(couponView || extraSeats > 0) && (
           <Text style={z.annualNote}>
-            {isFreeTrialCoupon
-              ? "Depois: " + fmtMo(totalPrice) + " a partir de " + fmtDate(couponApplied?.first_charge_date)
-              : couponApplied
-                ? "Mensalidades seguintes: " + fmtMo(totalPrice)
-                : "Cobrado mensalmente"}
+            {couponView ? couponView.afterNote : "Cobrado mensalmente"}
           </Text>
         )}
       </View>
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
-          <Pressable onPress={handlePixSubscribe} disabled={loading} style={[z.payBtn, loading && { opacity: 0.6 }]}>
+          <Pressable onPress={handlePixSubscribe} disabled={loading || blockedByDiscount} style={[z.payBtn, (loading || blockedByDiscount) && { opacity: 0.5 }]}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis" : "Gerar Pix - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
@@ -599,7 +665,7 @@ export default function CheckoutScreen() {
             <TextInput style={z.cardInput} value={cardAddressStreet} onChangeText={setCardAddressStreet} placeholder="Rua..." />
           </View>
 
-          <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid} style={[z.payBtn, (tokenizing || !cardValid) && { opacity: 0.5 }]}>
+          <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid || blockedByDiscount} style={[z.payBtn, (tokenizing || !cardValid || blockedByDiscount) && { opacity: 0.5 }]}>
             {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis (sem cobrança hoje)" : "Assinar Agora - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
@@ -664,6 +730,14 @@ var z = StyleSheet.create({
   couponRemove: { paddingHorizontal: 10, paddingVertical: 6 },
   couponRemoveText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   couponDiscountValue: { fontSize: 15, color: Colors.green, fontWeight: "800" },
+  discountCard: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: Colors.amber },
+  discountTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 6 },
+  discountText: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  discountWarn: { marginTop: 12, color: Colors.amber, fontWeight: "600" },
+  ackRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12, paddingVertical: 4 },
+  ackBox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  ackBoxOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  ackText: { flex: 1, fontSize: 12, color: Colors.ink, fontWeight: "600" },
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   pixCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: 20 },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16 },

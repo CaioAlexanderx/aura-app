@@ -14,6 +14,10 @@ export type AccessCodeRow = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // 11/09/2026 (migration 326) — ausentes antes da migration subir
+  discount_value?: number;
+  discount_months?: number;
+  restrict_to_plan?: boolean;
 };
 export type CreateAccessCodeBody = {
   code: string;
@@ -23,6 +27,9 @@ export type CreateAccessCodeBody = {
   discount_pct?: number;
   max_uses?: number;
   expires_at?: string | null;
+  discount_value?: number;     // reais por mensalidade (nunca junto com discount_pct)
+  discount_months?: number;    // 1 = so a 1a mensalidade
+  restrict_to_plan?: boolean;  // true = so vale no `plan`
 };
 
 export type AdminBannerRow = {
