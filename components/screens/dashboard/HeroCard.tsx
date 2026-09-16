@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, Pressable, Alert } from "react-native";
 import { Colors, Glass, IS_LIGHT_MODE } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
 import { Sparkline } from "./Sparkline";
-import { IS_WIDE, fmt, webOnly, GRAD } from "./types";
+import { IS_WIDE, IS_WEB, fmt, webOnly, GRAD } from "./types";
 
 type Props = {
   net: number;
@@ -12,6 +13,45 @@ type Props = {
   projection?: number;
   netDelta?: number;
 };
+
+// 16/09/2026 (Fase 0) — a explicação do saldo ocupava duas linhas fixas
+// dentro do hero. Virou ícone de ajuda: no toque/clique alterna um
+// popover (web, também aberto por hover) ou um Alert (nativo) com o
+// mesmo texto de sempre. Não achei um Tooltip genérico reaproveitável no
+// repo — TooltipBanner é o coach mark de primeira visita por tela, outra
+// coisa — então o popover é local a este card.
+const SALDO_HELP_TITLE = "Saldo líquido · este mês";
+const SALDO_HELP_TEXT =
+  "Receita total = tudo que entrou no mês: vendas do Caixa, pedidos do Canal Digital e lançamentos manuais (o mesmo “Entrou” do Financeiro). Em Vendas você vê só a parte do Caixa.";
+
+function SaldoHelpHint() {
+  const [open, setOpen] = useState(false);
+
+  function onPress() {
+    if (IS_WEB) { setOpen(function(v) { return !v; }); return; }
+    Alert.alert(SALDO_HELP_TITLE, SALDO_HELP_TEXT);
+  }
+
+  return (
+    <View style={{ position: "relative" }}>
+      <Pressable
+        onPress={onPress}
+        onHoverIn={IS_WEB ? function() { setOpen(true); } : undefined}
+        onHoverOut={IS_WEB ? function() { setOpen(false); } : undefined}
+        accessibilityRole="button"
+        accessibilityLabel="O que é o saldo líquido"
+        hitSlop={8}
+      >
+        <Icon name="info" size={13} color="rgba(255,255,255,0.78)" />
+      </Pressable>
+      {IS_WEB && open && (
+        <View style={s.tipBox}>
+          <Text style={s.tipText}>{SALDO_HELP_TEXT}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 // Count-up animation for the hero value — rAF on web, instant on native.
 function useCountUp(target: number, dur = 1400) {
@@ -100,6 +140,7 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
           <View style={[s.labelRow, Platform.OS === "web" ? (webLabel as any) : null]}>
             <View style={s.labelBar} />
             <Text style={s.label}>Saldo líquido · este mês</Text>
+            <SaldoHelpHint />
           </View>
 
           <View style={s.valueRow}>
@@ -139,13 +180,6 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
             )}
           </View>
 
-          {/* Nota de composicao — sem ela o lojista compara "Receita" daqui com
-              "Receita" de /vendas e ve dois valores sem explicacao. */}
-          {typeof revenue === "number" && (
-            <Text style={s.nota}>
-              Receita total = tudo que entrou no mês: vendas do Caixa, pedidos do Canal Digital e lançamentos manuais (o mesmo “Entrou” do Financeiro). Em Vendas você vê só a parte do Caixa.
-            </Text>
-          )}
         </View>
 
         {sparkNet && sparkNet.length >= 2 && (
@@ -187,6 +221,13 @@ const s = StyleSheet.create({
   metaItem: { gap: 3 },
   metaK: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.7)", letterSpacing: 1.2, textTransform: "uppercase" },
   metaV: { fontSize: 13, color: "#fff", fontWeight: "700" },
-  nota: { fontSize: 10.5, color: "rgba(255,255,255,0.72)", lineHeight: 15, marginTop: 14, maxWidth: 520 },
   sparkWrap: { flex: 1, alignItems: IS_WIDE ? "flex-end" : "flex-start", justifyContent: "center" },
+  tipBox: {
+    position: "absolute", top: 20, left: 0, zIndex: 20,
+    width: 260, padding: 12, borderRadius: 12,
+    backgroundColor: "rgba(20,14,40,0.97)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+    ...(Platform.OS === "web" ? (webOnly({ boxShadow: "0 12px 30px rgba(0,0,0,0.4)" }) as any) : null),
+  },
+  tipText: { fontSize: 11, lineHeight: 16, color: "#fff" },
 });
