@@ -322,9 +322,14 @@ export function GraduacoesCard({
 // ── Relação de faixas (snapshot) ───────────────────────
 // Cores por faixa: pega o hex canônico de constants/karateBelts.ts
 // (BELT_HEX, chaveado por slug) e reindexa pelo LABEL em PT que o
-// backend devolve em `buckets[].faixa` (~10 linhas por faixa, mais
+// backend devolve em `buckets[].long` (~10 linhas por faixa, mais
 // os graus de Dan que não têm slug próprio — mapeados manualmente
 // para o tom "preta"). Fallback `|| C.ink2` para chave desconhecida.
+// BUGFIX (16/09/2026, prod/FPKT): o render consultava BELT_HEX e
+// KYU_BY_FAIXA com `b.faixa` — o SLUG do backend ("azul_escuro",
+// "dan1"), que não casa com nenhuma chave aqui (essas são o LABEL em
+// PT). Toda barra caía no fallback marrom e o kyu nunca aparecia.
+// Trocado para `b.long` nos três pontos de leitura + no CSV.
 const BELT_HEX: Record<string, string> = {
   "Branca": CANONICAL_BELT_HEX.branca,
   "Amarela": CANONICAL_BELT_HEX.amarela,
@@ -405,7 +410,7 @@ export function RelacaoFaixasCard({
         csvData={{
           filename: "relacao-faixas",
           headers: ["Faixa", "Praticantes", "Percentual"],
-          rows: (effectiveData?.buckets || []).map((b) => [b.faixa, String(b.n), fmtPct(b.pct)]),
+          rows: (effectiveData?.buckets || []).map((b) => [b.long, String(b.n), fmtPct(b.pct)]),
         }}
       />
       <View style={{ flexDirection: "row", gap: 8 }}>
@@ -436,11 +441,11 @@ export function RelacaoFaixasCard({
           {/* Pyramid */}
           <View style={{ flex: 1, gap: 10 }}>
             {effectiveData.buckets.map((b, i) => (
-              <View key={b.faixa} style={st.beltRow}>
+              <View key={b.faixa} testID={`belt-row-${b.faixa}`} style={st.beltRow}>
                 <View style={{ width: 110 }}>
-                  <Text style={st.beltRowLabel} numberOfLines={1}>{b.faixa}</Text>
-                  {KYU_BY_FAIXA[b.faixa] ? (
-                    <Text style={{ fontFamily: F.body, fontSize: 10, color: C.ink3, marginTop: 1 }} numberOfLines={1}>{KYU_BY_FAIXA[b.faixa]}</Text>
+                  <Text style={st.beltRowLabel} numberOfLines={1}>{b.long}</Text>
+                  {KYU_BY_FAIXA[b.long] ? (
+                    <Text style={{ fontFamily: F.body, fontSize: 10, color: C.ink3, marginTop: 1 }} numberOfLines={1}>{KYU_BY_FAIXA[b.long]}</Text>
                   ) : null}
                 </View>
                 <View style={st.beltBarTrack}>
@@ -449,7 +454,7 @@ export function RelacaoFaixasCard({
                     pct={Math.round(b.n / maxN * 100)}
                     style={[
                       st.beltBar,
-                      { backgroundColor: BELT_HEX[b.faixa] || C.ink2 },
+                      { backgroundColor: BELT_HEX[b.long] || C.ink2 },
                     ]}
                   />
                 </View>
