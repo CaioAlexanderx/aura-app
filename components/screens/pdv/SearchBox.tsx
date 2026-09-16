@@ -11,9 +11,13 @@ type Props = {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  /** 16/09/2026: a busca tinha `minWidth: 340` fixo. Num 390px isso não
+   *  deixava espaço pro chip de estado do leitor ao lado — agora ela ocupa a
+   *  linha e o pai decide o limite. */
+  maxWidth?: number;
 };
 
-export function SearchBox({ value, onChange, placeholder }: Props) {
+export function SearchBox({ value, onChange, placeholder, maxWidth }: Props) {
   const ref = useRef<TextInput | null>(null);
 
   // Web keyboard shortcut: ⌘K / Ctrl+K focuses the input.
@@ -40,7 +44,7 @@ export function SearchBox({ value, onChange, placeholder }: Props) {
   });
 
   return (
-    <View style={[s.box, Platform.OS === "web" ? (webBox as any) : { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}>
+    <View style={[s.box, maxWidth ? { maxWidth } : null, Platform.OS === "web" ? (webBox as any) : { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}>
       <Icon name="search" size={15} color={Colors.ink3} />
       <TextInput
         ref={ref}
@@ -63,7 +67,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderRadius: 12,
-    minWidth: 340,
+    flex: 1,
+    minWidth: 0,
   },
   input: {
     flex: 1,
