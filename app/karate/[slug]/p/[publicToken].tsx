@@ -65,7 +65,7 @@ export default function PublicProfileScreen() {
           {/* grid */}
           <View style={styles.grid}>
             <View style={styles.gCell}><Text style={styles.k}>Dojo</Text><Text style={styles.v}>{data.dojo_name || "—"}</Text></View>
-            <View style={styles.gCell}><Text style={styles.k}>Federação</Text><Text style={styles.v}>{data.federation?.name || "FPKT"}</Text></View>
+            <View style={styles.gCell}><Text style={styles.k}>Federação</Text><Text style={styles.v}>{data.federation?.name || "—"}</Text></View>
             <View style={styles.gCell}><Text style={styles.k}>Registro</Text><Text style={[styles.v, styles.mono]}>{data.registration || "—"}</Text></View>
             <View style={styles.gCell}><Text style={styles.k}>Situação</Text><Text style={[styles.v, { color: KarateColors.ok }]}>Ativo</Text></View>
           </View>
@@ -88,7 +88,7 @@ export default function PublicProfileScreen() {
           {/* foot */}
           <View style={styles.foot}>
             <Icon name="checkmark-circle" size={14} color={KarateColors.ok} />
-            <Text style={styles.footTxt}>Perfil público verificado pela {data.federation?.name || "FPKT"}</Text>
+            <Text style={styles.footTxt}>Perfil público verificado pela {data.federation?.name || "sua federação"}</Text>
           </View>
         </View>
       )}
@@ -99,7 +99,7 @@ export default function PublicProfileScreen() {
         <View style={styles.footSeal}><Text style={styles.footSealK}>空</Text></View>
         <View>
           <Text style={styles.footWm}>Aura · Karatê</Text>
-          <Text style={styles.footSub}>Plataforma oficial da FPKT</Text>
+          <Text style={styles.footSub}>Plataforma oficial da {data?.federation?.name || "sua federação"}</Text>
         </View>
       </TouchableOpacity>
     </ScrollView>

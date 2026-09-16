@@ -35,14 +35,18 @@
 //   limpo, só com o caminho atual. Layout (25/06, feedback Caio):
 //   • Sidebar — topo: marca Aura Karatê (selo 空 sobre gradiente oxblood +
 //     wordmark, "Karatê" inteiro vermelho — G2).
-//   • Sidebar — bloco da federação: FpktLogo (pirâmide oficial) + nome da
-//     federação (nome completo sem truncamento — G4), no separador vermelho.
+//   • Sidebar — bloco da federação: logo da PRÓPRIA federação (FederationLogo,
+//     monograma quando não há logo cadastrada) + nome da federação (nome
+//     completo sem truncamento — G4), no separador vermelho.
+//     ⚠️ 16/09/2026: era a FpktLogo — o bitmap da FPKT aparecia na sidebar de
+//     qualquer federação (a JKA Teste expôs). Nome e logo agora saem do
+//     cadastro (useKarateFederation), nunca do código.
 //   • Sidebar — busca global (de volta à sidebar): abaixo do bloco da
 //     federação, acima da navegação; submeter → /karate/praticantes?q=.
 //   • Sidebar — rodapé: chip de usuário (avatar com iniciais + nome +
 //     papel + botão Sair).
 //   • Topbar OXBLOOD (head-red #a44c3e) no topo da área de conteúdo (web):
-//     o breadcrumb (FPKT / <página atual>) em texto claro à esquerda e o
+//     o breadcrumb (<federação> / <página atual>) em texto claro à esquerda e o
 //     SINO de notificações à direita. Sem logos e sem busca (vivem na
 //     sidebar) — o header segue uma faixa fina.
 //     ⚠️ 18/08/2026: o sino VOLTOU (decisão Caio). Até então este bloco
@@ -90,7 +94,8 @@ import { KarateColors, KarateRadius, KarateFonts, ShojiPalette } from "@/constan
 import { Motion, webTransition } from "@/constants/motion";
 import { usePrefersReducedMotion } from "@/components/karate/anim/useReducedMotion";
 import { useKarateFederation } from "@/contexts/KarateFederation";
-import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { useShojiFonts } from "@/components/karate/shoji";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { useAuthStore } from "@/stores/auth";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -220,13 +225,17 @@ function Topbar() {
   const router = useRouter();
   const path = usePathname();
   const loc = deriveLocation(path);
+  // Raiz do caminho = nome da federação logada. Era "FPKT" fixo até
+  // 16/09/2026: no print do Caio o breadcrumb de um campeonato da JKA dizia
+  // "FPKT / Competições / Detalhe".
+  const { federationName } = useKarateFederation();
 
   return (
     <View style={styles.topbar}>
       <View style={styles.topbarInner}>
-        {/* Breadcrumb: FPKT / <seção> [ › Detalhe ] em texto claro */}
+        {/* Breadcrumb: <federação> / <seção> [ › Detalhe ] em texto claro */}
         <View style={styles.crumbs} accessibilityRole="header">
-          <Text style={styles.crumbRoot}>FPKT</Text>
+          <Text style={styles.crumbRoot} numberOfLines={1}>{federationName}</Text>
           <Text style={styles.crumbSep}>/</Text>
           {loc.detail ? (
             <>
@@ -361,7 +370,7 @@ function BottomTabItem({ item, active, onPress }: { item: NavItem; active: boole
 function SidebarNav() {
   const router = useRouter();
   const path   = usePathname();
-  const { federationName, karateRole } = useKarateFederation();
+  const { federationName, federationLogoUrl, karateRole } = useKarateFederation();
   const items = visibleNav(karateRole);
 
   // Usuário logado (chip de rodapé). Nome cai no email se vier vazio.
@@ -408,11 +417,12 @@ function SidebarNav() {
         </View>
       </View>
 
-      {/* Bloco da federação: FpktLogo + nome (separadores vermelhos) */}
+      {/* Bloco da federação: logo da PRÓPRIA federação + nome (separadores
+          vermelhos). Até 16/09/2026 aqui vinha a FpktLogo — o bitmap da FPKT
+          na sidebar de qualquer federação. Sem logo cadastrada, o
+          FederationLogo desenha o monograma das iniciais. */}
       <View style={styles.orgSlug}>
-        <View style={styles.orgSlugFpktMark}>
-          <FpktLogo size={26} />
-        </View>
+        <FederationLogo name={federationName} logoUrl={federationLogoUrl} size={36} />
         <View style={styles.orgSlugMeta}>
           <Text style={styles.orgSlugLabel}>Federação</Text>
           <Text
@@ -520,6 +530,8 @@ function BottomTabNav() {
 export function KarateShell() {
   useShojiFonts();   // carrega as fontes Shoji (web) em todo o shell
   const { width } = useWindowDimensions();
+  // Topbar mobile: marca e nome da federação logada (ver FederationLogo).
+  const { federationName, federationLogoUrl } = useKarateFederation();
   const isWide    = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
 
   if (isWide) {
@@ -541,8 +553,16 @@ export function KarateShell() {
     <SafeAreaView style={styles.mobileContainer}>
       {/* Topbar mobile (enxuta) */}
       <View style={styles.mobileTopbar}>
-        <FpktLogo size={26} style={{ marginRight: 9 }} />
-        <Text style={styles.mobileTopbarTitle}>Aura Karatê</Text>
+        <FederationLogo
+          name={federationName}
+          logoUrl={federationLogoUrl}
+          size={32}
+          style={{ marginRight: 9 }}
+        />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.mobileTopbarEyebrow}>Aura Karatê</Text>
+          <Text style={styles.mobileTopbarTitle} numberOfLines={1}>{federationName}</Text>
+        </View>
         <View style={{ flex: 1 }} />
         {/* Topbar mobile é clara (KarateColors.glass) — sino no tom default */}
         <NotificationBell />
@@ -597,6 +617,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "rgba(253,248,242,0.74)",
     letterSpacing: 0.2,
+    // A raiz era "FPKT" (4 letras) e podia ocupar o que quisesse. Agora é o
+    // nome cadastrado da federação — "Federação Paulista de Karatê-Dô
+    // Tradicional" empurraria a seção atual para fora da faixa. Trunca a
+    // raiz, que é a parte redundante (o usuário sabe em qual federação está).
+    flexShrink: 1,
+    maxWidth: 260,
   } as TextStyle,
   crumbLink: {
     fontFamily: KarateFonts.body,
@@ -681,7 +707,7 @@ const styles = StyleSheet.create({
     color: ShojiPalette.red,
   } as TextStyle,
 
-  // Bloco da federação: FpktLogo + nome (separadores vermelhos)
+  // Bloco da federação: logo da federação + nome (separadores vermelhos)
   orgSlug: {
     flexDirection: "row",
     alignItems: "center",
@@ -694,17 +720,7 @@ const styles = StyleSheet.create({
     borderBottomColor: ShojiPalette.redLine,
     marginBottom: 16,
   } as ViewStyle,
-  orgSlugFpktMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: KarateColors.glass2,
-    borderWidth: 1,
-    borderColor: KarateColors.border2,
-    overflow: "hidden",
-  } as ViewStyle,
+  // (o quadro da marca virou responsabilidade do próprio FederationLogo)
   orgSlugMeta: {
     flex: 1,
     minWidth: 0,
@@ -848,9 +864,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: KarateColors.border,
   } as ViewStyle,
+  // Eyebrow + título (espelha o DojoShell): "Aura Karatê" vira a sobrancelha
+  // e a linha grande passa a ser o nome da federação logada.
+  mobileTopbarEyebrow: {
+    fontFamily: KarateFonts.body,
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: KarateColors.ink4,
+  } as TextStyle,
   mobileTopbarTitle: {
     fontFamily: KarateFonts.heading,
-    fontSize: 18,
+    // 16 (não 18): o nome de uma federação é bem mais longo que "Aura Karatê".
+    fontSize: 16,
     color: KarateColors.ink,
     letterSpacing: 0.3,
   } as TextStyle,

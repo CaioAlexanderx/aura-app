@@ -19,8 +19,8 @@
 // Notas de escopo (contexto FEDERAÇÃO):
 //   - Sem upload de "Logo da federação" aqui: o logo oficial é gerido pela
 //     Aura (Caio). O contexto "Aura Dojô" (app/karate/sensei) é separado.
-//   - Sem menção de emissão automática de NF-e/NFS-e na UI: a FPKT não emite
-//     notas pelo app. O código fiscal do backend segue dormente.
+//   - Sem menção de emissão automática de NF-e/NFS-e na UI: a federação não
+//     emite notas pelo app. O código fiscal do backend segue dormente.
 //
 // Guardrails:
 //   - StyleSheet.create: todos os valores são objetos (sem strings soltas no top-level)
@@ -403,6 +403,9 @@ const PIX_TYPES: { key: PixKeyType; label: string }[] = [
 ];
 
 function PixSection({ federationId }: { federationId: string }) {
+  // O placeholder trazia o nome da FPKT por extenso — numa segunda federação
+  // era o exemplo errado. Sugere o nome da federação logada (16/09/2026).
+  const { federationName } = useKarateFederation();
   const [pix, setPix] = useState<FederationPayments | null>(null);
   const [keyType, setKeyType] = useState<PixKeyType | null>(null);
   const [pixKey, setPixKey] = useState("");
@@ -514,7 +517,7 @@ function PixSection({ federationId }: { federationId: string }) {
                   style={pixSt.input}
                   value={holder}
                   onChangeText={setHolder}
-                  placeholder="Federação Paulista de Karatê-Dô"
+                  placeholder={federationName}
                   placeholderTextColor={KarateColors.ink4}
                 />
               </View>
@@ -794,6 +797,8 @@ function ReguaTab({ federationId }: { federationId: string }) {
 // ── Seção 3: Equipe ─────────────────────────────────────────────
 
 function EquipeTab({ federationId }: { federationId: string }) {
+  // Era "Equipe FPKT" fixo — a equipe é de quem está logado (16/09/2026).
+  const { federationName } = useKarateFederation();
   const [members, setMembers] = useState<FederationMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -850,7 +855,7 @@ function EquipeTab({ federationId }: { federationId: string }) {
   return (
     <ScrollView style={st.tabContent} contentContainerStyle={st.tabPad}>
       <SectionHeader
-        title="Equipe FPKT"
+        title={`Equipe da ${federationName}`}
         sub="Membros com acesso ao painel da federação"
         right={
           <TouchableOpacity style={[st.btn, st.btnPrimary, st.btnSm]} onPress={() => setInviteOpen(true)}>

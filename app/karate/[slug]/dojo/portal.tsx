@@ -15,7 +15,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts } from "@/constants/karateTheme";
-import { FpktLogo } from "@/components/karate/FpktLogo";
+import { DojoLogo } from "@/components/karate/DojoLogo";
 import { Skeleton } from "@/components/karate/Skeleton";
 import {
   karateDojoPortalApi, DojoMe, DojoPractitioner, AnnuityStatus,
@@ -99,10 +99,19 @@ export default function DojoPortal() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.topbar}>
-        <FpktLogo size={34} />
+        {/* Esta é a casa do DOJÔ: a marca é a dele, não a da federação
+            (mesma correção que o DojoShell levou em 27/08/2026). O payload
+            do portal (Canal B, token) não traz identidade de federação
+            nenhuma, então a legenda ficou neutra em vez de dizer "FPKT"
+            para o dojô de qualquer outra federação (16/09/2026). */}
+        <DojoLogo
+          name={dojo?.name ?? ""}
+          logoUrl={dojo?.karate_logo_url ?? null}
+          size={34}
+        />
         <View style={{ flex: 1 }}>
           <Text style={styles.dojoName} numberOfLines={1}>{dojo?.name ?? "Carregando…"}</Text>
-          <Text style={styles.dojoSub}>Portal do Dojô · FPKT</Text>
+          <Text style={styles.dojoSub}>Portal do Dojô</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityLabel="Sair">
           <Icon name="log-out-outline" size={20} color={KarateColors.ink3} />
@@ -131,7 +140,7 @@ export default function DojoPortal() {
             {/* Identidade */}
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Filiação</Text>
-              <Row label="Registro FPKT" value={dojo.fpkt_affiliation_id || "—"} mono />
+              <Row label="Registro de filiação" value={dojo.fpkt_affiliation_id || "—"} mono />
               <Row label="Situação" value={dojo.status === "active" ? "Ativo" : dojo.status === "pending" ? "Pendente" : "Inativo"} color={statusColor(dojo.status)} />
               {dojo.region && <Row label="Região" value={dojo.region} />}
               {/* "Modelo" (affiliation_model) removido em 13/07/2026 — decorativo/

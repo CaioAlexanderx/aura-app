@@ -24,7 +24,10 @@ import React, {
   createContext, useContext, useCallback, useEffect, useState, ReactNode,
 } from "react";
 import { useAuthStore } from "@/stores/auth";
-import { useKarateFederation } from "@/contexts/KarateFederation";
+import {
+  useKarateFederation,
+  FEDERATION_FALLBACK_NAME,
+} from "@/contexts/KarateFederation";
 import { karateDojoInfoApi, DojoMeInfo } from "@/services/karateDojoInfoApi";
 
 export interface KarateDojoContextValue {
@@ -44,6 +47,14 @@ export interface KarateDojoContextValue {
   dojoCode: string | null;
   /** Logo do próprio dojô (null → o shell desenha o monograma). */
   dojoLogoUrl: string | null;
+  /**
+   * Nome da federação à qual o dojô é filiado (16/09/2026). As telas do
+   * dojô que falavam "FPKT" no texto (certificados, anuidade, portal) leem
+   * daqui — o /dojo/me já devolve federation_name, e é a fonte mais direta
+   * nesta visão. Cai na identidade do KarateFederationContext enquanto o GET
+   * não respondeu e, por fim, no neutro "Federação". Nunca uma marca fixa.
+   */
+  federationName: string;
   linked: boolean;
 }
 
@@ -56,11 +67,12 @@ const KarateDojoContext = createContext<KarateDojoContextValue>({
   dojoName: "Dojô",
   dojoCode: null,
   dojoLogoUrl: null,
+  federationName: FEDERATION_FALLBACK_NAME,
   linked: true,
 });
 
 export function KarateDojoProvider({ children }: { children: ReactNode }) {
-  const { federationId } = useKarateFederation();
+  const { federationId, federationName: federationNameFromCtx } = useKarateFederation();
   const company = useAuthStore((s) => s.company) as any;
 
   const [dojoMe, setDojoMe] = useState<DojoMeInfo | null>(null);
@@ -100,6 +112,8 @@ export function KarateDojoProvider({ children }: { children: ReactNode }) {
     dojoName: dojoMe?.name || company?.name || "Dojô",
     dojoCode: dojoMe?.fpkt_affiliation_id ?? null,
     dojoLogoUrl: dojoMe?.logo_url ?? null,
+    federationName:
+      dojoMe?.federation_name || federationNameFromCtx || FEDERATION_FALLBACK_NAME,
     // Fail-open: enquanto carrega ou se o campo não vier, assume conectado
     // (nunca esconde nav/gate por causa de loading ou de um backend antigo).
     linked: dojoMe?.linked ?? true,

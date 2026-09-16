@@ -1,8 +1,8 @@
 // ============================================================
-// Consulta de Praticante — Portal público FPKT
+// Consulta de Praticante — Portal público da federação
 // Rota: /karate/[slug]/consulta
 //
-// Campo único "CPF, e-mail ou Número FPKT" → chama
+// Campo único "CPF, e-mail ou número de matrícula" → chama
 // POST /public/karate/:slug/lookup → exibe perfil + faixa + inscrições.
 // Sem OTP, sem fluxo de autenticação — consulta pública.
 // Erro 404 (PRACTITIONER_NOT_FOUND) → mensagem sóbria.
@@ -18,7 +18,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
-import { FpktLogo } from "@/components/karate/FpktLogo";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { BeltTag } from "@/components/karate/shoji";
 import {
   karatePublicApi,
@@ -109,9 +109,17 @@ export default function ConsultaScreen() {
       {/* Cabeçalho */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <FpktLogo size={30} />
+          {/* Rota PÚBLICA: sem JWT. Nome e logo vêm do payload da própria
+              busca (federation.name/logo). Antes da primeira busca não há
+              identidade nenhuma — o fallback é NEUTRO, nunca a marca de
+              outra federação (era FpktLogo + "FPKT", 16/09/2026). */}
+          <FederationLogo
+            name={result?.federation?.name || "Federação"}
+            logoUrl={result?.federation?.logo ?? null}
+            size={30}
+          />
           <View style={{ flex: 1 }}>
-            <Text style={styles.brandName} numberOfLines={1}>{result?.federation?.name || "FPKT"}</Text>
+            <Text style={styles.brandName} numberOfLines={1}>{result?.federation?.name || "Federação"}</Text>
             <Text style={styles.brandSub}>Portal do praticante</Text>
           </View>
           <TouchableOpacity
@@ -130,14 +138,14 @@ export default function ConsultaScreen() {
         </View>
         <Text style={styles.h1}>Consultar dados</Text>
         <Text style={styles.sub}>
-          Informe o CPF, e-mail ou Número FPKT para consultar o perfil do praticante.
+          Informe o CPF, e-mail ou número de matrícula para consultar o perfil do praticante.
         </Text>
       </View>
 
       {/* Painel de busca */}
       {(phase === "form" || phase === "loading" || phase === "error") && (
         <View style={styles.panel}>
-          <Text style={styles.fieldLabel}>CPF, e-mail ou Número FPKT</Text>
+          <Text style={styles.fieldLabel}>CPF, e-mail ou número de matrícula</Text>
           <TextInput
             style={styles.fieldInput as any}
             value={identifier}
@@ -194,7 +202,7 @@ export default function ConsultaScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{result.practitioner.name}</Text>
                 {result.practitioner.registration ? (
-                  <Text style={styles.registration}>FPKT {result.practitioner.registration}</Text>
+                  <Text style={styles.registration}>Matrícula {result.practitioner.registration}</Text>
                 ) : null}
               </View>
             </View>

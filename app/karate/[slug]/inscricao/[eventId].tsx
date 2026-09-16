@@ -19,7 +19,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme";
-import { FpktLogo } from "@/components/karate/FpktLogo";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { Skeleton } from "@/components/karate/Skeleton";
 import { beltHex } from "@/constants/karateBelts";
 import { KarateButton } from "@/components/karate/KarateButton";
@@ -119,7 +119,11 @@ export default function InscricaoScreen() {
 
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [event, setEvent] = useState<PublicEvent["event"] | null>(null);
-  const [fedName, setFedName] = useState("FPKT");
+  // Rota PÚBLICA (sem JWT): identidade vem do payload do próprio evento
+  // (federation.name/logo). O estado começava em "FPKT" — a inscrição de
+  // qualquer outra federação abria com a marca da FPKT (16/09/2026).
+  const [fedName, setFedName] = useState("Federação");
+  const [fedLogo, setFedLogo] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>("evento");
   const [guest, setGuest] = useState({ name: "", cpf: "", email: "", phone: "", birth_date: "", belt: "", dojo: "", professor: "" });
@@ -161,7 +165,12 @@ export default function InscricaoScreen() {
   useEffect(() => {
     let alive = true;
     karatePortalApi.getEvent(slugStr, eventIdStr)
-      .then((d) => { if (alive) { setEvent(d.event); setFedName(d.federation?.name || "FPKT"); } })
+      .then((d) => {
+        if (!alive) return;
+        setEvent(d.event);
+        setFedName(d.federation?.name || "Federação");
+        setFedLogo(d.federation?.logo ?? null);
+      })
       .catch((e: any) => {
         if (!alive) return;
         if (e?.status === 409) { setErr("fim"); }
@@ -195,10 +204,10 @@ export default function InscricaoScreen() {
     .map((f) => f.label);
 
   const doLookup = async () => {
-    // A4 — identificação livre (CPF, e-mail ou nº FPKT): validação client-side
+    // A4 — identificação livre (CPF, e-mail ou nº de matrícula): validação client-side
     // é só "não vazio, min. 3 caracteres" — a validação de formato específico
     // (CPF/e-mail/registro) é sempre do backend, que já sabe distinguir os 3.
-    if (cpf.trim().length < 3) { setErr("generic"); setErrMsg("Informe seu CPF, e-mail ou nº de registro FPKT."); return; }
+    if (cpf.trim().length < 3) { setErr("generic"); setErrMsg("Informe seu CPF, e-mail ou nº de matrícula."); return; }
     setBusy(true); setErr(null);
     try {
       const r = await karatePortalApi.lookup(slugStr, eventIdStr, cpf.trim(), isCompetition ? selectedCategoryId || undefined : undefined);
@@ -290,7 +299,7 @@ export default function InscricaoScreen() {
     const toneSoft = cfg.tone === "bad" ? KarateColors.dangerSoft : KarateColors.warnSoft;
     return (
       <ScrollView style={styles.page} contentContainerStyle={styles.wrap}>
-        <Card fed={fedName}>
+        <Card fed={fedName} fedLogo={fedLogo}>
           <View style={styles.errBlock}>
             <View style={[styles.errGlyph, { backgroundColor: toneSoft }]}>
               <Icon name={cfg.icon as any} size={30} color={toneColor} />
@@ -309,7 +318,7 @@ export default function InscricaoScreen() {
             )}
           </View>
         </Card>
-        <AuraFooter />
+        <AuraFooter fed={fedName} />
       </ScrollView>
     );
   }
@@ -325,18 +334,19 @@ export default function InscricaoScreen() {
         <EventLanding
           event={event}
           fedName={fedName}
+          fedLogo={fedLogo}
           isCompetition={isCompetition}
           winWidth={winWidth}
           onCta={() => { setErr(null); setStep(isCompetition ? "categoria" : "cpf"); }}
         />
-        <AuraFooter />
+        <AuraFooter fed={fedName} />
       </ScrollView>
     );
   }
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.wrap}>
-      <Card fed={fedName}>
+      <Card fed={fedName} fedLogo={fedLogo}>
         {step !== "pix" ? <Progress /> : null}
 
         <View style={styles.body}>
@@ -399,11 +409,11 @@ export default function InscricaoScreen() {
             <>
               <Text style={styles.stepLabel}>{isCompetition ? "ETAPA 3 DE 4" : "ETAPA 2 DE 3"} · IDENTIFICAÇÃO</Text>
               <Text style={styles.h2}>Informe seus dados</Text>
-              <Text style={styles.sub}>Usamos seu CPF, e-mail ou nº FPKT apenas para localizar seu registro.</Text>
-              <Text style={styles.label}>CPF, e-mail ou nº de registro FPKT</Text>
+              <Text style={styles.sub}>Usamos seu CPF, e-mail ou nº de matrícula apenas para localizar seu registro.</Text>
+              <Text style={styles.label}>CPF, e-mail ou nº de matrícula</Text>
               <TextInput
                 style={styles.input}
-                placeholder="000.000.000-00, voce@email.com ou nº FPKT"
+                placeholder="000.000.000-00, voce@email.com ou nº de matrícula"
                 placeholderTextColor={KarateColors.ink4}
                 value={cpf}
                 onChangeText={setCpf}
@@ -586,7 +596,7 @@ export default function InscricaoScreen() {
           </View>
         )}
       </Card>
-      <AuraFooter />
+      <AuraFooter fed={fedName} />
     </ScrollView>
   );
 }
@@ -679,11 +689,11 @@ function RegistrationFieldInput({
   );
 }
 
-function Card({ fed, children }: { fed: string; children: React.ReactNode }) {
+function Card({ fed, fedLogo, children }: { fed: string; fedLogo: string | null; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <FpktLogo size={38} />
+        <FederationLogo name={fed} logoUrl={fedLogo} size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headT}>Inscrição</Text>
           <Text style={styles.headS}>{fed}</Text>
@@ -693,13 +703,13 @@ function Card({ fed, children }: { fed: string; children: React.ReactNode }) {
     </View>
   );
 }
-function AuraFooter() {
+function AuraFooter({ fed }: { fed: string }) {
   return (
     <TouchableOpacity style={styles.auraFooter} onPress={() => Linking.openURL("https://www.getaura.com.br")} accessibilityRole="link">
       <View style={styles.footSeal}><Text style={styles.footSealK}>空</Text></View>
       <View>
         <Text style={styles.footWm}>Aura · Karatê</Text>
-        <Text style={styles.footSub}>Plataforma oficial da FPKT</Text>
+        <Text style={styles.footSub}>Plataforma oficial da {fed}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -723,10 +733,11 @@ function eventKindLabel(kind?: string | null): string {
 }
 
 function EventLanding({
-  event, fedName, isCompetition, winWidth, onCta,
+  event, fedName, fedLogo, isCompetition, winWidth, onCta,
 }: {
   event: PublicEvent["event"] | null;
   fedName: string;
+  fedLogo: string | null;
   isCompetition: boolean;
   winWidth: number;
   onCta: () => void;
@@ -800,7 +811,7 @@ function EventLanding({
   return (
     <View style={landing.page}>
       <View style={landing.brandRow}>
-        <FpktLogo size={34} />
+        <FederationLogo name={fedName} logoUrl={fedLogo} size={34} />
         <View>
           <Text style={landing.brandT}>Inscrição</Text>
           <Text style={landing.brandS}>{fedName}</Text>

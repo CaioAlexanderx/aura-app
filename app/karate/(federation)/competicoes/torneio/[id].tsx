@@ -1421,7 +1421,9 @@ function ResultadoModal({ entry, onClose, onSave }: {
           <Text style={styles.sheetSub}>{entry.student_name}</Text>
           <Text style={styles.inputLabel}>Colocação</Text>
           <TextInput style={styles.input} value={placement} onChangeText={setPlacement} keyboardType="numeric" placeholder="1" placeholderTextColor={KarateColors.ink4} />
-          <Text style={styles.inputLabel}>Pontos FPKT</Text>
+          {/* Era "Pontos FPKT": rótulo de campo, e o que ele nomeia é o
+              ranking da federação — não a marca de uma delas (16/09/2026). */}
+          <Text style={styles.inputLabel}>Pontos no ranking</Text>
           <TextInput style={styles.input} value={points} onChangeText={setPoints} keyboardType="numeric" placeholder="100" placeholderTextColor={KarateColors.ink4} />
           <View style={styles.sheetActions}>
             <KarateButton label="Cancelar" variant="ghost" size="md" onPress={onClose} style={{ flex: 1 }} />

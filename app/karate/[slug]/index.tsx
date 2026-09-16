@@ -1,9 +1,10 @@
 // ============================================================
-// Hub do Portal Público FPKT — Redesign
+// Hub do Portal Público da federação — Redesign
 // Rota: /karate/[slug]
 //
 // Layout: sidebar colapsável (desktop) + área de conteúdo principal.
-// Fundo Shoji (papel de arroz + lavagem de chá). Hero com logo FPKT.
+// Fundo Shoji (papel de arroz + lavagem de chá). Hero com a logo da
+// federação do slug (16/09/2026: era a logo fixa da FPKT).
 // Grade de cards: Inscrições, Carteirinha/Consulta, Ranking.
 // Carrossel de banners (placement=hub, aspect-ratio respeitado).
 // Footer "Desenvolvido por Aura Karatê" linkando getaura.com.br/dojo.
@@ -17,7 +18,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateFonts, KarateRadius, ShojiPalette } from "@/constants/karateTheme";
-import { FpktLogo } from "@/components/karate/FpktLogo";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { ShojiBackground } from "@/components/karate/shoji";
 import { BannerCarousel } from "@/components/karate/portal/BannerCarousel";
 import { karateCompetitionsApi } from "@/services/karateCompetitionsApi";
@@ -66,7 +67,7 @@ const HUB_CARDS: CardDef[] = [
   {
     key: "consulta",
     title: "Carteirinha",
-    desc: "Consulte e valide a carteirinha digital pelo número FPKT, CPF ou e-mail.",
+    desc: "Consulte e valide a carteirinha digital pelo número de matrícula, CPF ou e-mail.",
     icon: "qr_code",
     cta: "Verificar",
   },
@@ -86,25 +87,35 @@ function Sidebar({
   activeKey,
   onNav,
   fedName,
+  fedLogo,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   activeKey: string;
   onNav: (item: NavItem) => void;
   fedName: string;
+  fedLogo: string | null;
 }) {
   const w = collapsed ? 72 : 248;
   return (
     <View style={[styles.side, { width: w, minWidth: w }]}>
       {/* Logo + nome */}
       <View style={styles.sideTop}>
+        {/* Rota PÚBLICA: identidade vem do payload do slug (federation.
+            name/logo de getPublicSeasons), nunca de uma marca no código.
+            Enquanto não chega, monograma + "Federação" (16/09/2026). */}
         <View style={styles.sideMark}>
-          <FpktLogo size={28} />
+          <FederationLogo
+            name={fedName || "Federação"}
+            logoUrl={fedLogo}
+            size={36}
+            radiusRatio={0.25}
+          />
         </View>
         {!collapsed && (
           <View style={{ flex: 1 }}>
             <Text style={styles.sideName} numberOfLines={1}>
-              {fedName || "FPKT"}
+              {fedName || "Federação"}
             </Text>
             <Text style={styles.sideNameSub}>Portal</Text>
           </View>
@@ -299,6 +310,7 @@ export default function KarateHubScreen() {
   const fedSlug = String(slug || "fpkt");
 
   const [fedName, setFedName] = useState("");
+  const [fedLogo, setFedLogo] = useState<string | null>(null);
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("home");
   // Bloco B — eventos abertos (karate_belt_exams status='open') exibidos
@@ -315,7 +327,11 @@ export default function KarateHubScreen() {
     let alive = true;
     karateCompetitionsApi
       .getPublicSeasons(fedSlug)
-      .then((s) => { if (alive && s?.federation?.name) setFedName(s.federation.name); })
+      .then((s) => {
+        if (!alive) return;
+        if (s?.federation?.name) setFedName(s.federation.name);
+        setFedLogo(s?.federation?.logo ?? null);
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, [fedSlug]);
@@ -419,6 +435,7 @@ export default function KarateHubScreen() {
             activeKey={activeNav}
             onNav={handleNav}
             fedName={fedName}
+            fedLogo={fedLogo}
           />
         )}
 
@@ -439,11 +456,16 @@ export default function KarateHubScreen() {
             {/* Hero */}
             <View style={styles.hero}>
               <View style={styles.heroLogoWrap}>
-                <FpktLogo size={72} />
+                <FederationLogo
+                  name={fedName || "Federação"}
+                  logoUrl={fedLogo}
+                  size={78}
+                  radiusRatio={0.205}
+                />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.heroTitle}>
-                  {fedName || "Federação Paulista de Karatê-Dô Tradicional"}
+                  {fedName || "Federação"}
                 </Text>
                 <Text style={styles.heroSub}>
                   Inscrições em eventos e campeonatos, consulta de carteirinha e ranking — tudo num só lugar.

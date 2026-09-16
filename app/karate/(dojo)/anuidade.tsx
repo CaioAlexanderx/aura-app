@@ -4,25 +4,28 @@
 // Somente leitura; o pagamento é conciliado pela federação.
 //
 // Polish QA 25/07 (item 4): a tela vira DUAS federações lado a lado —
-//   • FPKT — exatamente o fluxo de hoje (pendência/histórico/Pix real,
-//     via GET /federation/:id/dojo/annuity), agora dentro de um card
-//     identificado como a federação FPKT. Quando o dojô não está
+//   • A federação do dojô — exatamente o fluxo de hoje (pendência/
+//     histórico/Pix real, via GET /federation/:id/dojo/annuity), dentro de
+//     um card identificado com o nome e a logo dela. Quando o dojô não está
 //     conectado (`linked === false` do contexto, ou `not_linked: true`
 //     na resposta — Aura-backend#422), o card mostra uma mensagem de
 //     conexão em vez da lista vazia genérica.
 //   • JKA — card DESABILITADO/esmaecido, selo "Em breve", SEM nenhuma
 //     chamada de API — é placeholder visual, não uma feature nova.
 //
-// F6 (conexão/filiação): antes deste polish, "conecte seu dojô à FPKT"
+// F6 (conexão/filiação): antes deste polish, "conecte seu dojô à federação"
 // era um BECO SEM SAÍDA — nenhuma tela do produto explicava COMO
 // conectar. O texto agora vira botão para /karate/(dojo)/conexao
 // (Aura-backend#424).
 //
-// 02/08 (bugfix): o nome da federação no card FPKT estava DIGITADO à mão
-// e errado ("Federação Paraense de Karatê Tradicional"). Agora lê de
-// dojoMe.federation_name (já carregado por useKarateDojo via GET
-// /dojo/me), com o nome oficial completo como fallback só quando o dado
-// ainda não chegou (loading/erro/backend antigo).
+// 02/08 (bugfix): o nome da federação no card estava DIGITADO à mão e errado
+// ("Federação Paraense de Karatê Tradicional"). Passou a ler de
+// dojoMe.federation_name (já carregado por useKarateDojo via GET /dojo/me).
+//
+// 16/09/2026: o card ainda tinha "FPKT" carimbado no selo, no título e no
+// texto de "conecte seu dojô" — o fallback do nome também era o nome da
+// FPKT por extenso. Tudo deriva do cadastro agora (federationName do
+// KarateDojoContext + FederationLogo no selo); o fallback é neutro.
 // ============================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -34,6 +37,7 @@ import { Icon } from "@/components/Icon";
 import { KarateFonts, KarateColors, KarateRadius, annuityStatusView } from "@/constants/karateTheme";
 import { useKarateFederation } from "@/contexts/KarateFederation";
 import { useKarateDojo } from "@/contexts/KarateDojo";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { karateApi, SenseiAnnuity, SenseiAnnuityResponse } from "@/services/karateApi";
 import { copyToClipboard } from "@/utils/clipboard";
 import { Skeleton } from "@/components/karate/Skeleton";
@@ -56,10 +60,10 @@ function fmtValor(v: number | null): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function FpktAnnuityCard() {
+function FederationAnnuityCard() {
   const router = useRouter();
-  const { federationId } = useKarateFederation();
-  const { linked, dojoMe } = useKarateDojo();
+  const { federationId, federationLogoUrl } = useKarateFederation();
+  const { linked, federationName } = useKarateDojo();
   const [data, setData] = useState<SenseiAnnuityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -90,11 +94,6 @@ function FpktAnnuityCard() {
   const pix = data?.pix ?? null;
   const hasAnyData = !!pending || history.length > 0;
 
-  // Nome oficial da federação: lido de dojoMe.federation_name (GET
-  // /dojo/me, já carregado por useKarateDojo). Fallback só quando o dado
-  // ainda não chegou (loading/erro/backend antigo sem o campo).
-  const fedName = dojoMe?.federation_name || "Federação Paulista de Karatê-Dô Tradicional";
-
   // Situação da anuidade: sem pendência → "Em dia"; com pendência, usa o
   // mapa de ANUIDADE (annuityStatusView normaliza tudo).
   const statusMeta = pending
@@ -114,10 +113,17 @@ function FpktAnnuityCard() {
   return (
     <View style={styles.fedCard}>
       <View style={styles.fedHead}>
-        <View style={styles.fedMark}><Text style={styles.fedMarkTxt}>FPKT</Text></View>
+        {/* Selo: logo cadastrada da federação, ou o monograma das iniciais.
+            Era um quadrado com "FPKT" digitado dentro. */}
+        <FederationLogo
+          name={federationName}
+          logoUrl={federationLogoUrl}
+          size={44}
+          radiusRatio={0.27}
+        />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.fedName}>FPKT</Text>
-          <Text style={styles.fedSub}>{fedName}</Text>
+          <Text style={styles.fedName} numberOfLines={2}>{federationName}</Text>
+          <Text style={styles.fedSub}>Filiação do dojô</Text>
         </View>
       </View>
 
@@ -145,7 +151,7 @@ function FpktAnnuityCard() {
       {!loading && notLinked && (
         <View style={styles.stateBox}>
           <Icon name="link" size={26} color={KarateColors.ink3} />
-          <Text style={styles.stateTxt}>Conecte seu dojô à FPKT para ver e pagar a anuidade.</Text>
+          <Text style={styles.stateTxt}>Conecte seu dojô à {federationName} para ver e pagar a anuidade.</Text>
           <TouchableOpacity style={styles.connectBtn} onPress={() => router.push("/karate/(dojo)/conexao" as any)} accessibilityRole="button" accessibilityLabel="Conectar meu dojô à federação">
             <Icon name="link" size={14} color={KarateColors.primary} />
             <Text style={styles.connectBtnTxt}>Conectar meu dojô</Text>
@@ -271,7 +277,7 @@ export default function DojoAnuidade() {
         <Text style={styles.lead}>A filiação anual do seu dojô às federações. O pagamento é por Pix e a federação confirma o recebimento.</Text>
       </View>
 
-      <FpktAnnuityCard />
+      <FederationAnnuityCard />
       <JkaAnnuityCard />
     </ScrollView>
   );
@@ -284,13 +290,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontFamily: KarateFonts.heading, fontWeight: "400", color: KarateColors.ink, marginTop: 2 } as TextStyle,
   lead: { fontSize: 13, color: KarateColors.ink3, marginTop: 4, lineHeight: 18, maxWidth: 460 } as TextStyle,
 
-  // ── Card de federação (envelope comum a FPKT e JKA) ───────────────
+  // ── Card de federação (envelope comum à federação do dojô e à JKA) ──
   fedCard: { backgroundColor: KarateColors.surface, borderRadius: KarateRadius.lg, borderWidth: 1, borderColor: KarateColors.border, padding: 16, gap: 14 } as ViewStyle,
   fedCardDisabled: { opacity: 0.6, backgroundColor: KarateColors.bg2 } as ViewStyle,
   fedHead: { flexDirection: "row", alignItems: "center", gap: 12 } as ViewStyle,
   fedMark: { width: 44, height: 44, borderRadius: 12, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
   fedMarkDisabled: { backgroundColor: KarateColors.bg2, borderWidth: 1, borderColor: KarateColors.border } as ViewStyle,
-  fedMarkTxt: { fontSize: 11, fontWeight: "600", color: KarateColors.primary } as TextStyle,
   fedMarkTxtDisabled: { fontSize: 11, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,
   fedName: { fontSize: 15, fontWeight: "600", color: KarateColors.ink } as TextStyle,
   fedNameDisabled: { fontSize: 15, fontWeight: "600", color: KarateColors.ink3 } as TextStyle,

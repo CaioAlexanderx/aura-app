@@ -13,7 +13,7 @@
 // mesmos campos do portal do sensei (FullRecordPanel em
 // app/karate/roster-update/[token].tsx / PORTAL_EDITABLE_FIELDS no
 // backend). O gate de identidade (2º fator) é o que sustenta abrir mais
-// campos: só quem sabe o nascimento OU a matrícula FPKT do praticante
+// campos: só quem sabe o nascimento OU a matrícula do praticante
 // grava algo.
 //
 // (16/07/2026, complemento — o buraco: a ficha abria em branco, então o
@@ -30,12 +30,12 @@
 //
 // Fluxo, mobile-first, sem jargão:
 //   1. Digita o próprio nome → escolhe entre até 8 resultados.
-//   2. Confirma identidade: data de nascimento OU nº de matrícula FPKT
+//   2. Confirma identidade: data de nascimento OU nº de matrícula
 //      (2º fator — evita que um estranho com o link mexa na ficha de
 //      um colega).
 //   3. Ficha carrega PRÉ-PREENCHIDA (POST .../record) — o aluno REVISA o
 //      que já está cadastrado e corrige o que estiver errado. Nome, nº
-//      FPKT e faixa aparecem como leitura (geridos pela federação).
+//      matrícula e faixa aparecem como leitura (geridos pela federação).
 //   4. Salva — só os campos que de fato mudaram vão no POST .../update.
 //   5. Tela de sucesso.
 //
@@ -246,7 +246,7 @@ export default function RosterSelfServiceScreen() {
       return;
     }
     if (identityMode === "registration" && !regNumber.trim()) {
-      setFormError("Informe o número de matrícula FPKT.");
+      setFormError("Informe o número de matrícula.");
       return;
     }
     fetchRecord();
@@ -403,7 +403,7 @@ export default function RosterSelfServiceScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Confirmar com número de matrícula"
               >
-                <Text style={[st.identityBtnText, identityMode === "registration" && st.identityBtnTextActive]}>Nº de matrícula FPKT</Text>
+                <Text style={[st.identityBtnText, identityMode === "registration" && st.identityBtnTextActive]}>Nº de matrícula</Text>
               </Pressable>
             </View>
             {identityMode === "birth_date" ? (
@@ -423,16 +423,16 @@ export default function RosterSelfServiceScreen() {
                 <TextInput
                   value={regNumber}
                   onChangeText={setRegNumber}
-                  placeholder="Número de matrícula FPKT"
+                  placeholder="Número de matrícula"
                   placeholderTextColor={P.ink4}
                   style={st.input}
-                  accessibilityLabel="Número de matrícula FPKT"
+                  accessibilityLabel="Número de matrícula"
                   autoFocus
                 />
               </View>
             )}
             <Text style={st.hint}>
-              Sua data de nascimento está errada no cadastro? Confirme aqui pela matrícula FPKT e corrija ela no próximo passo.
+              Sua data de nascimento está errada no cadastro? Confirme aqui pela matrícula e corrija ela no próximo passo.
             </Text>
             {!!formError && <Text style={st.errorText}>{formError}</Text>}
             <View style={st.actionsRow}>
@@ -472,7 +472,7 @@ export default function RosterSelfServiceScreen() {
               <Icon name="lock-closed" size={13} color={P.ink3} />
               <Text style={st.readonlyRowText}>
                 Nome: {locked?.name || selected.name}
-                {"\n"}Matrícula FPKT: {locked?.karate_registration_number || "não informada"}
+                {"\n"}Matrícula: {locked?.karate_registration_number || "não informada"}
                 {"\n"}Faixa: {locked?.belt_name || "não informada"}
                 {"\n"}Esses dados são geridos pela federação — não dá pra editar por aqui.
               </Text>

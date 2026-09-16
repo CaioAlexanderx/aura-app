@@ -41,7 +41,7 @@
 //   1. A escolha não tem desfazer pela tela (a conta do cadastro é
 //      DESATIVADA). Por isso há prévia do que vem junto ANTES do confirmar,
 //      e o botão troca de rótulo para "Aprovar e transferir a conta".
-//   2. São 105 registros: busca obrigatória (nome OU número FPKT), nunca
+//   2. São 105 registros: busca obrigatória (nome OU número de matrícula), nunca
 //      uma lista rolável.
 //   3. NÃO existe match automático por semelhança de nome. O que existe é
 //      uma SUGESTÃO DE BUSCA rotulada como tal, que só preenche o campo de
@@ -614,7 +614,7 @@ export function FiliacoesTab() {
                         <View style={st.hintBox}>
                           <Icon name="information-circle" size={13} color={C.ink3} />
                           <Body muted style={st.hintTxt}>
-                            Apontar um registro TRANSFERE a conta do sensei para aquela linha — ele herda os praticantes, o número FPKT e a anuidade que já estão lá. Não apontar cria um dojô sem histórico nenhum.
+                            Apontar um registro TRANSFERE a conta do sensei para aquela linha — ele herda os praticantes, o número de matrícula e a anuidade que já estão lá. Não apontar cria um dojô sem histórico nenhum.
                           </Body>
                         </View>
                       )}
@@ -623,7 +623,7 @@ export function FiliacoesTab() {
                         <View style={st.hintBox}>
                           <Icon name="information-circle" size={13} color={C.ink3} />
                           <Body muted style={st.hintTxt}>
-                            Nenhum registro será apontado: a conta de {dojoName || "o dojô"} continua como está e entra na federação SEM histórico — sem praticantes, sem anuidade, sem código FPKT anterior. Se este dojô já era cadastrado aqui, volte e aponte o registro.
+                            Nenhum registro será apontado: a conta de {dojoName || "o dojô"} continua como está e entra na federação SEM histórico — sem praticantes, sem anuidade, sem código de filiação anterior. Se este dojô já era cadastrado aqui, volte e aponte o registro.
                           </Body>
                         </View>
                       )}
@@ -631,7 +631,7 @@ export function FiliacoesTab() {
                       {/* ── 2. Busca (obrigatória — são 105 registros) ── */}
                       {registryChoice === "existing" && !selectedRegistry && (
                         <View style={st.pickerBox}>
-                          <Text style={st.fieldLabel}>Buscar registro por nome ou número FPKT</Text>
+                          <Text style={st.fieldLabel}>Buscar registro por nome ou número de matrícula</Text>
                           <View style={st.searchWrap}>
                             <Icon name="search" size={14} color={C.ink3} />
                             <TextInput
@@ -642,7 +642,7 @@ export function FiliacoesTab() {
                               placeholderTextColor={C.ink4}
                               autoCapitalize="none"
                               autoCorrect={false}
-                              accessibilityLabel="Buscar registro federativo por nome ou número FPKT"
+                              accessibilityLabel="Buscar registro federativo por nome ou número de matrícula"
                             />
                             {registrySearching && <ActivityIndicator size="small" color={P.red} />}
                           </View>
@@ -667,13 +667,13 @@ export function FiliacoesTab() {
                             </View>
                           ) : registryQuery.trim().length < MIN_REGISTRY_QUERY ? (
                             <Body muted style={st.pickerHint}>
-                              Digite ao menos {MIN_REGISTRY_QUERY} caracteres do nome do dojô ou o número FPKT.
+                              Digite ao menos {MIN_REGISTRY_QUERY} caracteres do nome do dojô ou o número de matrícula.
                             </Body>
                           ) : registrySearching ? (
                             <Body muted style={st.pickerHint}>Buscando…</Body>
                           ) : registryResults.length === 0 ? (
                             <Body muted style={st.pickerHint}>
-                              Nenhum registro encontrado para "{registryQuery.trim()}". Tente outro trecho do nome ou o número FPKT — se o dojô realmente não existe aqui, aprove como dojô novo.
+                              Nenhum registro encontrado para "{registryQuery.trim()}". Tente outro trecho do nome ou o número de matrícula — se o dojô realmente não existe aqui, aprove como dojô novo.
                             </Body>
                           ) : (
                             <View style={st.resultList}>
@@ -688,7 +688,7 @@ export function FiliacoesTab() {
                                   <View style={{ flex: 1, minWidth: 140 }}>
                                     <Text style={st.resultName} numberOfLines={1}>{c.name}</Text>
                                     <View style={st.resultMetaRow}>
-                                      <Mono style={st.resultMeta}>{c.fpkt_affiliation_id || "sem número FPKT"}</Mono>
+                                      <Mono style={st.resultMeta}>{c.fpkt_affiliation_id || "sem número de matrícula"}</Mono>
                                       {!!localLine(c) && <Text style={st.resultMeta}>· {localLine(c)}</Text>}
                                       <Text style={st.resultMeta}>· {ativosLabel(c)}</Text>
                                     </View>
@@ -722,7 +722,7 @@ export function FiliacoesTab() {
                             </View>
                             <View style={st.previewItem}>
                               <Icon name="barcode" size={12} color={C.ink3} />
-                              <Mono style={st.previewTxt}>{selectedRegistry.fpkt_affiliation_id || "sem número FPKT"}</Mono>
+                              <Mono style={st.previewTxt}>{selectedRegistry.fpkt_affiliation_id || "sem número de matrícula"}</Mono>
                             </View>
                             <View style={st.previewItem}>
                               <Icon name="calendar-outline" size={12} color={C.ink3} />
@@ -769,7 +769,7 @@ export function FiliacoesTab() {
                             <View style={st.warnBox}>
                               <Text style={st.warnTitle}>Isso não tem desfazer por esta tela</Text>
                               <Body muted style={st.warnTxt}>
-                                Ao confirmar, a conta de {dojoName || "quem pediu"} PASSA A SER este registro: o sensei vira responsável por ele e herda os praticantes acima; o que ele cadastrou na conta nova é migrado para cá; e a conta usada no cadastro é DESATIVADA. Confira o nome e o número FPKT antes de confirmar — apontar o registro errado entrega os praticantes de um dojô para outra pessoa.
+                                Ao confirmar, a conta de {dojoName || "quem pediu"} PASSA A SER este registro: o sensei vira responsável por ele e herda os praticantes acima; o que ele cadastrou na conta nova é migrado para cá; e a conta usada no cadastro é DESATIVADA. Confira o nome e o número de matrícula antes de confirmar — apontar o registro errado entrega os praticantes de um dojô para outra pessoa.
                               </Body>
                             </View>
                           )}

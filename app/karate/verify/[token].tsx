@@ -14,7 +14,7 @@
 // ============================================================
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Image, ActivityIndicator, TextInput,
+  View, Text, ScrollView, ActivityIndicator, TextInput,
   StyleSheet, ViewStyle, TextStyle, Platform, Linking, TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
@@ -23,7 +23,8 @@ import { KarateColors, KarateRadius, KarateFonts } from "@/constants/karateTheme
 import { beltHex } from "@/constants/karateBelts";
 import { karateCardApi, CardVerification, VerifyStatus, MembershipCard } from "@/services/karateCardApi";
 import { buildCarteirinhaHtml } from "@/components/karate/carteirinha/buildCarteirinhaHtml";
-import { useShojiFonts, FpktLogo } from "@/components/karate/shoji";
+import { useShojiFonts } from "@/components/karate/shoji";
+import { FederationLogo } from "@/components/karate/FederationLogo";
 import { Skeleton } from "@/components/karate/Skeleton";
 
 // ── helpers ──────────────────────────────────────────────
@@ -131,14 +132,21 @@ export default function VerifyCardScreen() {
       <View style={styles.container}>
         {/* gov header */}
         <View style={styles.gov}>
-          {data?.federation_logo ? (
-            <Image source={{ uri: data.federation_logo }} style={styles.govLogo} resizeMode="contain" />
-          ) : (
-            <FpktLogo size={42} />
-          )}
+          {/* Rota PÚBLICA (sem JWT): a identidade vem do payload da
+              verificação. Sem logo cadastrada, o FederationLogo desenha o
+              monograma — antes caía na FpktLogo, e uma carteirinha de outra
+              federação era verificada sob a marca da FPKT (16/09/2026).
+              O subtítulo era o nome da FPKT por extenso, DIGITADO. */}
+          <FederationLogo
+            name={data?.federation_name || "Federação"}
+            logoUrl={data?.federation_logo ?? null}
+            size={42}
+          />
           <View style={{ flex: 1 }}>
-            <Text style={styles.govTitle}>{data?.federation_name || "FPKT"}</Text>
-            <Text style={styles.govSub}>Federação Paulista de Karatê-Dô Tradicional</Text>
+            <Text style={styles.govTitle} numberOfLines={2}>
+              {data?.federation_name || "Federação"}
+            </Text>
+            <Text style={styles.govSub}>Verificação de autenticidade</Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={styles.govK}>VERIFICAÇÃO</Text>
@@ -201,7 +209,7 @@ export default function VerifyCardScreen() {
           <View style={styles.footSeal}><Text style={styles.footSealK}>空</Text></View>
           <View>
             <Text style={styles.footWm}>Aura · Karatê</Text>
-            <Text style={styles.footSub}>Plataforma oficial da FPKT</Text>
+            <Text style={styles.footSub}>Plataforma oficial da {data?.federation_name || "sua federação"}</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -267,7 +275,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
         <View style={styles.grid}>
           <Cell k="Situação" v={sit.txt} valueColor={sit.color} full />
           <Cell k="Dojo / academia" v={v.dojo_name || "—"} full />
-          {v.card_number ? <Cell k="Nº de registro FPKT" v={v.card_number} mono full /> : null}
+          {v.card_number ? <Cell k="Nº de registro" v={v.card_number} mono full /> : null}
         </View>
 
         {/* privacy note */}
@@ -283,7 +291,7 @@ function VerifiedCard({ v }: { v: CardVerification }) {
       <View style={styles.cardFoot}>
         <View style={styles.footItem}>
           <Icon name="lock-closed" size={13} color={KarateColors.ink3} />
-          <Text style={styles.footTxt}>Verificação oficial FPKT</Text>
+          <Text style={styles.footTxt}>Verificação oficial{v.federation_name ? ` · ${v.federation_name}` : ""}</Text>
         </View>
       </View>
     </View>
@@ -421,7 +429,6 @@ const styles = StyleSheet.create({
   container:   { width: "100%", maxWidth: 480 } as ViewStyle,
 
   gov:      { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: KarateColors.border } as ViewStyle,
-  govLogo:  { width: 42, height: 42 } as any,
   seal:     { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: KarateColors.primaryLine, backgroundColor: KarateColors.primarySoft, alignItems: "center", justifyContent: "center" } as ViewStyle,
   sealKanji:{ fontFamily: KarateFonts.heading, fontSize: 22, color: KarateColors.primary } as TextStyle,
   govTitle: { fontFamily: KarateFonts.heading, fontSize: 19, fontWeight: "400", color: KarateColors.ink } as TextStyle,

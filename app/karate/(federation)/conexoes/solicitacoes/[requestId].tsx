@@ -4,7 +4,7 @@
 //
 // Lado a lado, SEM paginação: dados do sensei × possíveis correspondências
 // (dedup, sugestão — nunca decide sozinha). Ações: Aprovar como criação
-// (pede número FPKT), Aprovar como transferência (escolhe pessoa
+// (pede número de matrícula), Aprovar como transferência (escolhe pessoa
 // existente), Editar antes de aprovar (deliberado), Rejeitar com motivo.
 //
 // 🔴 REGRA CRÍTICA (item 2): aprovar como transferência NUNCA sobrescreve
@@ -59,7 +59,7 @@ const CONFIDENCE_VIEW: Record<string, { label: string; color: string }> = {
 };
 
 const MATCHED_ON_LABEL: Record<string, string> = {
-  fpkt_number: "mesmo número FPKT",
+  fpkt_number: "mesmo número de matrícula",
   name_birthdate: "nome + nascimento",
   rg: "mesmo RG",
   cpf: "mesmo CPF",
@@ -469,7 +469,7 @@ export default function SolicitacaoDetalhe() {
                   Isso cria {detail.full_name} como praticante NOVO no dojô {detail.dojo_name || "da solicitação"}, ativo, e a faixa alegada
                   ({detail.claimed_belt || "não informada"}) vira o primeiro registro do histórico.
                 </Body>
-                <Field label="Número FPKT (obrigatório — emitido pela federação)" value={fpktNumber} onChangeText={setFpktNumber} placeholder="Ex.: 12345-D" />
+                <Field label="Número de matrícula (obrigatório — emitido pela federação)" value={fpktNumber} onChangeText={setFpktNumber} placeholder="Ex.: 12345-D" />
                 <View style={st.stageActions}>
                   <Pressable onPress={submitting ? undefined : closeStage} style={st.cancelBtn}><Text style={st.cancelTxt}>Cancelar</Text></Pressable>
                   <ShojiButton
@@ -490,7 +490,7 @@ export default function SolicitacaoDetalhe() {
                     Isso vincula a solicitação a <Text style={{ fontWeight: "700" }}>{selectedMatch.name}</Text>
                     {selectedMatch.karate_registration_number ? ` (matrícula ${selectedMatch.karate_registration_number})` : ""}
                     {selectedMatch.dojo_id && selectedMatch.dojo_id === detail.dojo_id ? (
-                      // Origem === destino (ex.: recadastro, número FPKT bate com quem já
+                      // Origem === destino (ex.: recadastro, número de matrícula bate com quem já
                       // está no dojô do sensei) — "move para onde já está" soa erro de
                       // cópia. Copy honesta: só vincula, sem mudança de dojô.
                       <> — já está em {detail.dojo_name || "este dojô"}. A solicitação só será vinculada a esta pessoa, sem mudança de dojô.</>
@@ -532,7 +532,7 @@ export default function SolicitacaoDetalhe() {
                 <Field label="Telefone" value={editForm.phone || ""} onChangeText={(t) => setEditForm((p) => ({ ...p, phone: t || null }))} />
                 <Field label="E-mail" value={editForm.email || ""} onChangeText={(t) => setEditForm((p) => ({ ...p, email: t || null }))} />
                 <Field label="Faixa alegada" value={editForm.claimed_belt || ""} onChangeText={(t) => setEditForm((p) => ({ ...p, claimed_belt: t || null }))} />
-                <Field label="Número FPKT alegado" value={editForm.fpkt_number_claimed || ""} onChangeText={(t) => setEditForm((p) => ({ ...p, fpkt_number_claimed: t || null }))} />
+                <Field label="Número de matrícula alegado" value={editForm.fpkt_number_claimed || ""} onChangeText={(t) => setEditForm((p) => ({ ...p, fpkt_number_claimed: t || null }))} />
                 <View style={st.stageActions}>
                   <Pressable onPress={submitting ? undefined : closeStage} style={st.cancelBtn}><Text style={st.cancelTxt}>Cancelar</Text></Pressable>
                   <ShojiButton label={submitting ? "Salvando..." : "Salvar edição"} variant="sumi" onPress={submitting ? undefined : handleSaveEdit} />
