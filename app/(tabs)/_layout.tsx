@@ -302,7 +302,7 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
     // Native fallback
     return (
       <Pressable onPress={soon ? undefined : onP}
-        style={[{ flexDirection: "row", alignItems: "center", gap: collapsed ? 0 : 11, paddingVertical: 9, paddingHorizontal: collapsed ? 0 : 10, borderRadius: 11, marginBottom: 2, justifyContent: collapsed ? "center" : "flex-start" }, a && { backgroundColor: C.violetD }, soon && { opacity: 0.5 }]}>
+        style={[{ flexDirection: "row", alignItems: "center", gap: collapsed ? 0 : 11, paddingVertical: 4, paddingHorizontal: collapsed ? 0 : 10, borderRadius: 11, marginBottom: 1, justifyContent: collapsed ? "center" : "flex-start" }, a && { backgroundColor: C.violetD }, soon && { opacity: 0.5 }]}>
         <View style={[{ width: 32, height: 32, borderRadius: 9, backgroundColor: C.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border }, a && { backgroundColor: C.violet, borderColor: C.violet2 }]}>
           <Icon name={ic as any} size={16} color={a ? "#fff" : soon ? C.ink3 + "66" : C.ink3} />
         </View>
@@ -336,7 +336,12 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
         display: "flex",
         alignItems: "center",
         gap: collapsed ? 0 : 11,
-        padding: collapsed ? "8px 0" : "8px 10px",
+        // 16/09/2026 — 8px → 4px. A linha passa de 49px (8+32+8+1 de margem)
+        // para 41px sem tocar em tipografia nem no tile de 32: o alvo de
+        // clique continua 40px, o mínimo confortável. São 8px por item, 136px
+        // recuperados num menu de 17 itens — a diferença entre o grupo
+        // Clientes e WhatsApp nascer dentro ou fora da primeira tela.
+        padding: collapsed ? "4px 0" : "4px 10px",
         borderRadius: 11,
         marginBottom: 1,
         cursor: soon ? "not-allowed" : "pointer",
@@ -402,7 +407,7 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
 function FooterRow({ icon, label, onPress, danger, collapsed, C }: { icon: string; label: string; onPress: () => void; danger?: boolean; collapsed: boolean; C: ReturnType<typeof useColors> }) {
   if (Platform.OS !== "web") {
     return (
-      <Pressable onPress={onPress} style={{ flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}>
+      <Pressable onPress={onPress} style={{ flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 6, paddingHorizontal: 6, borderRadius: 8 }}>
         <Icon name={icon as any} size={16} color={danger ? C.red : C.ink3} />
         {!collapsed && <Text style={{ fontSize: 12.5, color: danger ? C.red : C.ink3, fontWeight: "500" }}>{label}</Text>}
       </Pressable>
@@ -441,7 +446,7 @@ function FooterRow({ icon, label, onPress, danger, collapsed, C }: { icon: strin
         display: "flex",
         alignItems: "center",
         gap: 11,
-        padding: "8px 6px",
+        padding: "6px 6px",
         border: "none",
         background: "transparent",
         color: danger ? C.red : C.ink3,
@@ -542,7 +547,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
         {/* Brand + collapse toggle */}
         <header style={{
-          padding: collapsed ? "20px 8px 14px" : "20px 18px 14px",
+          // 16/09/2026 — o menu disputa altura com a marca, o switcher e o
+          // rodapé. Estes 8px do topo são os mais baratos da sidebar inteira.
+          padding: collapsed ? "16px 8px 10px" : "16px 18px 10px",
           display: "flex",
           alignItems: "center",
           justifyContent: collapsed ? "center" : "space-between",
@@ -600,7 +607,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         )}
 
         {/* Workspace card (CompanySwitcher) */}
-        <div style={{ padding: collapsed ? "0 8px 12px" : "0 18px 14px", flexShrink: 0 } as any}>
+        <div style={{ padding: collapsed ? "0 8px 8px" : "0 18px 10px", flexShrink: 0 } as any}>
           <CompanySwitcher collapsed={collapsed} variant={collapsed ? "sidebar" : "card"} />
         </div>
 
@@ -608,8 +615,11 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         <nav style={{ flex: 1, overflowY: "auto", padding: collapsed ? "0 8px 8px" : "0 14px 8px", minHeight: 0 } as any}>
           {filteredNav.map(s => (
             <div key={s.s} style={{
-              marginBottom: collapsed ? 8 : 14,
-              padding: collapsed ? 0 : "4px 6px 6px",
+              // 16/09/2026 — cartão do grupo mais justo: 14→8 de respiro entre
+              // grupos e 4/6→2/3 de padding interno. O cartão (fundo + borda +
+              // rótulo) custava 45px por grupo antes dos itens; agora custa 29.
+              marginBottom: collapsed ? 6 : 8,
+              padding: collapsed ? 0 : "2px 6px 3px",
               borderRadius: collapsed ? 0 : 14,
               background: collapsed ? "transparent" : sectionBg,
               border: collapsed ? "none" : "1px solid " + sectionBorder,
@@ -619,8 +629,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  padding: "8px 10px 8px",
-                  marginBottom: 4,
+                  // Rótulo do grupo: só o espaço em volta encolhe. fontSize 10,
+                  // peso 800 e letter-spacing 1.4px seguem intactos.
+                  padding: "4px 10px 3px",
+                  marginBottom: 2,
                   fontFamily: Fonts.body,
                   fontSize: 10,
                   fontWeight: 800,
@@ -643,7 +655,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
         {/* Footer */}
         <footer style={{
-          padding: collapsed ? "10px 8px 14px" : "10px 18px 14px",
+          // 16/09/2026 — o rodape encolhe junto com o menu (ver conta no PR):
+          // 10/14 -> 8/12 aqui, 8/12 no cartao do usuario e 8 -> 6 nas quatro
+          // linhas de acao. Sao 31px que voltam pro <nav> sem mexer em fonte.
+          padding: collapsed ? "8px 8px 12px" : "8px 18px 12px",
           borderTop: "1px solid " + C.border,
           background: "linear-gradient(180deg, transparent 0%, rgba(124,58,237,0.04) 100%)",
           flexShrink: 0,
@@ -651,7 +666,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           {!collapsed ? (
             <>
               {/* User card */}
-              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 4px 12px" } as any}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "6px 4px 8px" } as any}>
                 <div style={{ position: "relative", width: 38, height: 38, flexShrink: 0, borderRadius: "50%" } as any}>
                   <div style={{ position: "absolute", inset: -3, borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,0.45) 0%, transparent 70%)", zIndex: 0 } as any} />
                   <div style={{
@@ -677,7 +692,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                 </div>
               </div>
               {/* Actions */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingTop: 8, borderTop: "1px solid " + C.border } as any}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingTop: 6, borderTop: "1px solid " + C.border } as any}>
                 <FooterRow icon="edit" label="Personalizar menu" onPress={() => setEditorOpen(true)} collapsed={false} C={C} />
                 <FooterRow icon={isDark ? "sun" : "moon"} label={isDark ? "Modo claro" : "Modo escuro"} onPress={toggle} collapsed={false} C={C} />
                 <FooterRow icon="settings" label="Configurações" onPress={() => ro.push("/configuracoes" as any)} collapsed={false} C={C} />
