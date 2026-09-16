@@ -7,6 +7,8 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useTransactionSale } from "@/hooks/useTransactionSale";
 import { AddItemPicker } from "./AddItemPicker";
 import type { SaleDetailsItem } from "@/services/api";
+import { router } from "expo-router";
+import { ROTA_TROCA_PDV } from "@/utils/devolucaoOuTroca";
 
 // ============================================================
 // AURA. — Detalhes da venda vinculada (Item 1 Eryca + EXTRA C)
@@ -38,6 +40,11 @@ import type { SaleDetailsItem } from "@/services/api";
 //        de devolucao ancora uma venda type='devolucao' em vez de apagar o
 //        sale_item (guarda anti-dupla-devolucao).
 //     3. "Adicionar produto" nao existe: divida e carne ja foram gerados.
+//
+// 16/09/2026 (caso MHT / Karina Quadros): o lojista removeu o Vans 42/43 pra
+// "trocar pelo 40/41" -- virou devolucao, a venda seguiu listando o 42/43 e
+// nao dava pra incluir o 40/41. O aviso do crediario saiu do rodape em
+// italico e a confirmacao oferece "Trocar tamanho ou produto" (Troca do PDV).
 // ============================================================
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
@@ -245,11 +252,28 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
               <Text style={s.itemsTotal}>Total: {fmt(sale.total_amount)}</Text>
             )}
           </View>
-          {items.length > 0 && (
+          {items.length > 0 && isCredit && !isCancelled && (
+            <View style={s.creditCallout}>
+              <Icon name="repeat" size={13} color={Colors.violet3} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.creditCalloutTitle}>Remover aqui é devolução</Text>
+                <Text style={s.creditCalloutText}>
+                  O item volta ao estoque, continua listado como devolvido e o valor abate as parcelas.
+                  Para trocar por outro tamanho ou produto, use Trocar no PDV.
+                </Text>
+              </View>
+              <Pressable
+                testID="ir-para-troca"
+                onPress={function() { if (onClose) onClose(); router.push(ROTA_TROCA_PDV as any); }}
+                style={s.creditCalloutBtn}
+              >
+                <Text style={s.creditCalloutBtnText}>Trocar</Text>
+              </Pressable>
+            </View>
+          )}
+          {items.length > 0 && !isCredit && (
             <Text style={s.warnHint}>
-              {isCredit
-                ? "Remover devolve a quantidade ao estoque e abate as últimas parcelas em aberto. Sobra vira crédito a favor do cliente."
-                : "Remover devolve a quantidade ao estoque e cria devolução no financeiro. Adicionar decrementa o estoque e soma na venda."}
+              Remover devolve a quantidade ao estoque e cria devolução no financeiro. Adicionar decrementa o estoque e soma na venda.
             </Text>
           )}
           {items.map(function(item: SaleDetailsItem) {
@@ -349,12 +373,12 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
 
       <ConfirmDialog
         visible={!!pendingRemoveItemId}
-        title="Devolver este item?"
+        title={isCredit ? "Devolver ou trocar?" : "Devolver este item?"}
         message={
           isCredit
-            ? 'Você vai devolver "' + pendingRemoveItemName + '" desta venda no crediário. ' +
-              'A quantidade volta pro estoque e o valor abate as últimas parcelas em aberto ' +
-              '(o que sobrar vira crédito a favor do cliente). Parcelas ja pagas não são tocadas.'
+            ? 'Devolver "' + pendingRemoveItemName + '": a peça volta pro estoque, continua listada na venda ' +
+              'como devolvida e o valor abate as últimas parcelas em aberto (o que sobrar vira crédito). ' +
+              'Se o cliente vai levar outro tamanho ou produto, use Trocar.'
             : 'Você vai remover "' + pendingRemoveItemName + '" da venda. ' +
               'A quantidade volta pro estoque, o total da venda diminui e um lancamento de devolução eh criado no financeiro.'
         }
@@ -362,6 +386,13 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
         destructive
         onConfirm={handleConfirmRemove}
         onCancel={function() { setPendingRemoveItemId(null); setPendingRemoveItemName(""); }}
+        secondaryLabel={isCredit ? "Trocar tamanho ou produto" : undefined}
+        onSecondary={isCredit ? function() {
+          setPendingRemoveItemId(null);
+          setPendingRemoveItemName("");
+          if (onClose) onClose();
+          router.push(ROTA_TROCA_PDV as any);
+        } : undefined}
       />
     </View>
   );
@@ -417,6 +448,11 @@ const s = StyleSheet.create({
 
   cancelledHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red + "33" },
   cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 14 },
+  creditCallout: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, marginBottom: 8, backgroundColor: Colors.violetD, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2 },
+  creditCalloutTitle: { fontSize: 12, color: Colors.ink, fontWeight: "700" },
+  creditCalloutText: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 2 },
+  creditCalloutBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: Colors.violet2 },
+  creditCalloutBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
   creditHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, padding: 10, backgroundColor: Colors.violetD, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2 },
   creditHintText: { flex: 1, fontSize: 11, color: Colors.ink3, lineHeight: 14 },
 });

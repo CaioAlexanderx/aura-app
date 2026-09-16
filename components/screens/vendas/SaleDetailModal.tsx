@@ -9,6 +9,8 @@ import { employeesApi, request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
 import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
+import { router } from "expo-router";
+import { ROTA_TROCA_PDV, rotuloDevolvido, mensagemCancelamento, avisoRetornosAtivos } from "@/utils/devolucaoOuTroca";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -153,17 +155,12 @@ export function SaleDetailModal({
     if (!saleId) return;
     try {
       const result = await cancelSale({ saleId: saleId, reason: cancelReason.trim() });
-      if ((result as any)?.type === "troca") {
-        toast.success("Troca cancelada. Estoque dos dois lados revertido e financeiro ajustado.");
-        const warns = (result as any)?.fiscal_warnings;
-        if (Array.isArray(warns) && warns.length) {
-          toast.error("Atenção fiscal: " + warns[0]);
-        }
-      } else {
-        toast.success(
-          "Venda cancelada. " + result.items_returned + " item(s) devolvido(s) ao estoque e " +
-          fmt(result.refunded_amount) + " removido(s) da receita."
-        );
+      // 16/09/2026: devolução cancelada agora é desfeita no backend (#718);
+      // o texto diz o que voltou, em vez de "0 item(s) devolvido(s)".
+      toast.success(mensagemCancelamento(result as any));
+      const warns = (result as any)?.fiscal_warnings;
+      if ((result as any)?.type === "troca" && Array.isArray(warns) && warns.length) {
+        toast.error("Atenção fiscal: " + warns[0]);
       }
       setConfirmCancel(false);
       setCancelReason("");
@@ -302,6 +299,11 @@ export function SaleDetailModal({
   // 02/06/2026: troca segmentada
   const isTroca = (sale?.type as string) === "troca";
   const troca = detail?.troca || null;
+  // 16/09/2026 (caso MHT / Karina Quadros): devolução do crediário tem
+  // tela própria, e a venda de origem mostra o que já voltou.
+  const isDevolucao = (sale?.type as string) === "devolucao";
+  const devolucao = detail?.devolucao || null;
+  const avisoRetornos = !isCancelled ? avisoRetornosAtivos(detail?.returns) : null;
 
   // DESIGN-38 B5: botão Recibo — venda crediário não cancelada (cupom usa saleId)
   const isCrediario = (sale?.payment_method || "").toLowerCase() === "crediario";
@@ -330,7 +332,7 @@ export function SaleDetailModal({
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <View style={s.headerTitleRow}>
-              <Text style={s.headerTitle}>{isTroca ? "Detalhes da troca" : "Detalhes da venda"}</Text>
+              <Text style={s.headerTitle}>{isTroca ? "Detalhes da troca" : isDevolucao ? "Detalhes da devolução" : "Detalhes da venda"}</Text>
               {isTroca && !isCancelled && (
                 <View style={s.trocaBadge}>
                   <Icon name="repeat" size={9} color={TROCA_ORANGE} />
@@ -373,7 +375,32 @@ export function SaleDetailModal({
         {detail && sale && (
           <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 4 }}>
             {/* Venda normal: card de total */}
-            {!isTroca && (
+            {isDevolucao && devolucao && (
+              <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
+                <Text style={s.totalLabel}>Devolução no crediário</Text>
+                <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(devolucao.refund_value)}</Text>
+                <Text style={s.totalHint}>
+                  {devolucao.original_sale_number ? "Da venda #" + devolucao.original_sale_number + ". " : ""}
+                  Valor abatido da dívida do cliente.
+                </Text>
+                {devolucao.items.map(function(ri, idx) {
+                  return (
+                    <Text key={idx} style={s.itemMeta}>
+                      {ri.quantity}x {ri.product_name} voltou ao estoque
+                    </Text>
+                  );
+                })}
+              </View>
+            )}
+
+            {avisoRetornos && (
+              <View style={s.returnsHint}>
+                <Icon name="repeat" size={12} color={TROCA_ORANGE} />
+                <Text style={s.returnsHintText}>{avisoRetornos}</Text>
+              </View>
+            )}
+
+            {!isTroca && !isDevolucao && (
               <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
                 <Text style={s.totalLabel}>Valor da venda</Text>
                 <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(sale.total_amount)}</Text>
@@ -496,14 +523,16 @@ export function SaleDetailModal({
               </View>
             </View>
 
+            {!isDevolucao && (<>
             <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Mercadorias"}</Text>
             <View style={s.itemsBox}>
               {items.length === 0 && (
                 <Text style={s.noItems}>Esta venda não possui itens.</Text>
               )}
               {items.map(function(item) {
+                const devolvido = rotuloDevolvido(item.quantity, (item as any).returned_quantity);
                 return (
-                  <View key={item.id} style={s.itemRow}>
+                  <View key={item.id} style={[s.itemRow, devolvido === "Devolvido" && { opacity: 0.55 }]}>
                     <View style={s.itemImage}>
                       {item.image_url ? (
                         <Image source={{ uri: item.image_url }} style={s.itemImageInner} />
@@ -517,12 +546,14 @@ export function SaleDetailModal({
                         {item.quantity}x {fmt(item.unit_price)}
                         {item.discount > 0 ? "  - " + fmt(item.discount) : ""}
                       </Text>
+                      {devolvido && <Text style={s.itemReturned}>{devolvido}</Text>}
                     </View>
                     <Text style={s.itemTotal}>{fmt(item.total_price)}</Text>
                   </View>
                 );
               })}
             </View>
+            </>)}
 
             {sale.notes && (
               <View style={s.notesBox}>
@@ -532,7 +563,7 @@ export function SaleDetailModal({
             )}
 
             {/* 02/06/2026 (b/c): Nota fiscal */}
-            {!isCancelled && (
+            {!isCancelled && !isDevolucao && (
               <View style={s.fiscalBox}>
                 <View style={s.fiscalHeadRow}>
                   <Text style={s.fiscalTitle}>Nota fiscal</Text>
@@ -618,13 +649,15 @@ export function SaleDetailModal({
                 <Text style={s.cancelledHintText}>
                   {isTroca
                     ? "Esta troca foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". Estoque dos dois lados revertido e financeiro ajustado."
+                    : isDevolucao
+                    ? "Esta devolução foi desfeita em " + fmtDateTime(sale.cancelled_at) + ". A peça saiu de novo do estoque e o valor voltou para a dívida."
                     : "Esta venda foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". O estoque foi devolvido e o valor saiu da receita."}
                 </Text>
               </View>
             )}
 
             <View style={s.actionsRow}>
-              {sale.transaction_id && onEditTransaction && !isTroca && (
+              {sale.transaction_id && onEditTransaction && !isTroca && !isDevolucao && (
                 <Pressable
                   onPress={handleEditClick}
                   style={[s.actionBtn, s.actionEdit]}
@@ -660,6 +693,17 @@ export function SaleDetailModal({
                   <Text style={s.actionRefundText}>Devolver</Text>
                 </Pressable>
               )}
+              {/* 16/09/2026: trocar tamanho/produto é a Troca do PDV, não devolução. */}
+              {showRefundBtn && (
+                <Pressable
+                  testID="venda-trocar"
+                  onPress={function() { onClose(); router.push(ROTA_TROCA_PDV as any); }}
+                  style={[s.actionBtn, s.actionEdit]}
+                >
+                  <Icon name="repeat" size={13} color={Colors.violet3} />
+                  <Text style={s.actionEditText}>Trocar</Text>
+                </Pressable>
+              )}
               {!isCancelled && (
                 <Pressable
                   onPress={function() { setConfirmCancel(true); }}
@@ -671,7 +715,7 @@ export function SaleDetailModal({
                   ) : (
                     <>
                       <Icon name="x" size={13} color={Colors.red} />
-                      <Text style={s.actionCancelText}>{isTroca ? "Cancelar troca" : "Cancelar venda"}</Text>
+                      <Text style={s.actionCancelText}>{isTroca ? "Cancelar troca" : isDevolucao ? "Desfazer devolução" : "Cancelar venda"}</Text>
                     </>
                   )}
                 </Pressable>
@@ -685,10 +729,12 @@ export function SaleDetailModal({
       {confirmCancel && (
         <View style={s.confirmOverlay}>
           <View style={s.confirmModal}>
-            <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : "Cancelar venda?"}</Text>
+            <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : isDevolucao ? "Desfazer devolução?" : "Cancelar venda?"}</Text>
             <Text style={s.confirmMsg}>
               {isTroca
                 ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transações da troca somem do financeiro e a NF-e de devolução não autorizada e removida. Ação irreversivel."
+                : isDevolucao
+                ? "A peça devolvida sai de novo do estoque e o valor volta a ser dívida do cliente, nas mesmas parcelas de antes."
                 : "Os " + items.length + " item(s) voltam para o estoque e o valor sai da receita. Esta ação não pode ser desfeita."}
             </Text>
             <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
@@ -927,6 +973,9 @@ const s = StyleSheet.create({
   actionReceipt: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   actionReceiptText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   // DESIGN-38 B4: botão Devolver
+  returnsHint: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, marginBottom: 10, borderRadius: 8, backgroundColor: "rgba(251,146,60,0.10)", borderWidth: 1, borderColor: "rgba(251,146,60,0.35)" },
+  returnsHintText: { flex: 1, fontSize: 12, color: TROCA_ORANGE, lineHeight: 16 },
+  itemReturned: { fontSize: 10, color: TROCA_ORANGE, fontWeight: "700", marginTop: 3 },
   actionRefund: { backgroundColor: "rgba(251,146,60,0.12)", borderColor: "rgba(251,146,60,0.4)" },
   actionRefundText: { fontSize: 12, color: TROCA_ORANGE, fontWeight: "600" },
   actionCancel: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },

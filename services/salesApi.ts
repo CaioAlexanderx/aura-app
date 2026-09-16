@@ -187,6 +187,15 @@ export type SaleDetailFull = {
   troca?: SaleTrocaBlock | null;
   // 02/06/2026 (b): emissoes fiscais da venda (pode ser vazio).
   fiscal?: SaleFiscalEmission[];
+  // 16/09/2026: preenchido quando sale.type='devolucao' (o que voltou).
+  devolucao?: {
+    original_sale_id: string | null;
+    original_sale_number: number | null;
+    refund_value: number;
+    items: { product_id?: string | null; quantity: number; unit_price: number; product_name: string }[];
+  } | null;
+  // 16/09/2026: devoluções/trocas ativas desta venda.
+  returns?: { id: string; sale_number: number | null; type: string }[];
 };
 
 // 02/06/2026: retorno do cancel — campos de troca quando type='troca'.
@@ -202,6 +211,8 @@ export type CancelSaleResult = {
   troca_tx_removed?: number;
   payouts_reversed?: number;
   fiscal_warnings?: string[];
+  // 16/09/2026: resumo do que o cancelamento da devolução desfez.
+  devolucao_undo?: { credit_removed?: number; stock_removed?: { quantity?: number }[] } | null;
 };
 
 // 02/06/2026 (b): emitir NFC-e/NF-e por venda (POST /nfce/emit).
