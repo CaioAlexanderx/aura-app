@@ -48,6 +48,25 @@ jest.mock("@/hooks/useWhatsApp", () => ({
   }),
 }));
 
+// Fase 0 (I0.2): a aba Conexão passou a mostrar a entrada da reativação
+// com contagem e R$ em jogo, e ela conta em cima da lista de clientes.
+// Aqui a lista é fixa — três pessoas paradas há 10, 70 e 200 dias — só
+// para a tela montar sem rede nem QueryClient.
+function haDias(n: number): string {
+  return new Date(Date.now() - n * 864e5).toLocaleDateString("pt-BR");
+}
+var mockClientes: any[] = [
+  { id: "a", name: "Ana", lastPurchase: haDias(10), totalSpent: 100, visits: 4 },
+  { id: "b", name: "Bia", lastPurchase: haDias(70), totalSpent: 500, visits: 3 },
+  { id: "c", name: "Caio", lastPurchase: haDias(200), totalSpent: 900, visits: 2 },
+];
+jest.mock("@/hooks/useCustomers", () => ({
+  useCustomers: () => ({
+    customers: mockClientes, isLoading: false, plan: "negocio",
+    consolidatedView: false, companyCount: 1,
+  }),
+}));
+
 var mockStatus: any = {
   connected: true, phone_display: "5511912345678", waba_id: "w1", queue: {},
   schema_pending: false, addon_active: true,
