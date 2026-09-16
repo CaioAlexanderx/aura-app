@@ -10,9 +10,12 @@ type Props = {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Acao alternativa, em destaque acima dos botoes (ex.: "Trocar tamanho" no lugar de devolver). */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
 };
 
-export function ConfirmDialog({ visible, title, message, confirmLabel = "Confirmar", cancelLabel = "Cancelar", destructive = true, onConfirm, onCancel }: Props) {
+export function ConfirmDialog({ visible, title, message, confirmLabel = "Confirmar", cancelLabel = "Cancelar", destructive = true, onConfirm, onCancel, secondaryLabel, onSecondary }: Props) {
   if (!visible) return null;
   const isWeb = Platform.OS === "web";
   // Use fixed on web so the dialog stays in the viewport regardless of scroll position
@@ -26,6 +29,11 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = "Confirm
         </View>
         <Text style={s.title}>{title}</Text>
         <Text style={s.message}>{message}</Text>
+        {secondaryLabel && onSecondary ? (
+          <Pressable testID="confirm-secondary" onPress={onSecondary} style={s.secondaryBtn}>
+            <Text style={s.secondaryText}>{secondaryLabel}</Text>
+          </Pressable>
+        ) : null}
         <View style={s.actions}>
           <Pressable onPress={onCancel} style={s.cancelBtn}>
             <Text style={s.cancelText}>{cancelLabel}</Text>
@@ -83,6 +91,12 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   confirmText: { fontSize: 14, color: "#fff", fontWeight: "700" },
+  secondaryBtn: {
+    width: "100%", paddingVertical: 12, borderRadius: 12, marginBottom: 10,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet2,
+    alignItems: "center",
+  },
+  secondaryText: { fontSize: 14, color: Colors.violet3, fontWeight: "700" },
 });
 
 export default ConfirmDialog;

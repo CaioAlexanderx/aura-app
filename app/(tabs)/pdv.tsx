@@ -42,9 +42,11 @@
 //     antes 610px até a grade (entrava meio par de produtos);
 //     agora 272px, e os cards `dense` deixam dois pares inteiros na dobra.
 // ============================================================
+import { useEffect } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
 } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { Colors } from "@/constants/colors";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
@@ -67,6 +69,7 @@ import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { PdvModals } from "@/components/screens/pdv/PdvModals";
 
 import { usePdvState } from "@/hooks/usePdvState";
+import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
 import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -81,6 +84,16 @@ const CONTENT_H = `calc(100vh - ${TOPBAR_H}px)`;
 
 function CaixaScreenInner() {
   const st = usePdvState();
+
+  // 16/09/2026: "Trocar tamanho ou produto" do Editar lançamento chega aqui
+  // com ?troca=1 e já abre a Troca (caso MHT / Karina Quadros).
+  const params = useLocalSearchParams<{ troca?: string }>();
+  useEffect(() => {
+    if (!querAbrirTroca(params.troca)) return;
+    st.openTroca();
+    try { router.setParams({ troca: undefined } as any); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.troca]);
 
   const { company, isDemo, isNegocioPlus, clientesEnabled, vp, wide } = st;
   const { caixaEnabled, sessaoAtiva, isAberto, caixaLoading, invalidateCaixa } = st;
