@@ -20,7 +20,15 @@
 import { request } from "./api";
 import type { WaPreview } from "./waApi";
 
-/** Segmentos do motor de reativação (dias desde a última compra). */
+/**
+ * Segmentos do motor de reativação (dias desde a última compra).
+ *
+ * Os LIMIARES de cada um moram em components/screens/clientes/diasSemComprar
+ * — a régua única do app (ativo 0–30, em risco 31–60, inativo 61–120,
+ * perdido 121+), que é também quem manda na tag "Inativo" da lista de
+ * clientes. Aqui ficam só os nomes que o backend usa; quem precisa do
+ * intervalo em dias lê de lá, para não existirem duas réguas de novo.
+ */
 export type ReactivationSegment = "active" | "at_risk" | "dormant" | "lost";
 
 /** Qual fatia o disparo mira. 'both' = em risco + inativo. */

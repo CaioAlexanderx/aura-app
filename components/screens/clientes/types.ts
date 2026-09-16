@@ -1,3 +1,5 @@
+import { diasSemComprar, estaInativo } from "./diasSemComprar";
+
 export type Customer = {
   id: string;
   name: string;
@@ -29,11 +31,15 @@ export function getStatus(c: { visits: number; totalSpent: number; lastPurchase:
   if ((c.creditBalance || 0) > 0) t.push("Devendo");
   if (c.totalSpent >= 2000) t.push("VIP");
   if (c.visits >= 10) t.push("Frequente");
-  if (c.visits <= 3) t.push("Novo");
-  const p = c.lastPurchase.split("/");
-  if (p.length === 3) {
-    const d = new Date(+p[2], +p[1] - 1, +p[0]);
-    if ((Date.now() - d.getTime()) / 864e5 > 30) t.push("Inativo");
-  }
+  // Régua única (./diasSemComprar): "Inativo" passa a ser 61 dias ou mais.
+  // Era MAIS DE 30 — o que marcava como inativo justamente quem a tela de
+  // reativação chamava de "em risco" e não listava como inativo.
+  //
+  // E quem sumiu prevalece sobre quem é novo: com 61+ dias parado a tag
+  // "Novo" não sai, senão o mesmo cliente aparecia recém-chegado e sumido
+  // ao mesmo tempo — duas informações que se anulam na leitura.
+  const inativo = estaInativo(diasSemComprar(c.lastPurchase));
+  if (c.visits <= 3 && !inativo) t.push("Novo");
+  if (inativo) t.push("Inativo");
   return t;
 }

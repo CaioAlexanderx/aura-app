@@ -11,6 +11,7 @@ import { AddCustomerForm } from "@/components/screens/clientes/AddCustomerForm";
 import { CustomerRow } from "@/components/screens/clientes/CustomerRow";
 import { RankingTab } from "@/components/screens/clientes/RankingTab";
 import { RetentionTab } from "@/components/screens/clientes/RetentionTab";
+import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
 import { fmt } from "@/components/screens/clientes/types";
 // 29/08/2026: cabecalho e abas compartilhados com /vendas (padrao do /estoque).
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
@@ -354,6 +355,32 @@ export default function ClientesScreen() {
           </View>
         )}
 
+        {/* Fase 0 (I0.2) — a porta da reativação mora na aba LISTA, que é a
+            que abre por padrão. Ela já esteve só na aba Retenção, e foi
+            exatamente por estar escondida numa aba secundária (que ainda
+            por cima é Negócio+) que o cliente de trial não achou a
+            reativação. Aqui ela aparece em todos os planos; no Essencial
+            o botão leva a /planos.
+
+            Variante COMPACTA de propósito: acima dela já vêm o cabeçalho
+            editorial, o cartão de retenção, as abas e a linha de
+            importar/exportar. Com o bloco completo a primeira linha de
+            cliente cai abaixo da dobra em 911px de altura — e uma porta
+            que empurra a lista para fora da tela troca um problema por
+            outro. Medições em docs/mockups/fase0-entrada-reativacao.html.
+
+            Base vazia não mostra bloco: "0 clientes · R$ 0,00" numa loja
+            nova não é informação, é desânimo. */}
+        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
+          <ReativacaoEntrada
+            customers={customers}
+            plan={plan}
+            companyCount={consolidatedView ? companyCount : 1}
+            compacto
+            idBase="clientes-ir-para-reativacao"
+          />
+        )}
+
         {bulkMode && (
           <View style={s.bulkBar}>
             <Pressable onPress={handleSelectPage} style={s.bulkAction}>
@@ -480,40 +507,38 @@ export default function ClientesScreen() {
           />
         ) : <RankingTab customers={customers} />)}
 
-        {tab === 2 && (isEssencial ? (
-          <UpgradeCard
-            title="Retenção e clientes em risco"
-            description="Saiba quem voltou e quem não voltou. Reaja antes de perder um bom cliente."
-            features={[
-              "Taxa de retenção mensal",
-              "Clientes em risco (30 a 90 dias sem comprar)",
-              "Clientes perdidos (90+ dias)",
-              "Comparativo: novos x voltando",
-            ]}
-          />
-        ) : (
+        {tab === 2 && (
           <>
-            {/* Fase 7: a aba Retenção diz quem sumiu; a tela de reativação
-                é onde isso vira ação — um cupom pelo WhatsApp oficial. */}
-            <Pressable
-              onPress={() => router.push("/clientes/reativacao")}
-              accessibilityRole="button"
-              style={s.reativacaoLink}
-              testID="clientes-ir-para-reativacao"
-            >
-              <Icon name="whatsapp" size={15} color={Colors.violet3} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.reativacaoTitle}>Reativação por WhatsApp</Text>
-                <Text style={s.reativacaoSub}>
-                  Mande um cupom com prazo curto para quem parou de comprar. Mensagem de marketing —
-                  paga e só para quem autorizou.
-                </Text>
-              </View>
-              <Icon name="chevron_right" size={16} color={Colors.violet3} />
-            </Pressable>
-            <RetentionTab />
+            {/* A mesma porta, na aba onde já se fala de quem sumiu — aqui
+                na versão COMPLETA, porque nesta aba não há lista
+                competindo pela dobra. Fica ACIMA do gate de plano de
+                propósito: o produto pago é o disparo, não a contagem, e
+                quem está no Essencial vê justamente o número que é o
+                argumento do upgrade. Só o botão muda de destino. */}
+            {!isLoading && !isError && customers.length > 0 && (
+              <ReativacaoEntrada
+                customers={customers}
+                plan={plan}
+                companyCount={consolidatedView ? companyCount : 1}
+                idBase="clientes-retencao-ir-para-reativacao"
+              />
+            )}
+            {isEssencial ? (
+              <UpgradeCard
+                title="Retenção e clientes em risco"
+                description="Saiba quem voltou e quem não voltou. Reaja antes de perder um bom cliente."
+                features={[
+                  "Taxa de retenção mensal",
+                  "Clientes em risco (31 a 60 dias sem comprar)",
+                  "Clientes inativos (61 a 120 dias)",
+                  "Comparativo: novos x voltando",
+                ]}
+              />
+            ) : (
+              <RetentionTab />
+            )}
           </>
-        ))}
+        )}
 
         {tab === 3 && (isEssencial ? (
           <UpgradeCard
@@ -614,10 +639,6 @@ const s = StyleSheet.create({
   emptyImport:      { alignItems: "center", marginTop: -8 },
   listCard:         { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   demoBanner:       { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
-  // Ponte para a tela de reativacao (Fase 7).
-  reativacaoLink:   { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.violetD, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 12 },
-  reativacaoTitle:  { fontSize: 13.5, fontWeight: "800", color: Colors.ink },
-  reativacaoSub:    { fontSize: 11.5, color: Colors.ink3, lineHeight: 16.5, marginTop: 3 },
   demoText:         { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   // MULTICNPJ Onda 2.3
   consolidatedBanner: {

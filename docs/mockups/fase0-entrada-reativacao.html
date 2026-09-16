@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — entrada da reativação com número, R$ e filtro de dias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 0, tarefa I0.2 (regra 4 do CLAUDE.md).
+
+     O problema: a reativação existe e funciona, mas a porta de
+     entrada é um card-link mudo ("Reativação por WhatsApp →").
+     Um lojista de trial que queria "ver quem não vem há 60 ou 90
+     dias" não tem como saber, ANTES do clique, se tem 3 ou 300
+     pessoas ali dentro — então não clica.
+
+     A proposta: a porta passa a dizer o número, o R$ em jogo e a
+     deixar escolher o corte de dias. A linguagem visual do app não
+     muda (título em serifa, faixa de indicadores, abas em pílula,
+     detalhe por clique) — muda só este bloco.
+
+     Três estados nesta página:
+       A. Clientes › aba Retenção — plano Negócio (bloco completo)
+       B. WhatsApp › aba Conexão — variante compacta
+       C. Plano Essencial — número visível, botão leva a planos
+
+     Trocar o filtro de dias recalcula os números (dados de exemplo).
+     ============================================================ */
+  :root {
+    --bg:  #0B0716;
+    --bg2: #090c1a;
+    --bg3: #0e1228;
+    --bg4: #141830;
+    --border:  rgba(255,255,255,0.07);
+    --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff;
+    --ink2: rgba(220,215,255,0.75);
+    --ink3: rgba(170,160,235,0.65);
+    --violet:  #7c3aed;
+    --violet3: #a78bfa;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red:   #f87171;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 20px 80px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1.doc {
+    font-family: 'Instrument Serif', Georgia, serif; font-weight: 400;
+    font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px;
+  }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 620px; margin: 0 0 26px; }
+  .nota {
+    padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55; margin: 0 0 26px;
+  }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 0 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+           text-transform: uppercase; color: var(--ink3); }
+  .telas { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ── Moldura do celular (390px, o alvo real) ───────────── */
+  .phone {
+    width: 390px; border-radius: 26px; border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.9));
+    padding: 16px 14px 24px; box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  }
+  .phone-cap { display:flex; justify-content:center; margin-bottom: 14px; }
+  .phone-cap i { width: 92px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.12); }
+
+  /* ── Cabeçalho editorial que a tela já tem (não muda) ──── */
+  .hero-eyebrow {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .pill-live { padding: 2px 7px; border-radius: 999px; background: rgba(124,58,237,0.14);
+               color: var(--violet3); font-size: 9px; letter-spacing: 0.08em; }
+  .hero-title {
+    font-family: 'Instrument Serif', Georgia, serif; font-weight: 400;
+    font-size: 40px; line-height: 0.98; letter-spacing: -0.025em; margin: 0;
+  }
+  .hero-title span { color: var(--violet); }
+  .hero-sub { font-size: 11.5px; color: var(--ink3); margin: 8px 0 16px; line-height: 1.5; }
+  .abas { display: flex; gap: 6px; margin-bottom: 16px; }
+  .aba { padding: 7px 13px; border-radius: 10px; background: var(--bg3);
+         border: 1px solid var(--border); font-size: 11.5px; color: var(--ink3); font-weight: 500; }
+  .aba.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+
+  /* ── O bloco novo ──────────────────────────────────────── */
+  .entrada {
+    background: var(--violetD); border: 1px solid var(--border2);
+    border-radius: 16px; padding: 15px 14px 14px; margin-bottom: 14px;
+  }
+  .entrada-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .zap { width: 15px; height: 15px; flex: 0 0 auto; }
+  .entrada-title { font-size: 13.5px; font-weight: 800; color: var(--ink); }
+  .entrada-sub { font-size: 11px; color: var(--ink3); line-height: 1.5; margin: 0 0 12px; }
+
+  .label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+           color: var(--ink3); margin-bottom: 7px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 13px; }
+  .chip {
+    padding: 6px 11px; border-radius: 999px; background: var(--bg3);
+    border: 1px solid var(--border); font-size: 11.5px; color: var(--ink2);
+    font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .chip:hover { border-color: var(--border2); }
+  .chip.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+  /* Regra 7 do CLAUDE.md: nada aqui depende de hover — o hover é só
+     enfeite, o estado selecionado é o que informa. Em touch some. */
+  @media (hover: none) { .chip:hover { border-color: var(--border); } }
+
+  .livre { display: none; align-items: center; gap: 8px; margin: -6px 0 13px; }
+  .livre.on { display: flex; }
+  .livre input {
+    width: 82px; padding: 7px 10px; border-radius: 10px; background: var(--bg3);
+    border: 1px solid var(--border2); color: var(--ink); font-size: 13px;
+    font-family: 'DM Mono', monospace; text-align: center;
+  }
+  .livre span { font-size: 11.5px; color: var(--ink3); }
+
+  .numeros {
+    display: flex; gap: 10px; background: rgba(9,12,26,0.55);
+    border: 1px solid var(--border); border-radius: 13px; padding: 12px 13px; margin-bottom: 12px;
+  }
+  .num { flex: 1; min-width: 0; }
+  .num + .num { border-left: 1px solid var(--border); padding-left: 12px; }
+  .num b {
+    display: block; font-size: 26px; line-height: 1.05; font-weight: 700;
+    letter-spacing: -0.02em; color: var(--ink);
+  }
+  .num b.money { font-size: 21px; color: var(--green); }
+  .num i { display: block; font-style: normal; font-size: 10.5px; color: var(--ink3);
+           margin-top: 4px; line-height: 1.35; }
+
+  .btn {
+    display: block; width: 100%; text-align: center; padding: 11px 16px; border-radius: 12px;
+    background: var(--violet); color: #fff; font-size: 12.5px; font-weight: 700;
+    border: 0; cursor: pointer; font-family: inherit;
+  }
+  .btn.ghost { background: transparent; border: 1px solid var(--border2); color: var(--violet3); }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .rodape { font-size: 10.5px; color: var(--ink3); line-height: 1.5; margin: 9px 2px 0; }
+
+  .vazio { font-size: 11.5px; color: var(--green); font-weight: 600; line-height: 1.5;
+           padding: 4px 2px 2px; }
+
+  /* ── Variante compacta (WhatsApp › Conexão) ────────────── */
+  .entrada.compacta { padding: 13px 13px 12px; }
+  .entrada.compacta .entrada-sub { display: none; }
+  .entrada.compacta .numeros { padding: 10px 12px; margin-bottom: 10px; }
+  .entrada.compacta .num b { font-size: 22px; }
+  .entrada.compacta .num b.money { font-size: 18px; }
+
+  /* ── Cartão de plano (o UpgradeCard que já existe) ─────── */
+  .upgrade { margin-top: 12px; background: var(--bg3); border: 1px solid var(--border);
+             border-radius: 18px; padding: 20px 16px; text-align: center; }
+  .upgrade h4 { margin: 0 0 6px; font-size: 14px; }
+  .upgrade p { margin: 0 0 14px; font-size: 11.5px; color: var(--ink3); line-height: 1.5; }
+
+  /* ── Frame de 911px: a dobra real do celular ───────────────
+     O app em web estreito tem uma barra de cima (só o sino) e a
+     barra de abas embaixo. O que sobra para a tela é o que está
+     dentro de .scroll — e é ali que a primeira linha de cliente
+     precisa caber sem rolar. */
+  .rotulo-frame {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--green); margin-bottom: 8px;
+  }
+  .rotulo-frame.ruim { color: var(--red); }
+  .phone.fold {
+    height: 911px; padding: 0; overflow: hidden;
+    display: flex; flex-direction: column; position: relative;
+  }
+  .phone.fold .scroll { flex: 1; overflow: hidden; padding: 0 14px; min-height: 0; }
+  .chrome-top { height: 48px; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; flex-shrink: 0; }
+  .sino { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); display: block; }
+  .chrome-bar {
+    height: 59px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-around;
+    background: var(--bg2); border-top: 1px solid var(--border);
+  }
+  .chrome-bar i { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); display: block; }
+  .dobra {
+    position: absolute; left: 0; right: 0; bottom: 59px; border-top: 1px dashed var(--red);
+    pointer-events: none;
+  }
+  .dobra span {
+    position: absolute; right: 8px; top: -8px; font-size: 9px; color: var(--red);
+    background: var(--bg); padding: 0 6px; letter-spacing: 0.06em;
+  }
+
+  /* Vizinhos do bloco na aba Lista, com as mesmas medidas do app. */
+  .retencao-card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .retencao-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 12px; }
+  .retencao-row { display: flex; gap: 10px; }
+  .retencao-row div { flex: 1; }
+  .retencao-row b { display: block; font-size: 20px; font-weight: 800; color: var(--ink); }
+  .retencao-row i { display: block; font-style: normal; font-size: 10.5px; color: var(--ink3); margin-top: 2px; }
+  .import-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .mini-btn {
+    padding: 8px 12px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border);
+    font-size: 11.5px; color: var(--ink2); font-weight: 600;
+  }
+  .busca {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    padding: 11px 14px; font-size: 13px; color: var(--ink3); margin-bottom: 16px;
+  }
+  .lista { background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 8px; }
+  .linha { display: flex; align-items: center; gap: 10px; padding: 10px 8px; }
+  .linha + .linha { border-top: 1px solid var(--border); }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 11px; background: var(--violetD);
+    border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--violet3); flex: 0 0 auto;
+  }
+  .linha-txt { flex: 1; min-width: 0; }
+  .linha-txt b { display: block; font-size: 13px; font-weight: 700; color: var(--ink); }
+  .linha-txt i { display: block; font-style: normal; font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .tag { font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.03em; }
+  .tag.vip { background: var(--violetD); color: var(--violet3); }
+  .tag.inativo { background: rgba(248,113,113,0.12); color: var(--red); }
+
+  .medidas {
+    margin-top: 16px; padding: 12px 14px; border: 1px solid var(--border2); border-radius: 12px;
+    background: rgba(9,12,26,0.6); font-family: 'DM Mono', monospace; font-size: 11px;
+    line-height: 1.7; color: var(--ink2); white-space: pre-line;
+  }
+
+  .legenda { margin-top: 12px; font-size: 11.5px; color: var(--ink3); line-height: 1.6; max-width: 390px; }
+  .legenda b { color: var(--violet3); }
+  table.regua { border-collapse: collapse; margin-top: 8px; font-size: 11.5px; width: 100%; }
+  table.regua td { padding: 4px 8px 4px 0; color: var(--ink2); }
+  table.regua td:first-child { color: var(--ink3); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Entrada da reativação<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 0 · tarefa I0.2 — a porta de entrada da reativação passa a mostrar quantos clientes
+    sumiram, quanto eles já gastaram e deixa escolher o corte de dias antes do clique.
+    A tela <code>/clientes/reativacao</code> continua sendo o detalhe.
+  </p>
+
+  <div class="nota">
+    <b>O que não muda:</b> título em serifa, faixa de indicadores, abas em pílula, detalhe por
+    clique. <b>O que muda:</b> só este bloco, que hoje é um card-link sem número
+    (<code>clientes-ir-para-reativacao</code> e <code>wa-varejo-ir-para-reativacao</code>).
+    <b>Régua única:</b> em risco 31–60, inativo 61–120, perdido 121+ — a mesma régua que passa a
+    mandar na tag “Inativo” da lista (hoje ela dispara em mais de 30 dias).
+  </div>
+
+  <div class="secao">A · Clientes › Lista — a aba que abre por padrão (390 × 911, tema escuro)</div>
+  <div class="nota" style="margin-bottom:18px">
+    A porta já esteve só na aba <b>Retenção</b> — secundária, Negócio+, e no Essencial trocada por
+    um cartão de upgrade. Foi exatamente por estar escondida ali que o lojista de trial não achou a
+    reativação. Agora ela abre com a tela, na <b>Lista</b>, logo acima da busca. À direita, a mesma
+    tela com o bloco <b>completo</b>: ele empurra a primeira linha de cliente para baixo da dobra,
+    e é por isso que a Lista usa a variante compacta. As alturas são medidas de verdade, abaixo.
+  </div>
+  <div class="telas">
+    <div>
+      <div class="rotulo-frame">Compacta — o que vai para a Lista</div>
+      <div class="phone fold" data-frame="lista-compacta">
+        <div class="chrome-top"><span class="sino"></span></div>
+        <div class="scroll">
+          <div class="hero-eyebrow">Base de clientes <span class="pill-live">ao vivo</span></div>
+          <h2 class="hero-title">Clientes<span>.</span></h2>
+          <div class="hero-sub">312 clientes cadastrados de 5.000 do plano · R$ 486.210,00 de faturamento acumulado</div>
+
+          <div class="retencao-card">
+            <div class="retencao-title">Retenção dos últimos 30 dias</div>
+            <div class="retencao-row">
+              <div><b>68%</b><i>voltaram</i></div>
+              <div><b>24</b><i>novos</i></div>
+              <div><b>47</b><i>sumiram</i></div>
+            </div>
+          </div>
+
+          <div class="abas">
+            <div class="aba on">Lista</div><div class="aba">Ranking</div>
+            <div class="aba">Retenção</div><div class="aba">Avaliações</div>
+          </div>
+
+          <div class="import-row">
+            <span class="mini-btn">Exportar</span>
+            <span class="mini-btn">Importar</span>
+            <span class="mini-btn">Selecionar</span>
+          </div>
+
+          <div class="entrada compacta" data-medir="compacta">
+            <div class="entrada-top">
+              <svg class="zap" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>
+              <div class="entrada-title">Reativação por WhatsApp</div>
+            </div>
+            <div class="chips" data-chips="A" style="margin-top:10px">
+              <button class="chip" data-d="30">30</button>
+              <button class="chip on" data-d="60">60</button>
+              <button class="chip" data-d="90">90</button>
+              <button class="chip" data-d="120">120</button>
+              <button class="chip" data-d="180">180</button>
+              <button class="chip" data-d="outro">outro</button>
+            </div>
+            <div class="livre" data-livre="A">
+              <input type="number" min="1" max="999" value="75" />
+              <span>dias ou mais</span>
+            </div>
+            <div class="numeros">
+              <div class="num">
+                <b data-n="A">—</b>
+                <i data-nl="A">clientes sem comprar há 60 dias ou mais</i>
+              </div>
+              <div class="num">
+                <b class="money" data-r="A">—</b>
+                <i>já gastaram na loja</i>
+              </div>
+            </div>
+            <button class="btn">Ver e mandar cupom</button>
+          </div>
+
+          <div class="busca">Buscar por nome, telefone, e-mail ou Instagram…</div>
+
+          <div class="lista">
+            <div class="linha" data-primeira-linha="compacta">
+              <div class="avatar">AS</div>
+              <div class="linha-txt"><b>Ana Souza</b><i>R$ 1.240,00 · 8 visitas</i></div>
+              <span class="tag vip">VIP</span>
+            </div>
+            <div class="linha">
+              <div class="avatar">BL</div>
+              <div class="linha-txt"><b>Bruno Lima</b><i>R$ 430,00 · 3 visitas</i></div>
+              <span class="tag inativo">Inativo</span>
+            </div>
+            <div class="linha">
+              <div class="avatar">CD</div>
+              <div class="linha-txt"><b>Carla Dias</b><i>R$ 2.980,00 · 14 visitas</i></div>
+              <span class="tag vip">VIP</span>
+            </div>
+          </div>
+        </div>
+        <div class="dobra"><span>dobra — 911px</span></div>
+        <div class="chrome-bar"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="rotulo-frame ruim">Completa — a lista cai fora da tela</div>
+      <div class="phone fold" data-frame="lista-completa">
+        <div class="chrome-top"><span class="sino"></span></div>
+        <div class="scroll">
+          <div class="hero-eyebrow">Base de clientes <span class="pill-live">ao vivo</span></div>
+          <h2 class="hero-title">Clientes<span>.</span></h2>
+          <div class="hero-sub">312 clientes cadastrados de 5.000 do plano · R$ 486.210,00 de faturamento acumulado</div>
+
+          <div class="retencao-card">
+            <div class="retencao-title">Retenção dos últimos 30 dias</div>
+            <div class="retencao-row">
+              <div><b>68%</b><i>voltaram</i></div>
+              <div><b>24</b><i>novos</i></div>
+              <div><b>47</b><i>sumiram</i></div>
+            </div>
+          </div>
+
+          <div class="abas">
+            <div class="aba on">Lista</div><div class="aba">Ranking</div>
+            <div class="aba">Retenção</div><div class="aba">Avaliações</div>
+          </div>
+
+          <div class="import-row">
+            <span class="mini-btn">Exportar</span>
+            <span class="mini-btn">Importar</span>
+            <span class="mini-btn">Selecionar</span>
+          </div>
+
+          <div class="entrada" data-medir="completa">
+            <div class="entrada-top">
+              <svg class="zap" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>
+              <div class="entrada-title">Reativação por WhatsApp</div>
+            </div>
+            <p class="entrada-sub">
+              Um cupom com prazo curto para quem parou de comprar. Mensagem de marketing — paga e
+              só para quem autorizou.
+            </p>
+            <div class="label">Sem comprar há</div>
+            <div class="chips" data-chips="D">
+              <button class="chip" data-d="30">30 dias</button>
+              <button class="chip on" data-d="60">60 dias</button>
+              <button class="chip" data-d="90">90 dias</button>
+              <button class="chip" data-d="120">120 dias</button>
+              <button class="chip" data-d="180">180 dias</button>
+              <button class="chip" data-d="outro">outro</button>
+            </div>
+            <div class="livre" data-livre="D">
+              <input type="number" min="1" max="999" value="75" />
+              <span>dias ou mais</span>
+            </div>
+            <div class="numeros">
+              <div class="num">
+                <b data-n="D">—</b>
+                <i data-nl="D">clientes sem comprar há 60 dias ou mais</i>
+              </div>
+              <div class="num">
+                <b class="money" data-r="D">—</b>
+                <i>já gastaram na loja</i>
+              </div>
+            </div>
+            <button class="btn">Ver e mandar cupom</button>
+            <p class="rodape">Abre a lista de quem sumiu, ordenada por quanto gastou. Nada sai sem a prévia.</p>
+          </div>
+
+          <div class="busca">Buscar por nome, telefone, e-mail ou Instagram…</div>
+
+          <div class="lista">
+            <div class="linha" data-primeira-linha="completa">
+              <div class="avatar">AS</div>
+              <div class="linha-txt"><b>Ana Souza</b><i>R$ 1.240,00 · 8 visitas</i></div>
+              <span class="tag vip">VIP</span>
+            </div>
+            <div class="linha">
+              <div class="avatar">BL</div>
+              <div class="linha-txt"><b>Bruno Lima</b><i>R$ 430,00 · 3 visitas</i></div>
+              <span class="tag inativo">Inativo</span>
+            </div>
+          </div>
+        </div>
+        <div class="dobra"><span>dobra — 911px</span></div>
+        <div class="chrome-bar"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div class="legenda">
+      <b>Por que número antes do clique.</b> O card-link antigo não respondia a pergunta que faz o
+      lojista clicar (“tem gente lá dentro?”). Com “47 clientes · R$ 38.900” a decisão vira óbvia.<br><br>
+      <b>Por que na Lista.</b> É a aba que abre. A Retenção continua com o bloco — na versão
+      completa, porque lá não há lista disputando a dobra.<br><br>
+      <b>Base vazia não mostra bloco.</b> Loja nova não precisa ler “0 clientes · R$ 0,00”.<br><br>
+      <b>O filtro viaja.</b> O corte vai para a tela de detalhe por query param
+      (<code>/clientes/reativacao?dias=90</code>), que marca o alvo correspondente.<br><br>
+      <b>Régua única de dias sem comprar:</b>
+      <table class="regua">
+        <tr><td>0–30 dias</td><td>ativo</td></tr>
+        <tr><td>31–60 dias</td><td>em risco</td></tr>
+        <tr><td>61–120 dias</td><td>inativo</td></tr>
+        <tr><td>121+ dias</td><td>perdido</td></tr>
+      </table>
+      <br>
+      <b>Multi-CNPJ:</b> no consolidado o número soma todas as lojas; com uma loja selecionada, só
+      ela. Vem da mesma lista que a tela já carregou — sem chamada nova.
+      <div class="medidas" id="medidas">medindo…</div>
+    </div>
+  </div>
+
+  <div class="secao" style="margin-top:38px">B · WhatsApp › Conexão — variante compacta (390px)</div>
+  <div class="telas">
+    <div class="phone">
+      <div class="phone-cap"><i></i></div>
+      <h2 class="hero-title" style="font-size:34px">WhatsApp<span>.</span></h2>
+      <div class="hero-sub">Número da loja conectado · 41 mensagens este mês</div>
+      <div class="abas">
+        <div class="aba on">Conexão</div><div class="aba">Cobranças</div><div class="aba">Templates</div>
+      </div>
+
+      <div class="entrada compacta" id="blocoB">
+        <div class="entrada-top">
+          <svg class="zap" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>
+          <div class="entrada-title">Reativação por WhatsApp</div>
+        </div>
+
+        <div class="chips" data-chips="B" style="margin-top:10px">
+          <button class="chip" data-d="30">30</button>
+          <button class="chip" data-d="60">60</button>
+          <button class="chip on" data-d="90">90</button>
+          <button class="chip" data-d="120">120</button>
+          <button class="chip" data-d="180">180</button>
+          <button class="chip" data-d="outro">outro</button>
+        </div>
+        <div class="livre" data-livre="B">
+          <input type="number" min="1" max="999" value="75" />
+          <span>dias ou mais</span>
+        </div>
+
+        <div class="numeros">
+          <div class="num">
+            <b data-n="B">—</b>
+            <i data-nl="B">clientes sem comprar há 90 dias ou mais</i>
+          </div>
+          <div class="num">
+            <b class="money" data-r="B">—</b>
+            <i>já gastaram na loja</i>
+          </div>
+        </div>
+
+        <button class="btn">Ver e mandar cupom</button>
+      </div>
+
+      <div class="entrada compacta" style="background:transparent">
+        <p class="rodape" style="margin:0">
+          O envio automático das cobranças liga na régua, em Configurações do Crediário.
+        </p>
+      </div>
+    </div>
+
+    <div class="legenda">
+      <b>Compacta, não diferente.</b> Mesmo bloco, sem o parágrafo explicativo e com as pílulas só
+      com o número — quem está na tela do WhatsApp já sabe o que é reativação. O botão leva ao
+      mesmo lugar, com o mesmo <code>?dias=</code>.
+    </div>
+  </div>
+
+  <div class="secao" style="margin-top:38px">C · Plano Essencial — número visível, botão leva a planos</div>
+  <div class="telas">
+    <div class="phone">
+      <div class="phone-cap"><i></i></div>
+      <div class="hero-eyebrow">Base de clientes <span class="pill-live">ao vivo</span></div>
+      <h2 class="hero-title">Clientes<span>.</span></h2>
+      <div class="hero-sub">312 clientes cadastrados · R$ 486.210,00 de faturamento acumulado</div>
+      <div class="abas">
+        <div class="aba">Lista</div><div class="aba">Ranking</div>
+        <div class="aba on">Retenção</div><div class="aba">Avaliações</div>
+      </div>
+
+      <div class="entrada" id="blocoC">
+        <div class="entrada-top">
+          <svg class="zap" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>
+          <div class="entrada-title">Reativação por WhatsApp</div>
+        </div>
+        <p class="entrada-sub">
+          Você tem gente parada na base. O disparo do cupom faz parte do plano Negócio.
+        </p>
+
+        <div class="label">Sem comprar há</div>
+        <div class="chips" data-chips="C">
+          <button class="chip" data-d="30">30 dias</button>
+          <button class="chip on" data-d="60">60 dias</button>
+          <button class="chip" data-d="90">90 dias</button>
+          <button class="chip" data-d="120">120 dias</button>
+          <button class="chip" data-d="180">180 dias</button>
+          <button class="chip" data-d="outro">outro</button>
+        </div>
+        <div class="livre" data-livre="C">
+          <input type="number" min="1" max="999" value="75" />
+          <span>dias ou mais</span>
+        </div>
+
+        <div class="numeros">
+          <div class="num">
+            <b data-n="C">—</b>
+            <i data-nl="C">clientes sem comprar há 60 dias ou mais</i>
+          </div>
+          <div class="num">
+            <b class="money" data-r="C">—</b>
+            <i>já gastaram na loja</i>
+          </div>
+        </div>
+
+        <button class="btn ghost">Conhecer o plano Negócio</button>
+        <p class="rodape">A contagem é sua e continua aqui. O disparo é que depende do plano.</p>
+      </div>
+    </div>
+
+    <div class="legenda">
+      <b>Sem gate novo.</b> A contagem não é o produto pago — o disparo é. Esconder o número de
+      quem está no Essencial é esconder exatamente o argumento do upgrade. O botão vai para
+      <code>/(tabs)/planos</code>, reaproveitando o <code>UpgradeCard</code> que a tela já tem.
+    </div>
+  </div>
+</div>
+
+<script>
+  // Base de exemplo: 312 clientes, com dias desde a última compra e gasto
+  // histórico. Os números dos três blocos saem daqui — trocar o filtro
+  // recalcula de verdade, que é o ponto do mockup.
+  var BASE = (function () {
+    var out = [];
+    var seed = 20260916;
+    function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+    for (var i = 0; i < 312; i++) {
+      var r = rnd();
+      // Distribuição plausível de varejo de bairro: metade ativa, uma
+      // cauda longa de gente que sumiu.
+      var dias =
+        r < 0.46 ? Math.floor(rnd() * 31) :
+        r < 0.62 ? 31 + Math.floor(rnd() * 30) :
+        r < 0.80 ? 61 + Math.floor(rnd() * 60) :
+        r < 0.93 ? 121 + Math.floor(rnd() * 120) :
+                   241 + Math.floor(rnd() * 400);
+      out.push({ dias: dias, gasto: Math.round((120 + rnd() * 2400) * 100) / 100 });
+    }
+    return out;
+  })();
+
+  function brl(v) {
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  }
+
+  var estado = { A: 60, B: 90, C: 60, D: 60 };
+
+  function pintar(k) {
+    var d = estado[k];
+    var alvo = BASE.filter(function (c) { return c.dias >= d; });
+    var total = alvo.reduce(function (s, c) { return s + c.gasto; }, 0);
+    document.querySelector('[data-n="' + k + '"]').textContent = alvo.length;
+    document.querySelector('[data-r="' + k + '"]').textContent = brl(total);
+    var lbl = document.querySelector('[data-nl="' + k + '"]');
+    if (lbl) lbl.textContent = 'clientes sem comprar há ' + d + ' dias ou mais';
+  }
+
+  ['A', 'B', 'C', 'D'].forEach(function (k) {
+    var chips = document.querySelector('[data-chips="' + k + '"]');
+    var livre = document.querySelector('[data-livre="' + k + '"]');
+    chips.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('.chip');
+      if (!btn) return;
+      chips.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('on'); });
+      btn.classList.add('on');
+      if (btn.dataset.d === 'outro') {
+        livre.classList.add('on');
+        estado[k] = parseInt(livre.querySelector('input').value, 10) || 1;
+      } else {
+        livre.classList.remove('on');
+        estado[k] = parseInt(btn.dataset.d, 10);
+      }
+      pintar(k);
+    });
+    livre.querySelector('input').addEventListener('input', function (ev) {
+      var v = parseInt(ev.target.value, 10);
+      if (!isFinite(v) || v < 1) return;
+      estado[k] = v;
+      pintar(k);
+    });
+    pintar(k);
+  });
+
+  // ── Medição da dobra ──────────────────────────────────────
+  // Em vez de afirmar "cabe", o mockup mede: onde termina a primeira
+  // linha de cliente, e quanto disso está acima da dobra de 911px.
+  function medir() {
+    function frame(nome) {
+      var f = document.querySelector('[data-frame="' + nome + '"]');
+      var scroll = f.querySelector('.scroll');
+      var linha = f.querySelector('[data-primeira-linha]');
+      var bloco = f.querySelector('[data-medir]');
+      var topoScroll = scroll.getBoundingClientRect().top;
+      var fim = linha.getBoundingClientRect().bottom - topoScroll;
+      var disponivel = scroll.getBoundingClientRect().height;
+      return {
+        bloco: Math.round(bloco.getBoundingClientRect().height),
+        fimDaLinha: Math.round(fim),
+        disponivel: Math.round(disponivel),
+        cabe: fim <= disponivel,
+      };
+    }
+    var c = frame('lista-compacta');
+    var t = frame('lista-completa');
+    document.getElementById('medidas').textContent =
+      'MEDIDO EM 390 × 911\n' +
+      'área rolável (911 − 48 do topo − 59 da barra): ' + c.disponivel + 'px\n' +
+      '\n' +
+      'bloco compacto ......... ' + c.bloco + 'px\n' +
+      'fim da 1ª linha ........ ' + c.fimDaLinha + 'px  ' + (c.cabe ? '✓ acima da dobra' : '✗ abaixo da dobra') + '\n' +
+      '\n' +
+      'bloco completo ......... ' + t.bloco + 'px\n' +
+      'fim da 1ª linha ........ ' + t.fimDaLinha + 'px  ' + (t.cabe ? '✓ acima da dobra' : '✗ abaixo da dobra');
+  }
+  medir();
+  window.addEventListener('resize', medir);
+</script>
+</body>
+</html>

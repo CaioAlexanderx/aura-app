@@ -37,6 +37,8 @@ import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
 // Meta, custa mais e exige consentimento declarado. A declaração mora na
 // aba Conexão porque é uma propriedade do NÚMERO, não de uma rotina.
 import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
+import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
+import { useCustomers } from "@/hooks/useCustomers";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -50,6 +52,12 @@ export default function WhatsAppScreen() {
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
+
+  // A entrada da reativação conta em cima da lista de clientes. Mesma
+  // queryKey do hook da tela de Clientes (react-query), então isto é
+  // cache compartilhado, não uma chamada nova — e no consolidado a
+  // lista já vem de todas as lojas (MULTICNPJ).
+  const clientes = useCustomers();
 
   // A maquete só aparece no modo demonstração; o hook dela já não busca
   // nada em company real (queries com enabled: !isDemo).
@@ -116,17 +124,19 @@ export default function WhatsAppScreen() {
                   O envio automático das cobranças liga na régua, em Configurações do Crediário.
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => router.push("/clientes/reativacao")}
-                accessibilityRole="button"
-                style={s.linkCard}
-                testID="wa-varejo-ir-para-reativacao"
-              >
-                <Icon name="arrow_right" size={14} color={Colors.violet3} />
-                <Text style={s.linkTxt}>
-                  O cupom para quem parou de comprar fica em Clientes, na tela de Reativação.
-                </Text>
-              </Pressable>
+              {/* Fase 0 (I0.2): era um link que só dizia ONDE ficava a
+                  reativação. Agora diz QUANTOS clientes sumiram e quanto
+                  eles já gastaram, com o corte de dias escolhido aqui —
+                  mesma régua e mesmo bloco da aba Retenção de Clientes,
+                  na variante compacta. */}
+              <ReativacaoEntrada
+                customers={clientes.customers}
+                plan={clientes.plan}
+                carregando={clientes.isLoading}
+                companyCount={clientes.consolidatedView ? clientes.companyCount : 1}
+                compacto
+                idBase="wa-varejo-ir-para-reativacao"
+              />
             </>
           )}
 

@@ -12,14 +12,22 @@
 // 3. faltando consentimento (ou com o backend anterior à fase, que nem
 //    devolve o campo) o envio fica travado e o motivo aparece escrito;
 // 4. o resultado do disparo é lido em português: `skipped_reason` e
-//    `skipped` viram frase, nunca código.
+//    `skipped` viram frase, nunca código;
+// 5. (Fase 0, I0.2) o corte de dias escolhido na porta de entrada chega
+//    por `?dias=` e já marca o alvo — o lojista não escolhe duas vezes.
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+
+// O `?dias=` que vem da entrada da reativação (Clientes / WhatsApp).
+var mockParams: any = {};
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+  useLocalSearchParams: () => mockParams,
+}));
 jest.mock("@/components/ResponsiveSheet", () => ({
   ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
 }));
@@ -112,6 +120,7 @@ function achar(tree: any, id: string): any {
 
 describe("disparo de reativação", () => {
   beforeEach(() => {
+    mockParams = {};
     mockStatus = STATUS_PRONTO;
     mockSettings = { wa_reactivation_auto: false };
     mockPreview = { source: "reativacao", would_send: 2, skipped: { JA_ENVIADO: 1 }, items: [] };
@@ -194,8 +203,72 @@ describe("disparo de reativação", () => {
   });
 });
 
+describe("o corte de dias vem da porta de entrada (?dias=)", () => {
+  beforeEach(() => {
+    mockParams = {};
+    mockStatus = STATUS_PRONTO;
+    mockSettings = { wa_reactivation_auto: false };
+    mockGetPreview.mockClear();
+    mockSend.mockClear();
+  });
+
+  it("sem parâmetro, o alvo é o default da tela", async () => {
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+    expect(tem(tree, "reativacao-filtro-origem")).toBe(false);
+    await act(async () => { achar(tree, "reativacao-enviar").props.onPress(); });
+    await flush();
+    expect(mockGetPreview.mock.calls[0][1].segment).toBe("at_risk");
+    tree.unmount();
+  });
+
+  it("?dias=90 já chega com o alvo 'inativo' marcado e diz de onde veio", async () => {
+    mockParams = { dias: "90" };
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+
+    expect(tem(tree, "reativacao-filtro-origem")).toBe(true);
+    // O <Text> quebra em nós ("… corte de " + "90" + " dias …"), então a
+    // asserção é sobre a vizinhança e não sobre a frase inteira.
+    expect(JSON.stringify(tree.toJSON())).toMatch(/corte de \D*90\D*dias/);
+
+    // E o alvo marcado é o que o disparo usa — não adianta pintar a
+    // pílula e mandar para outro segmento.
+    await act(async () => { achar(tree, "reativacao-enviar").props.onPress(); });
+    await flush();
+    expect(mockGetPreview.mock.calls[0][1].segment).toBe("dormant");
+    tree.unmount();
+  });
+
+  it("?dias=30 pega em risco E inativo, porque o corte é aberto", async () => {
+    mockParams = { dias: "30" };
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+    await act(async () => { achar(tree, "reativacao-enviar").props.onPress(); });
+    await flush();
+    expect(mockGetPreview.mock.calls[0][1].segment).toBe("both");
+    tree.unmount();
+  });
+
+  it("parâmetro sujo não muda nada — cai no default, não quebra", async () => {
+    mockParams = { dias: "abacaxi" };
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+    expect(tem(tree, "reativacao-filtro-origem")).toBe(false);
+    await act(async () => { achar(tree, "reativacao-enviar").props.onPress(); });
+    await flush();
+    expect(mockGetPreview.mock.calls[0][1].segment).toBe("at_risk");
+    tree.unmount();
+  });
+});
+
 describe("guardas de marketing travam o disparo", () => {
   beforeEach(() => {
+    mockParams = {};
     mockSettings = { wa_reactivation_auto: false };
     mockGetPreview.mockClear();
     mockSend.mockClear();
@@ -240,6 +313,7 @@ describe("guardas de marketing travam o disparo", () => {
 
 describe("reativação automática semanal", () => {
   beforeEach(() => {
+    mockParams = {};
     mockStatus = STATUS_PRONTO;
     mockSettings = { wa_reactivation_auto: false };
     mockPreview = { source: "reativacao", would_send: 4, skipped: {}, items: [] };
