@@ -114,7 +114,12 @@ describe("leitura da data que a lista guarda", () => {
   });
 });
 
-describe("a tag Inativo da lista segue a régua", () => {
+describe("a tag única da lista segue a régua (Fase 1, C1.2)", () => {
+  // 16/09/2026 — getStatus passou a devolver UMA tag só (era um array de
+  // até duas), delegando pra classificarCliente (./segmentos.ts). O
+  // rótulo visível de "61 a 120 dias" também trocou: era "Inativo", agora
+  // é "Sumido" — a chave interna da régua única (estaInativo,
+  // FAIXAS[...].key === "inativo") não mudou.
   it("estaInativo é 61 dias ou mais, perdidos incluídos", () => {
     expect(estaInativo(60)).toBe(false);
     expect(estaInativo(61)).toBe(true);
@@ -122,35 +127,43 @@ describe("a tag Inativo da lista segue a régua", () => {
     expect(estaInativo(null)).toBe(false);
   });
 
-  it("45 dias parado NÃO é mais 'Inativo' na lista (era, com a régua de 30)", () => {
-    const tags = getStatus({ visits: 6, totalSpent: 500, lastPurchase: haDias(45) });
-    expect(tags).not.toContain("Inativo");
+  it("45 dias parado NÃO é 'Sumido' — cai em 'Em risco' (31–60 da régua)", () => {
+    const tag = getStatus({ visits: 6, totalSpent: 500, lastPurchase: haDias(45), firstVisit: haDias(400) });
+    expect(tag).not.toBe("Sumido");
+    expect(tag).toBe("Em risco");
   });
 
-  it("90 dias parado é 'Inativo' — o mesmo que a reativação chama de inativo", () => {
-    const tags = getStatus({ visits: 6, totalSpent: 500, lastPurchase: haDias(90) });
-    expect(tags).toContain("Inativo");
+  it("90 dias parado é 'Sumido' — o mesmo que a reativação chama de inativo (rótulo mudou, régua não)", () => {
+    const tag = getStatus({ visits: 6, totalSpent: 500, lastPurchase: haDias(90), firstVisit: haDias(400) });
+    expect(tag).toBe("Sumido");
   });
 
-  it("'Novo' e 'Inativo' nunca aparecem juntos: quem sumiu prevalece", () => {
-    const sumido = getStatus({ visits: 2, totalSpent: 300, lastPurchase: haDias(200) });
-    expect(sumido).toContain("Inativo");
-    expect(sumido).not.toContain("Novo");
+  it("'Novo' e 'Sumido' nunca aparecem juntos: quem sumiu prevalece (é a tag única, sempre um dos dois)", () => {
+    const sumido = getStatus({ visits: 2, totalSpent: 300, lastPurchase: haDias(200), firstVisit: haDias(400) });
+    expect(sumido).toBe("Perdido"); // 200 dias já é "perdido" (121+), não mais "sumido"
+    expect(sumido).not.toBe("Novo");
 
-    const recente = getStatus({ visits: 2, totalSpent: 300, lastPurchase: haDias(5) });
-    expect(recente).toContain("Novo");
-    expect(recente).not.toContain("Inativo");
+    const recente = getStatus({ visits: 2, totalSpent: 300, lastPurchase: haDias(5), firstVisit: haDias(5) });
+    expect(recente).toBe("Novo");
+    expect(recente).not.toBe("Sumido");
   });
 
-  it("as outras tags continuam como eram", () => {
-    const tags = getStatus({ visits: 12, totalSpent: 3000, lastPurchase: haDias(2), creditBalance: 50 });
-    expect(tags).toEqual(["Devendo", "VIP", "Frequente"]);
+  it("Devendo vence as outras tags — prioridade 1 (saldo em aberto)", () => {
+    const tag = getStatus({ visits: 12, totalSpent: 3000, lastPurchase: haDias(2), firstVisit: haDias(400), creditBalance: 50 });
+    expect(tag).toBe("Devendo");
   });
 
-  it("quem nunca comprou não ganha 'Inativo' por falta de data", () => {
-    const tags = getStatus({ visits: 0, totalSpent: 0, lastPurchase: "---" });
-    expect(tags).not.toContain("Inativo");
-    expect(tags).toContain("Novo");
+  it("VIP é relativo à base — sem contexto (chamada avulsa) ninguém vira VIP, mesmo gastando muito", () => {
+    const tag = getStatus({ visits: 12, totalSpent: 3000, lastPurchase: haDias(2), firstVisit: haDias(400) });
+    expect(tag).not.toBe("VIP");
+    // 12 compras e ativo (2 dias) — sem ser VIP, vira Recorrente.
+    expect(tag).toBe("Recorrente");
+  });
+
+  it("quem nunca comprou e foi cadastrado recentemente ganha 'Novo', não 'Sumido'", () => {
+    const tag = getStatus({ visits: 0, totalSpent: 0, lastPurchase: "---", firstVisit: haDias(5) });
+    expect(tag).not.toBe("Sumido");
+    expect(tag).toBe("Novo");
   });
 });
 
