@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Dimensions, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Dimensions, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
@@ -7,15 +7,15 @@ import { useSalesList } from "@/hooks/useSales";
 import { SaleDetailModal } from "@/components/screens/vendas/SaleDetailModal";
 import { FechamentosTab } from "@/components/screens/vendas/FechamentosTab";
 import { SalesRanking } from "@/components/screens/vendas/SalesRanking";
+import { VendasFiltros, type StatusKey } from "@/components/screens/vendas/VendasFiltros";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
-import { DateInput } from "@/components/inputs/DateInput";
 import { useLocalSearchParams } from "expo-router";
 import {
-  periodToRange, addMonths, spCurrentMonth,
+  periodToRange, spCurrentMonth,
   PAGE_SIZE, MONTH_NAMES,
   type PeriodKey, type MonthAnchor,
 } from "@/utils/vendasPeriodo";
@@ -82,23 +82,11 @@ import { pluralize } from "@/utils/plural";
 //     dois valores, nenhuma nota — agora cada rotulo diz o seu escopo.
 // ============================================================
 
-const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 720;
-
-type StatusKey = "all" | "active" | "cancelled";
-
-const PERIOD_OPTIONS: Array<{ key: PeriodKey; label: string }> = [
-  { key: "today", label: "Hoje" },
-  { key: "week", label: "Semana" },
-  { key: "month", label: "Mês" },
-  { key: "custom", label: "Personalizado" },
-  { key: "all", label: "Tudo" },
-];
-
-const STATUS_OPTIONS: Array<{ key: StatusKey; label: string }> = [
-  { key: "all", label: "Todas" },
-  { key: "active", label: "Ativas" },
-  { key: "cancelled", label: "Canceladas" },
-];
+const SCREEN_W = typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width;
+const IS_WIDE = SCREEN_W > 720;
+// I0.6 (16/09/2026): a partir de 1024px, periodo+mes+status+busca cabem
+// numa unica linha (ver VendasFiltros). Abaixo disso mantem a pilha.
+const IS_FILTERS_ROW = SCREEN_W >= 1024;
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: "PIX", cash: "Dinheiro", dinheiro: "Dinheiro",
@@ -177,10 +165,6 @@ export default function VendasScreen() {
   };
 
   const { sales, stats, total, isLoading, isFetching, error, refetch, breakdown, companyCount } = useSalesList(filters as any);
-
-  // Seta "próximo mes" para no mes corrente: nao ha venda no futuro.
-  const nowMonth = spCurrentMonth();
-  const isCurrentMonth = monthAnchor.y === nowMonth.y && monthAnchor.m === nowMonth.m;
 
   // `total` e o tamanho do filtro inteiro — o backend conta separado da pagina,
   // entao os KPIs continuam falando do periodo, nao das 30 linhas visiveis.
@@ -373,105 +357,27 @@ export default function VendasScreen() {
         </View>
       )}
 
-      {/* FILTROS */}
-      <View style={s.filtersWrap}>
-        <View style={s.filterGroup}>
-          <Text style={s.filterLabel}>Período</Text>
-          <View style={s.chipRow}>
-            {PERIOD_OPTIONS.map(function(opt) {
-              const active = period === opt.key;
-              return (
-                <Pressable key={opt.key} onPress={function() { setPeriod(opt.key); }} style={[s.chip, active && s.chipActive]}>
-                  <Text style={[s.chipText, active && s.chipTextActive]}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {/* Seletor de mes: e por aqui que se chega no historico antigo.
-              Sem limite pra tras; pra frente para no mes corrente. */}
-          {period === "month" && (
-            <View style={s.monthNav}>
-              <Pressable
-                onPress={function() { setMonthAnchor(addMonths(monthAnchor, -1)); }}
-                style={s.monthNavBtn}
-                accessibilityLabel="Mês anterior"
-              >
-                <Icon name="chevron_left" size={14} color={Colors.violet3} />
-              </Pressable>
-              <View style={s.monthNavLabelWrap}>
-                <Text style={s.monthNavLabel}>
-                  {MONTH_NAMES[monthAnchor.m]} de {monthAnchor.y}
-                </Text>
-                {!isCurrentMonth && (
-                  <Pressable onPress={function() { setMonthAnchor(spCurrentMonth()); }}>
-                    <Text style={s.monthNavToday}>Voltar pro mês atual</Text>
-                  </Pressable>
-                )}
-              </View>
-              <Pressable
-                onPress={function() { if (!isCurrentMonth) setMonthAnchor(addMonths(monthAnchor, 1)); }}
-                disabled={isCurrentMonth}
-                style={[s.monthNavBtn, isCurrentMonth && s.monthNavBtnDisabled]}
-                accessibilityLabel="Próximo mês"
-              >
-                <Icon name="chevron_right" size={14} color={isCurrentMonth ? Colors.ink3 : Colors.violet3} />
-              </Pressable>
-            </View>
-          )}
-          {period === "custom" && (
-            <View style={s.customRow}>
-              <View style={s.customField}>
-                <Text style={s.customLabel}>De</Text>
-                <DateInput
-                  value={customFromBr}
-                  onChangeText={setCustomFromBr}
-                  onValidChange={setCustomFromIso}
-                  style={s.customInput}
-                />
-              </View>
-              <View style={s.customField}>
-                <Text style={s.customLabel}>Até</Text>
-                <DateInput
-                  value={customToBr}
-                  onChangeText={setCustomToBr}
-                  onValidChange={setCustomToIso}
-                  style={s.customInput}
-                />
-              </View>
-            </View>
-          )}
-        </View>
-
-        <View style={s.filterGroup}>
-          <Text style={s.filterLabel}>Status</Text>
-          <View style={s.chipRow}>
-            {STATUS_OPTIONS.map(function(opt) {
-              const active = status === opt.key;
-              return (
-                <Pressable key={opt.key} onPress={function() { setStatus(opt.key); }} style={[s.chip, active && s.chipActive]}>
-                  <Text style={[s.chipText, active && s.chipTextActive]}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={s.searchWrap}>
-          <Icon name="search" size={13} color={Colors.ink3} />
-          <TextInput
-            style={s.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Buscar cliente ou vendedora…"
-            placeholderTextColor={Colors.ink3}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={function() { setSearch(""); }} style={s.clearBtn}>
-              <Icon name="x" size={11} color={Colors.ink3} />
-            </Pressable>
-          )}
-        </View>
-      </View>
+      {/* FILTROS — I0.6 (16/09/2026): extraidos pra VendasFiltros. Em telas
+          largas (>=1024px) periodo+mes+status+busca ficam numa linha so, em
+          vez de tres blocos empilhados que sozinhos ja tomavam a dobra
+          inteira. Mesmo comportamento de antes, so a disposicao mudou. */}
+      <VendasFiltros
+        wide={IS_FILTERS_ROW}
+        period={period}
+        onPeriodChange={setPeriod}
+        monthAnchor={monthAnchor}
+        onMonthAnchorChange={setMonthAnchor}
+        customFromBr={customFromBr}
+        onCustomFromBrChange={setCustomFromBr}
+        customToBr={customToBr}
+        onCustomToBrChange={setCustomToBr}
+        onCustomFromIsoChange={setCustomFromIso}
+        onCustomToIsoChange={setCustomToIso}
+        status={status}
+        onStatusChange={setStatus}
+        search={search}
+        onSearchChange={setSearch}
+      />
 
       {/* LISTA */}
       {isLoading && (
@@ -679,8 +585,12 @@ const s = StyleSheet.create({
   consolidatedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 14 },
 
   // STATS
-  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
-  statCard: { flex: 1, minWidth: 130, backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
+  // I0.6 (16/09/2026): marginBottom/padding reduzidos (18->12 / 14->12) pra
+  // a faixa de indicadores ocupar menos altura — assim a primeira venda da
+  // lista cabe sem rolar em 1920x911 mesmo com cabecalho+abas+filtros
+  // acima. Indicadores continuam os mesmos 4, so mais compactos.
+  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  statCard: { flex: 1, minWidth: 130, backgroundColor: Colors.bg3, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border },
   statLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   statValue: { fontSize: 20, color: Colors.ink, fontWeight: "800", marginTop: 6 },
   statHint: { fontSize: 9.5, color: Colors.ink3, marginTop: 3, lineHeight: 13 },
@@ -701,31 +611,7 @@ const s = StyleSheet.create({
   breakdownMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
   breakdownRevenue: { fontSize: 14, color: Colors.green, fontWeight: "700" },
 
-  // FILTROS
-  filtersWrap: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 14, gap: 12 },
-  filterGroup: { gap: 6 },
-  filterLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
-  chipRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
-  chipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
-  chipText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  chipTextActive: { color: Colors.violet3, fontWeight: "700" },
-  // Seletor de mes (period === "month")
-  monthNav: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 6, paddingVertical: 6 },
-  monthNavBtn: { width: 32, height: 32, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
-  monthNavBtnDisabled: { backgroundColor: Colors.bg3, borderColor: Colors.border },
-  monthNavLabelWrap: { flex: 1, alignItems: "center" },
-  monthNavLabel: { fontSize: 12.5, color: Colors.ink, fontWeight: "700" },
-  monthNavToday: { fontSize: 10, color: Colors.violet3, fontWeight: "600", marginTop: 2 },
-
-  customRow: { flexDirection: "row", gap: 10, marginTop: 10 },
-  customField: { flex: 1, gap: 4 },
-  customLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
-  customInput: { backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, color: Colors.ink, fontSize: 12 },
-
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
-  searchInput: { flex: 1, fontSize: 12, color: Colors.ink, paddingVertical: 4 },
-  clearBtn: { width: 22, height: 22, borderRadius: 5, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
+  // FILTROS: extraidos pra components/screens/vendas/VendasFiltros.tsx (I0.6).
 
   // LISTA
   loadingBox: { paddingVertical: 60, alignItems: "center", gap: 12 },
