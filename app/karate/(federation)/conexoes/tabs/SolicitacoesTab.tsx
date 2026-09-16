@@ -8,7 +8,7 @@
 // ?tab=solicitacoes na tela pai (ver ../index.tsx).
 //
 // KPIs no topo (item 5 do pedido): pendentes / mais antiga há X dias /
-// aguardando número FPKT — pra federação enxergar volume e urgência, e
+// aguardando número de matrícula — pra federação enxergar volume e urgência, e
 // pra ninguém treinar invisível.
 //
 // Fila ordenada por URGÊNCIA (mais antiga primeiro) sempre — mesmo
@@ -36,7 +36,7 @@
 // Modo de seleção na fila (só no filtro Pendentes) + revisão resumida
 // INLINE (nunca <Modal> — RN Web renderiza Modal-dentro-de-Modal atrás
 // da tela, já mordeu este produto 5x): nome, nascimento, faixa e dojô por
-// linha, número FPKT digitado POR ITEM (continua obrigatório e emitido
+// linha, número de matrícula digitado POR ITEM (continua obrigatório e emitido
 // pela federação — lote não muda essa regra). Rejeição em massa com
 // motivo compartilhado opcional. O backend processa item a item (cada um
 // na própria transação) e devolve resposta ITEMIZADA — o que falha
@@ -135,7 +135,7 @@ export function SolicitacoesTab() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchStage, setBatchStage] = useState<BatchStage>("none");
-  // Número FPKT digitado por solicitação (chave = request id).
+  // Número de matrícula digitado por solicitação (chave = request id).
   const [fpktByReq, setFpktByReq] = useState<Record<string, string>>({});
   const [batchReason, setBatchReason] = useState("");
   const [batchSubmitting, setBatchSubmitting] = useState(false);
@@ -349,7 +349,7 @@ export function SolicitacoesTab() {
   const kpiItems = useMemo(() => ([
     { label: "Pendentes", value: metrics?.pendentes ?? 0 },
     { label: "Mais antiga", value: metrics?.mais_antiga ? diasLabel(metrics.mais_antiga.dias) : "—" },
-    { label: "Aguardando número FPKT", value: metrics?.aguardando_numero_fpkt ?? 0 },
+    { label: "Aguardando número de matrícula", value: metrics?.aguardando_numero_fpkt ?? 0 },
   ]), [metrics]);
 
   // Seleção múltipla só faz sentido na fila de PENDENTES — aprovada e
@@ -383,7 +383,7 @@ export function SolicitacoesTab() {
         </View>
         {withFpktInput && (
           <View style={{ minWidth: 132 }}>
-            <Text style={st.fieldLabel}>Número FPKT</Text>
+            <Text style={st.fieldLabel}>Número de matrícula</Text>
             <TextInput
               style={[st.input, isDup && st.inputDup] as any}
               value={fpktByReq[r.id] ?? ""}
@@ -414,7 +414,7 @@ export function SolicitacoesTab() {
       >
         <PageHead
           title="Solicitações"
-          sub="Fila de solicitações de praticante vindas dos dojôs. Confira, atribua o número FPKT e aprove — a ficha já chega completa."
+          sub="Fila de solicitações de praticante vindas dos dojôs. Confira, atribua o número de matrícula e aprove — a ficha já chega completa."
         />
 
         {loading && !metrics ? (
@@ -497,7 +497,7 @@ export function SolicitacoesTab() {
           <Card style={{ marginTop: 16 }}>
             <Text style={st.stageTitle}>Aprovar em lote como criação</Text>
             <Body muted style={{ marginBottom: 4 }}>
-              Confira os dados essenciais e atribua um número FPKT para cada solicitação — o número é emitido pela
+              Confira os dados essenciais e atribua um número de matrícula para cada solicitação — o número é emitido pela
               federação, nunca gerado pelo sistema. Cada aprovação cria o praticante NOVO no dojô da solicitação, e a
               faixa alegada vira o primeiro registro do histórico.
             </Body>
@@ -514,12 +514,12 @@ export function SolicitacoesTab() {
 
             {missingCount > 0 && batchRows.length > 0 && (
               <Text style={st.pendingHint}>
-                {missingCount === 1 ? "Falta 1 número FPKT" : `Faltam ${missingCount} números FPKT`} para liberar a aprovação.
+                {missingCount === 1 ? "Falta 1 número de matrícula" : `Faltam ${missingCount} números de matrícula`} para liberar a aprovação.
               </Text>
             )}
             {duplicatedNumbers.size > 0 && (
               <Text style={[st.pendingHint, { color: P.red }]}>
-                Há número FPKT repetido dentro do lote — cada praticante precisa de um número próprio.
+                Há número de matrícula repetido dentro do lote — cada praticante precisa de um número próprio.
               </Text>
             )}
 
@@ -691,7 +691,7 @@ export function SolicitacoesTab() {
                         </View>
                         <View style={st.metaItem}>
                           <Icon name="barcode" size={12} color={C.ink3} />
-                          <Mono style={st.metaTxt}>{r.fpkt_number_claimed || "Não tem número FPKT"}</Mono>
+                          <Mono style={st.metaTxt}>{r.fpkt_number_claimed || "Não tem número de matrícula"}</Mono>
                         </View>
                         {matchCount > 0 && (
                           <View style={st.metaItem}>

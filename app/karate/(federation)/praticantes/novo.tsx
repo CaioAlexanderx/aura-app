@@ -92,7 +92,7 @@ function DojoSelector({
         <View style={selectorStyles.dropdown}>
           <TextInput
             style={selectorStyles.searchInput}
-            placeholder="Buscar por nome ou FPKT-NNN"
+            placeholder="Buscar por nome ou número de matrícula"
             placeholderTextColor={KarateColors.ink3}
             value={query}
             onChangeText={handleQueryChange}

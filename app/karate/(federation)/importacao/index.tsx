@@ -11,6 +11,13 @@
 // (não é erro/pendência); só sinalizamos linhas sem o Número FPKT (a chave).
 // Upsert "completar o que falta" no backend.
 //
+// ⚠️ 16/09/2026 (identidade por cadastro): esta tela continua nomeando a FPKT
+// de propósito. Ela lê UM formato de planilha específico — as chaves de
+// coluna ("Número FPKT", "Cód.Aluno") são do arquivo, não rótulos nossos, e
+// dizer "planilha da federação" prometeria um importador genérico que não
+// existe. Só os rótulos de RESULTADO ("sem nº de matrícula") foram
+// neutralizados. Generalizar o importador é trabalho à parte.
+//
 // Vocabulário: a planilha FPKT fala "Academias/Alunos"; o resto do app fala
 // "Dojôs/Praticantes". Mantemos os rótulos da planilha aqui (casam a origem)
 // e exibimos uma nota de equivalência discreta (TermNote) para não criar
@@ -329,7 +336,7 @@ export default function ImportacaoScreen() {
                 <Stat n={importableStudents.length} label="alunos" />
                 <Stat n={beltEvents.length} label="faixas" />
                 <Stat n={transfers.length} label="transferências" />
-                {skipCount > 0 ? <Stat n={skipCount} label="sem Nº FPKT" tone="muted" /> : null}
+                {skipCount > 0 ? <Stat n={skipCount} label="sem nº de matrícula" tone="muted" /> : null}
               </View>
               <TermNote />
             </Card>
@@ -340,7 +347,7 @@ export default function ImportacaoScreen() {
               <Body muted style={{ fontSize: 12.5 }}>• Transferências entre dojôs entram no histórico do praticante (as que apontam para dojô fora da lista ficam de fora).</Body>
               <Body muted style={{ fontSize: 12.5 }}>• Registros que já existem são <Text style={{ fontWeight: "700" as any }}>complementados</Text> — nunca sobrescritos.</Body>
               <Body muted style={{ fontSize: 12.5 }}>• Reenviar a mesma planilha é seguro (não duplica).</Body>
-              {skipCount > 0 ? <Body muted style={{ fontSize: 12.5 }}>• {skipCount} aluno(s) sem Número FPKT ficam de fora (sem chave para vincular).</Body> : null}
+              {skipCount > 0 ? <Body muted style={{ fontSize: 12.5 }}>• {skipCount} aluno(s) sem número de matrícula ficam de fora (sem chave para vincular).</Body> : null}
             </Card>
             <View style={styles.row2}>
               <ShojiButton label="Trocar arquivo" variant="ghost" onPress={() => { setParsed(null); setStep(0); }} style={{ flex: 1 }} />

@@ -210,9 +210,16 @@ describe("a marca da visão do dojô é a do DOJÔ", () => {
     expect(Number(m![1])).toBeGreaterThanOrEqual(64);
   });
 
-  test("a FpktLogo continua existindo para a federação", () => {
-    // A troca é de CONTEXTO, não remoção: o shell da federação é dela.
-    expect(lerFonte("components/karate/KarateShell.tsx")).toMatch(/FpktLogo/);
+  // 16/09/2026: este teste dizia "a FpktLogo continua existindo para a
+  // federação" e conferia que o KarateShell ainda a renderizava. A premissa
+  // caiu quando nasceu a segunda federação (JKA Teste): o shell da federação
+  // é de QUEM ESTÁ LOGADO, não da FPKT. Quem guarda isso agora é
+  // __tests__/logoDaFederacao.test.tsx — aqui só sobra a garantia de que a
+  // troca do dojô não arrastou o shell da federação junto por engano.
+  test("o shell da federação tem uma marca própria (não a do dojô)", () => {
+    const fed = lerFonte("components/karate/KarateShell.tsx");
+    expect(fed).toMatch(/<FederationLogo/);
+    expect(fed).not.toMatch(/<DojoLogo/);
   });
 });
 

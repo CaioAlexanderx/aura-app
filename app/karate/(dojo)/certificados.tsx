@@ -15,7 +15,7 @@
 //   • O DA FEDERAÇÃO (OFICIAL) — esta tela. "Praticantes aptos" +
 //     "Meus pedidos" (Track J, intocado nesta leva): fila derivada de
 //     graduação sem pedido ativo, POST /cert-orders, acompanhamento de
-//     status. Documento HOMOLOGADO pela FPKT.
+//     status. Documento HOMOLOGADO pela federação.
 //   • O DO PRÓPRIO DOJÔ (NÃO OFICIAL) — NÃO mora mais aqui. Editor de
 //     modelo + emissão/impressão em massa agora vivem DENTRO do exame de
 //     kyu ("Meus eventos" → exame concluído), reusando
@@ -65,6 +65,9 @@ import { Skeleton } from "@/components/karate/Skeleton";
 // telas sem conexão: a pergunta "onde emito o do meu dojô" não depende
 // de estar conectado à federação.
 function DoisDocumentosCard({ onGoEventos }: { onGoEventos: () => void }) {
+  // O título dizia "Federação FPKT" fixo — o dojô de qualquer outra
+  // federação lia o nome da FPKT no próprio certificado (16/09/2026).
+  const { federationName } = useKarateDojo();
   return (
     <View style={st.docsCard}>
       <View style={st.docsRow}>
@@ -72,7 +75,7 @@ function DoisDocumentosCard({ onGoEventos }: { onGoEventos: () => void }) {
           <Icon name="ribbon" size={18} color={KarateColors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={st.docsTitle}>Certificado oficial · Federação FPKT</Text>
+          <Text style={st.docsTitle}>Certificado oficial · {federationName}</Text>
           <Text style={st.docsBody}>
             É o que esta página acompanha: o dojô faz o exame de kyu, e os aprovados entram na fila abaixo para
             o pedido do certificado <Text style={{ fontWeight: "600" }}>homologado pela federação</Text>.

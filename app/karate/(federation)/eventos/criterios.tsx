@@ -1,7 +1,7 @@
 // ============================================================
 // Critérios de Graduação — Aura Karatê (federação)
 //
-// DECISÃO FPKT #2: critérios podem ser provisórios (confirmed=false)
+// DECISÃO DE PRODUTO #2: critérios podem ser provisórios (confirmed=false)
 // até a federação confirmar. Banner de aviso + edição + confirmar.
 // Dados reais via karateApi.listBeltRequirements + updateBeltRequirements.
 // Sem mock: loading → skeleton, falha → ErrorState, save honesto.
@@ -42,7 +42,7 @@ function buildEditState(reqs: BeltRequirement[]): EditState {
 }
 
 export default function CriteriosScreen() {
-  const { federationId } = useKarateFederation();
+  const { federationId, federationName } = useKarateFederation();
   const [requirements, setRequirements] = useState<BeltRequirement[]>([]);
   const [editState, setEditState] = useState<EditState>({});
   const [loading, setLoading] = useState(true);
@@ -115,7 +115,7 @@ export default function CriteriosScreen() {
           <View style={styles.bannerTextCol}>
             <Text style={styles.bannerTitle}>Valores provisórios</Text>
             <Text style={styles.bannerDesc}>
-              Um ou mais critérios ainda não foram confirmados pela FPKT. Verifique e marque cada critério como "Confirmado" após validação.
+              Um ou mais critérios ainda não foram confirmados pela {federationName}. Verifique e marque cada critério como "Confirmado" após validação.
             </Text>
           </View>
         </View>
@@ -156,8 +156,8 @@ export default function CriteriosScreen() {
                 <Switch value={state?.course_required ?? false} onValueChange={(v) => setField(r.id, "course_required", v)} trackColor={{ true: KarateColors.primary, false: KarateColors.border }} accessibilityLabel="Curso obrigatório" />
               </View>
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Marcar como Confirmado pela FPKT</Text>
-                <Switch value={state?.confirmed ?? false} onValueChange={(v) => setField(r.id, "confirmed", v)} trackColor={{ true: KarateColors.ok, false: KarateColors.warn }} accessibilityLabel="Critério confirmado pela FPKT" />
+                <Text style={styles.switchLabel}>Marcar como Confirmado pela {federationName}</Text>
+                <Switch value={state?.confirmed ?? false} onValueChange={(v) => setField(r.id, "confirmed", v)} trackColor={{ true: KarateColors.ok, false: KarateColors.warn }} accessibilityLabel={`Critério confirmado pela ${federationName}`} />
               </View>
             </View>
           );
