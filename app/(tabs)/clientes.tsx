@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -9,6 +9,7 @@ import { Pagination } from "@/components/Pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { AddCustomerForm } from "@/components/screens/clientes/AddCustomerForm";
 import { CustomerRow } from "@/components/screens/clientes/CustomerRow";
+import { contextoDaBase } from "@/components/screens/clientes/segmentos";
 import { RankingTab } from "@/components/screens/clientes/RankingTab";
 import { RetentionTab } from "@/components/screens/clientes/RetentionTab";
 import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
@@ -160,6 +161,10 @@ export default function ClientesScreen() {
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(filtered, PAGE_SIZE, search);
   const totalLtv = customers.reduce((s, c) => s + c.totalSpent, 0);
+  // Fase 1 (C1.2): a tag "VIP" agora é relativa (top 10%/20% da própria
+  // base por gasto, não mais R$ 2.000 fixo) — o limiar é calculado uma vez
+  // pra lista inteira e passado pra cada linha, não recalculado por cliente.
+  const contextoSegmentos = useMemo(() => contextoDaBase(customers), [customers]);
 
   const pageIds        = paginated.map(c => c.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every(id => bulkSelected.has(id));
@@ -484,6 +489,7 @@ export default function ClientesScreen() {
                   isSelected={bulkSelected.has(c.id)}
                   onSelect={bulkMode ? toggleBulkSelect : undefined}
                   showCompanyBadge={showCompanyBadge}
+                  contexto={contextoSegmentos}
                 />
               ))}
             </View>
