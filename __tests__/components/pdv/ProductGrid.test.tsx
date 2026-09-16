@@ -1,0 +1,68 @@
+// Fase 0 · I0.3 — "EST. 11 UN" (abreviação de sistema, caixa alta) virou
+// "11 em estoque" (frase, singular natural, unidade só aparece quando não é
+// "un"/"unidade": "3 kg em estoque").
+//
+// Icon é mockado porque react-native-svg não passa pelo transformIgnorePatterns
+// do projeto (mesma razão de __tests__/studio/dataBR.test.ts falhar ao carregar).
+jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+import { ProductGrid, stockLabel, GridProduct } from "@/components/screens/pdv/ProductGrid";
+
+function flattenText(node: any): string {
+  if (node == null || node === false) return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(flattenText).join("");
+  return flattenText(node.children);
+}
+
+describe("stockLabel", () => {
+  it("unidade implícita (un / vazia): '11 em estoque', sem a unidade repetida", () => {
+    expect(stockLabel(11, "un")).toBe("11 em estoque");
+    expect(stockLabel(11, "")).toBe("11 em estoque");
+    expect(stockLabel(11, undefined)).toBe("11 em estoque");
+  });
+
+  it("singular natural: '1 em estoque', não '1 uns em estoque'", () => {
+    expect(stockLabel(1, "un")).toBe("1 em estoque");
+  });
+
+  it("unidade diferente de un segue a unidade: '3 kg em estoque'", () => {
+    expect(stockLabel(3, "kg")).toBe("3 kg em estoque");
+  });
+
+  it("nunca usa a abreviação antiga 'EST.' ou caixa alta de sistema", () => {
+    const label = stockLabel(11, "un");
+    expect(label).not.toMatch(/EST\./i);
+    expect(label).not.toBe(label.toUpperCase());
+  });
+
+  it("sem estoque informado (null/undefined), devolve string vazia", () => {
+    expect(stockLabel(null)).toBe("");
+    expect(stockLabel(undefined)).toBe("");
+  });
+});
+
+describe("ProductGrid — card mostra a frase, não a abreviação", () => {
+  const produto: GridProduct = {
+    id: "p1", name: "Vestido midi floral", price: 189.9, stock: 11, unit: "un",
+  };
+  const produtoKg: GridProduct = {
+    id: "p2", name: "Tecido avulso", price: 42, stock: 3, unit: "kg",
+  };
+
+  it("renderiza '11 em estoque' pro produto em unidade, '3 kg em estoque' pro produto em kg", () => {
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(
+        <ProductGrid products={[produto, produtoKg]} qtyById={{}} onAdd={jest.fn()} />,
+      );
+    });
+    const text = flattenText(t.toJSON());
+    expect(text).toContain("11 em estoque");
+    expect(text).toContain("3 kg em estoque");
+    expect(text).not.toMatch(/EST\./i);
+  });
+});

@@ -18,6 +18,19 @@ import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
 
+// "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
+// uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
+// quando NÃO é "un" (que já está implícita na frase): "3 kg em estoque".
+// 16/09/2026 (Fase 0 · I0.3).
+const UNIDADES_IMPLICITAS = ["", "un", "und", "uni", "unid", "unidade", "unidades", "pc", "pç"];
+
+export function stockLabel(stock?: number | null, unit?: string | null): string {
+  const u = String(unit || "").trim();
+  if (stock == null) return u;
+  const implicita = UNIDADES_IMPLICITAS.indexOf(u.toLowerCase()) >= 0;
+  return implicita ? stock + " em estoque" : stock + " " + u + " em estoque";
+}
+
 export type GridProduct = {
   id: string;
   name: string;
@@ -40,10 +53,13 @@ type Props = {
   minCard?: number;
   /** Densidade reduzida — imagem/glyph/paddings menores p/ telas pequenas. */
   compact?: boolean;
+  /** Mobile portrait: densidade ainda menor, pra caber DOIS pares de produtos
+   *  na primeira dobra de um 390×780 (Fase 0 · I0.3). */
+  dense?: boolean;
 };
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false }: Props) {
-  const gap = compact ? 10 : 14;
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false }: Props) {
+  const gap = dense ? 12 : compact ? 10 : 14;
   const webGrid = IS_WEB
     ? (minCard
         ? ({
@@ -63,25 +79,26 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           index={i}
           onAdd={onAdd}
           compact={compact}
+          dense={dense}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, onAdd, compact = false }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean }) {
+function ProdCard({ product, qty, index, onAdd, compact = false, dense = false }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean }) {
   const accent = accentForProduct(product.id);
   const letter = productLetter(product.name);
   const inCart = qty > 0;
   const addRef = useRef<any>(null);
 
   // ── Métricas responsivas ──────────────────────────
-  const pad      = compact ? 10 : 14;
-  const imgH     = compact ? 92 : 120;
-  const glyphSz  = compact ? 28 : 34;
-  const nameSz   = compact ? 12 : 13;
-  const nameMinH = compact ? 32 : 36;
-  const addSz    = compact ? 26 : 30;
+  const pad      = dense ? 10 : compact ? 10 : 14;
+  const imgH     = dense ? 72 : compact ? 92 : 120;
+  const glyphSz  = dense ? 24 : compact ? 28 : 34;
+  const nameSz   = dense ? 12 : compact ? 12 : 13;
+  const nameMinH = dense ? 30 : compact ? 32 : 36;
+  const addSz    = dense ? 26 : compact ? 26 : 30;
 
   function handlePress() {
     let rect: { x: number; y: number } | null = null;
@@ -181,9 +198,7 @@ function ProdCard({ product, qty, index, onAdd, compact = false }: { product: Gr
 
       <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
       {(product.stock != null || product.unit) && (
-        <Text style={s.stock}>
-          {product.stock != null ? "Est. " + product.stock + (product.unit ? " " + product.unit : " un") : product.unit || ""}
-        </Text>
+        <Text style={s.stock}>{stockLabel(product.stock, product.unit)}</Text>
       )}
 
       <View style={s.foot}>
@@ -255,12 +270,11 @@ const s = StyleSheet.create({
     lineHeight: 17,
     minHeight: 36,
   },
+  // Frase, não etiqueta de sistema: sem monoespaçado, sem caixa alta, e no
+  // ink2 pra ficar legível (o ink3 em 10px era quase invisível).
   stock: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
-    fontSize: 10,
-    color: Colors.ink3,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
+    fontSize: 11,
+    color: Colors.ink2,
     marginTop: 3,
   },
   foot: {
