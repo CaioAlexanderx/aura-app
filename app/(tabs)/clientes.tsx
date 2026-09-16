@@ -355,6 +355,32 @@ export default function ClientesScreen() {
           </View>
         )}
 
+        {/* Fase 0 (I0.2) — a porta da reativação mora na aba LISTA, que é a
+            que abre por padrão. Ela já esteve só na aba Retenção, e foi
+            exatamente por estar escondida numa aba secundária (que ainda
+            por cima é Negócio+) que o cliente de trial não achou a
+            reativação. Aqui ela aparece em todos os planos; no Essencial
+            o botão leva a /planos.
+
+            Variante COMPACTA de propósito: acima dela já vêm o cabeçalho
+            editorial, o cartão de retenção, as abas e a linha de
+            importar/exportar. Com o bloco completo a primeira linha de
+            cliente cai abaixo da dobra em 911px de altura — e uma porta
+            que empurra a lista para fora da tela troca um problema por
+            outro. Medições em docs/mockups/fase0-entrada-reativacao.html.
+
+            Base vazia não mostra bloco: "0 clientes · R$ 0,00" numa loja
+            nova não é informação, é desânimo. */}
+        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
+          <ReativacaoEntrada
+            customers={customers}
+            plan={plan}
+            companyCount={consolidatedView ? companyCount : 1}
+            compacto
+            idBase="clientes-ir-para-reativacao"
+          />
+        )}
+
         {bulkMode && (
           <View style={s.bulkBar}>
             <Pressable onPress={handleSelectPage} style={s.bulkAction}>
@@ -483,19 +509,20 @@ export default function ClientesScreen() {
 
         {tab === 2 && (
           <>
-            {/* Fase 0 (I0.2): a porta da reativação fica ACIMA do gate de
-                plano de propósito. O produto pago é o disparo, não a
-                contagem — quem está no Essencial vê quantos clientes
-                sumiram e quanto eles já gastaram, que é exatamente o
-                argumento do upgrade, e o botão leva a /planos.
-                As faixas de dias saem da régua única (diasSemComprar). */}
-            <ReativacaoEntrada
-              customers={customers}
-              plan={plan}
-              carregando={isLoading}
-              companyCount={consolidatedView ? companyCount : 1}
-              idBase="clientes-ir-para-reativacao"
-            />
+            {/* A mesma porta, na aba onde já se fala de quem sumiu — aqui
+                na versão COMPLETA, porque nesta aba não há lista
+                competindo pela dobra. Fica ACIMA do gate de plano de
+                propósito: o produto pago é o disparo, não a contagem, e
+                quem está no Essencial vê justamente o número que é o
+                argumento do upgrade. Só o botão muda de destino. */}
+            {!isLoading && !isError && customers.length > 0 && (
+              <ReativacaoEntrada
+                customers={customers}
+                plan={plan}
+                companyCount={consolidatedView ? companyCount : 1}
+                idBase="clientes-retencao-ir-para-reativacao"
+              />
+            )}
             {isEssencial ? (
               <UpgradeCard
                 title="Retenção e clientes em risco"

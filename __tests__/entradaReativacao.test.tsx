@@ -12,7 +12,12 @@
 //    abandono, e um cupom de "volte" para ele sairia errado;
 // 4. no Essencial a CONTAGEM continua visível e só o botão muda de
 //    destino: o produto pago é o disparo, não o número;
-// 5. no consolidado a conta soma as lojas (MULTICNPJ).
+// 5. no consolidado a conta soma as lojas (MULTICNPJ);
+// 6. e, o mais importante: a porta abre com a tela. Ela já esteve só na
+//    aba Retenção — secundária e Negócio+ — e foi por estar escondida
+//    ali que o cliente de trial não a achou. Agora ela mora na aba
+//    Lista, que é a que abre. Numa base vazia não aparece: "0 clientes ·
+//    R$ 0,00" numa loja nova não é informação.
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -33,7 +38,29 @@ jest.mock("@/stores/auth", () => ({
   ),
 }));
 
+// ── Mocks só da tela de Clientes ────────────────────────────
+// A tela inteira puxa meia dúzia de componentes pesados que não têm nada
+// a ver com a porta da reativação; aqui eles viram casca.
+jest.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQueries: jest.fn() }) }));
+jest.mock("@/components/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+jest.mock("@/components/ImportExportBar", () => ({ ImportExportBar: () => null }));
+jest.mock("@/components/Pagination", () => ({ Pagination: () => null }));
+jest.mock("@/components/screens/clientes/AddCustomerForm", () => ({ AddCustomerForm: () => null }));
+jest.mock("@/components/screens/clientes/CustomerRow", () => ({ CustomerRow: () => null }));
+jest.mock("@/components/screens/clientes/RankingTab", () => ({ RankingTab: () => null }));
+jest.mock("@/components/screens/clientes/RetentionTab", () => ({ RetentionTab: () => null }));
+jest.mock("@/components/RetentionCard", () => ({ RetentionCard: () => null }));
+jest.mock("@/components/ReviewsList", () => ({ ReviewsList: () => null }));
+jest.mock("@/components/ServerImport", () => ({ ServerImport: () => null }));
+jest.mock("@/components/ListSkeleton", () => ({ ListSkeleton: () => null }));
+jest.mock("@/components/EmptyState", () => ({ EmptyState: () => null }));
+jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
+
+var mockHook: any = {};
+jest.mock("@/hooks/useCustomers", () => ({ useCustomers: () => mockHook }));
+
 import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
+import ClientesScreen from "@/app/(tabs)/clientes";
 
 function haDias(n: number): string {
   return new Date(Date.now() - n * 864e5).toLocaleDateString("pt-BR");
@@ -178,6 +205,69 @@ describe("plano Essencial: número visível, botão para planos", () => {
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/planos");
     expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining("/clientes/reativacao"));
     tree.unmount();
+  });
+});
+
+describe("a porta abre com a tela: aba Lista de Clientes", () => {
+  function estado(over: any = {}) {
+    return {
+      customers: BASE, isLoading: false, isError: false, refetch: jest.fn(),
+      isDemo: false, planBlocked: false, bulkDeleting: false,
+      addCustomer: jest.fn(), updateCustomer: jest.fn(), deleteCustomer: jest.fn(),
+      bulkDeleteCustomers: jest.fn(), consolidatedView: false, companyCount: 1,
+      plan: "negocio", planLimit: null, ...over,
+    };
+  }
+  function montarTela() {
+    return renderer.create(<ClientesScreen />);
+  }
+  function tem(tree: any, id: string): boolean {
+    return tree.root.findAllByProps({ testID: id }).length > 0;
+  }
+
+  beforeEach(() => { mockPush.mockClear(); mockRefreshMe.mockClear(); mockHook = estado(); });
+
+  it("a aba que abre é a Lista, e a porta está nela", async () => {
+    let tree: any;
+    await act(async () => { tree = montarTela(); });
+    // Sem tocar em aba nenhuma: é o estado inicial da tela.
+    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(true);
+    expect(tem(tree, "clientes-ir-para-reativacao-contagem")).toBe(true);
+    tree.unmount();
+  });
+
+  it("no Essencial a porta continua na Lista — o gate é do disparo, não do número", async () => {
+    mockHook = estado({ plan: "essencial" });
+    let tree: any;
+    await act(async () => { tree = montarTela(); });
+    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(true);
+    await act(async () => {
+      tree.root.findAllByProps({ testID: "clientes-ir-para-reativacao" })[0].props.onPress();
+    });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/planos");
+    tree.unmount();
+  });
+
+  it("loja nova (base vazia) não ganha um bloco dizendo '0 clientes · R$ 0,00'", async () => {
+    mockHook = estado({ customers: [] });
+    let tree: any;
+    await act(async () => { tree = montarTela(); });
+    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(false);
+    tree.unmount();
+  });
+
+  it("enquanto a lista carrega, e quando ela falha, a porta também não aparece", async () => {
+    mockHook = estado({ isLoading: true, customers: [] });
+    let tree: any;
+    await act(async () => { tree = montarTela(); });
+    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(false);
+    tree.unmount();
+
+    mockHook = estado({ isError: true, customers: [] });
+    let tree2: any;
+    await act(async () => { tree2 = montarTela(); });
+    expect(tem(tree2, "clientes-ir-para-reativacao")).toBe(false);
+    tree2.unmount();
   });
 });
 
