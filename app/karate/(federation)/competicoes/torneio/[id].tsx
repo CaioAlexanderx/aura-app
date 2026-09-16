@@ -30,7 +30,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Modal, TextInput,
-  ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Animated, useWindowDimensions,
+  ActivityIndicator, StyleSheet, ViewStyle, TextStyle, Animated, useWindowDimensions, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -517,295 +517,297 @@ export default function TorneioDetalhe() {
 
   return (
     <View style={styles.screen}>
-      <TouchableOpacity style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar">
-        <Icon name="chevron-back" size={18} color={KarateColors.primary} />
-        <Text style={styles.backText}>Competições</Text>
-      </TouchableOpacity>
+      <PageScroll isWide={isWide}>
+        <TouchableOpacity style={styles.back} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar">
+          <Icon name="chevron-back" size={18} color={KarateColors.primary} />
+          <Text style={styles.backText}>Competições</Text>
+        </TouchableOpacity>
 
-      {/* ── Header do campeonato ────────────────────────────────────── */}
-      <Animated.View style={[
-        styles.headerCard,
-        justPublished && {
-          shadowColor: KarateColors.primary,
-          shadowOpacity: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }),
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 0 },
-          borderColor: celebrateAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [KarateColors.border, KarateColors.primary],
-          }),
-        },
-      ]}>
-        <View style={styles.headerAccent} />
-        <View style={styles.headerTop}>
-          <View style={styles.titleBlock}>
-            <View style={styles.seal}>
-              <Icon name="trophy" size={20} color={KarateColors.bg} />
+        {/* ── Header do campeonato ────────────────────────────────────── */}
+        <Animated.View style={[
+          styles.headerCard,
+          justPublished && {
+            shadowColor: KarateColors.primary,
+            shadowOpacity: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }),
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 0 },
+            borderColor: celebrateAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [KarateColors.border, KarateColors.primary],
+            }),
+          },
+        ]}>
+          <View style={styles.headerAccent} />
+          <View style={styles.headerTop}>
+            <View style={styles.titleBlock}>
+              <View style={styles.seal}>
+                <Icon name="trophy" size={20} color={KarateColors.bg} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.title}>{comp.name}</Text>
+                <Text style={styles.subtitle}>
+                  Temporada {comp.season}
+                  {comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}
+                  {comp.location ? ` · ${comp.location}` : ""}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.title}>{comp.name}</Text>
-              <Text style={styles.subtitle}>
-                Temporada {comp.season}
-                {comp.circuit_round ? ` · ${comp.circuit_round}ª etapa` : ""}
-                {comp.location ? ` · ${comp.location}` : ""}
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {justPublished && (
+                <Animated.View style={[styles.celebrateCheck, {
+                  opacity: celebrateAnim,
+                  transform: [{ scale: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+                }]}>
+                  <Icon name="checkmark-circle" size={16} color={KarateColors.primary} />
+                </Animated.View>
+              )}
+              <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
             </View>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {justPublished && (
-              <Animated.View style={[styles.celebrateCheck, {
-                opacity: celebrateAnim,
-                transform: [{ scale: celebrateAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
-              }]}>
-                <Icon name="checkmark-circle" size={16} color={KarateColors.primary} />
-              </Animated.View>
-            )}
-            <Badge status={STATUS_BADGE[comp.status]} label={STATUS_LABEL[comp.status]} />
-          </View>
-        </View>
-        {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa.
-            F7.4: Encerrar (open) e Cancelar (draft/open). "Chaves" deixou de ser um botão
-            separado — agora é uma aba dentro de cada categoria no workspace abaixo. */}
-        <View style={styles.headerActions}>
-          {comp.status === "draft" && (
-            <KarateButton
-              label={publishing ? "Publicando..." : "Publicar / Abrir inscrições"}
-              variant="sumi"
-              size="sm"
-              loading={publishing}
-              onPress={handlePublish}
-            />
-          )}
-          <KarateButton
-            label="Editar informações"
-            variant="secondary"
-            size="sm"
-            onPress={() => setShowEditInfo(true)}
-          />
-          {comp.status === "open" && (
-            <KarateButton
-              label={closing ? "Encerrando..." : "Encerrar"}
-              variant="ghost"
-              size="sm"
-              loading={closing}
-              disabled={closing || cancelling}
-              onPress={handleClose}
-            />
-          )}
-          {(comp.status === "draft" || comp.status === "open") && (
-            <KarateButton
-              label={cancelling ? "Cancelando..." : "Cancelar"}
-              variant="ghost"
-              size="sm"
-              loading={cancelling}
-              disabled={closing || cancelling}
-              onPress={handleCancel}
-            />
-          )}
-          {(comp.status === "draft" || comp.status === "cancelled") && (
-            <KarateButton
-              label={deleting ? "Excluindo..." : "Excluir"}
-              variant="ghost"
-              size="sm"
-              loading={deleting}
-              disabled={deleting}
-              onPress={handleDelete}
-            />
-          )}
-        </View>
-      </Animated.View>
-
-      {/* ── Workspace: rail + conteúdo ──────────────────────────────── */}
-      <View style={[styles.workspace, isWide ? styles.workspaceWide : styles.workspaceNarrow]}>
-        <CategoryRail
-          isWide={isWide}
-          categories={comp.categories}
-          selection={selection}
-          onSelect={setSelection}
-          onSelectCategory={handleSelectCategory}
-          entriesByCat={entriesByCat}
-          divisions={divisions}
-        />
-
-        <View style={styles.contentArea}>
-          {selection.kind === "overview" && (
-            <>
-              <VisaoGeral
-                comp={comp}
-                entriesByCat={entriesByCat}
-                catProgress={catProgress}
-                loadingProgress={loadingProgress}
-                isKataModality={isKataModality}
-                onSelectCategory={handleSelectCategory}
-                divisions={divisions}
+          {/* F6.3: publicar campeonato (draft -> open) + editável: nome, data, local, etapa, taxa.
+              F7.4: Encerrar (open) e Cancelar (draft/open). "Chaves" deixou de ser um botão
+              separado — agora é uma aba dentro de cada categoria no workspace abaixo. */}
+          <View style={styles.headerActions}>
+            {comp.status === "draft" && (
+              <KarateButton
+                label={publishing ? "Publicando..." : "Publicar / Abrir inscrições"}
+                variant="sumi"
+                size="sm"
+                loading={publishing}
+                onPress={handlePublish}
               />
-              {/* Divulgação/Banners: anexo do evento, dentro da Visão geral
-                  para não roubar altura do rail + chaves no workspace. */}
-              <View style={{ marginTop: 20 }}>
-                <EventBannerManager federationId={federationId} eventId={cid} />
-              </View>
-            </>
-          )}
-          {selection.kind === "ranking" && (
-            <RankingGeral
-              ranking={ranking}
-              loading={loadingRanking}
-              error={rankingError}
-              onRetry={loadRanking}
-              onPrint={handlePrintRanking}
-              printing={printingRanking}
+            )}
+            <KarateButton
+              label="Editar informações"
+              variant="secondary"
+              size="sm"
+              onPress={() => setShowEditInfo(true)}
             />
-          )}
-          {selection.kind === "delegacoes" && (
-            <DelegacoesTab federationId={federationId} competitionId={cid} />
-          )}
-          {selection.kind === "credenciamento" && (
-            <CredenciamentoTab federationId={federationId} competitionId={cid} />
-          )}
-          {selection.kind === "kotos" && (
-            <KotosTab federationId={federationId} competitionId={cid} />
-          )}
-          {selection.kind === "premiacao" && (
-            <PremiacaoTab federationId={federationId} competitionId={cid} />
-          )}
-          {selection.kind === "arbitragem" && (
-            <ArbitragemTab federationId={federationId} competitionId={cid} />
-          )}
-          {selection.kind === "setup" && (
-            <SetupTab
-              federationId={federationId}
-              competitionId={cid}
-              divisions={divisions}
-              pricing={comp.pricing_config || {}}
-              rectificationDeadline={comp.rectification_deadline || null}
-              conferencePublishedAt={comp.conference_published_at || null}
-              bracketsPublishedAt={comp.brackets_published_at || null}
-              onChanged={load}
-            />
-          )}
-          {selection.kind === "category" && selectedCategory && (
-            <View>
-              <View style={styles.catHeadRow}>
-                <View style={[styles.mtile, isKataModality(selectedCategory.modality) ? styles.mtileKata : styles.mtileKumite]}>
-                  <Text style={[styles.mtileGlyph, { color: isKataModality(selectedCategory.modality) ? P.warn : P.red2 }]}>
-                    {isKataModality(selectedCategory.modality) ? "型" : "組"}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.catName} numberOfLines={1}>{selectedCategory.name}</Text>
-                  <Text style={styles.catMeta}>
-                    {MODALITY_LABEL[selectedCategory.modality]} · {selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)} {(selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)) === 1 ? "inscrito" : "inscritos"}
-                  </Text>
-                  {(() => {
-                    // Divisão e grupo da categoria (quando existirem) — linha
-                    // secundária em pills, sem competir com o nome.
-                    const scope = categoryScope(selectedCategory, divisions);
-                    if (!scope.division && !scope.group) return null;
-                    return (
-                      <View style={styles.scopeRow}>
-                        {!!scope.division && (
-                          <View style={styles.scopePill}>
-                            <Icon name="layers" size={11} color={KarateColors.ink3} />
-                            <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.division}</Text>
-                          </View>
-                        )}
-                        {!!scope.group && (
-                          <View style={styles.scopePill}>
-                            <Icon name="grid" size={11} color={KarateColors.ink3} />
-                            <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.group}</Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })()}
-                </View>
-                <Pressable
-                  onPress={() => setEditFor(selectedCategory)}
-                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
-                  accessibilityLabel={`Editar categoria ${selectedCategory.name}`}
-                  hitSlop={8}
-                >
-                  <Icon name="edit" size={15} color={KarateColors.ink2} />
-                </Pressable>
-                <Pressable
-                  onPress={() => setCopyFor(selectedCategory)}
-                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
-                  accessibilityLabel={`Copiar categoria ${selectedCategory.name}`}
-                  hitSlop={8}
-                >
-                  <Icon name="copy" size={15} color={KarateColors.ink2} />
-                </Pressable>
-                {/* P1: plano de fases (formato por rodada) e súmula imprimível. */}
-                <Pressable
-                  onPress={() => setPhasePlanFor(selectedCategory)}
-                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
-                  accessibilityLabel={`Plano de fases de ${selectedCategory.name}`}
-                  hitSlop={8}
-                >
-                  <Icon name="layers" size={15} color={KarateColors.ink2} />
-                </Pressable>
-                <Pressable
-                  onPress={() => handlePrintScoresheet(selectedCategory.id)}
-                  disabled={printingSheet}
-                  style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
-                  accessibilityLabel={`Imprimir súmula de ${selectedCategory.name}`}
-                  hitSlop={8}
-                >
-                  <Icon name="print" size={15} color={KarateColors.ink2} />
-                </Pressable>
-              </View>
+            {comp.status === "open" && (
+              <KarateButton
+                label={closing ? "Encerrando..." : "Encerrar"}
+                variant="ghost"
+                size="sm"
+                loading={closing}
+                disabled={closing || cancelling}
+                onPress={handleClose}
+              />
+            )}
+            {(comp.status === "draft" || comp.status === "open") && (
+              <KarateButton
+                label={cancelling ? "Cancelando..." : "Cancelar"}
+                variant="ghost"
+                size="sm"
+                loading={cancelling}
+                disabled={closing || cancelling}
+                onPress={handleCancel}
+              />
+            )}
+            {(comp.status === "draft" || comp.status === "cancelled") && (
+              <KarateButton
+                label={deleting ? "Excluindo..." : "Excluir"}
+                variant="ghost"
+                size="sm"
+                loading={deleting}
+                disabled={deleting}
+                onPress={handleDelete}
+              />
+            )}
+          </View>
+        </Animated.View>
 
-              {/* Abas locais — trocar de categoria mantém a aba ativa. */}
-              <View style={styles.tabsRow}>
-                <Pressable
-                  style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "inscritos" && styles.tabBtnActive]}
-                  onPress={() => setActiveTab("inscritos")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: activeTab === "inscritos" }}
-                >
-                  <Text style={[styles.tabBtnText, activeTab === "inscritos" && styles.tabBtnTextActive]}>Inscritos</Text>
-                </Pressable>
-                <Pressable
-                  style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "chaves" && styles.tabBtnActive]}
-                  onPress={() => setActiveTab("chaves")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: activeTab === "chaves" }}
-                >
-                  <Text style={[styles.tabBtnText, activeTab === "chaves" && styles.tabBtnTextActive]}>{chavesTabLabel}</Text>
-                </Pressable>
-              </View>
+        {/* ── Workspace: rail + conteúdo ──────────────────────────────── */}
+        <View style={[styles.workspace, isWide ? styles.workspaceWide : styles.workspaceNarrow]}>
+          <CategoryRail
+            isWide={isWide}
+            categories={comp.categories}
+            selection={selection}
+            onSelect={setSelection}
+            onSelectCategory={handleSelectCategory}
+            entriesByCat={entriesByCat}
+            divisions={divisions}
+          />
 
-              {activeTab === "inscritos" && (
-                <InscritosTab
-                  category={selectedCategory}
-                  entries={entriesByCat[selectedCategory.id] || []}
-                  loading={entriesLoadingCat === selectedCategory.id}
-                  onLaunchResult={setResultFor}
-                  onPrintRoster={handlePrintRoster}
-                  printing={printingRoster}
+          <ContentScroll isWide={isWide}>
+            {selection.kind === "overview" && (
+              <>
+                <VisaoGeral
+                  comp={comp}
+                  entriesByCat={entriesByCat}
+                  catProgress={catProgress}
+                  loadingProgress={loadingProgress}
+                  isKataModality={isKataModality}
+                  onSelectCategory={handleSelectCategory}
+                  divisions={divisions}
                 />
-              )}
+                {/* Divulgação/Banners: anexo do evento, dentro da Visão geral
+                    para não roubar altura do rail + chaves no workspace. */}
+                <View style={{ marginTop: 20 }}>
+                  <EventBannerManager federationId={federationId} eventId={cid} />
+                </View>
+              </>
+            )}
+            {selection.kind === "ranking" && (
+              <RankingGeral
+                ranking={ranking}
+                loading={loadingRanking}
+                error={rankingError}
+                onRetry={loadRanking}
+                onPrint={handlePrintRanking}
+                printing={printingRanking}
+              />
+            )}
+            {selection.kind === "delegacoes" && (
+              <DelegacoesTab federationId={federationId} competitionId={cid} />
+            )}
+            {selection.kind === "credenciamento" && (
+              <CredenciamentoTab federationId={federationId} competitionId={cid} />
+            )}
+            {selection.kind === "kotos" && (
+              <KotosTab federationId={federationId} competitionId={cid} />
+            )}
+            {selection.kind === "premiacao" && (
+              <PremiacaoTab federationId={federationId} competitionId={cid} />
+            )}
+            {selection.kind === "arbitragem" && (
+              <ArbitragemTab federationId={federationId} competitionId={cid} />
+            )}
+            {selection.kind === "setup" && (
+              <SetupTab
+                federationId={federationId}
+                competitionId={cid}
+                divisions={divisions}
+                pricing={comp.pricing_config || {}}
+                rectificationDeadline={comp.rectification_deadline || null}
+                conferencePublishedAt={comp.conference_published_at || null}
+                bracketsPublishedAt={comp.brackets_published_at || null}
+                onChanged={load}
+              />
+            )}
+            {selection.kind === "category" && selectedCategory && (
+              <View>
+                <View style={styles.catHeadRow}>
+                  <View style={[styles.mtile, isKataModality(selectedCategory.modality) ? styles.mtileKata : styles.mtileKumite]}>
+                    <Text style={[styles.mtileGlyph, { color: isKataModality(selectedCategory.modality) ? P.warn : P.red2 }]}>
+                      {isKataModality(selectedCategory.modality) ? "型" : "組"}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.catName} numberOfLines={1}>{selectedCategory.name}</Text>
+                    <Text style={styles.catMeta}>
+                      {MODALITY_LABEL[selectedCategory.modality]} · {selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)} {(selectedCategory.entry_count ?? (entriesByCat[selectedCategory.id]?.length ?? 0)) === 1 ? "inscrito" : "inscritos"}
+                    </Text>
+                    {(() => {
+                      // Divisão e grupo da categoria (quando existirem) — linha
+                      // secundária em pills, sem competir com o nome.
+                      const scope = categoryScope(selectedCategory, divisions);
+                      if (!scope.division && !scope.group) return null;
+                      return (
+                        <View style={styles.scopeRow}>
+                          {!!scope.division && (
+                            <View style={styles.scopePill}>
+                              <Icon name="layers" size={11} color={KarateColors.ink3} />
+                              <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.division}</Text>
+                            </View>
+                          )}
+                          {!!scope.group && (
+                            <View style={styles.scopePill}>
+                              <Icon name="grid" size={11} color={KarateColors.ink3} />
+                              <Text style={styles.scopePillTxt} numberOfLines={1}>{scope.group}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })()}
+                  </View>
+                  <Pressable
+                    onPress={() => setEditFor(selectedCategory)}
+                    style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                    accessibilityLabel={`Editar categoria ${selectedCategory.name}`}
+                    hitSlop={8}
+                  >
+                    <Icon name="edit" size={15} color={KarateColors.ink2} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCopyFor(selectedCategory)}
+                    style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                    accessibilityLabel={`Copiar categoria ${selectedCategory.name}`}
+                    hitSlop={8}
+                  >
+                    <Icon name="copy" size={15} color={KarateColors.ink2} />
+                  </Pressable>
+                  {/* P1: plano de fases (formato por rodada) e súmula imprimível. */}
+                  <Pressable
+                    onPress={() => setPhasePlanFor(selectedCategory)}
+                    style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                    accessibilityLabel={`Plano de fases de ${selectedCategory.name}`}
+                    hitSlop={8}
+                  >
+                    <Icon name="layers" size={15} color={KarateColors.ink2} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handlePrintScoresheet(selectedCategory.id)}
+                    disabled={printingSheet}
+                    style={({ hovered }) => [styles.iconBtn, hovered && styles.iconBtnHover]}
+                    accessibilityLabel={`Imprimir súmula de ${selectedCategory.name}`}
+                    hitSlop={8}
+                  >
+                    <Icon name="print" size={15} color={KarateColors.ink2} />
+                  </Pressable>
+                </View>
 
-              {activeTab === "chaves" && (
-                <CategoryBracketPanel
-                  federationId={federationId}
-                  cid={cid}
-                  catId={selectedCategory.id}
-                  catName={selectedCategory.name}
-                  modality={selectedCategory.modality}
-                  competitionName={comp.name}
-                  federationName={federationName}
-                  categoryNav={{
-                    items: comp.categories.map((c) => ({ id: c.id, name: c.name, modality: c.modality })),
-                    currentId: selectedCategory.id,
-                    onSelect: handleSelectCategory,
-                  }}
-                />
-              )}
-            </View>
-          )}
+                {/* Abas locais — trocar de categoria mantém a aba ativa. */}
+                <View style={styles.tabsRow}>
+                  <Pressable
+                    style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "inscritos" && styles.tabBtnActive]}
+                    onPress={() => setActiveTab("inscritos")}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: activeTab === "inscritos" }}
+                  >
+                    <Text style={[styles.tabBtnText, activeTab === "inscritos" && styles.tabBtnTextActive]}>Inscritos</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ hovered }) => [styles.tabBtn, hovered && styles.tabBtnHover, activeTab === "chaves" && styles.tabBtnActive]}
+                    onPress={() => setActiveTab("chaves")}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: activeTab === "chaves" }}
+                  >
+                    <Text style={[styles.tabBtnText, activeTab === "chaves" && styles.tabBtnTextActive]}>{chavesTabLabel}</Text>
+                  </Pressable>
+                </View>
+
+                {activeTab === "inscritos" && (
+                  <InscritosTab
+                    category={selectedCategory}
+                    entries={entriesByCat[selectedCategory.id] || []}
+                    loading={entriesLoadingCat === selectedCategory.id}
+                    onLaunchResult={setResultFor}
+                    onPrintRoster={handlePrintRoster}
+                    printing={printingRoster}
+                  />
+                )}
+
+                {activeTab === "chaves" && (
+                  <CategoryBracketPanel
+                    federationId={federationId}
+                    cid={cid}
+                    catId={selectedCategory.id}
+                    catName={selectedCategory.name}
+                    modality={selectedCategory.modality}
+                    competitionName={comp.name}
+                    federationName={federationName}
+                    categoryNav={{
+                      items: comp.categories.map((c) => ({ id: c.id, name: c.name, modality: c.modality })),
+                      currentId: selectedCategory.id,
+                      onSelect: handleSelectCategory,
+                    }}
+                  />
+                )}
+              </View>
+            )}
+          </ContentScroll>
         </View>
-      </View>
+      </PageScroll>
 
       <ResultadoModal entry={resultFor} onClose={() => setResultFor(null)} onSave={saveResult} />
       <CategoriaFormModal
@@ -860,6 +862,54 @@ export default function TorneioDetalhe() {
           setComp((prev) => (prev ? { ...prev, ...updated } : prev));
         }}
       />
+    </View>
+  );
+}
+
+// ── Rolagem da página / do workspace ──────────────────────────────
+// A tela inteira vive dentro de KarateShell > styles.content, que é
+// flex:1 + overflow:"hidden": NADA rola sozinho aqui, cada tela tem de
+// declarar sua própria rolagem. Até 16/09/2026 esta não declarava
+// nenhuma, então tanto o rail de categorias quanto o conteúdo de TODAS
+// as abas eram simplesmente cortados na altura da viewport.
+//
+// Largo: cabeçalho fixo, e rail e conteúdo rolam INDEPENDENTES (duas
+// colunas de altura travada, receita de KarateShell/DojoShell).
+// Estreito: quem rola é a página inteira — no celular o cabeçalho do
+// campeonato tem de sair do caminho junto com o resto.
+
+function PageScroll({ isWide, children }: { isWide: boolean; children: React.ReactNode }) {
+  if (isWide) return <>{children}</>;
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+      showsVerticalScrollIndicator={Platform.OS === "web"}
+      testID="page-scroll"
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+// Área de conteúdo do workspace — vale para TODAS as abas (visão geral,
+// ranking, delegações, credenciamento, kotos, premiação, arbitragem,
+// configurar e as de categoria), porque envolve o contentArea inteiro e
+// não o corpo de uma aba específica.
+function ContentScroll({ isWide, children }: { isWide: boolean; children: React.ReactNode }) {
+  if (!isWide) {
+    return <View style={[styles.contentArea, styles.contentAreaNarrow]} testID="content-area">{children}</View>;
+  }
+  return (
+    <View style={[styles.contentArea, styles.contentAreaWide]} testID="content-area">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.contentScrollInner}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
+        testID="content-scroll"
+      >
+        {children}
+      </ScrollView>
     </View>
   );
 }
@@ -1044,10 +1094,22 @@ function CategoryRail({
   );
 
   if (isWide) {
+    // Coluna rolável — MESMA receita de KarateShell/DojoShell: o wrapper
+    // (alignSelf:"stretch" + overflow:"hidden") trava a altura na do pai e
+    // é o ScrollView flex:1 de dentro que rola. Sem o wrapper o próprio
+    // ScrollView crescia com o conteúdo, nunca acionava, e a lista de
+    // categorias era cortada pela viewport (bug do QA de 16/09/2026).
     return (
-      <ScrollView style={styles.railWide} contentContainerStyle={{ gap: 4, paddingBottom: 24 }}>
-        {items}
-      </ScrollView>
+      <View style={styles.railWideWrap} testID="rail-wide">
+        <ScrollView
+          style={styles.railWide}
+          contentContainerStyle={{ gap: 4, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={Platform.OS === "web"}
+          testID="rail-wide-scroll"
+        >
+          {items}
+        </ScrollView>
+      </View>
     );
   }
   return (
@@ -1075,6 +1137,7 @@ function RailItem({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
+        testID={`rail-item-${label}`}
       >
         {active && <View style={styles.railAccentBar} />}
         <Icon name={icon as any} size={16} color={active ? KarateColors.primary : KarateColors.ink3} />
@@ -1094,6 +1157,7 @@ function RailItem({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
+      testID={`rail-item-${label}`}
     >
       <Icon name={icon as any} size={14} color={active ? KarateColors.primary : KarateColors.ink3} />
       <Text style={[styles.railChipLabel, active && styles.railChipLabelActive]} numberOfLines={1}>{label}</Text>
@@ -1631,13 +1695,21 @@ const styles = StyleSheet.create({
   statNum: { fontSize: 14, fontWeight: "800", color: KarateColors.ink, fontFamily: KarateFonts.mono } as TextStyle,
 
   // ── Workspace layout ──
-  workspace: { flex: 1, marginHorizontal: 24, marginTop: 16, marginBottom: 24, gap: 16 } as ViewStyle,
-  workspaceWide: { flexDirection: "row" } as ViewStyle,
-  workspaceNarrow: { flexDirection: "column" } as ViewStyle,
-  contentArea: { flex: 1, minWidth: 0 } as ViewStyle,
+  // minHeight:0 + overflow:"hidden" (largo) travam a altura do workspace na
+  // que sobrou da viewport — é o que faz as colunas roláveis de dentro
+  // acionarem em vez de esticarem. No estreito o workspace volta a crescer
+  // com o conteúdo, porque quem rola lá é a página (PageScroll).
+  workspace: { flex: 1, minHeight: 0, marginHorizontal: 24, marginTop: 16, marginBottom: 24, gap: 16 } as ViewStyle,
+  workspaceWide: { flexDirection: "row", overflow: "hidden" } as ViewStyle,
+  workspaceNarrow: { flexDirection: "column", flexGrow: 0, flexShrink: 0, flexBasis: "auto" } as ViewStyle,
+  contentArea: { minWidth: 0 } as ViewStyle,
+  contentAreaWide: { flex: 1, alignSelf: "stretch", overflow: "hidden" } as ViewStyle,
+  contentAreaNarrow: { width: "100%" } as ViewStyle,
+  contentScrollInner: { paddingBottom: 24 } as ViewStyle,
 
   // ── Rail (wide) ──
-  railWide: { width: 260, flexGrow: 0, flexShrink: 0 } as ViewStyle,
+  railWideWrap: { width: 260, flexGrow: 0, flexShrink: 0, alignSelf: "stretch", overflow: "hidden" } as ViewStyle,
+  railWide: { flex: 1 } as ViewStyle,
   railItemWide: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: KarateRadius.md } as ViewStyle,
   railItemWideActive: { backgroundColor: KarateColors.primarySoft } as ViewStyle,
   railItemWideLabel: { fontSize: 13, fontWeight: "700", color: KarateColors.ink2 } as TextStyle,
