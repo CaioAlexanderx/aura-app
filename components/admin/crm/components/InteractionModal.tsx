@@ -7,8 +7,10 @@ import { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, TextInput, Modal, ActivityIndicator, Switch } from "react-native";
 import { Colors } from "@/constants/colors";
 import { crmStyles as cs } from "../shared/styles";
-import { CHANNELS, STATUSES } from "../shared/constants";
+import { CHANNELS, STATUSES, LOST_REASONS } from "../shared/constants";
+import { canConfirmLossReason, buildLostReasonNote } from "../shared/helpers";
 import type { Lead, LeadChannel, LeadStatus } from "@/services/crmApi";
+import type { LostReasonKey } from "../shared/constants";
 
 type Props = {
   visible: boolean;
@@ -20,6 +22,8 @@ type Props = {
     new_status?: LeadStatus;
     next_followup_at?: string;
     advance_cadence?: boolean;
+    // Fase 0 (C0.1): so vem preenchido quando new_status === "lost".
+    lost_reason?: LostReasonKey;
   }) => void;
   isPending?: boolean;
 };
@@ -30,6 +34,12 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
   const [status, setStatus]                     = useState<LeadStatus | "">("");
   const [followup, setFollowup]                 = useState("");
   const [advanceCadence, setAdvanceCadence]     = useState(true);
+  // Fase 0 (C0.1, 16/09/2026): motivo de perda inline quando o novo status
+  // escolhido e "Perdido". Nao empilha um segundo modal — e so um bloco a
+  // mais dentro deste (aqui e passo unico, nao wizard).
+  const [lostReason, setLostReason]             = useState<LostReasonKey | "">("");
+  const [competitor, setCompetitor]             = useState("");
+  const [lostDetail, setLostDetail]             = useState("");
 
   // Reset ao abrir
   useEffect(() => {
@@ -39,19 +49,36 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
       setStatus(lead.status);
       setFollowup("");
       setAdvanceCadence(!!lead.cadence_name);
+      setLostReason("");
+      setCompetitor("");
+      setLostDetail("");
     }
   }, [visible, lead]);
 
   if (!lead) return null;
 
+  // So exige motivo quando o status esta REALMENTE mudando pra "Perdido"
+  // agora — um lead que ja estava perdido pode receber uma nova nota sem
+  // reabrir o motivo toda vez.
+  const movingToLost = status === "lost" && lead.status !== "lost";
+  // Sem motivo (ou "outro" sem texto) o Salvar fica travado.
+  const canSubmit = !!body.trim() && (!movingToLost || canConfirmLossReason(lostReason, lostDetail));
+
   function handleSubmit() {
-    if (!body.trim()) return;
+    if (!canSubmit) return;
+    // Quando vai pra "Perdido", prefixamos a observacao com o motivo
+    // padronizado — assim a linha do tempo sempre mostra o motivo, mesmo
+    // pra quem so olha o corpo da interacao (nao so o campo lost_reason).
+    const finalBody = movingToLost && lostReason
+      ? `${buildLostReasonNote(lostReason, { competitor, detail: lostDetail })}\n${body.trim()}`
+      : body.trim();
     onSubmit({
-      body: body.trim(),
+      body: finalBody,
       channel,
       new_status: status || undefined,
       next_followup_at: followup || undefined,
       advance_cadence: advanceCadence,
+      ...(movingToLost && lostReason ? { lost_reason: lostReason } : {}),
     });
   }
 
@@ -105,6 +132,47 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
             </View>
           </ScrollView>
 
+          {/* Motivo de perda (Fase 0 — C0.1): so aparece indo pra "Perdido" */}
+          {movingToLost && (
+            <View style={{ marginBottom: 12, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: Colors.red + "44", backgroundColor: Colors.red + "0a" }}>
+              <Text style={[cs.fieldLabel, { color: Colors.red }]}>Motivo da perda *</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: lostReason ? 10 : 0 }}>
+                {LOST_REASONS.map((r) => (
+                  <Pressable
+                    key={r.key}
+                    onPress={() => setLostReason(r.key)}
+                    style={[cs.chip, lostReason === r.key && { backgroundColor: Colors.red + "22", borderColor: Colors.red }]}
+                  >
+                    <Text style={[cs.chipText, lostReason === r.key && { color: Colors.red, fontWeight: "700" }]}>
+                      {r.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {lostReason === "concorrente" && (
+                <TextInput
+                  value={competitor}
+                  onChangeText={setCompetitor}
+                  placeholder="Qual concorrente? (opcional)"
+                  placeholderTextColor={Colors.ink3}
+                  style={[cs.noteInput, { minHeight: 40, marginBottom: 0 }]}
+                />
+              )}
+              {lostReason === "outro" && (
+                <TextInput
+                  value={lostDetail}
+                  onChangeText={setLostDetail}
+                  placeholder="Descreva o motivo (obrigatório)"
+                  placeholderTextColor={Colors.ink3}
+                  multiline
+                  numberOfLines={2}
+                  style={[cs.noteInput, { marginBottom: 0 }]}
+                />
+              )}
+            </View>
+          )}
+
           {/* Proximo follow-up */}
           <Text style={cs.fieldLabel}>Próximo follow-up (YYYY-MM-DD)</Text>
           <TextInput
@@ -140,8 +208,8 @@ export function InteractionModal({ visible, lead, onClose, onSubmit, isPending }
             </Pressable>
             <Pressable
               onPress={handleSubmit}
-              disabled={isPending || !body.trim()}
-              style={[cs.actionBtn, { flex: 1, backgroundColor: Colors.violetD, borderColor: Colors.border2 }, !body.trim() && { opacity: 0.5 }]}
+              disabled={isPending || !canSubmit}
+              style={[cs.actionBtn, { flex: 1, backgroundColor: Colors.violetD, borderColor: Colors.border2 }, !canSubmit && { opacity: 0.5 }]}
             >
               {isPending
                 ? <ActivityIndicator size="small" color={Colors.violet3} />

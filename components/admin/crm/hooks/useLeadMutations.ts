@@ -60,9 +60,12 @@ export function useLeadMutations(selectedLeadId?: string | null) {
 
   // ── Mudar status (otimista — usado pelo Kanban DnD) ────────────────────────
   // Optimistic cobre admin-leads E admin-leads-queue.
+  // Fase 0 (C0.1, 16/09/2026): aceita lost_reason opcional — quando o novo
+  // status e "lost", o gate de motivo de perda (LossReasonModal) preenche
+  // esse campo antes de chamar a mutation.
   const moveStatus = useMutation({
-    mutationFn: (p: { id: string; status: LeadStatus }) =>
-      crmApi.leads.update(p.id, { status: p.status }),
+    mutationFn: (p: { id: string; status: LeadStatus; lost_reason?: string }) =>
+      crmApi.leads.update(p.id, { status: p.status, ...(p.lost_reason ? { lost_reason: p.lost_reason } : {}) }),
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ["admin-leads"] });
       await qc.cancelQueries({ queryKey: ["admin-leads-queue"] });

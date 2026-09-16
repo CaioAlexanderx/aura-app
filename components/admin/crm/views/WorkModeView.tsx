@@ -13,8 +13,10 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useLeadQueue, priorityReasonLabel, priorityReasonColor, priorityReasonDescription } from "../hooks/useLeadQueue";
 import { useLeadMutations } from "../hooks/useLeadMutations";
+import { useLossReasonGate } from "../hooks/useLossReasonGate";
 import { useLeadFiltersStore, countActiveFilters } from "../shared/useLeadFiltersStore";
 import { InteractionModal } from "../components/InteractionModal";
+import { LossReasonModal } from "../components/LossReasonModal";
 import { FilterBar } from "../components/FilterBar";
 import { STATUSES, WA_TEMPLATE_DEFAULT } from "../shared/constants";
 import {
@@ -37,6 +39,7 @@ type Props = {
 export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, meta, onSaveAsView }: Props) {
   const { queue, leads, total, byReason, isLoading, isFetching, refetch, invalidate } = useLeadQueue(50);
   const mutations = useLeadMutations();
+  const lossGate = useLossReasonGate(); // Fase 0 (C0.1): gate de motivo de perda
 
   // Pra mostrar resumo de filtros ativos no topo do card
   const filters       = useLeadFiltersStore((s) => s.filters);
@@ -79,13 +82,27 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
 
   const handleChangeStatus = useCallback(async (newStatus: LeadStatus) => {
     if (!currentLead) return;
+    // Fase 0 (C0.1): "Perdido" exige motivo antes de mover — sem isso o
+    // lead fica onde estava (a Promise resolve null quando cancela).
+    if (newStatus === "lost") {
+      const result = await lossGate.requestReason({ leadName: currentLead.name });
+      if (!result) return;
+      try {
+        await mutations.update.mutateAsync({ id: currentLead.id, body: { status: "lost", lost_reason: result.reason } });
+        await mutations.interaction.mutateAsync({ id: currentLead.id, body: result.note, channel: "outro" });
+        nextLead();
+      } catch {
+        // toast ja exibido pelo onError do mutation
+      }
+      return;
+    }
     try {
       await mutations.update.mutateAsync({ id: currentLead.id, body: { status: newStatus } });
       nextLead(); // nao invalida fila durante sessao — progresso preservado
     } catch {
       // toast ja exibido pelo onError do mutation
     }
-  }, [currentLead, mutations.update, nextLead]);
+  }, [currentLead, mutations.update, mutations.interaction, lossGate, nextLead]);
 
   const handleMarkRotten = useCallback(async () => {
     if (!currentLead) return;
@@ -99,11 +116,16 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
 
   const handleSubmitInteraction = useCallback(async (p: any) => {
     if (!currentLead) return;
-    await mutations.interaction.mutateAsync({ id: currentLead.id, ...p });
+    const { lost_reason, ...interactionBody } = p;
+    await mutations.interaction.mutateAsync({ id: currentLead.id, ...interactionBody });
+    // Fase 0 (C0.1): lost_reason vai pro lead, nao pro payload de interactions.
+    if (lost_reason) {
+      await mutations.update.mutateAsync({ id: currentLead.id, body: { lost_reason } });
+    }
     setShowInteraction(false);
     invalidate();
     nextLead();
-  }, [currentLead, mutations.interaction, invalidate, nextLead]);
+  }, [currentLead, mutations.interaction, mutations.update, invalidate, nextLead]);
 
   // ── Atalhos de teclado (web) ─────────────────────────────────────────────
   const handlersRef = useRef({ handleWhatsApp, handleCopyMsg, handleChangeStatus, handleMarkRotten, nextLead, skipLead });
@@ -113,7 +135,9 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
     if (!isWeb) return;
     function onKey(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || showInteraction) return;
+      // lossGate.isOpen: enquanto o modal de motivo de perda esta aberto,
+      // "1".."7" nao pode disparar outra troca de status por baixo dele.
+      if (tag === "input" || tag === "textarea" || showInteraction || lossGate.isOpen) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const k = e.key.toLowerCase();
@@ -136,7 +160,7 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showInteraction]);
+  }, [showInteraction, lossGate.isOpen]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -413,6 +437,15 @@ export function WorkModeView({ waTemplate = WA_TEMPLATE_DEFAULT, onSelectLead, m
         onClose={() => setShowInteraction(false)}
         onSubmit={handleSubmitInteraction}
         isPending={mutations.interaction.isPending}
+      />
+
+      {/* Motivo de perda (Fase 0 — C0.1) */}
+      <LossReasonModal
+        visible={lossGate.isOpen}
+        leadName={lossGate.target?.leadName}
+        onCancel={lossGate.cancel}
+        onConfirm={lossGate.confirm}
+        isPending={mutations.update.isPending || mutations.interaction.isPending}
       />
     </View>
   );
