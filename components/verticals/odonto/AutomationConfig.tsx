@@ -36,9 +36,9 @@ export function AutomationConfig() {
   });
 
   var cfg = (configData as any)?.config || {};
-  // Backend ainda nao publicou este campo em todo lugar — ausencia = false
+  // Backend devolve config.whatsapp_connected (Aura-backend#723) — ausencia = false
   // (mesma logica de "sem WhatsApp conectado" ate a integracao existir).
-  var waConnected = !!(configData as any)?.whatsapp_connected;
+  var waConnected = !!(cfg.whatsapp_connected ?? (configData as any)?.whatsapp_connected);
 
   function toggleField(field: string, value: boolean) {
     saveMut.mutate({ [field]: value });
