@@ -5,10 +5,11 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal,
+  StyleSheet, ActivityIndicator, Modal,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
+import { notify } from '@/utils/webAlert';
 
 export const SESSION_TYPE_LABEL: Record<string, string> = {
   avaliacao:'Avaliação', instalacao:'Instalação', adjustment:'Ajuste',
@@ -42,7 +43,7 @@ export function OrthoSessionTimeline({ sessions, totalPlanned, treatmentId, comp
         method: 'PATCH', body,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ortho-treatments'] }); setSel(null); },
-    onError:   (e: any) => Alert.alert('Erro', e?.message),
+    onError:   (e: any) => notify('Erro', e?.message),
   });
 
   const done   = sessions.filter(s => s.status === 'completed').length;

@@ -5,10 +5,11 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert, Modal,
+  StyleSheet, ActivityIndicator, Modal,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
+import { notify } from '@/utils/webAlert';
 
 export const PHASE_KIND_LABEL: Record<string, string> = {
   planning:         'Planejamento',
@@ -58,7 +59,7 @@ export function ImplantPhaseTimeline({ phases, treatmentId, companyId }: Props) 
         method: 'PATCH', body: { status },
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['implant-treatments'] }); setSel(null); },
-    onError:   (e: any) => Alert.alert('Erro', e?.message),
+    onError:   (e: any) => notify('Erro', e?.message),
   });
 
   const sorted = [...phases].sort((a, b) => a.phase_number - b.phase_number);

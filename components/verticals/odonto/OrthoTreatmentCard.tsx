@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  ScrollView, StyleSheet, ActivityIndicator, Alert,
+  ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { OrthoSessionTimeline, SESSION_TYPE_LABEL, fmtDate } from './OrthoSessionTimeline';
+import { notify } from '@/utils/webAlert';
 
 export const APPLIANCE_LABELS: Record<string, string> = {
   brackets_metal:'Brackets Metal', brackets_ceramic:'Brackets Ceramica',
@@ -62,7 +63,7 @@ export function OrthoTreatmentCard({ t, companyId }: Props) {
       setShowAddSession(false);
       setSessionDate('');
     },
-    onError: (e: any) => Alert.alert('Erro', e?.message),
+    onError: (e: any) => notify('Erro', e?.message),
   });
 
   return (

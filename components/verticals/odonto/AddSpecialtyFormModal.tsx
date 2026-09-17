@@ -16,11 +16,12 @@
 import { useState, useMemo } from 'react';
 import {
   Modal, View, Text, ScrollView, TextInput, Pressable,
-  StyleSheet, Platform, Alert, ActivityIndicator,
+  StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { notify } from '@/utils/webAlert';
 
 // ──────── SPECIALTIES (espelho do FichaEspecialidade.tsx) ────────
 const SPECIALTIES: Record<string, { label: string; icon: string; fields: string[] }> = {
@@ -110,13 +111,13 @@ export function AddSpecialtyFormModal({
         },
       }),
     onSuccess: () => {
-      Alert.alert('Ficha salva', 'Ficha de especialidade registrada com sucesso.');
+      notify('Ficha salva', 'Ficha de especialidade registrada com sucesso.');
       onSaved?.();
       reset();
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Não foi possível salvar a ficha.');
+      notify('Erro', err?.message || 'Não foi possível salvar a ficha.');
     },
   });
 
@@ -128,7 +129,7 @@ export function AddSpecialtyFormModal({
 
   function handleSave() {
     if (!specialty) {
-      Alert.alert('Atenção', 'Escolha uma especialidade antes de salvar.');
+      notify('Atenção', 'Escolha uma especialidade antes de salvar.');
       return;
     }
     // Filtra so os campos preenchidos
@@ -138,7 +139,7 @@ export function AddSpecialtyFormModal({
     }, {} as Record<string, string>);
 
     if (Object.keys(filled).length === 0 && !notes.trim()) {
-      Alert.alert(
+      notify(
         'Ficha vazia',
         'Preencha ao menos um campo ou observação antes de salvar.'
       );

@@ -10,13 +10,14 @@
 // - Acentuação corrigida em strings UI
 // ============================================================
 import { useMemo } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { Icon } from "@/components/Icon";
+import { notify, confirmAlert } from "@/utils/webAlert";
 import { OrcamentoFunnel } from "@/components/verticals/odonto/OrcamentoFunnel";
 import { ConvenioManager } from "@/components/verticals/odonto/ConvenioManager";
 import { TissGuideManager } from "@/components/verticals/odonto/TissGuideManager";
@@ -212,7 +213,7 @@ export function AgendaOnlineTab() {
       qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Não foi possível atualizar o status.");
+      notify("Erro", err?.message || "Não foi possível atualizar o status.");
     },
   });
 
@@ -226,7 +227,7 @@ export function AgendaOnlineTab() {
       qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Não foi possível salvar a configuração.");
+      notify("Erro", err?.message || "Não foi possível salvar a configuração.");
     },
   });
 
@@ -237,13 +238,13 @@ export function AgendaOnlineTab() {
       });
     },
     onSuccess: function() {
-      Alert.alert("Confirmado", "Solicitação convertida em agendamento. Veja na aba Agenda.");
+      notify("Confirmado", "Solicitação convertida em agendamento. Veja na aba Agenda.");
       qc.invalidateQueries({ queryKey: ["dental-booking-requests", cid] });
       qc.invalidateQueries({ queryKey: ["dental-booking-config", cid] });
       qc.invalidateQueries({ queryKey: ["dental-agenda"] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Não foi possível converter a solicitação.");
+      notify("Erro", err?.message || "Não foi possível converter a solicitação.");
     },
   });
 
@@ -257,31 +258,28 @@ export function AgendaOnlineTab() {
       qc.invalidateQueries({ queryKey: ["dental-booking-requests", cid] });
     },
     onError: function(err: any) {
-      Alert.alert("Erro", err?.message || "Não foi possível recusar a solicitação.");
+      notify("Erro", err?.message || "Não foi possível recusar a solicitação.");
     },
   });
 
   if (loadingConfig || loadingReqs) return <Loader />;
 
   function handleConfirm(requestId: string) {
-    Alert.alert(
+    confirmAlert(
       "Confirmar agendamento?",
       "Isso vai criar um agendamento na agenda e cadastrar o paciente (se ainda não existir). Você pode editar depois pela aba Agenda.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Confirmar", onPress: function() { convertMut.mutate(requestId); } },
-      ]
+      "Confirmar",
+      function() { convertMut.mutate(requestId); }
     );
   }
 
   function handleReject(requestId: string) {
-    Alert.alert(
+    confirmAlert(
       "Recusar solicitação?",
       "Esta ação é irreversível. O paciente não será notificado automaticamente.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Recusar", style: "destructive", onPress: function() { rejectMut.mutate(requestId); } },
-      ]
+      "Recusar",
+      function() { rejectMut.mutate(requestId); },
+      { destructive: true }
     );
   }
 

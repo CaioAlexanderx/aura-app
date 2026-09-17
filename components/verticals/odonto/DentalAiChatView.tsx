@@ -5,9 +5,10 @@
 import { useRef } from 'react';
 import {
   View, Text, ScrollView, TextInput, Pressable,
-  StyleSheet, ActivityIndicator, Platform, Alert, KeyboardAvoidingView,
+  StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { Icon } from '@/components/Icon';
+import { confirmAlert } from '@/utils/webAlert';
 
 interface Conversation {
   id: string;
@@ -57,7 +58,7 @@ export function DentalAiChatView({ conversation, messages, pendingMessage, input
           </Text>
           {conversation.patient_name && <Text style={st.headerSub}>Contexto: {conversation.patient_name}</Text>}
         </View>
-        <Pressable onPress={() => Alert.alert('Arquivar conversa?','A conversa será ocultada da lista mas o histórico será mantido.',[{text:'Cancelar',style:'cancel'},{text:'Arquivar',style:'destructive',onPress:onArchive}])} hitSlop={10}>
+        <Pressable onPress={() => confirmAlert('Arquivar conversa?','A conversa será ocultada da lista mas o histórico será mantido.','Arquivar', onArchive, { destructive: true })} hitSlop={10}>
           <Icon name="archive" size={18} color="#94A3B8" />
         </Pressable>
       </View>
