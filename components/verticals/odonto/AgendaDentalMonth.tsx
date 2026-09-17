@@ -6,7 +6,9 @@
 import { useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
+import { dentalStatus } from "@/constants/dentalStatus";
 import type { DentalAppointment } from "@/components/verticals/odonto/AgendaDental";
+import { StatusLegend } from "@/components/verticals/odonto/AgendaGridParts";
 
 interface Props {
   appointments: DentalAppointment[];
@@ -16,11 +18,6 @@ interface Props {
 }
 
 const DOW_LABELS = ["SEG","TER","QUA","QUI","SEX","SAB","DOM"];
-
-const STATUS_COLOR: Record<string, string> = {
-  agendado: "#06B6D4", confirmado: "#10B981", em_atendimento: "#F59E0B",
-  concluido: "#10B981", faltou: "#EF4444", cancelado: "#9CA3AF",
-};
 
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -68,6 +65,8 @@ export function AgendaDentalMonth({ appointments, anchorDate, onDayPress, onAppo
   function cellKey(d: Date) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
 
   return (
+    <View style={{ gap: 8 }}>
+    <StatusLegend />
     <View style={s.container}>
       {/* DOW header */}
       <View style={s.dowRow}>
@@ -102,7 +101,7 @@ export function AgendaDentalMonth({ appointments, anchorDate, onDayPress, onAppo
                 </View>
                 <View style={s.cellBody}>
                   {list.slice(0, 2).map(a => {
-                    const color = STATUS_COLOR[a.status] || "#06B6D4";
+                    const color = dentalStatus(a.status).color;
                     const dt = new Date(a.scheduled_at);
                     const time = `${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`;
                     return (
@@ -127,6 +126,7 @@ export function AgendaDentalMonth({ appointments, anchorDate, onDayPress, onAppo
           })}
         </View>
       </ScrollView>
+    </View>
     </View>
   );
 }
