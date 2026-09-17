@@ -86,6 +86,7 @@ const CSS = `
 .aag-target.aag-warn{background:${rgba(C.amber, 0.14)};border-color:${C.amber}}
 .aag-label{position:absolute;top:-25px;left:-2px;background:${C.cyan};color:${PRI_INK};font-family:${Fonts.body};font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;z-index:9;box-shadow:0 4px 12px rgba(0,0,0,.25)}
 .aag-label.aag-bottom{top:auto;bottom:-26px}
+.aag-label.aag-right{left:auto;right:-2px}
 .aag-warn .aag-label{background:${C.amber};color:#1a1200}
 .aag-flash{animation:aag-flash 1.4s ease-out}
 @keyframes aag-flash{0%{box-shadow:0 0 0 0 ${C.cyan}}30%{box-shadow:0 0 0 5px ${C.cyanSoft}}100%{box-shadow:0 0 0 0 transparent}}
@@ -257,7 +258,7 @@ export function AgendaBlock({ appt, place, wide, compact = false, lanes, movable
 
 // ─── Fantasma + faixa-alvo ──────────────────────────────────
 
-export function DropOverlay({ appt, top, height, startMin, durMin, label, warn, bottomLabel }: {
+export function DropOverlay({ appt, top, height, startMin, durMin, label, warn, bottomLabel, alignRight = false }: {
   appt: GridAppointment;
   top: number;
   height: number;
@@ -266,6 +267,8 @@ export function DropOverlay({ appt, top, height, startMin, durMin, label, warn, 
   label: string;
   warn: boolean;
   bottomLabel: boolean;
+  /** Últimas colunas: rótulo cresce para a esquerda para não sair da grade. */
+  alignRight?: boolean;
 }) {
   if (!IS_WEB) return null;
   const h = createElement;
@@ -282,7 +285,7 @@ export function DropOverlay({ appt, top, height, startMin, durMin, label, warn, 
     "div",
     { style: { position: "absolute", left: 0, right: 0, top: 0, height: 0 } },
     h("div", { key: "t", className: `aag-target${warn ? " aag-warn" : ""}`, style: { top, height } },
-      h("div", { className: `aag-label${bottomLabel ? " aag-bottom" : ""}`, role: "status" }, label)),
+      h("div", { className: `aag-label${bottomLabel ? " aag-bottom" : ""}${alignRight ? " aag-right" : ""}`, role: "status" }, label)),
     h("div", {
       key: "g",
       className: `aag-blk aag-ghost aag-${tier}${st.dashed ? " aag-dashed" : ""}`,
@@ -322,6 +325,7 @@ export function ColumnDragLayer({ colIdx, colCount, day, columnLabel, hourPx, st
   if (active.mode === "move" && active.fromCol !== active.colIdx && columnLabel) label += ` · ${columnLabel}`;
   if (conflicts.length) label += ` · sobre ${firstName(conflicts[0].patient_name)}`;
   const appt = req.appt as GridAppointment;
+  const alignRight = colCount > 1 && colIdx >= colCount - 2;
   return (
     <>
       <DropOverlay
@@ -333,12 +337,13 @@ export function ColumnDragLayer({ colIdx, colCount, day, columnLabel, hourPx, st
         label={label}
         warn={conflicts.length > 0}
         bottomLabel={active.mode === "resize"}
+        alignRight={alignRight}
       />
       {!preview && pending ? (
         <ConflictPopover
           pending={pending}
           top={box.top + box.height + (active.mode === "resize" ? 34 : 12)}
-          alignRight={colCount > 1 && colIdx >= colCount - 2}
+          alignRight={alignRight}
           onFit={onFit}
           onCancel={onCancel}
         />

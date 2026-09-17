@@ -371,7 +371,7 @@ const s = StyleSheet.create({
   chairMin: { minWidth: 220 },
   chairDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.cyan },
   chairName: { fontSize: 12.5, fontWeight: "600", color: C.ink, fontFamily: Fonts.body, flexShrink: 1 },
-  chairCount: { marginLeft: "auto" as any, fontSize: 10.5, color: C.ink3, fontFamily: Fonts.body },
+  chairCount: { marginLeft: "auto" as any, fontSize: 10.5, color: C.ink3, fontFamily: Fonts.body, flexShrink: 0 },
   bodyRow: { flexDirection: "row", marginTop: 10 },
   hourLabel: { position: "absolute", top: -7, right: 8, fontSize: 10, fontWeight: "500", color: C.ink3, fontFamily: Fonts.mono },
   col: { flex: 1, minWidth: 0, borderLeftWidth: 1, borderLeftColor: C.border },
