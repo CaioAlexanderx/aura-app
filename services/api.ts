@@ -145,7 +145,13 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
     }
   }
-  throw lastError || new ApiError("Erro de conexão. Verifique sua internet.", 0, null, true, "network");
+  // Só chega aqui quem esgotou as tentativas sem resposta do servidor (o fetch
+  // rejeitou: sem internet, DNS, rede bloqueando o backend). Relançar o
+  // TypeError cru fazia as telas caírem no texto padrão delas: o login dizia
+  // "E-mail ou senha incorretos." para um cliente cuja requisição nem chegou
+  // ao backend (17/09/2026). Sai sempre como ApiError de rede.
+  if (lastError instanceof ApiError) throw lastError;
+  throw new ApiError("Erro de conexão. Verifique sua internet.", 0, null, true, "network");
 }
 
 export { BASE_URL };

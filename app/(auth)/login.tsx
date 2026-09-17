@@ -179,7 +179,10 @@ export default function LoginScreen() {
       if (KARATE_VERTICALS.includes(vertical)) { useKarateIntro.getState().trigger(); router.replace("/karate"); return; }
       router.replace("/(tabs)");
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "E-mail ou senha incorretos.";
+      // Senha errada chega como ApiError 401 com a mensagem do backend. O que
+      // não é ApiError não veio do servidor: não dá para afirmar que a senha
+      // está errada.
+      const msg = err instanceof ApiError ? err.message : "Não foi possível entrar. Tente novamente.";
       toast.error(msg);
     }
   }
