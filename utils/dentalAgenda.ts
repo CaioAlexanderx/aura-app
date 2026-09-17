@@ -229,6 +229,11 @@ export function slotSummary(d: Date, durationMin: number): string {
   return `${DOW[d.getDay()]} ${pad(d.getDate())} · ${hhmm(d)} · ${durationMin} min`;
 }
 
+/** "qui 17 às 14:00" — avisos depois de salvar. */
+export function shortDayTime(d: Date): string {
+  return `${DOW[d.getDay()].toLowerCase()} ${pad(d.getDate())} às ${hhmm(d)}`;
+}
+
 /** "Ana Paula (14:00–14:30)" para o aviso de conflito. */
 export function conflictLabel(c: SlotCandidate): string {
   const d = new Date(c.scheduled_at);

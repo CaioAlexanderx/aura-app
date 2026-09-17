@@ -23,6 +23,8 @@ import {
   dayLabel,
   whenLine,
   conflictLabel,
+  shortDayTime,
+  slotSummary,
 } from "@/utils/dentalAgenda";
 
 const at = (h: number, m = 0, day = 17) => new Date(2026, 8, day, h, m).toISOString();
@@ -180,5 +182,7 @@ describe("datas", () => {
     expect(dayLabel(new Date(2026, 8, 17, 15), now)).toBe("Amanhã, qui 17/09");
     expect(dayLabel(new Date(2026, 8, 18, 15), now)).toBe("Sex 18/09");
     expect(whenLine(new Date(2026, 8, 16, 15), 60, now)).toBe("Hoje, qua 16/09 · 15:00–16:00");
+    expect(shortDayTime(new Date(2026, 8, 17, 14))).toBe("qui 17 às 14:00");
+    expect(slotSummary(new Date(2026, 8, 17, 14), 45)).toBe("Qui 17 · 14:00 · 45 min");
   });
 });
