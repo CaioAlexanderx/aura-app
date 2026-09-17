@@ -26,6 +26,7 @@ import { PatientFormModal, type PatientFormData } from "@/components/verticals/o
 import { NewAppointmentModal } from "@/components/verticals/odonto/NewAppointmentModal";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { AppointmentsList } from "@/components/verticals/odonto/AppointmentsList";
+import { useTomorrowAppointments } from "@/components/verticals/odonto/ConfirmTomorrowView";
 import { PatientHub, type PatientLite } from "@/components/verticals/odonto/PatientHub";
 import { PatientsList } from "@/components/verticals/odonto/PatientsList";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
@@ -53,6 +54,9 @@ export function AgendaTab() {
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [initialDateTime, setInitialDateTime] = useState<string | undefined>(undefined);
+  // Atalho "Confirmar amanhã" (mockup 16/09/2026, aba F): contador + abre a Lista nessa visão.
+  const [confirmSignal, setConfirmSignal] = useState(0);
+  const { pending: pendingTomorrow } = useTomorrowAppointments();
 
   const { start: rangeStart, end: rangeEnd } = agendaRangeFor(agendaView, anchorDate);
 
@@ -160,6 +164,16 @@ export function AgendaTab() {
           <Text style={[v.toggleText, viewMode === "list" && v.toggleTextActive]}>Lista</Text>
         </Pressable>
         <View style={{ flex: 1 }} />
+        <Pressable
+          testID="agenda-confirm-tomorrow"
+          onPress={() => { setViewMode("list"); setConfirmSignal((n) => n + 1); }}
+          style={v.confirmBtn}
+          accessibilityLabel={pendingTomorrow ? `Confirmar amanhã, ${pendingTomorrow} pendentes` : "Confirmar amanhã"}
+        >
+          <Icon name="check" size={13} color={Colors.ink} />
+          <Text style={v.confirmBtnText}>Confirmar amanhã</Text>
+          {pendingTomorrow > 0 && <View style={v.badge}><Text style={v.badgeText}>{pendingTomorrow}</Text></View>}
+        </Pressable>
         <Pressable onPress={handleNewAppointment} style={v.newBtn}>
           <Icon name="plus" size={13} color="#fff" />
           <Text style={v.newBtnText}>Agendar</Text>
@@ -202,10 +216,15 @@ export function AgendaTab() {
         </>
       )}
 
-      {viewMode === "list" && <AppointmentsList />}
+      {viewMode === "list" && <AppointmentsList confirmTomorrowSignal={confirmSignal} />}
 
       <NewAppointmentModal visible={showNew} onClose={() => setShowNew(false)} initialDateTime={initialDateTime} />
-      <AppointmentDetailModal visible={!!detailId} appointmentId={detailId} onClose={() => setDetailId(null)} />
+      <AppointmentDetailModal
+        visible={!!detailId}
+        appointmentId={detailId}
+        seed={((data as any)?.appointments || []).find((a: any) => a.id === detailId) || null}
+        onClose={() => setDetailId(null)}
+      />
     </View>
   );
 }
@@ -407,6 +426,10 @@ const v = StyleSheet.create({
   toggleTextActive: { color: "#fff" },
   newBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.violet3 || "#a78bfa", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   newBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  confirmBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  confirmBtnText: { color: Colors.ink, fontSize: 12, fontWeight: "600" },
+  badge: { minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: "#fbbf24", alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: 11, fontWeight: "800", color: "#1a1200" },
 });
 
 const z = StyleSheet.create({
