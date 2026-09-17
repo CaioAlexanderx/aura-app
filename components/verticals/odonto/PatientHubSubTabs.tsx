@@ -160,7 +160,11 @@ export function AnamneseTab({ patient }: { patient: PatientLite }) {
       {(data as any)?.updated_at && (
         <View style={st.infoBadge}><Text style={st.infoBadgeText}>Atualizado: {formatDateBR((data as any).updated_at)}</Text></View>
       )}
-      <AnamneseWizard initialData={(data as any)?.anamnesis || undefined} onComplete={d => save.mutate(d)} />
+      <AnamneseWizard
+        initialData={(data as any)?.anamnesis || undefined}
+        patientAllergiesText={patient.allergies}
+        onComplete={d => save.mutate(d)}
+      />
       {save.isPending && (
         <View style={st.savingOverlay}><ActivityIndicator color="#06B6D4" /><Text style={st.savingText}>Salvando...</Text></View>
       )}
