@@ -13,8 +13,20 @@ export function maskCpf(value: string): string {
 }
 
 // Telefone: (00) 00000-0000 (celular) ou (00) 0000-0000 (fixo)
+//
+// FIX 16/09/2026: numero colado do WhatsApp vem com codigo do pais na frente
+// ("5599999990004") — 12-13 digitos = "55" + DDD + numero nacional (10-11
+// digitos). Antes disso, o "55" era lido como DDD e o numero era truncado em
+// 11 digitos, perdendo o ultimo digito real. So removemos o prefixo quando
+// sobram digitos demais pra ser um numero nacional puro (10 ou 11); um DDD 55
+// legitimo (Santa Maria/RS) sempre chega aqui com 10-11 digitos no total e
+// continua intacto.
 export function maskPhone(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
+  let raw = value.replace(/\D/g, "");
+  if ((raw.length === 12 || raw.length === 13) && raw.startsWith("55")) {
+    raw = raw.slice(2);
+  }
+  const digits = raw.slice(0, 11);
   if (digits.length === 0) return "";
   if (digits.length <= 2) return `(${digits}`;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;

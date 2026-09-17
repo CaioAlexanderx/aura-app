@@ -12,15 +12,18 @@ interface NewPatientModalProps {
   visible: boolean;
   onClose: () => void;
   onCreated?: (patient: any) => void;
+  /** Repassado ao PatientFormModal — ex: texto ja digitado numa busca. */
+  initialName?: string;
 }
 
-export function NewPatientModal({ visible, onClose, onCreated }: NewPatientModalProps) {
+export function NewPatientModal({ visible, onClose, onCreated, initialName }: NewPatientModalProps) {
   return (
     <PatientFormModal
       visible={visible}
       onClose={onClose}
       onSaved={onCreated}
       mode="create"
+      initialName={initialName}
     />
   );
 }

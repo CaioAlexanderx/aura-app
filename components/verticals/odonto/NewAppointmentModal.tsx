@@ -293,6 +293,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
       <NewPatientModal
         visible={showNewPatient}
         onClose={() => setShowNewPatient(false)}
+        initialName={search}
         onCreated={(p: any) => {
           setPatientId(p.id);
           setPatientName(p.full_name || p.name);

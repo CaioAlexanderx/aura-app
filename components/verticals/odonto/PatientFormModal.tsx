@@ -19,11 +19,13 @@
 // Avatar 56px no topo da secao IDENTIFICACAO com botao pra capturar
 // ou trocar foto. Persistido no submit junto com outros campos.
 // ============================================================
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { todayLocalString } from "@/utils/dateOnly";
 import {
   Animated, Modal, View, Text, TextInput, Pressable, ScrollView,
   StyleSheet, ActivityIndicator, Platform, useWindowDimensions, Image,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { DentalForm } from "@/constants/dental-tokens";
 import { Icon } from "@/components/Icon";
@@ -67,6 +69,14 @@ interface Props {
   onSaved?: (patient: PatientFormData) => void;
   mode?: "create" | "edit";
   patient?: PatientFormData | null;
+  /** Pre-preenche o nome — ex: texto digitado na busca do NewAppointmentModal. */
+  initialName?: string;
+}
+
+interface FieldErrors {
+  fullName?: string;
+  cpf?: string;
+  birthDate?: string;
 }
 
 const DRAWER_WIDTH = 540;
@@ -80,10 +90,13 @@ function isoToBR(iso?: string | null): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
+// Hoje no fuso local, formato YYYY-MM-DD — comparavel lexicograficamente com o
+// ISO de brDateToISO (mesmo formato largura-fixa).
 
-export function PatientFormModal({ visible, onClose, onSaved, mode = "create", patient }: Props) {
+export function PatientFormModal({ visible, onClose, onSaved, mode = "create", patient, initialName }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
+  const router = useRouter();
   const isEdit = mode === "edit" && !!patient?.id;
   const { width: screenW } = useWindowDimensions();
   const drawerW = Math.min(DRAWER_WIDTH, screenW);
@@ -110,6 +123,55 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
   const [showCamera, setShowCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [cpfDuplicate, setCpfDuplicate] = useState<{ patientId: string; patientName: string } | null>(null);
+  // Ref (nao state) porque precisa estar atualizado *antes* do proximo
+  // mutate() — "Cadastrar mesmo assim" dispara o submit na mesma acao que
+  // liga a flag, sem esperar um re-render.
+  const allowDuplicateCpfRef = useRef(false);
+
+  // Scroll-to-erro (mesmo padrao do AlunoFormModal): mede a posicao do
+  // wrapper do campo via measureLayout contra o node interno do proprio
+  // ScrollView e rola ate ele; depois foca o input.
+  const scrollRef = useRef<ScrollView>(null);
+  const fullNameFieldRef = useRef<View>(null);
+  const cpfFieldRef = useRef<View>(null);
+  const birthDateFieldRef = useRef<View>(null);
+  const fullNameInputRef = useRef<TextInput>(null);
+  const cpfInputRef = useRef<TextInput>(null);
+  const birthDateInputRef = useRef<TextInput>(null);
+  const fieldRefs: Record<keyof FieldErrors, React.RefObject<View>> = {
+    fullName: fullNameFieldRef,
+    cpf: cpfFieldRef,
+    birthDate: birthDateFieldRef,
+  };
+  const fieldInputRefs: Record<keyof FieldErrors, React.RefObject<TextInput>> = {
+    fullName: fullNameInputRef,
+    cpf: cpfInputRef,
+    birthDate: birthDateInputRef,
+  };
+
+  function scrollToField(key: keyof FieldErrors) {
+    const node = fieldRefs[key].current as any;
+    const scrollNode = scrollRef.current as any;
+    if (node && scrollNode && typeof node.measureLayout === "function") {
+      try {
+        const innerNode = typeof scrollNode.getInnerViewNode === "function"
+          ? scrollNode.getInnerViewNode()
+          : scrollNode;
+        node.measureLayout(
+          innerNode,
+          (_x: number, y: number) => scrollRef.current?.scrollTo({ y: Math.max(y - 16, 0), animated: true }),
+          () => { /* falha ao medir — melhor nao rolar do que quebrar o modal */ }
+        );
+      } catch {
+        // silencioso — formulario segue usavel mesmo sem o auto-scroll
+      }
+    }
+    // Pequeno delay pra nao competir com o scrollTo (web em particular
+    // ignora o focus se disparado no mesmo tick de um scroll programatico).
+    setTimeout(() => fieldInputRefs[key].current?.focus?.(), 60);
+  }
 
   const translateX = useRef(new Animated.Value(drawerW)).current;
   useEffect(() => {
@@ -127,6 +189,8 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
     setNeighborhood(""); setCity(""); setStateUf("");
     setAllergies(""); setMedicalHistory(""); setMedications("");
     setInsuranceName(""); setPhotoUrl(null); setError(null);
+    setFieldErrors({}); setCpfDuplicate(null);
+    allowDuplicateCpfRef.current = false;
   }
 
   // Prefill em edit ao abrir / trocar paciente
@@ -153,11 +217,16 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
       setInsuranceName(patient.insurance_name || "");
       setPhotoUrl(patient.photo_url || null);
       setError(null);
+      setFieldErrors({}); setCpfDuplicate(null);
+      allowDuplicateCpfRef.current = false;
     } else {
       reset();
+      // Cadastro rapido a partir da busca do NewAppointmentModal: o nome ja
+      // digitado nao pode se perder ao abrir o form completo.
+      if (initialName) setFullName(initialName);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, isEdit, patient?.id]);
+  }, [visible, isEdit, patient?.id, initialName]);
 
   async function lookupCep() {
     const digits = onlyDigits(cep);
@@ -206,7 +275,11 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
       }
       return request(`/companies/${cid}/dental/patients`, {
         method: "POST",
-        body: { ...body, lgpd_consent: true },
+        body: {
+          ...body,
+          lgpd_consent: true,
+          ...(allowDuplicateCpfRef.current ? { allow_duplicate_cpf: true } : {}),
+        },
       });
     },
     onSuccess: (res: any) => {
@@ -215,15 +288,64 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
       onSaved?.(res?.patient);
       onClose();
     },
-    onError: (err: any) =>
-      setError(err?.message || err?.error || (isEdit ? "Erro ao atualizar paciente" : "Erro ao cadastrar paciente")),
+    onError: (err: any) => {
+      const status = err?.status;
+      const code = err?.data?.code;
+      // 409: CPF ja cadastrado em outro paciente — o backend manda o nome e
+      // id do dono atual pra oferecer "Abrir ficha" ou forcar o cadastro.
+      if (status === 409 && code === "CPF_DUPLICADO") {
+        setCpfDuplicate({ patientId: err.data.patient_id, patientName: err.data.patient_name });
+        setError(null);
+        scrollToField("cpf");
+        return;
+      }
+      // 400: data de nascimento no futuro escapou da validacao client-side
+      // (ex: relogio do dispositivo errado) — o backend e a fonte da verdade.
+      if (status === 400 && code === "BIRTH_DATE_FUTURE") {
+        setFieldErrors((prev) => ({ ...prev, birthDate: "Data de nascimento não pode ser no futuro" }));
+        setError("Corrija os campos destacados acima");
+        scrollToField("birthDate");
+        return;
+      }
+      setError(err?.data?.error || err?.message || (isEdit ? "Erro ao atualizar paciente" : "Erro ao cadastrar paciente"));
+    },
   });
 
   function handleSubmit() {
     setError(null);
-    if (!fullName.trim()) return setError("Nome e obrigatório");
-    if (cpf.trim() && !isValidCpf(cpf)) return setError("CPF inválido");
-    if (birthDateBR.trim() && !brDateToISO(birthDateBR)) return setError("Data de nascimento inválida (use DD/MM/AAAA)");
+    setCpfDuplicate(null);
+
+    const errors: FieldErrors = {};
+    if (!fullName.trim()) errors.fullName = "Nome é obrigatório";
+    if (cpf.trim() && !isValidCpf(cpf)) errors.cpf = "CPF inválido";
+    if (birthDateBR.trim()) {
+      const iso = brDateToISO(birthDateBR);
+      if (!iso) errors.birthDate = "Data de nascimento inválida (use DD/MM/AAAA)";
+      else if (iso > todayLocalString()) errors.birthDate = "Data de nascimento não pode ser no futuro";
+    }
+    setFieldErrors(errors);
+
+    const order: Array<keyof FieldErrors> = ["fullName", "cpf", "birthDate"];
+    const firstInvalid = order.find((k) => errors[k]);
+    if (firstInvalid) {
+      setError("Corrija os campos destacados acima");
+      scrollToField(firstInvalid);
+      return;
+    }
+
+    allowDuplicateCpfRef.current = false;
+    saveMut.mutate();
+  }
+
+  function handleOpenDuplicateFicha() {
+    if (!cpfDuplicate) return;
+    const id = cpfDuplicate.patientId;
+    onClose();
+    router.push(`/dental/(clinic)/pacientes?open_patient=${id}` as any);
+  }
+  function handleForceDuplicateCpf() {
+    allowDuplicateCpfRef.current = true;
+    setCpfDuplicate(null);
     saveMut.mutate();
   }
   function handleClose() {
@@ -253,7 +375,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
               </Pressable>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
               {/* PR29: Avatar + botao webcam no topo */}
               <View style={s.photoBlock}>
                 <View style={s.avatarWrap}>
@@ -282,15 +404,49 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
               </View>
 
               <Text style={s.sectionLabel}>IDENTIFICAÇÃO</Text>
-              <Field label="Nome completo *" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
-              <Field
-                label="CPF"
-                value={cpf}
-                onChangeText={(v: string) => setCpf(maskCpf(v))}
-                keyboardType="numeric"
-                placeholder="000.000.000-00"
-                maxLength={14}
-              />
+              <View ref={fullNameFieldRef}>
+                <Field
+                  label="Nome completo *"
+                  value={fullName}
+                  onChangeText={(v: string) => { setFullName(v); if (fieldErrors.fullName) setFieldErrors((p) => ({ ...p, fullName: undefined })); }}
+                  autoCapitalize="words"
+                  inputRef={fullNameInputRef}
+                  errorText={fieldErrors.fullName}
+                  testID="patient-form-fullname"
+                />
+              </View>
+              <View ref={cpfFieldRef}>
+                <Field
+                  label="CPF"
+                  value={cpf}
+                  onChangeText={(v: string) => {
+                    setCpf(maskCpf(v));
+                    if (fieldErrors.cpf) setFieldErrors((p) => ({ ...p, cpf: undefined }));
+                    if (cpfDuplicate) setCpfDuplicate(null);
+                  }}
+                  keyboardType="numeric"
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  inputRef={cpfInputRef}
+                  errorText={fieldErrors.cpf}
+                  testID="patient-form-cpf"
+                />
+                {cpfDuplicate && (
+                  <View style={s.cpfDupBox} testID="patient-form-cpfdup-box">
+                    <Text style={s.cpfDupText}>
+                      Já existe um paciente com este CPF: {cpfDuplicate.patientName}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                      <Pressable onPress={handleOpenDuplicateFicha} style={s.cpfDupBtn} testID="patient-form-cpfdup-open">
+                        <Text style={s.cpfDupBtnText}>Abrir ficha</Text>
+                      </Pressable>
+                      <Pressable onPress={handleForceDuplicateCpf} style={[s.cpfDupBtn, s.cpfDupBtnGhost]} testID="patient-form-cpfdup-force">
+                        <Text style={[s.cpfDupBtnText, s.cpfDupBtnGhostText]}>Cadastrar mesmo assim</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </View>
               <Row>
                 <Field
                   label="Telefone principal"
@@ -313,15 +469,22 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
               </Row>
               <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
               <Row>
-                <Field
-                  label="Data de nascimento"
-                  value={birthDateBR}
-                  onChangeText={(v: string) => setBirthDateBR(maskDateBR(v))}
-                  keyboardType="numeric"
-                  placeholder="DD/MM/AAAA"
-                  maxLength={10}
-                  style={{ flex: 1 }}
-                />
+                <View style={{ flex: 1 }} ref={birthDateFieldRef}>
+                  <Field
+                    label="Data de nascimento"
+                    value={birthDateBR}
+                    onChangeText={(v: string) => {
+                      setBirthDateBR(maskDateBR(v));
+                      if (fieldErrors.birthDate) setFieldErrors((p) => ({ ...p, birthDate: undefined }));
+                    }}
+                    keyboardType="numeric"
+                    placeholder="DD/MM/AAAA"
+                    maxLength={10}
+                    inputRef={birthDateInputRef}
+                    errorText={fieldErrors.birthDate}
+                    testID="patient-form-birthdate"
+                  />
+                </View>
                 <GenderSelect value={gender} onChange={setGender} />
               </Row>
 
@@ -405,7 +568,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
                 </Text>
               )}
 
-              {error && <Text style={s.error}>{error}</Text>}
+              {error && <Text style={s.error} testID="patient-form-summary-error">{error}</Text>}
             </ScrollView>
 
             <View style={s.footer}>
@@ -416,6 +579,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
                 onPress={handleSubmit}
                 style={[s.btn, s.btnPrimary, saveMut.isPending && { opacity: 0.6 }]}
                 disabled={saveMut.isPending}
+                testID="patient-form-submit"
               >
                 {saveMut.isPending ? (
                   <ActivityIndicator color="#fff" />
@@ -441,17 +605,20 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
 }
 
 function Field(props: any) {
-  const { label, style, multiline, ...rest } = props;
+  const { label, style, multiline, errorText, inputRef, testID, ...rest } = props;
   return (
     <View style={[{ gap: 4 }, style]}>
       <Text style={s.fieldLabel}>{label}</Text>
       <TextInput
+        ref={inputRef}
+        testID={testID}
         {...rest}
-        style={[s.input, multiline && s.inputMultiline]}
+        style={[s.input, multiline && s.inputMultiline, errorText && s.inputError]}
         placeholderTextColor={Colors.ink3}
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
       />
+      {errorText ? <Text style={s.fieldErrorText} testID={testID ? `${testID}-error` : undefined}>{errorText}</Text> : null}
     </View>
   );
 }
@@ -530,6 +697,21 @@ const s = StyleSheet.create({
     color: Colors.ink,
   } as any,
   inputMultiline: { minHeight: 60, textAlignVertical: "top" } as any,
+  inputError: { borderColor: "#EF4444" },
+  fieldErrorText: { color: "#EF4444", fontSize: 11, marginTop: 2 },
+  cpfDupBox: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(239,68,68,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.35)",
+  },
+  cpfDupText: { fontSize: 12, color: "#EF4444", fontWeight: "600" },
+  cpfDupBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center", backgroundColor: "#EF4444" },
+  cpfDupBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  cpfDupBtnGhost: { backgroundColor: "transparent", borderWidth: 1, borderColor: "rgba(239,68,68,0.35)" },
+  cpfDupBtnGhostText: { color: "#EF4444" },
   pill: {
     flex: 1,
     alignItems: "center",
