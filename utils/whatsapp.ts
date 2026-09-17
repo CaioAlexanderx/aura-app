@@ -120,3 +120,77 @@ export function confirmationText({
 export function genericText({ patientName }: { patientName: string }): string {
   return `Olá, ${firstName(patientName)}!`;
 }
+
+function clinicIntro(clinicName?: string | null): string {
+  return clinicName ? ` Aqui é da ${clinicName}.` : "";
+}
+
+/** "quinta, 17/09, às 14:00" — usado nos avisos de falta/cancelamento/remarcação. */
+function whenPhrase(d: Date): string {
+  return `${formatWeekdayDate(d)}, às ${formatTime(d)}`;
+}
+
+type WhenArgs = { patientName: string; clinicName?: string | null; when: Date };
+
+/** Lembrete para quem já confirmou. */
+export function reminderText({ patientName, clinicName, when }: WhenArgs): string {
+  return `Olá, ${firstName(patientName)}!${clinicIntro(clinicName)} Lembrando da sua consulta ${formatWeekdayDate(when)} às ${formatTime(when)}. Até lá!`;
+}
+
+/** Para quem faltou: oferece remarcar. */
+export function noShowText({ patientName, clinicName, when }: WhenArgs): string {
+  return `Olá, ${firstName(patientName)}!${clinicIntro(clinicName)} Sentimos sua falta na consulta de ${whenPhrase(when)}. Quer remarcar? Me diga o melhor dia e horário para você.`;
+}
+
+export type CancelReasonKey = "desmarcou" | "sem_resposta" | "remarcada" | "outro";
+
+/** Aviso de cancelamento; a redação muda conforme o motivo (mockup aprovado, aba E). */
+export function cancellationText({
+  patientName,
+  clinicName,
+  when,
+  reason,
+}: WhenArgs & { reason?: CancelReasonKey | null }): string {
+  const hi = `Olá, ${firstName(patientName)}!${clinicIntro(clinicName)}`;
+  const w = whenPhrase(when);
+  switch (reason) {
+    case "desmarcou":
+      return `${hi} Conforme combinamos, cancelei sua consulta de ${w}. Quando quiser remarcar, é só me chamar por aqui.`;
+    case "sem_resposta":
+      return `${hi} Como não consegui confirmar sua consulta de ${w}, liberei o horário. Se ainda quiser vir, me chame que encontramos outro horário.`;
+    case "remarcada":
+      return `${hi} Sua consulta de ${w} foi remarcada. Já te mando a nova data.`;
+    default:
+      return `${hi} Sua consulta de ${w} foi cancelada. Quando quiser remarcar, é só me chamar por aqui.`;
+  }
+}
+
+/** Aviso de remarcação: "antes → agora". */
+export function rescheduleText({
+  patientName,
+  clinicName,
+  from,
+  to,
+}: {
+  patientName: string;
+  clinicName?: string | null;
+  from: Date;
+  to: Date;
+}): string {
+  return `Olá, ${firstName(patientName)}!${clinicIntro(clinicName)} Sua consulta de ${whenPhrase(from)} foi remarcada para ${whenPhrase(to)}. Qualquer dúvida, me avise por aqui.`;
+}
+
+/**
+ * Mensagem pronta do botão WhatsApp do detalhe, conforme o status:
+ * agendado → pedir confirmação; faltou → oferecer remarcar; cancelado →
+ * aviso de cancelamento; demais → lembrete.
+ */
+export function appointmentMessage({
+  status,
+  ...args
+}: WhenArgs & { status: string | null | undefined }): string {
+  if (status === "faltou") return noShowText(args);
+  if (status === "cancelado") return cancellationText(args);
+  if (!status || status === "agendado" || status === "avaliacao") return confirmationText(args);
+  return reminderText(args);
+}
