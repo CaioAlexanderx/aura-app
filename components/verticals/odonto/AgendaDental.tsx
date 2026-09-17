@@ -10,6 +10,8 @@
 // Antes era uma lista de linhas de 1h: só cabia 1 consulta por hora e 07:30
 // aparecia como 07:00. A WeekView interna (não usada) foi removida — a Semana
 // é o AgendaDentalWeek.
+// Com `clinic` (horário de funcionamento), cada cadeira ganha o fundo do dia:
+// turnos, almoço cinza e hachura no fechado — tudo continua clicável.
 // ============================================================
 import { useCallback, useMemo, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -19,6 +21,7 @@ import { Fonts } from "@/constants/fonts";
 import {
   AgendaBlock,
   AgendaToast,
+  ClinicColumnBackground,
   ColumnDragLayer,
   DRAG_MIN_WIDTH,
   IS_WEB,
@@ -26,11 +29,13 @@ import {
   StatusLegend,
   isMovable,
   useAgendaCss,
+  type ClinicHoursView,
 } from "@/components/verticals/odonto/AgendaGridParts";
 import { useAgendaDrag, type DragPreview } from "@/hooks/useAgendaDrag";
 import { changeFromPreview, useAgendaGridFlow } from "@/hooks/useAgendaGridFlow";
 import type { RescheduleFn } from "@/hooks/useDentalReschedule";
 import {
+  atMinute,
   blockBox,
   gridHourRange,
   hm,
@@ -38,6 +43,7 @@ import {
   minutesOfDay,
   pad2,
 } from "@/utils/agendaGrid";
+import { clinicDayBands, clinicMinuteStatus, isWithinClinicHours, jsDayToWeekday } from "@/utils/clinicHours";
 
 export interface DentalAppointment {
   id: string;
@@ -78,6 +84,8 @@ interface Props {
   onReschedule?: RescheduleFn;
   startHour?: number;
   endHour?: number;
+  /** Horário da clínica (hooks/useClinicHours). Sem horário salvo, a grade fica lisa. */
+  clinic?: ClinicHoursView;
 }
 
 const C = DentalColors;
@@ -111,6 +119,7 @@ export function AgendaDental({
   onReschedule,
   startHour = 7,
   endHour = 19,
+  clinic,
 }: Props) {
   useAgendaCss();
   const { width } = useWindowDimensions();
@@ -152,6 +161,13 @@ export function AgendaDental({
     [range],
   );
 
+  const clinicHours = clinic?.configured ? clinic.hours : null;
+  const weekday = jsDayToWeekday(anchor.getDay());
+  const bands = useMemo(
+    () => (clinicHours ? clinicDayBands(clinicHours, weekday) : null),
+    [clinicHours, weekday],
+  );
+
   const flow = useAgendaGridFlow({ appointments: dayAppts, onReschedule });
   const colRefs = useRef<any[]>([]);
 
@@ -164,8 +180,9 @@ export function AgendaDental({
       columnChanged: p.colIdx !== p.fromCol,
       practitionerId: chair.practitionerId || undefined,
       columnLabel: chair.label,
+      outsideHours: !!clinicHours && !isWithinClinicHours(clinicHours, atMinute(anchor, p.startMin), p.durMin),
     });
-  }, [byId, chairs, anchor]);
+  }, [byId, chairs, anchor, clinicHours]);
 
   const drag = useAgendaDrag({
     enabled: canDrag,
@@ -199,7 +216,7 @@ export function AgendaDental({
             <View style={s.chairDot} />
             <Text style={s.chairName} numberOfLines={1}>{ch.label}</Text>
             <Text style={s.chairCount}>
-              {byChair[i].length} {byChair[i].length === 1 ? "consulta" : "consultas"}
+              {bands?.closed ? "Fechado · " : ""}{byChair[i].length} {byChair[i].length === 1 ? "consulta" : "consultas"}
             </Text>
           </View>
         ))}
@@ -225,11 +242,21 @@ export function AgendaDental({
               ref={(el: any) => { colRefs.current[ci] = el; }}
               style={[s.col, multi && phone && s.chairMin, activeCol === ci && { zIndex: 5 }]}
             >
+              {bands ? (
+                <ClinicColumnBackground
+                  bands={bands}
+                  startHour={range.startHour}
+                  endHour={range.endHour}
+                  hourPx={hourPx}
+                />
+              ) : null}
+
               {hours.map(h => [0, 30].map(m => (
                 <Pressable
                   key={`${h}-${m}`}
                   onPress={() => onSlotPress?.(ch.label, hm(h * 60 + m))}
-                  accessibilityLabel={`Agendar às ${hm(h * 60 + m)} na ${ch.label}`}
+                  accessibilityLabel={`Agendar às ${hm(h * 60 + m)} na ${ch.label}`
+                    + (clinicHours && clinicMinuteStatus(clinicHours, weekday, h * 60 + m).kind !== "open" ? " (fora do horário)" : "")}
                   style={[s.slot, { height: hourPx / 2 }, m === 0 ? s.slotHour : s.slotHalf]}
                 />
               )))}

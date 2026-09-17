@@ -13,7 +13,7 @@ import { request } from "@/services/api";
 import { applyAppointmentPatch, type ReschedulePatch, type ScheduleConflict } from "@/utils/agendaGrid";
 
 export type RescheduleResult =
-  | { status: "ok"; conflicts: ScheduleConflict[] }
+  | { status: "ok"; conflicts: ScheduleConflict[]; outsideHours?: boolean }
   | { status: "conflict"; conflicts: ScheduleConflict[] }
   | { status: "error"; message: string };
 
@@ -33,11 +33,16 @@ export function useDentalReschedule(cid: string | undefined): RescheduleFn {
     const snapshot = qc.getQueriesData({ queryKey: AGENDA_KEY });
     qc.setQueriesData({ queryKey: AGENDA_KEY }, (old: any) => applyAppointmentPatch(old, appointmentId, patch));
     try {
-      const res = await request<{ conflicts?: ScheduleConflict[] }>(
+      const res = await request<{ conflicts?: ScheduleConflict[]; outside_hours?: boolean }>(
         `/companies/${cid}/dental/appointments/${appointmentId}`,
         { method: "PATCH", body: rejectOnConflict ? { ...patch, reject_on_conflict: true } : patch },
       );
-      return { status: "ok", conflicts: res?.conflicts || [] };
+      return {
+        status: "ok",
+        conflicts: res?.conflicts || [],
+        // Backend só manda quando a clínica tem horário salvo; sem o campo, vale a conta do cliente.
+        outsideHours: typeof res?.outside_hours === "boolean" ? res.outside_hours : undefined,
+      };
     } catch (e: any) {
       // Nada foi gravado (ou não sabemos): o bloco volta para onde estava.
       for (const [key, data] of snapshot) qc.setQueryData(key, data);

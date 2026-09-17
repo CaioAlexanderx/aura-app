@@ -7,9 +7,9 @@
 // configuração (ClinicHoursCard.tsx), então salvar lá invalida
 // e atualiza aqui automaticamente.
 //
-// NÃO usado pela agenda ainda — hook pronto para outro agente
-// consumir em AgendaDental*.tsx / OdontoClinicTabs.tsx (ver
-// briefing do item 5 do card de horário).
+// Usado pela Agenda (OdontoClinicTabs → AgendaDental/AgendaDentalWeek:
+// faixa de horas, fundo por turno, confirmação fora do horário) e pelo
+// NewAppointmentModal (duração padrão e aviso de encaixe).
 // ============================================================
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";

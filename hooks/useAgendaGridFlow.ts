@@ -7,6 +7,8 @@
 //   2. sem conflito → PATCH com reject_on_conflict (409 → mesmo aviso);
 //   3. gravou → aviso no rodapé da agenda com Desfazer (PATCH com os valores
 //      antigos); erro → aviso de erro e o bloco volta (rollback no hook de PATCH).
+// Fora do horário da clínica não bloqueia: o rótulo do alvo avisa e o aviso
+// final diz "como encaixe fora do horário" (o backend responde outside_hours).
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragPreview } from "@/hooks/useAgendaDrag";
@@ -38,6 +40,8 @@ export interface ChangeRequest {
   ghost: DragPreview;
   /** Texto do aviso depois de gravar. */
   message: string;
+  /** O novo horário não cabe num turno da clínica (só aviso; não bloqueia). */
+  outsideHours?: boolean;
 }
 
 export interface PendingConflict extends ChangeRequest {
@@ -55,13 +59,15 @@ export interface GridToast {
 export function changeFromPreview(
   appt: FlowAppointment,
   p: DragPreview,
-  target: { day: Date; columnChanged: boolean; practitionerId?: string | null; columnLabel?: string },
+  target: { day: Date; columnChanged: boolean; practitionerId?: string | null; columnLabel?: string; outsideHours?: boolean },
 ): ChangeRequest {
   const who = firstName(appt.patient_name);
+  const outsideHours = !!target.outsideHours;
   if (p.mode === "resize") {
     return {
       appt,
       ghost: p,
+      outsideHours,
       patch: { duration_min: p.durMin },
       message: `Consulta de ${who} agora dura ${p.durMin} min (${hm(p.startMin)}–${hm(p.startMin + p.durMin)})`,
     };
@@ -72,10 +78,17 @@ export function changeFromPreview(
   return {
     appt,
     ghost: p,
+    outsideHours,
     patch,
     message: `Consulta de ${who} movida para ${dayShortLabel(target.day).toLowerCase()} às ${hm(p.startMin)}`
       + (chairMoved && target.columnLabel ? ` · ${target.columnLabel}` : ""),
   };
+}
+
+/** " como encaixe" / " como encaixe fora do horário" no aviso depois de gravar. */
+export function toastSuffix(fit: boolean, outsideHours: boolean): string {
+  if (outsideHours) return " como encaixe fora do horário";
+  return fit ? " como encaixe" : "";
 }
 
 /** Conflitos que o patch criaria, pela regra do backend. */
@@ -143,7 +156,7 @@ export function useAgendaGridFlow({ appointments, onReschedule }: {
     flash(req.appt.id);
     showToast({
       kind: "ok",
-      message: req.message + (fit ? " como encaixe" : ""),
+      message: req.message + toastSuffix(fit, res.outsideHours ?? !!req.outsideHours),
       undo: async () => {
         setToast(null);
         const r = await onReschedule(req.appt.id, undoPatch, { rejectOnConflict: false });
