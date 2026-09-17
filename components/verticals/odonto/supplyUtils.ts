@@ -1,5 +1,6 @@
 // AURA. — Supply Utils (GAP-03)
 // Constantes e helpers compartilhados pelos componentes de estoque odonto.
+import { dateOnlyToLocalDate, formatDateOnlyBR } from "@/utils/dateOnly";
 
 export const CATEGORIES: { id: string; label: string; icon: string }[] = [
   { id: 'todos',                 label: 'Todos',         icon: '📦' },
@@ -17,16 +18,17 @@ export const CATEGORIES: { id: string; label: string; icon: string }[] = [
 
 export const UNITS = ['un', 'cx', 'fr', 'ml', 'g', 'kg', 'L', 'par', 'rolo'];
 
+// expiry_date e coluna DATE. O truque `v + 'T12:00:00'` dava Invalid Date
+// quando a API manda "YYYY-MM-DDT00:00:00.000Z".
 export function fmt(v?: string | null): string {
-  if (!v) return '—';
-  try {
-    return new Date(v + 'T12:00:00').toLocaleDateString('pt-BR');
-  } catch { return '—'; }
+  return formatDateOnlyBR(v, '—');
 }
 
 export function daysTo(dateStr?: string | null): number | null {
-  if (!dateStr) return null;
-  return Math.ceil((new Date(dateStr + 'T12:00:00').getTime() - Date.now()) / 86400000);
+  const d = dateOnlyToLocalDate(dateStr);
+  if (!d) return null;
+  d.setHours(12, 0, 0, 0);
+  return Math.ceil((d.getTime() - Date.now()) / 86400000);
 }
 
 export function categoryLabel(id: string): string {

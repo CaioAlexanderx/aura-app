@@ -28,6 +28,7 @@ import { request } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { DentalColors } from "@/constants/dental-tokens";
+import { dateOnlyToLocalDate } from "@/utils/dateOnly";
 import type { PatientLite } from "@/components/verticals/odonto/PatientHub";
 
 type ViewMode = "grid" | "list";
@@ -78,9 +79,10 @@ function isActive(p: BackendPatient): boolean {
 }
 
 function isBirthdayWithin(birthDate: string | null | undefined, days = 7): boolean {
-  if (!birthDate) return false;
+  // birth_date e coluna DATE: new Date() jogaria o aniversario para a vespera
+  const birth = dateOnlyToLocalDate(birthDate);
+  if (!birth) return false;
   try {
-    const birth = new Date(birthDate);
     const today = new Date();
     for (let i = 0; i <= days; i++) {
       const d = new Date(today);
@@ -106,6 +108,12 @@ function fmtDate(iso?: string | null): string {
     const d = new Date(iso);
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
   } catch { return "—"; }
+}
+
+// Mesmo formato de fmtDate, para colunas DATE (birth_date).
+function fmtDateOnly(v?: string | null): string {
+  const d = dateOnlyToLocalDate(v);
+  return d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "—";
 }
 
 function patientToLite(p: BackendPatient): PatientLite {
@@ -523,7 +531,7 @@ function PatientRow({ patient, index, selected, onToggleSelect, onOpen }: { pati
       <View style={{ flex: 2, minWidth: 0 }}>
         <Text style={s.listName} numberOfLines={1}>{patient.full_name || patient.name}</Text>
         <Text style={s.listMeta} numberOfLines={1}>
-          {patient.gender || ""}{patient.birth_date ? ` · nasceu ${fmtDate(patient.birth_date)}` : ""}
+          {patient.gender || ""}{patient.birth_date ? ` · nasceu ${fmtDateOnly(patient.birth_date)}` : ""}
         </Text>
       </View>
       <Text style={[s.listText, { width: 140 }]} numberOfLines={1}>{patient.phone || "—"}</Text>

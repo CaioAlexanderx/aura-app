@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatDateOnlyBR, dateOnlyToLocalDate } from "@/utils/dateOnly";
 
 // Nao podemos usar o services/api aqui — ele manda Authorization header
 // e intercepta 401 pra deslogar. Precisamos de um fetch cru.
@@ -57,11 +58,19 @@ function formatDateTime(iso: string) {
   return { date, time };
 }
 
+// due_date e coluna DATE: le os componentes como vieram, sem fuso
 function formatDateOnly(iso: string) {
-  // due_date vem como 'YYYY-MM-DD' sem timezone — tratar como UTC pra nao deslocar
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+  return formatDateOnlyBR(iso);
+}
+
+// Vencida so a partir do dia seguinte ao vencimento (new Date("YYYY-MM-DD")
+// e meia-noite UTC = 21h da vespera em SP, e marcava como vencida a parcela
+// que vence hoje).
+function isPastDue(dueDate: string | null | undefined): boolean {
+  const due = dateOnlyToLocalDate(dueDate);
+  if (!due) return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return due < today;
 }
 
 const fmt = (n: number) => "R$ " + (n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -98,11 +107,7 @@ export default function PatientPortalPage() {
   const documents = portal.documents || [];
 
   const overdue = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return payments.filter((p: any) => {
-      if (!p.due_date) return false;
-      return new Date(p.due_date) < today;
-    });
+    return payments.filter((p: any) => isPastDue(p.due_date));
   }, [payments]);
 
   // Loading
@@ -219,8 +224,7 @@ export default function PatientPortalPage() {
             </View>
           )}
           {payments.map((p: any) => {
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const isOverdue = p.due_date && new Date(p.due_date) < today;
+            const isOverdue = isPastDue(p.due_date);
             return (
               <View key={p.id} style={s.paymentRow}>
                 <View style={{ flex: 1 }}>

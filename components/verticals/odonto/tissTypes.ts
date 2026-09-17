@@ -1,5 +1,6 @@
 // AURA. — TISS Types, constants e helpers
 // Extraido de TissDashboard.tsx (decomposicao).
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 export interface Insurance {
   id: string; name: string; razao_social?: string; cnpj?: string;
@@ -58,9 +59,9 @@ export function formatBRL(v: number | string): string {
   return n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, '.');
 }
 
+// Usado so para service_date (coluna DATE): le o dia como veio, sem fuso.
 export function formatDateBR(iso?: string | null): string {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return '—'; }
+  return formatDateOnlyBR(iso, '—');
 }
 
 // Shared styles tokens reutilizados nas sub-tabs

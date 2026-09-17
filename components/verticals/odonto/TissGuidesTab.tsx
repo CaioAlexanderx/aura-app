@@ -13,6 +13,7 @@ import { Icon } from '@/components/Icon';
 import { notify } from '@/utils/webAlert';
 import type { Guide, Insurance } from './tissTypes';
 import { GUIDE_TYPE_LABELS, STATUS_COLORS, formatBRL, formatDateBR } from './tissTypes';
+import { dateOnlyToLocalDate, todayLocalString } from "@/utils/dateOnly";
 
 // ─── StatusBadge (shared) ────────────────────────────────────
 export function StatusBadge({ status }: { status: string }) {
@@ -112,7 +113,7 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
   const [patientId,          setPatientId]          = useState(initialPatientId || '');
   const [patientName]                               = useState(initialPatientName || '');
   const [cardId,             setCardId]             = useState('');
-  const [serviceDate,        setServiceDate]        = useState(new Date().toISOString().substring(0, 10));
+  const [serviceDate,        setServiceDate]        = useState(todayLocalString());
   const [authNumber,         setAuthNumber]         = useState('');
   const [authPassword,       setAuthPassword]       = useState('');
   const [professionalCro,    setProfessionalCro]    = useState('');
@@ -138,7 +139,7 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
       };
       if (guideType === 'internacao') {
         body.cid_code = cidCode; body.clinical_indication = clinicalIndication;
-        body.hospital_admission_at = new Date(serviceDate).toISOString(); body.hospital_regime = 'hospitalar';
+        body.hospital_admission_at = (dateOnlyToLocalDate(serviceDate) ?? new Date()).toISOString(); body.hospital_regime = 'hospitalar';
       }
       return request(`/companies/${cid}/dental/tiss/guides`, { method: 'POST', body });
     },

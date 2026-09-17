@@ -19,6 +19,7 @@ import { toast } from '@/components/Toast';
 import { DentalColors } from '@/constants/dental-tokens';
 import { ContactActions } from '@/components/dental/ContactActions';
 import { genericText } from '@/utils/whatsapp';
+import { ageFromDateOnly, formatDateOnlyBR } from "@/utils/dateOnly";
 import { OdontoSubNav } from './OdontoSubNav';
 import { PortalShareModal } from './PortalShareModal';
 import { ConsentCollectModal } from './ConsentCollectModal';
@@ -105,24 +106,13 @@ const popupShadow = Platform.OS === 'web' ? {
   elevation: 24,
 };
 
+// birth_date e coluna DATE: sem new Date() (meia-noite UTC = vespera em SP)
 function fmtBirth(iso?: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  } catch { return "—"; }
+  return formatDateOnlyBR(iso, "—");
 }
 
 function calcAge(iso?: string | null): number | null {
-  if (!iso) return null;
-  try {
-    const birth = new Date(iso);
-    const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const m = now.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-    return age;
-  } catch { return null; }
+  return ageFromDateOnly(iso);
 }
 
 function fmtSince(iso?: string | null): string {

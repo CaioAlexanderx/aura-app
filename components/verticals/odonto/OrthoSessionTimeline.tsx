@@ -10,6 +10,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { notify } from '@/utils/webAlert';
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 export const SESSION_TYPE_LABEL: Record<string, string> = {
   avaliacao:'Avaliação', instalacao:'Instalação', adjustment:'Ajuste',
@@ -21,6 +22,12 @@ export const SESSION_TYPE_LABEL: Record<string, string> = {
 export function fmtDate(v?: string | null) {
   if (!v) return '—';
   try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return '—'; }
+}
+
+// Para colunas DATE (planned_date, start_date, expected_end_date);
+// completed_date e timestamptz e segue em fmtDate.
+export function fmtDateOnly(v?: string | null) {
+  return formatDateOnlyBR(v, '—');
 }
 
 interface Props {
@@ -79,7 +86,7 @@ export function OrthoSessionTimeline({ sessions, totalPlanned, treatmentId, comp
                     {isDone && <Text style={st.dotCheck}>✓</Text>}
                   </View>
                   <Text style={st.dotLabel}>S{sess.session_number}</Text>
-                  {sess.planned_date && <Text style={st.dotDate}>{fmtDate(sess.planned_date).slice(0, 5)}</Text>}
+                  {sess.planned_date && <Text style={st.dotDate}>{fmtDateOnly(sess.planned_date).slice(0, 5)}</Text>}
                 </View>
               </TouchableOpacity>
             );
@@ -105,7 +112,7 @@ export function OrthoSessionTimeline({ sessions, totalPlanned, treatmentId, comp
               <Text style={st.cardTitle}>
                 Sessao {sel.session_number} — {SESSION_TYPE_LABEL[sel.session_type] || sel.session_type}
               </Text>
-              {sel.planned_date && <Text style={st.meta}>Data: {fmtDate(sel.planned_date)}</Text>}
+              {sel.planned_date && <Text style={st.meta}>Data: {fmtDateOnly(sel.planned_date)}</Text>}
               {sel.status === 'completed' && (
                 <Text style={[st.meta, { color: '#10B981' }]}>✓ Concluida em {fmtDate(sel.completed_date)}</Text>
               )}
