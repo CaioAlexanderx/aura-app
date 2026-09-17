@@ -13,7 +13,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 // no overlay "Mais".
 //
 // FONTE UNICA: modulos genericos do Aura nao aparecem aqui. O
-// atalho "Aura Negócio" no overlay leva pro shell generico
+// Configurações (tela da clínica) fica no overlay "Mais" (17/09/2026: o atalho "Aura Negócio" saiu)
 // quando o usuario precisa de algo nao-dental.
 //
 // Limitacao: overlay "Mais" so funciona no web (usa position
@@ -36,7 +36,7 @@ const MORE_ITEMS: MTabItem[] = [
   { route: "/dental/(clinic)/faturamento", label: "Faturamento", icon: "wallet" },
   { route: "/dental/(clinic)/materiais",   label: "Materiais",   icon: "package" },
   { route: "/dental/(clinic)/comunicacao", label: "Comunicação", icon: "message" },
-  { route: "/dental/(clinic)/clinica",     label: "Clínica",     icon: "settings" },
+  { route: "/dental/(clinic)/clinica",     label: "Configurações", icon: "settings" },
 ];
 
 function routeMatches(pathname: string, route: string): boolean {
@@ -105,27 +105,6 @@ export function DentalMBar() {
                   </div>
                 );
               })}
-              {/* Atalho pra Aura Negocio (modulos genericos) */}
-              <div
-                onClick={() => navigate("/(tabs)")}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-                  padding: 14, borderRadius: 12, cursor: "pointer",
-                  background: "transparent",
-                  border: "1px dashed " + DentalColors.border,
-                } as any}
-              >
-                <div style={{
-                  width: 38, height: 38, borderRadius: 10,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "rgba(255,255,255,0.04)",
-                } as any}>
-                  <Icon name="grid" size={18} color={DentalColors.ink3} />
-                </div>
-                <span style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "600", textAlign: "center" } as any}>
-                  Aura Negócio
-                </span>
-              </div>
             </div>
           </div>
         </div>

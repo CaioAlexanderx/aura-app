@@ -38,10 +38,12 @@ const DENTAL_NAV: DentalNavSectionLocal[] = [
     { route: "/dental/(clinic)/materiais",    label: "Materiais",    icon: "package",    tourKey: "materiais" },
     { route: "/dental/(clinic)/comunicacao",  label: "Comunicação",  icon: "message",    tourKey: "comunicacao" },
   ]},
-  { label: "Configurações", items: [
-    { route: "/dental/(clinic)/clinica",     label: "Clínica",     icon: "settings", tourKey: "clinica" },
-  ]},
 ];
+
+// 17/09/2026: "Clínica" saiu do menu e virou o botão "Configurações" do
+// rodapé (mesmo layout do Shell Negócio); o antigo "Aura Negócio" só
+// redirecionava de volta para /dental/hoje.
+const SETTINGS_ROUTE = "/dental/(clinic)/clinica";
 
 function routeMatches(pathname: string, route: string): boolean {
   const stripped = route.replace(/\/\([^)]+\)/g, "");
@@ -56,6 +58,7 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
   const { layout } = useDentalSidebarLayout();
   const [editorOpen, setEditorOpen] = useState(false);
   const sw = collapsed ? 64 : 240;
+  const settingsActive = routeMatches(pathname, SETTINGS_ROUTE);
 
   const filteredNav: DentalNavSection[] = useMemo(
     () => applyLayoutToDental(DENTAL_NAV as DentalNavSection[], layout),
@@ -189,10 +192,10 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>{isDark ? "Modo claro" : "Modo escuro"}</Text>
             </Pressable>
 
-            <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}
-              {...(Platform.OS === "web" ? { title: "Acessar módulos genéricos do Aura Negócio" } : {})}>
-              <Icon name="grid" size={12} color={DentalColors.ink3} />
-              <Text style={{ fontSize: 11, color: DentalColors.ink3, fontWeight: "500" }}>Aura Negócio</Text>
+            <Pressable onPress={() => router.push(SETTINGS_ROUTE as any)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: settingsActive ? DentalColors.cyan : DentalColors.border, backgroundColor: settingsActive ? DentalColors.cyanDim : "transparent" }}
+              {...(Platform.OS === "web" ? { title: "Cadeiras, dentistas e horário da clínica", "data-tour": "dental-nav-clinica" } as any : {})}>
+              <Icon name="settings" size={12} color={settingsActive ? DentalColors.cyan : DentalColors.ink3} />
+              <Text style={{ fontSize: 11, color: settingsActive ? DentalColors.cyan : DentalColors.ink3, fontWeight: settingsActive ? "600" : "500" }}>Configurações</Text>
             </Pressable>
             <Pressable onPress={logout} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border }}>
               <Icon name="logout" size={12} color={DentalColors.ink3} />
@@ -216,9 +219,9 @@ export function DentalSidebar({ collapsed, onToggle }: { collapsed: boolean; onT
               <Icon name={isDark ? "sun" : "moon"} size={13} color={DentalColors.ink3} />
             </Pressable>
 
-            <Pressable onPress={() => router.push("/(tabs)" as any)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
-              {...(Platform.OS === "web" ? { title: "Aura Negócio" } : {})}>
-              <Icon name="grid" size={13} color={DentalColors.ink3} />
+            <Pressable onPress={() => router.push(SETTINGS_ROUTE as any)} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: settingsActive ? DentalColors.cyanDim : "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
+              {...(Platform.OS === "web" ? { title: "Configurações", "data-tour": "dental-nav-clinica" } as any : {})}>
+              <Icon name="settings" size={13} color={settingsActive ? DentalColors.cyan : DentalColors.ink3} />
             </Pressable>
             <Pressable onPress={logout} style={{ alignSelf: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.04)", alignItems: "center", justifyContent: "center" }}
               {...(Platform.OS === "web" ? { title: "Sair" } : {})}>

@@ -66,7 +66,7 @@ const STEPS: TourStep[] = [
   {
     id: "done",
     title: "Pronto. Boa clínica.",
-    body: "Próximo passo recomendado: ir em Configurações da Clínica para cadastrar suas cadeiras e a equipe de dentistas. Após isso, seu painel está 100% funcional.",
+    body: "Próximo passo recomendado: ir em Configurações, no rodapé do menu, para cadastrar suas cadeiras e a equipe de dentistas. Após isso, seu painel está 100% funcional.",
     cta: "Concluir",
   },
 ];
