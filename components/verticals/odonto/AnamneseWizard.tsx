@@ -96,7 +96,7 @@ function tokenMatchesChip(normToken: string, normChip: string): boolean {
   if (normToken === normChip) return true;
   if (normToken.length >= 4 && (normChip.includes(normToken) || normToken.includes(normChip))) return true;
   const significantWords = normChip.split(" ").filter(w => w.length >= 4);
-  return significantWords.some(w => w === normToken || normToken.includes(w) || w.includes(normToken));
+  return significantWords.some(w => w === normToken || normToken.includes(w) || (normToken.length >= 4 && w.includes(normToken)));
 }
 
 export function matchAllergyChips(
