@@ -43,6 +43,7 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
 };
 
 const HOURS = Array.from({ length: 12 }, (_, i) => `${String(i + 7).padStart(2, "0")}:00`);
+const DAY_MOVABLE = new Set(["agendado", "confirmado", "paciente_consultorio", "avaliacao", "aprovado"]);
 const DAY_NAMES = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
 
 function sameDay(a: Date, b: Date): boolean {
@@ -356,8 +357,11 @@ function DayView({
                     "div",
                     {
                       key: hour,
-                      draggable: true,
+                      // Hotfix QA 16/09: so arrasta consulta que ainda nao comecou; a alca de
+                      // redimensionar (dentro do bloco arrastavel) mudava hora e duracao juntas.
+                      draggable: DAY_MOVABLE.has(appt.status),
                       onDragStart: (e: any) => {
+                        if (!DAY_MOVABLE.has(appt.status)) { e.preventDefault(); return; }
                         e.dataTransfer.setData("apptId", appt.id);
                         e.dataTransfer.setData("origChair", chair);
                         e.dataTransfer.setData("origHour", hour);
@@ -374,7 +378,7 @@ function DayView({
                         borderLeft: `3px solid ${st.color}`,
                         backgroundColor: Colors.bg2 || "#090c1a",
                         marginBottom: 3,
-                        cursor: "grab",
+                        cursor: DAY_MOVABLE.has(appt.status) ? "grab" : "pointer",
                         position: "relative",
                         userSelect: "none",
                       },
@@ -411,36 +415,7 @@ function DayView({
                         },
                       },
                       st.label
-                    ),
-                    // Resize handle
-                    createElement("div", {
-                      style: {
-                        position: "absolute",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: 6,
-                        cursor: "s-resize",
-                        background: "rgba(255,255,255,0.10)",
-                      },
-                      onMouseDown: (e: any) => {
-                        e.stopPropagation();
-                        const startY = e.clientY;
-                        const startDur = appt.duration_min || 60;
-                        const onMove = (ev: MouseEvent) => {
-                          const dy = ev.clientY - startY;
-                          const deltaMins = Math.round(dy / 36) * 30;
-                          const newDur = Math.max(30, startDur + deltaMins);
-                          onResizeAppointment?.(appt.id, newDur);
-                        };
-                        const onUp = () => {
-                          window.removeEventListener("mousemove", onMove);
-                          window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                      },
-                    })
+                    )
                   );
                 }
 
