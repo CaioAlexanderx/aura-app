@@ -10,7 +10,7 @@ import { DentalHeroCard } from "@/components/dental/DentalHeroCard";
 import { DentalQuickActions } from "@/components/dental/DentalQuickActions";
 import { DentalSectionHeader } from "@/components/dental/DentalSectionHeader";
 
-import { useDentalPersona, dentalPersonaLabel, type DentalPersona } from "@/hooks/useDentalPersona";
+import { useDentalPersona, dentalPersonaLabel, isSoloDentistManager, type DentalPersona } from "@/hooks/useDentalPersona";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import { DentalColors } from "@/constants/dental-tokens";
@@ -75,7 +75,24 @@ export default function HojeScreen() {
   const greeting = greetingFor();
   const order = ORDERS[persona];
   const personaLabel = dentalPersonaLabel(persona);
-  const showAppointmentsPanel = PERSONAS_WITH_APPOINTMENTS_PANEL.has(persona);
+
+  // Dona que atende sozinha: gestor + exatamente 1 dentista ativo
+  // cadastrado. Mesma queryKey usada em DentalSettings.tsx pra
+  // reaproveitar o cache.
+  const { data: practitionersData } = useQuery({
+    queryKey: ["dental-practitioners", company?.id],
+    queryFn: () => request<any>(`/companies/${company!.id}/dental/practitioners`),
+    enabled: !!company?.id && persona === "gestor",
+    staleTime: 30000,
+  });
+  const activeDentistCount = useMemo(() => {
+    const practitioners = practitionersData?.practitioners || [];
+    return practitioners.filter((p: any) => p.is_active).length;
+  }, [practitionersData]);
+  const soloDentist = isSoloDentistManager(persona, activeDentistCount);
+
+  const showAppointmentsPanel = PERSONAS_WITH_APPOINTMENTS_PANEL.has(persona) || soloDentist;
+  const tagline = soloDentist ? PERSONA_TAGLINE.dentista : PERSONA_TAGLINE[persona];
 
   const { data: dashData } = useQuery({
     queryKey: ["dental-dashboard", company?.id],
@@ -145,16 +162,19 @@ export default function HojeScreen() {
             {firstName ? <Text style={{ color: DentalColors.cyan }}>{firstName}</Text> : null}
           </Text>
           <Text style={{ fontSize: 13, color: DentalColors.ink2, marginTop: 4 }}>
-            {PERSONA_TAGLINE[persona]}
+            {tagline}
           </Text>
         </View>
+
+        {/* Dona solo: a agenda do dia vem antes dos indicadores (decisao 16/09). */}
+        {soloDentist && <HojeAppointmentsPanel />}
 
         <DentalHeroCard {...heroProps} />
 
         <DentalSectionHeader title="Atalhos" />
         <DentalQuickActions persona={persona} />
 
-        {showAppointmentsPanel && <HojeAppointmentsPanel />}
+        {showAppointmentsPanel && !soloDentist && <HojeAppointmentsPanel />}
 
         <OdontoDashboard sectionsOrder={order} hideTitle />
       </View>

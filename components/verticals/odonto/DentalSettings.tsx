@@ -234,7 +234,7 @@ export function DentalSettings() {
           <View style={{ flex: 1 }}>
             <Text style={s.cardTitle}>Cadeiras</Text>
             <Text style={s.cardSub}>
-              {maxChairs} cadeira{maxChairs > 1 ? 's' : ''} disponivel{maxChairs > 1 ? 'is' : ''} no seu plano. Desative as nao usadas pra limpar a interface.
+              {maxChairs} cadeira{maxChairs > 1 ? 's' : ''} disponível{maxChairs > 1 ? 'is' : ''} no seu plano. Desative as nao usadas pra limpar a interface.
             </Text>
           </View>
         </View>
@@ -269,17 +269,22 @@ export function DentalSettings() {
                     contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingRight: 12 }}>
                     <Pressable
                       onPress={() => assignPractitioner(idx, null)}
-                      style={[s.assignChip, !allocatedId && s.assignChipActive]}>
-                      <Text style={[s.assignChipText, !allocatedId && { color: Colors.violet3 }]}>Sem alocacao</Text>
+                      style={[s.assignChip, !allocatedId && s.assignChipActiveNeutral]}>
+                      {!allocatedId && <Icon name="check" size={11} color="#fff" />}
+                      <Text style={[s.assignChipText, !allocatedId && s.assignChipTextActive]}>Sem alocação</Text>
                     </Pressable>
                     {activePractitioners.map(p => {
                       const selected = allocatedId === p.id;
                       return (
                         <Pressable key={p.id}
                           onPress={() => assignPractitioner(idx, p.id)}
-                          style={[s.assignChip, selected && s.assignChipActive, selected && { borderColor: p.color }]}>
-                          <View style={[s.assignChipDot, { backgroundColor: p.color }]} />
-                          <Text style={[s.assignChipText, selected && { color: p.color, fontWeight: '700' }]}>
+                          style={[s.assignChip, selected && [s.assignChipActive, { backgroundColor: p.color, borderColor: p.color }]]}>
+                          {selected ? (
+                            <Icon name="check" size={11} color="#fff" />
+                          ) : (
+                            <View style={[s.assignChipDot, { backgroundColor: p.color }]} />
+                          )}
+                          <Text style={[s.assignChipText, selected && s.assignChipTextActive]}>
                             {p.name}
                           </Text>
                         </Pressable>
@@ -374,10 +379,12 @@ const s = StyleSheet.create({
   chairInactive: { fontSize: 10, color: Colors.ink3, fontStyle: 'italic' as any },
   chairAssign: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   chairAssignLabel: { fontSize: 10, color: Colors.ink3, fontWeight: '700', textTransform: 'uppercase' as any, letterSpacing: 0.4, marginBottom: 6 },
-  assignChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  assignChipActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  assignChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1.5, borderColor: Colors.border },
+  assignChipActive: { borderColor: 'transparent' },
+  assignChipActiveNeutral: { backgroundColor: Colors.violet, borderColor: 'transparent' },
   assignChipDot: { width: 8, height: 8, borderRadius: 4 },
-  assignChipText: { fontSize: 11, color: Colors.ink, fontWeight: '500' },
+  assignChipText: { fontSize: 11, color: Colors.ink2, fontWeight: '500' },
+  assignChipTextActive: { color: '#fff', fontWeight: '700' },
 
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   addBtnText: { fontSize: 11, color: '#fff', fontWeight: '700' },

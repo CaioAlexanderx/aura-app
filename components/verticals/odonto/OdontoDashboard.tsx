@@ -197,7 +197,7 @@ export function OdontoDashboard({ sectionsOrder = DEFAULT_ORDER, hideTitle = fal
           <DentalKpiCard value={String(pacientes.total || 0)} label="Base ativa" color={DentalColors.cyan} icon="users"
             sublabel={`+${pacientes.novos_mes || 0} este mes`} />
           <DentalKpiCard value={String(recall)} label="Recall pendente" color={DentalColors.violet} icon="phone"
-            sublabel="Sem visita ha 150+ dias" />
+            sublabel="Sem visita ha 180+ dias" />
         </View>
       </Fragment>
     ),
