@@ -9,7 +9,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { authApi } from "@/services/api";
+import { authApi, ApiError } from "@/services/api";
 import { useLgpdConsentInset } from "@/components/LGPDConsent";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
@@ -141,7 +141,7 @@ export default function ForgotPasswordScreen() {
       await authApi.forgotPassword(email.trim().toLowerCase());
       setSent(true);
       toast.success("Link enviado! Verifique seu e-mail.");
-    } catch { toast.error("Erro ao enviar. Tente novamente."); }
+    } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao enviar. Tente novamente."); }
     finally { setLoading(false); }
   }
 
