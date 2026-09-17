@@ -14,6 +14,7 @@ import { request } from "@/services/api";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { openWhatsApp, genericText } from "@/utils/whatsapp";
 import { RecallControl, type RecallPatient } from "@/components/verticals/odonto/RecallControl";
 import { NoShowTracker, type NoShowPatient } from "@/components/verticals/odonto/NoShowTracker";
 
@@ -64,6 +65,22 @@ export function RetornoTab() {
   const recallPatients  = recallData?.patients  || [];
   const noShowsPatients = noShowsData?.patients || [];
   const recallDays      = recallData?.recall_days || 180;
+
+  // WhatsApp MANUAL por paciente — a API de recall nao tem envio
+  // individual (so o batch acima), entao esses botoes so abrem o app com
+  // o texto pronto; nada e enviado pela Aura.
+  function handleSendRecallWA(patientId: string) {
+    const p = recallPatients.find((x) => x.id === patientId);
+    if (!p) return;
+    const text = `${genericText({ patientName: p.full_name })} Já faz um tempo desde sua última visita — que tal agendar um retorno?`;
+    openWhatsApp(p.phone, text);
+  }
+
+  function handleContactNoShowWA(patientId: string) {
+    const p = noShowsPatients.find((x) => x.id === patientId);
+    if (!p) return;
+    openWhatsApp(p.phone, genericText({ patientName: p.full_name }));
+  }
 
   return (
     <View style={{ gap: 12 }}>
@@ -122,7 +139,7 @@ export function RetornoTab() {
           {!loadRecall && !recallErr && (
             <RecallControl
               patients={recallPatients}
-              // onSendRecall individual nao disponivel ainda — botao global acima faz batch.
+              onSendRecall={handleSendRecallWA}
               // onSchedule omitido — vai abrir modal de novo agendamento numa proxima sessao.
             />
           )}
@@ -150,8 +167,8 @@ export function RetornoTab() {
             <NoShowTracker
               patients={noShowsPatients}
               maxNoShows={3}
-              // onContactPatient + onViewHistory omitidos — vao abrir modals
-              // na proxima sessao. Por ora o tracker mostra os dados agregados.
+              onContactPatient={handleContactNoShowWA}
+              // onViewHistory omitido — vai abrir modal na proxima sessao.
             />
           )}
         </>
