@@ -166,12 +166,15 @@ export default function HojeScreen() {
           </Text>
         </View>
 
+        {/* Dona solo: a agenda do dia vem antes dos indicadores (decisao 16/09). */}
+        {soloDentist && <HojeAppointmentsPanel />}
+
         <DentalHeroCard {...heroProps} />
 
         <DentalSectionHeader title="Atalhos" />
         <DentalQuickActions persona={persona} />
 
-        {showAppointmentsPanel && <HojeAppointmentsPanel />}
+        {showAppointmentsPanel && !soloDentist && <HojeAppointmentsPanel />}
 
         <OdontoDashboard sectionsOrder={order} hideTitle />
       </View>
