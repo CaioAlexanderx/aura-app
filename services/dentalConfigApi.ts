@@ -1,4 +1,5 @@
 import { request } from "@/services/api";
+import type { ClinicHours } from "@/utils/clinicHours";
 
 // ============================================================
 // AURA. — Dental Practitioners + Settings API (D-FIX #1+#6)
@@ -11,6 +12,8 @@ import { request } from "@/services/api";
 //   POST   /companies/:id/dental/practitioners
 //   PATCH  /companies/:id/dental/practitioners/:pid
 //   DELETE /companies/:id/dental/practitioners/:pid
+//   GET    /companies/:id/dental/hours   (Aura-backend#725)
+//   PUT    /companies/:id/dental/hours
 // ============================================================
 
 export type DentalChairSettings = {
@@ -51,6 +54,22 @@ export type UpdatePractitionerBody = Partial<CreatePractitionerBody> & {
   is_active?: boolean;
 };
 
+// Horário de funcionamento da clínica (Aura-backend#725)
+export type DentalHoursResponse = {
+  configured: boolean;
+  hours: ClinicHours | null;
+  default_interval_min: 15 | 20 | 30 | 45 | 60 | null;
+  grid: { start_hour: number; end_hour: number };
+  suggestion: { hours: ClinicHours; default_interval_min: 15 | 20 | 30 | 45 | 60 | null };
+};
+
+export type SaveDentalHoursBody = {
+  hours: ClinicHours;
+  default_interval_min: 15 | 20 | 30 | 45 | 60 | null;
+};
+
+export type DentalHoursValidationError = { weekday: number; shift: number; field: string; message: string };
+
 export var dentalConfigApi = {
   // Settings (chairs + assignments)
   getSettings: function(companyId: string) {
@@ -89,6 +108,20 @@ export var dentalConfigApi = {
     return request<{ deleted: boolean }>(
       "/companies/" + companyId + "/dental/practitioners/" + pid,
       { method: "DELETE", retry: 0 }
+    );
+  },
+
+  // Horário de funcionamento
+  getHours: function(companyId: string) {
+    return request<DentalHoursResponse>(
+      "/companies/" + companyId + "/dental/hours",
+      { retry: 1 }
+    );
+  },
+  saveHours: function(companyId: string, body: SaveDentalHoursBody) {
+    return request<DentalHoursResponse>(
+      "/companies/" + companyId + "/dental/hours",
+      { method: "PUT", body: body, retry: 0 }
     );
   },
 };

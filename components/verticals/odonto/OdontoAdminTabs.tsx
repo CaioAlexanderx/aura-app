@@ -23,7 +23,8 @@ import { ConvenioManager } from "@/components/verticals/odonto/ConvenioManager";
 import { TissGuideManager } from "@/components/verticals/odonto/TissGuideManager";
 import { CheckinPaciente } from "@/components/verticals/odonto/CheckinPaciente";
 import { ListaEsperaDental } from "@/components/verticals/odonto/ListaEsperaDental";
-import { AgendaOnline, type BookingConfig as AOConfig, type BookingRequest as AOReq } from "@/components/verticals/odonto/AgendaOnline";
+import { AgendaOnline, type BookingConfig as AOConfig, type BookingEffective as AOEffective, type BookingRequest as AOReq } from "@/components/verticals/odonto/AgendaOnline";
+import { useClinicHours } from "@/hooks/useClinicHours";
 
 function useCompanyId() { return useAuthStore().company?.id; }
 function Loader() { return <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>; }
@@ -159,6 +160,7 @@ function mapReqStatus(beStatus: string): 'pendente' | 'confirmado' | 'recusado' 
 export function AgendaOnlineTab() {
   var cid = useCompanyId();
   var qc = useQueryClient();
+  var clinicHours = useClinicHours();
 
   var { data: configData, isLoading: loadingConfig } = useQuery({
     queryKey: ["dental-booking-config", cid],
@@ -174,6 +176,7 @@ export function AgendaOnlineTab() {
   });
 
   var configRaw = (configData as any)?.config;
+  var effectiveRaw = (configData as any)?.effective;
   var requestsRaw = ((reqsData as any)?.requests) || [];
 
   var config: AOConfig | null = useMemo(function() {
@@ -182,15 +185,27 @@ export function AgendaOnlineTab() {
       is_active:        !!configRaw.is_active,
       slug:             configRaw.slug || '',
       welcome_msg:      configRaw.welcome_msg || '',
-      slot_duration_min: configRaw.slot_duration_min || 60,
-      start_hour:       configRaw.start_hour || 8,
-      end_hour:         configRaw.end_hour || 18,
-      available_days:   Array.isArray(configRaw.available_days) ? configRaw.available_days : [1,2,3,4,5],
       require_phone:    configRaw.require_phone !== false,
       min_advance_hours: configRaw.min_advance_hours || 2,
       max_advance_days:  configRaw.max_advance_days || 30,
+      use_clinic_hours: configRaw.use_clinic_hours !== false,
+      online_window:    configRaw.online_window || null,
+      slot_duration_custom: configRaw.slot_duration_custom ?? null,
+      // Legado — só relevante quando effective.source === "legacy"
+      start_hour:       configRaw.start_hour || 8,
+      end_hour:         configRaw.end_hour || 18,
+      available_days:   Array.isArray(configRaw.available_days) ? configRaw.available_days : [1,2,3,4,5],
     };
   }, [configRaw]);
+
+  var effective: AOEffective | null = useMemo(function() {
+    if (!effectiveRaw) return null;
+    return {
+      source: effectiveRaw.source || "legacy",
+      clinic_hours_configured: !!effectiveRaw.clinic_hours_configured,
+      slot_duration_min: effectiveRaw.slot_duration_min || 60,
+    };
+  }, [effectiveRaw]);
 
   var requests: AOReq[] = useMemo(function() {
     return requestsRaw.map(function(r: any) {
@@ -225,7 +240,7 @@ export function AgendaOnlineTab() {
   });
 
   var updateConfigMut = useMutation({
-    mutationFn: function(patch: Partial<AOConfig>) {
+    mutationFn: function(patch: any) {
       return request("/companies/" + cid + "/dental/booking/config", {
         method: "PUT", body: patch,
       });
@@ -293,11 +308,14 @@ export function AgendaOnlineTab() {
   return (
     <AgendaOnline
       config={config}
+      effective={effective}
+      clinicHours={clinicHours.hours}
       requests={requests}
       bookingUrl={bookingUrl}
       saving={updateConfigMut.isPending}
       onToggleActive={function(active) { toggleActiveMut.mutate(active); }}
-      onUpdateConfig={function(patch: Partial<AOConfig>) { updateConfigMut.mutate(patch); }}
+      onUpdateConfig={function(patch: any) { updateConfigMut.mutate(patch); }}
+      onGotoClinicHours={function() { router.push("/dental/(clinic)/clinica" as any); }}
       onConfirmRequest={handleConfirm}
       onRejectRequest={handleReject}
     />

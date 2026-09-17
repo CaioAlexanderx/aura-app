@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dentalConfigApi, type DentalPractitioner, type DentalChairSettings } from "@/services/dentalConfigApi";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ClinicHoursCard } from "@/components/verticals/odonto/ClinicHoursCard";
 
 // ============================================================
 // AURA. — DentalSettings tab (D-FIX #1 + #6)
@@ -297,6 +298,9 @@ export function DentalSettings() {
           );
         })}
       </View>
+
+      {/* Card: Horário de funcionamento */}
+      <ClinicHoursCard />
 
       {/* Card 2: Dentistas */}
       <View style={s.card}>

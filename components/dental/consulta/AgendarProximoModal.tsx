@@ -12,6 +12,13 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { DentalColors } from "@/constants/dental-tokens";
 import { localDayKey, toDateOnlyString, todayLocalString } from "@/utils/dateOnly";
+import {
+  type ClinicHours,
+  findDayHours,
+  jsDayToWeekday,
+  timeToMinutes,
+} from "@/utils/clinicHours";
+import { useClinicHours } from "@/hooks/useClinicHours";
 
 interface BusyAppt {
   id: string;
@@ -49,20 +56,31 @@ interface BookingConfigLite {
   available_days: number[];
 }
 
+export type ClinicHoursLite = { configured: boolean; hours: ClinicHours; defaultIntervalMin?: number | null };
+
 // Exportado para teste. `durationMin` e a duracao escolhida no modal: um
 // horario so e livre se a consulta INTEIRA cabe sem sobrepor outra (antes
 // usava o tamanho do slot e oferecia 09:00 para 60min com algo as 09:30).
+//
+// `clinic`: horário da clínica (GET /hours, item 4). Quando configurado,
+// os turnos por dia + intervalo padrão substituem `cfg` (config do
+// agendamento online) inteiramente. Sem horário salvo (`clinic` ausente ou
+// `configured: false`), cai no comportamento atual (baseado em `cfg`).
 export function buildDays(
   now: Date,
   busy: BusyAppt[],
   practitionerId?: string | null,
   cfg?: BookingConfigLite,
   durationMin?: number,
+  clinic?: ClinicHoursLite | null,
 ): DaySlots[] {
+  const useClinic = !!clinic?.configured;
   const startH = cfg?.start_hour ?? 8;
   const endH = cfg?.end_hour ?? 18;
-  const slotMin = cfg?.slot_duration_min || 30;
+  const fallbackSlotMin = cfg?.slot_duration_min || 30;
+  const slotMin = useClinic ? (clinic?.defaultIntervalMin || 30) : fallbackSlotMin;
   const apptMs = (durationMin && durationMin > 0 ? durationMin : slotMin) * 60 * 1000;
+  const apptMin = apptMs / 60000;
   const allowedDays = new Set(cfg?.available_days || [1, 2, 3, 4, 5, 6]);
 
   const out: DaySlots[] = [];
@@ -80,17 +98,36 @@ export function buildDays(
 
   for (let i = 1; i <= DAYS_AHEAD; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    if (!allowedDays.has(d.getDay())) continue;
+    const dayHours = useClinic ? findDayHours(clinic!.hours, jsDayToWeekday(d.getDay())) : null;
+    if (useClinic) {
+      if (!dayHours || !dayHours.open) continue;
+    } else if (!allowedDays.has(d.getDay())) {
+      continue;
+    }
     const key = toDateOnlyString(d);
     const free: string[] = [];
     const dayBusy = busyByDay[key] || [];
-    for (let h = startH; h < endH; h++) {
-      for (let m = 0; m < 60; m += slotMin) {
-        const slot = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0);
-        const ts = slot.getTime();
-        const conflict = dayBusy.some((b) => ts < b.end && ts + apptMs > b.start);
-        if (!conflict) free.push(slot.toISOString());
+
+    const candidateMins: number[] = [];
+    if (useClinic && dayHours) {
+      for (const shift of dayHours.shifts) {
+        const a = timeToMinutes(shift.start);
+        const b = timeToMinutes(shift.end);
+        for (let t = a; t + apptMin <= b; t += slotMin) candidateMins.push(t);
       }
+    } else {
+      for (let h = startH; h < endH; h++) {
+        for (let m = 0; m < 60; m += slotMin) candidateMins.push(h * 60 + m);
+      }
+    }
+
+    for (const totalMin of candidateMins) {
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      const slot = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0);
+      const ts = slot.getTime();
+      const conflict = dayBusy.some((b) => ts < b.end && ts + apptMs > b.start);
+      if (!conflict) free.push(slot.toISOString());
     }
     const wkLabel = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][d.getDay()];
     out.push({
@@ -131,18 +168,27 @@ export function AgendarProximoModal({
     staleTime: 30000,
   });
 
+  // Item 4: horário da clínica (GET /hours) manda quando estiver salvo.
+  // Sem horário salvo, cai no comportamento atual (config do agendamento
+  // online, buscada abaixo só como fallback).
+  const clinicHours = useClinicHours();
+
   const { data: cfgData } = useQuery({
     queryKey: ["dental-booking-config", cid],
     queryFn: () => request<{ config: BookingConfigLite }>(`/companies/${cid}/dental/booking/config`),
-    enabled: !!cid && open,
+    enabled: !!cid && open && !clinicHours.configured,
     staleTime: 60000,
   });
   const bookingCfg: BookingConfigLite | undefined = (cfgData as any)?.config;
 
   const durationMin = Number(duration) || 0;
+  const clinicLite: ClinicHoursLite = useMemo(
+    () => ({ configured: clinicHours.configured, hours: clinicHours.hours, defaultIntervalMin: clinicHours.defaultIntervalMin }),
+    [clinicHours.configured, clinicHours.hours, clinicHours.defaultIntervalMin]
+  );
   const days = useMemo(
-    () => buildDays(new Date(), data?.appointments || [], practitionerId, bookingCfg, durationMin),
-    [data, practitionerId, bookingCfg, durationMin]
+    () => buildDays(new Date(), data?.appointments || [], practitionerId, bookingCfg, durationMin, clinicLite),
+    [data, practitionerId, bookingCfg, durationMin, clinicLite]
   );
 
   // Aumentou a duracao e o horario escolhido deixou de caber: desmarca.
@@ -195,7 +241,9 @@ export function AgendarProximoModal({
             📅 Agendar próxima consulta
           </Text>
           <Text style={{ fontSize: 11, color: DentalColors.ink3, marginBottom: 14 }}>
-            {`Selecione dia e horário livre. Janela ${bookingCfg?.start_hour ?? 8}h-${bookingCfg?.end_hour ?? 18}h, slots de ${bookingCfg?.slot_duration_min || 30}min.`}
+            {clinicHours.configured
+              ? `Selecione dia e horário livre, dentro do horário de funcionamento da clínica. Slots de ${clinicHours.defaultIntervalMin || 30}min.`
+              : `Selecione dia e horário livre. Janela ${bookingCfg?.start_hour ?? 8}h-${bookingCfg?.end_hour ?? 18}h, slots de ${bookingCfg?.slot_duration_min || 30}min.`}
           </Text>
 
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
