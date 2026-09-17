@@ -27,18 +27,23 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
+import { generateSlotsForShifts, type ClinicShift } from '@/utils/clinicHours';
 
 interface BookingConfig {
   company_name: string;
   welcome_msg: string;
   slot_duration_min: number;
-  available_days: number[];   // 0=domingo, 6=sabado
+  available_days: number[];   // 0=domingo, 6=sabado — usado só quando day_windows não vem (legado)
   start_hour: number;
   end_hour: number;
   require_phone: boolean;
   min_advance_hours: number;
   max_advance_days: number;
   booked_slots: Array<{ start: string; duration: number }>;
+  // Item 3 (horário da clínica): quando vem, substitui start_hour/end_hour/
+  // available_days pra gerar os horários. Chaves = Date.getDay() (0=domingo).
+  hours_source?: 'clinic' | 'window' | 'legacy';
+  day_windows?: Record<string, ClinicShift[]>;
 }
 
 const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
@@ -52,8 +57,24 @@ function hm(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Horarios HH:MM do dia (a partir de day_windows, por turno — o almoço/vão
+// entre turnos nunca aparece) ou, sem day_windows, do range fixo antigo.
+function rawTimesForDay(date: Date, config: BookingConfig): string[] {
+  if (config.day_windows) {
+    const shifts = config.day_windows[String(date.getDay())] || [];
+    return generateSlotsForShifts(shifts, config.slot_duration_min);
+  }
+  const times: string[] = [];
+  for (let h = config.start_hour; h < config.end_hour; h++) {
+    for (let m = 0; m < 60; m += config.slot_duration_min) {
+      times.push(`${pad(h)}:${pad(m)}`);
+    }
+  }
+  return times;
+}
+
 // Gera lista de slots HH:MM pra um dia, respeitando config + booked + minAdvance
-function generateSlotsForDay(
+export function generateSlotsForDay(
   date: Date,
   config: BookingConfig
 ): Array<{ time: string; available: boolean; reason?: string }> {
@@ -71,39 +92,37 @@ function generateSlotsForDay(
     bookedRanges.push({ start: startMin, end: startMin + b.duration });
   }
 
-  for (let h = config.start_hour; h < config.end_hour; h++) {
-    for (let m = 0; m < 60; m += config.slot_duration_min) {
-      const slotMin = h * 60 + m;
-      const time = `${pad(h)}:${pad(m)}`;
+  for (const time of rawTimesForDay(date, config)) {
+    const [hh, mm] = time.split(':').map(Number);
+    const slotMin = hh * 60 + mm;
 
-      // Slot ja foi
-      if (isToday) {
-        const slotDate = new Date(date);
-        slotDate.setHours(h, m, 0, 0);
-        if (slotDate.getTime() - now.getTime() < minAdvanceMs) {
-          slots.push({ time, available: false, reason: 'passou' });
-          continue;
-        }
+    // Slot ja foi
+    if (isToday) {
+      const slotDate = new Date(date);
+      slotDate.setHours(hh, mm, 0, 0);
+      if (slotDate.getTime() - now.getTime() < minAdvanceMs) {
+        slots.push({ time, available: false, reason: 'passou' });
+        continue;
       }
+    }
 
-      // Conflito com horario ja agendado
-      const slotEnd = slotMin + config.slot_duration_min;
-      const conflict = bookedRanges.some(
-        (b) => slotMin < b.end && slotEnd > b.start
-      );
-      if (conflict) {
-        slots.push({ time, available: false, reason: 'ocupado' });
-      } else {
-        slots.push({ time, available: true });
-      }
+    // Conflito com horario ja agendado
+    const slotEnd = slotMin + config.slot_duration_min;
+    const conflict = bookedRanges.some(
+      (b) => slotMin < b.end && slotEnd > b.start
+    );
+    if (conflict) {
+      slots.push({ time, available: false, reason: 'ocupado' });
+    } else {
+      slots.push({ time, available: true });
     }
   }
 
   return slots;
 }
 
-// Gera array de proximos N dias (apenas os available)
-function generateAvailableDates(config: BookingConfig): Date[] {
+// Gera array de proximos N dias (apenas os disponiveis)
+export function generateAvailableDates(config: BookingConfig): Date[] {
   const dates: Date[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -112,9 +131,10 @@ function generateAvailableDates(config: BookingConfig): Date[] {
   for (let i = 0; i < maxDays; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    if (config.available_days.includes(d.getDay())) {
-      dates.push(d);
-    }
+    const hasDay = config.day_windows
+      ? (config.day_windows[String(d.getDay())] || []).length > 0
+      : config.available_days.includes(d.getDay());
+    if (hasDay) dates.push(d);
   }
   return dates;
 }
@@ -130,7 +150,7 @@ export default function BookPage() {
   const [reason, setReason] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const { data: config, isLoading, error } = useQuery({
+  const { data: config, isLoading, error, refetch: refetchConfig } = useQuery({
     queryKey: ['public-booking-config', slug],
     queryFn: () => request<BookingConfig>(`/dental/book/${slug}`, { token: null, retry: 1 }),
     enabled: !!slug,
@@ -152,6 +172,14 @@ export default function BookPage() {
         },
       }),
     onSuccess: () => setSuccess(true),
+    onError: (err: any) => {
+      // Horário deixou de estar disponível (agenda mudou entre a listagem e
+      // o envio) — refaz a lista de slots pro paciente escolher outro.
+      if (err?.data?.code === 'OUTSIDE_ONLINE_HOURS') {
+        setSelectedTime(null);
+        refetchConfig();
+      }
+    },
   });
 
   const dates = useMemo(() => (config ? generateAvailableDates(config) : []), [config]);
@@ -342,7 +370,9 @@ export default function BookPage() {
             {submitMut.isError && (
               <View style={s.errorBox}>
                 <Text style={s.errorBoxText}>
-                  {(submitMut.error as any)?.message || 'Erro ao enviar. Tente novamente.'}
+                  {(submitMut.error as any)?.data?.code === 'OUTSIDE_ONLINE_HOURS'
+                    ? 'Esse horário não está mais disponível. Escolha outro.'
+                    : (submitMut.error as any)?.message || 'Erro ao enviar. Tente novamente.'}
                 </Text>
               </View>
             )}
