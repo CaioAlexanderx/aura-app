@@ -49,7 +49,11 @@ import { ROTA_TROCA_PDV } from "@/utils/devolucaoOuTroca";
 
 var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); };
 
-export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: () => void }) {
+// onTxAmountChange: valor do lancamento depois de remover/adicionar item. O
+// modal "Editar lancamento" usa pra nao regravar o valor antigo no Salvar.
+export function SaleDetailsSection({ txId, onClose, onTxAmountChange }: {
+  txId: string; onClose?: () => void; onTxAmountChange?: (amount: number) => void;
+}) {
   const {
     details, isLoading,
     removeItem, isRemoving,
@@ -101,6 +105,7 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
     if (!pendingRemoveItemId) return;
     try {
       const result = await removeItem(pendingRemoveItemId);
+      if (onTxAmountChange && typeof result.new_tx_amount === "number" && !result.tx_removed) onTxAmountChange(result.new_tx_amount);
       const nome = result.removed_item?.name || "item";
       const valor = fmt(result.removed_item?.refund_amount || 0);
       if (result.mode === "credit_refund") {
@@ -354,7 +359,11 @@ export function SaleDetailsSection({ txId, onClose }: { txId: string; onClose?: 
           {/* Picker (quando aberto) */}
           {addPickerOpen && (
             <AddItemPicker
-              onAdd={addItem}
+              onAdd={async function(body) {
+                const result = await addItem(body);
+                if (onTxAmountChange && typeof result?.new_tx_amount === "number") onTxAmountChange(result.new_tx_amount);
+                return result;
+              }}
               isAdding={isAdding}
               onCancel={function() { setAddPickerOpen(false); }}
             />

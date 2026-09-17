@@ -16,6 +16,7 @@ import { CouponInput } from "./CouponInput";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { SaleDetailsSection } from "./SaleDetailsSection";
 import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink";
+import { valorDoPatch } from "@/utils/editarLancamento";
 
 var isWeb = Platform.OS === "web";
 
@@ -124,6 +125,8 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [txType, setTxType] = useState<"income" | "expense" | "sale">("income");
   var [mode, setMode] = useState<"unit" | "batch">("unit");
   var [amount, setAmount] = useState("");
+  // Valor que o lancamento tem AGORA no backend (ver utils/editarLancamento).
+  var [baseAmount, setBaseAmount] = useState<number | null>(null);
   var [desc, setDesc] = useState("");
   var [category, setCategory] = useState("");
   var [dateStr, setDateStr] = useState(todayBR());
@@ -184,6 +187,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     if (editTransaction) {
       setTxType(editTransaction.type === "expense" ? "expense" : "income");
       setAmount(amountToMask(editTransaction.amount));
+      setBaseAmount(Number(editTransaction.amount));
       setDesc(editTransaction.desc || "");
       setCategory(editTransaction.category || "");
       var raw = (editTransaction as any).due_date || (editTransaction as any).created_at;
@@ -199,7 +203,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   }, [editTransaction]);
 
   function reset() {
-    setAmount(""); setDesc(""); setCategory(""); setDateStr(todayBR()); setBatchText(""); setMode("unit"); setSaving(false);
+    setAmount(""); setBaseAmount(null); setDesc(""); setCategory(""); setDateStr(todayBR()); setBatchText(""); setMode("unit"); setSaving(false);
     setSaleSearch(""); setSaleItems([]); setSalePayment("pix"); setVariantPending(null); setVariantOptions([]);
     setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
     setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
@@ -222,9 +226,11 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       try {
         // PATCH inclui payment_method e employee_id (campos opcionais, so envia se mudou ou esta presente)
         var patchBody: any = {
-          type: txType, amount: val, description: desc.trim(),
+          type: txType, description: desc.trim(),
           category: category || cats[0], due_date: dueDate,
         };
+        var patchAmount = valorDoPatch({ digitado: val, base: baseAmount, isCreditReceivable: isCreditReceivable });
+        if (patchAmount !== undefined) patchBody.amount = patchAmount;
         // Inclui payment_method/employee se foram preenchidos OU se vieram preenchidos antes
         // (permite limpar enviando string vazia ou null).
         // Backend interpreta string vazia como NULL via ELSE no UPDATE? Nao — mando explicito.
@@ -392,11 +398,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         <SaleDetailsSection
           txId={editTransaction.id}
           onClose={function() { reset(); onClose(); }}
+          onTxAmountChange={function(v) { setAmount(amountToMask(v)); setBaseAmount(v); }}
         />
       )}
 
       <View style={s.rowFields}>
-        <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={s.input} value={amount} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
+        <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={[s.input, isCreditReceivable && { opacity: 0.6 }]} value={amount} editable={!isCreditReceivable} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
         <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
       </View>
       <Text style={s.label}>Descrição</Text>
@@ -468,9 +475,10 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         <View style={s.dateHint}>
           <Icon name="alert" size={11} color="#fb923c" />
           <Text style={[s.dateHintText, { color: "#fb923c" }]}>
-            Este e o "A Receber" do crediário. Mexer no valor ou na categoria aqui
-            NÃO muda o carne do cliente e tira o lancamento dos relatórios de
-            crediário. Pra devolver produto, use a lista de mercadorias acima.
+            Este e o "A Receber" do crediário: o valor acompanha as parcelas e as
+            devoluções e não é editado aqui. Mexer na categoria tira o lancamento
+            dos relatórios de crediário. Pra devolver produto, use a lista de
+            mercadorias acima.
           </Text>
         </View>
       )}

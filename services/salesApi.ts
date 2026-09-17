@@ -64,6 +64,8 @@ export type RemoveSaleItemResult = {
   removed_item: { id: string; name: string; quantity: number; refund_amount: number };
   new_sale_total: number;
   new_tx_amount: number;
+  // true quando o lancamento sumiu (ultimo item removido / recebivel zerado).
+  tx_removed?: boolean;
   sale_cancelled: boolean;
   credit_refund?: {
     devolucao_sale_id: string;
