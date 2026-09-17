@@ -68,6 +68,8 @@ interface Props {
   onSaved?: (patient: PatientFormData) => void;
   mode?: "create" | "edit";
   patient?: PatientFormData | null;
+  /** Pre-preenche o nome — ex: texto digitado na busca do NewAppointmentModal. */
+  initialName?: string;
 }
 
 interface FieldErrors {
@@ -97,7 +99,7 @@ function todayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function PatientFormModal({ visible, onClose, onSaved, mode = "create", patient }: Props) {
+export function PatientFormModal({ visible, onClose, onSaved, mode = "create", patient, initialName }: Props) {
   const cid = useAuthStore().company?.id;
   const qc = useQueryClient();
   const router = useRouter();
@@ -225,9 +227,12 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
       allowDuplicateCpfRef.current = false;
     } else {
       reset();
+      // Cadastro rapido a partir da busca do NewAppointmentModal: o nome ja
+      // digitado nao pode se perder ao abrir o form completo.
+      if (initialName) setFullName(initialName);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, isEdit, patient?.id]);
+  }, [visible, isEdit, patient?.id, initialName]);
 
   async function lookupCep() {
     const digits = onlyDigits(cep);

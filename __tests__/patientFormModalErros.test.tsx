@@ -239,3 +239,13 @@ describe("PatientFormModal — CPF duplicado (409)", () => {
     tree.unmount();
   });
 });
+
+describe("PatientFormModal — initialName", () => {
+  it("pre-preenche o nome com o texto ja digitado na busca do agendamento", async () => {
+    const tree = await createTree(
+      <PatientFormModal visible={true} onClose={jest.fn()} mode="create" initialName="Joao da Silva" />
+    );
+    expect(byTestId(tree, "patient-form-fullname").props.value).toBe("Joao da Silva");
+    tree.unmount();
+  });
+});
