@@ -4,6 +4,9 @@ import { Colors, Glass, IS_LIGHT_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Sparkline } from "./Sparkline";
 import { IS_WIDE, IS_WEB, fmt, webOnly, GRAD } from "./types";
+import { OlhoValores } from "@/components/OlhoValores";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
+import { MASCARA_MOEDA } from "@/utils/valoresOcultos";
 
 type Props = {
   net: number;
@@ -76,6 +79,7 @@ function useCountUp(target: number, dur = 1400) {
 
 export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelta }: Props) {
   const isPositive = net >= 0;
+  const { ocultos, m } = useValoresOcultos();
   const animated = useCountUp(Math.abs(net || 0));
   const abs = Math.abs(animated);
 
@@ -141,13 +145,20 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
             <View style={s.labelBar} />
             <Text style={s.label}>Saldo líquido · este mês</Text>
             <SaldoHelpHint />
+            <OlhoValores color="rgba(255,255,255,0.78)" size={16} />
           </View>
 
-          <View style={s.valueRow}>
-            <Text style={[s.cur, { color: isPositive ? "#fff" : "#ffb4b4" }]}>R$ </Text>
-            <Text style={[s.valueBig, { color: isPositive ? "#fff" : "#ffb4b4" }]}>{isPositive ? "" : "-"}{intPart}</Text>
-            <Text style={[s.cents, { color: isPositive ? "#fff" : "#ffb4b4" }]}>,{cents}</Text>
-          </View>
+          {ocultos ? (
+            <View style={s.valueRow}>
+              <Text style={[s.valueBig, { color: "#fff" }]}>{MASCARA_MOEDA}</Text>
+            </View>
+          ) : (
+            <View style={s.valueRow}>
+              <Text style={[s.cur, { color: isPositive ? "#fff" : "#ffb4b4" }]}>R$ </Text>
+              <Text style={[s.valueBig, { color: isPositive ? "#fff" : "#ffb4b4" }]}>{isPositive ? "" : "-"}{intPart}</Text>
+              <Text style={[s.cents, { color: isPositive ? "#fff" : "#ffb4b4" }]}>,{cents}</Text>
+            </View>
+          )}
 
           {typeof netDelta === "number" && Math.abs(netDelta) > 0.0001 && (
             <View style={[s.deltaChip, { backgroundColor: netDelta >= 0 ? "rgba(52,211,153,0.2)" : "rgba(255,180,180,0.22)", borderColor: netDelta >= 0 ? "rgba(52,211,153,0.4)" : "rgba(255,180,180,0.45)" }]}>
@@ -163,19 +174,19 @@ export function HeroCard({ net, sparkNet, revenue, expenses, projection, netDelt
                 {/* 29/08/2026 — QA de coerencia: era so "Receita", mesmo rotulo
                     que /vendas usa pra outro numero. Aqui e tudo que entrou. */}
                 <Text style={s.metaK}>Receita total</Text>
-                <Text style={s.metaV}>{fmt(revenue)}</Text>
+                <Text style={s.metaV}>{m(fmt(revenue))}</Text>
               </View>
             )}
             {typeof expenses === "number" && (
               <View style={s.metaItem}>
                 <Text style={s.metaK}>Despesas</Text>
-                <Text style={s.metaV}>{fmt(expenses)}</Text>
+                <Text style={s.metaV}>{m(fmt(expenses))}</Text>
               </View>
             )}
             {typeof projection === "number" && projection > 0 && (
               <View style={s.metaItem}>
                 <Text style={s.metaK}>Projeção fim do mês</Text>
-                <Text style={[s.metaV, { color: "#e9d5ff" }]}>{fmt(projection)}</Text>
+                <Text style={[s.metaV, { color: "#e9d5ff" }]}>{m(fmt(projection))}</Text>
               </View>
             )}
           </View>

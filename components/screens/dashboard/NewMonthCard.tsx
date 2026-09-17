@@ -19,6 +19,7 @@ import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WIDE, fmt, webOnly } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 export type PreviousMonthTotals = { income: number; expenses: number; net: number };
 
@@ -35,6 +36,7 @@ type Props = {
 };
 
 export function NewMonthCard({ monthLabel, prevMonthLabel, prevTotals, early, onPress }: Props) {
+  const { m } = useValoresOcultos();
   const webCard = webOnly({
     background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(79,91,213,0.05))",
     backdropFilter: "blur(18px) saturate(140%)",
@@ -55,7 +57,7 @@ export function NewMonthCard({ monthLabel, prevMonthLabel, prevTotals, early, on
 
   const sub = hasPrev
     ? prevMonthLabel.charAt(0).toUpperCase() + prevMonthLabel.slice(1) +
-      " fechou em " + fmt(prevTotals!.income) + " de entradas. " +
+      " fechou em " + m(fmt(prevTotals!.income)) + " de entradas. " +
       "Os números de " + monthLabel.toLowerCase() + " aparecem aqui assim que o primeiro lançamento entrar."
     : "Nenhum lançamento em " + monthLabel.toLowerCase() + " ainda. " +
       "Seu histórico continua inteiro no Financeiro — aqui o mês é que está começando.";
@@ -75,15 +77,15 @@ export function NewMonthCard({ monthLabel, prevMonthLabel, prevTotals, early, on
           <View style={s.prevRow}>
             <View style={s.prevItem}>
               <Text style={s.prevK}>Entrou</Text>
-              <Text style={[s.prevV, { color: Colors.green }]}>{fmt(prevTotals!.income)}</Text>
+              <Text style={[s.prevV, { color: Colors.green }]}>{m(fmt(prevTotals!.income))}</Text>
             </View>
             <View style={s.prevItem}>
               <Text style={s.prevK}>Saiu</Text>
-              <Text style={[s.prevV, { color: Colors.red }]}>{fmt(prevTotals!.expenses)}</Text>
+              <Text style={[s.prevV, { color: Colors.red }]}>{m(fmt(prevTotals!.expenses))}</Text>
             </View>
             <View style={s.prevItem}>
               <Text style={s.prevK}>Resultado</Text>
-              <Text style={[s.prevV, { color: prevTotals!.net >= 0 ? Colors.ink : Colors.red }]}>{fmt(prevTotals!.net)}</Text>
+              <Text style={[s.prevV, { color: prevTotals!.net >= 0 ? Colors.ink : Colors.red }]}>{m(fmt(prevTotals!.net))}</Text>
             </View>
           </View>
         </View>

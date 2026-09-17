@@ -2,10 +2,12 @@ import { View, Text, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { fmt, webOnly } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 export function SaleRow({ customer, amount, time, method, type }: {
   customer: string; amount: number; time: string; method?: string; type?: string;
 }) {
+  const { ocultos, m } = useValoresOcultos();
   const isExpense = type === "expense";
   const isPending = type === "pending";
   const color = isExpense ? Colors.red : isPending ? Colors.amber : Colors.green;
@@ -47,7 +49,7 @@ export function SaleRow({ customer, amount, time, method, type }: {
           textShadowRadius: Platform.OS === "web" ? 10 : 0,
         }]}
       >
-        {prefix}{fmt(amount).replace("R$ ", "R$ ")}
+        {ocultos ? m("") : prefix + fmt(amount)}
       </Text>
     </View>
   );

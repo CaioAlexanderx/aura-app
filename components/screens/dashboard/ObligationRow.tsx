@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { fmt } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 // Maps "20/04/2026" or "2026-04-20" to { day: "20", mon: "ABR" }
 function parseDate(due: string): { day: string; mon: string } {
@@ -33,6 +34,7 @@ function statusStyle(status: string) {
 export function ObligationRow({ name, due, amount, status, category }: {
   name: string; due: string; amount: number | null; status: string; category: string;
 }) {
+  const { m } = useValoresOcultos();
   const { day, mon } = parseDate(due);
   const st = statusStyle(status);
   const cl = category === "aura_resolve" ? "Aura resolve" : "Aura facilita";
@@ -45,7 +47,7 @@ export function ObligationRow({ name, due, amount, status, category }: {
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.name} numberOfLines={1}>{name}</Text>
-        <Text style={s.sub}>{amount != null ? fmt(amount) : "Sem valor fixo"}  -  {cl}</Text>
+        <Text style={s.sub}>{amount != null ? m(fmt(amount)) : "Sem valor fixo"}  -  {cl}</Text>
       </View>
       <View style={[s.chip, { backgroundColor: st.bg, borderColor: st.border }]}>
         <Text style={[s.chipText, { color: st.fg }]}>{st.label}</Text>

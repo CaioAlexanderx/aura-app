@@ -28,6 +28,7 @@ import { creditLeadsApi, leadReason, relativeDays } from "@/services/creditLeads
 import type { CreditLead, LeadWindow, LeadSegment } from "@/services/creditLeadsApi";
 import { normalizeBrPhone } from "@/services/messaging";
 import { CreditoLivreCupomModal } from "@/components/crediario/CreditoLivreCupomModal";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -252,6 +253,7 @@ export function CreditoLivreTab({ companyId, consolidated, onOpenCustomer }: Pro
 function LeadRow({ lead, position, onOpen, onCupom }: {
   lead: CreditLead; position: number; onOpen: () => void; onCupom: () => void;
 }) {
+  const { m } = useValoresOcultos();
   const reason = leadReason(lead);
   const phoneOk = !!normalizeBrPhone(lead.phone || "");
   const isTop = position <= 3;
@@ -305,7 +307,7 @@ function LeadRow({ lead, position, onOpen, onCupom }: {
       </Pressable>
 
       <View style={s.colVal}>
-        <Text style={s.val}>{fmtShort(lead.total_debited)}</Text>
+        <Text style={s.val}>{m(fmtShort(lead.total_debited))}</Text>
         <Text style={s.valSub}>já comprou</Text>
       </View>
 

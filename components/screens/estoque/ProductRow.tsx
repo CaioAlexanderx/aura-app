@@ -5,6 +5,7 @@ import { ProductImageUpload } from "@/components/ProductImageUpload";
 import type { Product } from "./types";
 import { fmt } from "./types";
 import { minutosParaRotulo } from "./item-form/types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -40,6 +41,7 @@ export function ProductRow({
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const { m } = useValoresOcultos();
   const isWeb = Platform.OS === "web";
   const isService = isServiceProduct(product);
   // Servico nao tem estoque, entao nunca esta "baixo"
@@ -100,7 +102,7 @@ export function ProductRow({
               {isLow && <View style={s.alertDot} />}
             </View>
           )}
-          <Text style={s.price}>{fmt(product.price)}</Text>
+          <Text style={s.price}>{m(fmt(product.price))}</Text>
         </View>
       </Pressable>
       {expanded && !onSelect && (
@@ -110,7 +112,7 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", fmt(product.cost)], ["Margem", margin + "%"], ["Valor estoque", fmt(product.stock * product.cost)], ["Estoque mínimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                {[["Custo", m(fmt(product.cost))], ["Margem", margin + "%"], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", product.minStock + " " + product.unit]].map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
                 )}
               </View>
@@ -121,7 +123,7 @@ export function ProductRow({
                   45 min") e aparecia aqui embaixo, em itálico, junto das
                   observações. Virou coluna na migration 323 — e passa a ter
                   um lugar próprio, ao lado do preço. */}
-              {([["Preço", fmt(product.price)], ["Custo", fmt(product.cost)], ["Margem", margin + "%"]] as Array<[string, string]>)
+              {([["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin + "%"]] as Array<[string, string]>)
                 .concat(duracao ? [["Duração", duracao]] : [])
                 .map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>

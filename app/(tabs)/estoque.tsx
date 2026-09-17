@@ -41,6 +41,8 @@ import { productLinksApi, type AggregatedProduct } from "@/services/productLinks
 import { useEstoquePremiumStyles } from "@/components/screens/estoque/useEstoquePremiumStyles";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
+import { OlhoValores } from "@/components/OlhoValores";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { EstoqueKpiStrip } from "@/components/screens/estoque/EstoqueKpiStrip";
 import { CategoryDropdownWeb } from "@/components/screens/estoque/CategoryDropdownWeb";
 import { ProductTableWeb } from "@/components/screens/estoque/ProductTableWeb";
@@ -97,6 +99,7 @@ type CategoriesModalState = { open: boolean; initialType?: CategoryType };
 // ────────────────────────────────────────────────────────────
 function AggregatedView() {
   const [search, setSearch] = useState("");
+  const { m } = useValoresOcultos();
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { data, isLoading, error } = useQuery({
@@ -205,7 +208,7 @@ function AggregatedView() {
             <View style={agg.rightCol}>
               <Text style={agg.totalStock}>{Math.round(g.total_stock)}</Text>
               <Text style={agg.totalStockLabel}>{g.unit || "un"}</Text>
-              <Text style={agg.price}>{fmt(g.avg_price)}</Text>
+              <Text style={agg.price}>{m(fmt(g.avg_price))}</Text>
             </View>
           </View>
         ))}
@@ -252,6 +255,7 @@ const agg = StyleSheet.create({
 
 export default function EstoqueScreen() {
   useEstoquePremiumStyles();
+  const { m } = useValoresOcultos();
   const { products, categories, isLoading, isDemo, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
   // D2 (F0): `flattened` alimenta o filtro hierarquico. O vinculo de
   // categoria do produto recem-criado passou para o ItemFormModal.
@@ -494,6 +498,7 @@ export default function EstoqueScreen() {
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   const ActionButtons = () => (
     <>
+      <OlhoValores variant="botao" />
       <Pressable onPress={() => abrirCadastro("service")} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
         <Icon name="star" size={14} color={Colors.violet3} />
         {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Serviço</Text>}
@@ -622,7 +627,7 @@ export default function EstoqueScreen() {
           ) : (
             <View style={s.summaryRow}>
               <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-              <SummaryCard label="VALOR EM ESTOQUE" value={fmt(totalValue)} />
+              <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(totalValue))} />
               <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
             </View>
           )

@@ -17,6 +17,7 @@ import { useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { Product } from "@/components/screens/estoque/types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,6 +37,7 @@ type Props = {
 export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
+  const { m } = useValoresOcultos();
   if (Platform.OS !== "web") return null;
 
   const accent = C.violet;
@@ -172,7 +174,7 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                 display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8,
               } as any}>
                 <span style={{ fontSize: 13, color: C.ink2, fontFamily: Fonts.mono, fontWeight: 600 } as any}>
-                  {fmtBRL(price)}
+                  {m(fmtBRL(price))}
                 </span>
                 <span style={{
                   fontSize: 12, fontFamily: Fonts.mono, fontWeight: 600,

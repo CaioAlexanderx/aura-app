@@ -24,6 +24,8 @@ import { Button } from "@/components/Button";
 import { Motion, Shadows, webTransition } from "@/constants/motion";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
+import { OlhoValores } from "@/components/OlhoValores";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 // ============================================================
 // AURA. — Crediário (F2 do redesign — spec docs/crediario-redesign-spec.md §2.2)
@@ -243,6 +245,9 @@ function HeroStat({ dot, label, value, sub, color, onPress, active }: {
 
 export default function CrediarioScreen() {
   const { company, refreshMe, consolidatedView } = useAuthStore();
+  // Olho: só o que aparece na tela passa por m(). A mensagem de cobrança
+  // (WhatsApp) usa fmt() direto — vai para o cliente com o valor real.
+  const { m } = useValoresOcultos();
   const availableCompanies = useAuthStore((st) => st.availableCompanies);
   const companiesLoading = useAuthStore((st) => st.companiesLoading);
   const loadCompanies = useAuthStore((st) => st.loadCompanies);
@@ -525,9 +530,9 @@ export default function CrediarioScreen() {
         live
         subtitle={
           <>
-            {fmt(Number(totalOpen) || 0)} em aberto · {pluralize(customersOpen, "cliente com saldo", "clientes com saldo")}
+            {m(fmt(Number(totalOpen) || 0))} em aberto · {pluralize(customersOpen, "cliente com saldo", "clientes com saldo")}
             {overdueAmount > 0 ? (
-              <Text style={{ color: Colors.red, fontWeight: "600" }}>{" · " + fmt(overdueAmount) + " vencidos"}</Text>
+              <Text style={{ color: Colors.red, fontWeight: "600" }}>{" · " + m(fmt(overdueAmount)) + " vencidos"}</Text>
             ) : (
               <Text style={{ color: Colors.green, fontWeight: "600" }}>{" · nada vencido"}</Text>
             )}
@@ -535,6 +540,7 @@ export default function CrediarioScreen() {
         }
         actions={
           <>
+            <OlhoValores variant="botao" />
             <Button
               title="Novo lançamento"
               icon="plus"
@@ -578,21 +584,21 @@ export default function CrediarioScreen() {
       <FadeInUp>
         <GlassCard tone="gradient" style={{ padding: isNarrow ? 18 : 24, marginBottom: 14 }}>
           <Text style={s.heroLabel}>Em aberto · total</Text>
-          <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{fmt(heroValue)}</Text>
+          <Text style={[s.heroValue, { fontSize: isNarrow ? 30 : 42 }]}>{m(fmt(heroValue))}</Text>
           <Text style={s.heroMeta}>
             {pluralize(customersOpen, "cliente com saldo em aberto", "clientes com saldo em aberto")}
           </Text>
           <View style={s.heroStats}>
             <HeroStat
               dot={Colors.red} color={Colors.red}
-              label="Vencido" value={fmt(overdueAmount)}
+              label="Vencido" value={m(fmt(overdueAmount))}
               sub={pluralize(kpis?.overdue_count || 0, "parcela")}
               onPress={() => toggleFilter("atraso")}
               active={filterSel === "atraso"}
             />
             <HeroStat
               dot={Colors.green} color={Colors.green}
-              label="Recebido no mês" value={fmt(kpis?.paid_this_month_amount || 0)}
+              label="Recebido no mês" value={m(fmt(kpis?.paid_this_month_amount || 0))}
               sub={pluralize(kpis?.paid_this_month_count || 0, "recebimento")}
             />
             <HeroStat
@@ -630,7 +636,7 @@ export default function CrediarioScreen() {
                     key={faixa}
                     onPress={() => toggleFilter(faixa)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${AGING_LABELS[faixa]}: ${fmt(amt)}, ${pluralize(row.count, "cliente")}. Toque para filtrar`}
+                    accessibilityLabel={`${AGING_LABELS[faixa]}: ${m(fmt(amt))}, ${pluralize(row.count, "cliente")}. Toque para filtrar`}
                     style={({ hovered }: any) => [
                       {
                         width: (`${pct}%` as any),
@@ -652,7 +658,7 @@ export default function CrediarioScreen() {
                 style={({ hovered }: any) => [s.pill, filterSel === "todos" && s.pillActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color", "background-color"], Motion.base) as any) : null]}
               >
                 <Text style={[s.pillLabel, filterSel === "todos" && s.pillLabelActive]}>Todos</Text>
-                <Text style={[s.pillAmount, filterSel === "todos" && s.pillLabelActive]}>{fmt(totalOpen)}</Text>
+                <Text style={[s.pillAmount, filterSel === "todos" && s.pillLabelActive]}>{m(fmt(totalOpen))}</Text>
               </Pressable>
 
               {AGING_ORDER.map((faixa) => {
@@ -667,7 +673,7 @@ export default function CrediarioScreen() {
                   >
                     <View style={[s.pillDot, { backgroundColor: AGING_COLORS[faixa] }]} />
                     <Text style={[s.pillLabel, on && s.pillLabelActive]}>{AGING_LABELS[faixa]}</Text>
-                    <Text style={[s.pillAmount, on && s.pillLabelActive]}>{fmt(row.amount)}</Text>
+                    <Text style={[s.pillAmount, on && s.pillLabelActive]}>{m(fmt(row.amount))}</Text>
                   </Pressable>
                 );
               })}
@@ -753,7 +759,7 @@ export default function CrediarioScreen() {
                   key={cust.id}
                   onPress={() => setModalCust({ id: cust.id, name: cust.name })}
                   accessibilityRole="button"
-                  accessibilityLabel={`Abrir ficha de ${cust.name}, saldo ${fmt(cust.balance)}`}
+                  accessibilityLabel={`Abrir ficha de ${cust.name}, saldo ${m(fmt(cust.balance))}`}
                   style={({ hovered, pressed }: any) => [
                     s.row,
                     (hovered || pressed) && ({
@@ -782,7 +788,7 @@ export default function CrediarioScreen() {
 
                   {/* Saldo */}
                   <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : Colors.ink }]} numberOfLines={1}>
-                    {fmt(cust.balance)}
+                    {m(fmt(cust.balance))}
                   </Text>
 
                   {/* Maior atraso (desktop) — F2: pill colorida; overdue sem data ganha pill "Em atraso" */}
