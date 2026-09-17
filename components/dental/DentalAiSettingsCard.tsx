@@ -36,6 +36,14 @@ export function DentalAiSettingsCard() {
   if (!planAllowsAi) return null;
 
   if (isLoading) return <Card><Header /><ActivityIndicator color={DentalColors.cyan} /></Card>;
+
+  // Endpoint /companies/:cid/dental/ai/settings ainda nao existe no backend
+  // (404) pra algumas empresas. Nesse caso nao mostra nada — o card so
+  // aparece pra quem o backend de fato suporta. Outros erros (rede,
+  // 500, etc) continuam com "Tentar de novo".
+  const status = (error as any)?.status;
+  if (status === 404) return null;
+
   if (error || !data) return (
     <Card>
       <Header />
