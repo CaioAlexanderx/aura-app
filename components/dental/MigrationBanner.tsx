@@ -63,12 +63,11 @@ export function MigrationBanner() {
           Bem-vindo à Aura Odonto
         </div>
         <div style={{ fontSize: 12, color: DentalColors.ink2, lineHeight: 1.5 } as any}>
-          Este é o shell dedicado da sua clínica. Os módulos gerais
-          (PDV, NF-e, Folha) continuam acessíveis pelo botão
+          Este é o espaço da sua clínica. Cadeiras, dentistas e horário ficam em
           {" "}<span
-            onClick={() => router.push("/(tabs)" as any)}
+            onClick={() => router.push("/dental/(clinic)/clinica" as any)}
             style={{ color: DentalColors.cyan, fontWeight: 600, cursor: "pointer", textDecoration: "underline" } as any}
-          >Aura Negócio</span> no rodapé do menu lateral.
+          >Configurações</span>, no rodapé do menu lateral.
         </div>
       </div>
 
