@@ -18,11 +18,12 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, ScrollView, TextInput, Pressable,
-  StyleSheet, Platform, Alert, ActivityIndicator,
+  StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { notify } from '@/utils/webAlert';
 
 interface Props {
   visible: boolean;
@@ -59,13 +60,13 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
         },
       }),
     onSuccess: () => {
-      Alert.alert('Exame salvo', 'Periograma registrado com sucesso.');
+      notify('Exame salvo', 'Periograma registrado com sucesso.');
       onSaved?.();
       reset();
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Não foi possível salvar o exame.');
+      notify('Erro', err?.message || 'Não foi possível salvar o exame.');
     },
   });
 
@@ -83,7 +84,7 @@ export function AddPerioExamModal({ visible, patientId, patientName, onClose, on
     const bi = parseInt(bleedingIdx) || 0;
     const pi = parseInt(plaqueIdx) || 0;
     if (bi < 0 || bi > 100 || pi < 0 || pi > 100) {
-      Alert.alert('Valor inválido', 'Índices devem estar entre 0 e 100%.');
+      notify('Valor inválido', 'Índices devem estar entre 0 e 100%.');
       return;
     }
     saveMut.mutate();

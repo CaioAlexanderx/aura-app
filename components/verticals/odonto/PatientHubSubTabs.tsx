@@ -5,12 +5,13 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Linking, Alert, ActivityIndicator,
+  StyleSheet, Linking, ActivityIndicator,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { DentalForm, DentalColors } from '@/constants/dental-tokens';
+import { notify, confirmAlert } from '@/utils/webAlert';
 
 // Format ISO date (YYYY-MM-DD or full ISO) to dd/mm/yyyy. Avoids new Date()
 // timezone shift (parsing 'YYYY-MM-DD' as UTC drifts to previous day in GMT-).
@@ -149,8 +150,8 @@ export function AnamneseTab({ patient }: { patient: PatientLite }) {
   const save = useMutation({
     mutationFn: (d: AnamneseData) =>
       request(`/companies/${cid}/dental/patients/${patient.id}/anamnesis`, { method: 'PUT', body: { data: d } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['dental-anamnesis', cid, patient.id] }); Alert.alert('Anamnese salva','Dados registrados.'); },
-    onError: (e: any) => Alert.alert('Erro', e?.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['dental-anamnesis', cid, patient.id] }); notify('Anamnese salva','Dados registrados.'); },
+    onError: (e: any) => notify('Erro', e?.message),
   });
   if (isLoading) return <View style={st.center}><ActivityIndicator color="#06B6D4" /></View>;
   if (error) return <View style={st.center}><Text style={st.errTitle}>Erro</Text><Text style={st.errMsg}>{(error as any)?.message}</Text></View>;
@@ -159,7 +160,11 @@ export function AnamneseTab({ patient }: { patient: PatientLite }) {
       {(data as any)?.updated_at && (
         <View style={st.infoBadge}><Text style={st.infoBadgeText}>Atualizado: {formatDateBR((data as any).updated_at)}</Text></View>
       )}
-      <AnamneseWizard initialData={(data as any)?.anamnesis || undefined} onComplete={d => save.mutate(d)} />
+      <AnamneseWizard
+        initialData={(data as any)?.anamnesis || undefined}
+        patientAllergiesText={patient.allergies}
+        onComplete={d => save.mutate(d)}
+      />
       {save.isPending && (
         <View style={st.savingOverlay}><ActivityIndicator color="#06B6D4" /><Text style={st.savingText}>Salvando...</Text></View>
       )}
@@ -250,7 +255,7 @@ export function ImagensTab({ patient }: { patient: PatientLite }) {
   const del = useMutation({
     mutationFn: (id: string) => request(`/companies/${cid}/dental/images/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dental-images', cid, patient.id] }),
-    onError: (e: any) => Alert.alert('Erro', e?.message),
+    onError: (e: any) => notify('Erro', e?.message),
   });
   if (isLoading) return <View style={st.center}><ActivityIndicator color="#06B6D4" /></View>;
   const images = ((data as any)?.images||[]).map((i: any) => ({
@@ -265,10 +270,7 @@ export function ImagensTab({ patient }: { patient: PatientLite }) {
           patientName={patient.full_name||patient.name}
           onUpload={() => setShowAdd(true)}
           onImagePress={(img: any) => Linking.openURL(img.url).catch(()=>{})}
-          onDelete={(id: string) => Alert.alert('Excluir?','Ação irreversível.',[
-            {text:'Cancelar',style:'cancel'},
-            {text:'Excluir',style:'destructive',onPress:()=>del.mutate(id)},
-          ])}
+          onDelete={(id: string) => confirmAlert('Excluir?','Ação irreversível.','Excluir', () => del.mutate(id), { destructive: true })}
         />
       </ScrollView>
       <AddClinicalImageModal visible={showAdd} patientId={patient.id} patientName={patient.full_name||patient.name} onClose={()=>setShowAdd(false)} onSaved={()=>qc.invalidateQueries({queryKey:['dental-images',cid,patient.id]})} />

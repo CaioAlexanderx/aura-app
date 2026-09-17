@@ -19,12 +19,13 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, ScrollView, TextInput, Pressable,
-  StyleSheet, Platform, Alert, ActivityIndicator, Image,
+  StyleSheet, Platform, ActivityIndicator, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { notify } from '@/utils/webAlert';
 
 interface Props {
   visible: boolean;
@@ -76,7 +77,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
 
       const a = result.assets[0];
       if (!a.base64) {
-        Alert.alert('Erro', 'Não foi possível ler a imagem. Tente outra foto.');
+        notify('Erro', 'Não foi possível ler a imagem. Tente outra foto.');
         return;
       }
 
@@ -89,7 +90,7 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
         fileSize: a.fileSize,
       });
     } catch (err: any) {
-      Alert.alert('Erro', err?.message || 'Não foi possível abrir a galeria.');
+      notify('Erro', err?.message || 'Não foi possível abrir a galeria.');
     }
   }
 
@@ -135,13 +136,13 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
       return meta;
     },
     onSuccess: () => {
-      Alert.alert('Imagem salva', 'Foto clínica registrada com sucesso.');
+      notify('Imagem salva', 'Foto clínica registrada com sucesso.');
       onSaved?.();
       reset();
       onClose();
     },
     onError: (err: any) => {
-      Alert.alert('Erro', err?.message || 'Não foi possível salvar a imagem.');
+      notify('Erro', err?.message || 'Não foi possível salvar a imagem.');
     },
     onSettled: () => {
       setUploading(false);
@@ -163,13 +164,13 @@ export function AddClinicalImageModal({ visible, patientId, patientName, onClose
 
   function handleSave() {
     if (!asset) {
-      Alert.alert('Atenção', 'Escolha uma foto antes de salvar.');
+      notify('Atenção', 'Escolha uma foto antes de salvar.');
       return;
     }
     if (toothNumber) {
       const n = parseInt(toothNumber);
       if (isNaN(n) || n < 11 || n > 85) {
-        Alert.alert('Dente inválido', 'Número do dente deve estar entre 11 e 85 (sistema FDI).');
+        notify('Dente inválido', 'Número do dente deve estar entre 11 e 85 (sistema FDI).');
         return;
       }
     }

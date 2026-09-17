@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import {
   Modal, View, Text, Pressable,
-  StyleSheet, ActivityIndicator, Platform, Alert,
+  StyleSheet, ActivityIndicator, Platform,
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth';
 import { Icon } from '@/components/Icon';
 import { DentalAiConvList } from './DentalAiConvList';
 import { DentalAiChatView } from './DentalAiChatView';
+import { notify } from '@/utils/webAlert';
 
 interface Conversation {
   id: string;
@@ -80,7 +81,7 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
     onSuccess: (data) => { qc.invalidateQueries({ queryKey: ['dental-ai-conv-list', cid] }); setActiveCvid(data.conversation.id); },
     onError: (err: any) => {
       if (err?.status === 403) { setGated({ error: err.body?.error || 'Acesso negado', hint: err.body?.upgrade_hint }); }
-      else { Alert.alert('Erro', err?.body?.error || 'Não foi possível criar a conversa.'); }
+      else { notify('Erro', err?.body?.error || 'Não foi possível criar a conversa.'); }
     },
   });
 
@@ -88,7 +89,7 @@ export function DentalAiChat({ visible, onClose, initialPatientId, initialPatien
     mutationFn: (text: string) =>
       request<{ message: Message }>(`/companies/${cid}/dental/ai/conversations/${activeCvid}/messages`, { method: 'POST', body: { message: text }, retry: 0 }),
     onSuccess: () => { setPendingMessage(null); qc.invalidateQueries({ queryKey: ['dental-ai-conv', activeCvid] }); qc.invalidateQueries({ queryKey: ['dental-ai-conv-list', cid] }); },
-    onError: (err: any) => { setPendingMessage(null); Alert.alert('Erro', err?.body?.error || 'A IA não respondeu. Tente novamente.'); },
+    onError: (err: any) => { setPendingMessage(null); notify('Erro', err?.body?.error || 'A IA não respondeu. Tente novamente.'); },
   });
 
   const archiveMut = useMutation({

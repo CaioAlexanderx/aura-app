@@ -5,13 +5,14 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal, Platform,
+  StyleSheet, ActivityIndicator, Modal, Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { ImplantTreatmentCard } from './ImplantTreatmentCard';
 import { PHASE_STATUS_COLOR } from './ImplantPhaseTimeline';
+import { notify } from '@/utils/webAlert';
 import type { PatientLite } from './PatientHub';
 
 const SURGERY_TYPES = ['Convencional', 'Guiada', 'Imediata', 'Mini-implante', 'Zigomático'];
@@ -124,7 +125,7 @@ function ImplantForm({ companyId, customerId, brands, onClose, onCreated }: any)
         body: { customer_id: customerId, diagnosis: diagnosis || undefined, surgery_date: surgeryDate || undefined, surgery_type: surgeryType, uses_graft: usesGraft, total_value: totalValue ? parseFloat(totalValue.replace(',', '.')) : undefined, notes: notes || undefined },
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['implant-treatments'] }); onCreated(); },
-    onError: (e: any) => Alert.alert('Erro', e?.message),
+    onError: (e: any) => notify('Erro', e?.message),
   });
 
   return (

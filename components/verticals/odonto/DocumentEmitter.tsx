@@ -11,13 +11,14 @@
 import { useState, useEffect } from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity,
-  TextInput, StyleSheet, ActivityIndicator, Alert,
+  TextInput, StyleSheet, ActivityIndicator,
   Platform, Linking,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import type { PatientLite } from '@/components/verticals/odonto/PatientHub';
+import { notify } from '@/utils/webAlert';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -134,7 +135,7 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
       setStep('preview');
       qc.invalidateQueries({ queryKey: ['dental-documents', cid, patient.id] });
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Não foi possível criar o documento.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Não foi possível criar o documento.'),
   });
 
   const signMut = useMutation({
@@ -142,9 +143,9 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
       request(`/companies/${cid}/dental/documents/${createdDoc?.id}/sign`, { method: 'PATCH' }),
     onSuccess: (data) => {
       setCreatedDoc(data.document);
-      Alert.alert('Assinado', 'Documento assinado com sucesso.');
+      notify('Assinado', 'Documento assinado com sucesso.');
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Erro ao assinar.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Erro ao assinar.'),
   });
 
   const sendWAMut = useMutation({
@@ -161,9 +162,9 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
         (createdDoc?.rendered_text ?? '')
       );
       Linking.openURL(`https://wa.me/55${phone}?text=${text}`).catch(() => {});
-      Alert.alert('Enviado', 'Documento marcado como enviado via WhatsApp.');
+      notify('Enviado', 'Documento marcado como enviado via WhatsApp.');
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Erro ao registrar envio.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Erro ao registrar envio.'),
   });
 
   // ── Step: type selector ──────────────────────────────────

@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, ActivityIndicator, Alert, Platform,
+  ScrollView, StyleSheet, ActivityIndicator, Platform,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { APPLIANCE_LABELS, APPLIANCE_ICON } from './OrthoTreatmentCard';
+import { notify } from '@/utils/webAlert';
 
 const APPLIANCE_OPTIONS = Object.keys(APPLIANCE_LABELS);
 
@@ -48,7 +49,7 @@ export function OrthoTreatmentForm({ companyId, customerId, onClose, onCreated }
         },
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ortho-treatments'] }); onCreated(); },
-    onError:   (e: any) => Alert.alert('Erro', e?.message || 'Não foi possível criar o tratamento.'),
+    onError:   (e: any) => notify('Erro', e?.message || 'Não foi possível criar o tratamento.'),
   });
 
   return (

@@ -4,10 +4,11 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
+import { notify } from '@/utils/webAlert';
 
 interface Props {
   supply:    any;
@@ -30,13 +31,13 @@ export function SupplyMovementModal({ supply, companyId, onClose, onDone }: Prop
       }),
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['dental-supplies'] });
-      Alert.alert(
+      notify(
         'Movimentação registrada',
         `Estoque: ${data.stock_qty_prev} → ${data.stock_qty_new} ${supply.unit || 'un'}`
       );
       onDone();
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Não foi possível movimentar.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Não foi possível movimentar.'),
   });
 
   const isValid = qty.trim() !== '' && parseFloat(qty) > 0;

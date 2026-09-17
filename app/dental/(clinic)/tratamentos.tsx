@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { OrcamentosTab } from "@/components/verticals/odonto/OdontoAdminTabs";
+import { OrçamentosTab } from "@/components/verticals/odonto/OdontoAdminTabs";
 import { DentalFunnel } from "@/components/verticals/odonto/DentalFunnel";
 import { Icon } from "@/components/Icon";
 import { DentalColors } from "@/constants/dental-tokens";
@@ -15,7 +15,7 @@ import { DentalColors } from "@/constants/dental-tokens";
 // Hint visual no final aponta o caminho correto.
 
 const TABS = [
-  { id: "orcamentos", label: "Orçamentos",     Component: OrcamentosTab },
+  { id: "orcamentos", label: "Orçamentos",     Component: OrçamentosTab },
   { id: "funil",      label: "Funil de leads", Component: DentalFunnel },
 ];
 

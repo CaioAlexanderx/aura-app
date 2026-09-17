@@ -49,6 +49,10 @@ export type AnamneseData = {
 
 interface Props {
   initialData?: Partial<AnamneseData>;
+  // Texto livre de alergias do cadastro do paciente (PatientFormModal).
+  // Usado só pra pré-marcar chips quando a anamnese ainda não tem
+  // alergias salvas — nunca sobrescreve dado já preenchido.
+  patientAllergiesText?: string | null;
   onComplete: (data: AnamneseData) => void;
   onCancel?: () => void;
 }
@@ -67,6 +71,70 @@ const MEDICACOES = [
   "Insulina", "Antidepressivo", "Corticoide", "Anticoncepcional",
   "Imunossupressor", "Quimioterápico", "Outra",
 ];
+// ============================================================
+// Pre-selecao de alergias a partir do cadastro do paciente (item
+// "alergias" do PatientFormModal, texto livre separado por virgula).
+// Faz match tolerante a acento/caixa contra os chips de ALERGIAS;
+// o que nao casar com nenhum chip conhecido cai em "Outra".
+// ============================================================
+function normalizeAllergyText(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const ALLERGY_NONE_SYNONYMS = new Set([
+  "nenhuma", "nenhum", "nao", "na", "n a", "nda", "sem alergia", "sem alergias", "sem",
+]);
+
+function tokenMatchesChip(normToken: string, normChip: string): boolean {
+  if (!normToken || !normChip) return false;
+  if (normToken === normChip) return true;
+  if (normToken.length >= 4 && (normChip.includes(normToken) || normToken.includes(normChip))) return true;
+  const significantWords = normChip.split(" ").filter(w => w.length >= 4);
+  return significantWords.some(w => w === normToken || normToken.includes(w) || (normToken.length >= 4 && w.includes(normToken)));
+}
+
+export function matchAllergyChips(
+  allergiesText: string | null | undefined,
+  chips: string[] = ALERGIAS
+): { matched: string[]; hasUnmatched: boolean } {
+  const fullNormalized = normalizeAllergyText(allergiesText || "");
+  if (!fullNormalized) return { matched: [], hasUnmatched: false };
+
+  if (ALLERGY_NONE_SYNONYMS.has(fullNormalized) && chips.includes("Nenhuma")) {
+    return { matched: ["Nenhuma"], hasUnmatched: false };
+  }
+
+  const candidates = chips.filter(c => c !== "Nenhuma" && c !== "Outra");
+  const tokens = (allergiesText || "")
+    .split(/[,;/]|\be\b|\bou\b/i)
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  const matched = new Set<string>();
+  let hasUnmatched = false;
+
+  for (const token of tokens) {
+    const normToken = normalizeAllergyText(token);
+    if (!normToken || ALLERGY_NONE_SYNONYMS.has(normToken)) continue;
+    let found = false;
+    for (const chip of candidates) {
+      if (tokenMatchesChip(normToken, normalizeAllergyText(chip))) {
+        matched.add(chip);
+        found = true;
+      }
+    }
+    if (!found) hasUnmatched = true;
+  }
+
+  return { matched: Array.from(matched), hasUnmatched };
+}
+
 const GRAVIDEZ_OPTS = ["Não", "1º trimestre", "2º trimestre", "3º trimestre", "Amamentando", "N/A"];
 const ULTIMA_VISITA_OPTS = ["< 6 meses", "6-12 meses", "1-2 anos", "> 2 anos", "Primeira vez"];
 const ESCOVACAO_OPTS = ["1x/dia", "2x/dia", "3x+/dia"];
@@ -89,23 +157,35 @@ function BoolOption({ label, value, onToggle }: { label: string; value: boolean;
   );
 }
 
-export function AnamneseWizard({ initialData, onComplete, onCancel }: Props) {
+export function AnamneseWizard({ initialData, patientAllergiesText, onComplete, onCancel }: Props) {
   const [step, setStep] = useState(0);
-  const [data, setData] = useState<AnamneseData>({
-    doencas: [], alergias: [], medicacoes: [],
-    cirurgia_recente: false, cirurgia_detalhe: "",
-    ultima_visita_dentista: "",
-    bisfosfonatos: false,
-    gravidez: "Não",
-    tabagismo: false, etilismo: false,
-    bruxismo: false, sangramento_gengival: false,
-    ansiedade_dental: false,
-    higiene_escovacao: "", higiene_fio: false,
-    queixa_principal: "",
-    historico_familiar: [],
-    observacoes: "",
-    lgpd_consent: false,
-    ...initialData,
+  const [data, setData] = useState<AnamneseData>(() => {
+    const base: AnamneseData = {
+      doencas: [], alergias: [], medicacoes: [],
+      cirurgia_recente: false, cirurgia_detalhe: "",
+      ultima_visita_dentista: "",
+      bisfosfonatos: false,
+      gravidez: "Não",
+      tabagismo: false, etilismo: false,
+      bruxismo: false, sangramento_gengival: false,
+      ansiedade_dental: false,
+      higiene_escovacao: "", higiene_fio: false,
+      queixa_principal: "",
+      historico_familiar: [],
+      observacoes: "",
+      lgpd_consent: false,
+      ...initialData,
+    };
+    // Anamnese ainda sem alergias salvas + cadastro tem alergias?
+    // Pré-marca os chips que baterem; o resto vira "Outra".
+    const hasSavedAllergies = Array.isArray(initialData?.alergias) && initialData!.alergias!.length > 0;
+    if (!hasSavedAllergies && patientAllergiesText) {
+      const { matched, hasUnmatched } = matchAllergyChips(patientAllergiesText, ALERGIAS);
+      const preselected = [...matched];
+      if (hasUnmatched && ALERGIAS.includes("Outra")) preselected.push("Outra");
+      if (preselected.length > 0) base.alergias = preselected;
+    }
+    return base;
   });
 
   const toggleArray = (field: "doencas" | "alergias" | "medicacoes" | "historico_familiar", val: string) => {

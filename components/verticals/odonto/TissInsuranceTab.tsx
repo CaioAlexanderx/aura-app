@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal, Linking,
+  StyleSheet, ActivityIndicator, Modal, Linking,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { Icon } from '@/components/Icon';
+import { notify } from '@/utils/webAlert';
 import type { Insurance, CatalogItem } from './tissTypes';
 import { TISS_TOKENS } from './tissTypes';
 
@@ -80,10 +81,10 @@ export function TissCatalogModal({ visible, cid, onClose }: CatalogProps) {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] });
-      Alert.alert('Convênio adicionado', `${selected!.name} foi adicionado.`);
+      notify('Convênio adicionado', `${selected!.name} foi adicionado.`);
       reset();
     },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível adicionar.'),
+    onError: (e: any) => notify('Erro', e?.body?.error || 'Não foi possível adicionar.'),
   });
 
   function reset() { setSelected(null); setProviderCode(''); setContractNumber(''); onClose(); }
@@ -143,8 +144,8 @@ export function TissInsuranceFormModal({ visible, cid, insurance, onClose }: Ins
       method: 'PATCH',
       body: { provider_code: providerCode, contract_number: contractNumber, payment_deadline_days: parseInt(paymentDays) || 30 },
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] }); Alert.alert('Salvo', 'Convênio atualizado.'); onClose(); },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível salvar.'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-insurance', cid] }); notify('Salvo', 'Convênio atualizado.'); onClose(); },
+    onError: (e: any) => notify('Erro', e?.body?.error || 'Não foi possível salvar.'),
   });
 
   if (!insurance) return null;

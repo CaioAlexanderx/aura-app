@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal, Linking,
+  StyleSheet, ActivityIndicator, Modal, Linking,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { Icon } from '@/components/Icon';
+import { notify } from '@/utils/webAlert';
 import type { Batch, Guide, Insurance } from './tissTypes';
 import { GUIDE_TYPE_LABELS, STATUS_COLORS, formatBRL, formatDateBR } from './tissTypes';
 
@@ -35,7 +36,7 @@ export function TissBatchesTab({ cid, onCreate }: BatchesTabProps) {
 
   function downloadXml(b: Batch) {
     const url = `${process.env.EXPO_PUBLIC_API_URL}/companies/${cid}/dental/tiss/batches/${b.id}/xml`;
-    Linking.openURL(url).catch(() => Alert.alert('Erro', 'Não foi possível baixar o XML.'));
+    Linking.openURL(url).catch(() => notify('Erro', 'Não foi possível baixar o XML.'));
   }
 
   return (
@@ -115,10 +116,10 @@ export function TissBatchFormModal({ visible, cid, onClose }: BatchFormProps) {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['tiss-batches', cid] });
       qc.invalidateQueries({ queryKey: ['tiss-guides', cid] });
-      Alert.alert('Lote criado', `Lote ${data.batch.batch_number} gerado com ${data.total_guias} guias.`);
+      notify('Lote criado', `Lote ${data.batch.batch_number} gerado com ${data.total_guias} guias.`);
       onClose();
     },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível gerar o lote.'),
+    onError: (e: any) => notify('Erro', e?.body?.error || 'Não foi possível gerar o lote.'),
   });
 
   function toggle(id: string) {

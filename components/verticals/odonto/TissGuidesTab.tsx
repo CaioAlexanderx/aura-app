@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  StyleSheet, ActivityIndicator, Alert, Modal, Platform,
+  StyleSheet, ActivityIndicator, Modal, Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { Icon } from '@/components/Icon';
+import { notify } from '@/utils/webAlert';
 import type { Guide, Insurance } from './tissTypes';
 import { GUIDE_TYPE_LABELS, STATUS_COLORS, formatBRL, formatDateBR } from './tissTypes';
 
@@ -141,8 +142,8 @@ export function TissGuideFormModal({ visible, cid, guide, initialPatientId, init
       }
       return request(`/companies/${cid}/dental/tiss/guides`, { method: 'POST', body });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-guides', cid] }); Alert.alert('Guia criada', 'Guia salva como rascunho.'); onClose(); },
-    onError: (e: any) => Alert.alert('Erro', e?.body?.error || 'Não foi possível criar.'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tiss-guides', cid] }); notify('Guia criada', 'Guia salva como rascunho.'); onClose(); },
+    onError: (e: any) => notify('Erro', e?.body?.error || 'Não foi possível criar.'),
   });
 
   function addProcedure() { setProcedures([...procedures, { tuss_code:'', description:'', unit_value:'', quantity:'1' }]); }

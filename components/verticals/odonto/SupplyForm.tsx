@@ -5,11 +5,12 @@
 import { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, ActivityIndicator, Alert, Platform,
+  ScrollView, StyleSheet, ActivityIndicator, Platform,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { CATEGORIES, UNITS } from './supplyUtils';
+import { notify } from '@/utils/webAlert';
 
 interface Props {
   companyId: string;
@@ -49,7 +50,7 @@ export function SupplyForm({ companyId, onClose, onCreated }: Props) {
       qc.invalidateQueries({ queryKey: ['dental-supplies', companyId] });
       onCreated();
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Não foi possível cadastrar.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Não foi possível cadastrar.'),
   });
 
   const catOptions = CATEGORIES.filter(c => c.id !== 'todos');

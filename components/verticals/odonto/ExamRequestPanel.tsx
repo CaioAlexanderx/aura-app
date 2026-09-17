@@ -20,12 +20,13 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Linking,
+  ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import type { PatientLite } from '@/components/verticals/odonto/PatientHub';
+import { notify } from '@/utils/webAlert';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -177,14 +178,14 @@ export function ExamRequestPanel({ patient, onClose, onSaved }: Props) {
       setStep('done');
       onSaved?.(data?.document?.id);
     },
-    onError: (err: any) => Alert.alert('Erro', err?.message || 'Não foi possível salvar.'),
+    onError: (err: any) => notify('Erro', err?.message || 'Não foi possível salvar.'),
   });
 
   // Enviar WhatsApp
   function sendWhatsApp() {
     const phone = patient.phone?.replace(/\D/g, '');
     if (!phone) {
-      Alert.alert('Sem telefone', 'O paciente não tem telefone cadastrado.');
+      notify('Sem telefone', 'O paciente não tem telefone cadastrado.');
       return;
     }
     const text = encodeURIComponent(
