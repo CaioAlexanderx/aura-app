@@ -38,6 +38,10 @@ const DentalDark = {
   surfaceStrong: "rgba(255,255,255,0.08)",
   border:      "rgba(255,255,255,0.08)",
 
+  // Agenda: horas fechadas (listras) e intervalo entre turnos (almoço)
+  hatch:       "rgba(255,255,255,0.07)",
+  lunch:       "rgba(148,148,170,0.16)",
+
   // Ink
   ink:         "#fafafa",
   ink2:        "rgba(250,250,250,0.65)",
@@ -70,6 +74,10 @@ const DentalLight = {
   surface:     "rgba(0,0,0,0.025)",
   surfaceStrong: "rgba(0,0,0,0.05)",
   border:      "rgba(109,40,217,0.10)", // violet sutil — alinhado com Light.border
+
+  // Agenda: horas fechadas (listras) e intervalo entre turnos (almoço)
+  hatch:       "rgba(24,23,43,0.06)",
+  lunch:       "rgba(24,23,43,0.08)",
 
   // Ink — texto escuro sobre fundo claro
   ink:         "#18172b",

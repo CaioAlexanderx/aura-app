@@ -8,8 +8,11 @@
 //   - #17 fix cancelar consulta — handleAppointmentPress agora sempre abre
 //     AppointmentDetailModal em vez de bypassar pra Modo Consulta. O modal
 //     ja tem botoes Iniciar/Cancelar, agora visiveis em qualquer status.
+// Horário de funcionamento (17/09/2026, mockup parte 2): a grade Dia/Semana
+// usa a faixa do useClinicHours (±1h), pinta turnos/almoço/fechado e pede
+// confirmação antes de abrir o Novo agendamento fora do horário.
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -20,6 +23,10 @@ import { Icon } from "@/components/Icon";
 import { AgendaDental, type DentalAppointment, type DentalChair } from "@/components/verticals/odonto/AgendaDental";
 import { useDentalReschedule } from "@/hooks/useDentalReschedule";
 import { AgendaDentalWeek } from "@/components/verticals/odonto/AgendaDentalWeek";
+import { ClinicHoursLegend } from "@/components/verticals/odonto/AgendaGridParts";
+import { useClinicHours } from "@/hooks/useClinicHours";
+import { outsideHoursPrompt } from "@/utils/clinicHours";
+import { confirmAlert } from "@/utils/webAlert";
 import { AgendaDentalMonth } from "@/components/verticals/odonto/AgendaDentalMonth";
 import { AgendaNavigator, agendaRangeFor, type AgendaView } from "@/components/verticals/odonto/AgendaNavigator";
 import Odontograma2D, { type ToothState } from "@/components/verticals/odonto/Odontograma2D";
@@ -49,6 +56,12 @@ type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
+  const router = useRouter();
+  const clinicHours = useClinicHours();
+  const clinic = useMemo(
+    () => ({ configured: clinicHours.configured, hours: clinicHours.hours }),
+    [clinicHours.configured, clinicHours.hours],
+  );
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [agendaView, setAgendaView] = useState<AgendaView>("week");
   const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -119,14 +132,21 @@ export function AgendaTab() {
   }));
 
   function handleNewAppointment() { setInitialDateTime(undefined); setShowNew(true); }
+  // Clique em horário vazio: fora do horário da clínica, confirma antes (não bloqueia).
+  function openNewAt(dt: Date) {
+    const open = () => { setInitialDateTime(dt.toISOString()); setShowNew(true); };
+    const prompt = clinic.configured ? outsideHoursPrompt(clinic.hours, dt) : null;
+    if (!prompt) return open();
+    confirmAlert(prompt.title, prompt.message, "Agendar mesmo assim", open);
+  }
   function handleSlotPressDay(_chair: string, time: string) {
     const dt = new Date(anchorDate);
     const [h, m] = time.split(":");
     dt.setHours(parseInt(h) || 9, parseInt(m) || 0, 0, 0);
-    setInitialDateTime(dt.toISOString());
-    setShowNew(true);
+    openNewAt(dt);
   }
-  function handleSlotPressWeek(dt: Date) { setInitialDateTime(dt.toISOString()); setShowNew(true); }
+  function handleSlotPressWeek(dt: Date) { openNewAt(dt); }
+  function openHoursSettings() { router.push("/dental/(clinic)/clinica" as any); }
   function handleDayPressMonth(d: Date) { setAnchorDate(d); setAgendaView("day"); }
 
   // PR44 #17: SEMPRE abrir AppointmentDetailModal (antes bypassava direto pro Modo Consulta
@@ -167,6 +187,9 @@ export function AgendaTab() {
       {viewMode === "calendar" && (
         <>
           <AgendaNavigator view={agendaView} date={anchorDate} onViewChange={setAgendaView} onDateChange={setAnchorDate} />
+          {agendaView !== "month" && !clinicHours.isLoading && (
+            <ClinicHoursLegend configured={clinic.configured} onOpenSettings={openHoursSettings} />
+          )}
           {isLoading && <Loader />}
           {!isLoading && agendaView === "day" && (
             <AgendaDental
@@ -176,6 +199,9 @@ export function AgendaTab() {
               onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressDay}
               onReschedule={reschedule}
+              startHour={clinicHours.gridStartHour}
+              endHour={clinicHours.gridEndHour}
+              clinic={clinic}
             />
           )}
           {!isLoading && agendaView === "week" && (
@@ -185,6 +211,9 @@ export function AgendaTab() {
               onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressWeek}
               onReschedule={reschedule}
+              startHour={clinicHours.gridStartHour}
+              endHour={clinicHours.gridEndHour}
+              clinic={clinic}
             />
           )}
           {!isLoading && agendaView === "month" && (

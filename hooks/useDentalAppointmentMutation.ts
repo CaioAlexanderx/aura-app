@@ -24,6 +24,8 @@ export type AppointmentPatch = {
 export type AppointmentPatchResult = {
   appointment?: any;
   conflicts?: Array<{ id: string; patient_name?: string | null; scheduled_at: string; duration_min?: number }>;
+  /** Clínica com horário salvo e a consulta fora de um turno (só aviso). */
+  outside_hours?: boolean;
 };
 
 /** Listas de agendamentos que refletem a mudança. */

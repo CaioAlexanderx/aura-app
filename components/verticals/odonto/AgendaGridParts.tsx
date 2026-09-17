@@ -22,6 +22,7 @@ import {
   type PendingConflict,
 } from "@/hooks/useAgendaGridFlow";
 import { blockBox, blockTier, dropLabel, firstName, hm, minutesOfDay, type BlockTier } from "@/utils/agendaGrid";
+import type { ClinicDayBands, ClinicHours } from "@/utils/clinicHours";
 
 export const IS_WEB = Platform.OS === "web";
 /** Abaixo disso não há arraste: toque abre o detalhe (mockup, aba G). */
@@ -88,6 +89,7 @@ const CSS = `
 .aag-label.aag-bottom{top:auto;bottom:-26px}
 .aag-label.aag-right{left:auto;right:-2px}
 .aag-warn .aag-label{background:${C.amber};color:#1a1200}
+.aag-hatch{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;background-image:repeating-linear-gradient(135deg,${C.hatch} 0 4px,transparent 4px 8px)}
 .aag-flash{animation:aag-flash 1.4s ease-out}
 @keyframes aag-flash{0%{box-shadow:0 0 0 0 ${C.cyan}}30%{box-shadow:0 0 0 5px ${C.cyanSoft}}100%{box-shadow:0 0 0 0 transparent}}
 `;
@@ -324,6 +326,8 @@ export function ColumnDragLayer({ colIdx, colCount, day, columnLabel, hourPx, st
   let label = dropLabel(active.mode, day, active.startMin, active.durMin);
   if (active.mode === "move" && active.fromCol !== active.colIdx && columnLabel) label += ` · ${columnLabel}`;
   if (conflicts.length) label += ` · sobre ${firstName(conflicts[0].patient_name)}`;
+  // Fora do horário da clínica: avisa no rótulo, mas solta normalmente (vira encaixe).
+  if (req.outsideHours) label += " · fora do horário";
   const appt = req.appt as GridAppointment;
   const alignRight = colCount > 1 && colIdx >= colCount - 2;
   return (
@@ -335,7 +339,7 @@ export function ColumnDragLayer({ colIdx, colCount, day, columnLabel, hourPx, st
         startMin={active.startMin}
         durMin={active.durMin}
         label={label}
-        warn={conflicts.length > 0}
+        warn={conflicts.length > 0 || !!req.outsideHours}
         bottomLabel={active.mode === "resize"}
         alignRight={alignRight}
       />
@@ -432,6 +436,112 @@ export function NowLine({ top, label }: { top: number; label?: string }) {
   );
 }
 
+// ─── Horário de funcionamento: fundo da coluna e legenda ────
+
+/** Horário da clínica como a grade consome (hooks/useClinicHours). */
+export interface ClinicHoursView {
+  configured: boolean;
+  hours: ClinicHours;
+}
+
+function Hatch() {
+  if (IS_WEB) return createElement("div", { className: "aag-hatch", "data-testid": "agenda-hatch" });
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: C.hatch }]} pointerEvents="none" />;
+}
+
+/**
+ * Fundo de uma coluna (mockup do horário, parte 2): hachura no que está
+ * fechado, turnos com o fundo do card e almoço cinza ("Almoço" com 60 min
+ * ou mais). Fica atrás dos horários clicáveis — nada aqui bloqueia clique.
+ */
+export function ClinicColumnBackground({ bands, startHour, endHour, hourPx, today }: {
+  bands: ClinicDayBands;
+  startHour: number;
+  endHour: number;
+  hourPx: number;
+  today?: boolean;
+}) {
+  const a = startHour * 60;
+  const b = endHour * 60;
+  const box = (start: number, end: number) => {
+    const s0 = Math.max(start, a);
+    const e0 = Math.min(end, b);
+    return e0 > s0 ? { top: ((s0 - a) / 60) * hourPx, height: ((e0 - s0) / 60) * hourPx } : null;
+  };
+  return (
+    <View style={bg.layer} pointerEvents="none" testID="agenda-clinic-bg">
+      <Hatch />
+      {bands.open.map((o, i) => {
+        const p = box(o.start, o.end);
+        return p ? (
+          <View key={`o${i}`} style={[bg.band, bg.open, p]} testID="agenda-band-open">
+            {today ? <View style={[StyleSheet.absoluteFill, { backgroundColor: C.cyanGhost }]} /> : null}
+          </View>
+        ) : null;
+      })}
+      {bands.lunch.map((l, i) => {
+        const p = box(l.start, l.end);
+        return p ? (
+          <View key={`l${i}`} style={[bg.band, bg.lunch, p]} testID="agenda-band-lunch">
+            {l.label ? <Text style={bg.lunchText}>Almoço</Text> : null}
+          </View>
+        ) : null;
+      })}
+      {bands.closed ? <Text style={bg.closedText} testID="agenda-closed-label">Fechado</Text> : null}
+    </View>
+  );
+}
+
+function LegendSwatch({ kind }: { kind: "open" | "lunch" | "closed" }) {
+  if (kind === "closed" && IS_WEB) {
+    return createElement("span", {
+      style: {
+        position: "relative", display: "inline-block", width: 14, height: 10, borderRadius: 3,
+        border: `1px solid ${C.border}`, overflow: "hidden", flex: "none",
+      },
+    }, createElement("span", { className: "aag-hatch" }));
+  }
+  return (
+    <View
+      style={[
+        bg.sw,
+        kind === "open" && { backgroundColor: C.bg2 },
+        kind === "lunch" && { backgroundColor: C.lunch },
+        kind === "closed" && { backgroundColor: C.hatch },
+      ]}
+    />
+  );
+}
+
+/**
+ * Legenda Atendimento / Intervalo / Fechado e o atalho para configurar o
+ * horário. Sem horário salvo, só um aviso discreto com o link.
+ */
+export function ClinicHoursLegend({ configured, onOpenSettings }: { configured: boolean; onOpenSettings?: () => void }) {
+  const link = (label: string) => (
+    <Pressable onPress={onOpenSettings} accessibilityRole="link" testID="agenda-hours-link" hitSlop={6}>
+      <Text style={bg.link}>{label}</Text>
+    </Pressable>
+  );
+  if (!configured) {
+    return (
+      <View style={bg.legendRow} testID="agenda-hours-legend">
+        <Text style={bg.legendText}>A grade mostra 07h–19h até você definir o horário da clínica.</Text>
+        {link("Defina o horário de funcionamento")}
+      </View>
+    );
+  }
+  return (
+    <View style={bg.legendRow} testID="agenda-hours-legend">
+      <View style={bg.legendItem}><LegendSwatch kind="open" /><Text style={bg.legendText}>Atendimento</Text></View>
+      <View style={bg.legendItem}><LegendSwatch kind="lunch" /><Text style={bg.legendText}>Intervalo (almoço)</Text></View>
+      <View style={bg.legendItem}><LegendSwatch kind="closed" /><Text style={bg.legendText}>Fechado · ainda clicável</Text></View>
+      <View style={{ flex: 1 }} />
+      {link("Horário de funcionamento")}
+    </View>
+  );
+}
+
 // ─── Legenda de status ──────────────────────────────────────
 
 export function StatusLegend() {
@@ -508,6 +618,25 @@ const l = StyleSheet.create({
     position: "absolute", left: -50, top: -8, fontSize: 10, fontFamily: Fonts.mono, color: C.red,
     backgroundColor: C.bg2, paddingHorizontal: 3, borderRadius: 4,
   },
+});
+
+const bg = StyleSheet.create({
+  layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
+  band: { position: "absolute", left: 0, right: 0 },
+  open: { backgroundColor: C.bg2 },
+  lunch: { backgroundColor: C.lunch, alignItems: "center", justifyContent: "center" },
+  lunchText: {
+    fontSize: 10, fontWeight: "600", letterSpacing: 0.4, color: C.ink3, textTransform: "uppercase", fontFamily: Fonts.body,
+  },
+  closedText: {
+    position: "absolute", top: 10, left: 0, right: 0, textAlign: "center", fontSize: 10, fontWeight: "600",
+    letterSpacing: 0.5, color: C.ink3, textTransform: "uppercase", fontFamily: Fonts.body,
+  },
+  sw: { width: 14, height: 10, borderRadius: 3, borderWidth: 1, borderColor: C.border },
+  legendRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 14, rowGap: 6 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendText: { fontSize: 11.5, color: C.ink3, fontFamily: Fonts.body },
+  link: { fontSize: 12, fontWeight: "600", color: IS_DARK_MODE ? C.cyan : "#0891B2", fontFamily: Fonts.body },
 });
 
 const g = StyleSheet.create({

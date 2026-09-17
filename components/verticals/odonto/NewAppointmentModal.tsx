@@ -17,8 +17,11 @@
 //     terminal no backend, então a remarcação cria um agendamento novo;
 //   * uma cadeira ativa → chip fixo; várias → seletor;
 //   * no celular (< 768 px) vira folha de baixo com Salvar sempre visível.
+// - Horário de funcionamento (17/09/2026): novo agendamento começa com a
+//   duração padrão da clínica; horário fora do turno mostra um aviso âmbar
+//   e salva normalmente (vira encaixe).
 // ============================================================
-import { useState, useEffect, useMemo, createElement } from "react";
+import { useState, useEffect, useMemo, useRef, createElement } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
 import { IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -36,6 +39,7 @@ import {
 import {
   APPOINTMENT_LIST_KEYS, apiErrorMessage, useDentalAppointmentMutation, type AppointmentPatch,
 } from "@/hooks/useDentalAppointmentMutation";
+import { useClinicHours } from "@/hooks/useClinicHours";
 import { NewPatientModal } from "./NewPatientModal";
 import { AC, AgendaBtn, AgendaModalFrame, CheckRow, Chip, FieldLabel, Hint, useIsSheet } from "./agendaModalKit";
 
@@ -96,10 +100,20 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
   const [error, setError] = useState<string | null>(null);
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [notifyWa, setNotifyWa] = useState(true);
+  const clinicHours = useClinicHours();
+  const defaultDur = clinicHours.defaultIntervalMin;
+  // Duração escolhida à mão não é sobrescrita quando o horário da clínica chega.
+  const durationTouched = useRef(false);
+
+  function applyDuration(m: number) {
+    setDuration(m);
+    setCustomDuration(DURATIONS.includes(m) ? "" : String(m));
+  }
 
   useEffect(() => {
     if (!visible) return;
     setError(null);
+    durationTouched.current = false;
     if (appointment) {
       const d = new Date(appointment.scheduled_at);
       setDate(toDateOnlyString(d));
@@ -120,6 +134,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
     }
     if (initialPatient) setPatient(initialPatient);
     if (initialNote) setChiefComplaint(initialNote);
+    if (defaultDur) applyDuration(defaultDur);
     if (initialDateTime) {
       const d = new Date(initialDateTime);
       setDate(toDateOnlyString(d));
@@ -131,6 +146,13 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialDateTime, appointment?.id, initialPatient?.id]);
+
+  // Horário da clínica carregou depois de abrir: aplica a duração padrão (só no novo).
+  useEffect(() => {
+    if (!visible || appointment || !defaultDur || durationTouched.current) return;
+    applyDuration(defaultDur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, defaultDur, appointment?.id]);
 
   // #13: busca so dispara com 2+ chars
   const { data: patientsData } = useQuery({
@@ -201,13 +223,15 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
   const conflicts = useMemo(() => (target ? findConflicts(target, dayList) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [scheduledISO, duration, practitionerId, selfId, dayData]);
+  // Fora do turno da clínica (só com horário salvo): aviso, nunca bloqueio.
+  const outsideHours = !!(clinicHours.configured && newAt && durationValid && !clinicHours.isWithinHours(newAt, duration));
   const free = useMemo(() => (target && conflicts.length ? nextFreeSlot(target, dayList) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [conflicts]);
 
   function reset() {
     setPatient(null); setSearch("");
-    setDate(""); setTime(""); setDuration(60); setCustomDuration(""); setChiefComplaint("");
+    setDate(""); setTime(""); setDuration(defaultDur || 60); setCustomDuration(""); setChiefComplaint("");
     setPractitionerId(null); setError(null); setNotifyWa(true);
   }
 
@@ -266,7 +290,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
         { id: appointment.id, patch, silent: true },
         {
           onSuccess: (res) => {
-            const fit = conflicts.length > 0 || !!res?.conflicts?.length;
+            const fit = conflicts.length > 0 || !!res?.conflicts?.length || (moved && (res?.outside_hours ?? outsideHours));
             notify(savedMessage(fit, opened, moved ? "remarcada" : "atualizado"));
             reset();
             if (onSaved) onSaved({ id: appointment.id }); else onClose();
@@ -281,7 +305,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
     createMut.mutate(undefined, {
       onSuccess: (res) => {
         invalidateLists();
-        const fit = conflicts.length > 0 || !!res?.conflicts?.length;
+        const fit = conflicts.length > 0 || !!res?.conflicts?.length || !!(res?.outside_hours ?? outsideHours);
         notify(savedMessage(fit, opened, appointment ? "remarcada" : "agendada"));
         const id = res?.appointment?.id;
         reset();
@@ -421,6 +445,13 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
           </View>
         )}
 
+        {outsideHours && (
+          <View style={s.outside} testID="appt-outside-hours" accessibilityRole="alert">
+            <Icon name="clock" size={14} color={AC.amberInk} />
+            <Text style={s.outsideText}>Fora do horário de funcionamento — será marcado como encaixe</Text>
+          </View>
+        )}
+
         {/* Duração */}
         <FieldLabel>Duração</FieldLabel>
         <View style={s.chips}>
@@ -430,7 +461,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
               testID={`appt-dur-${m}`}
               label={`${m} min`}
               on={duration === m && !customDuration}
-              onPress={() => { setDuration(m); setCustomDuration(""); }}
+              onPress={() => { durationTouched.current = true; setDuration(m); setCustomDuration(""); }}
             />
           ))}
           <View style={[s.customChip, !!customDuration && s.customChipOn]}>
@@ -439,6 +470,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
               testID="appt-dur-custom"
               value={customDuration}
               onChangeText={(v) => {
+                durationTouched.current = true;
                 const clean = v.replace(/\D/g, "").slice(0, 4);
                 setCustomDuration(clean);
                 if (clean) setDuration(parseInt(clean, 10));
@@ -599,6 +631,8 @@ const s = StyleSheet.create({
   customInput: { width: 48, borderBottomWidth: 1, borderBottomColor: AC.border2, color: AC.ink, fontSize: 13, textAlign: "center", paddingVertical: 2 } as any,
   input: { backgroundColor: AC.bg3, borderWidth: 1, borderColor: AC.border2, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13.5, color: AC.ink } as any,
   inputMultiline: { minHeight: 56, textAlignVertical: "top" } as any,
+  outside: { marginTop: 10, flexDirection: "row", gap: 7, alignItems: "center", borderWidth: 1, borderColor: AC.amberBorder, backgroundColor: AC.amberBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  outsideText: { fontSize: 12.5, fontWeight: "600", color: AC.amberInk, flex: 1 },
   warnBox: { marginTop: 14, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: AC.amberBorder, backgroundColor: AC.amberBg },
   warnText: { fontSize: 12, color: AC.amberInk, lineHeight: 17 },
   diff: { marginTop: 14, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: AC.surface, borderWidth: 1, borderColor: AC.border, flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" },

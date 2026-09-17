@@ -14,6 +14,10 @@ import {
   clipShiftsToWindow,
   generateSlotsForShift,
   generateSlotsForShifts,
+  clinicMinuteStatus,
+  clinicDayBands,
+  isClinicDayClosed,
+  outsideHoursPrompt,
   type ClinicHours,
 } from "../utils/clinicHours";
 
@@ -164,5 +168,66 @@ describe("generateSlotsForShift(s)", () => {
     expect(slots).not.toContain("12:00");
     expect(slots).not.toContain("13:00");
     expect(slots).toEqual(["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"]);
+  });
+});
+
+// ─── Efeito na Agenda (mockup do horário, parte 2) ──────────
+describe("clinicMinuteStatus / clinicDayBands / outsideHoursPrompt", () => {
+  // seg 08–12 + 14–18; ter 08–12 + 12:30–18 (vão de 30 min); sáb 08–12; dom fechado;
+  // qua "aberta" sem turno válido conta como fechada.
+  const h = hours({
+    1: { open: true, shifts: [["14:00", "18:00"], ["08:00", "12:00"]] },
+    2: { open: true, shifts: [["08:00", "12:00"], ["12:30", "18:00"]] },
+    3: { open: true, shifts: [["10:00", "09:00"]] },
+    6: { open: true, shifts: [["08:00", "12:00"]] },
+    7: { open: false, shifts: [["08:00", "12:00"]] },
+  });
+  const m = (t: string) => timeToMinutes(t);
+
+  it("classifica cada faixa do dia por minuto (turnos fora de ordem)", () => {
+    expect(clinicMinuteStatus(h, 1, m("07:59"))).toEqual({ kind: "before", opensAt: m("08:00") });
+    expect(clinicMinuteStatus(h, 1, m("08:00"))).toEqual({ kind: "open" });
+    expect(clinicMinuteStatus(h, 1, m("11:59"))).toEqual({ kind: "open" });
+    expect(clinicMinuteStatus(h, 1, m("12:00"))).toEqual({ kind: "lunch", from: m("12:00"), to: m("14:00") });
+    expect(clinicMinuteStatus(h, 1, m("13:59"))).toEqual({ kind: "lunch", from: m("12:00"), to: m("14:00") });
+    expect(clinicMinuteStatus(h, 1, m("14:00"))).toEqual({ kind: "open" });
+    expect(clinicMinuteStatus(h, 1, m("18:00"))).toEqual({ kind: "after", closesAt: m("18:00") });
+    expect(clinicMinuteStatus(h, 6, m("12:00"))).toEqual({ kind: "after", closesAt: m("12:00") });
+  });
+
+  it("dia fechado (inclusive aberto sem turno válido e turnos ignorados de dia fechado)", () => {
+    expect(clinicMinuteStatus(h, 7, m("09:00"))).toEqual({ kind: "closedDay" });
+    expect(clinicMinuteStatus(h, 3, m("09:30"))).toEqual({ kind: "closedDay" });
+    expect(clinicMinuteStatus(h, 5, m("09:30"))).toEqual({ kind: "closedDay" });
+    expect(isClinicDayClosed(h, 7)).toBe(true);
+    expect(isClinicDayClosed(h, 3)).toBe(true);
+    expect(isClinicDayClosed(h, 1)).toBe(false);
+  });
+
+  it("bandas: turnos ordenados, almoço com rótulo só com 60 min ou mais", () => {
+    expect(clinicDayBands(h, 1)).toEqual({
+      closed: false,
+      open: [{ start: m("08:00"), end: m("12:00") }, { start: m("14:00"), end: m("18:00") }],
+      lunch: [{ start: m("12:00"), end: m("14:00"), label: true }],
+    });
+    expect(clinicDayBands(h, 2).lunch).toEqual([{ start: m("12:00"), end: m("12:30"), label: false }]);
+    expect(clinicDayBands(h, 6).lunch).toEqual([]);
+    expect(clinicDayBands(h, 7)).toEqual({ closed: true, open: [], lunch: [] });
+  });
+
+  it("confirmação: depois de fechar, antes de abrir, almoço e dia fechado", () => {
+    // 14/09/2026 = segunda; 20/09/2026 = domingo
+    expect(outsideHoursPrompt(h, new Date(2026, 8, 14, 9, 0))).toBeNull();
+    const after = outsideHoursPrompt(h, new Date(2026, 8, 14, 18, 30))!;
+    expect(after.title).toBe("Fora do horário de funcionamento (18:00). Agendar mesmo assim?");
+    expect(after.message).toBe("Segunda, 14/09 às 18:30. A clínica fecha às 18:00 neste dia. O horário fica marcado como encaixe na agenda.");
+    const before = outsideHoursPrompt(h, new Date(2026, 8, 14, 7, 0))!;
+    expect(before.title).toBe("Fora do horário de funcionamento (08:00). Agendar mesmo assim?");
+    expect(before.message).toContain("A clínica abre às 08:00 neste dia.");
+    expect(outsideHoursPrompt(h, new Date(2026, 8, 14, 12, 30))!.title)
+      .toBe("Intervalo entre turnos (12:00–14:00). Agendar mesmo assim?");
+    const sunday = outsideHoursPrompt(h, new Date(2026, 8, 20, 10, 0))!;
+    expect(sunday.title).toBe("Fora do horário de funcionamento (domingo fechado). Agendar mesmo assim?");
+    expect(sunday.message).toBe("Domingo, 20/09 às 10:00. O horário fica marcado como encaixe na agenda.");
   });
 });

@@ -6,7 +6,8 @@
 // Horas: "HH:MM" em passos de 15 min; "24:00" só é válido como fim de turno.
 //
 // Usado por: components/verticals/odonto/ClinicHoursCard.tsx,
-// hooks/useClinicHours.ts, app/dental/book/[slug].tsx.
+// hooks/useClinicHours.ts, app/dental/book/[slug].tsx e a grade da Agenda
+// (AgendaDental*, AgendaGridParts, OdontoClinicTabs).
 // ============================================================
 
 export type ClinicShift = { start: string; end: string };
@@ -195,4 +196,107 @@ export function generateSlotsForShifts(shifts: ClinicShift[], stepMin: number): 
   const out: string[] = [];
   for (const s of shifts) out.push(...generateSlotsForShift(s, stepMin));
   return out;
+}
+
+// ─── Efeito na Agenda (mockup do horário, parte 2) ──────────
+//
+// Cada minuto de um dia cai em uma faixa: turno aberto, intervalo entre
+// turnos (almoço), antes de abrir, depois de fechar ou dia fechado. A grade
+// pinta o fundo por faixa e pergunta antes de agendar fora do turno — nunca
+// bloqueia.
+
+export type ClinicMinuteStatus =
+  | { kind: "open" }
+  | { kind: "before"; opensAt: number }
+  | { kind: "after"; closesAt: number }
+  | { kind: "lunch"; from: number; to: number }
+  | { kind: "closedDay" };
+
+/** Turnos válidos do dia, em minutos, ordenados (fim > início). */
+export function sortedShiftMinutes(day: ClinicDayHours | undefined): Array<{ start: number; end: number }> {
+  if (!day || !day.open) return [];
+  return day.shifts
+    .map((s) => ({ start: timeToMinutes(s.start), end: timeToMinutes(s.end) }))
+    .filter((s) => s.end > s.start)
+    .sort((a, b) => a.start - b.start);
+}
+
+/**
+ * Faixa do minuto `min` (minutos do dia) no dia `weekday` (1=seg … 7=dom).
+ * Dia aberto sem nenhum turno válido conta como fechado.
+ */
+export function clinicMinuteStatus(hours: ClinicHours, weekday: number, min: number): ClinicMinuteStatus {
+  const shifts = sortedShiftMinutes(findDayHours(hours, weekday));
+  if (!shifts.length) return { kind: "closedDay" };
+  if (shifts.some((s) => min >= s.start && min < s.end)) return { kind: "open" };
+  for (let i = 1; i < shifts.length; i++) {
+    const from = shifts[i - 1].end;
+    const to = shifts[i].start;
+    if (min >= from && min < to) return { kind: "lunch", from, to };
+  }
+  if (min < shifts[0].start) return { kind: "before", opensAt: shifts[0].start };
+  return { kind: "after", closesAt: shifts[shifts.length - 1].end };
+}
+
+export function isClinicDayClosed(hours: ClinicHours, weekday: number): boolean {
+  return sortedShiftMinutes(findDayHours(hours, weekday)).length === 0;
+}
+
+export type ClinicDayBands = {
+  closed: boolean;
+  /** Turnos (fundo "Atendimento"). */
+  open: Array<{ start: number; end: number }>;
+  /** Vãos entre turnos (fundo cinza); `label` só quando o vão tem 60 min ou mais. */
+  lunch: Array<{ start: number; end: number; label: boolean }>;
+};
+
+/** Fundo de uma coluna do dia: o que não é turno nem almoço fica hachurado. */
+export function clinicDayBands(hours: ClinicHours, weekday: number): ClinicDayBands {
+  const open = sortedShiftMinutes(findDayHours(hours, weekday));
+  const lunch: ClinicDayBands["lunch"] = [];
+  for (let i = 1; i < open.length; i++) {
+    const start = open[i - 1].end;
+    const end = open[i].start;
+    if (end > start) lunch.push({ start, end, label: end - start >= 60 });
+  }
+  return { closed: open.length === 0, open, lunch };
+}
+
+const DOW_BY_JS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+/**
+ * Confirmação antes de agendar fora do horário (null = dentro do turno).
+ * Ex.: "Fora do horário de funcionamento (18:00). Agendar mesmo assim?"
+ */
+export function outsideHoursPrompt(hours: ClinicHours, date: Date): { title: string; message: string } | null {
+  const weekday = jsDayToWeekday(date.getDay());
+  const min = date.getHours() * 60 + date.getMinutes();
+  const st = clinicMinuteStatus(hours, weekday, min);
+  if (st.kind === "open") return null;
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const when = `${DOW_BY_JS[date.getDay()]}, ${dd}/${mm} às ${minutesToTime(min)}.`;
+  const tail = " O horário fica marcado como encaixe na agenda.";
+  switch (st.kind) {
+    case "after":
+      return {
+        title: `Fora do horário de funcionamento (${minutesToTime(st.closesAt)}). Agendar mesmo assim?`,
+        message: `${when} A clínica fecha às ${minutesToTime(st.closesAt)} neste dia.${tail}`,
+      };
+    case "before":
+      return {
+        title: `Fora do horário de funcionamento (${minutesToTime(st.opensAt)}). Agendar mesmo assim?`,
+        message: `${when} A clínica abre às ${minutesToTime(st.opensAt)} neste dia.${tail}`,
+      };
+    case "lunch":
+      return {
+        title: `Intervalo entre turnos (${minutesToTime(st.from)}–${minutesToTime(st.to)}). Agendar mesmo assim?`,
+        message: `${when}${tail}`,
+      };
+    default:
+      return {
+        title: `Fora do horário de funcionamento (${WEEKDAY_LABELS[weekday].toLowerCase()} fechado). Agendar mesmo assim?`,
+        message: `${when}${tail}`,
+      };
+  }
 }
