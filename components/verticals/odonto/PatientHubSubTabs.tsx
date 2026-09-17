@@ -10,6 +10,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { openWhatsApp } from '@/utils/whatsapp';
 import { DentalForm, DentalColors } from '@/constants/dental-tokens';
 import { notify, confirmAlert } from '@/utils/webAlert';
 
@@ -90,13 +91,15 @@ export function DataTab({ patient }: { patient: PatientLite }) {
         <Field label="Nome completo" value={patient.full_name || patient.name} />
         <Field label="Telefone" value={patient.phone} />
         <Field label="Email" value={patient.email} />
-        {patient.phone && (
+        {patient.phone ? (
           <TouchableOpacity
-            onPress={() => Linking.openURL(`https://wa.me/55${patient.phone!.replace(/\D/g,'')}`).catch(()=>{})}
+            onPress={() => openWhatsApp(patient.phone, `Olá, ${(patient.full_name || patient.name || '').split(/\s+/)[0]}!`)}
             style={st.waBtn}
           >
             <Text style={st.waBtnText}>💬 Conversar no WhatsApp</Text>
           </TouchableOpacity>
+        ) : (
+          <Text style={st.noPhoneHint}>Sem telefone cadastrado</Text>
         )}
       </View>
       <View style={st.section}>
@@ -388,6 +391,7 @@ const st = StyleSheet.create({
   notes:        { color: '#CBD5E1', fontSize: 13, lineHeight: 20 },
   waBtn:        { marginTop: 12, backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center' },
   waBtnText:    { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  noPhoneHint:  { marginTop: 12, color: '#64748B', fontSize: 12, fontStyle: 'italic' },
   infoBadge:    { marginBottom: 12, padding: 8, backgroundColor: 'rgba(6,182,212,0.08)', borderRadius: 6, borderWidth: 0.5, borderColor: 'rgba(6,182,212,0.2)' },
   infoBadgeText:{ color: '#06B6D4', fontSize: 11, fontWeight: '600' },
   savingOverlay:{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.7)', alignItems: 'center', justifyContent: 'center', gap: 12 },

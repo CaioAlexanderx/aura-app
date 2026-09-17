@@ -12,11 +12,12 @@ import { useState, useEffect } from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity,
   TextInput, StyleSheet, ActivityIndicator,
-  Platform, Linking,
+  Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { openWhatsApp } from '@/utils/whatsapp';
 import type { PatientLite } from '@/components/verticals/odonto/PatientHub';
 import { notify } from '@/utils/webAlert';
 
@@ -155,17 +156,20 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
         body: { phone: patient.phone },
       }),
     onSuccess: () => {
-      // Abre WhatsApp com o texto do documento
-      const phone = patient.phone?.replace(/\D/g, '');
-      const text  = encodeURIComponent(
-        `*${DOC_TYPES.find(d => d.id === docType)?.label ?? 'Documento'}*\n\n` +
-        (createdDoc?.rendered_text ?? '')
-      );
-      Linking.openURL(`https://wa.me/55${phone}?text=${text}`).catch(() => {});
       notify('Enviado', 'Documento marcado como enviado via WhatsApp.');
     },
     onError: (err: any) => notify('Erro', err?.message || 'Erro ao registrar envio.'),
   });
+
+  // WhatsApp é manual — nada é enviado pela Aura. Abre o app com o texto
+  // pronto (SÍNCRONO, antes do await da mutation que só registra o envio
+  // no backend, senão o browser bloqueia o pop-up).
+  function handleSendWhatsApp() {
+    const text = `*${DOC_TYPES.find(d => d.id === docType)?.label ?? 'Documento'}*\n\n` +
+      (createdDoc?.rendered_text ?? '');
+    if (!openWhatsApp(patient.phone, text)) return;
+    sendWAMut.mutate();
+  }
 
   // ── Step: type selector ──────────────────────────────────
   function renderTypeStep() {
@@ -285,9 +289,9 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
             </TouchableOpacity>
           )}
 
-          {patient.phone && (
+          {patient.phone ? (
             <TouchableOpacity
-              onPress={() => sendWAMut.mutate()}
+              onPress={handleSendWhatsApp}
               disabled={sendWAMut.isPending || isSentWA}
               style={[
                 s.actionBtn,
@@ -301,6 +305,10 @@ export function DocumentEmitter({ visible, patient, onClose }: Props) {
                   </Text>
               }
             </TouchableOpacity>
+          ) : (
+            <View style={[s.actionBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#334155', flex: 1, minWidth: 90 }]}>
+              <Text style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic', textAlign: 'center' }}>Sem telefone cadastrado</Text>
+            </View>
           )}
 
           <TouchableOpacity
