@@ -1,3 +1,13 @@
+// useDentalPersona importa stores/auth, que importa expo-secure-store —
+// e expo-modules-core não carrega sob Jest. Mock necessário mesmo só
+// testando as funções puras (detectDentalPersona / isSoloDentistManager),
+// porque o import do módulo já dispara a cadeia.
+jest.mock("expo-secure-store", () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+}));
+
 import { detectDentalPersona, isSoloDentistManager } from "@/hooks/useDentalPersona";
 
 describe("isSoloDentistManager", () => {
