@@ -3,35 +3,58 @@
 // Renderizado em /dental/(clinic)/clinica.
 // ============================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView, Switch } from "react-native";
 import { DentalColors } from "@/constants/dental-tokens";
 import { toast } from "@/components/Toast";
 import { useDentalAiSettings } from "@/hooks/useDentalAiConsulta";
+import { useAiAccess } from "@/hooks/useAiAccess";
+import { useAuthStore } from "@/stores/auth";
 
 export function DentalAiSettingsCard() {
-  const { data, isLoading, error, toggle, acceptConsent } = useDentalAiSettings();
+  // O backend (requireOdontoExpansao em dentalAi.js) 403a QUALQUER
+  // rota /dental/ai/* — inclusive GET /settings — pra empresa fora do
+  // plano Expansao ou sem vertical Odonto ativa. Sem esse gate local,
+  // o fetch sempre falhava pra essas empresas e caía no branch de erro
+  // genérico ("Não foi possível carregar...") em vez de simplesmente
+  // não mostrar o card.
+  //
+  // armadilha_plano_stale_jwt (CLAUDE.md #1): company.plan vem do JWT e
+  // não revalida sozinho — refreshMe() no mount antes de checar o plano,
+  // senão uma empresa recém-upgradeada pra Expansão continua sem ver o card.
+  const refreshMe = useAuthStore(s => s.refreshMe);
+  useEffect(() => { refreshMe?.().catch(() => {}); }, [refreshMe]);
+
+  const aiAccess = useAiAccess();
+  const planAllowsAi = aiAccess.reason !== "no_company" && aiAccess.reason !== "plan_below_required";
+
+  const { data, isLoading, error, refetch, isRefetching, toggle, acceptConsent } =
+    useDentalAiSettings({ enabled: planAllowsAi });
   const [consentOpen, setConsentOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
 
-  if (data && (data.plan !== "expansao" || data.vertical_active !== "odonto")) {
-    return (
-      <Card>
-        <Header />
-        <Text style={{ fontSize: 12, color: DentalColors.ink2, lineHeight: 17 }}>
-          A IA Aura no Modo Consulta está disponível a partir do plano{" "}
-          <Text style={{ color: DentalColors.violet, fontWeight: "700" }}>Expansão</Text> com vertical Odonto ativa.
-        </Text>
-        <Text style={{ fontSize: 10, color: DentalColors.ink3, marginTop: 6 }}>
-          Plano atual: {data.plan} · Vertical: {data.vertical_active || "—"}
-        </Text>
-      </Card>
-    );
-  }
+  if (!planAllowsAi) return null;
 
   if (isLoading) return <Card><Header /><ActivityIndicator color={DentalColors.cyan} /></Card>;
   if (error || !data) return (
-    <Card><Header /><Text style={{ fontSize: 12, color: DentalColors.amber }}>Não foi possível carregar as configurações de IA.</Text></Card>
+    <Card>
+      <Header />
+      <Text style={{ fontSize: 12, color: DentalColors.amber }}>Não foi possível carregar as configurações de IA.</Text>
+      <Pressable
+        onPress={() => refetch()}
+        disabled={isRefetching}
+        style={{
+          marginTop: 10, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7,
+          borderRadius: 8, borderWidth: 1, borderColor: DentalColors.border,
+          flexDirection: "row", alignItems: "center", gap: 6, opacity: isRefetching ? 0.6 : 1,
+        }}
+      >
+        {isRefetching ? <ActivityIndicator color={DentalColors.ink2} size="small" /> : null}
+        <Text style={{ fontSize: 12, color: DentalColors.ink2, fontWeight: "600" }}>
+          {isRefetching ? "Tentando..." : "Tentar de novo"}
+        </Text>
+      </Pressable>
+    </Card>
   );
 
   const usagePct = data.quota_total
