@@ -20,11 +20,12 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Linking,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { openWhatsApp } from '@/utils/whatsapp';
 import type { PatientLite } from '@/components/verticals/odonto/PatientHub';
 import { notify } from '@/utils/webAlert';
 
@@ -183,15 +184,14 @@ export function ExamRequestPanel({ patient, onClose, onSaved }: Props) {
 
   // Enviar WhatsApp
   function sendWhatsApp() {
-    const phone = patient.phone?.replace(/\D/g, '');
-    if (!phone) {
+    const text = `Olá ${patient.name}! Segue sua solicitação de exame:
+
+${preview}
+
+Qualquer dúvida estou à disposição.`;
+    if (!openWhatsApp(patient.phone, text)) {
       notify('Sem telefone', 'O paciente não tem telefone cadastrado.');
-      return;
     }
-    const text = encodeURIComponent(
-      `Olá ${patient.name}! Segue sua solicitação de exame:\n\n${preview}\n\nQualquer dúvida estou à disposição.`
-    );
-    Linking.openURL(`https://wa.me/55${phone}?text=${text}`);
   }
 
   const field = (key: string) => fields[key] || '';
@@ -366,9 +366,15 @@ export function ExamRequestPanel({ patient, onClose, onSaved }: Props) {
                 : <Text style={st.primaryBtnText}>💾 Salvar no Prontuário</Text>
               }
             </TouchableOpacity>
-            <TouchableOpacity onPress={sendWhatsApp} style={st.waBtn}>
-              <Text style={st.waBtnText}>💬 WhatsApp</Text>
-            </TouchableOpacity>
+            {patient.phone ? (
+              <TouchableOpacity onPress={sendWhatsApp} style={st.waBtn}>
+                <Text style={st.waBtnText}>💬 WhatsApp</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={st.noPhoneBox}>
+                <Text style={st.noPhoneText}>Sem telefone cadastrado</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity onPress={() => setStep('select')} style={[st.secondaryBtn, { marginTop: 8 }]}>
@@ -389,9 +395,15 @@ export function ExamRequestPanel({ patient, onClose, onSaved }: Props) {
         <Text style={st.doneTitle}>Pedido salvo!</Text>
         <Text style={st.doneHint}>Registrado no prontuário do paciente.</Text>
 
-        <TouchableOpacity onPress={sendWhatsApp} style={[st.waBtn, { marginTop: 20, paddingHorizontal: 28 }]}>
-          <Text style={st.waBtnText}>💬 Enviar por WhatsApp</Text>
-        </TouchableOpacity>
+        {patient.phone ? (
+          <TouchableOpacity onPress={sendWhatsApp} style={[st.waBtn, { marginTop: 20, paddingHorizontal: 28 }]}>
+            <Text style={st.waBtnText}>💬 Enviar por WhatsApp</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[st.noPhoneBox, { marginTop: 20 }]}>
+            <Text style={st.noPhoneText}>Sem telefone cadastrado</Text>
+          </View>
+        )}
 
         <TouchableOpacity
           onPress={() => { setStep('select'); setSelectedExam(null); setFields({}); setPreview(''); }}
@@ -448,6 +460,8 @@ const st = StyleSheet.create({
   actionRow:  { flexDirection: 'row', gap: 8 },
   waBtn:      { backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 13, borderRadius: 10, alignItems: 'center' },
   waBtnText:  { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  noPhoneBox: { paddingHorizontal: 16, paddingVertical: 13, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' },
+  noPhoneText:{ color: '#64748B', fontSize: 12, fontStyle: 'italic' },
 
   // Done
   doneTitle:  { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginTop: 12 },

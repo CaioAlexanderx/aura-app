@@ -24,13 +24,14 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import {
   Modal, View, Text, Pressable, StyleSheet, ActivityIndicator,
-  Image, Linking, Platform, ScrollView, TextInput,
+  Image, Platform, ScrollView, TextInput,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
+import { openWhatsApp } from "@/utils/whatsapp";
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -271,14 +272,8 @@ export function ConsentCollectModal({
   function handleWhatsApp() {
     if (!url || !selectedTpl) return;
     const greeting = patientName ? `, ${patientName}` : "";
-    const msg = encodeURIComponent(
-      `Ola${greeting}! Por favor leia e assine o termo de consentimento para "${selectedTpl.title}":\n\n${url}\n\nLink valido por 10 minutos.`
-    );
-    const phone = (patientPhone || "").replace(/\D/g, "");
-    const wa = phone
-      ? `https://wa.me/55${phone}?text=${msg}`
-      : `https://wa.me/?text=${msg}`;
-    Linking.openURL(wa).catch(() => {});
+    const text = `Ola${greeting}! Por favor leia e assine o termo de consentimento para "${selectedTpl.title}":\n\n${url}\n\nLink valido por 10 minutos.`;
+    openWhatsApp(patientPhone, text);
   }
 
   // ── Templates agrupados por categoria ──
@@ -509,10 +504,16 @@ export function ConsentCollectModal({
             <Icon name="copy" size={14} color={Colors.ink} />
             <Text style={s.btnGhostText}>{copied ? "Copiado!" : "Copiar"}</Text>
           </Pressable>
-          <Pressable onPress={handleWhatsApp} style={[s.btn, s.btnWhatsApp]}>
-            <Icon name="message" size={14} color="#fff" />
-            <Text style={s.btnPrimaryText}>WhatsApp</Text>
-          </Pressable>
+          {patientPhone ? (
+            <Pressable onPress={handleWhatsApp} style={[s.btn, s.btnWhatsApp]}>
+              <Icon name="whatsapp" size={14} color="#fff" />
+              <Text style={s.btnPrimaryText}>WhatsApp</Text>
+            </Pressable>
+          ) : (
+            <View style={[s.btn, s.btnNoPhone]}>
+              <Text style={s.noPhoneText}>Sem telefone cadastrado</Text>
+            </View>
+          )}
         </View>
 
         <Text style={s.note}>
@@ -711,6 +712,8 @@ const s = StyleSheet.create({
   },
   btnGhostText: { color: Colors.ink, fontSize: 13, fontWeight: "600" },
   btnWhatsApp: { backgroundColor: "#25D366" },
+  btnNoPhone: { backgroundColor: "transparent", borderWidth: 1, borderColor: Colors.border },
+  noPhoneText: { fontSize: 12, color: Colors.ink3, fontStyle: "italic" },
   btnClose: {
     backgroundColor: "transparent",
     borderWidth: 1, borderColor: Colors.border,

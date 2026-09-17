@@ -19,6 +19,8 @@ import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { SignatureRequestModal } from "./SignatureRequestModal";
+import { ContactActions } from "@/components/dental/ContactActions";
+import { confirmationText } from "@/utils/whatsapp";
 
 interface Props {
   visible: boolean;
@@ -49,7 +51,8 @@ const STATUS_CHIPS: Array<{ value: string; label: string; color: string }> = [
 ];
 
 export function AppointmentDetailModal({ visible, appointmentId, onClose }: Props) {
-  const cid = useAuthStore().company?.id;
+  const company = useAuthStore().company;
+  const cid = company?.id;
   const qc = useQueryClient();
   const router = useRouter();
   const [signatureOpen, setSignatureOpen] = useState(false);
@@ -172,7 +175,24 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose }: Prop
           ) : (
             <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
               <Row label="Paciente" value={appt.patient_name || "—"} />
-              <Row label="Telefone" value={appt.patient_phone || "—"} />
+              <View style={s.row}>
+                <Text style={s.rowLabel}>Telefone</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+                  <Text style={s.rowValue}>{appt.patient_phone || "—"}</Text>
+                  {appt.patient_phone && (
+                    <ContactActions
+                      phone={appt.patient_phone}
+                      whatsappText={appt.scheduled_at ? confirmationText({
+                        patientName: appt.patient_name || "",
+                        clinicName: company?.name,
+                        when: new Date(appt.scheduled_at),
+                      }) : undefined}
+                      variant="compact"
+                      contactName={appt.patient_name}
+                    />
+                  )}
+                </View>
+              </View>
               <Row label="Data / hora" value={formatDateTime(appt.scheduled_at)} />
               <Row label="Duração" value={`${appt.duration_min || 60} min`} />
               {appt.chief_complaint && <Row label="Queixa" value={appt.chief_complaint} />}

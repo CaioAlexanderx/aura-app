@@ -36,6 +36,9 @@ export function AutomationConfig() {
   });
 
   var cfg = (configData as any)?.config || {};
+  // Backend devolve config.whatsapp_connected (Aura-backend#723) — ausencia = false
+  // (mesma logica de "sem WhatsApp conectado" ate a integracao existir).
+  var waConnected = !!(cfg.whatsapp_connected ?? (configData as any)?.whatsapp_connected);
 
   function toggleField(field: string, value: boolean) {
     saveMut.mutate({ [field]: value });
@@ -59,7 +62,15 @@ export function AutomationConfig() {
       {tab === 'config' && (
         <View style={z.configList}>
           {loadingCfg && <ActivityIndicator color={Colors.violet3} style={{ padding: 20 }} />}
-          {!loadingCfg && (
+          {!loadingCfg && !waConnected && (
+            <View style={z.noWaBox}>
+              <Icon name="whatsapp" size={16} color={Colors.ink3} />
+              <Text style={z.noWaText}>
+                Envio automático pelo WhatsApp ainda não está disponível. Use o botão de WhatsApp em cada paciente.
+              </Text>
+            </View>
+          )}
+          {!loadingCfg && waConnected && (
             <>
               <View style={z.configItem}>
                 <View style={{ flex: 1 }}>
@@ -144,6 +155,8 @@ var z = StyleSheet.create({
   tabText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
   configList: { gap: 3 },
+  noWaBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: Colors.bg3, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  noWaText: { flex: 1, fontSize: 12, color: Colors.ink3, lineHeight: 18 },
   configItem: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, marginBottom: 6, gap: 12 },
   configLabel: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   configHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },

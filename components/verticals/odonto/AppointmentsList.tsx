@@ -18,6 +18,8 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
+import { ContactActions } from "@/components/dental/ContactActions";
+import { confirmationText } from "@/utils/whatsapp";
 
 type Period = "today" | "7d" | "30d" | "future" | "all";
 type StatusFilter = "all" | "agendado" | "em_atendimento" | "concluido" | "cancelado";
@@ -46,7 +48,8 @@ function periodDates(p: Period): { from?: string; to?: string } {
 }
 
 export function AppointmentsList() {
-  const cid = useAuthStore().company?.id;
+  const company = useAuthStore().company;
+  const cid = company?.id;
   const qc = useQueryClient();
   const router = useRouter();
 
@@ -157,6 +160,17 @@ export function AppointmentsList() {
                 </View>
               </View>
               <View style={s.actions}>
+                <ContactActions
+                  phone={a.patient_phone}
+                  whatsappText={confirmationText({
+                    patientName: a.patient_name || "",
+                    clinicName: company?.name,
+                    when: new Date(a.scheduled_at),
+                  })}
+                  variant="icon"
+                  showCall={false}
+                  contactName={a.patient_name}
+                />
                 {(a.status === "agendado" || a.status === "aprovado" || a.status === "em_atendimento") && (
                   <Pressable
                     onPress={() => router.push(`/dental/consulta/${a.id}` as any)}
