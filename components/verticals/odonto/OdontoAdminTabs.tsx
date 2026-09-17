@@ -127,7 +127,14 @@ export function EsperaTab() {
     enabled: !!cid, staleTime: 15000,
   });
   if (isLoading) return <Loader />;
-  var entries = ((data as any)?.entries) || [];
+  // Backend (dentalAdvanced.js GET /waitlist) devolve { waitlist: [...] },
+  // nao { entries: [...] } — a chave errada fazia a lista ficar sempre
+  // vazia. patient_full_name (join com customers) e mais confiavel que
+  // patient_name (texto solto da linha) quando o paciente tem cadastro.
+  var rawEntries = ((data as any)?.waitlist) || [];
+  var entries = rawEntries.map(function(e: any) {
+    return { ...e, patient_name: e.patient_full_name || e.patient_name };
+  });
   return <ListaEsperaDental entries={entries} />;
 }
 
