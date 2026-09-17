@@ -60,3 +60,17 @@ export function useDentalPersona(): DentalPersona {
 export function dentalPersonaLabel(persona: DentalPersona): string {
   return PERSONA_LABELS[persona];
 }
+
+// ============================================================
+// Decisao 2026-09-16 (QA odonto — dentista solo):
+// Dona que atende sozinha (persona "gestor" + exatamente 1
+// dentista ativo cadastrado na clinica, GET .../dental/practitioners)
+// tambem enxerga o painel de proximos atendimentos, acima do
+// bloco de faturamento, com a tagline de dentista. Clinica com
+// 2+ dentistas ativos mantem a visao de gestor pura.
+// Funcao pura: recebe a persona ja detectada + contagem de
+// dentistas ativos (practitioners.filter(p => p.is_active).length).
+// ============================================================
+export function isSoloDentistManager(persona: DentalPersona, activeDentistCount: number): boolean {
+  return persona === "gestor" && activeDentistCount === 1;
+}
