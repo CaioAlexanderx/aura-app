@@ -20,6 +20,7 @@
 // ou trocar foto. Persistido no submit junto com outros campos.
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
+import { todayLocalString } from "@/utils/dateOnly";
 import {
   Animated, Modal, View, Text, TextInput, Pressable, ScrollView,
   StyleSheet, ActivityIndicator, Platform, useWindowDimensions, Image,
@@ -91,13 +92,6 @@ function isoToBR(iso?: string | null): string {
 }
 // Hoje no fuso local, formato YYYY-MM-DD — comparavel lexicograficamente com o
 // ISO de brDateToISO (mesmo formato largura-fixa).
-function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export function PatientFormModal({ visible, onClose, onSaved, mode = "create", patient, initialName }: Props) {
   const cid = useAuthStore().company?.id;
@@ -327,7 +321,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
     if (birthDateBR.trim()) {
       const iso = brDateToISO(birthDateBR);
       if (!iso) errors.birthDate = "Data de nascimento inválida (use DD/MM/AAAA)";
-      else if (iso > todayISO()) errors.birthDate = "Data de nascimento não pode ser no futuro";
+      else if (iso > todayLocalString()) errors.birthDate = "Data de nascimento não pode ser no futuro";
     }
     setFieldErrors(errors);
 
