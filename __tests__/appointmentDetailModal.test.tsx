@@ -107,7 +107,7 @@ const one = (t: renderer.ReactTestRenderer, id: string) => t.root.findAllByProps
 const all = (t: renderer.ReactTestRenderer, id: string) => t.root.findAllByProps({ testID: id }, { deep: false });
 /** O Modal aberto renderiza a View do cartão com esse testID. */
 const shown = (t: renderer.ReactTestRenderer, id: string) =>
-  t.root.findAll((n) => n.type === "View" && n.props.testID === id).length > 0;
+  t.root.findAll((n) => (n.type as unknown) === "View" && n.props.testID === id).length > 0;
 async function press(t: renderer.ReactTestRenderer, id: string) {
   await act(async () => {
     one(t, id).props.onPress();
