@@ -116,8 +116,8 @@ function DayBars({
   windowTo: number | null;
   onlineDays: number[] | null; // weekdays 1..7, null = todos que a clínica abre
 }) {
-  const pct = (m: number) => `${(((m - AXIS_START) / (AXIS_END - AXIS_START)) * 100).toFixed(2)}%`;
-  const wpct = (a: number, b: number) => `${(((b - a) / (AXIS_END - AXIS_START)) * 100).toFixed(2)}%`;
+  const pct = (m: number): `${number}%` => `${(((m - AXIS_START) / (AXIS_END - AXIS_START)) * 100).toFixed(2)}%` as `${number}%`;
+  const wpct = (a: number, b: number): `${number}%` => `${(((b - a) / (AXIS_END - AXIS_START)) * 100).toFixed(2)}%` as `${number}%`;
   return (
     <View style={{ marginTop: 10 }}>
       {clinicHours.map((day) => {
