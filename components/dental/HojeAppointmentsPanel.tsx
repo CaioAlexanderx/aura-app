@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { DentalColors } from "@/constants/dental-tokens";
 import { ContactActions } from "@/components/dental/ContactActions";
-import { confirmationText } from "@/utils/whatsapp";
+import { appointmentMessage } from "@/utils/whatsapp";
+import { dentalStatus } from "@/constants/dentalStatus";
+import { todayLocalString } from "@/utils/dateOnly";
+import { CancelAppointmentModal } from "@/components/verticals/odonto/CancelAppointmentModal";
 
 // ============================================================
 // HojeAppointmentsPanel — Lista de proximos atendimentos do dia
@@ -17,6 +20,8 @@ import { confirmationText } from "@/utils/whatsapp";
 // FIX-11 (2026-05-09): STATUS_META — escala canonica:
 //   Azul=Agendado, Laranja=Confirmado, Amarelo=Em atendimento, Verde=Concluido.
 // FIX-17 (2026-05-09): botao Cancelar inline por linha com confirmacao.
+// Mockup agenda (16/09/2026): cores de constants/dentalStatus; cancelar
+//   passa pelo CancelAppointmentModal (motivo obrigatorio, nada apagado).
 // ============================================================
 
 interface DentalAppointment {
@@ -28,35 +33,15 @@ interface DentalAppointment {
   scheduled_at: string;
   duration_min: number;
   chief_complaint?: string;
-  status: "agendado" | "confirmado" | "avaliacao" | "aprovado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
+  status: "agendado" | "confirmado" | "paciente_consultorio" | "avaliacao" | "aprovado" | "em_atendimento" | "concluido" | "faltou" | "falta_justificada" | "cancelado";
   chair?: string;
   professional_name?: string;
   professional_color?: string;
 }
 
-// FIX-11: escala canonica de cores
-const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  agendado:       { label: "Agendado",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
-  confirmado:     { label: "Confirmado",      color: "#F97316", bg: "rgba(249,115,22,0.14)"  },
-  avaliacao:      { label: "Avaliação",       color: "#06B6D4", bg: "rgba(6,182,212,0.14)"   },
-  aprovado:       { label: "Aprovado",        color: "#A78BFA", bg: "rgba(167,139,250,0.14)" },
-  em_atendimento: { label: "Em atendimento",  color: "#F59E0B", bg: "rgba(245,158,11,0.14)"  },
-  concluido:      { label: "Concluido",       color: "#10B981", bg: "rgba(16,185,129,0.14)"  },
-  faltou:         { label: "Faltou",          color: "#EF4444", bg: "rgba(239,68,68,0.14)"   },
-  cancelado:      { label: "Cancelado",       color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
-};
-
-const VISIBLE_STATUSES = new Set(["agendado", "confirmado", "avaliacao", "aprovado", "em_atendimento"]);
-const CANCELABLE_STATUSES = new Set(["agendado", "confirmado", "avaliacao", "aprovado"]);
+const VISIBLE_STATUSES = new Set(["agendado", "confirmado", "paciente_consultorio", "avaliacao", "aprovado", "em_atendimento"]);
+const CANCELABLE_STATUSES = new Set(["agendado", "confirmado", "paciente_consultorio", "avaliacao", "aprovado"]);
 const MAX_ROWS = 6;
-
-function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", {
@@ -75,9 +60,8 @@ export function HojeAppointmentsPanel() {
   const company = useAuthStore().company;
   const cid = company?.id;
   const router = useRouter();
-  const qc = useQueryClient();
-  const today = todayISO();
-  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const today = todayLocalString();
+  const [cancelTarget, setCancelTarget] = useState<DentalAppointment | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["dental-hoje-appointments", cid, today],
@@ -87,19 +71,6 @@ export function HojeAppointmentsPanel() {
       ),
     enabled: !!cid,
     staleTime: 30000,
-  });
-
-  const cancelMut = useMutation({
-    mutationFn: (id: string) =>
-      request(`/companies/${cid}/dental/appointments/${id}`, {
-        method: "PATCH",
-        body: { status: "cancelado" },
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dental-hoje-appointments"] });
-      qc.invalidateQueries({ queryKey: ["dental-agenda"] });
-      setCancelConfirm(null);
-    },
   });
 
   const upcoming = useMemo(() => {
@@ -162,13 +133,11 @@ export function HojeAppointmentsPanel() {
       {!isLoading && !error && visible.length > 0 && (
         <View>
           {visible.map((a) => {
-            const meta = STATUS_META[a.status] || STATUS_META.agendado;
-            const isCancelConfirming = cancelConfirm === a.id;
-            const canceling = cancelMut.isPending && cancelConfirm === a.id;
+            const meta = dentalStatus(a.status);
             return (
               <View key={a.id}>
                 {/* Main row */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: isCancelConfirming ? 0 : 1, borderBottomColor: DentalColors.border }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: DentalColors.border }}>
                   <Text style={{ width: 46, fontSize: 13, fontWeight: "700", color: DentalColors.cyan, fontFamily: "JetBrains Mono, monospace" as any }}>
                     {formatTime(a.scheduled_at)}
                   </Text>
@@ -184,14 +153,15 @@ export function HojeAppointmentsPanel() {
                   </View>
                   <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: meta.bg }}>
                     <Text style={{ fontSize: 9, fontWeight: "700", color: meta.color, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                      {meta.label}
+                      {meta.short}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
                     {/* WhatsApp — confirmação, sempre visível (sem hover-reveal) */}
                     <ContactActions
                       phone={a.patient_phone}
-                      whatsappText={confirmationText({
+                      whatsappText={appointmentMessage({
+                        status: a.status,
                         patientName: a.patient_name || "",
                         clinicName: company?.name,
                         when: new Date(a.scheduled_at),
@@ -229,9 +199,9 @@ export function HojeAppointmentsPanel() {
                       </Pressable>
                     )}
                     {/* Cancelar — mostra botão ✕ para statuses canceláveis */}
-                    {CANCELABLE_STATUSES.has(a.status) && !isCancelConfirming && (
+                    {CANCELABLE_STATUSES.has(a.status) && (
                       <Pressable
-                        onPress={() => setCancelConfirm(a.id)}
+                        onPress={() => setCancelTarget(a)}
                         style={{ backgroundColor: "rgba(239,68,68,0.08)", borderWidth: 1, borderColor: "rgba(239,68,68,0.25)", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 }}
                         accessibilityLabel={`Cancelar consulta de ${a.patient_name || "paciente"}`}
                       >
@@ -240,30 +210,6 @@ export function HojeAppointmentsPanel() {
                     )}
                   </View>
                 </View>
-                {/* Confirmação de cancelamento inline */}
-                {isCancelConfirming && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: DentalColors.border, backgroundColor: "rgba(239,68,68,0.04)", borderRadius: 8, marginBottom: 2 }}>
-                    <Text style={{ flex: 1, fontSize: 12, color: "#EF4444" }}>
-                      Cancelar{" "}<Text style={{ fontWeight: "700" }}>{a.patient_name}</Text>?
-                    </Text>
-                    <Pressable
-                      onPress={() => cancelMut.mutate(a.id)}
-                      disabled={canceling}
-                      style={{ backgroundColor: "#EF4444", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 }}
-                    >
-                      {canceling
-                        ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={{ fontSize: 12, color: "#fff", fontWeight: "700" }}>Confirmar</Text>
-                      }
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setCancelConfirm(null)}
-                      style={{ backgroundColor: DentalColors.surface, borderWidth: 1, borderColor: DentalColors.border, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 }}
-                    >
-                      <Text style={{ fontSize: 12, color: DentalColors.ink2, fontWeight: "600" }}>Não</Text>
-                    </Pressable>
-                  </View>
-                )}
               </View>
             );
           })}
@@ -275,6 +221,13 @@ export function HojeAppointmentsPanel() {
           </Pressable>
         </View>
       )}
+
+      <CancelAppointmentModal
+        visible={!!cancelTarget}
+        appointment={cancelTarget}
+        onBack={() => setCancelTarget(null)}
+        onCancelled={() => setCancelTarget(null)}
+      />
     </View>
   );
 }

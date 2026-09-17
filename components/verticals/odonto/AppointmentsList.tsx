@@ -8,8 +8,11 @@
 //
 // PR20 (2026-04-27): botao "▶ Iniciar" pra agendamento/aprovado/
 // em_atendimento — leva direto pra /dental/consulta/[id].
+// Mockup agenda (16/09/2026): filtro "Amanhã · a confirmar" abre a rotina
+// Confirmar amanhã (ConfirmTomorrowView); cores/rótulos de status vêm de
+// constants/dentalStatus.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Modal } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -20,21 +23,12 @@ import { request } from "@/services/api";
 import { toDateOnlyString } from "@/utils/dateOnly";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { ContactActions } from "@/components/dental/ContactActions";
-import { confirmationText } from "@/utils/whatsapp";
+import { appointmentMessage } from "@/utils/whatsapp";
+import { dentalStatus } from "@/constants/dentalStatus";
+import { ConfirmTomorrowView, useTomorrowAppointments } from "@/components/verticals/odonto/ConfirmTomorrowView";
 
-type Period = "today" | "7d" | "30d" | "future" | "all";
-type StatusFilter = "all" | "agendado" | "em_atendimento" | "concluido" | "cancelado";
-
-const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  agendado:       { label: "Agendado",        color: "#06B6D4", bg: "rgba(6,182,212,0.12)" },
-  avaliacao:      { label: "Em avaliação",    color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-  aprovado:       { label: "Aprovado",        color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-  em_atendimento: { label: "Em atendimento",  color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
-  concluido:      { label: "Concluído",       color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-  cancelado:      { label: "Cancelado",       color: "#9CA3AF", bg: "rgba(156,163,175,0.08)" },
-  faltou:         { label: "Faltou",          color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-  confirmado:     { label: "Confirmado",      color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-};
+type Period = "today" | "7d" | "30d" | "future" | "all" | "confirm_tomorrow";
+type StatusFilter = "all" | "agendado" | "confirmado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
 
 function periodDates(p: Period): { from?: string; to?: string } {
   const today = new Date();
@@ -48,16 +42,33 @@ function periodDates(p: Period): { from?: string; to?: string } {
   return {};
 }
 
-export function AppointmentsList() {
+interface Props {
+  /** Muda a cada clique no atalho "Confirmar amanhã" do cabeçalho: abre essa visão. */
+  confirmTomorrowSignal?: number;
+}
+
+export function AppointmentsList({ confirmTomorrowSignal }: Props = {}) {
   const company = useAuthStore().company;
   const cid = company?.id;
   const qc = useQueryClient();
   const router = useRouter();
 
-  const [period, setPeriod] = useState<Period>("future");
+  const [period, setPeriod] = useState<Period>(confirmTomorrowSignal ? "confirm_tomorrow" : "future");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailSeed, setDetailSeed] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { pending: pendingTomorrow } = useTomorrowAppointments();
+  const confirmMode = period === "confirm_tomorrow";
+
+  useEffect(() => {
+    if (confirmTomorrowSignal) setPeriod("confirm_tomorrow");
+  }, [confirmTomorrowSignal]);
+
+  function openDetail(a: any) {
+    setDetailSeed(a);
+    setDetailId(a.id);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["dental-appointments-list", cid, period, status],
@@ -69,7 +80,7 @@ export function AppointmentsList() {
       if (status !== "all") qs.append("status", status);
       return request(`/companies/${cid}/dental/appointments?${qs.toString()}`);
     },
-    enabled: !!cid,
+    enabled: !!cid && !confirmMode,
     staleTime: 15000,
   });
 
@@ -99,11 +110,8 @@ export function AppointmentsList() {
     { v: "all",   l: "Todos" },
   ];
   const statusOpts: Array<{ v: StatusFilter; l: string }> = [
-    { v: "all",            l: "Todos" },
-    { v: "agendado",       l: "Agendado" },
-    { v: "em_atendimento", l: "Em atendimento" },
-    { v: "concluido",      l: "Concluído" },
-    { v: "cancelado",      l: "Cancelado" },
+    { v: "all", l: "Todos" },
+    ...(["agendado", "confirmado", "em_atendimento", "concluido", "faltou", "cancelado"] as const).map((k) => ({ v: k, l: dentalStatus(k).label })),
   ];
 
   return (
@@ -111,6 +119,15 @@ export function AppointmentsList() {
       <View style={s.container}>
         {/* Filtros */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+          <Pressable
+            testID="list-confirm-tomorrow"
+            onPress={() => setPeriod("confirm_tomorrow")}
+            style={[s.pill, confirmMode && s.pillActive, { flexDirection: "row", alignItems: "center", gap: 6 }]}
+          >
+            <Icon name="check" size={12} color={confirmMode ? "#fff" : Colors.ink3} />
+            <Text style={[s.pillText, confirmMode && s.pillTextActive]}>Amanhã · a confirmar</Text>
+            {pendingTomorrow > 0 && <View style={s.badge}><Text style={s.badgeText}>{pendingTomorrow}</Text></View>}
+          </Pressable>
           {periodOpts.map(o => (
             <Pressable key={o.v} onPress={() => setPeriod(o.v)} style={[s.pill, period === o.v && s.pillActive]}>
               <Text style={[s.pillText, period === o.v && s.pillTextActive]}>{o.l}</Text>
@@ -118,6 +135,9 @@ export function AppointmentsList() {
           ))}
         </ScrollView>
 
+        {confirmMode && <ConfirmTomorrowView onOpen={openDetail} />}
+
+        {!confirmMode && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
           {statusOpts.map(o => (
             <Pressable key={o.v} onPress={() => setStatus(o.v)} style={[s.pillSm, status === o.v && s.pillSmActive]}>
@@ -125,23 +145,24 @@ export function AppointmentsList() {
             </Pressable>
           ))}
         </ScrollView>
+        )}
 
         {/* Summary */}
-        <Text style={s.summary}>{appointments.length} agendamento{appointments.length !== 1 ? "s" : ""}</Text>
+        {!confirmMode && <Text style={s.summary}>{appointments.length} agendamento{appointments.length !== 1 ? "s" : ""}</Text>}
 
         {/* Lista */}
-        {isLoading && <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>}
+        {!confirmMode && isLoading && <View style={{ padding: 40, alignItems: "center" }}><ActivityIndicator color={Colors.violet3} /></View>}
 
-        {!isLoading && appointments.length === 0 && (
+        {!confirmMode && !isLoading && appointments.length === 0 && (
           <View style={s.empty}>
             <Icon name="calendar" size={24} color={Colors.ink3} />
             <Text style={s.emptyText}>Nenhum agendamento no período selecionado</Text>
           </View>
         )}
 
-        {!isLoading && appointments.map((a: any) => {
+        {!confirmMode && !isLoading && appointments.map((a: any) => {
           const { date, time } = formatDateTime(a.scheduled_at);
-          const meta = STATUS_META[a.status] || STATUS_META.agendado;
+          const meta = dentalStatus(a.status);
           return (
             <View key={a.id} style={s.card}>
               <View style={s.cardLeft}>
@@ -156,14 +177,15 @@ export function AppointmentsList() {
                   </Text>
                   {a.chief_complaint && <Text style={s.complaint}>{a.chief_complaint}</Text>}
                 </View>
-                <View style={[s.statusBadge, { backgroundColor: meta.bg }]}>
+                <View style={[s.statusBadge, { backgroundColor: meta.bg }, meta.dashed && { borderWidth: 1, borderStyle: "dashed", borderColor: meta.color }]}>
                   <Text style={[s.statusText, { color: meta.color }]}>{meta.label}</Text>
                 </View>
               </View>
               <View style={s.actions}>
                 <ContactActions
                   phone={a.patient_phone}
-                  whatsappText={confirmationText({
+                  whatsappText={appointmentMessage({
+                    status: a.status,
                     patientName: a.patient_name || "",
                     clinicName: company?.name,
                     when: new Date(a.scheduled_at),
@@ -181,7 +203,7 @@ export function AppointmentsList() {
                     <Text style={[s.btnText, { color: "#fff" }]}>▶ Iniciar</Text>
                   </Pressable>
                 )}
-                <Pressable onPress={() => setDetailId(a.id)} style={[s.btn, s.btnGhost]}>
+                <Pressable onPress={() => openDetail(a)} style={[s.btn, s.btnGhost]}>
                   <Icon name="eye" size={12} color={Colors.ink} />
                   <Text style={s.btnText}>Ver</Text>
                 </Pressable>
@@ -200,7 +222,8 @@ export function AppointmentsList() {
       <AppointmentDetailModal
         visible={!!detailId}
         appointmentId={detailId}
-        onClose={() => setDetailId(null)}
+        seed={detailSeed}
+        onClose={() => { setDetailId(null); setDetailSeed(null); }}
       />
 
       {/* Confirm delete */}
@@ -240,6 +263,8 @@ const s = StyleSheet.create({
   pillActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
   pillText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   pillTextActive: { color: "#fff" },
+  badge: { minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: "#fbbf24", alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: 11, fontWeight: "800", color: "#1a1200" },
   pillSm: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, backgroundColor: "transparent" },
   pillSmActive: { backgroundColor: Colors.violet3 || "#a78bfa", borderColor: Colors.violet3 || "#a78bfa" },
   pillSmText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },

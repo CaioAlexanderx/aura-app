@@ -1,20 +1,26 @@
 // ============================================================
-// AURA. — D-UNIFY: Modal de novo agendamento odonto
-// POST /companies/:id/dental/appointments
+// AURA. — D-UNIFY: Modal de novo agendamento / editar agendamento odonto
+// POST  /companies/:id/dental/appointments
+// PATCH /companies/:id/dental/appointments/:aid   (modo edição)
 //
 // Melhorias:
-// - Modal centrado com fundo desfocado (fade + backdrop blur web)
 // - Cadastro rápido de paciente integrado
-// - Seletor de duração manual ao lado das pills
-// - Label "Observações" em vez de "Queixa principal"
-// - Formulário compacto (padding 14, gap 8)
-// #13 (2026-05-09): busca de paciente só dispara com 2+ chars;
+// - #13 (2026-05-09): busca de paciente só dispara com 2+ chars;
 //   lista não exibida antes de digitar (privacidade).
+// - Mockup "Agenda Odonto" (16/09/2026, aba D):
+//   * mesmo modal para Novo e Editar (prop `appointment`);
+//   * conflito aparece logo abaixo da hora (mesma regra do backend, com os
+//     agendamentos do dia) com "Usar HH:MM · próximo livre"; salvar assim
+//     vira "Salvar como encaixe";
+//   * "antes → agora" e "Avisar no WhatsApp" quando data/hora mudam;
+//   * remarcar falta/justificada volta o status para agendado; cancelado é
+//     terminal no backend, então a remarcação cria um agendamento novo;
+//   * uma cadeira ativa → chip fixo; várias → seletor;
+//   * no celular (< 768 px) vira folha de baixo com Salvar sempre visível.
 // ============================================================
-import { useState, useEffect, createElement } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
-import { Colors } from "@/constants/colors";
-import { DentalForm } from "@/constants/dental-tokens";
+import { useState, useEffect, useMemo, createElement } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
+import { IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,50 +28,115 @@ import { request } from "@/services/api";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 import { localDateTimeToISO } from "@/utils/mask";
 import { toDateOnlyString, todayLocalString } from "@/utils/dateOnly";
+import { openWhatsApp, rescheduleText } from "@/utils/whatsapp";
+import { notify } from "@/utils/webAlert";
+import {
+  conflictLabel, findConflicts, hhmm, localDayBoundsISO, nextFreeSlot, rescheduleMode, shortDayTime, slotSummary, whenLine,
+} from "@/utils/dentalAgenda";
+import {
+  APPOINTMENT_LIST_KEYS, apiErrorMessage, useDentalAppointmentMutation, type AppointmentPatch,
+} from "@/hooks/useDentalAppointmentMutation";
 import { NewPatientModal } from "./NewPatientModal";
+import { AC, AgendaBtn, AgendaModalFrame, CheckRow, Chip, FieldLabel, Hint, useIsSheet } from "./agendaModalKit";
+
+export interface EditableAppointment {
+  id: string;
+  patient_id?: string | null;
+  customer_id?: string | null;
+  patient_name?: string | null;
+  patient_phone?: string | null;
+  allergies?: string | null;
+  scheduled_at: string;
+  duration_min?: number | null;
+  practitioner_id?: string | null;
+  chief_complaint?: string | null;
+  status?: string | null;
+}
+
+export interface PatientSeed {
+  id: string;
+  name: string;
+  phone?: string | null;
+  allergies?: string | null;
+}
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   initialDateTime?: string;
+  /** Modo edição/remarcação. */
+  appointment?: EditableAppointment | null;
+  /** Paciente pré-escolhido (ex.: "Agendar retorno"). */
+  initialPatient?: PatientSeed | null;
+  initialNote?: string;
+  /** Depois de salvar (id do agendamento salvo/criado). */
+  onSaved?: (saved: { id: string }) => void;
 }
 
-export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props) {
-  const cid = useAuthStore().company?.id;
-  const qc = useQueryClient();
+const DURATIONS = [30, 45, 60, 90];
+const pad = (n: number) => String(n).padStart(2, "0");
+const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
+const firstName = (n?: string | null) => (n || "").trim().split(/\s+/)[0] || "o paciente";
 
-  const [patientId, setPatientId] = useState<string | null>(null);
-  const [patientName, setPatientName] = useState("");
+export function NewAppointmentModal({ visible, onClose, initialDateTime, appointment, initialPatient, initialNote, onSaved }: Props) {
+  const company = useAuthStore().company;
+  const cid = company?.id;
+  const qc = useQueryClient();
+  const sheet = useIsSheet();
+  const isEdit = !!appointment;
+
+  const [patient, setPatient] = useState<PatientSeed | null>(null);
   const [search, setSearch] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [duration, setDuration] = useState("60");
+  const [duration, setDuration] = useState(60);
   const [customDuration, setCustomDuration] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [practitionerId, setPractitionerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showNewPatient, setShowNewPatient] = useState(false);
-
-  const webBlur = Platform.OS === "web" ? { backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" } as any : {};
+  const [notifyWa, setNotifyWa] = useState(true);
 
   useEffect(() => {
     if (!visible) return;
+    setError(null);
+    if (appointment) {
+      const d = new Date(appointment.scheduled_at);
+      setDate(toDateOnlyString(d));
+      setTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+      const dur = appointment.duration_min || 60;
+      setDuration(dur);
+      setCustomDuration(DURATIONS.includes(dur) ? "" : String(dur));
+      setChiefComplaint(appointment.chief_complaint || "");
+      setPractitionerId(appointment.practitioner_id || null);
+      setPatient({
+        id: String(appointment.customer_id || appointment.patient_id || ""),
+        name: appointment.patient_name || "Paciente",
+        phone: appointment.patient_phone,
+        allergies: appointment.allergies,
+      });
+      setNotifyWa(!!appointment.patient_phone);
+      return;
+    }
+    if (initialPatient) setPatient(initialPatient);
+    if (initialNote) setChiefComplaint(initialNote);
     if (initialDateTime) {
       const d = new Date(initialDateTime);
       setDate(toDateOnlyString(d));
-      setTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+      setTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
     } else {
       // dia local: via toISOString, depois das 21h abria com a data de amanha
       setDate(todayLocalString());
       setTime("09:00");
     }
-  }, [visible, initialDateTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialDateTime, appointment?.id, initialPatient?.id]);
 
   // #13: busca so dispara com 2+ chars
   const { data: patientsData } = useQuery({
     queryKey: ["dental-patients-picker", cid, search],
     queryFn: () => request(`/companies/${cid}/dental/patients?search=${encodeURIComponent(search)}&limit=20`),
-    enabled: !!cid && visible && !patientId && search.trim().length >= 2,
+    enabled: !!cid && visible && !patient && search.trim().length >= 2,
     staleTime: 30000,
   });
 
@@ -81,6 +152,15 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
     enabled: !!cid && visible, staleTime: 30000,
   });
 
+  // Agendamentos do dia escolhido, para avisar do conflito ANTES de salvar.
+  const bounds = localDayBoundsISO(date);
+  const { data: dayData } = useQuery({
+    queryKey: ["dental-agenda-day", cid, date],
+    queryFn: () => request<any>(`/companies/${cid}/dental/agenda?start=${encodeURIComponent(bounds!.start)}&end=${encodeURIComponent(bounds!.end)}`),
+    enabled: !!cid && visible && !!bounds,
+    staleTime: 15000,
+  });
+
   // Monta lista de cadeiras ativas com o practitioner alocado
   const chairOptions: Array<{ idx: number; practitionerId: string; practitionerName: string; label: string }> = [];
   const settings = settingsData?.settings;
@@ -92,211 +172,365 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
       if (!pid) return;
       const p = practitioners.find((x: any) => x.id === pid);
       if (!p) return;
-      chairOptions.push({ idx, practitionerId: pid, practitionerName: p.name, label: `Cadeira ${idx + 1} - ${p.name}` });
+      chairOptions.push({ idx, practitionerId: pid, practitionerName: p.name, label: `Cadeira ${idx + 1} · ${p.name}` });
     });
   }
 
-  // Auto-seleciona primeira cadeira disponivel
+  // Auto-seleciona a primeira cadeira. Na edição só quando há uma cadeira
+  // (o chip é fixo) — com várias, não muda a cadeira de quem já estava marcado.
   useEffect(() => {
-    if (!visible) return;
-    if (!practitionerId && chairOptions.length > 0) {
-      setPractitionerId(chairOptions[0].practitionerId);
-    }
-  }, [visible, chairOptions.length, practitionerId]);
+    if (!visible || practitionerId || chairOptions.length === 0) return;
+    if (isEdit && chairOptions.length > 1) return;
+    setPractitionerId(chairOptions[0].practitionerId);
+  }, [visible, chairOptions.length, practitionerId, isEdit]);
+
+  // ── horário, conflito, próximo livre ──
+  const durationValid = Number.isInteger(duration) && duration >= 5 && duration <= 1440;
+  const scheduledISO = date && /^\d{2}:\d{2}$/.test(time) ? localDateTimeToISO(date, time) : null;
+  const originalAt = appointment ? new Date(appointment.scheduled_at) : null;
+  const newAt = scheduledISO ? new Date(scheduledISO) : null;
+  const moved = !!(originalAt && newAt && originalAt.getTime() !== newAt.getTime());
+  const durChanged = !!(appointment && duration !== (appointment.duration_min || 60));
+  const mode = appointment ? rescheduleMode(appointment.status, moved) : { mode: "create" as const };
+  const selfId = appointment && mode.mode === "patch" ? appointment.id : null;
+
+  const dayList = (dayData as any)?.appointments || [];
+  const target = scheduledISO && durationValid
+    ? { id: selfId, scheduled_at: scheduledISO, duration_min: duration, practitioner_id: practitionerId }
+    : null;
+  const conflicts = useMemo(() => (target ? findConflicts(target, dayList) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scheduledISO, duration, practitionerId, selfId, dayData]);
+  const free = useMemo(() => (target && conflicts.length ? nextFreeSlot(target, dayList) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conflicts]);
 
   function reset() {
-    setPatientId(null); setPatientName(""); setSearch("");
-    setDate(""); setTime(""); setDuration("60"); setCustomDuration(""); setChiefComplaint("");
-    setPractitionerId(null); setError(null);
+    setPatient(null); setSearch("");
+    setDate(""); setTime(""); setDuration(60); setCustomDuration(""); setChiefComplaint("");
+    setPractitionerId(null); setError(null); setNotifyWa(true);
+  }
+
+  function invalidateLists() {
+    for (const k of APPOINTMENT_LIST_KEYS) qc.invalidateQueries({ queryKey: k });
+  }
+
+  function savedMessage(fit: boolean, opened: boolean, verb: "agendada" | "remarcada" | "atualizado") {
+    const who = firstName(patient?.name);
+    const at = newAt ? shortDayTime(newAt) : "";
+    let msg = verb === "atualizado" ? `Agendamento de ${who} atualizado` : `Consulta de ${who} ${verb} para ${at}`;
+    if (fit) msg += " como encaixe";
+    if (opened) msg += " · WhatsApp aberto com o aviso";
+    return msg;
   }
 
   const createMut = useMutation({
-    mutationFn: () => {
-      const scheduledAt = localDateTimeToISO(date, time);
-      return request(`/companies/${cid}/dental/appointments`, {
+    mutationFn: () =>
+      request<any>(`/companies/${cid}/dental/appointments`, {
         method: "POST",
         body: {
-          patient_id: patientId,
-          scheduled_at: scheduledAt,
-          duration_min: parseInt(duration) || 60,
+          patient_id: patient?.id,
+          scheduled_at: scheduledISO,
+          duration_min: duration,
           chief_complaint: chiefComplaint.trim() || null,
           practitioner_id: practitionerId || null,
         },
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dental-agenda"] });
-      reset();
-      onClose();
-    },
-    onError: (err: any) => {
-      setError(err?.message || err?.error || "Erro ao agendar");
-    },
+      }),
   });
+  const patchMut = useDentalAppointmentMutation(cid);
+  const pending = createMut.isPending || patchMut.isPending;
 
   function handleSubmit() {
     setError(null);
-    if (!patientId) return setError("Selecione um paciente");
-    if (!date || !time) return setError("Data e horário são obrigatórios");
-    createMut.mutate();
+    if (!patient?.id) return setError("Selecione um paciente");
+    if (!date || !time || !scheduledISO) return setError("Data e horário são obrigatórios");
+    if (!durationValid) return setError("Duração inválida (mínimo 5 minutos)");
+
+    // WhatsApp abre no mesmo tick do clique (regra do pop-up no web).
+    const wantsWa = !!appointment && moved && notifyWa && !!patient.phone;
+    const openWa = () =>
+      wantsWa && originalAt && newAt
+        ? openWhatsApp(patient.phone, rescheduleText({ patientName: patient.name, clinicName: company?.name, from: originalAt, to: newAt }))
+        : false;
+
+    if (appointment && mode.mode === "patch") {
+      const patch: AppointmentPatch = {};
+      if (moved) patch.scheduled_at = scheduledISO;
+      if (durChanged) patch.duration_min = duration;
+      if ((practitionerId || null) !== (appointment.practitioner_id || null)) patch.practitioner_id = practitionerId || null;
+      if ((chiefComplaint.trim() || null) !== (appointment.chief_complaint || null)) patch.chief_complaint = chiefComplaint.trim() || null;
+      if (mode.status) patch.status = mode.status;
+      if (!Object.keys(patch).length) { onClose(); return; }
+      const opened = openWa();
+      patchMut.mutate(
+        { id: appointment.id, patch, silent: true },
+        {
+          onSuccess: (res) => {
+            const fit = conflicts.length > 0 || !!res?.conflicts?.length;
+            notify(savedMessage(fit, opened, moved ? "remarcada" : "atualizado"));
+            reset();
+            if (onSaved) onSaved({ id: appointment.id }); else onClose();
+          },
+          onError: (err) => setError(apiErrorMessage(err, "Erro ao salvar")),
+        },
+      );
+      return;
+    }
+
+    const opened = openWa();
+    createMut.mutate(undefined, {
+      onSuccess: (res) => {
+        invalidateLists();
+        const fit = conflicts.length > 0 || !!res?.conflicts?.length;
+        notify(savedMessage(fit, opened, appointment ? "remarcada" : "agendada"));
+        const id = res?.appointment?.id;
+        reset();
+        if (id && onSaved) onSaved({ id }); else onClose();
+      },
+      onError: (err: any) => setError(apiErrorMessage(err, "Erro ao agendar")),
+    });
   }
 
   function handleClose() {
-    if (createMut.isPending) return;
+    if (pending) return;
     reset();
     onClose();
   }
 
+  function applyFreeSlot() {
+    if (!free) return;
+    setDate(toDateOnlyString(free));
+    setTime(hhmm(free));
+  }
+
   const patients = (patientsData as any)?.patients || [];
+  const saveLabel = conflicts.length ? "Salvar como encaixe" : appointment && mode.mode === "patch" ? "Salvar alterações" : "Agendar";
+  const endAt = newAt && durationValid ? new Date(newAt.getTime() + duration * 60000) : null;
+
+  const header = (
+    <View style={s.head}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={s.kicker}>{isEdit ? "Editar agendamento" : "Novo agendamento"}</Text>
+        <Text style={s.name} numberOfLines={1}>{patient?.name || "Escolha o paciente"}</Text>
+        {appointment && (
+          <Text style={s.sub}>Marcada para {whenLine(appointment.scheduled_at, appointment.duration_min || 60).replace(/^(Hoje|Amanhã)/, (m) => m.toLowerCase())}</Text>
+        )}
+      </View>
+      <Pressable onPress={handleClose} hitSlop={8} style={s.close} accessibilityLabel="Fechar">
+        <Icon name="x" size={16} color={AC.ink2} />
+      </Pressable>
+    </View>
+  );
+
+  const saveBtn = (
+    <AgendaBtn testID="appt-save" variant="primary" large={sheet} label={saveLabel} loading={pending} onPress={handleSubmit} />
+  );
+  const backBtn = (
+    <AgendaBtn testID="appt-back" variant={sheet ? "ghost" : "outline"} label={sheet ? "Voltar sem salvar" : "Voltar"} onPress={handleClose} disabled={pending} />
+  );
 
   return (
     <>
-      <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={handleClose}>
-        <View style={[s.backdrop, webBlur]}>
-          <View style={s.sheet}>
-            <View style={s.header}>
-              <Text style={s.title}>Novo agendamento</Text>
-              <Pressable onPress={handleClose} hitSlop={8}>
-                <Icon name="close" size={20} color={Colors.ink3} />
-              </Pressable>
+      <AgendaModalFrame
+        visible={visible}
+        onClose={handleClose}
+        sheet={sheet}
+        testID="appt-form-modal"
+        header={header}
+        footer={sheet ? <>{saveBtn}{backBtn}</> : <>{backBtn}<View style={{ flex: 1 }} />{saveBtn}</>}
+      >
+        {/* Paciente */}
+        <FieldLabel first>Paciente</FieldLabel>
+        {patient ? (
+          <View style={s.pcard} testID="appt-patient">
+            <View style={s.avatar}><Text style={s.avatarText}>{initials(patient.name)}</Text></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.pname} numberOfLines={1}>{patient.name}</Text>
+              <Text style={s.pmeta} numberOfLines={2}>
+                {patient.phone || "Sem telefone"}
+                {patient.allergies ? <Text style={s.allergyMini}>{` · Alergia: ${patient.allergies}`}</Text> : null}
+              </Text>
             </View>
-
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.form} showsVerticalScrollIndicator={false}>
-              {/* Paciente */}
-              <Text style={s.sectionLabel}>Paciente *</Text>
-              {patientId ? (
-                <View style={s.selectedPatient}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.selectedPatientName}>{patientName}</Text>
-                    <Text style={s.selectedPatientHint}>Paciente selecionado</Text>
-                  </View>
-                  <Pressable onPress={() => { setPatientId(null); setPatientName(""); }}>
-                    <Text style={s.changeLink}>Trocar</Text>
+            {!isEdit && (
+              <AgendaBtn small label="Trocar" onPress={() => { setPatient(null); setSearch(""); }} />
+            )}
+          </View>
+        ) : (
+          <>
+            <View style={s.searchBox}>
+              <Icon name="search" size={14} color={AC.ink3} />
+              <TextInput style={s.searchInput} placeholder="Buscar por nome, CPF ou telefone" placeholderTextColor={AC.ink3} value={search} onChangeText={setSearch} />
+            </View>
+            {/* #13: gate — so exibe lista com 2+ chars */}
+            {search.trim().length >= 2 ? (
+              <View style={{ gap: 4, marginTop: 6 }}>
+                {patients.slice(0, 8).map((p: any) => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => setPatient({ id: p.id, name: p.full_name || p.name, phone: p.phone, allergies: p.allergies })}
+                    style={s.pitem}
+                  >
+                    <Text style={s.pitemName}>{p.full_name || p.name}</Text>
+                    <Text style={s.pitemMeta}>{p.phone || ""}</Text>
                   </Pressable>
-                </View>
-              ) : (
-                <>
-                  <View style={s.searchBox}>
-                    <Icon name="search" size={14} color={Colors.ink3} />
-                    <TextInput style={s.searchInput} placeholder="Buscar paciente..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-                  </View>
-                  {/* #13: gate — so exibe lista com 2+ chars */}
-                  {search.trim().length >= 2 ? (
-                    <>
-                      {patients.slice(0, 8).map((p: any) => (
-                        <Pressable key={p.id} onPress={() => { setPatientId(p.id); setPatientName(p.full_name || p.name); }} style={s.patientItem}>
-                          <Text style={s.patientItemName}>{p.full_name || p.name}</Text>
-                          <Text style={s.patientItemMeta}>{p.phone || ""}</Text>
-                        </Pressable>
-                      ))}
-                      {patients.length === 0 && (
-                        <>
-                          <Text style={s.hint}>Nenhum paciente encontrado</Text>
-                          <Pressable onPress={() => setShowNewPatient(true)} style={s.quickRegBtn}>
-                            <Icon name="plus" size={13} color="#06B6D4" />
-                            <Text style={s.quickRegText}>Cadastrar "{search}" como novo paciente</Text>
-                          </Pressable>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <Text style={s.hint}>
-                      {search.trim().length === 1 ? "Continue digitando..." : "Digite o nome, CPF ou telefone para buscar"}
-                    </Text>
-                  )}
-                </>
-              )}
-
-              {/* Cadeira */}
-              {chairOptions.length > 0 && (
-                <>
-                  <Text style={[s.sectionLabel, { marginTop: 16 }]}>Cadeira *</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                    {chairOptions.map(opt => (
-                      <Pressable
-                        key={opt.practitionerId}
-                        onPress={() => setPractitionerId(opt.practitionerId)}
-                        style={[s.chairPill, practitionerId === opt.practitionerId && s.chairPillActive]}
-                      >
-                        <Text style={[s.chairPillText, practitionerId === opt.practitionerId && s.chairPillTextActive]}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              )}
-              {chairOptions.length === 0 && (
-                <View style={s.warnBox}>
-                  <Text style={s.warnText}>
-                    Nenhuma cadeira configurada. Acesse Configurações do módulo odonto para ativar cadeiras e alocar dentistas.
-                  </Text>
-                </View>
-              )}
-
-              {/* Data/hora/duracao */}
-              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Data e horário *</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <NativeDateInput label="Data" value={date} onChange={setDate} style={{ flex: 2 }} />
-                <NativeTimeInput label="Hora" value={time} onChange={setTime} style={{ flex: 1 }} />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={s.fieldLabel}>Duração</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                    {["30", "60", "90"].map(d => (
-                      <Pressable key={d} onPress={() => { setDuration(d); setCustomDuration(""); }}
-                        style={[s.durPill, duration === d && !customDuration && s.durPillActive]}>
-                        <Text style={[s.durPillText, duration === d && !customDuration && s.durPillTextActive]}>{d}m</Text>
-                      </Pressable>
-                    ))}
-                    {Platform.OS === "web" ? (
-                      createElement("input", {
-                        type: "number", min: "5", step: "5", placeholder: "min",
-                        value: customDuration,
-                        onChange: (e: any) => { setCustomDuration(e.target.value); if (e.target.value) setDuration(e.target.value); },
-                        style: {
-                          width: 56, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: customDuration ? Colors.violet3 : Colors.border,
-                          borderRadius: 6, padding: "5px 8px", fontSize: 12, color: Colors.ink, fontFamily: "inherit",
-                          colorScheme: "dark",
-                        },
-                      })
-                    ) : (
-                      <TextInput
-                        value={customDuration}
-                        onChangeText={(v) => { setCustomDuration(v); if (v) setDuration(v); }}
-                        placeholder="min" keyboardType="numeric"
-                        style={[s.durPill, { width: 48, textAlign: "center" as any, ...(customDuration ? { borderColor: Colors.violet3 } : {}) }]}
-                      />
-                    )}
-                  </View>
-                </View>
+                ))}
+                {patients.length === 0 && (
+                  <>
+                    <Hint>Nenhum paciente encontrado</Hint>
+                    <Pressable onPress={() => setShowNewPatient(true)} style={s.quickReg}>
+                      <Icon name="plus" size={13} color={AC.cyanInk} />
+                      <Text style={s.quickRegText}>Cadastrar "{search}" como novo paciente</Text>
+                    </Pressable>
+                  </>
+                )}
               </View>
+            ) : (
+              <Hint>{search.trim().length === 1 ? "Continue digitando..." : "Digite o nome, CPF ou telefone para buscar"}</Hint>
+            )}
+          </>
+        )}
 
-              {/* Observações */}
-              <Text style={[s.sectionLabel, { marginTop: 16 }]}>Detalhes</Text>
-              <Field label="Observações" value={chiefComplaint} onChangeText={setChiefComplaint} placeholder="Ex: avaliação, limpeza, retorno pós-procedimento..." multiline />
-
-              {error && <Text style={s.error}>{error}</Text>}
-            </ScrollView>
-
-            <View style={s.footer}>
-              <Pressable onPress={handleClose} style={[s.btn, s.btnGhost]} disabled={createMut.isPending}>
-                <Text style={s.btnGhostText}>Cancelar</Text>
-              </Pressable>
-              <Pressable onPress={handleSubmit} style={[s.btn, s.btnPrimary, createMut.isPending && { opacity: 0.6 }]} disabled={createMut.isPending}>
-                {createMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>Agendar</Text>}
-              </Pressable>
-            </View>
+        {/* Data e hora */}
+        <View style={s.row2}>
+          <View style={{ flex: 1.3 }}>
+            <FieldLabel>Data</FieldLabel>
+            <NativeDateInput value={date} onChange={setDate} testID="appt-date" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FieldLabel>Hora</FieldLabel>
+            <NativeTimeInput value={time} onChange={setTime} testID="appt-time" />
           </View>
         </View>
-      </Modal>
+
+        {conflicts.length > 0 && (
+          <View style={s.warn} testID="appt-conflict" accessibilityRole="alert">
+            <View style={s.warnCaret} />
+            <View style={{ flexDirection: "row", gap: 7, alignItems: "flex-start" }}>
+              <Icon name="alert" size={16} color={AC.amberInk} />
+              <Text style={s.warnTitle}>Esse horário já tem {conflicts.map(conflictLabel).join(" e ")}.</Text>
+            </View>
+            <View style={s.warnActions}>
+              {free && (
+                <>
+                  <AgendaBtn testID="appt-use-free" small label={`Usar ${hhmm(free)} · próximo livre`} onPress={applyFreeSlot} />
+                  <Text style={s.warnMuted}>ou</Text>
+                </>
+              )}
+              <Text style={s.warnMuted}>salve assim para marcar como encaixe.</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Duração */}
+        <FieldLabel>Duração</FieldLabel>
+        <View style={s.chips}>
+          {DURATIONS.map((m) => (
+            <Chip
+              key={m}
+              testID={`appt-dur-${m}`}
+              label={`${m} min`}
+              on={duration === m && !customDuration}
+              onPress={() => { setDuration(m); setCustomDuration(""); }}
+            />
+          ))}
+          <View style={[s.customChip, !!customDuration && s.customChipOn]}>
+            <Text style={[s.customText, !!customDuration && { color: AC.cyanInk }]}>Outra</Text>
+            <TextInput
+              testID="appt-dur-custom"
+              value={customDuration}
+              onChangeText={(v) => {
+                const clean = v.replace(/\D/g, "").slice(0, 4);
+                setCustomDuration(clean);
+                if (clean) setDuration(parseInt(clean, 10));
+                else setDuration(60);
+              }}
+              placeholder="__"
+              placeholderTextColor={AC.ink3}
+              keyboardType="numeric"
+              accessibilityLabel="Duração em minutos"
+              style={s.customInput}
+            />
+            <Text style={[s.customText, !!customDuration && { color: AC.cyanInk }]}>min</Text>
+          </View>
+        </View>
+        {endAt && <Hint>Termina às {hhmm(endAt)}</Hint>}
+
+        {/* Cadeira */}
+        {chairOptions.length === 1 && (
+          <>
+            <FieldLabel>Cadeira</FieldLabel>
+            <View style={s.chips}><Chip testID="appt-chair-fixed" fixed on label={chairOptions[0].label} /></View>
+            <Hint>Você tem uma cadeira. Com mais de uma, a escolha aparece aqui.</Hint>
+          </>
+        )}
+        {chairOptions.length > 1 && (
+          <>
+            <FieldLabel>Cadeira</FieldLabel>
+            <View style={s.chips}>
+              {chairOptions.map((opt) => (
+                <Chip
+                  key={opt.practitionerId}
+                  label={opt.label}
+                  on={practitionerId === opt.practitionerId}
+                  onPress={() => setPractitionerId(opt.practitionerId)}
+                />
+              ))}
+            </View>
+          </>
+        )}
+        {settings && chairOptions.length === 0 && (
+          <View style={s.warnBox}>
+            <Text style={s.warnText}>
+              Nenhuma cadeira configurada. Acesse Configurações do módulo odonto para ativar cadeiras e alocar dentistas.
+            </Text>
+          </View>
+        )}
+
+        {/* Observação */}
+        <FieldLabel>Observação</FieldLabel>
+        <TextInput
+          value={chiefComplaint}
+          onChangeText={setChiefComplaint}
+          placeholder="Ex.: avaliação, limpeza, trazer o raio-X"
+          placeholderTextColor={AC.ink3}
+          multiline
+          style={[s.input, s.inputMultiline]}
+        />
+
+        {appointment && (moved || durChanged) && originalAt && newAt && (
+          <View style={s.diff} testID="appt-diff">
+            <Text style={s.diffMuted}>Antes</Text>
+            <Text style={s.diffOld}>{slotSummary(originalAt, appointment.duration_min || 60)}</Text>
+            <Text style={s.diffMuted}>→ Agora</Text>
+            <Text style={s.diffNew}>{slotSummary(newAt, duration)}</Text>
+          </View>
+        )}
+        {appointment && moved && mode.mode === "patch" && mode.status === "agendado" && (
+          <Hint>Ao salvar, o status volta para Agendado.</Hint>
+        )}
+        {appointment && mode.mode === "create" && (
+          <Hint>A consulta cancelada fica no histórico; a remarcação cria um agendamento novo.</Hint>
+        )}
+        {appointment && moved && (patient?.phone ? (
+          <CheckRow
+            testID="appt-notify"
+            label={`Avisar ${firstName(patient?.name)} da mudança no WhatsApp`}
+            value={notifyWa}
+            onChange={setNotifyWa}
+          />
+        ) : (
+          <Hint style={{ marginTop: 14 }}>Sem telefone cadastrado: avise {firstName(patient?.name)} por outro meio.</Hint>
+        ))}
+
+        {error && <Text style={s.error} testID="appt-error">{error}</Text>}
+      </AgendaModalFrame>
 
       <NewPatientModal
         visible={showNewPatient}
         onClose={() => setShowNewPatient(false)}
         initialName={search}
         onCreated={(p: any) => {
-          setPatientId(p.id);
-          setPatientName(p.full_name || p.name);
+          setPatient({ id: p.id, name: p.full_name || p.name, phone: p.phone, allergies: p.allergies });
           setShowNewPatient(false);
         }}
       />
@@ -304,111 +538,74 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
   );
 }
 
-function Field(props: any) {
-  const { label, style, multiline, ...rest } = props;
-  return (
-    <View style={[{ gap: 4 }, style]}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <TextInput {...rest} style={[s.input, multiline && s.inputMultiline]} placeholderTextColor={Colors.ink3} multiline={multiline} />
-    </View>
-  );
-}
-
 // ── Native date/time inputs (web: HTML native; mobile: TextInput fallback) ──
-function NativeDateInput({ label, value, onChange, style }: any) {
+const webInputStyle = {
+  backgroundColor: AC.bg3, border: `1px solid ${AC.border2}`, borderRadius: 9,
+  padding: "9px 11px", fontSize: 13.5, color: AC.ink, fontFamily: "inherit",
+  colorScheme: IS_DARK_MODE ? "dark" : "light", width: "100%", boxSizing: "border-box", minHeight: 40,
+};
+
+function NativeDateInput({ value, onChange, testID }: { value: string; onChange: (v: string) => void; testID?: string }) {
   if (Platform.OS === "web") {
-    return (
-      <View style={[{ gap: 4 }, style]}>
-        <Text style={s.fieldLabel}>{label}</Text>
-        {createElement("input", {
-          type: "date",
-          value: value,
-          onChange: (e: any) => onChange(e.target.value),
-          style: {
-            backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border,
-            borderRadius: 8, paddingLeft: 12, paddingRight: 12, paddingTop: 10, paddingBottom: 10,
-            fontSize: 13, color: Colors.ink, fontFamily: "inherit",
-            colorScheme: "dark",
-          },
-        })}
-      </View>
-    );
+    return createElement("input", {
+      type: "date", value, "data-testid": testID, "aria-label": "Data",
+      onChange: (e: any) => onChange(e.target.value),
+      style: webInputStyle,
+    });
   }
-  return (
-    <View style={[{ gap: 4 }, style]}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChange} placeholder="AAAA-MM-DD" placeholderTextColor={Colors.ink3} style={s.input} keyboardType="numeric" />
-    </View>
-  );
+  return <TextInput testID={testID} value={value} onChangeText={onChange} placeholder="AAAA-MM-DD" placeholderTextColor={AC.ink3} style={s.input} keyboardType="numeric" />;
 }
 
-function NativeTimeInput({ label, value, onChange, style }: any) {
+function NativeTimeInput({ value, onChange, testID }: { value: string; onChange: (v: string) => void; testID?: string }) {
   if (Platform.OS === "web") {
-    return (
-      <View style={[{ gap: 4 }, style]}>
-        <Text style={s.fieldLabel}>{label}</Text>
-        {createElement("input", {
-          type: "time",
-          value: value,
-          onChange: (e: any) => onChange(e.target.value),
-          step: 300,
-          style: {
-            backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border,
-            borderRadius: 8, paddingLeft: 12, paddingRight: 12, paddingTop: 10, paddingBottom: 10,
-            fontSize: 13, color: Colors.ink, fontFamily: "inherit",
-            colorScheme: "dark",
-          },
-        })}
-      </View>
-    );
+    return createElement("input", {
+      type: "time", value, step: 300, "data-testid": testID, "aria-label": "Hora",
+      onChange: (e: any) => onChange(e.target.value),
+      style: webInputStyle,
+    });
   }
-  return (
-    <View style={[{ gap: 4 }, style]}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChange} placeholder="HH:MM" placeholderTextColor={Colors.ink3} style={s.input} keyboardType="numeric" />
-    </View>
-  );
+  return <TextInput testID={testID} value={value} onChangeText={onChange} placeholder="HH:MM" placeholderTextColor={AC.ink3} style={s.input} keyboardType="numeric" />;
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", alignItems: "center", padding: 20 },
-  sheet: { backgroundColor: Colors.bg2, borderRadius: 20, width: "100%", maxWidth: 520, maxHeight: "88%", borderWidth: 1, borderColor: Colors.border } as any,
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  title: { fontSize: 18, fontWeight: "700", color: Colors.ink },
-  form: { padding: 14, gap: 8, paddingBottom: 24 },
-  sectionLabel: { fontSize: 11, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.6 },
-  fieldLabel: { ...DentalForm.label },
-  input: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink } as any,
-  inputMultiline: { minHeight: 60, textAlignVertical: "top" } as any,
-  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
-  searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
-  patientItem: { padding: 12, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  patientItemName: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  patientItemMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  selectedPatient: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.violet3 || "#a78bfa", backgroundColor: "rgba(109,40,217,0.08)" },
-  selectedPatientName: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  selectedPatientHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  changeLink: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  chairPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
-  chairPillActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
-  chairPillText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-  chairPillTextActive: { color: "#fff" },
-  warnBox: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#F59E0B", backgroundColor: "rgba(245,158,11,0.08)" },
-  warnText: { fontSize: 11, color: "#F59E0B", lineHeight: 16 },
-  durPill: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3, minWidth: 34 },
-  durPillActive: { backgroundColor: Colors.violet || "#6d28d9", borderColor: Colors.violet || "#6d28d9" },
-  durPillText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
-  durPillTextActive: { color: "#fff" },
-  hint: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 12 },
-  quickRegBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#06B6D4", borderStyle: "dashed", backgroundColor: "rgba(6,182,212,0.06)" },
-  quickRegText: { fontSize: 12, color: "#06B6D4", flex: 1 },
-  error: { color: "#EF4444", fontSize: 12, textAlign: "center", marginTop: 6 },
-  footer: { flexDirection: "row", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: Colors.border },
-  btn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  btnGhost: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  btnGhostText: { color: Colors.ink, fontSize: 13, fontWeight: "600" },
-  btnPrimary: { backgroundColor: Colors.violet || "#6d28d9" },
-  btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  head: { flexDirection: "row", gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, alignItems: "flex-start" },
+  kicker: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", color: AC.cyanInk },
+  name: { fontSize: 18, fontWeight: "700", color: AC.ink, letterSpacing: -0.2 },
+  sub: { fontSize: 12.5, color: AC.ink2, marginTop: 1 },
+  close: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: AC.border, backgroundColor: AC.surface, alignItems: "center", justifyContent: "center" },
+  pcard: { flexDirection: "row", gap: 10, alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: AC.cyanSoft, backgroundColor: AC.cyanDim },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: AC.cyan, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  pname: { fontSize: 13.5, fontWeight: "700", color: AC.ink },
+  pmeta: { fontSize: 12, color: AC.ink2 },
+  allergyMini: { color: AC.redInk, fontWeight: "700" },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: AC.bg3, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, borderWidth: 1, borderColor: AC.border2 },
+  searchInput: { flex: 1, fontSize: 13.5, color: AC.ink } as any,
+  pitem: { flexDirection: "row", justifyContent: "space-between", gap: 8, borderWidth: 1, borderColor: AC.border, backgroundColor: AC.bg3, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 10, minHeight: 44, alignItems: "center" },
+  pitemName: { fontSize: 13, fontWeight: "700", color: AC.ink, flexShrink: 1 },
+  pitemMeta: { fontSize: 12, color: AC.ink3 },
+  quickReg: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: AC.cyan, borderStyle: "dashed", backgroundColor: AC.cyanGhost },
+  quickRegText: { fontSize: 12, color: AC.cyanInk, flex: 1 },
+  row2: { flexDirection: "row", gap: 10 },
+  warn: { marginTop: 10, borderWidth: 1, borderColor: AC.amberBorder, backgroundColor: AC.amberBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  warnCaret: { position: "absolute", top: -6, left: "70%" as any, width: 10, height: 10, backgroundColor: AC.modal, borderLeftWidth: 1, borderTopWidth: 1, borderColor: AC.amberBorder, transform: [{ rotate: "45deg" }] },
+  warnTitle: { fontSize: 13, fontWeight: "700", color: AC.amberInk, flex: 1 },
+  warnActions: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 8 },
+  warnMuted: { fontSize: 12, color: AC.ink2 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  customChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: AC.border2, backgroundColor: AC.bg3, borderRadius: 9, paddingHorizontal: 12, minHeight: 36 },
+  customChipOn: { backgroundColor: AC.cyanDim, borderColor: AC.cyan },
+  customText: { fontSize: 13, fontWeight: "600", color: AC.ink },
+  customInput: { width: 48, borderBottomWidth: 1, borderBottomColor: AC.border2, color: AC.ink, fontSize: 13, textAlign: "center", paddingVertical: 2 } as any,
+  input: { backgroundColor: AC.bg3, borderWidth: 1, borderColor: AC.border2, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13.5, color: AC.ink } as any,
+  inputMultiline: { minHeight: 56, textAlignVertical: "top" } as any,
+  warnBox: { marginTop: 14, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: AC.amberBorder, backgroundColor: AC.amberBg },
+  warnText: { fontSize: 12, color: AC.amberInk, lineHeight: 17 },
+  diff: { marginTop: 14, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: AC.surface, borderWidth: 1, borderColor: AC.border, flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" },
+  diffMuted: { fontSize: 12.5, color: AC.ink3 },
+  diffOld: { fontSize: 12.5, color: AC.ink2, textDecorationLine: "line-through" },
+  diffNew: { fontSize: 12.5, color: AC.ink, fontWeight: "700" },
+  error: { color: AC.redInk, fontSize: 12.5, textAlign: "center", marginTop: 10 },
 });
 
 export default NewAppointmentModal;
