@@ -1,12 +1,43 @@
-import { createElement, useMemo, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Colors } from "@/constants/colors";
-import { toDateOnlyString } from "@/utils/dateOnly";
-
 // ============================================================
-// AgendaDental — View Semanal (padrão) + View Dia
-// Itens 8 (semana) + 9 (drag-to-move / resize, web only)
+// AgendaDental — visão DIA da agenda odonto
+//
+// Mockup "Agenda Odonto" (16/09/2026), aba B (e G no celular):
+// linha do tempo com altura proporcional à duração, uma coluna por cadeira.
+// Mesmo comportamento da Semana (arrastar muda só o horário, e a cadeira se
+// soltar em outra; a borda de baixo muda só a duração). Por ser mais larga, a
+// coluna mostra procedimento, telefone e alergia. A lateral responde "quem
+// está na cadeira", "quem está esperando" e "quem vem depois".
+// Antes era uma lista de linhas de 1h: só cabia 1 consulta por hora e 07:30
+// aparecia como 07:00. A WeekView interna (não usada) foi removida — a Semana
+// é o AgendaDentalWeek.
 // ============================================================
+import { useCallback, useMemo, useRef } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { DentalColors } from "@/constants/dental-tokens";
+import { DENTAL_STATUS_ORDER, dentalStatus } from "@/constants/dentalStatus";
+import { Fonts } from "@/constants/fonts";
+import {
+  AgendaBlock,
+  AgendaToast,
+  ColumnDragLayer,
+  DRAG_MIN_WIDTH,
+  IS_WEB,
+  NowLine,
+  StatusLegend,
+  isMovable,
+  useAgendaCss,
+} from "@/components/verticals/odonto/AgendaGridParts";
+import { useAgendaDrag, type DragPreview } from "@/hooks/useAgendaDrag";
+import { changeFromPreview, useAgendaGridFlow } from "@/hooks/useAgendaGridFlow";
+import type { RescheduleFn } from "@/hooks/useDentalReschedule";
+import {
+  blockBox,
+  gridHourRange,
+  hm,
+  layoutLanes,
+  minutesOfDay,
+  pad2,
+} from "@/utils/agendaGrid";
 
 export interface DentalAppointment {
   id: string;
@@ -15,723 +46,356 @@ export interface DentalAppointment {
   scheduled_at: string;
   duration_min: number;
   chief_complaint?: string;
-  status: "agendado" | "confirmado" | "em_atendimento" | "concluido" | "faltou" | "cancelado";
+  /** Ver constants/dentalStatus.ts (DentalStatus). */
+  status: string;
   chair?: string;
+  practitioner_id?: string | null;
+  /** Alergias do paciente, quando a API manda. */
+  allergies?: string | null;
   professional_name?: string;
   professional_color?: string;
 }
 
-type ViewMode = "semana" | "dia";
+export interface DentalChair {
+  /** Rótulo exibido ("Cadeira 1 - Dra. Marina"); também casa com appointment.chair. */
+  label: string;
+  /**
+   * Dentista alocado na cadeira. Soltar um bloco nesta coluna troca o
+   * practitioner_id da consulta; sem dentista alocado a coluna não recebe blocos
+   * de outras cadeiras.
+   */
+  practitionerId?: string | null;
+}
 
 interface Props {
   appointments: DentalAppointment[];
-  chairs?: string[];
+  chairs?: DentalChair[];
   date?: Date;
   onAppointmentPress?: (appt: DentalAppointment) => void;
-  onSlotPress?: (chairOrDay: string, time: string) => void;
-  onNewAppointment?: () => void;
-  onMoveAppointment?: (appointmentId: string, newScheduledAt: string) => void;
-  onResizeAppointment?: (appointmentId: string, newDurationMin: number) => void;
+  /** (rótulo da cadeira, "HH:MM") */
+  onSlotPress?: (chair: string, time: string) => void;
+  /** Grava a remarcação/duração. Sem ele, a grade não arrasta. */
+  onReschedule?: RescheduleFn;
+  startHour?: number;
+  endHour?: number;
 }
 
-const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> = {
-  agendado:        { bg: "rgba(6,182,212,0.12)",   color: "#06B6D4", label: "Agendado" },
-  confirmado:      { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Confirmado" },
-  em_atendimento:  { bg: "rgba(245,158,11,0.12)",  color: "#F59E0B", label: "Em atendimento" },
-  concluido:       { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Concluido" },
-  faltou:          { bg: "rgba(239,68,68,0.12)",   color: "#EF4444", label: "Faltou" },
-  cancelado:       { bg: "rgba(156,163,175,0.08)",  color: "#9CA3AF", label: "Cancelado" },
-};
-
-const HOURS = Array.from({ length: 12 }, (_, i) => `${String(i + 7).padStart(2, "0")}:00`);
-const DAY_MOVABLE = new Set(["agendado", "confirmado", "paciente_consultorio", "avaliacao", "aprovado"]);
-const DAY_NAMES = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+const C = DentalColors;
+const HOUR_COL = 52;
+const DEFAULT_CHAIRS: DentalChair[] = [{ label: "Cadeira 1" }];
+const WAITING_LIST = new Set(["agendado", "confirmado", "avaliacao", "aprovado"]);
 
 function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function getWeekDays(anchor: Date): Date[] {
-  const d = new Date(anchor);
-  const day = d.getDay(); // 0=dom
-  const diff = day === 0 ? -6 : 1 - day; // segunda
-  d.setDate(d.getDate() + diff);
-  return Array.from({ length: 7 }, (_, i) => {
-    const x = new Date(d);
-    x.setDate(d.getDate() + i);
-    return x;
-  });
-}
-
-// Dia LOCAL: via toISOString, consulta das 21h+ caia na coluna do dia seguinte.
-function toIsoDate(d: Date): string {
-  return toDateOnlyString(d);
-}
-
-// ─── Week view ───────────────────────────────────────────────
-
-function WeekView({
-  appointments,
-  anchor,
-  onAppointmentPress,
-  onSlotPress,
-  onMoveAppointment,
-  onResizeAppointment,
-}: {
-  appointments: DentalAppointment[];
-  anchor: Date;
-  onAppointmentPress?: (appt: DentalAppointment) => void;
-  onSlotPress?: (chairOrDay: string, time: string) => void;
-  onMoveAppointment?: (appointmentId: string, newScheduledAt: string) => void;
-  onResizeAppointment?: (appointmentId: string, newDurationMin: number) => void;
-}) {
-  const today = new Date();
-  const weekDays = useMemo(() => getWeekDays(anchor), [anchor]);
-
-  // Map: isoDate -> DentalAppointment[]
-  const byDay = useMemo(() => {
-    const map: Record<string, DentalAppointment[]> = {};
-    for (const d of weekDays) map[toIsoDate(d)] = [];
-    for (const appt of appointments) {
-      const iso = toIsoDate(new Date(appt.scheduled_at));
-      if (map[iso]) map[iso].push(appt);
-    }
-    return map;
-  }, [appointments, weekDays]);
-
-  const isWeb = Platform.OS === "web";
-
-  function renderAppointmentBlock(appt: DentalAppointment, dayDate: Date, hour: string) {
-    const st = STATUS_MAP[appt.status] || STATUS_MAP.agendado;
-    const shortName =
-      appt.patient_name.length > 14
-        ? appt.patient_name.slice(0, 13) + "…"
-        : appt.patient_name;
-
-    if (isWeb) {
-      return createElement(
-        "div",
-        {
-          key: `appt-${appt.id}`,
-          draggable: true,
-          onDragStart: (e: any) => {
-            e.dataTransfer.setData("apptId", appt.id);
-            e.dataTransfer.setData("origHour", hour);
-            e.dataTransfer.effectAllowed = "move";
-          },
-          onClick: () => onAppointmentPress?.(appt),
-          style: {
-            position: "absolute",
-            top: 1,
-            left: 1,
-            right: 1,
-            bottom: 1,
-            backgroundColor: st.bg,
-            borderLeft: `3px solid ${st.color}`,
-            borderRadius: 4,
-            padding: "2px 4px",
-            cursor: "grab",
-            overflow: "hidden",
-            fontSize: 10,
-            color: st.color,
-            fontWeight: 600,
-            userSelect: "none",
-            zIndex: 2,
-          },
-        },
-        shortName,
-        // Resize handle
-        createElement("div", {
-          style: {
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 6,
-            cursor: "s-resize",
-            background: "rgba(255,255,255,0.15)",
-          },
-          onMouseDown: (e: any) => {
-            e.stopPropagation();
-            const startY = e.clientY;
-            const startDur = appt.duration_min || 60;
-            const onMove = (ev: MouseEvent) => {
-              const dy = ev.clientY - startY;
-              const deltaMins = Math.round(dy / 36) * 30;
-              const newDur = Math.max(30, startDur + deltaMins);
-              onResizeAppointment?.(appt.id, newDur);
-            };
-            const onUp = () => {
-              window.removeEventListener("mousemove", onMove);
-              window.removeEventListener("mouseup", onUp);
-            };
-            window.addEventListener("mousemove", onMove);
-            window.addEventListener("mouseup", onUp);
-          },
-        })
-      );
-    }
-
-    // Native fallback
-    return (
-      <Pressable
-        key={`appt-${appt.id}`}
-        onPress={() => onAppointmentPress?.(appt)}
-        style={[
-          s.weekApptBlock,
-          { backgroundColor: st.bg, borderLeftColor: st.color },
-        ]}
-      >
-        <Text style={[s.weekApptText, { color: st.color }]} numberOfLines={1}>
-          {shortName}
-        </Text>
-      </Pressable>
-    );
+/** Coluna da consulta: dentista da cadeira, depois o rótulo, senão a primeira. */
+function chairIndexFor(a: DentalAppointment, chairs: DentalChair[]): number {
+  if (a.practitioner_id) {
+    const i = chairs.findIndex(c => c.practitionerId && c.practitionerId === a.practitioner_id);
+    if (i >= 0) return i;
   }
-
-  function renderSlotCell(dayDate: Date, hour: string) {
-    const iso = toIsoDate(dayDate);
-    const dayAppts = byDay[iso] || [];
-    const appt = dayAppts.find((a) => {
-      const t = new Date(a.scheduled_at);
-      return `${String(t.getHours()).padStart(2, "0")}:00` === hour;
-    });
-
-    if (isWeb) {
-      return createElement(
-        "div",
-        {
-          key: `${iso}-${hour}`,
-          onDragOver: (e: any) => e.preventDefault(),
-          onDrop: (e: any) => {
-            const apptId = e.dataTransfer.getData("apptId");
-            if (!apptId) return;
-            const [h] = hour.split(":");
-            const newDate = new Date(dayDate);
-            newDate.setHours(parseInt(h, 10), 0, 0, 0);
-            onMoveAppointment?.(apptId, newDate.toISOString());
-          },
-          onClick: appt
-            ? undefined
-            : () => onSlotPress?.(iso, hour),
-          style: {
-            height: 36,
-            borderBottom: `1px solid ${Colors.border || "rgba(255,255,255,0.07)"}`,
-            position: "relative",
-            boxSizing: "border-box",
-          },
-        },
-        appt ? renderAppointmentBlock(appt, dayDate, hour) : null
-      );
-    }
-
-    // Native
-    return (
-      <Pressable
-        key={`${iso}-${hour}`}
-        onPress={() => {
-          if (appt) onAppointmentPress?.(appt);
-          else onSlotPress?.(iso, hour);
-        }}
-        style={s.weekSlotCell}
-      >
-        {appt ? renderAppointmentBlock(appt, dayDate, hour) : null}
-      </Pressable>
-    );
+  if (a.chair) {
+    const i = chairs.findIndex(c => c.label === a.chair);
+    if (i >= 0) return i;
   }
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View>
-          {/* Week header */}
-          <View style={s.weekHeader}>
-            <View style={s.weekHourCol} />
-            {weekDays.map((d, idx) => {
-              const isToday = sameDay(d, today);
-              return (
-                <View key={idx} style={s.weekDayHdr}>
-                  <Text style={s.weekDayName}>{DAY_NAMES[idx]}</Text>
-                  <Text style={[s.weekDayNum, isToday && s.weekDayNumToday]}>
-                    {d.getDate()}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Grid */}
-          <View style={s.weekGrid}>
-            {/* Hour column */}
-            <View style={s.weekHourCol}>
-              {HOURS.map((hour) => (
-                <View key={hour} style={s.weekHourCell}>
-                  <Text style={s.weekHourText}>{hour}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Day columns */}
-            {weekDays.map((dayDate, idx) => (
-              <View key={idx} style={s.weekDayCol}>
-                {HOURS.map((hour) => renderSlotCell(dayDate, hour))}
-              </View>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
-    </ScrollView>
-  );
+  return 0;
 }
-
-// ─── Day view (preserved from D-05) ─────────────────────────
-
-function DayView({
-  appointments,
-  chairs,
-  anchor,
-  onAppointmentPress,
-  onSlotPress,
-  onMoveAppointment,
-  onResizeAppointment,
-}: {
-  appointments: DentalAppointment[];
-  chairs: string[];
-  anchor: Date;
-  onAppointmentPress?: (appt: DentalAppointment) => void;
-  onSlotPress?: (chair: string, time: string) => void;
-  onMoveAppointment?: (appointmentId: string, newScheduledAt: string) => void;
-  onResizeAppointment?: (appointmentId: string, newDurationMin: number) => void;
-}) {
-  const dayAppointments = useMemo(
-    () => appointments.filter((a) => sameDay(new Date(a.scheduled_at), anchor)),
-    [appointments, anchor]
-  );
-
-  const byChair = useMemo(() => {
-    const map: Record<string, DentalAppointment[]> = {};
-    for (const ch of chairs) map[ch] = [];
-    for (const appt of dayAppointments) {
-      const chair = appt.chair || chairs[0];
-      if (!map[chair]) map[chair] = [];
-      map[chair].push(appt);
-    }
-    return map;
-  }, [dayAppointments, chairs]);
-
-  const isWeb = Platform.OS === "web";
-
-  return (
-    <ScrollView horizontal={chairs.length > 2} showsHorizontalScrollIndicator={false}>
-      <View style={s.grid}>
-        {chairs.map((chair) => (
-          <View
-            key={chair}
-            style={[
-              s.column,
-              {
-                minWidth: chairs.length > 2 ? 200 : undefined,
-                flex: chairs.length <= 2 ? 1 : undefined,
-              },
-            ]}
-          >
-            <View style={s.chairHeader}>
-              <View style={[s.chairDot, { backgroundColor: "#06B6D4" }]} />
-              <Text style={s.chairName}>{chair}</Text>
-              <Text style={s.chairCount}>{(byChair[chair] || []).length} agend.</Text>
-            </View>
-
-            {HOURS.map((hour) => {
-              const appt = (byChair[chair] || []).find((a) => {
-                const t = new Date(a.scheduled_at);
-                return `${String(t.getHours()).padStart(2, "0")}:00` === hour;
-              });
-
-              if (appt) {
-                const st = STATUS_MAP[appt.status] || STATUS_MAP.agendado;
-
-                if (isWeb) {
-                  return createElement(
-                    "div",
-                    {
-                      key: hour,
-                      // Hotfix QA 16/09: so arrasta consulta que ainda nao comecou; a alca de
-                      // redimensionar (dentro do bloco arrastavel) mudava hora e duracao juntas.
-                      draggable: DAY_MOVABLE.has(appt.status),
-                      onDragStart: (e: any) => {
-                        if (!DAY_MOVABLE.has(appt.status)) { e.preventDefault(); return; }
-                        e.dataTransfer.setData("apptId", appt.id);
-                        e.dataTransfer.setData("origChair", chair);
-                        e.dataTransfer.setData("origHour", hour);
-                        e.dataTransfer.effectAllowed = "move";
-                      },
-                      onClick: () => onAppointmentPress?.(appt),
-                      style: {
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: 8,
-                        borderRadius: 8,
-                        borderLeft: `3px solid ${st.color}`,
-                        backgroundColor: Colors.bg2 || "#090c1a",
-                        marginBottom: 3,
-                        cursor: DAY_MOVABLE.has(appt.status) ? "grab" : "pointer",
-                        position: "relative",
-                        userSelect: "none",
-                      },
-                    },
-                    createElement(
-                      "span",
-                      { style: { fontSize: 11, color: Colors.ink3 || "#888", fontWeight: 600, width: 38 } },
-                      hour
-                    ),
-                    createElement(
-                      "div",
-                      { style: { flex: 1 } },
-                      createElement(
-                        "div",
-                        { style: { fontSize: 13, fontWeight: 600, color: Colors.ink || "#fff" } },
-                        appt.patient_name
-                      ),
-                      createElement(
-                        "div",
-                        { style: { fontSize: 11, color: Colors.ink2 || "#aaa" } },
-                        appt.chief_complaint || "Consulta"
-                      )
-                    ),
-                    createElement(
-                      "span",
-                      {
-                        style: {
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          backgroundColor: st.bg,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: st.color,
-                        },
-                      },
-                      st.label
-                    )
-                  );
-                }
-
-                return (
-                  <Pressable
-                    key={hour}
-                    onPress={() => onAppointmentPress?.(appt)}
-                    style={[s.slot, { borderLeftColor: st.color }]}
-                  >
-                    <Text style={s.slotTime}>{hour}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.slotName}>{appt.patient_name}</Text>
-                      <Text style={s.slotProc}>{appt.chief_complaint || "Consulta"}</Text>
-                    </View>
-                    <View style={[s.slotBadge, { backgroundColor: st.bg }]}>
-                      <Text style={[s.slotBadgeText, { color: st.color }]}>{st.label}</Text>
-                    </View>
-                  </Pressable>
-                );
-              }
-
-              // Empty slot
-              if (isWeb) {
-                return createElement("div", {
-                  key: hour,
-                  onDragOver: (e: any) => e.preventDefault(),
-                  onDrop: (e: any) => {
-                    const apptId = e.dataTransfer.getData("apptId");
-                    if (!apptId) return;
-                    const [h] = hour.split(":");
-                    const newDate = new Date(anchor);
-                    newDate.setHours(parseInt(h, 10), 0, 0, 0);
-                    onMoveAppointment?.(apptId, newDate.toISOString());
-                  },
-                  onClick: () => onSlotPress?.(chair, hour),
-                  style: {
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: 8,
-                    borderRadius: 8,
-                    borderLeft: `3px solid ${Colors.border || "rgba(255,255,255,0.07)"}`,
-                    backgroundColor: Colors.bg2 || "#090c1a",
-                    marginBottom: 3,
-                    opacity: 0.5,
-                    cursor: "pointer",
-                  },
-                },
-                  createElement("span", { style: { fontSize: 11, color: Colors.ink3 || "#888", fontWeight: 600, width: 38 } }, hour),
-                  createElement("span", { style: { fontSize: 11, color: Colors.ink3 || "#888", fontStyle: "italic" } }, "Horário livre")
-                );
-              }
-
-              return (
-                <Pressable
-                  key={hour}
-                  onPress={() => onSlotPress?.(chair, hour)}
-                  style={[s.slot, s.slotEmpty]}
-                >
-                  <Text style={s.slotTime}>{hour}</Text>
-                  <Text style={s.slotEmptyText}>Horário livre</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
-  );
-}
-
-// ─── Main component ──────────────────────────────────────────
 
 export function AgendaDental({
   appointments,
-  chairs = ["Cadeira 1", "Cadeira 2"],
+  chairs: chairsProp,
   date,
   onAppointmentPress,
   onSlotPress,
-  onNewAppointment,
-  onMoveAppointment,
-  onResizeAppointment,
+  onReschedule,
+  startHour = 7,
+  endHour = 19,
 }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>("dia");
-  const anchor = date || new Date();
+  useAgendaCss();
+  const { width } = useWindowDimensions();
+  const phone = width < DRAG_MIN_WIDTH;
+  const withSide = width >= 1024;
+  const canDrag = IS_WEB && !phone && !!onReschedule;
+  const hourPx = phone ? 64 : 76;
+  const chairs = chairsProp && chairsProp.length ? chairsProp : DEFAULT_CHAIRS;
+  const anchor = useMemo(() => {
+    const d = date ? new Date(date) : new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [date]);
+  const now = new Date();
+  const isToday = sameDay(anchor, now);
+  const nowMin = minutesOfDay(now);
 
-  const displayDate = anchor.toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
+  const dayAppts = useMemo(
+    () => appointments
+      .filter(a => a.status !== "cancelado" && sameDay(new Date(a.scheduled_at), anchor))
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
+    [appointments, anchor],
+  );
+  const byId = useMemo(() => new Map(dayAppts.map(a => [a.id, a])), [dayAppts]);
+  const byChair = useMemo(() => {
+    const m: DentalAppointment[][] = chairs.map(() => []);
+    for (const a of dayAppts) m[chairIndexFor(a, chairs)].push(a);
+    return m;
+  }, [dayAppts, chairs]);
+
+  const range = useMemo(() => gridHourRange(
+    dayAppts.map(a => ({ start: minutesOfDay(new Date(a.scheduled_at)), dur: a.duration_min || 60 })),
+    startHour,
+    endHour,
+  ), [dayAppts, startHour, endHour]);
+  const geometry = useMemo(() => ({ hourPx, ...range }), [hourPx, range]);
+  const hours = useMemo(
+    () => Array.from({ length: range.endHour - range.startHour }, (_, i) => range.startHour + i),
+    [range],
+  );
+
+  const flow = useAgendaGridFlow({ appointments: dayAppts, onReschedule });
+  const colRefs = useRef<any[]>([]);
+
+  const toChange = useCallback((p: DragPreview) => {
+    const appt = byId.get(p.id);
+    const chair = chairs[p.colIdx];
+    if (!appt || !chair) return null;
+    return changeFromPreview(appt, p, {
+      day: anchor,
+      columnChanged: p.colIdx !== p.fromCol,
+      practitionerId: chair.practitionerId || undefined,
+      columnLabel: chair.label,
+    });
+  }, [byId, chairs, anchor]);
+
+  const drag = useAgendaDrag({
+    enabled: canDrag,
+    geometry,
+    getColumnRects: () => chairs.map((_, i) => {
+      const r = colRefs.current[i]?.getBoundingClientRect?.();
+      return r ? { left: r.left, right: r.right, top: r.top } : { left: 0, right: 0, top: 0 };
+    }),
+    canEnterColumn: (_from, to) => !!chairs[to]?.practitionerId,
+    onDrop: (_item, p) => {
+      const req = toChange(p);
+      if (req) flow.request(req);
+    },
   });
 
-  // KPIs — always computed for the anchor day
-  const dayAppointments = useMemo(
-    () => appointments.filter((a) => sameDay(new Date(a.scheduled_at), anchor)),
-    [appointments, anchor]
+  function press(a: DentalAppointment) {
+    if (drag.consumeClick()) return;
+    onAppointmentPress?.(a);
+  }
+
+  const activeCol = (drag.preview ?? flow.pending?.ghost)?.colIdx ?? -1;
+  const ghostId = drag.preview?.id ?? flow.pending?.appt.id;
+  const multi = chairs.length > 1;
+
+  const grid = (
+    <View style={s.card}>
+      <View style={s.headerRow}>
+        <View style={{ width: HOUR_COL }} />
+        {chairs.map((ch, i) => (
+          <View key={ch.label + i} style={[s.chairHeader, multi && phone && s.chairMin]}>
+            <View style={s.chairDot} />
+            <Text style={s.chairName} numberOfLines={1}>{ch.label}</Text>
+            <Text style={s.chairCount}>
+              {byChair[i].length} {byChair[i].length === 1 ? "consulta" : "consultas"}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={[s.bodyRow, { height: hours.length * hourPx }]}>
+        <View style={{ width: HOUR_COL }}>
+          {hours.map(h => (
+            <View key={h} style={{ height: hourPx }}>
+              <Text style={s.hourLabel}>{pad2(h)}:00</Text>
+            </View>
+          ))}
+        </View>
+
+        {chairs.map((ch, ci) => {
+          const laid = layoutLanes(byChair[ci].map(a => ({
+            id: a.id, start: minutesOfDay(new Date(a.scheduled_at)), dur: a.duration_min || 60, a,
+          })));
+          return (
+            <View
+              key={ch.label + ci}
+              testID={`agenda-col-${ci}`}
+              ref={(el: any) => { colRefs.current[ci] = el; }}
+              style={[s.col, multi && phone && s.chairMin, activeCol === ci && { zIndex: 5 }]}
+            >
+              {hours.map(h => [0, 30].map(m => (
+                <Pressable
+                  key={`${h}-${m}`}
+                  onPress={() => onSlotPress?.(ch.label, hm(h * 60 + m))}
+                  accessibilityLabel={`Agendar às ${hm(h * 60 + m)} na ${ch.label}`}
+                  style={[s.slot, { height: hourPx / 2 }, m === 0 ? s.slotHour : s.slotHalf]}
+                />
+              )))}
+
+              {laid.map(({ item, col, n }) => {
+                const box = blockBox(item.start, item.dur, range.startHour, hourPx);
+                const movable = canDrag && isMovable(item.a.status);
+                const dragItem = { id: item.id, colIdx: ci, startMin: item.start, durMin: item.dur };
+                return (
+                  <AgendaBlock
+                    key={item.id}
+                    appt={item.a}
+                    place={{ top: box.top, height: box.height, leftPct: (col * 100) / n, widthPct: 100 / n }}
+                    wide
+                    compact={phone}
+                    lanes={n}
+                    movable={movable}
+                    dragging={ghostId === item.id}
+                    flashing={flow.flashId === item.id}
+                    onPress={() => press(item.a)}
+                    onMoveDown={movable ? (e: any) => drag.onMovePointerDown(e, dragItem) : undefined}
+                    onResizeDown={movable ? (e: any) => drag.onResizePointerDown(e, dragItem) : undefined}
+                  />
+                );
+              })}
+
+              {isToday && nowMin >= range.startHour * 60 && nowMin <= range.endHour * 60 ? (
+                <NowLine top={((nowMin - range.startHour * 60) / 60) * hourPx} label={ci === 0 ? hm(nowMin) : undefined} />
+              ) : null}
+
+              <ColumnDragLayer
+                colIdx={ci}
+                colCount={chairs.length}
+                day={anchor}
+                columnLabel={ch.label}
+                hourPx={hourPx}
+                startHour={range.startHour}
+                preview={drag.preview}
+                pending={flow.pending}
+                toChange={toChange}
+                appointments={dayAppts}
+                onFit={flow.confirmFit}
+                onCancel={flow.cancelPending}
+              />
+            </View>
+          );
+        })}
+      </View>
+
+      <AgendaToast toast={flow.toast} onClose={flow.dismissToast} />
+    </View>
   );
-  const total = dayAppointments.filter((a) => a.status !== "cancelado").length;
-  const confirmed = dayAppointments.filter(
-    (a) => a.status === "confirmado" || a.status === "concluido"
-  ).length;
-  const pending = dayAppointments.filter((a) => a.status === "agendado").length;
-  const noShow = dayAppointments.filter((a) => a.status === "faltou").length;
 
   return (
-    <View style={s.container}>
-      {/* KPIs */}
-      <View style={s.kpiRow}>
-        <View style={s.kpi}>
-          <Text style={[s.kpiVal, { color: "#06B6D4" }]}>{total}</Text>
-          <Text style={s.kpiLbl}>No dia</Text>
+    <View style={{ gap: 8 }}>
+      {!phone && <StatusLegend />}
+      {phone && <Text style={s.hint}>Toque numa consulta para ver, confirmar ou remarcar.</Text>}
+      <View style={withSide ? s.layoutSide : undefined}>
+        <View style={withSide ? { flex: 1, minWidth: 0 } : undefined}>
+          {multi && phone ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>{grid}</ScrollView>
+          ) : grid}
         </View>
-        <View style={s.kpi}>
-          <Text style={[s.kpiVal, { color: "#10B981" }]}>{confirmed}</Text>
-          <Text style={s.kpiLbl}>Confirmados</Text>
-        </View>
-        <View style={s.kpi}>
-          <Text style={[s.kpiVal, { color: "#F59E0B" }]}>{pending}</Text>
-          <Text style={s.kpiLbl}>Pendentes</Text>
-        </View>
-        <View style={s.kpi}>
-          <Text style={[s.kpiVal, { color: "#EF4444" }]}>{noShow}</Text>
-          <Text style={s.kpiLbl}>Faltas</Text>
-        </View>
+        {withSide && (
+          <DaySide appointments={dayAppts} isToday={isToday} nowMin={nowMin} onPress={a => onAppointmentPress?.(a)} />
+        )}
       </View>
+    </View>
+  );
+}
 
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.dateTitle}>{displayDate}</Text>
-        <View style={s.headerRight}>
-          {/* PR21 #7: viewToggle interno removido (duplicava AgendaNavigator
-              externo de OdontoClinicTabs). AgendaDental agora so renderiza
-              o dia que o pai escolheu. */}
-          {onNewAppointment && (
-            <Pressable onPress={onNewAppointment} style={s.addBtn}>
-              <Text style={s.addBtnText}>+ Agendar</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
+// ─── Lateral: na cadeira, aguardando, próximos, contagem ────
 
-      {/* Grid */}
-      {viewMode === "semana" ? (
-        <WeekView
-          appointments={appointments}
-          anchor={anchor}
-          onAppointmentPress={onAppointmentPress}
-          onSlotPress={onSlotPress}
-          onMoveAppointment={onMoveAppointment}
-          onResizeAppointment={onResizeAppointment}
-        />
-      ) : (
-        <DayView
-          appointments={appointments}
-          chairs={chairs}
-          anchor={anchor}
-          onAppointmentPress={onAppointmentPress}
-          onSlotPress={onSlotPress}
-          onMoveAppointment={onMoveAppointment}
-          onResizeAppointment={onResizeAppointment}
-        />
+function DaySide({ appointments, isToday, nowMin, onPress }: {
+  appointments: DentalAppointment[];
+  isToday: boolean;
+  nowMin: number;
+  onPress: (a: DentalAppointment) => void;
+}) {
+  const inChair = appointments.filter(a => a.status === "em_atendimento");
+  const waiting = appointments.filter(a => a.status === "paciente_consultorio");
+  const next = appointments.filter(a =>
+    WAITING_LIST.has(a.status) && (!isToday || minutesOfDay(new Date(a.scheduled_at)) > nowMin));
+  const counts = DENTAL_STATUS_ORDER
+    .filter(k => k !== "cancelado")
+    .map(k => [k, appointments.filter(a => a.status === k).length] as const)
+    .filter(([, c]) => c > 0);
+
+  const row = (a: DentalAppointment) => (
+    <Pressable key={a.id} onPress={() => onPress(a)} style={s.sideRow} accessibilityRole="button">
+      <View style={[s.sideDot, { backgroundColor: dentalStatus(a.status).color }]} />
+      <Text style={s.sideTime}>{hm(minutesOfDay(new Date(a.scheduled_at)))}</Text>
+      <Text style={s.sideName} numberOfLines={1}>{a.patient_name}</Text>
+    </Pressable>
+  );
+
+  return (
+    <View style={s.side}>
+      {isToday && (
+        <>
+          <View style={s.sideCard}>
+            <Text style={s.sideTitle}>Na cadeira agora</Text>
+            {inChair.length ? inChair.map(row) : <Text style={s.sideEmpty}>Ninguém</Text>}
+          </View>
+          <View style={s.sideCard}>
+            <Text style={s.sideTitle}>Aguardando</Text>
+            {waiting.length ? waiting.map(row) : <Text style={s.sideEmpty}>Ninguém na sala de espera</Text>}
+          </View>
+        </>
       )}
+      <View style={s.sideCard}>
+        <Text style={s.sideTitle}>{isToday ? "Próximos" : "A atender"}</Text>
+        {next.length ? next.map(row) : <Text style={s.sideEmpty}>Nenhum</Text>}
+      </View>
+      <View style={s.sideCard}>
+        <Text style={s.sideTitle}>{isToday ? "Hoje" : "No dia"}</Text>
+        {counts.length ? counts.map(([k, c]) => (
+          <View key={k} style={s.kv}>
+            <View style={s.kvLeft}>
+              <View style={[s.kvDot, { backgroundColor: dentalStatus(k).color }]} />
+              <Text style={s.kvLabel}>{dentalStatus(k).label}</Text>
+            </View>
+            <Text style={s.kvVal}>{c}</Text>
+          </View>
+        )) : <Text style={s.sideEmpty}>Sem consultas</Text>}
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { gap: 12 },
+  layoutSide: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
+  card: { backgroundColor: C.bg2, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingBottom: 12, flexGrow: 1 },
+  headerRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: C.border },
+  chairHeader: {
+    flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 8, paddingVertical: 8, borderLeftWidth: 1, borderLeftColor: C.border,
+  },
+  chairMin: { minWidth: 220 },
+  chairDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.cyan },
+  chairName: { fontSize: 12.5, fontWeight: "600", color: C.ink, fontFamily: Fonts.body, flexShrink: 1 },
+  chairCount: { marginLeft: "auto" as any, fontSize: 10.5, color: C.ink3, fontFamily: Fonts.body, flexShrink: 0 },
+  bodyRow: { flexDirection: "row", marginTop: 10 },
+  hourLabel: { position: "absolute", top: -7, right: 8, fontSize: 10, fontWeight: "500", color: C.ink3, fontFamily: Fonts.mono },
+  col: { flex: 1, minWidth: 0, borderLeftWidth: 1, borderLeftColor: C.border },
+  slot: { borderTopWidth: 1 },
+  slotHour: { borderTopColor: C.border },
+  slotHalf: { borderTopColor: C.surface },
+  hint: { fontSize: 11.5, color: C.ink3, fontFamily: Fonts.body },
 
-  // KPIs
-  kpiRow: { flexDirection: "row", gap: 8 },
-  kpi: {
-    flex: 1,
-    backgroundColor: Colors.bg2 || "#090c1a",
-    borderRadius: 10,
-    padding: 10,
-    alignItems: "center",
+  side: { width: 290, gap: 12 },
+  sideCard: { backgroundColor: C.bg2, borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 14 },
+  sideTitle: {
+    fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.ink3, fontWeight: "600",
+    fontFamily: Fonts.body, marginBottom: 8,
   },
-  kpiVal: { fontSize: 20, fontWeight: "700" },
-  kpiLbl: {
-    fontSize: 9,
-    color: Colors.ink3 || "#888",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-
-  // Header
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dateTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: Colors.ink || "#fff",
-    textTransform: "capitalize" as any,
-    flex: 1,
-  },
-  addBtn: {
-    backgroundColor: "#06B6D4",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  addBtnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-
-  // View toggle
-  viewToggle: {
-    flexDirection: "row",
-    gap: 0,
-    backgroundColor: Colors.bg3 || "#0e1228",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border || "rgba(255,255,255,0.07)",
-    overflow: "hidden",
-  },
-  viewBtn: { paddingHorizontal: 14, paddingVertical: 7 },
-  viewBtnActive: { backgroundColor: Colors.violet || "#6d28d9" },
-  viewBtnText: { fontSize: 12, color: Colors.ink3 || "#888", fontWeight: "600" },
-  viewBtnTextActive: { color: "#fff" },
-
-  // ── Week view ──
-  weekHeader: { flexDirection: "row" },
-  weekHourCol: { width: 44 },
-  weekDayHdr: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 6,
-    borderRightWidth: 1,
-    borderRightColor: Colors.border || "rgba(255,255,255,0.07)",
-  },
-  weekDayName: {
-    fontSize: 10,
-    color: Colors.ink3 || "#888",
-    textTransform: "uppercase" as any,
-  },
-  weekDayNum: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: Colors.ink || "#fff",
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center" as any,
-    marginTop: 2,
-  },
-  weekDayNumToday: {
-    backgroundColor: Colors.violet || "#6d28d9",
-    color: "#fff",
-    overflow: "hidden" as any,
-  },
-  weekGrid: { flexDirection: "row" },
-  weekHourCell: {
-    height: 36,
-    justifyContent: "flex-start",
-    paddingTop: 2,
-    paddingRight: 6,
-    alignItems: "flex-end",
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border || "rgba(255,255,255,0.07)",
-  },
-  weekHourText: { fontSize: 9, color: Colors.ink3 || "#888" },
-  weekDayCol: {
-    flex: 1,
-    borderRightWidth: 1,
-    borderRightColor: Colors.border || "rgba(255,255,255,0.07)",
-  },
-  weekSlotCell: {
-    height: 36,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border || "rgba(255,255,255,0.07)",
-    position: "relative" as any,
-  },
-  weekApptBlock: {
-    position: "absolute" as any,
-    top: 1,
-    left: 1,
-    right: 1,
-    bottom: 1,
-    borderLeftWidth: 3,
-    borderRadius: 4,
-    padding: 2,
-    overflow: "hidden",
-    justifyContent: "center",
-  },
-  weekApptText: { fontSize: 10, fontWeight: "600" },
-
-  // ── Day view ──
-  grid: { flexDirection: "row", gap: 10 },
-  column: { gap: 4 },
-  chairHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
-  chairDot: { width: 8, height: 8, borderRadius: 4 },
-  chairName: { fontSize: 13, fontWeight: "600", color: Colors.ink || "#fff", flex: 1 },
-  chairCount: { fontSize: 10, color: Colors.ink3 || "#888" },
-  slot: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 8,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#06B6D4",
-    backgroundColor: Colors.bg2 || "#090c1a",
-    marginBottom: 3,
-  },
-  slotEmpty: { borderLeftColor: Colors.border || "rgba(255,255,255,0.07)", opacity: 0.5 },
-  slotTime: { fontSize: 11, color: Colors.ink3 || "#888", fontWeight: "600", width: 38 },
-  slotName: { fontSize: 13, fontWeight: "600", color: Colors.ink || "#fff" },
-  slotProc: { fontSize: 11, color: Colors.ink2 || "#aaa" },
-  slotEmptyText: { fontSize: 11, color: Colors.ink3 || "#888", fontStyle: "italic" },
-  slotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  slotBadgeText: { fontSize: 9, fontWeight: "600" },
+  sideEmpty: { fontSize: 11.5, color: C.ink3, fontFamily: Fonts.body },
+  sideRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  sideDot: { width: 9, height: 9, borderRadius: 5 },
+  sideTime: { fontSize: 11, color: C.ink3, fontFamily: Fonts.mono },
+  sideName: { fontSize: 13, fontWeight: "600", color: C.ink, fontFamily: Fonts.body, flexShrink: 1 },
+  kv: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 3 },
+  kvLeft: { flexDirection: "row", alignItems: "center", gap: 7 },
+  kvDot: { width: 8, height: 8, borderRadius: 2 },
+  kvLabel: { fontSize: 13, color: C.ink2, fontFamily: Fonts.body },
+  kvVal: { fontSize: 13, fontWeight: "700", color: C.ink, fontFamily: Fonts.body },
 });
 
 export default AgendaDental;

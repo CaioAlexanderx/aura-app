@@ -7,7 +7,7 @@ export type { AnamneseData } from "./AnamneseWizard";
 export { ProntuarioTimeline } from "./ProntuarioTimeline";
 export type { TimelineEntry, TimelineEntryType } from "./ProntuarioTimeline";
 export { AgendaDental } from "./AgendaDental";
-export type { DentalAppointment } from "./AgendaDental";
+export type { DentalAppointment, DentalChair } from "./AgendaDental";
 export { ClinicalImages } from "./ClinicalImages";
 export type { ClinicalImage } from "./ClinicalImages";
 export { OrcamentoFunnel } from "./OrcamentoFunnel";

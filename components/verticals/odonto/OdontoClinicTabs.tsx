@@ -2,8 +2,9 @@
 // AURA. — Odonto Clinical Tab Wrappers (patient-centric)
 // PR43 (2026-04-29): OdontogramaTab standalone usa Odontograma2D v5.
 // PR44 (2026-04-29): UAT bugs P0
-//   - #2 fix drag-drop agenda — passar onMoveAppointment/onResizeAppointment
-//     pra Day/Week/Month (regressao PR21+ ao reescrever AgendaTab).
+//   - #2 fix drag-drop agenda (substituido em 17/09/2026: a grade Dia/Semana
+//     recebe onReschedule = useDentalReschedule e faz arrastar/redimensionar
+//     por pointer events — ver hooks/useAgendaDrag.ts).
 //   - #17 fix cancelar consulta — handleAppointmentPress agora sempre abre
 //     AppointmentDetailModal em vez de bypassar pra Modo Consulta. O modal
 //     ja tem botoes Iniciar/Cancelar, agora visiveis em qualquer status.
@@ -13,10 +14,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { Icon } from "@/components/Icon";
-import { AgendaDental } from "@/components/verticals/odonto/AgendaDental";
+import { AgendaDental, type DentalAppointment, type DentalChair } from "@/components/verticals/odonto/AgendaDental";
+import { useDentalReschedule } from "@/hooks/useDentalReschedule";
 import { AgendaDentalWeek } from "@/components/verticals/odonto/AgendaDentalWeek";
 import { AgendaDentalMonth } from "@/components/verticals/odonto/AgendaDentalMonth";
 import { AgendaNavigator, agendaRangeFor, type AgendaView } from "@/components/verticals/odonto/AgendaNavigator";
@@ -47,7 +49,6 @@ type ViewMode = "calendar" | "list";
 
 export function AgendaTab() {
   const cid = useCompanyId();
-  const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [agendaView, setAgendaView] = useState<AgendaView>("week");
   const [anchorDate, setAnchorDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -81,40 +82,29 @@ export function AgendaTab() {
     enabled: !!cid, staleTime: 30000,
   });
 
-  // PR44 #2: mutations pra mover/redimensionar agendamento via drag-drop
-  const moveMut = useMutation({
-    mutationFn: (p: { id: string; scheduled_at: string }) =>
-      request(`/companies/${cid}/dental/appointments/${p.id}`, {
-        method: "PATCH",
-        body: { scheduled_at: p.scheduled_at },
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dental-agenda"] }),
-  });
-  const resizeMut = useMutation({
-    mutationFn: (p: { id: string; duration_min: number }) =>
-      request(`/companies/${cid}/dental/appointments/${p.id}`, {
-        method: "PATCH",
-        body: { duration_min: p.duration_min },
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dental-agenda"] }),
-  });
+  // Arrastar/redimensionar na grade (Dia e Semana): um PATCH por gesto, com
+  // atualização otimista; conflito, Desfazer e avisos ficam na própria grade.
+  const reschedule = useDentalReschedule(cid);
 
   const settings = settingsData?.settings;
   const practitioners = practitionersData?.practitioners || [];
 
-  let chairs: string[] | undefined;
+  let chairs: DentalChair[] | undefined;
   if (settings) {
     chairs = [];
     settings.chairs_active.forEach((active: boolean, idx: number) => {
       if (!active) return;
       const allocId = settings.chair_practitioner_ids[idx];
       const allocated = practitioners.find((p: any) => p.id === allocId);
-      chairs!.push(allocated ? `Cadeira ${idx + 1} - ${allocated.name}` : `Cadeira ${idx + 1}`);
+      chairs!.push({
+        label: allocated ? `Cadeira ${idx + 1} - ${allocated.name}` : `Cadeira ${idx + 1}`,
+        practitionerId: allocated ? allocated.id : undefined,
+      });
     });
-    if (chairs.length === 0) chairs = ["Cadeira 1"];
+    if (chairs.length === 0) chairs = [{ label: "Cadeira 1" }];
   }
 
-  const appointments = ((data as any)?.appointments || []).map((a: any) => ({
+  const appointments: DentalAppointment[] = ((data as any)?.appointments || []).map((a: any) => ({
     id: a.id,
     patient_name: a.patient_name || "Paciente",
     patient_phone: a.patient_phone,
@@ -123,6 +113,8 @@ export function AgendaTab() {
     chief_complaint: a.chief_complaint,
     status: a.status || "agendado",
     chair: chairLabelFor(a.practitioner_id, settings, practitioners),
+    practitioner_id: a.practitioner_id ?? null,
+    allergies: a.allergies ?? null,
     professional_name: a.professional_name,
   }));
 
@@ -142,14 +134,6 @@ export function AgendaTab() {
   // atendimento" e "Cancelar" — agora ambos visiveis em qualquer status.
   function handleAppointmentPress(a: { id: string; status: string }) {
     setDetailId(a.id);
-  }
-
-  // PR44 #2: handlers pro drag-drop
-  function handleMoveAppointment(id: string, newScheduledAt: string) {
-    moveMut.mutate({ id, scheduled_at: newScheduledAt });
-  }
-  function handleResizeAppointment(id: string, newDurationMin: number) {
-    resizeMut.mutate({ id, duration_min: newDurationMin });
   }
 
   return (
@@ -191,8 +175,7 @@ export function AgendaTab() {
               date={anchorDate}
               onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressDay}
-              onMoveAppointment={handleMoveAppointment}
-              onResizeAppointment={handleResizeAppointment}
+              onReschedule={reschedule}
             />
           )}
           {!isLoading && agendaView === "week" && (
@@ -201,8 +184,7 @@ export function AgendaTab() {
               anchorDate={anchorDate}
               onAppointmentPress={handleAppointmentPress}
               onSlotPress={handleSlotPressWeek}
-              onMoveAppointment={handleMoveAppointment}
-              onResizeAppointment={handleResizeAppointment}
+              onReschedule={reschedule}
             />
           )}
           {!isLoading && agendaView === "month" && (
