@@ -6,6 +6,8 @@ import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { DentalColors } from "@/constants/dental-tokens";
+import { ContactActions } from "@/components/dental/ContactActions";
+import { confirmationText } from "@/utils/whatsapp";
 
 // ============================================================
 // HojeAppointmentsPanel — Lista de proximos atendimentos do dia
@@ -70,7 +72,8 @@ function emptyMessage(): { title: string; sub: string } {
 }
 
 export function HojeAppointmentsPanel() {
-  const cid = useAuthStore().company?.id;
+  const company = useAuthStore().company;
+  const cid = company?.id;
   const router = useRouter();
   const qc = useQueryClient();
   const today = todayISO();
@@ -184,7 +187,19 @@ export function HojeAppointmentsPanel() {
                       {meta.label}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: "row", gap: 5 }}>
+                  <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
+                    {/* WhatsApp — confirmação, sempre visível (sem hover-reveal) */}
+                    <ContactActions
+                      phone={a.patient_phone}
+                      whatsappText={confirmationText({
+                        patientName: a.patient_name || "",
+                        clinicName: company?.name,
+                        when: new Date(a.scheduled_at),
+                      })}
+                      variant="icon"
+                      showCall={false}
+                      contactName={a.patient_name}
+                    />
                     {/* Prontuário */}
                     {(a.customer_id || a.patient_id) ? (
                       <Pressable

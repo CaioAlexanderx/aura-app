@@ -17,6 +17,8 @@ import { useAuthStore } from '@/stores/auth';
 import { request } from '@/services/api';
 import { toast } from '@/components/Toast';
 import { DentalColors } from '@/constants/dental-tokens';
+import { ContactActions } from '@/components/dental/ContactActions';
+import { genericText } from '@/utils/whatsapp';
 import { OdontoSubNav } from './OdontoSubNav';
 import { PortalShareModal } from './PortalShareModal';
 import { ConsentCollectModal } from './ConsentCollectModal';
@@ -247,6 +249,13 @@ export function PatientHub({ visible, patient, onClose, onEdit, initialTab }: Pr
               </View>
 
               <View style={st.actions}>
+                <ContactActions
+                  phone={patient.phone}
+                  whatsappText={genericText({ patientName: patient.full_name || patient.name })}
+                  variant="labeled"
+                  showCall
+                  contactName={patient.full_name || patient.name}
+                />
                 {onEdit && (
                   <Pressable onPress={() => onEdit(patient)} style={st.btnPrimary}>
                     <Text style={st.btnPrimaryText}>✏️ Editar</Text>
