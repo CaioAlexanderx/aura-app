@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ImplantPhaseTimeline, PHASE_STATUS_COLOR } from './ImplantPhaseTimeline';
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 const TREATMENT_STATUS_LABEL: Record<string, string> = {
   planning:'Planejamento', pre_surgical:'Pré-cirúrgico', surgical:'Cirúrgico',
@@ -17,9 +18,9 @@ const TREATMENT_STATUS_COLOR: Record<string, string> = {
   completed:'#10B981', abandoned:'#EF4444',
 };
 
+// surgery_date e coluna DATE
 function fmt(v?: string | null) {
-  if (!v) return '—';
-  try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return '—'; }
+  return formatDateOnlyBR(v, '—');
 }
 function fmtBRL(v?: number | string | null) {
   const n = parseFloat(v as string) || 0;

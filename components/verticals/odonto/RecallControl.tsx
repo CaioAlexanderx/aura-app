@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // ============================================================
 // D-09: RecallControl — Patient recall/return tracking
@@ -85,7 +86,7 @@ function PatientRecallCard({ patient: p, urgency, onSendRecall, onSchedule }: {
     <View style={[s.card, { borderLeftColor: color }]}>
       <View style={{ flex: 1 }}>
         <Text style={s.name}>{p.full_name}</Text>
-        <Text style={s.recallDate}>Retorno: {new Date(p.next_recall).toLocaleDateString("pt-BR")} ({daysText})</Text>
+        <Text style={s.recallDate}>Retorno: {formatDateOnlyBR(p.next_recall, "—")} ({daysText})</Text>
         <Text style={s.meta}>Intervalo: {p.recall_interval_months} meses{p.no_show_count > 0 ? ` | ${p.no_show_count} faltas` : ""}</Text>
       </View>
       <View style={s.actions}>

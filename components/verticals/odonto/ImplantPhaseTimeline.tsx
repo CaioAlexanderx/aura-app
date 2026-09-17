@@ -10,6 +10,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
 import { notify } from '@/utils/webAlert';
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 export const PHASE_KIND_LABEL: Record<string, string> = {
   planning:         'Planejamento',
@@ -33,6 +34,8 @@ function fmt(v?: string | null) {
   if (!v) return '—';
   try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return '—'; }
 }
+// planned_date e DATE (completed_date e timestamptz e segue em fmt)
+const fmtDay = (v?: string | null) => formatDateOnlyBR(v, '—');
 
 function PhaseDot({ kind, status, onPress }: { kind: string; status: string; onPress: () => void }) {
   const color = PHASE_STATUS_COLOR[status] || '#475569';
@@ -87,7 +90,7 @@ export function ImplantPhaseTimeline({ phases, treatmentId, companyId }: Props) 
               <Text style={st.cardStatus}>
                 Status: {sel.status === 'completed' ? '✓ Concluída' : sel.status}
               </Text>
-              {sel.planned_date   && <Text style={st.meta}>Agendada: {fmt(sel.planned_date)}</Text>}
+              {sel.planned_date   && <Text style={st.meta}>Agendada: {fmtDay(sel.planned_date)}</Text>}
               {sel.completed_date && <Text style={st.meta}>Concluída: {fmt(sel.completed_date)}</Text>}
               {sel.notes          && <Text style={[st.meta, { lineHeight: 18, marginTop: 6 }]}>{sel.notes}</Text>}
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>

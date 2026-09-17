@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // ============================================================
 // D-02: TreatmentPlanCard (Orcamento Odontologico)
@@ -151,7 +152,7 @@ export function TreatmentPlanCard({
             <View key={inst.installment_number} style={s.instRow}>
               <Text style={s.instNum}>{inst.installment_number}\u00AA</Text>
               <Text style={s.instDate}>
-                {new Date(inst.due_date).toLocaleDateString("pt-BR")}
+                {formatDateOnlyBR(inst.due_date, "—")}
               </Text>
               <Text style={s.instAmount}>
                 R$ {Number(inst.amount).toFixed(2).replace(".", ",")}

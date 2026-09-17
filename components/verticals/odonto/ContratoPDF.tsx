@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // ============================================================
 // D-15: ContratoPDF — Auto-generated treatment contract
@@ -96,7 +97,7 @@ export function ContratoPDF({ contrato: c, onGeneratePDF, onSendWhatsApp, onPrin
           <Text style={s.clause}>1. O contratante autoriza a realizacao dos procedimentos listados acima.</Text>
           <Text style={s.clause}>2. O tratamento pode sofrer alterações conforme evolução clínica, mediante acordo entre as partes.</Text>
           <Text style={s.clause}>3. Faltas sem aviso prévio de 24h poderão ser cobradas.</Text>
-          <Text style={s.clause}>4. Validade deste orcamento: {c.validUntil ? new Date(c.validUntil).toLocaleDateString("pt-BR") : "30 dias"}.</Text>
+          <Text style={s.clause}>4. Validade deste orcamento: {formatDateOnlyBR(c.validUntil, "30 dias")}.</Text>
         </View>
 
         {/* Signatures */}

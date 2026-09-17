@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/services/api';
-import { OrthoSessionTimeline, SESSION_TYPE_LABEL, fmtDate } from './OrthoSessionTimeline';
+import { OrthoSessionTimeline, SESSION_TYPE_LABEL, fmtDateOnly } from './OrthoSessionTimeline';
 import { notify } from '@/utils/webAlert';
 
 export const APPLIANCE_LABELS: Record<string, string> = {
@@ -87,8 +87,8 @@ export function OrthoTreatmentCard({ t, companyId }: Props) {
 
       {/* Meta */}
       <View style={st.metaRow}>
-        {t.start_date           && <Text style={st.metaChip}>📅 Inicio: {fmtDate(t.start_date)}</Text>}
-        {t.expected_end_date    && <Text style={st.metaChip}>🏁 Prev: {fmtDate(t.expected_end_date)}</Text>}
+        {t.start_date           && <Text style={st.metaChip}>📅 Inicio: {fmtDateOnly(t.start_date)}</Text>}
+        {t.expected_end_date    && <Text style={st.metaChip}>🏁 Prev: {fmtDateOnly(t.expected_end_date)}</Text>}
         {t.practitioner_name    && <Text style={st.metaChip}>👤 {t.practitioner_name}</Text>}
         {t.estimated_duration_months && <Text style={st.metaChip}>⏱ {t.estimated_duration_months} meses</Text>}
       </View>

@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
 import { DentalColors } from "@/constants/dental-tokens";
+import { toDateOnlyString } from "@/utils/dateOnly";
 
 type RetentionsResponse = {
   period: { from: string; to: string };
@@ -48,10 +49,10 @@ const fmtBRL = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function startOfMonth(d = new Date()) {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0];
+  return toDateOnlyString(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 function endOfMonth(d = new Date()) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
+  return toDateOnlyString(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 export function DentalTissRetentionsCard() {

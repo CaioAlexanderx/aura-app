@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // D-19: Periograma — Periodontal probing chart
 
@@ -27,7 +28,7 @@ export function Periograma({ charts, patientName, onAddExam, onViewChart }: Prop
             <View style={s.kpi}><Text style={[s.kpiVal, { color: latest.bleeding_index > 20 ? "#EF4444" : "#10B981" }]}>{latest.bleeding_index}%</Text><Text style={s.kpiLbl}>Sangramento</Text></View>
             <View style={s.kpi}><Text style={[s.kpiVal, { color: latest.plaque_index > 30 ? "#F59E0B" : "#10B981" }]}>{latest.plaque_index}%</Text><Text style={s.kpiLbl}>Placa</Text></View>
             <View style={s.kpi}><Text style={s.kpiVal}>{latest.bleeding_sites}/{latest.total_sites}</Text><Text style={s.kpiLbl}>Sites sangrantes</Text></View>
-            <View style={s.kpi}><Text style={[s.kpiVal, { fontSize: 12 }]}>{new Date(latest.exam_date).toLocaleDateString("pt-BR")}</Text><Text style={s.kpiLbl}>Data exame</Text></View>
+            <View style={s.kpi}><Text style={[s.kpiVal, { fontSize: 12 }]}>{formatDateOnlyBR(latest.exam_date, "—")}</Text><Text style={s.kpiLbl}>Data exame</Text></View>
           </View>
           {latest.diagnosis && <Text style={s.diagnosis}>Diagnostico: {latest.diagnosis}</Text>}
           {/* Mini tooth grid */}
@@ -74,7 +75,7 @@ export function Periograma({ charts, patientName, onAddExam, onViewChart }: Prop
       {charts.length > 1 && (<View style={s.history}><Text style={s.histTitle}>Historico ({charts.length} exames)</Text>
         {charts.slice(1).map(c => (
           <Pressable key={c.id} onPress={() => onViewChart?.(c.id)} style={s.histRow}>
-            <Text style={s.histDate}>{new Date(c.exam_date).toLocaleDateString("pt-BR")}</Text>
+            <Text style={s.histDate}>{formatDateOnlyBR(c.exam_date, "—")}</Text>
             <Text style={s.histBi}>Sangr: {c.bleeding_index}%</Text>
             <Text style={s.histPi}>Placa: {c.plaque_index}%</Text>
           </Pressable>

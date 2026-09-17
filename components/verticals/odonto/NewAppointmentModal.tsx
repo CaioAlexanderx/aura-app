@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { dentalConfigApi } from "@/services/dentalConfigApi";
 import { localDateTimeToISO } from "@/utils/mask";
+import { toDateOnlyString, todayLocalString } from "@/utils/dateOnly";
 import { NewPatientModal } from "./NewPatientModal";
 
 interface Props {
@@ -51,11 +52,11 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime }: Props
     if (!visible) return;
     if (initialDateTime) {
       const d = new Date(initialDateTime);
-      setDate(d.toISOString().split("T")[0]);
+      setDate(toDateOnlyString(d));
       setTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
     } else {
-      const now = new Date();
-      setDate(now.toISOString().split("T")[0]);
+      // dia local: via toISOString, depois das 21h abria com a data de amanha
+      setDate(todayLocalString());
       setTime("09:00");
     }
   }, [visible, initialDateTime]);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Switch } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // ============================================================
 // D-11: AgendaOnline — Online booking management
@@ -259,7 +260,7 @@ export function AgendaOnline({ config, requests, bookingUrl, saving, onToggleAct
               <View style={{ flex: 1 }}>
                 <Text style={s.reqName}>{req.patient_name}</Text>
                 <Text style={s.reqDate}>
-                  {new Date(req.preferred_date).toLocaleDateString("pt-BR")} às {req.preferred_time}
+                  {formatDateOnlyBR(req.preferred_date, "—")} às {req.preferred_time}
                 </Text>
                 {req.patient_phone && <Text style={s.reqPhone}>{req.patient_phone}</Text>}
                 {req.chief_complaint && <Text style={s.reqComplaint}>{req.chief_complaint}</Text>}

@@ -13,6 +13,7 @@ import { Icon } from '@/components/Icon';
 import { notify } from '@/utils/webAlert';
 import type { Batch, Guide, Insurance } from './tissTypes';
 import { GUIDE_TYPE_LABELS, STATUS_COLORS, formatBRL, formatDateBR } from './tissTypes';
+import { todayLocalString } from "@/utils/dateOnly";
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_COLORS[status] || STATUS_COLORS.rascunho;
@@ -94,7 +95,7 @@ interface BatchFormProps { visible: boolean; cid: string; onClose: () => void; }
 export function TissBatchFormModal({ visible, cid, onClose }: BatchFormProps) {
   const qc = useQueryClient();
   const [insuranceId,     setInsuranceId]     = useState('');
-  const [referenceMonth,  setReferenceMonth]  = useState(new Date().toISOString().substring(0, 7));
+  const [referenceMonth,  setReferenceMonth]  = useState(todayLocalString().substring(0, 7));
   const [selectedGuides,  setSelectedGuides]  = useState<Set<string>>(new Set());
 
   const { data: insData } = useQuery({

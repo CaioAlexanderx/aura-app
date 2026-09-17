@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth';
 import { openWhatsApp } from '@/utils/whatsapp';
 import { DentalForm, DentalColors } from '@/constants/dental-tokens';
 import { notify, confirmAlert } from '@/utils/webAlert';
+import { formatDateOnlyBR } from "@/utils/dateOnly";
 
 // Format ISO date (YYYY-MM-DD or full ISO) to dd/mm/yyyy. Avoids new Date()
 // timezone shift (parsing 'YYYY-MM-DD' as UTC drifts to previous day in GMT-).
@@ -338,7 +339,7 @@ export function CobrancasTab({ patient }: { patient: PatientLite }) {
           <View key={p.payment_id} style={[st.installCard,isOvd&&st.installCardOvd,isPaid&&st.installCardPaid]}>
             <View style={{flex:1}}>
               <Text style={st.installNum}>Parcela {p.installment_number}</Text>
-              <Text style={st.installDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu há ${days}d`:`Vence em ${formatDateBR(p.due_date)}`}</Text>
+              <Text style={st.installDate}>{isPaid?`Pago em ${formatDateBR(p.paid_at)}`:isOvd?`Venceu há ${days}d`:`Vence em ${formatDateOnlyBR(p.due_date, '—')}`}</Text>
             </View>
             <Text style={[st.installAmt,isPaid&&{color:'#10B981'},isOvd&&{color:'#EF4444'}]}>R$ {formatBRL(amt)}</Text>
           </View>

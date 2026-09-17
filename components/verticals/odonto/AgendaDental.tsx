@@ -1,6 +1,7 @@
 import { createElement, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
+import { toDateOnlyString } from "@/utils/dateOnly";
 
 // ============================================================
 // AgendaDental — View Semanal (padrão) + View Dia
@@ -66,8 +67,9 @@ function getWeekDays(anchor: Date): Date[] {
   });
 }
 
+// Dia LOCAL: via toISOString, consulta das 21h+ caia na coluna do dia seguinte.
 function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return toDateOnlyString(d);
 }
 
 // ─── Week view ───────────────────────────────────────────────

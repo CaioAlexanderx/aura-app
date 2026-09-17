@@ -17,6 +17,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
+import { toDateOnlyString } from "@/utils/dateOnly";
 import { AppointmentDetailModal } from "@/components/verticals/odonto/AppointmentDetailModal";
 import { ContactActions } from "@/components/dental/ContactActions";
 import { confirmationText } from "@/utils/whatsapp";
@@ -38,7 +39,7 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string }> 
 function periodDates(p: Period): { from?: string; to?: string } {
   const today = new Date();
   const y = today.getFullYear(), m = today.getMonth(), d = today.getDate();
-  const iso = (dt: Date) => dt.toISOString().split("T")[0];
+  const iso = toDateOnlyString; // dia local (toISOString daria o dia UTC)
 
   if (p === "today")  return { from: iso(new Date(y, m, d)),         to: iso(new Date(y, m, d)) };
   if (p === "7d")     return { from: iso(new Date(y, m, d)),         to: iso(new Date(y, m, d + 7)) };
