@@ -4,13 +4,14 @@
 // PR34 (2026-04-28): backdrop centrado + sheet com maxWidth.
 // ============================================================
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, Modal, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { DentalColors } from "@/constants/dental-tokens";
+import { localDayKey, toDateOnlyString, todayLocalString } from "@/utils/dateOnly";
 
 interface BusyAppt {
   id: string;
@@ -48,15 +49,20 @@ interface BookingConfigLite {
   available_days: number[];
 }
 
-function buildDays(
+// Exportado para teste. `durationMin` e a duracao escolhida no modal: um
+// horario so e livre se a consulta INTEIRA cabe sem sobrepor outra (antes
+// usava o tamanho do slot e oferecia 09:00 para 60min com algo as 09:30).
+export function buildDays(
   now: Date,
   busy: BusyAppt[],
   practitionerId?: string | null,
   cfg?: BookingConfigLite,
+  durationMin?: number,
 ): DaySlots[] {
   const startH = cfg?.start_hour ?? 8;
   const endH = cfg?.end_hour ?? 18;
   const slotMin = cfg?.slot_duration_min || 30;
+  const apptMs = (durationMin && durationMin > 0 ? durationMin : slotMin) * 60 * 1000;
   const allowedDays = new Set(cfg?.available_days || [1, 2, 3, 4, 5, 6]);
 
   const out: DaySlots[] = [];
@@ -65,7 +71,8 @@ function buildDays(
     if (a.status === "cancelado") continue;
     if (practitionerId && a.practitioner_id && a.practitioner_id !== practitionerId) continue;
     const d = new Date(a.scheduled_at);
-    const key = d.toISOString().slice(0, 10);
+    // dia LOCAL: consulta as 21h+ em SP e dia seguinte em UTC
+    const key = localDayKey(d);
     const start = d.getTime();
     const end = start + (a.duration_min || slotMin) * 60 * 1000;
     (busyByDay[key] = busyByDay[key] || []).push({ start, end });
@@ -74,14 +81,14 @@ function buildDays(
   for (let i = 1; i <= DAYS_AHEAD; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
     if (!allowedDays.has(d.getDay())) continue;
-    const key = d.toISOString().slice(0, 10);
+    const key = toDateOnlyString(d);
     const free: string[] = [];
     const dayBusy = busyByDay[key] || [];
     for (let h = startH; h < endH; h++) {
       for (let m = 0; m < 60; m += slotMin) {
         const slot = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0);
         const ts = slot.getTime();
-        const conflict = dayBusy.some((b) => ts < b.end && ts + slotMin * 60 * 1000 > b.start);
+        const conflict = dayBusy.some((b) => ts < b.end && ts + apptMs > b.start);
         if (!conflict) free.push(slot.toISOString());
       }
     }
@@ -115,7 +122,7 @@ export function AgendarProximoModal({
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["dental-agenda-window", cid, startISO.slice(0, 10), DAYS_AHEAD],
+    queryKey: ["dental-agenda-window", cid, todayLocalString(), DAYS_AHEAD],
     queryFn: () =>
       request<{ appointments: BusyAppt[] }>(
         `/companies/${cid}/dental/agenda?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`,
@@ -132,10 +139,16 @@ export function AgendarProximoModal({
   });
   const bookingCfg: BookingConfigLite | undefined = (cfgData as any)?.config;
 
+  const durationMin = Number(duration) || 0;
   const days = useMemo(
-    () => buildDays(new Date(), data?.appointments || [], practitionerId, bookingCfg),
-    [data, practitionerId, bookingCfg]
+    () => buildDays(new Date(), data?.appointments || [], practitionerId, bookingCfg, durationMin),
+    [data, practitionerId, bookingCfg, durationMin]
   );
+
+  // Aumentou a duracao e o horario escolhido deixou de caber: desmarca.
+  useEffect(() => {
+    if (selectedSlot && !days.some((d) => d.free.includes(selectedSlot))) setSelectedSlot(null);
+  }, [days, selectedSlot]);
 
   const confirmMut = useMutation({
     mutationFn: () => {
