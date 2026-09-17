@@ -10,6 +10,7 @@ import { useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { Product } from "@/components/screens/estoque/types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -29,6 +30,7 @@ type Props = {
 export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
+  const { m } = useValoresOcultos();
   if (Platform.OS !== "web") return null;
 
   const accent = C.violet;
@@ -174,7 +176,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 13, fontWeight: 500, color: C.ink,
                   fontVariantNumeric: "tabular-nums",
-                } as any}>{fmtBRL(price)}</td>
+                } as any}>{m(fmtBRL(price))}</td>
                 <td style={{
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 12,

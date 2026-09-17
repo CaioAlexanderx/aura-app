@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
 import { fmt } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 function AlertRow({ product }: { product: Product }) {
   const [hovered, setHovered] = useState(false);
+  const { m } = useValoresOcultos();
   const isWeb = Platform.OS === "web";
   const deficit = product.minStock - product.stock;
   return (
@@ -13,12 +15,13 @@ function AlertRow({ product }: { product: Product }) {
       style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}>
       <View style={s.icon}><Text style={s.iconText}>!</Text></View>
       <View style={{ flex: 1 }}><Text style={s.name}>{product.name}</Text><Text style={s.detail}>Atual: {product.stock} {product.unit} / Minimo: {product.minStock} {product.unit}</Text></View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {deficit} {product.unit}</Text></View><Text style={s.cost}>~{fmt(deficit * product.cost)}</Text></View>
+      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {deficit} {product.unit}</Text></View><Text style={s.cost}>~{m(fmt(deficit * product.cost))}</Text></View>
     </Pressable>
   );
 }
 
 export function AlertsList({ products }: { products: Product[] }) {
+  const { m } = useValoresOcultos();
   const lowStock = products.filter(p => p.stock <= p.minStock).sort((a, b) => (a.stock / (a.minStock || 1)) - (b.stock / (b.minStock || 1)));
 
   if (lowStock.length === 0) return (
@@ -29,7 +32,7 @@ export function AlertsList({ products }: { products: Product[] }) {
     <View>
       <View style={s.alertHeader}><Text style={s.alertHeaderText}>{lowStock.length} produto{lowStock.length > 1 ? "s" : ""} abaixo do estoque minimo</Text></View>
       <View style={s.listCard}>{lowStock.map(p => <AlertRow key={p.id} product={p} />)}</View>
-      <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposição</Text><Text style={s.reorderValue}>{fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque mínimo</Text></View>
+      <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposição</Text><Text style={s.reorderValue}>{m(fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0)))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque mínimo</Text></View>
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { webOnly } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 // 29/08/2026: helper compartilhado de plural — o ranking mostrava "1 vendas".
 import { pluralize } from "@/utils/plural";
 
@@ -20,6 +21,7 @@ type Props = { onSeeAll?: () => void };
 
 export function TopSellersCard({ onSeeAll }: Props) {
   var { company } = useAuthStore();
+  var { m } = useValoresOcultos();
   var companyId = company?.id;
   var plan = company?.plan || "";
   var isNegocio = plan === "negocio" || plan === "expansao" || plan === "personalizado";
@@ -67,7 +69,7 @@ export function TopSellersCard({ onSeeAll }: Props) {
               <Text style={s.role}>{pluralize(emp.total_sales, "venda", "vendas")}</Text>
             </View>
             <View style={s.right}>
-              <Text style={s.revenue}>{fmt(emp.total_revenue)}</Text>
+              <Text style={s.revenue}>{m(fmt(emp.total_revenue))}</Text>
               <Text style={[s.trend, { color: trendColor }]}>{trendArrow}{Math.abs(emp.trend_pct)}%</Text>
             </View>
           </View>

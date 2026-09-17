@@ -6,6 +6,8 @@
 import { Platform } from "react-native";
 import { useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
+import { MASCARA_MOEDA } from "@/utils/valoresOcultos";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -47,6 +49,7 @@ type Props = {
 export function EstoqueKpiStrip({ totalValue, totalProducts, totalUnits, lowCount, onLowClick }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
+  const { ocultos } = useValoresOcultos();
   if (Platform.OS !== "web") return null;
 
   const accent = C.violet;
@@ -110,13 +113,15 @@ export function EstoqueKpiStrip({ totalValue, totalProducts, totalUnits, lowCoun
       <Card
         label="Valor em estoque"
         primary big sparkline
-        valueNode={
+        valueNode={ocultos ? (
+          <span style={{ fontFamily: Fonts.heading, fontSize: 50, lineHeight: 1, color: C.ink, letterSpacing: "-0.02em" } as any}>{MASCARA_MOEDA}</span>
+        ) : (
           <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 } as any}>
             <span style={{ fontFamily: Fonts.heading, fontStyle: "italic", fontSize: 18, color: C.ink3, alignSelf: "flex-start", marginTop: 6 } as any}>R$</span>
             <span style={{ fontFamily: Fonts.heading, fontSize: 50, lineHeight: 1, color: C.ink, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" } as any}>{reais}</span>
             <span style={{ fontFamily: Fonts.heading, fontSize: 22, color: C.ink2, alignSelf: "flex-start", marginTop: 6, fontVariantNumeric: "tabular-nums" } as any}>,{cents || "00"}</span>
           </span>
-        }
+        )}
         sub={<span>Soma de stock × custo · atualizado em tempo real</span>}
       />
       <Card

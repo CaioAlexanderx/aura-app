@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth";
 import type { DashboardBreakdown } from "@/services/meAggregates";
 // 01/09/2026: helper compartilhado de plural (o pill mostrava "1 empresas").
 import { pluralize } from "@/utils/plural";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 function fmtBRL(value: number): string {
   if (value === null || value === undefined || isNaN(value)) return "R$ 0,00";
@@ -36,6 +37,7 @@ export function ConsolidatedBreakdownCard({
   breakdown: DashboardBreakdown[];
 }) {
   const { switchCompany, switching } = useAuthStore();
+  const { m } = useValoresOcultos();
 
   if (!breakdown || breakdown.length === 0) return null;
 
@@ -98,7 +100,7 @@ export function ConsolidatedBreakdownCard({
                   )}
                 </View>
                 <Text style={s.rowSub} numberOfLines={1}>
-                  {fmtBRL(b.revenue)} entrada · {fmtBRL(b.expenses)} despesa
+                  {m(fmtBRL(b.revenue))} entrada · {m(fmtBRL(b.expenses))} despesa
                 </Text>
                 {/* mini-bar de proporcao da receita */}
                 {totalRevenue > 0 && (
@@ -115,7 +117,7 @@ export function ConsolidatedBreakdownCard({
             </View>
 
             <View style={s.rowRight}>
-              <Text style={[s.net, { color: netColor }]}>{fmtBRL(b.net)}</Text>
+              <Text style={[s.net, { color: netColor }]}>{m(fmtBRL(b.net))}</Text>
               <Text style={s.netLabel}>resultado</Text>
             </View>
           </Pressable>

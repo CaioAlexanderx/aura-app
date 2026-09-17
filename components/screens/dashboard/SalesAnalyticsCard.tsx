@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { useSalesAnalytics, useProductsRanking } from "@/hooks/useSalesAnalytics";
 import { fmtK, fmt, webOnly } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 const PERIODS = [
   // `empty` completa a frase "Nenhuma venda ___" — sem ela o card dizia
@@ -17,6 +18,7 @@ type PeriodKey = typeof PERIODS[number]["key"];
 
 export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
   const [period, setPeriod] = useState<PeriodKey>("today");
+  const { m } = useValoresOcultos();
   const { data, isLoading, isFetching } = useSalesAnalytics(period, "day");
   const { data: ranking } = useProductsRanking(period);
 
@@ -63,7 +65,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
       <View style={[s.card, Platform.OS === "web" ? (webCard as any) : null, isFetching && { opacity: 0.7 }]}>
         <View style={s.kpiRow}>
           <View style={s.kpiMain}>
-            <Text style={s.kpiMainValue}>{fmt(totalRevenue)}</Text>
+            <Text style={s.kpiMainValue}>{m(fmt(totalRevenue))}</Text>
             <Text style={s.kpiMainLabel}>Faturamento ({periodLabel.toLowerCase()})</Text>
           </View>
           <View style={s.kpiSide}>
@@ -78,7 +80,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
             </View>
             <View style={s.kpiDivider} />
             <View style={s.kpiSmall}>
-              <Text style={s.kpiSmallValue}>{fmt(avgTicket)}</Text>
+              <Text style={s.kpiSmallValue}>{m(fmt(avgTicket))}</Text>
               <Text style={s.kpiSmallLabel}>Ticket</Text>
             </View>
           </View>
@@ -100,7 +102,7 @@ export function SalesAnalyticsCard({ onPress }: { onPress: () => void }) {
                 </View>
                 <Text style={s.topName} numberOfLines={1}>{p.name}</Text>
                 <Text style={s.topQty}>{p.total_qty || p.qty_sold || 0} un</Text>
-                <Text style={s.topRev}>{fmtK(p.total_revenue || p.revenue || 0)}</Text>
+                <Text style={s.topRev}>{m(fmtK(p.total_revenue || p.revenue || 0))}</Text>
               </View>
             ))}
           </View>

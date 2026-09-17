@@ -2,6 +2,7 @@ import { View, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { KPICard } from "./KPICard";
 import { fmtK, fmt, fmtInt, IS_WIDE } from "./types";
+import { useValoresOcultos } from "@/stores/valoresOcultos";
 
 type Props = {
   d: any;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function KPIGrid({ d, onNavigate }: Props) {
+  const { m } = useValoresOcultos();
   return (
     <View style={s.grid}>
       {/* 29/08/2026 — QA de coerencia: este card dizia so "Receita" e a tela
@@ -19,7 +21,7 @@ export function KPIGrid({ d, onNavigate }: Props) {
           e "Receita de vendas", so o que saiu pelo Caixa. */}
       <KPICard
         ic="dollar" iconColor={Colors.green}
-        label="Receita total" value={fmtK(d.revenue)}
+        label="Receita total" value={m(fmtK(d.revenue))}
         hint="Vendas + Canal Digital + lançamentos"
         hintLong={"Receita total: todas as entradas confirmadas do mês — vendas do Caixa, pedidos do Canal Digital e lançamentos manuais. É o mesmo número do \"Entrou\" no Financeiro. A tela de Vendas mostra só a parte que passou pelo Caixa."}
         delta={d.revenueDelta ? `${Math.abs(d.revenueDelta)}%` : undefined}
@@ -29,7 +31,7 @@ export function KPIGrid({ d, onNavigate }: Props) {
       />
       <KPICard
         ic="trending_down" iconColor={Colors.red}
-        label="Despesas" value={fmtK(d.expenses)}
+        label="Despesas" value={m(fmtK(d.expenses))}
         hint="Saídas confirmadas do mês"
         delta={d.expensesDelta ? `${Math.abs(d.expensesDelta)}%` : undefined}
         deltaUp={false}
@@ -38,7 +40,7 @@ export function KPIGrid({ d, onNavigate }: Props) {
       />
       <KPICard
         ic="bag" iconColor={Colors.violet3}
-        label="Vendas hoje" value={fmt(d.salesToday)}
+        label="Vendas hoje" value={m(fmt(d.salesToday))}
         hint="Valor vendido hoje (não a quantidade)"
         hintLong={"Vendas hoje: o valor vendido hoje, não a quantidade de vendas — a contagem fica no bloco Vendas, logo abaixo. Diferente da Receita total, que soma o mês inteiro."}
         spark={d.sparkNet}
@@ -46,7 +48,7 @@ export function KPIGrid({ d, onNavigate }: Props) {
       />
       <KPICard
         ic="receipt" iconColor={Colors.amber}
-        label="Ticket médio" value={fmt(d.avgTicket)}
+        label="Ticket médio" value={m(fmt(d.avgTicket))}
         hint="Média por venda no mês"
         onPress={() => onNavigate("/financeiro")}
       />
