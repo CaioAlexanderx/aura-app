@@ -72,6 +72,35 @@ export type SendBannerEmailResult = {
   sent: { email: string; provider_id: string | null }[];
   failed: { email: string; error: string }[];
 };
+// Pedidos de disparo preparados pelo Claude (migration 348 do backend).
+export type DispatchResult = {
+  http_status?: number;
+  sent?: { email: string }[];
+  failed?: { email: string; error: string }[];
+  error?: string;
+};
+export type DispatchRequestRow = {
+  id: string;
+  action: string;                       // hoje: "notification_email"
+  note: string | null;                  // o pedido em linguagem natural
+  status: "awaiting_approval" | "processing" | "done" | "failed" | "rejected";
+  requested_via: string;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  result: DispatchResult | null;
+  error: string | null;
+  preview: null | {
+    error?: string;
+    banner?: { id: string; title: string; is_active: boolean; expires_at: string | null };
+    company?: { id: string; name: string | null; legal_name: string | null } | null;
+    recipients?: string[];
+    subject?: string;
+    pix?: { code: string; amount?: number | null; due_date?: string | null } | null;
+  };
+};
 export type CreateBannerBody = {
   title: string;
   body?: string | null;
@@ -257,6 +286,18 @@ export var adminApi = {
     },
     remove: function(id: string) {
       return request<{ deleted: boolean }>("/admin/notifications/banners/" + id, { method: "DELETE", retry: 0 });
+    },
+  },
+  // Pedidos de disparo preparados pelo Claude; só executam com aprovação.
+  dispatchRequests: {
+    list: function() {
+      return request<{ requests: DispatchRequestRow[] }>("/admin/dispatch-requests");
+    },
+    approve: function(id: string) {
+      return request<{ status: "done" | "failed"; result?: DispatchResult; error?: string }>("/admin/dispatch-requests/" + id + "/approve", { method: "POST", retry: 0 });
+    },
+    reject: function(id: string) {
+      return request<{ status: "rejected" }>("/admin/dispatch-requests/" + id + "/reject", { method: "POST", retry: 0 });
     },
   },
 };
