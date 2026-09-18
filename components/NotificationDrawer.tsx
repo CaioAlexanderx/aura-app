@@ -29,6 +29,14 @@
 //   Preferências ficam AQUI dentro (engrenagem no cabeçalho), não em tela
 //   nova — ver components/NotificationPrefs.tsx.
 //   Mockup: docs/mockups/sino-de-eventos-da-loja.html
+//
+// 18/09/2026 — gaveta web vai para o document.body (WebPortal).
+//   O sino mora dentro do topbar de cada shell. No RNW toda View nasce com
+//   z-index:0, então o zIndex 1001 da gaveta ficava preso no contexto do
+//   topbar e a área de conteúdo (irmã seguinte, com PageTransition) pintava
+//   por cima: no Aura Karatê só o cabeçalho da gaveta aparecia e o corpo
+//   (banners, eventos) sumia atrás da página. Fora da árvore do shell, a
+//   gaveta não depende do empilhamento de quem hospeda o sino.
 // ============================================================
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
@@ -42,6 +50,7 @@ import {
   visualForEvent, severityLabel, relTime,
 } from '@/components/notificationEventModel';
 import { NotificationPrefs } from '@/components/NotificationPrefs';
+import { WebPortal } from '@/components/WebPortal';
 import { useRouter } from 'expo-router';
 
 type DrawerView = 'feed' | 'prefs';
@@ -908,7 +917,7 @@ export function NotificationDrawer(props: Props) {
   const [view, setView] = useState<DrawerView>('feed');
   const inner: InnerProps = { ...props, view, setView };
   if (Platform.OS !== 'web') return <DrawerNative {...inner} />;
-  return <DrawerWeb {...inner} />;
+  return <WebPortal active><DrawerWeb {...inner} /></WebPortal>;
 }
 
 const styles = StyleSheet.create({
