@@ -48,6 +48,29 @@ export type AdminBannerRow = {
   created_at: string;
   updated_at: string;
   read_count?: number;
+  last_emailed_at?: string | null;   // último e-mail enviado (migration 347 do backend)
+  email_count?: number;
+};
+
+// E-mail de notificação de empresa específica (18/09/2026).
+export type BannerRecipient = {
+  email: string;
+  sources: ("owner" | "company" | "member")[];
+  name: string | null;
+  selected: boolean;           // sugestão do backend: dono e empresa marcados
+};
+export type BannerRecipientsResponse = {
+  company: { id: string; name: string | null; legal_name: string | null; vertical: string | null };
+  recipients: BannerRecipient[];
+};
+export type SendBannerEmailBody = {
+  recipients: string[];
+  subject?: string;
+  pix?: { code: string; amount?: number | null; due_date?: string | null } | null;
+};
+export type SendBannerEmailResult = {
+  sent: { email: string; provider_id: string | null }[];
+  failed: { email: string; error: string }[];
 };
 export type CreateBannerBody = {
   title: string;
@@ -225,6 +248,12 @@ export var adminApi = {
     },
     update: function(id: string, body: Partial<CreateBannerBody>) {
       return request<{ banner: AdminBannerRow }>("/admin/notifications/banners/" + id, { method: "PATCH", body: body, retry: 0 });
+    },
+    recipients: function(companyId: string) {
+      return request<BannerRecipientsResponse>("/admin/notifications/recipients?company_id=" + encodeURIComponent(companyId));
+    },
+    sendEmail: function(id: string, body: SendBannerEmailBody) {
+      return request<SendBannerEmailResult>("/admin/notifications/banners/" + id + "/email", { method: "POST", body: body, retry: 0 });
     },
     remove: function(id: string) {
       return request<{ deleted: boolean }>("/admin/notifications/banners/" + id, { method: "DELETE", retry: 0 });
