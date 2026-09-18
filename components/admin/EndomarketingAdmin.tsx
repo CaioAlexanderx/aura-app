@@ -21,6 +21,7 @@ import { toast } from "@/components/Toast";
 import { adminApi, AdminBannerRow, BannerRecipientsResponse, SendBannerEmailBody } from "@/services/adminApi";
 import { BannerEmailFields } from "@/components/admin/BannerEmailFields";
 import { EmailDraft, EMPTY_DRAFT, UUID_RE, buildSendBody, fmtEnvio } from "@/components/admin/bannerEmail";
+import { DispatchRequestsCard } from "@/components/admin/DispatchRequestsCard";
 
 const BANNER_BASE_W = 1080;
 type TargetMode = "all" | "plan" | "company";
@@ -251,6 +252,8 @@ export function EndomarketingAdmin() {
 
   return (
     <View style={{ gap: 18 }}>
+      {/* Pedidos preparados pelo Claude — só sai com aprovação (18/09/2026) */}
+      <DispatchRequestsCard onChanged={load} />
       <View style={s.card}>
         <Text style={s.cardTitle}>Novo banner</Text>
 
