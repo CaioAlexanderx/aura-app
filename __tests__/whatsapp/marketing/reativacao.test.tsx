@@ -82,7 +82,11 @@ jest.mock("@/services/waApi", () => {
   return { ...actual, waApi: { getStatus: () => Promise.resolve(mockStatus) } };
 });
 
-import ReativacaoScreen from "@/app/clientes/reativacao";
+// I1.3 (16/09/2026): a tela ganhou o shell padrão e mudou de arquivo —
+// app/clientes/reativacao.tsx (fora do grupo (tabs), sem sidebar nem
+// cabeçalho editorial) virou app/(tabs)/clientes/reativacao.tsx. A rota
+// /clientes/reativacao é a mesma; só o import muda.
+import ReativacaoScreen from "@/app/(tabs)/clientes/reativacao";
 
 const STATUS_PRONTO = {
   connected: true,
@@ -306,7 +310,10 @@ describe("guardas de marketing travam o disparo", () => {
     await act(async () => { tree = montar(); });
     await flush();
     expect(tem(tree, "reativacao-enviar-travado")).toBe(true);
-    expect(JSON.stringify(tree.toJSON())).toContain("não foi aprovado pela Meta");
+    // I1.3: CONEXAO e TEMPLATE (os dois casos de "ainda não configurei
+    // nada") viraram uma linha de checklist só, em vez de um card cada.
+    expect(JSON.stringify(tree.toJSON())).toContain("Falta configurar");
+    expect(JSON.stringify(tree.toJSON())).toContain("template aprovado");
     tree.unmount();
   });
 });
