@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — identificar o cliente no Caixa (Fase 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 1, identificar o cliente no Caixa.
+
+     Parte do Caixa aprovado na Fase 0 (docs/mockups/
+     fase0-caixa-barra-scanner.html): logo do lojista no cabeçalho,
+     chip "Lendo · pode bipar" na linha da busca e as ações escritas
+     "Cliente F3 · Vendedora F2 · Cupom F4 · Troca ou devolução F5".
+
+     Hoje o botão Cliente abre o popover do ActPerson: busca livre e a
+     lista "Atendidos recentemente". O cadastro rápido é o
+     QuickCustomerModal (nome, nascimento e telefone obrigatórios,
+     Instagram). O "CPF na nota" do CartPanel valida o CPF (mod-11),
+     mas não conversa com o cadastro.
+
+     A proposta:
+       · a busca escolhe o que se digita — Telefone, CPF ou Nome — e
+         aplica a máscara certa; o resultado diz a última compra;
+       · sem resultado, "Cadastrar com este telefone" abre o cadastro
+         rápido já preenchido, com a caixa de consentimento
+         DESMARCADA (Negócio para cima);
+       · o CPF na nota que bate com um cliente sugere vincular;
+       · o desconto anunciado nunca depende de identificar o cliente.
+     ============================================================ */
+  :root {
+    --bg: #0B0716; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --line: rgba(255,255,255,0.07); --line2: rgba(120,100,240,0.22);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(124,58,237,0.12);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --amber: #f59e0b; --amberD: rgba(245,158,11,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --orange: #f97316; --orangeD: rgba(251,146,60,0.14);
+    --glass: rgba(255,255,255,0.035);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 24px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.14) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.09) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink); font-family: var(--sans); min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 820px; margin: 0 0 22px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--line2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 22px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 38px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12px; color: var(--ink3); line-height: 1.65; max-width: 1100px; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; max-width: 390px; }
+
+  .ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--line2); border-radius: 12px; background: rgba(9,12,26,0.85); margin: 0 0 16px; position: sticky; top: 8px; z-index: 60; backdrop-filter: blur(8px); }
+  .ctl-g { display: flex; align-items: center; gap: 6px; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--line2); background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: rgba(124,58,237,0.25); color: #fff; border-style: solid; }
+
+  /* ── Desktop ── */
+  .scaler { width: 100%; overflow-x: auto; }
+  .desk { width: 1440px; height: 911px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); display: flex; overflow: hidden; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .side { width: 72px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 10px; }
+  .side i { width: 34px; height: 34px; border-radius: 10px; background: var(--bg3); display: block; }
+  .side i.on { background: var(--violetD); box-shadow: inset 0 0 0 1px var(--violet); }
+  .cat { flex: 1; min-width: 0; padding: 24px; position: relative; overflow: hidden; }
+  .cartcol { width: 400px; flex-shrink: 0; padding: 24px 24px 24px 0; }
+
+  /* cabeçalho do Caixa (Fase 0) */
+  .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .logo { height: 48px; border-radius: 12px; display: flex; align-items: center; padding: 0 12px; background: #f6eee4; color: #3b1d2a; font-family: var(--serif); font-size: 19px; flex-shrink: 0; }
+  .logo i { font-style: italic; color: #b0406a; font-size: 1.25em; margin-left: 3px; }
+  .title { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; line-height: 31px; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--ink3); letter-spacing: 0.6px; text-transform: uppercase; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); flex-shrink: 0; }
+  .sp { flex: 1; }
+  .caixabtn { display: flex; flex-direction: column; justify-content: center; height: 44px; padding: 0 14px; border-radius: 12px; background: var(--greenD); border: 1px solid rgba(52,211,153,0.35); }
+  .caixabtn b { font-size: 12px; letter-spacing: 0.4px; color: var(--green); }
+  .caixabtn small { font-family: var(--mono); font-size: 10px; color: var(--ink3); margin-top: 2px; }
+  .searchrow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .search { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); flex: 1; max-width: 560px; font-size: 13px; color: var(--ink3); }
+  .kbd { font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--ink3); margin-left: auto; }
+  .leitor { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 8px; background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.30); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .leitor .d { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .actbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; position: relative; }
+  .abtn { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; cursor: pointer; }
+  .abtn.filled { background: rgba(124,58,237,0.14); border-color: rgba(124,58,237,0.45); }
+  .abtn.filled .rot { color: var(--ink3); font-weight: 500; }
+  .abtn.aberto { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,0.18); }
+  .abtn .sc { font-family: var(--mono); font-size: 9px; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--ink3); font-weight: 400; }
+  .abtn .pend { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px rgba(245,158,11,0.6); }
+  .abtn.discreto { background: transparent; border-color: rgba(255,255,255,0.05); color: var(--ink3); font-weight: 500; font-size: 12px; }
+  .catrow { display: flex; gap: 8px; margin-bottom: 12px; }
+  .cc { font-size: 11px; font-weight: 600; color: var(--ink3); padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); }
+  .cc.on { color: #fff; background: var(--violet); border-color: var(--violet2); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .pcard { border-radius: 16px; padding: 12px; background: var(--glass); border: 1px solid var(--line); }
+  .pimg { height: 110px; border-radius: 12px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, rgba(167,139,250,0.35), rgba(167,139,250,0.07) 70%); border: 1px solid rgba(167,139,250,0.25); font-size: 28px; font-weight: 700; }
+  .pname { font-size: 13px; font-weight: 600; min-height: 34px; line-height: 17px; }
+  .pst { font-size: 11px; color: var(--ink2); margin-top: 3px; }
+  .pfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .pprice { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--violet3); }
+  .padd { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); display: flex; align-items: center; justify-content: center; color: #fff; }
+
+  /* carrinho */
+  .cart { border-radius: 18px; border: 1px solid var(--line2); background: rgba(255,255,255,0.02); overflow: hidden; height: 100%; display: flex; flex-direction: column; }
+  .carthead { padding: 16px 18px; background: linear-gradient(135deg, rgba(124,58,237,0.85), rgba(109,40,217,0.75)); }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.65); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; }
+  .carthead .who { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 6px; }
+  .cartbody { flex: 1; overflow-y: auto; padding: 12px 16px; scrollbar-width: none; }
+  .item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .item small { display: block; color: var(--ink3); font-size: 11px; margin-top: 2px; }
+  .promo { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 10px 0; padding: 9px 11px; border-radius: 10px; background: var(--greenD); border: 1px solid rgba(52,211,153,0.3); font-size: 12px; }
+  .promo b { color: var(--green); }
+  .promo small { display: block; color: var(--ink3); font-size: 10.5px; margin-top: 1px; }
+  .pay { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+  .pay span { padding: 7px 11px; border-radius: 9px; background: var(--bg3); border: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink2); }
+  .pay span.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .sum { font-size: 12.5px; }
+  .sum div { display: flex; justify-content: space-between; padding: 3px 0; color: var(--ink2); }
+  .sum .t { color: var(--ink); font-weight: 700; font-size: 14px; border-top: 1px solid var(--line); padding-top: 7px; margin-top: 4px; }
+  .cpf { margin-top: 12px; }
+  .cpfrow { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg3); }
+  .cpfrow.valid { border-color: rgba(34,197,94,0.55); }
+  .cpfrow.invalid { border-color: rgba(239,68,68,0.55); }
+  .cpfrow label { font-size: 11px; font-weight: 700; color: var(--ink3); white-space: nowrap; }
+  .cpfrow input { flex: 1; min-width: 0; background: none; border: 0; color: var(--ink); font-family: var(--mono); font-size: 13px; padding: 10px 0; outline: none; }
+  .cpfbadge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .cpfbadge.ok { background: rgba(34,197,94,0.18); color: #4ade80; }
+  .cpfbadge.no { background: rgba(239,68,68,0.18); color: #fca5a5; }
+  .cpferr { font-size: 11px; color: var(--red); margin-top: 4px; }
+  .sug { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 11px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--line2); font-size: 12px; line-height: 1.4; }
+  .sug b { color: var(--ink); }
+  .sug .mini { margin-left: auto; }
+  .mini { height: 30px; padding: 0 10px; border-radius: 8px; background: var(--violet); border: 0; color: #fff; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .mini.ghost { background: transparent; border: 1px solid var(--line2); color: var(--violet3); }
+  .foot { padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+  .warn { font-size: 11.5px; color: var(--amber); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .warn .mini { margin-left: auto; }
+  .fin { width: 100%; height: 48px; border-radius: 12px; border: 0; background: var(--violet); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+  .fin[disabled] { opacity: 0.45; cursor: default; }
+
+  /* popover / folha de busca */
+  .pop { position: absolute; z-index: 30; top: 190px; left: 24px; width: 420px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,0.55); padding: 14px; }
+  .pop h4 { margin: 0 0 10px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .pop h4 small { font-weight: 500; color: var(--ink3); font-size: 11px; }
+  .modos { display: flex; gap: 6px; margin-bottom: 8px; }
+  .modo { padding: 6px 12px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--line); color: var(--ink2); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .modo.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .qin { width: 100%; height: 42px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--line2); color: var(--ink); padding: 0 12px; font-size: 14px; outline: none; }
+  .qin.mono { font-family: var(--mono); letter-spacing: 0.02em; }
+  .grp { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin: 12px 2px 4px; }
+  .res { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 10px; cursor: pointer; }
+  .res:hover { background: var(--bg4); }
+  @media (hover: none) { .res:hover { background: transparent; } }
+  .av { width: 34px; height: 34px; border-radius: 17px; background: var(--violetD); border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--violet3); flex-shrink: 0; }
+  .res .n { font-size: 13px; font-weight: 600; }
+  .res .m { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .res .m .mono { font-family: var(--mono); }
+  .res .u { margin-left: auto; text-align: right; font-size: 11px; color: var(--ink3); white-space: nowrap; }
+  .res .u b { display: block; color: var(--ink2); font-size: 11.5px; }
+  .res .u b.risco { color: #fbbf24; } .res .u b.sumido { color: #fca5a5; } .res .u b.perdido { color: var(--red); }
+  .nada { padding: 14px 6px 4px; font-size: 12.5px; color: var(--ink2); }
+  .nada .mono { font-family: var(--mono); color: var(--ink); }
+  .nada .mini { margin-top: 10px; height: 38px; width: 100%; font-size: 13px; }
+  .dica { font-size: 11px; color: var(--ink3); margin-top: 6px; }
+  .semid { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink3); }
+  .semid .mini { margin-left: auto; }
+
+  /* cadastro rápido */
+  .scrim { position: absolute; inset: 0; background: rgba(3,5,14,0.72); z-index: 40; }
+  .modal { position: absolute; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 460px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 20px; padding: 20px; }
+  .modal.sheet { left: 0; right: 0; bottom: 0; top: auto; transform: none; width: auto; border-radius: 20px 20px 0 0; padding: 16px 16px 18px; max-height: 92%; overflow-y: auto; scrollbar-width: none; }
+  .modal h3 { font-family: var(--serif); font-weight: 400; font-size: 28px; margin: 0 0 2px; }
+  .modal h3 span { color: var(--violet); }
+  .modal .sub { font-size: 12px; color: var(--ink3); margin: 0 0 14px; }
+  .fl { font-size: 11px; color: var(--ink3); font-weight: 600; margin: 10px 0 6px; letter-spacing: 0.3px; }
+  .fl small { font-weight: 500; }
+  .fi { width: 100%; height: 42px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--line); color: var(--ink); padding: 0 12px; font-size: 14px; outline: none; }
+  .fi:focus { border-color: var(--line2); }
+  .fi.mono { font-family: var(--mono); }
+  .row2 { display: flex; gap: 10px; }
+  .row2 > div { flex: 1; min-width: 0; }
+  .optin { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 11px 12px; border-radius: 12px; background: var(--bg3); border: 1px solid var(--line); cursor: pointer; position: relative; }
+  .optin input { position: absolute; opacity: 0; }
+  .optin .box { width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--ink3); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; }
+  .optin.on { border-color: rgba(52,211,153,0.4); }
+  .optin.on .box { background: var(--green); border-color: var(--green); }
+  .optin.on .box::after { content: '✓'; color: #062b1e; font-size: 12px; font-weight: 800; line-height: 1; }
+  .optin b { font-size: 13px; font-weight: 600; display: block; }
+  .optin .txt { font-size: 11px; color: var(--ink3); line-height: 1.45; margin-top: 4px; }
+  .optin .quem { font-size: 10.5px; color: var(--ink3); margin-top: 4px; font-family: var(--mono); }
+  .mbtns { display: flex; gap: 8px; margin-top: 16px; }
+  .mbtns button { flex: 1; height: 44px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .mbtns .c { background: transparent; border: 1px solid var(--line); color: var(--ink2); }
+  .mbtns .s { background: var(--violet); border: 0; color: #fff; }
+  .mbtns .s[disabled] { opacity: 0.45; cursor: default; }
+  .toast { position: absolute; z-index: 50; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 14px; border-radius: 12px; background: #0f2a22; border: 1px solid rgba(52,211,153,0.4); color: var(--green); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+
+  /* ── Celular ── */
+  .phone { width: 390px; height: 844px; border-radius: 26px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.95)); overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .p-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; }
+  .p-top i { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--line); }
+  .p-scroll { flex: 1; overflow-y: auto; padding: 0 14px 12px; min-height: 0; scrollbar-width: none; position: relative; }
+  .p-cart { flex-shrink: 0; margin: 0 12px 10px; height: 52px; border-radius: 14px; background: var(--violet); display: flex; align-items: center; padding: 0 14px; gap: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .p-cart small { font-weight: 500; opacity: 0.85; }
+  .p-cart .sp { flex: 1; }
+  .p-bar { height: 59px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-around; background: var(--bg2); border-top: 1px solid var(--line); font-size: 10px; color: var(--ink3); }
+  .p-bar .on { color: var(--violet3); font-weight: 700; }
+  .phone .logo { height: 44px; font-size: 16px; }
+  .phone .head { gap: 12px; margin-bottom: 10px; }
+  .phone .caixabtn { height: 40px; margin-bottom: 10px; }
+  .phone .search { padding: 10px 12px; }
+  .phone .grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .phone .pimg { height: 70px; font-size: 22px; }
+  .phone .pname { font-size: 12px; min-height: 30px; line-height: 15px; }
+  .phone .pop { position: absolute; top: auto; left: 0; right: 0; bottom: 0; width: auto; border-radius: 20px 20px 0 0; max-height: 88%; overflow-y: auto; z-index: 41; padding: 14px 14px 18px; scrollbar-width: none; }
+  .phone .cart { border-radius: 20px 20px 0 0; height: auto; }
+  .cartsheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; z-index: 41; display: flex; flex-direction: column; background: var(--bg2); border-radius: 20px 20px 0 0; border-top: 1px solid var(--line2); overflow: hidden; }
+  .cartsheet .cartbody { max-height: 470px; }
+  .grab { width: 44px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.15); margin: 8px auto 4px; }
+
+  table.t { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 8px; max-width: 1100px; }
+  table.t th, table.t td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.t th { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); }
+  table.t td { color: var(--ink2); }
+  .procon { display: flex; gap: 20px; flex-wrap: wrap; max-width: 1100px; }
+  .pc { flex: 1 1 300px; border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--bg3); }
+  .pc h4 { margin: 0 0 8px; font-size: 13px; }
+  .pc .big { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .pc .lin { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink2); padding: 3px 0; }
+  .pc.nao { border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.05); }
+  .pc.nao li { margin-bottom: 6px; }
+  .pc.nao s { color: var(--red); }
+  .decisoes { border: 1px solid var(--line2); border-radius: 16px; padding: 18px 22px; background: rgba(124,58,237,0.06); max-width: 1100px; }
+  .decisoes h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0 0 10px; }
+  .decisoes h2 span { color: var(--violet); }
+  .decisoes ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--ink2); }
+  .decisoes li { margin-bottom: 10px; }
+  .decisoes li b { color: var(--ink); }
+  .decisoes li i { color: var(--violet3); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Quem está comprando<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 1 — identificar a cliente no fechamento do Caixa sem atrasar a fila: busca por telefone, CPF ou nome com a
+    máscara certa, cadastro rápido quando não acha, e o CPF na nota conversando com o cadastro.
+  </p>
+  <div class="nota">
+    <b>O que não muda:</b> o Caixa da Fase 0 (logo no cabeçalho, “Lendo · pode bipar”, ações escritas com F1–F5), o fluxo de venda,
+    as formas de pagamento, a validação de CPF (mod-11) e a política “Identificar cliente” das Configurações.<br>
+    <b>O que muda:</b> (1) o popover do botão “Cliente” ganha a escolha <b>Telefone · CPF · Nome</b>, com máscara, e cada resultado mostra
+    a <b>última compra</b>; (2) sem resultado, <b>“Cadastrar com este telefone”</b> abre o cadastro rápido já preenchido — nome, telefone,
+    nascimento — e, do Negócio para cima, a caixa <b>“Aceita receber ofertas pelo WhatsApp”</b>, <i>desmarcada</i>, com o texto padrão embaixo;
+    (3) o <b>CPF na nota</b> que bate com um cliente sugere vincular a venda a ele.<br>
+    <b>Procon:</b> o desconto anunciado já está no total antes de qualquer identificação. Nenhuma tela diz “informe o CPF para ter desconto”.<br>
+    <b>Essencial:</b> busca e cadastro rápido continuam (clientes é Essencial); a caixa de consentimento e o Crediário não aparecem.
+    <b>Multi-CNPJ:</b> a busca procura na base do dono; o resultado de outra loja mostra o selo da loja.
+  </div>
+
+  <div class="ctl" id="ctl">
+    <div class="ctl-g"><span>Plano</span>
+      <button data-k="plano" data-v="negocio" class="on">Negócio</button>
+      <button data-k="plano" data-v="essencial">Essencial</button>
+    </div>
+    <div class="ctl-g"><span>Política “Identificar cliente”</span>
+      <button data-k="pol" data-v="off" class="on">Desligada</button>
+      <button data-k="pol" data-v="on">Ligada</button>
+    </div>
+    <div class="ctl-g"><span>Desktop</span>
+      <button data-fit="1" class="on">Ajustar à largura</button>
+      <button data-fit="0">100%</button>
+    </div>
+    <div class="ctl-g"><button data-reset>Recomeçar os exemplos</button></div>
+  </div>
+  <p class="legenda" style="margin:-4px 0 14px">Experimente no desktop: “Cliente” (ou F3) → Telefone → digite <code>11987</code> para achar a Mariana, ou
+    <code>11912345678</code> para não achar ninguém e cadastrar. No carrinho, digite o CPF <code>529.982.247-25</code>.</p>
+
+  <div class="secao" style="margin-top:6px">A · Desktop 1440 × 911</div>
+  <div class="scaler"><div class="desk" id="desk"></div></div>
+
+  <div class="secao">B · Celular 390 × 844 — a busca e o cadastro viram folhas de baixo</div>
+  <div class="telas">
+    <div><div class="rotulo">1 · Toque em “Cliente”: busca por telefone</div><div class="phone" id="ph1"></div></div>
+    <div><div class="rotulo">2 · Não achou: cadastro rápido</div><div class="phone" id="ph2"></div></div>
+    <div><div class="rotulo">3 · Carrinho: o CPF na nota acha a cliente</div><div class="phone" id="ph3"></div></div>
+  </div>
+  <p class="legenda" style="margin-top:14px">
+    <b>Folha de baixo, não popover.</b> No celular a busca e o cadastro sobem de baixo e o teclado numérico abre sozinho em Telefone e CPF.
+    <b>Tudo escrito:</b> “Cliente”, “Vendedora”, “Mais…” — como na Fase 0. A barra roxa de baixo é o carrinho, com o total sempre à vista.
+  </p>
+
+  <div class="secao">C · O desconto não depende do cliente (Procon)</div>
+  <div class="procon">
+    <div class="pc">
+      <h4>Venda sem cliente identificado</h4>
+      <div class="lin"><span>Subtotal</span><span>R$ 229,80</span></div>
+      <div class="lin"><span>Promoção da semana · 10%</span><span style="color:var(--green)">− R$ 22,98</span></div>
+      <div class="big">R$ 206,82</div>
+    </div>
+    <div class="pc">
+      <h4>A mesma venda com a Mariana vinculada</h4>
+      <div class="lin"><span>Subtotal</span><span>R$ 229,80</span></div>
+      <div class="lin"><span>Promoção da semana · 10%</span><span style="color:var(--green)">− R$ 22,98</span></div>
+      <div class="big">R$ 206,82</div>
+    </div>
+    <div class="pc nao">
+      <h4>O que nenhuma tela do Caixa diz</h4>
+      <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--ink2);line-height:1.5">
+        <li><s>“Informe o CPF para ter desconto”</s></li>
+        <li><s>“Preço especial para clientes cadastrados”</s></li>
+        <li><s>Desconto que só entra depois de vincular o cliente</s></li>
+        <li><s>Caixa de consentimento já marcada</s></li>
+      </ul>
+      <p style="font-size:12px;color:var(--ink3);margin:10px 0 0;line-height:1.5">
+        O cupom pessoal (F4) continua existindo: é um código que a cliente já tem, não uma troca de desconto por dado.
+        A promoção da vitrine entra no total no momento em que o item entra no carrinho.
+      </p>
+    </div>
+  </div>
+
+  <div class="secao">D · Essencial × Negócio — o que some</div>
+  <table class="t">
+    <tr><th>Pedaço</th><th>Essencial</th><th>Negócio e acima</th></tr>
+    <tr><td>Botão “Cliente”, busca por Telefone · CPF · Nome, última compra no resultado</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Cadastro rápido (nome, telefone, nascimento)</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Sugestão do CPF na nota para vincular a cliente</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Caixa “Aceita receber ofertas pelo WhatsApp” no cadastro rápido</td><td><b>some</b></td><td>aparece, desmarcada</td></tr>
+    <tr><td>Forma de pagamento Crediário</td><td><b>some</b></td><td>aparece (se ligada)</td></tr>
+  </table>
+
+  <div class="secao">E · Decisões para o Caio</div>
+  <div class="decisoes">
+    <h2>Decisões para o Caio<span>.</span></h2>
+    <ol>
+      <li><b>A busca pede para escolher Telefone · CPF · Nome, ou adivinha pelo que se digita?</b> Celular e CPF têm os dois 11 dígitos,
+        então adivinhar erra justamente no caso mais comum. <i>Proposta:</i> escolher, com Telefone já marcado e a última escolha lembrada por aparelho.</li>
+      <li><b>Nascimento continua obrigatório no cadastro rápido do Caixa?</b> Hoje o <code>QuickCustomerModal</code> exige.
+        <i>Proposta:</i> opcional no Caixa — com fila, a data é o campo que a vendedora inventa. A ficha pede depois.</li>
+      <li><b>Com a política “Identificar cliente” ligada, o Caixa aceita “Cliente não quis se identificar”?</b> (ligue a política no painel para ver)
+        <i>Proposta:</i> sim, registrado na venda com o nome da vendedora — exigir dado pessoal para vender é o que o Procon questiona.</li>
+      <li><b>CPF na nota que bate com um cliente: só sugere ou já vincula?</b> <i>Proposta:</i> só sugere, com um toque para vincular — o CPF
+        pode ser de quem está pagando por outra pessoa.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Clientes fictícios ────────────────────────────────────
+  function dv(base) {
+    var d = base.split('').map(Number), s = 0, i;
+    for (i = 0; i < 9; i++) s += d[i] * (10 - i);
+    var a = (s * 10) % 11; if (a === 10) a = 0; d.push(a);
+    s = 0; for (i = 0; i < 10; i++) s += d[i] * (11 - i);
+    var b = (s * 10) % 11; if (b === 10) b = 0; d.push(b);
+    return d.join('');
+  }
+  function cpfValido(c) {
+    if (!/^\d{11}$/.test(c) || /^(\d)\1{10}$/.test(c)) return false;
+    return dv(c.slice(0, 9)) === c;
+  }
+  var CL = [
+    { id: 1, nome: 'Mariana Couto', ini: 'MC', tel: '11987654321', cpf: '52998224725', dias: 44, gasto: 3482.4, loja: 'Centro' },
+    { id: 2, nome: 'Renata Pires', ini: 'RP', tel: '11998761234', cpf: dv('123456789'), dias: 9, gasto: 8910, loja: 'Shopping' },
+    { id: 3, nome: 'Juliana Andrade', ini: 'JA', tel: '11976543210', cpf: dv('111444777'), dias: 3, gasto: 640, loja: 'Centro' },
+    { id: 4, nome: 'Patrícia Lemos', ini: 'PL', tel: '11981234455', cpf: dv('453178287'), dias: 75, gasto: 1210, loja: 'Centro' },
+    { id: 5, nome: 'Mariana Rezende', ini: 'MR', tel: '11991112222', cpf: '', dias: 15, gasto: 1716, loja: 'Centro' },
+    { id: 6, nome: 'Camila Rocha', ini: 'CR', tel: '11987009911', cpf: '', dias: 133, gasto: 480, loja: 'Shopping' }
+  ];
+  var RECENTES = [3, 2, 5];
+  var G = { plano: 'negocio', pol: 'off' };
+
+  function digits(s) { return String(s || '').replace(/\D/g, ''); }
+  function mTel(d) {
+    d = d.slice(0, 11);
+    if (d.length <= 2) return d.length ? '(' + d : '';
+    if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+  }
+  function mCpf(d) {
+    d = d.slice(0, 11);
+    var o = d.slice(0, 3);
+    if (d.length > 3) o += '.' + d.slice(3, 6);
+    if (d.length > 6) o += '.' + d.slice(6, 9);
+    if (d.length > 9) o += '-' + d.slice(9);
+    return o;
+  }
+  function mData(d) {
+    d = d.slice(0, 8);
+    var o = d.slice(0, 2);
+    if (d.length > 2) o += '/' + d.slice(2, 4);
+    if (d.length > 4) o += '/' + d.slice(4);
+    return o;
+  }
+  function brl(v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (x) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]; }); }
+  function ult(c) {
+    if (c.dias == null) return ['', 'sem compras'];
+    var cls = c.dias >= 121 ? 'perdido' : c.dias >= 61 ? 'sumido' : c.dias >= 31 ? 'risco' : '';
+    return [cls, c.dias === 0 ? 'comprou hoje' : 'há ' + c.dias + ' dias'];
+  }
+
+  var ITENS = [['Vestido midi floral', 'M · Azul', 189.9], ['Brinco argola', 'Único · Dourado', 39.9]];
+  var SUB = 229.8, DESC = 22.98, TOTAL = 206.82;
+  var PROD = [['VE', 'Vestido midi floral', '11 em estoque', 'R$ 189,90'], ['BL', 'Blusa canelada', '1 em estoque', 'R$ 89,90'],
+              ['CA', 'Calça wide leg', '6 em estoque', 'R$ 229,90'], ['BR', 'Brinco argola', '24 em estoque', 'R$ 39,90'],
+              ['JA', 'Jaqueta jeans', '4 em estoque', 'R$ 299,90'], ['CI', 'Cinto de couro fino', '9 em estoque', 'R$ 134,10'],
+              ['CM', 'Camisa de seda', '3 em estoque', 'R$ 298,00'], ['SA', 'Saia plissada', '7 em estoque', 'R$ 159,90']];
+
+  function novo(extra) {
+    var st = { pop: false, modo: 'tel', q: '', cad: null, cliente: null, semId: false, cpf: '', cartOpen: false, toast: '' };
+    for (var k in extra) st[k] = extra[k];
+    return st;
+  }
+
+  function busca(st) {
+    var d = digits(st.q);
+    if (st.modo === 'tel') {
+      if (d.length < 4) return null;
+      return CL.filter(function (c) { return c.tel.indexOf(d) >= 0; });
+    }
+    if (st.modo === 'cpf') {
+      if (d.length < 3) return null;
+      return CL.filter(function (c) { return c.cpf && c.cpf.indexOf(d) === 0; });
+    }
+    var q = st.q.trim().toLowerCase();
+    if (q.length < 2) return null;
+    return CL.filter(function (c) { return c.nome.toLowerCase().indexOf(q) >= 0; });
+  }
+
+  function resHtml(c) {
+    var u = ult(c);
+    return '<div class="res" data-pick="' + c.id + '"><div class="av">' + c.ini + '</div><div style="min-width:0"><div class="n">' + esc(c.nome) + '</div>' +
+      '<div class="m"><span class="mono">' + mTel(c.tel) + '</span>' + (c.loja === 'Shopping' ? ' · Loja da Lu · Shopping' : '') + '</div></div>' +
+      '<div class="u">última compra<b class="' + u[0] + '">' + u[1] + '</b>' + brl(c.gasto) + ' no total</div></div>';
+  }
+
+  function pop(st, m) {
+    var ph = { tel: '(11) 9____-____', cpf: '___.___.___-__', nome: 'Nome da cliente' }[st.modo];
+    var h = '<div class="pop" data-stop>' +
+      '<h4>Quem está comprando?<small>' + (m ? '' : 'Esc fecha') + '</small></h4>' +
+      '<div class="modos">' + [['tel', 'Telefone'], ['cpf', 'CPF'], ['nome', 'Nome']].map(function (x) {
+        return '<button class="modo' + (st.modo === x[0] ? ' on' : '') + '" data-modo="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</div>' +
+      '<input class="qin' + (st.modo === 'nome' ? '' : ' mono') + '" data-q placeholder="' + ph + '" inputmode="' + (st.modo === 'nome' ? 'text' : 'numeric') + '" value="' + esc(st.q) + '">';
+    var r = busca(st);
+    if (r === null) {
+      h += '<div class="grp">Atendidos recentemente</div>' + RECENTES.map(function (id) { return resHtml(CL[id - 1]); }).join('');
+    } else if (r.length) {
+      h += '<div class="grp">' + r.length + (r.length === 1 ? ' cliente' : ' clientes') + '</div>' + r.map(resHtml).join('');
+    } else {
+      var d = digits(st.q);
+      if (st.modo === 'tel' && d.length >= 10) {
+        h += '<div class="nada">Nenhum cliente com <span class="mono">' + mTel(d) + '</span>.<button class="mini" data-cadastrar>Cadastrar com este telefone</button></div>';
+      } else if (st.modo === 'cpf' && d.length === 11) {
+        h += cpfValido(d)
+          ? '<div class="nada">Nenhum cliente com o CPF <span class="mono">' + mCpf(d) + '</span>.<button class="mini" data-cadastrar>Cadastrar com este CPF</button></div>'
+          : '<div class="nada" style="color:var(--red)">CPF inválido — confira os dígitos.</div>';
+      } else if (st.modo === 'nome') {
+        h += '<div class="nada">Ninguém com “' + esc(st.q) + '”.<button class="mini" data-cadastrar>Cadastrar “' + esc(st.q) + '”</button></div>';
+      } else {
+        h += '<div class="dica">Continue digitando…</div>';
+      }
+    }
+    if (G.pol === 'on') {
+      h += '<div class="semid"><span>A cliente não quer se identificar?</span><button class="mini ghost" data-semid>Vender sem identificar</button></div>';
+    }
+    return h + '</div>';
+  }
+
+  function cadastro(st, m) {
+    var c = st.cad;
+    var telOk = digits(c.tel).length >= 10;
+    var ok = c.nome.trim().length >= 2 && telOk;
+    var neg = G.plano !== 'essencial';
+    return '<div class="scrim" data-fechar-cad></div><div class="modal' + (m ? ' sheet' : '') + '" data-stop>' +
+      '<h3>Cadastro rápido<span>.</span></h3><p class="sub">Leva menos de um minuto. A venda continua aberta.</p>' +
+      '<div class="fl">Nome completo *</div><input class="fi" data-cad="nome" placeholder="Nome da cliente" value="' + esc(c.nome) + '">' +
+      '<div class="row2"><div><div class="fl">Telefone *</div><input class="fi mono" data-cad="tel" inputmode="numeric" placeholder="(11) 9____-____" value="' + esc(mTel(digits(c.tel))) + '"></div>' +
+      '<div><div class="fl">Nascimento <small>(opcional)</small></div><input class="fi mono" data-cad="nasc" inputmode="numeric" placeholder="DD/MM/AAAA" value="' + esc(mData(digits(c.nasc))) + '"></div></div>' +
+      (c.cpf ? '<div class="fl">CPF</div><input class="fi mono" data-cad="cpf" value="' + esc(mCpf(digits(c.cpf))) + '">' : '') +
+      (neg ? '<label class="optin' + (c.optin ? ' on' : '') + '"><input type="checkbox" data-optin' + (c.optin ? ' checked' : '') + '><span class="box"></span><span>' +
+        '<b>Aceita receber ofertas pelo WhatsApp</b>' +
+        '<div class="txt">Aceito receber ofertas e novidades da Loja da Lu pelo WhatsApp. Posso sair quando quiser respondendo SAIR.</div>' +
+        '<div class="quem">' + (c.optin ? 'fica registrado' : 'se marcar, fica registrado') + ': 16/09 · no balcão · por Simone</div></span></label>' : '') +
+      '<div class="mbtns"><button class="c" data-fechar-cad>Cancelar</button><button class="s" data-salvar-cad' + (ok ? '' : ' disabled') + '>Cadastrar e vincular</button></div></div>';
+  }
+
+  function carrinho(st, m) {
+    var neg = G.plano !== 'essencial';
+    var d = digits(st.cpf);
+    var estado = !d ? 'empty' : d.length < 11 ? 'incomplete' : cpfValido(d) ? 'valid' : 'invalid';
+    var dono = estado === 'valid' ? CL.filter(function (c) { return c.cpf === d; })[0] : null;
+    var sug = '';
+    if (dono && (!st.cliente || st.cliente.id !== dono.id)) {
+      sug = '<div class="sug"><span>Este CPF é de <b>' + esc(dono.nome) + '</b>' + (st.cliente ? ' — a venda está com ' + esc(st.cliente.nome) : '') + '.</span>' +
+        '<button class="mini" data-pick="' + dono.id + '">' + (st.cliente ? 'Trocar' : 'Vincular à venda') + '</button></div>';
+    } else if (st.cliente && st.cliente.cpf && !d) {
+      sug = '<div class="sug"><span>' + esc(st.cliente.nome.split(' ')[0]) + ' tem CPF no cadastro.</span><button class="mini ghost" data-usar-cpf>Usar na nota</button></div>';
+    }
+    var who = st.cliente ? esc(st.cliente.nome) + (st.cliente.dias == null ? ' · primeira compra' : ' · última compra ' + ult(st.cliente)[1]) : (st.semId ? 'Cliente não quis se identificar' : 'Sem cliente vinculado');
+    var falta = G.pol === 'on' && !st.cliente && !st.semId;
+    return '<div class="cart">' +
+      '<div class="carthead"><div class="k">Total da venda</div><div class="tot">' + brl(TOTAL) + '</div><div class="who">' + who + '</div></div>' +
+      '<div class="cartbody">' +
+        ITENS.map(function (it) { return '<div class="item"><div>' + it[0] + '<small>' + it[1] + ' · 1 un</small></div><div>' + brl(it[2]) + '</div></div>'; }).join('') +
+        '<div class="promo"><div><b>Promoção da semana · 10%</b><small>vale para toda venda, com ou sem cliente</small></div><b>− ' + brl(DESC) + '</b></div>' +
+        '<div class="pay"><span class="on">Pix</span><span>Dinheiro</span><span>Crédito</span><span>Débito</span>' + (neg ? '<span>Crediário</span>' : '') + '</div>' +
+        '<div class="sum"><div><span>Subtotal</span><span>' + brl(SUB) + '</span></div><div><span>Descontos</span><span style="color:var(--green)">− ' + brl(DESC) + '</span></div>' +
+        '<div class="t"><span>Total</span><span>' + brl(TOTAL) + '</span></div></div>' +
+        '<div class="cpf"><div class="cpfrow ' + estado + '"><label>CPF na nota</label><input data-cpf inputmode="numeric" placeholder="(opcional)" value="' + esc(mCpf(d)) + '">' +
+          (estado === 'valid' ? '<span class="cpfbadge ok">válido</span>' : estado === 'invalid' ? '<span class="cpfbadge no">inválido</span>' : '') + '</div>' +
+          (estado === 'invalid' ? '<div class="cpferr">CPF inválido — confira os dígitos</div>' : '') + sug + '</div>' +
+      '</div>' +
+      '<div class="foot">' + (falta ? '<div class="warn"><span>Esta loja pede o cliente em toda venda.</span><button class="mini ghost" data-abrir>Escolher cliente</button></div>' : '') +
+      '<button class="fin"' + (falta ? ' disabled' : '') + '>Finalizar venda · ' + brl(TOTAL) + '</button></div></div>';
+  }
+
+  function clienteBtn(st, m) {
+    var pend = G.pol === 'on' && !st.cliente && !st.semId;
+    var cls = 'abtn' + (st.cliente || st.semId ? ' filled' : '') + (st.pop ? ' aberto' : '');
+    var val = st.cliente ? (m ? st.cliente.nome.split(' ')[0] : st.cliente.nome) : st.semId ? 'não identificado' : '';
+    return '<div class="' + cls + '" data-abrir>' + (pend ? '<span class="pend"></span>' : '') +
+      '<span class="rot">' + (val ? 'Cliente:' : 'Cliente') + '</span>' + (val ? '<span class="val">' + esc(val) + '</span>' : '') +
+      (m ? '' : '<span class="sc">F3</span>') + '</div>';
+  }
+
+  function cabecalho(m) {
+    return '<div class="head"><div class="logo">Loja da <i>Lu</i></div><div style="min-width:0"><div class="title">Caixa</div>' +
+      '<div class="eyebrow"><span class="dot"></span>Loja da Lu · nova venda</div></div>' +
+      (m ? '' : '<div class="sp"></div><div class="caixabtn"><b>CAIXA ABERTO</b><small>Simone · desde 09:02</small></div>') + '</div>' +
+      (m ? '<div class="caixabtn"><b>CAIXA ABERTO</b><small>Simone · desde 09:02</small></div>' : '');
+  }
+
+  function grade(n) {
+    return '<div class="grid">' + PROD.slice(0, n).map(function (p) {
+      return '<div class="pcard"><div class="pimg">' + p[0] + '</div><div class="pname">' + p[1] + '</div><div class="pst">' + p[2] + '</div>' +
+        '<div class="pfoot"><span class="pprice">' + p[3] + '</span><span class="padd">+</span></div></div>';
+    }).join('') + '</div>';
+  }
+
+  function desk(st) {
+    return '<aside class="side"><i></i><i class="on"></i><i></i><i></i><i></i><i></i></aside>' +
+      '<div class="cat">' + cabecalho(false) +
+        '<div class="searchrow"><div class="search">Buscar produto ou código…<span class="kbd">⌘K</span></div><div class="leitor"><span class="d"></span>Lendo · pode bipar</div></div>' +
+        '<div class="actbar">' + clienteBtn(st, false) +
+          '<div class="abtn filled"><span class="rot">Vendedora:</span><span class="val">Simone</span><span class="sc">F2</span></div>' +
+          '<div class="abtn">Cupom<span class="sc">F4</span></div><div class="abtn">Troca ou devolução<span class="sc">F5</span></div>' +
+          '<div class="sp"></div><div class="abtn discreto">Digitar código<span class="sc">F1</span></div></div>' +
+        '<div class="catrow"><span class="cc on">Todos</span><span class="cc">Vestidos</span><span class="cc">Blusas</span><span class="cc">Calças</span><span class="cc">Acessórios</span></div>' +
+        grade(8) + (st.pop ? pop(st, false) : '') +
+      '</div><div class="cartcol">' + carrinho(st, false) + '</div>' +
+      (st.cad ? cadastro(st, false) : '') + (st.toast ? '<div class="toast">' + esc(st.toast) + '</div>' : '');
+  }
+
+  function phone(st) {
+    return '<div class="p-top"><i></i></div><div class="p-scroll">' + cabecalho(true) +
+      '<div class="searchrow"><div class="search">Buscar…</div><div class="leitor"><span class="d"></span>Lendo</div></div>' +
+      '<div class="actbar">' + clienteBtn(st, true) + '<div class="abtn filled"><span class="rot">Vendedora:</span><span class="val">Simone</span></div><div class="sp"></div><div class="abtn">Mais…</div></div>' +
+      '<div class="catrow"><span class="cc on">Todos</span><span class="cc">Vestidos</span><span class="cc">Blusas</span></div>' + grade(4) +
+      '</div><div class="p-cart" data-cart>2 itens<small>' + (st.cliente ? '· ' + esc(st.cliente.nome.split(' ')[0]) : '') + '</small><span class="sp"></span>' + brl(TOTAL) + ' · Ver carrinho</div>' +
+      '<div class="p-bar"><span>Painel</span><span class="on">Caixa</span><span>Clientes</span><span>WhatsApp</span><span>Mais</span></div>' +
+      (st.pop ? '<div class="scrim" data-fechar-pop></div>' + pop(st, true) : '') +
+      (st.cartOpen ? '<div class="scrim" data-fechar-cart></div><div class="cartsheet" data-stop><div class="grab"></div>' + carrinho(st, true) + '</div>' : '') +
+      (st.cad ? cadastro(st, true) : '') + (st.toast ? '<div class="toast">' + esc(st.toast) + '</div>' : '');
+  }
+
+  function iniciais() {
+    return [
+      { el: document.getElementById('desk'), m: false, init: {} },
+      { el: document.getElementById('ph1'), m: true, init: { pop: true, q: '(11) 987' } },
+      { el: document.getElementById('ph2'), m: true, init: { cad: { nome: '', tel: '11912345678', nasc: '', cpf: '', optin: false } } },
+      { el: document.getElementById('ph3'), m: true, init: { cartOpen: true, cpf: '52998224725' } }
+    ];
+  }
+  var INST = iniciais();
+  INST.forEach(function (it) { it.st = novo(JSON.parse(JSON.stringify(it.init))); });
+
+  function renderUm(it) {
+    var a = document.activeElement, foco = null, pos = 0;
+    if (a && it.el.contains(a)) {
+      foco = a.hasAttribute('data-q') ? '[data-q]' : a.hasAttribute('data-cpf') ? '[data-cpf]' : a.getAttribute('data-cad') ? '[data-cad="' + a.getAttribute('data-cad') + '"]' : null;
+      pos = a.value ? a.value.length : 0;
+    }
+    it.el.innerHTML = it.m ? phone(it.st) : desk(it.st);
+    if (foco) { var n = it.el.querySelector(foco); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
+  }
+  function render() { INST.forEach(renderUm); }
+
+  function vincular(it, c, msg) {
+    var st = it.st;
+    st.cliente = c; st.semId = false; st.pop = false; st.cad = null; st.q = '';
+    st.toast = msg || (c.nome + ' vinculada à venda');
+    renderUm(it);
+    clearTimeout(it.tt);
+    it.tt = setTimeout(function () { st.toast = ''; renderUm(it); }, 2200);
+  }
+
+  INST.forEach(function (it) {
+    it.el.addEventListener('click', function (ev) {
+      var t = ev.target, st = it.st;
+      var q = function (s) { return t.closest(s); };
+      if (t.matches('[data-optin]')) { st.cad.optin = t.checked; renderUm(it); return; }
+      if (q('[data-pick]')) { var c = CL.filter(function (x) { return x.id === +q('[data-pick]').dataset.pick; })[0]; vincular(it, c); return; }
+      if (q('[data-abrir]')) { st.pop = !st.pop; st.cartOpen = false; renderUm(it); var i = it.el.querySelector('[data-q]'); if (i) i.focus(); return; }
+      if (q('[data-modo]')) { st.modo = q('[data-modo]').dataset.modo; st.q = ''; renderUm(it); it.el.querySelector('[data-q]').focus(); return; }
+      if (q('[data-cadastrar]')) {
+        var d = digits(st.q);
+        st.cad = { nome: st.modo === 'nome' ? st.q : '', tel: st.modo === 'tel' ? d : '', nasc: '', cpf: st.modo === 'cpf' ? d : '', optin: false };
+        st.pop = false; renderUm(it);
+        var f = it.el.querySelector(st.modo === 'nome' ? '[data-cad="tel"]' : '[data-cad="nome"]'); if (f) f.focus();
+        return;
+      }
+      if (q('[data-semid]')) { st.semId = true; st.cliente = null; st.pop = false; renderUm(it); return; }
+      if (q('[data-fechar-cad]')) { st.cad = null; renderUm(it); return; }
+      if (q('[data-salvar-cad]')) {
+        if (q('[data-salvar-cad]').disabled) return;
+        var nome = st.cad.nome.trim();
+        var nc = { id: CL.length + 1, nome: nome, ini: nome.split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase(),
+          tel: digits(st.cad.tel), cpf: digits(st.cad.cpf), dias: null, gasto: 0, loja: 'Centro' };
+        CL.push(nc);
+        vincular(it, nc, nome.split(' ')[0] + ' cadastrada e vinculada' + (st.cad.optin ? ' · aceita ofertas' : ''));
+        return;
+      }
+      if (q('[data-usar-cpf]')) { st.cpf = st.cliente.cpf; renderUm(it); return; }
+      if (q('[data-cart]')) { st.cartOpen = true; st.pop = false; renderUm(it); return; }
+      if (q('[data-fechar-cart]')) { st.cartOpen = false; renderUm(it); return; }
+      if (q('[data-fechar-pop]')) { st.pop = false; renderUm(it); return; }
+      if (!it.m && st.pop && !q('[data-stop]')) { st.pop = false; renderUm(it); }
+    });
+    it.el.addEventListener('input', function (ev) {
+      var t = ev.target, st = it.st;
+      if (t.hasAttribute('data-q')) {
+        st.q = st.modo === 'nome' ? t.value : (st.modo === 'tel' ? mTel(digits(t.value)) : mCpf(digits(t.value)));
+        renderUm(it);
+      } else if (t.hasAttribute('data-cpf')) {
+        st.cpf = digits(t.value).slice(0, 11); renderUm(it);
+      } else if (t.getAttribute('data-cad')) {
+        var k = t.getAttribute('data-cad');
+        st.cad[k] = k === 'nome' ? t.value : digits(t.value);
+        renderUm(it);
+      }
+    });
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    var d = INST[0];
+    if (ev.key === 'F3') { ev.preventDefault(); d.st.pop = true; renderUm(d); var i = d.el.querySelector('[data-q]'); if (i) i.focus(); }
+    if (ev.key === 'Escape') { d.st.pop = false; d.st.cad = null; renderUm(d); }
+  });
+
+  var FIT = true;
+  function fit() {
+    document.querySelectorAll('.desk').forEach(function (x) { x.style.zoom = FIT ? Math.min(1, x.parentElement.clientWidth / 1442) : 1; });
+  }
+  window.addEventListener('resize', fit);
+  document.getElementById('ctl').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    if (b.hasAttribute('data-reset')) {
+      CL.splice(6);
+      INST.forEach(function (it) { it.st = novo(JSON.parse(JSON.stringify(it.init))); });
+      render(); return;
+    }
+    if (b.dataset.fit) {
+      FIT = b.dataset.fit === '1';
+      this.querySelectorAll('[data-fit]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      fit(); return;
+    }
+    G[b.dataset.k] = b.dataset.v;
+    this.querySelectorAll('[data-k="' + b.dataset.k + '"]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    render();
+  });
+
+  render();
+  fit();
+})();
+</script>
+</body>
+</html>
