@@ -1,4 +1,4 @@
-import { diasSemComprar, estaInativo } from "./diasSemComprar";
+import { classificarCliente, rotuloDoSegmento, type ClienteSegmentavel, type ContextoDaBase } from "./segmentos";
 
 export type Customer = {
   id: string;
@@ -26,20 +26,17 @@ export const TABS = ["Clientes", "Ranking", "Retenção", "Avaliações"];
 
 export const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-export function getStatus(c: { visits: number; totalSpent: number; lastPurchase: string; creditBalance?: number }): string[] {
-  const t: string[] = [];
-  if ((c.creditBalance || 0) > 0) t.push("Devendo");
-  if (c.totalSpent >= 2000) t.push("VIP");
-  if (c.visits >= 10) t.push("Frequente");
-  // Régua única (./diasSemComprar): "Inativo" passa a ser 61 dias ou mais.
-  // Era MAIS DE 30 — o que marcava como inativo justamente quem a tela de
-  // reativação chamava de "em risco" e não listava como inativo.
-  //
-  // E quem sumiu prevalece sobre quem é novo: com 61+ dias parado a tag
-  // "Novo" não sai, senão o mesmo cliente aparecia recém-chegado e sumido
-  // ao mesmo tempo — duas informações que se anulam na leitura.
-  const inativo = estaInativo(diasSemComprar(c.lastPurchase));
-  if (c.visits <= 3 && !inativo) t.push("Novo");
-  if (inativo) t.push("Inativo");
-  return t;
+// Fase 1 (C1.2): getStatus devolve UMA tag só, delegando pra
+// classificarCliente (./segmentos.ts) — que é quem decide a prioridade
+// entre Devendo/Perdido/Sumido/Em risco/VIP/Recorrente/Novo/Comprou uma
+// vez. Assinatura muda de string[] pra string (era um array de até duas
+// tags exibidas por CustomerRow; agora é sempre uma).
+//
+// `contexto` vem de `contextoDaBase(clientes)` (./segmentos.ts) — sem ele
+// (chamada avulsa com um único cliente) ninguém vira VIP, porque VIP é
+// relativo à base inteira. Os dois chamadores que precisam do VIP de
+// verdade (CustomerRow.tsx, RankingTab.tsx) recebem a lista completa e
+// passam o contexto explicitamente.
+export function getStatus(c: ClienteSegmentavel, contexto?: ContextoDaBase): string {
+  return rotuloDoSegmento(classificarCliente(c, contexto).segmento);
 }

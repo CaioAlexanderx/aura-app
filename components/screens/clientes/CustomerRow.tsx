@@ -7,21 +7,39 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
-import { fmt, getStatus } from "./types";
+import { fmt } from "./types";
+import {
+  classificarCliente, SEGMENTOS, type ContextoDaBase, type TokenCor,
+} from "./segmentos";
+import { diasSemComprar } from "./diasSemComprar";
+import { pluralize } from "@/utils/plural";
 import {
   hasUsablePhone, buildGreetingWaLink, buildReviewRequestWaLink, openExternalUrl,
 } from "./customerActions";
 import { ReceberPagamentoModal } from "./ReceberPagamentoModal";
 import { HistoricoComprasModal } from "./HistoricoComprasModal";
 
-function Tag({ tag }: { tag: string }) {
-  const m: Record<string, { b: string; f: string }> = {
-    VIP: { b: Colors.violetD, f: Colors.violet3 }, Frequente: { b: Colors.greenD, f: Colors.green },
-    Novo: { b: Colors.amberD, f: Colors.amber }, Inativo: { b: Colors.redD, f: Colors.red },
-    Devendo: { b: "rgba(251,146,60,0.18)", f: "#f97316" },
-  };
-  const c = m[tag] || { b: Colors.bg4, f: Colors.ink3 };
-  return <View style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: c.b }}><Text style={{ fontSize: 9, fontWeight: "600", color: c.f, letterSpacing: 0.3 }}>{tag}</Text></View>;
+// Resolve o TokenCor (indireção de ./segmentos.ts — módulo puro, sem
+// import de react-native) pra cor real. O laranja de "Devendo" nunca
+// entrou em constants/colors.ts (já era um literal aqui antes da Fase 1).
+const TOKEN_CORES: Record<TokenCor, string> = {
+  violetD: Colors.violetD, violet3: Colors.violet3,
+  greenD: Colors.greenD, green: Colors.green,
+  amberD: Colors.amberD, amber: Colors.amber,
+  redD: Colors.redD, red: Colors.red,
+  bg4: Colors.bg4, ink3: Colors.ink3,
+  laranjaBg: "rgba(251,146,60,0.18)", laranjaFg: "#f97316",
+};
+
+function Tag({ tag, cor, motivo }: { tag: string; cor: { bVar: TokenCor; fVar: TokenCor }; motivo: string }) {
+  return (
+    <View
+      style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: TOKEN_CORES[cor.bVar] }}
+      accessibilityLabel={motivo}
+    >
+      <Text style={{ fontSize: 9, fontWeight: "600", color: TOKEN_CORES[cor.fVar], letterSpacing: 0.3 }}>{tag}</Text>
+    </View>
+  );
 }
 
 function Stars({ r }: { r: number | null }) {
@@ -33,6 +51,7 @@ export function CustomerRow({
   c, expanded, onToggle, onDelete, onEdit,
   isSelected, onSelect,
   showCompanyBadge,
+  contexto,
 }: {
   c: Customer;
   expanded: boolean;
@@ -44,10 +63,21 @@ export function CustomerRow({
   // MULTICNPJ Onda 2.3: mostra badge da loja onde foi cadastrado.
   // FE passa true so quando companyCount > 1 (multi-CNPJ ativo).
   showCompanyBadge?: boolean;
+  // Fase 1 (C1.2): limiar de VIP relativo à base inteira — quem chama
+  // (app/(tabs)/clientes.tsx) calcula uma vez com contextoDaBase(customers)
+  // e passa pra cada linha. Sem ele, ninguém vira VIP (ver getStatus).
+  contexto?: ContextoDaBase;
 }) {
   const [h, sH] = useState(false);
   const w = Platform.OS === "web";
-  const tags = getStatus(c);
+  const { segmento, motivo } = classificarCliente(c, contexto);
+  const tagInfo = SEGMENTOS[segmento];
+  const diasUltimaCompra = diasSemComprar(c.lastPurchase);
+  const ultimaCompraLabel = diasUltimaCompra == null
+    ? "ainda não comprou"
+    : diasUltimaCompra === 0
+    ? "última compra hoje"
+    : `última compra há ${pluralize(diasUltimaCompra, "dia")}`;
   const { settings: pdvSettings } = usePdvSettings();
   const oticaEnabled = pdvSettings.otica_enabled === true;
   const showBadge = showCompanyBadge && c.company_name;
@@ -106,7 +136,7 @@ export function CustomerRow({
             <Text style={s.name} numberOfLines={1}>{c.name}</Text>
             <View style={s.metaRow}>
               <Text style={s.meta} numberOfLines={1}>
-                {c.phone}{c.instagram ? " / " + c.instagram : ""}
+                {ultimaCompraLabel}{c.instagram ? " / " + c.instagram : ""}
               </Text>
               {showBadge && (
                 <View style={s.companyBadge}>
@@ -124,7 +154,7 @@ export function CustomerRow({
                 <Text style={s.openBadgeText}>Em aberto: {fmt(c.creditBalance)}</Text>
               </View>
             )}
-            <View style={{ flexDirection: "row", gap: 4 }}>{tags.slice(0, 2).map(t => <Tag key={t} tag={t} />)}</View>
+            <Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} />
           </View>
         )}
       </Pressable>
@@ -151,7 +181,7 @@ export function CustomerRow({
             )}
           </View>
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
-          <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}>{tags.map(t => <Tag key={t} tag={t} />)}</View></View>
+          <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}><Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} /></View></View>
           <View style={s.actions}>
             {hasCredit && (
               <Pressable
