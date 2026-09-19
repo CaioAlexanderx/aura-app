@@ -10,6 +10,12 @@ import { useAuthStore } from "@/stores/auth";
 // useSalesList(filters): lista paginada + stats agregados
 //   - cache curto (15s) — vendas chegam frequente
 //   - re-fetch ao mudar filtros (queryKey muda)
+//   - 18/09/2026: trocar de pagina/filtro mantem a lista anterior na tela
+//     ate a nova chegar (placeholderData). Antes a pagina inteira (lista,
+//     KPIs e o subtitulo do cabecalho) sumia pro "Carregando" e voltava —
+//     ver public/index.html (MH Alimentos, "Proxima" derrubava o app).
+//     So reaproveita dentro do mesmo escopo (mesma empresa / consolidado),
+//     pra nunca mostrar vendas de outra loja durante a troca de empresa.
 //   - MULTICNPJ Onda 2.4: ramifica via consolidatedView do auth.
 //     Em consolidated -> meAggregatesApi.sales() (/me/sales).
 //     Em per-company -> salesApi.list() (/companies/:id/sales).
@@ -41,10 +47,13 @@ export function useSalesList(filters?: SalesFilters) {
   // Normaliza filtros pra queryKey estavel (objeto ou undefined)
   const filtersKey = filters || {};
 
+  const scopeKey = consolidatedView ? "me" : company?.id;
+
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: consolidatedView
-      ? ["sales-list", "me", filtersKey]
-      : ["sales-list", company?.id, filtersKey],
+    queryKey: ["sales-list", scopeKey, filtersKey],
+    placeholderData: function(prev, prevQuery) {
+      return prevQuery && prevQuery.queryKey[1] === scopeKey ? prev : undefined;
+    },
     queryFn: function() {
       if (consolidatedView) {
         return meAggregatesApi.sales(filters);

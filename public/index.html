@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!--
+  Template web do Expo (output "single"). Sem este arquivo o Expo usa o
+  template padrao, que declara lang="en".
+
+  18/09/2026 (MH Alimentos: "Proxima" na tela de Vendas derrubava o app):
+  com lang="en" o Chrome oferece/aplica a traducao automatica numa pagina
+  que e toda em portugues. O tradutor troca os nos de texto por <font>, e o
+  React quebra ao remover/inserir esses nos na proxima renderizacao
+  ("Failed to execute 'removeChild' on 'Node'") — cai no ErrorBoundary.
+  lang="pt-BR" + translate="no" + meta notranslate desligam a traducao.
+-->
+<html lang="pt-BR" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="google" content="notranslate" />
+    <title>Aura.</title>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body class="notranslate">
+    <noscript>
+      Você precisa habilitar o JavaScript para usar o Aura.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>
