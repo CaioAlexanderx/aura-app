@@ -47,6 +47,38 @@ function buildRankingQuery(opts?: ProductsRankingOpts): string {
   return parts.join('&');
 }
 
+// Fase 1 ABC por categoria (16/09/2026). Item de
+// GET /companies/:id/products/categories — mesmas regras de vendas do
+// ranking (status != cancelled, type = 'sale'; ver aura-backend
+// src/services/productsRanking.js, getCategories). Já vem ordenado por
+// total_revenue DESC; NÃO traz `abc` (o backend só classifica no
+// /products/ranking) — a classificação client-side fica em
+// components/screens/financeiro/v2/abcCategoryUtils.ts.
+export type ProductCategoryRanking = {
+  category: string;
+  total_products: number;
+  total_revenue: number;
+  total_qty: number;
+  share_pct: number;
+};
+
+// A rota já aceita start_date/end_date via resolvePeriod (mesma função do
+// ranking) — só o client não expunha isso ainda. period continua aceitando
+// string (compat com a chamada antiga productsCategories(cid, period)).
+export type ProductsCategoriesOpts = {
+  period?: string;
+  start_date?: string;
+  end_date?: string;
+};
+
+function buildCategoriesQuery(opts?: ProductsCategoriesOpts): string {
+  var period = (opts && opts.period) || 'month';
+  var parts: string[] = ['period=' + encodeURIComponent(period)];
+  if (opts && opts.start_date) parts.push('start_date=' + encodeURIComponent(opts.start_date));
+  if (opts && opts.end_date)   parts.push('end_date='   + encodeURIComponent(opts.end_date));
+  return parts.join('&');
+}
+
 export var companiesApi = {
   get: function(companyId: string) { return request<any>("/companies/" + companyId); },
   getProfile: function(companyId: string) { return request<any>("/companies/" + companyId + "/profile"); },
@@ -145,5 +177,10 @@ export var companiesApi = {
       : (periodOrOpts || {});
     return request<any>("/companies/" + companyId + "/products/ranking?" + buildRankingQuery(opts));
   },
-  productsCategories: function(companyId: string, period?: string) { return request<any>("/companies/" + companyId + "/products/categories?period=" + (period || "month")); },
+  productsCategories: function(companyId: string, periodOrOpts?: string | ProductsCategoriesOpts) {
+    var opts: ProductsCategoriesOpts = typeof periodOrOpts === 'string'
+      ? { period: periodOrOpts }
+      : (periodOrOpts || {});
+    return request<ProductCategoryRanking[]>("/companies/" + companyId + "/products/categories?" + buildCategoriesQuery(opts));
+  },
 };

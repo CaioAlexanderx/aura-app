@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Curva ABC por categoria (Financeiro)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 1, "Curva ABC por categoria" (regra 4 do
+     CLAUDE.md: mockup antes do código pra mudança visual forte).
+
+     Pedido do Caio (16/09/2026): "melhorar ainda mais a curva ABC
+     trazendo a categoria e não somente os itens avulsos", na tela
+     Financeiro › Produtos que mais dão dinheiro (AbcCurveCard).
+
+     O que este mockup cobre:
+       1. Seletor "Por produto · Por categoria" — BOTÕES DE TEXTO, não
+          ícones (decisão do Caio). Mesmo período vale pras duas visões.
+       2. Visão por categoria: donut A/B/C por categoria, frase de
+          leitura, tabela com #, Categoria, Classe, Produtos vendidos,
+          Quantidade, Receita, % da receita, % acumulado.
+       3. Clique numa categoria abre a visão por produto já filtrada,
+          com chip "Categoria: X ✕" pra limpar o filtro.
+       4. Categoria-mãe (quando existe hierarquia) aparece como linha
+          expansível pras filhas — ver nota "HIERARQUIA" abaixo.
+
+     Interativo de verdade (JS vanilla, sem framework) — clique no
+     seletor de visão, nas linhas de categoria, no chevron do grupo e
+     nos chips de classe A/B/C/Todos. Os números são fixos (mock), só a
+     navegação entre estados é real.
+
+     Duas larguras: 1440 (desktop, largura real do card no Financeiro:
+     max-width 1100 dentro da tela) e 390 (mobile, moldura de celular).
+  ============================================================ */
+  :root {
+    --bg:  #060816;
+    --bg2: #090c1a;
+    --bg3: #0e1228;
+    --bg4: #141830;
+    --border:  rgba(255,255,255,0.07);
+    --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff;
+    --ink2: rgba(220,215,255,0.75);
+    --ink3: rgba(170,160,235,0.65);
+    --violet:  #7c3aed;
+    --violet3: #a78bfa;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;
+    --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24;
+    --amberD: rgba(251,191,36,0.10);
+    --red:   #f87171;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 20px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+  h1.doc {
+    font-family: 'Instrument Serif', Georgia, serif; font-weight: 400;
+    font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px;
+  }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 720px; margin: 0 0 16px; }
+  .nota {
+    padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55; margin: 0 0 26px; max-width: 900px;
+  }
+  .nota b { color: var(--violet3); }
+  .secao {
+    margin: 40px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .secao:first-of-type { margin-top: 0; }
+
+  /* ── Card real (mesma casca do AbcCurveCard.tsx) ───────── */
+  .abc-card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .abc-card.desktop { width: 1000px; }
+  .abc-card.mobile-card { width: 100%; }
+
+  .card-header { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .card-header .left { flex: 1; min-width: 200px; }
+  .card-title { font-size: 15px; color: var(--ink); font-weight: 700; }
+  .card-subtitle { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .card-subtitle-note { font-size: 10px; color: var(--ink3); margin-top: 4px; font-style: italic; }
+  .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .segment {
+    display: flex; gap: 4px; background: var(--bg4); border-radius: 8px; padding: 3px;
+  }
+  .segment button {
+    padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    color: var(--ink3); background: transparent; border: 0; cursor: pointer; font-family: inherit;
+  }
+  .segment button.on { background: var(--violet); color: #fff; font-weight: 700; }
+
+  .export-btn {
+    display: flex; align-items: center; gap: 6px; background: var(--bg4); border-radius: 8px;
+    padding: 6px 10px; border: 1px solid var(--border); font-size: 11px; color: var(--violet3);
+    font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+
+  .cat-chip {
+    align-self: flex-start; margin-top: 8px; background: var(--violetD); border: 1px solid var(--violet);
+    border-radius: 999px; padding: 5px 11px; font-size: 11px; color: var(--violet3); font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+
+  /* ── Frase de leitura ───────────────────────────────────── */
+  .reading {
+    display: flex; align-items: flex-start; gap: 8px; background: var(--violetD);
+    border: 1px solid var(--border2); border-radius: 12px; padding: 12px;
+  }
+  .reading svg { flex: 0 0 auto; margin-top: 2px; }
+  .reading p { margin: 0; flex: 1; font-size: 12.5px; color: var(--ink); line-height: 1.5; font-weight: 600; }
+
+  /* ── Resumo ─────────────────────────────────────────────── */
+  .summary-row { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .summary-item { flex: 1; }
+  .summary-label { font-size: 9px; color: var(--ink3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+  .summary-value { font-size: 16px; color: var(--ink); font-weight: 800; margin-top: 4px; }
+  .summary-value.green { color: var(--green); }
+
+  /* ── Donut ──────────────────────────────────────────────── */
+  .donut-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .donut-legend { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 160px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 5px; flex: 0 0 auto; }
+  .legend-label { font-size: 12px; color: var(--ink); font-weight: 600; }
+  .legend-value { font-size: 10px; color: var(--ink3); margin-top: 1px; }
+
+  /* ── Cards A/B/C ────────────────────────────────────────── */
+  .grades-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .grade-card { flex: 1; min-width: 160px; background: var(--bg4); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
+  .grade-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .grade-title { font-size: 13px; color: var(--ink); font-weight: 700; }
+  .grade-hint { font-size: 10px; color: var(--ink3); margin-top: 1px; }
+  .grade-count { font-size: 11px; color: var(--ink3); }
+  .bar-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .bar-label { font-size: 9px; color: var(--ink3); width: 70px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .track { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+  .fill { height: 6px; border-radius: 3px; }
+  .pct { font-size: 10px; font-weight: 700; width: 30px; text-align: right; }
+
+  .badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; font-weight: 800; font-size: 11px; }
+  .badge.small { width: 18px; height: 18px; font-size: 9px; border-radius: 5px; }
+  .badge.A { background: var(--greenD); color: var(--green); }
+  .badge.B { background: var(--amberD); color: var(--amber); }
+  .badge.C { background: rgba(255,255,255,0.05); color: var(--ink3); }
+
+  /* ── Filtro de classe ───────────────────────────────────── */
+  .class-filter-row { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .class-filter-label { font-size: 10px; color: var(--ink3); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .class-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .class-chip {
+    padding: 7px 12px; border-radius: 10px; background: var(--bg4); border: 1px solid var(--border);
+    font-size: 11px; color: var(--ink2); font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .class-chip.on { background: var(--violetD); border-color: var(--violet); color: var(--violet3); font-weight: 700; }
+
+  /* ── Tabela ─────────────────────────────────────────────── */
+  .rank-section { display: flex; flex-direction: column; gap: 4px; }
+  .rank-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .rank-title { font-size: 10px; color: var(--ink3); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .rank-meta { font-size: 10px; color: var(--ink3); }
+  .rank-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px;
+    cursor: pointer; background: transparent; border: 0; width: 100%; text-align: left; font-family: inherit;
+  }
+  .rank-row:hover { background: rgba(255,255,255,0.03); }
+  @media (hover: none) { .rank-row:hover { background: transparent; } }
+  .rank-row.group-row { background: var(--bg4); }
+  .rank-row.group-row:hover { background: var(--bg4); }
+  .rank-row.child-row { padding-left: 24px; }
+  .rank-num { width: 26px; text-align: right; font-size: 11px; color: var(--ink3); font-weight: 700; font-family: 'DM Mono', monospace; flex: 0 0 auto; }
+  .chevron { width: 12px; height: 12px; flex: 0 0 auto; color: var(--ink3); transition: transform .12s; }
+  .chevron.open { transform: rotate(90deg); }
+  .rank-name-col { flex: 1; min-width: 0; }
+  .rank-name { font-size: 12px; color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank-sub { font-size: 10px; color: var(--ink3); margin-top: 1px; }
+  .rank-right { text-align: right; min-width: 80px; flex: 0 0 auto; }
+  .rank-qty { font-size: 10px; color: var(--ink3); }
+  .rank-rev { font-size: 12px; color: var(--green); font-weight: 700; }
+  .rank-badges { display: flex; gap: 2px; flex: 0 0 auto; }
+
+  .hide { display: none !important; }
+
+  /* ── Frame de celular ───────────────────────────────────── */
+  .phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .phone {
+    width: 390px; border-radius: 26px; border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.9));
+    padding: 16px 12px 20px; box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  }
+  .phone-cap { display: flex; justify-content: center; margin-bottom: 14px; }
+  .phone-cap i { width: 92px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.12); }
+
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 8px; }
+
+  svg text { font-family: 'DM Sans', sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Curva ABC por categoria<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 1 · pedido do Caio (16/09/2026) — "melhorar ainda mais a curva ABC trazendo a categoria
+    e não somente os itens avulsos". O card de Financeiro › Produtos que mais dão dinheiro ganha
+    um seletor "Por produto · Por categoria"; a visão por categoria reclassifica A/B/C no cliente
+    (o backend só classifica produto — <code>/products/categories</code> devolve receita/quantidade
+    por categoria, sem classe) usando a MESMA regra de corte 80/95% do backend
+    (<code>classifyABC</code> em <code>aura-backend/src/services/productsRanking.js</code>).
+  </p>
+  <div class="nota">
+    <b>Hierarquia de categoria:</b> <code>products.category</code> grava só o NOME DA FOLHA
+    ("Fones", não "Eletrônicos &gt; Fones") — confirmado em
+    <code>aura-backend/src/routes/productCategories.js</code> (<code>p.category = c.name</code>).
+    Não há caminho completo salvo no produto. O agrupamento "categoria-mãe expansível" abaixo
+    (linha <b>Eletrônicos</b>) é melhor esforço: cruza o nome com a árvore de categorias
+    (<code>useCategories().flattened</code>) pra achar o pai — a mesma ambiguidade por nome que o
+    resto do catálogo já aceita. Uma categoria sem pai na árvore (ou com produtos "soltos" demais
+    pra ter 2+ filhas no período) aparece como linha solta, sem seta de expandir — é o caso de
+    <b>Calçados</b>, <b>Blusas</b>, <b>Bolsas</b> etc. abaixo.
+  </div>
+
+  <div class="secao">Desktop — 1440</div>
+  <div id="desktop-card"></div>
+
+  <div class="secao">Mobile — 390</div>
+  <div class="phones">
+    <div class="phone">
+      <div class="phone-cap"><i></i></div>
+      <div class="rotulo">Visão por categoria (padrão)</div>
+      <div id="mobile-card"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Dados mock — únicos, compartilhados pelas duas instâncias (desktop e
+// mobile). Números batem com o exemplo do pedido: "3 categorias fazem
+// 80% da receita: Calçados, Blusas e Bolsas".
+// ============================================================
+var CATEGORIES = [
+  // já "ordenado por receita DESC", como a API devolve
+  { name: "Calçados",      revenue: 4000, products: 18, qty: 210, parent: null },
+  { name: "Blusas",        revenue: 2500, products: 24, qty: 340, parent: null },
+  { name: "Bolsas",        revenue: 1500, products: 9,  qty: 61,  parent: null },
+  { name: "Fones",         revenue: 600,  products: 4,  qty: 22,  parent: "Eletrônicos" },
+  { name: "Carregadores",  revenue: 500,  products: 3,  qty: 30,  parent: "Eletrônicos" },
+  { name: "Meias",         revenue: 500,  products: 6,  qty: 95,  parent: null },
+  { name: "Outros",        revenue: 400,  products: 11, qty: 48,  parent: null },
+];
+
+var PRODUCTS_BY_CATEGORY = {
+  "Calçados": [
+    { name: "Tênis Casual Branco 38", qty: 44, revenue: 1180 },
+    { name: "Sandália Conforto Preta", qty: 38, revenue: 950 },
+    { name: "Bota Coturno Marrom 39", qty: 20, revenue: 780 },
+    { name: "Chinelo Slide Cinza", qty: 60, revenue: 540 },
+    { name: "Tênis Corrida Azul 40", qty: 28, revenue: 550 },
+  ],
+  "Fones": [
+    { name: "Fone Bluetooth In-ear", qty: 14, revenue: 420 },
+    { name: "Fone com Fio P2", qty: 8, revenue: 180 },
+  ],
+  "Carregadores": [
+    { name: "Carregador USB-C 20W", qty: 18, revenue: 320 },
+    { name: "Carregador Wireless", qty: 12, revenue: 180 },
+  ],
+};
+
+function classifyABC(items, totalRevenue) {
+  var accumulated = 0;
+  return items.map(function(item) {
+    accumulated += item.revenue;
+    var pct = totalRevenue > 0 ? (accumulated / totalRevenue) * 100 : 0;
+    var abc = pct <= 80 ? "A" : pct <= 95 ? "B" : "C";
+    return Object.assign({}, item, { accumulated_pct: Math.round(pct * 10) / 10, abc: abc });
+  });
+}
+
+var TOTAL_REVENUE = CATEGORIES.reduce(function(s, c) { return s + c.revenue; }, 0);
+var TOTAL_QTY = CATEGORIES.reduce(function(s, c) { return s + c.qty; }, 0);
+var CLASSIFIED = classifyABC(CATEGORIES, TOTAL_REVENUE);
+
+function fmt(n) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); }
+function fmtK(n) { return n >= 1000 ? "R$ " + (n / 1000).toFixed(1).replace(".", ",") + "k" : fmt(n); }
+
+function readingSentence(classified) {
+  var a = classified.filter(function(c) { return c.abc === "A"; });
+  if (!a.length) return "Nenhuma categoria concentra 80% da receita sozinha.";
+  var names = a.map(function(c) { return c.name; });
+  var list = names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " e " + names[names.length - 1];
+  return a.length + " categoria" + (a.length !== 1 ? "s fazem" : " faz") + " 80% da receita: " + list;
+}
+
+var ABC_COLORS = { A: "#10b981", B: "#fbbf24", C: "#6b7280" };
+
+function donutSvg(classified, total, size) {
+  size = size || 156;
+  var cx = size / 2, cy = size / 2, r = Math.round(size * 0.38), sw = Math.round(size * 0.155);
+  var circ = 2 * Math.PI * r;
+  var grades = ["A", "B", "C"];
+  var offset = 0;
+  var slices = "";
+  grades.forEach(function(g) {
+    var rev = classified.filter(function(c) { return c.abc === g; }).reduce(function(s, c) { return s + c.revenue; }, 0);
+    if (rev <= 0) return;
+    var pct = rev / total;
+    var dash = circ * pct, gap = circ - dash;
+    slices += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + ABC_COLORS[g] + '" stroke-width="' + sw + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (-offset) + '" opacity="0.88"/>';
+    offset += dash;
+  });
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="transform:rotate(-90deg)">' +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--bg4)" stroke-width="' + sw + '"/>' + slices + '</svg>';
+}
+
+function classBreakdown(classified, totalRevenue, totalQty) {
+  return ["A", "B", "C"].map(function(g) {
+    var items = classified.filter(function(c) { return c.abc === g; });
+    var rev = items.reduce(function(s, c) { return s + c.revenue; }, 0);
+    var qty = items.reduce(function(s, c) { return s + c.qty; }, 0);
+    return {
+      grade: g, count: items.length, revenue: rev, qty: qty,
+      revenue_pct: totalRevenue > 0 ? Math.round((rev / totalRevenue) * 100) : 0,
+      qty_pct: totalQty > 0 ? Math.round((qty / totalQty) * 100) : 0,
+    };
+  });
+}
+
+var GRADE_LABELS = { A: "Alta concentração de receita", B: "Concentração média", C: "Cauda longa" };
+
+// Agrupa filhas cuja mãe também está presente na lista (2+ filhas).
+function buildDisplayRows(classified) {
+  var childCount = {};
+  classified.forEach(function(c) { if (c.parent) childCount[c.parent] = (childCount[c.parent] || 0) + 1; });
+  var emitted = {};
+  var rows = [];
+  classified.forEach(function(c) {
+    var grouped = c.parent && childCount[c.parent] >= 2;
+    if (!grouped) { rows.push({ kind: "leaf", item: c }); return; }
+    if (emitted[c.parent]) return;
+    emitted[c.parent] = true;
+    var children = classified.filter(function(x) { return x.parent === c.parent; });
+    rows.push({
+      kind: "group", parentName: c.parent, children: children,
+      revenue: children.reduce(function(s, x) { return s + x.revenue; }, 0),
+      qty: children.reduce(function(s, x) { return s + x.qty; }, 0),
+      products: children.reduce(function(s, x) { return s + x.products; }, 0),
+      grades: Array.from(new Set(children.map(function(x) { return x.abc; }))).sort(),
+    });
+  });
+  return rows;
+}
+
+// ============================================================
+// Render de uma instância do card (desktop ou mobile) — estado próprio.
+// ============================================================
+function renderCard(root, opts) {
+  var state = { view: "categoria", classFilter: "ALL", expanded: {}, categoryDrill: null };
+  var compact = !!opts.compact;
+
+  function badge(grade, small) {
+    return '<span class="badge ' + grade + (small ? ' small' : '') + '">' + grade + '</span>';
+  }
+
+  function renderHeader() {
+    var title = state.view === "categoria" ? "Curva ABC por categoria" : "Curva ABC de produtos";
+    var chip = (state.view === "produto" && state.categoryDrill)
+      ? '<button class="cat-chip" data-action="clear-chip">Categoria: ' + state.categoryDrill + ' ✕</button>'
+      : "";
+    return (
+      '<div class="card-header">' +
+        '<div class="left">' +
+          '<div class="card-title">' + title + '</div>' +
+          '<div class="card-subtitle">Calculada a partir das vendas reais · Mês</div>' +
+          '<div class="card-subtitle-note">Vendas canceladas e trocas excluídas (alinhado com Painel e Vendas).</div>' +
+          chip +
+        '</div>' +
+        '<div class="header-actions">' +
+          '<div class="segment">' +
+            '<button data-action="view" data-view="produto" class="' + (state.view === "produto" ? "on" : "") + '">Por produto</button>' +
+            '<button data-action="view" data-view="categoria" class="' + (state.view === "categoria" ? "on" : "") + '">Por categoria</button>' +
+          '</div>' +
+          '<div class="segment"><button class="on" style="cursor:default">Mês</button></div>' +
+          (state.view === "produto" ? '<button class="export-btn" type="button">⭳ Exportar CSV</button>' : "") +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderCategoriaView() {
+    var filtered = state.classFilter === "ALL" ? CLASSIFIED : CLASSIFIED.filter(function(c) { return c.abc === state.classFilter; });
+    var rows = buildDisplayRows(filtered);
+    var bd = classBreakdown(CLASSIFIED, TOTAL_REVENUE, TOTAL_QTY);
+    var donutItems = bd.filter(function(b) { return b.revenue > 0; });
+
+    var html = '';
+    html += '<div class="reading"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet3)" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg><p>' + readingSentence(CLASSIFIED) + '</p></div>';
+
+    html += '<div class="summary-row">' +
+      '<div class="summary-item"><div class="summary-label">Categorias vendidas</div><div class="summary-value">' + CATEGORIES.length + '</div></div>' +
+      '<div class="summary-item"><div class="summary-label">Unidades</div><div class="summary-value">' + TOTAL_QTY.toLocaleString("pt-BR") + '</div></div>' +
+      '<div class="summary-item"><div class="summary-label">Receita total</div><div class="summary-value green">' + fmt(TOTAL_REVENUE) + '</div></div>' +
+    '</div>';
+
+    if (donutItems.length) {
+      html += '<div class="donut-row">' + donutSvg(CLASSIFIED, TOTAL_REVENUE, compact ? 130 : 156) + '<div class="donut-legend">';
+      donutItems.forEach(function(b) {
+        var pct = Math.round((b.revenue / TOTAL_REVENUE) * 100);
+        html += '<div class="legend-item"><div class="legend-dot" style="background:' + ABC_COLORS[b.grade] + '"></div>' +
+          '<div><div class="legend-label">Curva ' + b.grade + '</div><div class="legend-value">' + fmt(b.revenue) + ' · ' + pct + '%</div></div></div>';
+      });
+      html += '</div></div>';
+    }
+
+    html += '<div class="grades-row">';
+    bd.forEach(function(b) {
+      html += '<div class="grade-card">' +
+        '<div class="grade-header">' + badge(b.grade) + '<div><div class="grade-title">Curva ' + b.grade + '</div><div class="grade-hint">' + GRADE_LABELS[b.grade] + '</div></div></div>' +
+        '<div class="grade-count">' + b.count + ' categoria' + (b.count !== 1 ? "s" : "") + '</div>' +
+        '<div class="bar-row"><div class="bar-label">Receita</div><div class="track"><div class="fill" style="width:' + b.revenue_pct + '%;background:' + ABC_COLORS[b.grade] + '"></div></div><div class="pct" style="color:' + ABC_COLORS[b.grade] + '">' + b.revenue_pct + '%</div></div>' +
+        '<div class="bar-row"><div class="bar-label">Qtd vendida</div><div class="track"><div class="fill" style="width:' + b.qty_pct + '%;background:' + ABC_COLORS[b.grade] + '"></div></div><div class="pct" style="color:' + ABC_COLORS[b.grade] + '">' + b.qty_pct + '%</div></div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="class-filter-row"><div class="class-filter-label">Filtrar por classe</div><div class="class-chips">';
+    [["ALL", "Todos"], ["A", "Curva A"], ["B", "Curva B"], ["C", "Curva C"]].forEach(function(pair) {
+      html += '<button class="class-chip ' + (state.classFilter === pair[0] ? "on" : "") + '" data-action="class-filter" data-class="' + pair[0] + '">' + pair[1] + '</button>';
+    });
+    html += '</div></div>';
+
+    html += '<div class="rank-section"><div class="rank-header"><div class="rank-title">' + (state.classFilter === "ALL" ? "Todas as categorias" : "Categorias curva " + state.classFilter) + '</div><div class="rank-meta">' + rows.length + (rows.length === 1 ? " linha" : " linhas") + '</div></div>';
+
+    rows.forEach(function(row, idx) {
+      var num = idx + 1;
+      if (row.kind === "leaf") {
+        var c = row.item;
+        html += '<button class="rank-row" data-action="drill" data-category="' + c.name + '">' +
+          '<div class="rank-num">' + num + '</div>' +
+          '<div class="rank-name-col"><div class="rank-name">' + c.name + '</div><div class="rank-sub">' + c.products + ' produtos</div></div>' +
+          '<div class="rank-right"><div class="rank-qty">' + c.qty.toLocaleString("pt-BR") + ' un</div><div class="rank-rev">' + fmtK(c.revenue) + '</div></div>' +
+          badge(c.abc, true) +
+        '</button>';
+      } else {
+        var open = !!state.expanded[row.parentName];
+        html += '<button class="rank-row group-row" data-action="toggle-group" data-parent="' + row.parentName + '">' +
+          '<div class="rank-num">' + num + '</div>' +
+          '<svg class="chevron ' + (open ? "open" : "") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' +
+          '<div class="rank-name-col"><div class="rank-name">' + row.parentName + '</div><div class="rank-sub">' + row.children.length + ' subcategorias · ' + row.products + ' produtos</div></div>' +
+          '<div class="rank-right"><div class="rank-qty">' + row.qty.toLocaleString("pt-BR") + ' un</div><div class="rank-rev">' + fmtK(row.revenue) + '</div></div>' +
+          '<div class="rank-badges">' + row.grades.map(function(g) { return badge(g, true); }).join("") + '</div>' +
+        '</button>';
+        if (open) {
+          row.children.forEach(function(child) {
+            html += '<button class="rank-row child-row" data-action="drill" data-category="' + child.name + '">' +
+              '<div class="rank-num"></div>' +
+              '<div class="rank-name-col"><div class="rank-name">' + child.name + '</div><div class="rank-sub">' + child.products + ' produtos</div></div>' +
+              '<div class="rank-right"><div class="rank-qty">' + child.qty.toLocaleString("pt-BR") + ' un</div><div class="rank-rev">' + fmtK(child.revenue) + '</div></div>' +
+              badge(child.abc, true) +
+            '</button>';
+          });
+        }
+      }
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderProdutoView() {
+    var cat = state.categoryDrill;
+    var list = cat && PRODUCTS_BY_CATEGORY[cat] ? PRODUCTS_BY_CATEGORY[cat] : [];
+    var totalRev = list.reduce(function(s, p) { return s + p.revenue; }, 0);
+    var classified = classifyABC(list.map(function(p) { return { name: p.name, revenue: p.revenue, qty: p.qty }; }), totalRev);
+
+    if (!cat) {
+      return '<div style="padding:28px 4px;text-align:center;color:var(--ink3);font-size:12px">' +
+        'Clique numa categoria na aba "Por categoria" pra ver os produtos dela aqui — ou troque pro ranking geral (fora do escopo deste mockup, é o AbcCurveCard já existente).' +
+      '</div>';
+    }
+
+    var html = '<div class="rank-section"><div class="rank-header"><div class="rank-title">Produtos de ' + cat + '</div><div class="rank-meta">' + classified.length + ' produtos</div></div>';
+    classified.forEach(function(p, idx) {
+      html += '<div class="rank-row" style="cursor:default">' +
+        '<div class="rank-num">' + (idx + 1) + '</div>' +
+        '<div class="rank-name-col"><div class="rank-name">' + p.name + '</div></div>' +
+        '<div class="rank-right"><div class="rank-qty">' + p.qty + ' un</div><div class="rank-rev">' + fmtK(p.revenue) + '</div></div>' +
+        badge(p.abc, true) +
+      '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function render() {
+    root.innerHTML = renderHeader() + (state.view === "categoria" ? renderCategoriaView() : renderProdutoView());
+    root.querySelectorAll("[data-action]").forEach(function(el) {
+      el.addEventListener("click", function() {
+        var action = el.getAttribute("data-action");
+        if (action === "view") { state.view = el.getAttribute("data-view"); }
+        else if (action === "class-filter") { state.classFilter = el.getAttribute("data-class"); }
+        else if (action === "toggle-group") {
+          var p = el.getAttribute("data-parent");
+          state.expanded[p] = !state.expanded[p];
+        } else if (action === "drill") {
+          state.categoryDrill = el.getAttribute("data-category");
+          state.view = "produto";
+        } else if (action === "clear-chip") {
+          state.categoryDrill = null;
+        }
+        render();
+      });
+    });
+  }
+
+  render();
+}
+
+renderCard(document.getElementById("desktop-card"), { compact: false });
+document.getElementById("desktop-card").className = "abc-card desktop";
+renderCard(document.getElementById("mobile-card"), { compact: true });
+document.getElementById("mobile-card").className = "abc-card mobile-card";
+</script>
+</body>
+</html>
