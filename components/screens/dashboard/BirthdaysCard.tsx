@@ -13,8 +13,84 @@ import { AniversarioAutoCard } from "@/components/whatsapp/AniversarioAutoCard";
 import { normalizeBrPhone } from "@/services/messaging";
 // 01/09/2026: helper compartilhado de plural — a linha dizia "em 1 dias".
 import { pluralize } from "@/utils/plural";
+// MULTICNPJ Fase 1 (C1.8): no consolidado não existe endpoint de
+// aniversariantes agregado. /me/customers já traz `birth_date` por
+// cliente de todas as lojas do dono — dá para montar a mesma lista sem
+// chamada nova (e sem uma chamada por loja: ver nota grande abaixo).
+import { meAggregatesApi, type ConsolidatedCustomer } from "@/services/meAggregates";
+import { toast } from "@/components/Toast";
 
 type Tab = "today" | "week";
+
+/** Aniversariante calculado no front (consolidado) — mesmo shape de
+ * BirthdayCustomer, com a loja de origem a mais. */
+export type ConsolidatedBirthdayCustomer = BirthdayCustomer & {
+  company_id: string | null;
+  company_name: string | null;
+};
+
+/**
+ * Próximo aniversário a partir de uma data ISO ("YYYY-MM-DD..."),
+ * ignorando o ano (aniversário se repete). `null` sem data válida.
+ * Cálculo puro — sem rede, sem React — mesma disciplina de
+ * diasSemComprar.ts, para poder testar sem mock.
+ */
+export function proximoAniversario(
+  birthDate: string | null | undefined,
+  agora: number = Date.now()
+): { diasAte: number; isToday: boolean } | null {
+  if (!birthDate) return null;
+  const datePart = String(birthDate).split("T")[0];
+  const partes = datePart.split("-").map(Number);
+  if (partes.length !== 3) return null;
+  const [, mes, dia] = partes;
+  if (!Number.isFinite(mes) || !Number.isFinite(dia) || mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+
+  const hoje = new Date(agora);
+  const hojeZero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+  let proximo = new Date(hoje.getFullYear(), mes - 1, dia).getTime();
+  if (proximo < hojeZero) proximo = new Date(hoje.getFullYear() + 1, mes - 1, dia).getTime();
+
+  const diasAte = Math.round((proximo - hojeZero) / 864e5);
+  return { diasAte, isToday: diasAte === 0 };
+}
+
+/**
+ * Monta a lista de aniversariantes (próximos `days` dias) a partir da
+ * lista consolidada de clientes (/me/customers) — sem chamada por loja
+ * nem por cliente. Ordenada por proximidade, como o backend já devolve
+ * para o modo single-company.
+ */
+export function birthdaysFromConsolidatedCustomers(
+  customers: ConsolidatedCustomer[],
+  days: number,
+  agora: number = Date.now()
+): ConsolidatedBirthdayCustomer[] {
+  const out: ConsolidatedBirthdayCustomer[] = [];
+  for (const c of customers || []) {
+    const info = proximoAniversario(c.birth_date, agora);
+    if (!info || info.diasAte > days) continue;
+    out.push({
+      id: c.id,
+      name: c.name || "Cliente",
+      phone: c.phone || null,
+      email: c.email || null,
+      birth_date: c.birth_date,
+      total_purchases: c.visits ?? c.visit_count ?? 0,
+      total_spent: c.total_spent ?? c.totalSpent ?? 0,
+      days_until: info.diasAte,
+      is_today: info.isToday,
+      // Sem opt-out aqui de propósito: a ação real (enviar) só acontece
+      // depois de trocar para a loja de origem, onde o dado vem certo do
+      // backend — nunca se envia a partir desta lista aproximada.
+      marketing_opt_out: undefined,
+      company_id: c.company_id || null,
+      company_name: c.company_name || null,
+    });
+  }
+  out.sort((a, b) => a.days_until - b.days_until);
+  return out;
+}
 
 /**
  * BirthdaysCard — quadro de aniversariantes no painel violeta.
@@ -31,27 +107,62 @@ type Tab = "today" | "week";
  *
  * Decisão de produto: o modal único agrega "criar cupom" e
  * "criar + enviar", evitando dois caminhos paralelos no painel.
+ *
+ * MULTICNPJ Fase 1 (C1.8) — este card sumia inteiro no consolidado
+ * (`!consolidatedView` em app/(tabs)/index.tsx). O motivo não era um
+ * limite técnico forte: `company` fica `null` em modo consolidado
+ * (stores/auth.ts), e todo o card girava em torno de `company.id`
+ * (aniversariantes, "já enviado", módulo, e o cupom em si).
+ *
+ * O que muda agora, só no consolidado:
+ * 1. Gate por módulo: sem `company.module_overrides` por loja no
+ *    switcher (SwitcherCompany não carrega isso), o gate vira "alguma
+ *    das empresas do dono está no Negócio ou Expansão" — mesma régua de
+ *    fallback que o modo single-company já usava.
+ * 2. Lista de aniversariantes: computada de /me/customers (via
+ *    useCustomers-like, `meAggregatesApi.customers()`), que já tem
+ *    `birth_date` por cliente de TODAS as lojas — nenhuma chamada nova.
+ *    Cada aniversariante mostra a loja de origem (`company_name`).
+ * 3. "Já enviado este ano": aproximado — fica de fora no consolidado.
+ *    `birthdayApi.sentThisYear` é por empresa; somar isso exigiria uma
+ *    chamada por loja (não por cliente, mas ainda assim uma chamada a
+ *    mais por card só para pintar um selo). Documentado aqui em vez de
+ *    inventado: o selo "Enviado" não aparece no consolidado.
+ * 4. Ação "Cupom": BirthdayCouponModal usa `company` do auth store do
+ *    início ao fim (settings, status do WhatsApp, criar cupom, enviar) —
+ *    e module está FORA do escopo desta mudança. Abri-lo direto no
+ *    consolidado mandaria a chamada para a empresa errada (ou para
+ *    nenhuma, com `company` null). Em vez disso, o botão troca o
+ *    contexto para a loja do cliente (`switchCompany`, já usado pelo
+ *    app para isso — ver RequireCompanyScope) e a pessoa clica de novo
+ *    já na loja certa, com o modal funcionando como sempre funcionou.
  */
 export function BirthdaysCard() {
-  const { company } = useAuthStore();
+  const { company, consolidatedView, availableCompanies, switchCompany } = useAuthStore();
   const [tab, setTab] = useState<Tab>("today");
   const [modalCustomer, setModalCustomer] = useState<BirthdayCustomer | null>(null);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
-  // Gate por module_overrides com precedência sobre o plano
+  // Gate por module_overrides com precedência sobre o plano (single-company).
+  // No consolidado não há module_overrides por loja no switcher — cai no
+  // fallback por plano, testando todas as empresas do dono.
   const visible = useMemo(() => {
+    if (consolidatedView) {
+      return (availableCompanies || []).some((c) => c.plan === "negocio" || c.plan === "expansao");
+    }
     if (!company) return false;
     const ov = (company.module_overrides ?? {}) as Record<string, boolean>;
     if (ov.clientes === true) return true;
     if (ov.clientes === false) return false;
     return company.plan === "negocio" || company.plan === "expansao";
-  }, [company]);
+  }, [company, consolidatedView, availableCompanies]);
 
   const days = tab === "today" ? 0 : 7;
 
   const birthdaysQuery = useQuery({
     queryKey: ["birthdays", company?.id, days],
     queryFn: () => companiesApi.birthdays(company!.id, days),
-    enabled: visible && !!company?.id,
+    enabled: visible && !consolidatedView && !!company?.id,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -59,7 +170,7 @@ export function BirthdaysCard() {
   const sentQuery = useQuery({
     queryKey: ["birthday-sent", company?.id],
     queryFn: () => birthdayApi.sentThisYear(company!.id),
-    enabled: visible && !!company?.id,
+    enabled: visible && !consolidatedView && !!company?.id,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -70,11 +181,44 @@ export function BirthdaysCard() {
     return map;
   }, [sentQuery.data]);
 
+  // Mesma queryKey que useCustomers() usa no consolidado ("customers",
+  // "me", "name") — se a lista de Clientes já foi visitada nesta sessão,
+  // reaproveita o cache em vez de buscar de novo.
+  const consolidatedQuery = useQuery({
+    queryKey: ["customers", "me", "name"],
+    queryFn: () => meAggregatesApi.customers(),
+    enabled: visible && consolidatedView,
+    staleTime: 30000,
+  });
+
+  const consolidatedCustomers = useMemo(
+    () => birthdaysFromConsolidatedCustomers(consolidatedQuery.data?.customers ?? [], days),
+    [consolidatedQuery.data, days]
+  );
+
   if (!visible) return null;
 
-  const customers = birthdaysQuery.data?.customers ?? [];
-  const isLoading = birthdaysQuery.isLoading;
-  const isError = birthdaysQuery.isError;
+  const customers: BirthdayCustomer[] = consolidatedView
+    ? consolidatedCustomers
+    : birthdaysQuery.data?.customers ?? [];
+  const isLoading = consolidatedView ? consolidatedQuery.isLoading : birthdaysQuery.isLoading;
+  const isError = consolidatedView ? consolidatedQuery.isError : birthdaysQuery.isError;
+
+  function abrirAcao(c: BirthdayCustomer) {
+    const companyId = (c as ConsolidatedBirthdayCustomer).company_id;
+    if (consolidatedView && companyId) {
+      // A ação real (criar/enviar cupom) precisa da loja certa — o modal
+      // é escopo fora desta mudança e depende de `company` do store.
+      // Troca o contexto e deixa a pessoa clicar de novo já na loja dela.
+      setSwitchingId(c.id);
+      switchCompany(companyId).catch((err: any) => {
+        setSwitchingId(null);
+        toast.error(err?.message || "Não foi possível trocar de loja");
+      });
+      return;
+    }
+    setModalCustomer(c);
+  }
 
   return (
     <>
@@ -115,7 +259,10 @@ export function BirthdaysCard() {
         {isError && !isLoading && (
           <View style={s.center}>
             <Text style={s.errorText}>Não foi possível carregar a lista.</Text>
-            <Pressable onPress={() => birthdaysQuery.refetch()} style={s.retryBtn}>
+            <Pressable
+              onPress={() => (consolidatedView ? consolidatedQuery.refetch() : birthdaysQuery.refetch())}
+              style={s.retryBtn}
+            >
               <Text style={s.retryText}>Tentar novamente</Text>
             </Pressable>
           </View>
@@ -127,18 +274,25 @@ export function BirthdaysCard() {
 
         {!isLoading && !isError && customers.length > 0 && (
           <View style={s.list}>
+            {consolidatedView && (
+              <Text style={s.consolidatedNote} testID="birthdays-card-consolidado">
+                Somando todas as lojas. "Já enviado este ano" não é calculado aqui — confira na loja.
+              </Text>
+            )}
             {customers.map((c) => (
               <BirthdayRow
                 key={c.id}
                 customer={c}
                 alreadySent={!!sentMap[c.id]}
-                onAction={() => setModalCustomer(c)}
+                consolidatedCompanyName={consolidatedView ? (c as ConsolidatedBirthdayCustomer).company_name : null}
+                switching={switchingId === c.id}
+                onAction={() => abrirAcao(c)}
               />
             ))}
           </View>
         )}
 
-        {!!company?.id && <AniversarioAutoCard companyId={company.id} />}
+        {!consolidatedView && !!company?.id && <AniversarioAutoCard companyId={company.id} />}
       </View>
 
       <BirthdayCouponModal
@@ -173,8 +327,16 @@ function EmptyState({ tab }: { tab: Tab }) {
   );
 }
 
-type RowProps = { customer: BirthdayCustomer; alreadySent: boolean; onAction: () => void };
-function BirthdayRow({ customer, alreadySent, onAction }: RowProps) {
+type RowProps = {
+  customer: BirthdayCustomer;
+  alreadySent: boolean;
+  onAction: () => void;
+  /** MULTICNPJ: nome da loja de origem — só passado no consolidado. */
+  consolidatedCompanyName?: string | null;
+  /** Trocando de loja para agir neste cliente (consolidado). */
+  switching?: boolean;
+};
+function BirthdayRow({ customer, alreadySent, onAction, consolidatedCompanyName, switching }: RowProps) {
   const phoneOk = !!normalizeBrPhone(customer.phone);
   const optedOut = customer.marketing_opt_out === true;
   const initials = (customer.name || "?")
@@ -214,11 +376,18 @@ function BirthdayRow({ customer, alreadySent, onAction }: RowProps) {
             <Text style={s.metaWarn}>sem fone</Text>
           )}
           {optedOut && <Text style={s.metaWarn}>opt-out</Text>}
+          {!!consolidatedCompanyName && (
+            <View style={s.companyBadge}>
+              <Text style={s.companyBadgeText} numberOfLines={1}>{consolidatedCompanyName}</Text>
+            </View>
+          )}
         </View>
       </View>
-      <Pressable onPress={onAction} style={s.actionBtn}>
-        <Icon name="gift" size={14} color="#fff" />
-        <Text style={s.actionText}>Cupom</Text>
+      <Pressable onPress={onAction} style={s.actionBtn} disabled={switching} testID="birthday-row-acao">
+        <Icon name={consolidatedCompanyName ? "arrow-right" : "gift"} size={14} color="#fff" />
+        <Text style={s.actionText}>
+          {switching ? "Trocando…" : consolidatedCompanyName ? "Ir para a loja" : "Cupom"}
+        </Text>
       </Pressable>
     </View>
   );
@@ -288,6 +457,14 @@ const s = StyleSheet.create({
   metaDay: { fontSize: 11, color: Colors.violet, fontWeight: "600" },
   metaPhone: { fontSize: 11, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
   metaWarn: { fontSize: 10, color: "#f59e0b", fontWeight: "600", textTransform: "uppercase" },
+  // MULTICNPJ: badge da loja de origem, mesma ideia do showCompanyBadge
+  // da lista de clientes — só aparece no consolidado.
+  companyBadge: {
+    backgroundColor: Colors.violet + "18", borderRadius: 999,
+    paddingHorizontal: 7, paddingVertical: 2, maxWidth: 140,
+  },
+  companyBadgeText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700" },
+  consolidatedNote: { fontSize: 10.5, color: Colors.violet3, fontWeight: "600", marginBottom: 4 },
   actionBtn: {
     backgroundColor: Colors.violet,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
