@@ -1,15 +1,4 @@
 <!DOCTYPE html>
-<!--
-  Template web do Expo (output "single"). Sem este arquivo o Expo usa o
-  template padrao, que declara lang="en".
-
-  18/09/2026 (MH Alimentos: "Proxima" na tela de Vendas derrubava o app):
-  com lang="en" o Chrome oferece/aplica a traducao automatica numa pagina
-  que e toda em portugues. O tradutor troca os nos de texto por <font>, e o
-  React quebra ao remover/inserir esses nos na proxima renderizacao
-  ("Failed to execute 'removeChild' on 'Node'") — cai no ErrorBoundary.
-  lang="pt-BR" + translate="no" + meta notranslate desligam a traducao.
--->
 <html lang="pt-BR" translate="no">
   <head>
     <meta charset="utf-8" />

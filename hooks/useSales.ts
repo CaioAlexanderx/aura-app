@@ -13,7 +13,11 @@ import { useAuthStore } from "@/stores/auth";
 //   - 18/09/2026: trocar de pagina/filtro mantem a lista anterior na tela
 //     ate a nova chegar (placeholderData). Antes a pagina inteira (lista,
 //     KPIs e o subtitulo do cabecalho) sumia pro "Carregando" e voltava —
-//     ver public/index.html (MH Alimentos, "Proxima" derrubava o app).
+//     com o Chrome traduzindo a pagina, isso derrubava o app no "Proxima"
+//     (removeChild em no de texto trocado pelo tradutor). A correcao de
+//     raiz esta em public/index.html: lang="pt-BR" + translate="no" +
+//     meta notranslate. Nao remover — o template padrao do Expo e lang="en".
+//     (O motivo fica aqui porque comentario no index.html e publico.)
 //     So reaproveita dentro do mesmo escopo (mesma empresa / consolidado),
 //     pra nunca mostrar vendas de outra loja durante a troca de empresa.
 //   - MULTICNPJ Onda 2.4: ramifica via consolidatedView do auth.
