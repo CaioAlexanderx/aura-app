@@ -51,6 +51,43 @@ function maskCpf(v: string) {
   if (d.length > 3) return d.slice(0, 3) + "." + d.slice(3);
   return d;
 }
+// 21/09/2026 — CPF ou CNPJ de quem paga. O Asaas não gera cobrança para cliente
+// sem documento, e a maioria das empresas entra sem CNPJ (MEI/autônomo). O
+// checkout pedia o dado (via erro do Asaas) e não tinha campo para informar —
+// no Pix, nenhum. Mesma validação de dígito verificador do backend
+// (services/asaasCustomer.js): erro de digitação para aqui, não no Asaas.
+function maskCpfCnpj(v: string) {
+  var d = v.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 11) return maskCpf(d);
+  return d.slice(0, 2) + "." + d.slice(2, 5) + "." + d.slice(5, 8) + "/" + d.slice(8, 12) + "-" + d.slice(12);
+}
+function isValidCpf(v: string) {
+  var c = v.replace(/\D/g, "");
+  if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+  function calc(len: number) {
+    var s = 0;
+    for (var i = 0; i < len; i++) s += parseInt(c[i], 10) * (len + 1 - i);
+    var r = (s * 10) % 11;
+    return r === 10 ? 0 : r;
+  }
+  return parseInt(c[9], 10) === calc(9) && parseInt(c[10], 10) === calc(10);
+}
+function isValidCnpj(v: string) {
+  var c = v.replace(/\D/g, "");
+  if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+  function calc(len: number) {
+    var w = len === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    var s = 0;
+    for (var i = 0; i < len; i++) s += parseInt(c[i], 10) * w[i];
+    var r = s % 11;
+    return r < 2 ? 0 : 11 - r;
+  }
+  return parseInt(c[12], 10) === calc(12) && parseInt(c[13], 10) === calc(13);
+}
+function isValidCpfCnpj(v: string) {
+  var d = v.replace(/\D/g, "");
+  return d.length === 11 ? isValidCpf(d) : d.length === 14 ? isValidCnpj(d) : false;
+}
 function maskPostalCode(v: string) {
   var d = v.replace(/\D/g, "").slice(0, 8);
   if (d.length > 5) return d.slice(0, 5) + "-" + d.slice(5);
@@ -143,6 +180,12 @@ export default function CheckoutScreen() {
   var [polling, setPolling] = useState(false);
   var pollRef = useRef<any>(null);
 
+  // CPF/CNPJ de quem paga (Pix). No cartão, o CPF do titular já cumpre o papel.
+  var [taxId, setTaxId] = useState("");
+  // Backend devolveu stage='cpf_cnpj': mostra o campo mesmo se a tela achava
+  // que não precisava (ex.: cliente Asaas antigo, criado sem documento).
+  var [taxIdForced, setTaxIdForced] = useState(false);
+
   // Card state
   var [cardNumber, setCardNumber] = useState("");
   var [cardExpiry, setCardExpiry] = useState("");
@@ -203,11 +246,22 @@ export default function CheckoutScreen() {
   var [openInvoiceLoading, setOpenInvoiceLoading] = useState(false);
   var blockedByDiscount = !!activeDiscount && !discountLossAck;
 
+  // Precisa pedir CPF/CNPJ? O backend responde (needs_cpf_cnpj); enquanto o
+  // status não chega — ou num backend anterior a 21/09 — decide pelo CNPJ da
+  // empresa que já está na tela.
+  var needsTaxId = taxIdForced || (typeof billingStatusData?.needs_cpf_cnpj === "boolean"
+    ? billingStatusData.needs_cpf_cnpj
+    : !isValidCnpj(String((company as any)?.cnpj || "")));
+  var taxIdDigits = taxId.replace(/\D/g, "");
+  var taxIdValid = isValidCpfCnpj(taxIdDigits);
+  var taxIdComplete = taxIdDigits.length === 11 || taxIdDigits.length === 14;
+  var blockedByTaxId = needsTaxId && !taxIdValid;
+
   var cardDigits = cardNumber.replace(/\D/g, "");
   var expiryParts = cardExpiry.split("/");
   var holderAddressNumberDigits = cardAddressNumber.replace(/\D/g, "");
   var holderAddressStreet = cardAddressStreet.trim();
-  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && cardCpf.replace(/\D/g, "").length === 11 && cardPostalCode.replace(/\D/g, "").length === 8 && holderAddressNumberDigits.length >= 1 && holderAddressStreet.length >= 3;
+  var cardValid = cardDigits.length >= 15 && cardExpiry.length === 5 && cardCvv.length >= 3 && cardName.length >= 3 && isValidCpf(cardCpf) && cardPostalCode.replace(/\D/g, "").length === 8 && holderAddressNumberDigits.length >= 1 && holderAddressStreet.length >= 3;
   var brand = cardBrand(cardNumber);
 
   var annualEndDate = isAnnual ? addMonthsIso(new Date(), 12) : undefined;
@@ -258,10 +312,10 @@ export default function CheckoutScreen() {
   }, [selectedPlan, cycle, method]);
 
   async function handlePixSubscribe() {
-    if (!company?.id) return;
+    if (!company?.id || blockedByTaxId) return;
     setLoading(true);
     try {
-      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code });
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code, cpfCnpj: taxIdValid ? taxIdDigits : undefined });
       // Cupom de dias gratis no Pix: nao ha o que pagar hoje, entao nao vem QR.
       if (couponApplied?.trial_days) {
         setSuccess(true);
@@ -277,6 +331,9 @@ export default function CheckoutScreen() {
       }
       startPolling();
     } catch (err: any) {
+      // Faltou (ou o Asaas recusou) o CPF/CNPJ: abre o campo em vez de deixar
+      // o cliente num erro sem saída.
+      if (err instanceof ApiError && err.data?.stage === "cpf_cnpj") setTaxIdForced(true);
       toast.error(err instanceof ApiError ? err.message : "Erro ao gerar Pix");
     } finally { setLoading(false); }
   }
@@ -607,7 +664,25 @@ export default function CheckoutScreen() {
 
       {method === "pix" && !pixQr && (
         <View style={z.formCard}>
-          <Pressable onPress={handlePixSubscribe} disabled={loading || blockedByDiscount} style={[z.payBtn, (loading || blockedByDiscount) && { opacity: 0.5 }]}>
+          {needsTaxId && (
+            <View style={z.cardField}>
+              <Text style={z.cardLabel}>CPF ou CNPJ de quem vai pagar</Text>
+              <TextInput
+                style={[z.cardInput, taxIdComplete && !taxIdValid && { borderColor: Colors.red }]}
+                value={taxId}
+                onChangeText={function (v) { setTaxId(maskCpfCnpj(v)); }}
+                placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                placeholderTextColor={Colors.ink3}
+                keyboardType="number-pad"
+                maxLength={18}
+                editable={!loading}
+              />
+              {taxIdComplete && !taxIdValid
+                ? <Text style={z.couponError}>CPF ou CNPJ inválido. Confira os números.</Text>
+                : <Text style={z.taxIdHint}>Exigido pelo banco para gerar o Pix. Não tem CNPJ? Use seu CPF.</Text>}
+            </View>
+          )}
+          <Pressable onPress={handlePixSubscribe} disabled={loading || blockedByDiscount || blockedByTaxId} style={[z.payBtn, (loading || blockedByDiscount || blockedByTaxId) && { opacity: 0.5 }]}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis" : "Gerar Pix - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
@@ -724,6 +799,7 @@ var z = StyleSheet.create({
   couponBtn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   couponBtnText: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
   couponError: { fontSize: 11, color: Colors.red, marginTop: 8 },
+  taxIdHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
   couponAppliedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   couponAppliedTitle: { fontSize: 13, fontWeight: "700", color: Colors.green },
   couponAppliedSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
