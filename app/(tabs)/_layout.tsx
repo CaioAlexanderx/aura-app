@@ -13,6 +13,7 @@ import { useVerticalTheme } from "@/hooks/useVerticalTheme";
 import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
+import { moduloEstaOculto } from "@/constants/modulosOcultos";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
@@ -237,6 +238,16 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       if (item.osToggle && osEnabled !== true) return false;
       // 15/09/2026 — mesmo desenho para a Otica (pdv_settings.otica_enabled).
       if (item.oticaToggle && oticaEnabled !== true) return false;
+      // 21/09/2026 — feature que ainda nao esta operante fica fora do
+      // menu (constants/modulosOcultos.ts). Filtro de APRESENTACAO: o
+      // item segue declarado no NAV e o plano/permissao dele continuam
+      // valendo por baixo, entao tirar a chave da lista devolve a
+      // visibilidade exatamente como era. Fica aqui, e nao nos dois
+      // call sites, porque buildRawNav e o unico ponto por onde passam
+      // tanto a Sidebar (web) quanto a MBar (mobile) — e tambem o
+      // baseNav do SidebarEditor, que assim nao oferece ao cliente uma
+      // tela que o menu nao mostra.
+      if (moduloEstaOculto(item.mod)) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
   })).filter(section => section.i.length > 0);
