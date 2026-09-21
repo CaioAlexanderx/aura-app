@@ -1,22 +1,37 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { Customer } from "./types";
-import { fmt, getStatus } from "./types";
+import { fmt } from "./types";
+import { classificarCliente, contextoDaBase, SEGMENTOS, type TokenCor } from "./segmentos";
 
-function Tag({ tag }: { tag: string }) {
-  const m: Record<string, { b: string; f: string }> = {
-    VIP: { b: Colors.violetD, f: Colors.violet3 }, Frequente: { b: Colors.greenD, f: Colors.green },
-    Novo: { b: Colors.amberD, f: Colors.amber }, Inativo: { b: Colors.redD, f: Colors.red },
-  };
-  const c = m[tag] || { b: Colors.bg4, f: Colors.ink3 };
-  return <View style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: c.b }}><Text style={{ fontSize: 9, fontWeight: "600", color: c.f }}>{tag}</Text></View>;
+// Mesma indireção de CustomerRow.tsx: ./segmentos.ts é módulo puro (sem
+// react-native), então quem resolve TokenCor -> cor real é quem já
+// importa Colors.
+const TOKEN_CORES: Record<TokenCor, string> = {
+  violetD: Colors.violetD, violet3: Colors.violet3,
+  greenD: Colors.greenD, green: Colors.green,
+  amberD: Colors.amberD, amber: Colors.amber,
+  redD: Colors.redD, red: Colors.red,
+  bg4: Colors.bg4, ink3: Colors.ink3,
+  laranjaBg: "rgba(251,146,60,0.18)", laranjaFg: "#f97316",
+};
+
+function Tag({ tag, cor, motivo }: { tag: string; cor: { bVar: TokenCor; fVar: TokenCor }; motivo: string }) {
+  return (
+    <View style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: TOKEN_CORES[cor.bVar] }} accessibilityLabel={motivo}>
+      <Text style={{ fontSize: 9, fontWeight: "600", color: TOKEN_CORES[cor.fVar] }}>{tag}</Text>
+    </View>
+  );
 }
 
 export function RankingTab({ customers }: { customers: Customer[] }) {
   const [metric, setMetric] = useState<"ltv" | "visits">("ltv");
   const ranked = [...customers].sort((a, b) => metric === "ltv" ? b.totalSpent - a.totalSpent : b.visits - a.visits);
   const medals: Record<number, string> = { 1: Colors.amber, 2: Colors.ink3, 3: "#cd7f32" };
+  // Fase 1 (C1.2): VIP é relativo à base inteira (top 10%/20% por gasto) —
+  // calcula uma vez pra lista toda, não por linha.
+  const contexto = useMemo(() => contextoDaBase(customers), [customers]);
 
   return (
     <View>
@@ -30,7 +45,8 @@ export function RankingTab({ customers }: { customers: Customer[] }) {
       <View style={s.listCard}>
         {ranked.map((c, i) => {
           const col = medals[i + 1];
-          const tags = getStatus(c);
+          const { segmento, motivo } = classificarCliente(c, contexto);
+          const tagInfo = SEGMENTOS[segmento];
           return (
             <View key={c.id} style={s.row}>
               <View style={[s.rankBadge, col ? { backgroundColor: col + "22" } : {}]}>
@@ -39,7 +55,7 @@ export function RankingTab({ customers }: { customers: Customer[] }) {
               <View style={s.avatar}><Text style={s.avatarText}>{c.name.charAt(0)}</Text></View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.name}>{c.name}</Text>
-                <View style={{ flexDirection: "row", gap: 4 }}>{tags.slice(0, 2).map(t => <Tag key={t} tag={t} />)}</View>
+                <View style={{ flexDirection: "row", gap: 4 }}><Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} /></View>
               </View>
               <Text style={s.value}>{metric === "ltv" ? fmt(c.totalSpent) : `${c.visits} visitas`}</Text>
             </View>
