@@ -28,6 +28,35 @@ import {
 // em que roda.
 const AGORA = new Date(2026, 8, 16, 12, 0, 0).getTime();
 
+// ============================================================
+// 21/09/2026 — o relógio fixo agora é fixo DE FATO.
+//
+// AGORA congelava só as datas de ENTRADA: `haDias(150)` montava
+// "19/04/2026" e parava aí. Mas `classificarCliente`, `resumoDosSegmentos`,
+// `intervaloHabitualDias` e `ehAniversarianteDoMes` recebem o instante por
+// parâmetro com `= Date.now()` de padrão, e nenhuma das 42 chamadas deste
+// arquivo passava AGORA. Resultado: entrada parada em 16/09, leitura no
+// relógio real, e a distância entre as duas crescendo um dia por dia.
+//
+// Verde no dia em que foi escrito (16/09) e vermelho a partir do dia
+// seguinte: em 21/09 o cliente de `haDias(150)` já era lido como 155 dias,
+// e o de 120 dias atravessava a fronteira dos 121 e virava "perdido" em vez
+// de "sumido". Ninguém viu porque o CI do front roda só o guard de base64,
+// não a suíte.
+//
+// Congelar o relógio do processo conserta as 42 de uma vez e protege as que
+// vierem depois — passar AGORA em cada chamada deixaria a próxima esquecer
+// de novo, que é exatamente o erro original. Mesmo padrão de
+// __tests__/lojaSempreAberta.test.tsx.
+// ============================================================
+beforeAll(() => {
+  jest.useFakeTimers();
+  jest.setSystemTime(AGORA);
+});
+afterAll(() => {
+  jest.useRealTimers();
+});
+
 /** Data "dd/mm/aaaa" de N dias atrás, do jeito que o app guarda. */
 function haDias(n: number): string {
   const d = new Date(AGORA - n * 864e5);
