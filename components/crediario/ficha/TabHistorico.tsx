@@ -16,6 +16,7 @@ import { creditApi, printReceipt, type CreditHistoryEvent } from "@/services/cre
 import { toast } from "@/components/Toast";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import { fmt, fmtDate } from "./fichaHelpers";
+import { eventNote } from "./eventNote";
 import { m } from "./fichaStyles";
 import { pdvApi } from "@/services/pdvApi";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
@@ -176,6 +177,9 @@ export function TabHistorico({
       // venda) que o endpoint genérico de "undo" pode não reverter corretamente.
       const canDelete = ev.type === "manual_debit";
       const isDeleting = deletingId === ev.id;
+      // 21/09/2026: descrição digitada no lançamento (meta.notes) — chegava do
+      // backend e nunca aparecia; todo lançamento virava só "Débito manual".
+      const note = eventNote(ev);
       return (
         <View key={ev.id} style={m.tlItem}>
           <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
@@ -187,6 +191,7 @@ export function TabHistorico({
               </Text>
             </View>
             <Text style={m.tlSub}>{fmtDate(ev.occurred_at)}</Text>
+            {!!note && <Text style={lc.note} selectable>{note}</Text>}
             {ev.items && ev.items.length > 0 && (
               <View style={lc.itemList}>
                 {ev.items.map((it, idx) => (
@@ -316,6 +321,7 @@ const lc = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
   legendTxt: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600" },
+  note: { fontSize: 12, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
   itemList: {
     marginTop: 5,
     gap: 3,
