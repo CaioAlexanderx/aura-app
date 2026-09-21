@@ -39,6 +39,8 @@ import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
 import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
 import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
 import { useCustomers } from "@/hooks/useCustomers";
+import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
+import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -66,27 +68,39 @@ export default function WhatsAppScreen() {
   const abas = demo ? TABS : TABS_REAIS;
   const ativa = Math.min(tab, abas.length - 1);
 
+  // I1.3 — cabeçalho editorial padrão (ScreenHero), igual às outras onze
+  // telas. Subtítulo lê o estado da conexão + mensagens do mês direto do
+  // wa.status que a aba Conexão já carrega — nenhuma chamada nova.
+  const tabsHero: ScreenTabItem[] = abas.map((t, i) => ({
+    key: String(i),
+    label: t,
+    testID: `wa-varejo-aba-${i}`,
+  }));
+
+  const heroSub = demo
+    ? "Modo demonstrativo — conversas, automações e campanhas de exemplo."
+    : wa.statusLoading && !wa.status
+    ? "Verificando a conexão do WhatsApp da loja…"
+    : wa.status?.connected
+    ? (
+      <>
+        Número {fmtPhoneBR(wa.status.phone_display)} conectado
+        {typeof wa.status?.usage?.month_sent === "number"
+          ? ` · ${wa.status.usage.month_sent} mensagens enviadas este mês`
+          : ""}
+      </>
+    )
+    : "Número da loja ainda não conectado — conecte na aba Conexão.";
+
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <Text style={s.pageTitle}>WhatsApp</Text>
+      <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, marginBottom: 20 }}
-        contentContainerStyle={{ flexDirection: "row", gap: 6 }}
-      >
-        {abas.map((t, i) => (
-          <Pressable
-            key={t}
-            onPress={() => { setTab(i); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
-            style={[s.tab, ativa === i && s.tabActive]}
-            testID={`wa-varejo-aba-${i}`}
-          >
-            <Text style={[s.tabText, ativa === i && s.tabTextActive]}>{t}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <ScreenTabs
+        tabs={tabsHero}
+        active={String(ativa)}
+        onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+      />
 
       {demo ? (
         <View testID="wa-varejo-maquete">
@@ -170,11 +184,6 @@ export default function WhatsAppScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
-  pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700", marginBottom: 20 },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  tabText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
-  tabTextActive: { color: "#fff", fontWeight: "600" },
   loadingBox: { paddingVertical: 28, alignItems: "center" },
   linkCard: {
     flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: Colors.violetD,

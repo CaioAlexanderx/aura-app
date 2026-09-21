@@ -179,7 +179,9 @@ export function ScreenHero({ eyebrow, title, subtitle, live, badge, actions }: S
 // horizontal no mobile e nao cria uma segunda linha de base brigando
 // com o ponto final do titulo editorial.
 // ============================================================
-export type ScreenTabItem = { key: string; label: string; locked?: boolean };
+// 16/09/2026 (I1.3) — `testID` opcional: /whatsapp precisava manter os
+// testIDs históricos das abas (wa-varejo-aba-N) ao migrar pro padrão.
+export type ScreenTabItem = { key: string; label: string; locked?: boolean; testID?: string };
 
 type ScreenTabsProps = {
   tabs: ScreenTabItem[];
@@ -205,6 +207,7 @@ export function ScreenTabs({ tabs, active, onSelect }: ScreenTabsProps) {
             onPress={() => onSelect(t.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
+            testID={t.testID}
             style={[
               tb.tab,
               { backgroundColor: isDark ? C.bg3 : C.bg3, borderColor: C.border },
