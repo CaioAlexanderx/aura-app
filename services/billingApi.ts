@@ -64,6 +64,9 @@ export type BillingStatusResponse = {
   has_payment_method: boolean;
   vertical_active: string | null;
   allowed_plans: string[];
+  // 21/09/2026 — empresa sem CNPJ válido: o checkout precisa pedir CPF/CNPJ.
+  // Ausente em backend anterior a essa data.
+  needs_cpf_cnpj?: boolean;
   // 11/09/2026 — desconto de varios meses ainda valendo nesta assinatura.
   // Mensalidades que vencem ANTES de first_full_due_date levam o desconto.
   discount?: BillingDiscount | null;
@@ -131,6 +134,9 @@ export var billingApi = {
     creditCardToken?: string; holderName?: string; holderCpf?: string;
     holderPostalCode?: string; holderAddressNumber?: string; holderAddress?: string;
     endDate?: string; totalCycles?: number; accessCode?: string;
+    // 21/09/2026 — CPF/CNPJ de quem paga (só dígitos). O Asaas não gera
+    // cobrança sem documento e a maioria das empresas não tem CNPJ cadastrado.
+    cpfCnpj?: string;
   }) {
     return request<SubscribeResponse>("/companies/" + companyId + "/billing/subscribe", {
       method: "POST",
@@ -138,6 +144,7 @@ export var billingApi = {
         plan: plan, billing_type: billingType || "PIX", cycle: cycle || "monthly",
         end_date: opts?.endDate, total_cycles: opts?.totalCycles,
         access_code: opts?.accessCode,
+        cpf_cnpj: opts?.cpfCnpj,
         credit_card_token: opts?.creditCardToken, credit_card_holder_name: opts?.holderName,
         credit_card_holder_cpf: opts?.holderCpf, credit_card_holder_postal_code: opts?.holderPostalCode,
         credit_card_holder_address_number: opts?.holderAddressNumber, credit_card_holder_address: opts?.holderAddress,
