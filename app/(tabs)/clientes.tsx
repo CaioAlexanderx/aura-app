@@ -129,7 +129,7 @@ export default function ClientesScreen() {
     consolidatedView, companyCount,
     plan, planLimit,
   } = useCustomers();
-  const { company } = useAuthStore();
+  const { company, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
   const [tab, setTab] = useState(0);
@@ -148,6 +148,21 @@ export default function ClientesScreen() {
 
   // PLAN-01: tabs avancadas (Ranking, Retencao, Avaliacoes) sao Negocio+.
   const isEssencial = plan === "essencial";
+
+  // MULTICNPJ Fase 1 (C1.8): `plan` acima vem de useCustomers(), que no
+  // consolidado devolve sempre "essencial" -- `company` e null quando
+  // consolidatedView=true (stores/auth.ts), entao `company?.plan` nunca
+  // resolve. Sem este calculo, RetentionCard e a aba Retencao nunca
+  // apareceriam no consolidado nem para quem tem Negocio/Expansao --
+  // travados pelo mesmo isEssencial que bloqueia o Essencial de verdade.
+  //
+  // Escopo de proposito ESTREITO: so a Retencao usa isto. Ranking,
+  // Avaliacoes e a porta da reativacao continuam com o isEssencial de
+  // sempre -- essas telas nao foram auditadas nesta frente, e mudar o
+  // gate delas tambem e risco fora do pedido.
+  const retencaoBloqueada = consolidatedView
+    ? !(availableCompanies || []).some((c) => c.plan === "negocio" || c.plan === "expansao")
+    : isEssencial;
 
   // Formulario de cliente (add e editar) — bottom sheet, mesmo padrao do estoque.
   const formOpen = showAdd || !!editTarget;
@@ -264,7 +279,7 @@ export default function ClientesScreen() {
   const TABS_CLIENTES: ScreenTabItem[] = [
     { key: "0", label: "Lista" },
     { key: "1", label: "Ranking",    locked: isEssencial },
-    { key: "2", label: "Retenção",   locked: isEssencial },
+    { key: "2", label: "Retenção",   locked: retencaoBloqueada },
     { key: "3", label: "Avaliações", locked: isEssencial },
   ];
 
@@ -334,7 +349,7 @@ export default function ClientesScreen() {
           <View style={s.planBlock}><Text style={s.planBlockText}>Sem acesso ao módulo de clientes neste momento.</Text></View>
         )}
 
-        {tab === 0 && !planBlocked && !isDemo && !consolidatedView && !isEssencial && <RetentionCard />}
+        {tab === 0 && !planBlocked && !isDemo && !retencaoBloqueada && <RetentionCard />}
 
         <ScreenTabs
           tabs={TABS_CLIENTES}
@@ -529,7 +544,7 @@ export default function ClientesScreen() {
                 idBase="clientes-retencao-ir-para-reativacao"
               />
             )}
-            {isEssencial ? (
+            {retencaoBloqueada ? (
               <UpgradeCard
                 title="Retenção e clientes em risco"
                 description="Saiba quem voltou e quem não voltou. Reaja antes de perder um bom cliente."

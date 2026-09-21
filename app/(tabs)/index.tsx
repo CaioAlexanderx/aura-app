@@ -300,12 +300,18 @@ export default function DashboardScreen() {
                 comercial, que é mais consulta do que ação.
                 MULTICNPJ Onda 2.6: SalesAnalyticsCard agora funciona em consolidated
                 via /me/sales/analytics (useSalesAnalytics ramifica internamente).
-                TopSellersCard e BirthdaysCard ainda per-company (escondidos em
-                consolidated por ora — proxima onda de polish, se houver demanda).
+                TopSellersCard ainda per-company (escondido em consolidated por ora
+                — proxima onda de polish, se houver demanda). BirthdaysCard passou
+                a somar todas as lojas no consolidado (Fase 1, C1.8).
                 06/05/2026: "Ver análise completa" deep-linka pra Curva ABC dentro
                 da aba Receitas (foco abc -> auto-scroll na tela de Financeiro). */}
             {!isDemo && <SalesAnalyticsCard onPress={function() { go("/financeiro?tab=receitas&focus=abc"); }} />}
-            {!isDemo && !consolidatedView && <BirthdaysCard />}
+            {/* MULTICNPJ Fase 1 (C1.8): BirthdaysCard agora sabe se virar
+                sozinho no consolidado (soma todas as lojas via
+                /me/customers) — o motivo de estar escondido era só
+                `company` ficar null nesse modo, não falta de dado. Ver o
+                comentário grande em BirthdaysCard.tsx. */}
+            {!isDemo && <BirthdaysCard />}
             {/* 02/08/2026: ranking completo migrou de /folha pra aba propria em
                 /vendas — deep-link direto na aba pra nao cair na listagem. */}
             {!isDemo && !consolidatedView && <TopSellersCard onSeeAll={function() { go("/vendas?tab=ranking"); }} />}
