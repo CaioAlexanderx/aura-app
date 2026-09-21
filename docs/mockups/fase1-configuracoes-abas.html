@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Configurações em abas (Fase 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Fase 1, Configurações em abas.
+
+     Hoje app/(tabs)/configuracoes.tsx é uma rolagem única com onze
+     seções: Identidade, Contato, Dados registrais, Plano atual,
+     Empresas, Vendas (Políticas do Caixa + taxa da maquininha +
+     cupons), Equipe, Minha conta, Aparência, Suporte e Indique e
+     ganhe — mais o botão "Salvar alterações" no meio do caminho.
+
+     A proposta: as mesmas onze seções, distribuídas em cinco abas em
+     pílula (Empresa · Caixa · Equipe · Conta · Aparência), e uma
+     seção nova em Empresa › WhatsApp e consentimento (Negócio+).
+     Nenhum campo muda de comportamento.
+     ============================================================ */
+  :root {
+    --bg:  #0B0716; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border:  rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;  --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24;  --amberD: rgba(251,191,36,0.10);
+    --red:   #f87171;  --redD:   rgba(248,113,113,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 24px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink); font-family: var(--sans); min-height: 100vh;
+  }
+  button, input { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 820px; margin: 0 0 22px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 22px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 38px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12px; color: var(--ink3); line-height: 1.65; max-width: 380px; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+
+  .ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border2); border-radius: 12px; background: rgba(9,12,26,0.85); margin: 0 0 16px; position: sticky; top: 8px; z-index: 60; backdrop-filter: blur(8px); }
+  .ctl-g { display: flex; align-items: center; gap: 6px; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--border2); background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: rgba(124,58,237,0.25); color: #fff; border-style: solid; }
+
+  /* Desktop */
+  .scaler { width: 100%; overflow-x: auto; }
+  .desk { width: 1440px; height: 911px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); display: flex; overflow: hidden; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .side { width: 232px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .side-s { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink3); padding: 14px 10px 6px; }
+  .side-i { font-size: 13px; color: var(--ink2); padding: 8px 10px; border-radius: 9px; }
+  .side-i.on { background: var(--violetD); color: #fff; font-weight: 600; box-shadow: inset 2px 0 0 var(--violet); }
+  .main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 36px 90px; position: relative; scrollbar-width: none; }
+  .main::-webkit-scrollbar { width: 0; }
+  .logo-s { display: inline-flex; align-items: center; background: #f6eee4; color: #3b1d2a; border-radius: 12px; font-family: var(--serif); font-size: 17px; height: 44px; padding: 0 12px; margin: 4px 6px 16px; align-self: flex-start; }
+  .logo-s i, .logo-b i { font-style: italic; color: #b0406a; font-size: 1.25em; margin-left: 3px; }
+
+  /* Cabeçalho com a logo em destaque (ProfileHero) */
+  .hero { display: flex; gap: 22px; align-items: center; margin-bottom: 18px; }
+  .logo-b { width: 132px; height: 132px; border-radius: 26px; background: #f6eee4; color: #3b1d2a; display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 26px; flex-shrink: 0; flex-direction: column; line-height: 1; }
+  .logo-acts { display: flex; gap: 6px; margin-top: 8px; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-bottom: 8px; flex-wrap: wrap; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .badge-n { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg3); font-size: 10px; }
+  .hero-t { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: 0.95; letter-spacing: -0.025em; margin: 0; }
+  .hero-t span { color: var(--violet); }
+  .hero-s { font-size: 14px; color: var(--ink3); margin-top: 10px; line-height: 1.5; }
+  .hero-s .mono { font-family: var(--mono); color: var(--ink2); font-size: 13px; }
+  .comp { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--ink3); }
+  .comp .bar { width: 160px; height: 6px; border-radius: 99px; background: var(--bg4); overflow: hidden; }
+  .comp .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--violet), var(--violet3)); }
+  .txtbtn { height: 30px; padding: 0 10px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border); color: var(--ink2); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+
+  .abas { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
+  .abas::-webkit-scrollbar { height: 0; }
+  .aba { flex-shrink: 0; padding: 9px 16px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); font-size: 13px; color: var(--ink3); font-weight: 500; cursor: pointer; }
+  .aba.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .aba small { font-size: 10px; opacity: 0.75; margin-left: 4px; }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .st { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); margin: 0 0 8px 2px; display: flex; align-items: center; gap: 8px; }
+  .st .novo { padding: 2px 7px; border-radius: 999px; background: var(--greenD); color: var(--green); letter-spacing: 0.06em; font-size: 9px; }
+  .st .neg { padding: 2px 7px; border-radius: 999px; background: var(--violetD); color: var(--violet3); letter-spacing: 0.06em; font-size: 9px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+  .fld + .fld { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .fl { font-size: 11px; color: var(--ink3); font-weight: 600; margin-bottom: 6px; letter-spacing: 0.3px; }
+  .fi { width: 100%; height: 42px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); color: var(--ink); padding: 0 12px; font-size: 14px; outline: none; }
+  .fi:focus { border-color: var(--border2); }
+  .fi.mono { font-family: var(--mono); }
+  .hint { font-size: 11px; color: var(--ink3); margin-top: 5px; }
+  .ro { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .ro .v { font-size: 15px; font-weight: 600; }
+  .ro .v.mono { font-family: var(--mono); font-size: 15px; letter-spacing: 0.02em; }
+  .ro .k { font-size: 11px; color: var(--ink3); font-weight: 600; }
+  .ok { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--green); font-weight: 600; }
+  .note { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--ink3); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); line-height: 1.45; }
+  .link-card { display: flex; align-items: center; gap: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-bottom: 20px; cursor: pointer; }
+  .link-card b { display: block; font-size: 14px; }
+  .link-card small { display: block; font-size: 12px; color: var(--ink3); margin-top: 2px; }
+  .link-card .go { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--violet3); white-space: nowrap; }
+  .count { padding: 2px 9px; border-radius: 999px; background: var(--violetD); color: var(--violet3); font-size: 12px; font-weight: 700; }
+
+  /* toggles (Políticas do Caixa) */
+  .tg { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+  .tg:first-of-type { border-top: 0; padding-top: 2px; }
+  .tg b { display: block; font-size: 13.5px; }
+  .tg small { display: block; font-size: 12px; color: var(--ink3); margin-top: 2px; line-height: 1.45; }
+  .tg .sw { margin-left: auto; width: 42px; height: 24px; border-radius: 99px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex-shrink: 0; cursor: pointer; }
+  .tg .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink3); transition: left .15s; }
+  .tg .sw.on { background: var(--violet); border-color: var(--violet); }
+  .tg .sw.on::after { left: 20px; background: #fff; }
+  .tg .sub { font-size: 12px; color: var(--violet3); font-weight: 600; margin-top: 6px; }
+
+  /* membros */
+  .mem { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .mem:first-of-type { border-top: 0; }
+  .av { width: 36px; height: 36px; border-radius: 18px; background: var(--violetD); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--violet3); flex-shrink: 0; }
+  .mem b { font-size: 13.5px; display: block; }
+  .mem small { font-size: 11.5px; color: var(--ink3); }
+  .role { margin-left: auto; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--bg4); color: var(--ink2); }
+  .btn { height: 40px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--violet); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border2); color: var(--violet3); }
+  .btn.green { background: var(--greenD); border: 1px solid rgba(52,211,153,0.4); color: var(--green); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* plano, indicação, tema */
+  .plan { display: flex; align-items: center; gap: 12px; }
+  .plan .pb { padding: 5px 12px; border-radius: 999px; background: var(--violet); font-size: 12px; font-weight: 700; }
+  .plan .pp { font-size: 15px; font-weight: 700; }
+  .ref { display: flex; gap: 10px; align-items: center; }
+  .ref .code { font-family: var(--mono); font-size: 16px; padding: 8px 12px; border-radius: 10px; background: var(--bg2); border: 1px dashed var(--border2); letter-spacing: 0.06em; }
+  .stats { display: flex; gap: 10px; margin-top: 12px; }
+  .stats div { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+  .stats b { display: block; font-size: 18px; }
+  .stats small { font-size: 11px; color: var(--ink3); }
+  .temas { display: flex; gap: 10px; }
+  .tema { flex: 1; border-radius: 14px; border: 1px solid var(--border); padding: 12px; cursor: pointer; background: var(--bg2); }
+  .tema.on { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,0.18); }
+  .tema .pv { height: 70px; border-radius: 10px; margin-bottom: 8px; display: flex; gap: 6px; padding: 8px; }
+  .tema .pv i { display: block; border-radius: 6px; }
+  .tema b { font-size: 13px; }
+
+  /* WhatsApp e consentimento */
+  .wa-top { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .pct { font-size: 52px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--green); }
+  .pct-l { font-size: 13px; color: var(--ink2); max-width: 220px; line-height: 1.4; }
+  .stack { flex: 1; min-width: 260px; }
+  .stack .bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--bg4); }
+  .stack .bar i { display: block; height: 100%; }
+  .leg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12px; color: var(--ink2); }
+  .leg span { display: inline-flex; align-items: center; gap: 6px; }
+  .leg i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .leg b { color: var(--ink); }
+  .wa-sub { font-size: 11.5px; color: var(--ink3); margin-top: 8px; }
+  .corte { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+  .corte input { width: 132px; height: 40px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border2); color: var(--ink); padding: 0 10px; font-family: var(--mono); font-size: 14px; text-align: center; outline: none; }
+  .corte-prev { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
+  .corte-prev b { color: var(--ink); }
+  .corte-prev.err { border-color: rgba(248,113,113,0.4); color: var(--red); }
+  .optxt { position: relative; padding: 14px 16px; border-radius: 12px; background: var(--bg2); border: 1px dashed var(--border2); font-size: 14px; line-height: 1.55; }
+  .optxt-f { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .optxt-f small { font-size: 11.5px; color: var(--ink3); flex: 1; min-width: 200px; }
+  .gate { background: var(--bg3); border: 1px solid var(--border2); border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+  .gate b { font-size: 14px; display: block; }
+  .gate p { font-size: 12.5px; color: var(--ink3); margin: 4px 0 12px; line-height: 1.5; }
+  .savebar { position: sticky; bottom: 0; margin: 10px -36px -90px; padding: 14px 36px; background: linear-gradient(180deg, rgba(11,7,22,0), rgba(11,7,22,0.95) 30%); display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+  .savebar small { font-size: 12px; color: var(--ink3); }
+  .savebar .btn.saved { background: var(--green); color: #062b1e; }
+
+  /* Celular */
+  .phone { width: 390px; height: 844px; border-radius: 26px; border: 1px solid var(--border); background: linear-gradient(180deg, rgba(14,18,40,0.9), rgba(9,12,26,0.95)); overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .p-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; }
+  .p-top i { width: 32px; height: 32px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); }
+  .p-scroll { flex: 1; overflow-y: auto; padding: 0 14px 20px; min-height: 0; scrollbar-width: none; position: relative; }
+  .p-scroll::-webkit-scrollbar { width: 0; }
+  .p-bar { height: 59px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-around; background: var(--bg2); border-top: 1px solid var(--border); font-size: 10px; color: var(--ink3); }
+  .p-bar .on { color: var(--violet3); font-weight: 700; }
+  .phone .hero { gap: 14px; align-items: flex-start; }
+  .phone .logo-b { width: 84px; height: 84px; border-radius: 20px; font-size: 17px; }
+  .phone .hero-t { font-size: 36px; }
+  .phone .hero-s { font-size: 12px; margin-top: 6px; }
+  .phone .comp .bar { width: 90px; }
+  .phone .eyebrow { font-size: 10px; }
+  .phone .cols { display: block; }
+  .phone .abas { margin: 0 -14px 16px; padding: 0 14px; }
+  .phone .aba { padding: 8px 13px; font-size: 12.5px; }
+  .phone .pct { font-size: 40px; }
+  .phone .stack { min-width: 0; flex-basis: 100%; }
+  .phone .savebar { margin: 10px -14px -20px; padding: 12px 14px; }
+  .phone .savebar small { display: none; }
+  .phone .savebar .btn { flex: 1; }
+  .phone .temas { flex-direction: column; }
+  .phone .ref { flex-wrap: wrap; }
+
+  table.t { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 8px; max-width: 1100px; }
+  table.t th, table.t td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t th { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); }
+  table.t td { color: var(--ink2); }
+  .decisoes { border: 1px solid var(--border2); border-radius: 16px; padding: 18px 22px; background: rgba(124,58,237,0.06); max-width: 1100px; }
+  .decisoes h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0 0 10px; }
+  .decisoes h2 span { color: var(--violet); }
+  .decisoes ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--ink2); }
+  .decisoes li { margin-bottom: 10px; }
+  .decisoes li b { color: var(--ink); }
+  .decisoes li i { color: var(--violet3); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Configurações em abas<span>.</span></h1>
+  <p class="doc-sub">
+    Fase 1 — a mesma tela, com as onze seções de hoje distribuídas em cinco abas em pílula, e uma seção nova para o
+    consentimento de ofertas pelo WhatsApp. A logo da loja abre a tela em destaque.
+  </p>
+  <div class="nota">
+    <b>O que não muda:</b> os campos, as validações (e-mail, telefone, CNPJ na Receita), o upload da logo, as políticas do Caixa
+    (que já salvam sozinhas), o gate de Equipe por capacidade, o comportamento no consolidado (seções por empresa pedem para escolher
+    uma empresa) e os textos de cada seção.<br>
+    <b>O que muda:</b> (1) cinco abas — <b>Empresa · Caixa · Equipe · Conta · Aparência</b> — no lugar da rolagem única; (2) a logo sobe
+    para o cabeçalho, a 132px, com “Trocar logo” e “Remover” escritos (hoje é um ícone de upload que só aparece por cima da imagem);
+    (3) “Salvar alterações” fica preso ao pé da aba Empresa, a única com campos de digitar; (4) nova seção
+    <b>Empresa › WhatsApp e consentimento</b>, só do Negócio para cima: resumo, data de corte e o texto padrão copiável.
+    Nada de tela de consentimentos — o aceite de cada cliente é uma caixa de marcar na ficha, no cadastro e no Caixa.<br>
+    <b>Onde foi parar cada seção:</b> Empresa = Identidade, Contato, Dados registrais, Empresas (+ WhatsApp e consentimento);
+    Caixa = Políticas do Caixa (com a taxa da maquininha) e o atalho de Cupons; Equipe = Equipe; Conta = Minha conta, Plano atual,
+    Indique e ganhe, Suporte; Aparência = Aparência (que ganha o acento que falta hoje).<br>
+    <b>CNPJ e e-mails</b> aparecem com valores fictícios. A aba escolhida vai para a URL (<code>/configuracoes?aba=caixa</code>),
+    para o suporte poder mandar o link certo.
+  </div>
+
+  <div class="ctl" id="ctl">
+    <div class="ctl-g"><span>Plano</span>
+      <button data-k="plano" data-v="negocio" class="on">Negócio</button>
+      <button data-k="plano" data-v="essencial">Essencial</button>
+    </div>
+    <div class="ctl-g"><span>Visão</span>
+      <button data-k="visao" data-v="loja" class="on">Loja da Lu · Centro</button>
+      <button data-k="visao" data-v="cons">Consolidado · 2 lojas</button>
+    </div>
+    <div class="ctl-g"><span>Desktop</span>
+      <button data-fit="1" class="on">Ajustar à largura</button>
+      <button data-fit="0">100%</button>
+    </div>
+  </div>
+
+  <div class="secao" style="margin-top:6px">A · Desktop 1440 × 911 — clique nas abas</div>
+  <div class="scaler"><div class="desk" id="desk">
+    <aside class="side">
+      <span class="logo-s">Loja da <i>Lu</i></span>
+      <div class="side-s">Vendas</div>
+      <div class="side-i">Caixa</div><div class="side-i">Vendas</div><div class="side-i">Cupons</div><div class="side-i">Crediário</div><div class="side-i">Estoque</div>
+      <div class="side-s">Clientes e WhatsApp</div>
+      <div class="side-i">Clientes</div><div class="side-i">WhatsApp</div><div class="side-i">Reativação</div>
+      <div style="flex:1"></div>
+      <div class="side-i on">Configurações</div>
+    </aside>
+    <main class="main" id="d-app"></main>
+  </div></div>
+
+  <div class="secao">B · Celular 390 × 844 — as abas rolam na horizontal</div>
+  <div class="telas">
+    <div><div class="rotulo">Aba Empresa, no topo</div><div class="phone"><div class="p-top"><i></i></div><div class="p-scroll" id="m1"></div><div class="p-bar"><span>Painel</span><span>Caixa</span><span>Clientes</span><span>WhatsApp</span><span class="on">Mais</span></div></div></div>
+    <div><div class="rotulo">Empresa › WhatsApp e consentimento</div><div class="phone"><div class="p-top"><i></i></div><div class="p-scroll" id="m2"></div><div class="p-bar"><span>Painel</span><span>Caixa</span><span>Clientes</span><span>WhatsApp</span><span class="on">Mais</span></div></div></div>
+    <div class="legenda">
+      <b>Ordem das abas.</b> Empresa primeiro porque é onde o lojista novo tem o que preencher; Aparência por último porque é
+      a que menos se visita.<br><br>
+      <b>WhatsApp e consentimento fica em Empresa</b>, não numa aba “WhatsApp”: são três coisas pequenas (um número, uma data e um
+      texto), e uma aba própria pediria mais do que isso para não parecer vazia. A conexão do número continua na tela WhatsApp.<br><br>
+      <b>O texto padrão usa o nome da loja</b> que está em Identidade. Troque o nome lá e o texto acompanha.<br><br>
+      <b>“Salvar alterações”</b> só aparece na aba Empresa, preso ao pé, e fica verde por um instante depois de salvar.
+      Nas outras abas cada mudança salva sozinha, como as Políticas do Caixa já fazem hoje.
+    </div>
+  </div>
+
+  <div class="secao">C · Essencial × Negócio — o que some</div>
+  <table class="t">
+    <tr><th>Pedaço</th><th>Essencial</th><th>Negócio e acima</th></tr>
+    <tr><td>Abas Empresa, Caixa, Conta e Aparência, com as seções de hoje</td><td>aparece</td><td>aparece</td></tr>
+    <tr><td>Empresa › WhatsApp e consentimento</td><td><b>some</b></td><td>aparece</td></tr>
+    <tr><td>Caixa › Crediário, Ordem de Serviço e Ótica nas Políticas do Caixa</td><td><b>somem</b></td><td>aparecem</td></tr>
+    <tr><td>Aba Equipe (sem acesso extra comprado)</td><td><b>some</b> — ver decisão 3</td><td>aparece</td></tr>
+  </table>
+
+  <div class="secao">D · Decisões para o Caio</div>
+  <div class="decisoes">
+    <h2>Decisões para o Caio<span>.</span></h2>
+    <ol>
+      <li><b>O consentimento e a data de corte são do dono (valem para todas as lojas) ou de cada CNPJ?</b> O cliente é do dono, mas o
+        texto diz “ofertas da Loja da Lu”. <i>Proposta:</i> do dono — a seção aparece também no consolidado, e com lojas de nomes
+        diferentes o texto usa o nome da marca do dono.</li>
+      <li><b>A data de corte é obrigatória antes do primeiro envio de ofertas em massa?</b> <i>Proposta:</i> sim — a reativação pede a
+        data na primeira vez, já sugerindo 30 dias à frente, e depois ela vive aqui.</li>
+      <li><b>No Essencial sem acesso extra, a aba Equipe some?</b> A premissa diz que sim, mas hoje é ali que se descobre que dá para
+        comprar acesso extra. <i>Proposta:</i> some; a compra de acesso extra passa a aparecer em Conta › Plano atual.</li>
+      <li><b>Plano atual e Indique e ganhe ficam em Conta?</b> <i>Proposta:</i> sim — são do dono, não da loja, e é assim que o consolidado
+        já os trata.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  var G = { plano: 'negocio', visao: 'loja' };
+  var TEXTO = 'Aceito receber ofertas e novidades da Loja da Lu pelo WhatsApp. Posso sair quando quiser respondendo SAIR.';
+  // Base de exemplo: 312 clientes, 258 com telefone.
+  var CONS = { sim: 98, sem: 139, nao: 21, semTel: 54 };
+  var TOTAL_TEL = CONS.sim + CONS.sem + CONS.nao;
+  var POL = { cliente: false, vendedora: true, caixa: true, troco: true, crediario: true, os: false, otica: false, taxa: true };
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (x) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]; }); }
+  function digits(s) { return String(s || '').replace(/\D/g, ''); }
+  function mData(d) { d = d.slice(0, 8); var o = d.slice(0, 2); if (d.length > 2) o += '/' + d.slice(2, 4); if (d.length > 4) o += '/' + d.slice(4); return o; }
+
+  function novo(extra) {
+    var st = { aba: 'empresa', dirty: false, saved: false, corte: '', copiado: false, nome: 'Loja da Lu', email: 'lojadalu@exemplo.com.br', tema: 'escuro' };
+    for (var k in extra) st[k] = extra[k];
+    return st;
+  }
+
+  function abas(st) {
+    var ess = G.plano === 'essencial';
+    var lista = [['empresa', 'Empresa'], ['caixa', 'Caixa'], ['equipe', 'Equipe'], ['conta', 'Conta'], ['aparencia', 'Aparência']]
+      .filter(function (a) { return !(ess && a[0] === 'equipe'); });
+    if (ess && st.aba === 'equipe') st.aba = 'empresa';
+    return '<div class="abas">' + lista.map(function (a) {
+      return '<button class="aba' + (st.aba === a[0] ? ' on' : '') + '" data-aba="' + a[0] + '">' + a[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function hero(st, m) {
+    var cons = G.visao === 'cons';
+    if (cons) {
+      return '<div class="hero"><div><div class="eyebrow"><span class="dot"></span>Suas empresas · Configurações <span class="badge-n">Consolidado · 2 lojas</span></div>' +
+        '<h2 class="hero-t">Configurações<span>.</span></h2>' +
+        '<div class="hero-s">2 empresas ativas. O que é do dono fica aqui; o que é de cada loja pede para escolher a empresa.</div></div></div>';
+    }
+    return '<div class="hero"><div><div class="logo-b"><span>Loja da</span><i style="font-size:1.5em;margin:0">Lu</i></div>' +
+      '<div class="logo-acts"><button class="txtbtn">Trocar logo</button>' + (m ? '' : '<button class="txtbtn">Remover</button>') + '</div></div>' +
+      '<div style="min-width:0"><div class="eyebrow"><span class="dot"></span>' + esc(st.nome) + ' · Configurações</div>' +
+      '<h2 class="hero-t">Configurações<span>.</span></h2>' +
+      '<div class="hero-s">' + esc(st.nome) + ' · CNPJ <span class="mono">12.345.678/0001-90</span>' + (m ? '' : ' · Simples Nacional') + '</div>' +
+      '<div class="comp"><span class="bar"><i style="width:86%"></i></span><span>Perfil 86% completo' + (m ? '' : ' · falta o Instagram') + '</span></div></div></div>';
+  }
+
+  function gateEmpresa() {
+    return '<div class="gate"><b>Configurações por empresa</b><p>Identidade, contato, dados registrais, políticas do Caixa e equipe são de cada CNPJ. Escolha a empresa para mexer nelas.</p>' +
+      '<div class="btns"><button class="btn ghost">Loja da Lu · Centro</button><button class="btn ghost">Loja da Lu · Shopping</button></div></div>';
+  }
+
+  function whatsapp(st) {
+    if (G.plano === 'essencial') return '';
+    var pct = Math.round(CONS.sim / TOTAL_TEL * 100);
+    var d = digits(st.corte);
+    var prev;
+    if (d.length < 8) {
+      prev = '<div class="corte-prev">Sem data de corte, quem está <b>sem registro</b> ainda pode receber ofertas. Cobranças, lembretes de parcela e avisos de pedido não dependem disso.</div>';
+    } else {
+      var dia = +d.slice(0, 2), mes = +d.slice(2, 4), ano = +d.slice(4);
+      var dt = new Date(ano, mes - 1, dia);
+      var valida = dt.getFullYear() === ano && dt.getMonth() === mes - 1 && dt.getDate() === dia;
+      var hoje = new Date(2026, 8, 16);
+      if (!valida) prev = '<div class="corte-prev err">Data inválida.</div>';
+      else if (dt < hoje) prev = '<div class="corte-prev err">A data de corte precisa ser hoje (16/09/2026) ou depois.</div>';
+      else {
+        var dias = Math.round((dt - hoje) / 864e5);
+        prev = '<div class="corte-prev">A partir de <b>' + mData(d) + '</b>' + (dias ? ' (daqui a ' + dias + ' dias)' : ' (hoje)') + ': <b>' + CONS.sim + ' clientes</b> continuam recebendo ofertas e <b>' + CONS.sem +
+          ' sem registro</b> deixam de receber até alguém marcar a caixa na ficha ou no Caixa. Os ' + CONS.nao + ' que responderam SAIR já não recebem.</div>';
+      }
+    }
+    return '<div class="st">WhatsApp e consentimento <span class="novo">novo</span><span class="neg">Negócio</span></div>' +
+      '<div class="card" id="wa-sec">' +
+        '<div class="wa-top"><div class="pct">' + pct + '%</div><div class="pct-l">dos clientes com telefone aceitam receber ofertas pelo WhatsApp</div>' +
+        '<div class="stack"><div class="bar"><i style="width:' + (CONS.sim / TOTAL_TEL * 100) + '%;background:var(--green)"></i><i style="width:' + (CONS.sem / TOTAL_TEL * 100) + '%;background:rgba(170,160,235,0.35)"></i><i style="width:' + (CONS.nao / TOTAL_TEL * 100) + '%;background:var(--red)"></i></div>' +
+        '<div class="leg"><span><i style="background:var(--green)"></i><b>' + CONS.sim + '</b> aceitam</span><span><i style="background:rgba(170,160,235,0.35)"></i><b>' + CONS.sem + '</b> sem registro</span><span><i style="background:var(--red)"></i><b>' + CONS.nao + '</b> responderam SAIR</span></div>' +
+        '<div class="wa-sub">de ' + TOTAL_TEL + ' clientes com telefone · ' + CONS.semTel + ' sem telefone não entram na conta · <a href="fase1-lista-clientes-segmentos.html" style="color:var(--violet3)">ver os ' + CONS.sem + ' sem registro</a></div></div></div>' +
+        '<div class="fld" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><div class="fl">Data de corte</div>' +
+          '<div class="corte"><span>A partir de</span><input data-corte inputmode="numeric" placeholder="__/__/____" value="' + esc(mData(d)) + '"><span>só envio ofertas para quem aceitou.</span></div>' + prev + '</div>' +
+        '<div class="fld"><div class="fl">Texto padrão do aceite</div>' +
+          '<div class="optxt">' + esc(TEXTO.replace('Loja da Lu', st.nome)) + '</div>' +
+          '<div class="optxt-f"><small>É o texto que aparece embaixo da caixa “Aceita receber ofertas pelo WhatsApp” no Caixa, no cadastro e na ficha. Use o mesmo num cartaz no balcão ou na bio.</small>' +
+          '<button class="btn ' + (st.copiado ? 'green' : 'ghost') + '" data-copiar>' + (st.copiado ? 'Copiado' : 'Copiar texto') + '</button></div></div>' +
+      '</div>';
+  }
+
+  function empresa(st, m) {
+    var cons = G.visao === 'cons';
+    var empresas = '<div class="st">Empresas</div><div class="link-card"><div><b>Minhas empresas</b><small>2 CNPJs cadastrados — gerenciar, trocar ou adicionar</small></div><span class="count">2</span><span class="go">Abrir</span></div>';
+    if (cons) return gateEmpresa() + empresas + whatsapp(st);
+    var esq = '<div class="st">Identidade</div><div class="card">' +
+        '<div class="fld"><div class="fl">Nome da empresa</div><input class="fi" data-campo="nome" value="' + esc(st.nome) + '"></div>' +
+        '<div class="fld"><div class="fl">Endereço</div><input class="fi" data-campo="end" value="Rua das Acácias, 120 — Centro, São Paulo - SP"></div></div>' +
+      '<div class="st">Contato</div><div class="card">' +
+        '<div class="fld"><div class="fl">E-mail da empresa</div><input class="fi" data-campo="email" value="' + esc(st.email) + '"><div class="hint">Usado para comunicações e notas fiscais</div></div>' +
+        '<div class="fld"><div class="fl">Telefone</div><input class="fi mono" data-campo="tel" value="(11) 3456-7890"><div class="hint">Aparece na vitrine e no canal digital</div></div></div>';
+    var dir = '<div class="st">Dados registrais</div><div class="card">' +
+        '<div class="ro"><span class="k">CNPJ</span><span class="ok">● confirmado na Receita Federal</span></div><div class="ro" style="margin-top:4px"><span class="v mono">12.345.678/0001-90</span></div>' +
+        '<div class="ro" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><span class="k">Regime</span><span class="v">Simples Nacional</span></div>' +
+        '<div class="note">Para alterar CNPJ ou regime, fale com o suporte da Aura.</div></div>' + empresas;
+    var base = m ? esq + dir : '<div class="cols"><div>' + esq + '</div><div>' + dir + '</div></div>';
+    return base + whatsapp(st) +
+      '<div class="savebar"><small>' + (st.dirty ? 'Você tem alterações não salvas.' : 'Alterações entram em vigor após salvar.') + '</small>' +
+      '<button class="btn' + (st.saved ? ' saved' : '') + '" data-salvar' + (st.dirty || st.saved ? '' : ' style="opacity:.5"') + '>' + (st.saved ? 'Salvo' : 'Salvar alterações') + '</button></div>';
+  }
+
+  function caixa(st) {
+    if (G.visao === 'cons') return gateEmpresa();
+    var ess = G.plano === 'essencial';
+    function t(k, titulo, desc, sub) {
+      return '<div class="tg"><div><b>' + titulo + '</b><small>' + desc + '</small>' + (sub && POL[k] ? '<div class="sub">' + sub + '</div>' : '') + '</div><span class="sw' + (POL[k] ? ' on' : '') + '" data-pol="' + k + '"></span></div>';
+    }
+    return '<div class="st">Políticas do Caixa</div><div class="card">' +
+      t('cliente', 'Identificar cliente', 'Bloqueia finalizar venda sem selecionar cliente') +
+      t('vendedora', 'Identificar vendedora', 'Bloqueia finalizar venda sem informar quem vendeu') +
+      t('caixa', 'Módulo de caixa', 'Habilita abertura e fechamento de caixa por turno', 'Gerenciar caixa') +
+      t('troco', 'Modal de troco em dinheiro', 'Ao finalizar venda em dinheiro, abre um auxílio para calcular o troco') +
+      (ess ? '' : t('crediario', 'Crediário (fiado)', 'Permite vender no fiado e registrar pagamento posterior pelo cadastro do cliente', 'Ver clientes com saldo')) +
+      (ess ? '' : t('os', 'Ordem de Serviço', 'Registre a entrada de equipamentos para conserto: defeito, orçamento, prazo e garantia')) +
+      (ess ? '' : t('otica', 'Ótica', 'Receituário do cliente, OS de óculos com etapa de laboratório e aviso de “óculos prontos”')) +
+      t('taxa', 'Taxa da maquininha', 'Lança sozinho a despesa do que a maquininha retém em cada venda no cartão', 'Crédito 3,19% · Débito 1,37%') +
+      '<div class="note">Cada mudança aqui salva na hora.</div></div>' +
+      '<div class="st">Cupons</div><div class="link-card"><div><b>Cupons de desconto</b><small>Crie e gerencie cupons para oferecer descontos no caixa</small></div><span class="go">Abrir</span></div>';
+  }
+
+  function equipe() {
+    if (G.visao === 'cons') return gateEmpresa();
+    var p = [['LM', 'Luciana Martins', 'luciana@exemplo.com.br', 'Dona'], ['SM', 'Simone Macedo', 'simone@exemplo.com.br', 'Vendedora'], ['CP', 'Camila Prado', 'camila@exemplo.com.br', 'Vendedora']];
+    return '<div class="st">Equipe · 3 de 3 acessos</div><div class="card">' + p.map(function (x) {
+      return '<div class="mem"><div class="av">' + x[0] + '</div><div><b>' + x[1] + '</b><small>' + x[2] + '</small></div><span class="role">' + x[3] + '</span><button class="txtbtn">Permissões</button></div>';
+    }).join('') + '<div class="note" style="justify-content:space-between;align-items:center"><span>Para mais uma pessoa, compre um acesso extra.</span><div class="btns"><button class="btn ghost">Comprar acesso extra</button><button class="btn">Convidar pessoa</button></div></div></div>';
+  }
+
+  function conta(st) {
+    var ess = G.plano === 'essencial';
+    return '<div class="cols"><div>' +
+      '<div class="st">Minha conta</div><div class="card"><div class="ro"><span class="k">Nome</span><span class="v">Luciana Martins</span></div>' +
+        '<div class="ro" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><span class="k">E-mail de acesso</span><span class="v mono" style="font-size:13.5px">luciana@exemplo.com.br</span></div>' +
+        '<div class="note">Para alterar nome ou e-mail, entre em contato com o suporte.</div></div>' +
+      '<div class="st">Plano atual</div><div class="card"><div class="plan"><span class="pb">' + (ess ? 'Essencial' : 'Negócio') + '</span><span class="pp">' + (ess ? 'R$ 89/mês' : 'R$ 169/mês') + '</span><span style="flex:1"></span><button class="btn ghost">Ver planos</button></div>' +
+        (ess ? '<div class="note">Precisa de mais uma pessoa no sistema? <b style="color:var(--violet3);margin-left:4px">Comprar acesso extra</b></div>' : '') + '</div>' +
+      '<div class="st">Suporte</div><div class="card"><div class="btns"><button class="btn green">Falar no WhatsApp</button><button class="btn ghost">Mandar e-mail</button></div></div>' +
+      '</div><div>' +
+      '<div class="st">Indique e ganhe</div><div class="card"><div class="ref"><span class="k" style="font-size:12px;color:var(--ink3)">Seu código</span><span class="code">LOJADALU-26</span><button class="btn ghost">Copiar</button><button class="btn green">WhatsApp</button></div>' +
+        '<div class="stats"><div><b>2</b><small>Concluídas</small></div><div><b>1</b><small>Pendentes</small></div><div><b>R$ 169</b><small>Descontos</small></div></div></div>' +
+      '</div></div>';
+  }
+
+  function aparencia(st) {
+    return '<div class="st">Aparência</div><div class="card"><div class="temas">' +
+      '<div class="tema' + (st.tema === 'escuro' ? ' on' : '') + '" data-tema="escuro"><div class="pv" style="background:#060816"><i style="width:30%;background:#0e1228"></i><i style="flex:1;background:#141830"></i></div><b>Escuro</b></div>' +
+      '<div class="tema' + (st.tema === 'claro' ? ' on' : '') + '" data-tema="claro"><div class="pv" style="background:#e6e4f0"><i style="width:30%;background:#fafbff"></i><i style="flex:1;background:#fff"></i></div><b>Claro</b></div>' +
+      '</div><div class="note">Vale só para este aparelho.</div></div>';
+  }
+
+  function app(st, m) {
+    var corpo = st.aba === 'empresa' ? empresa(st, m) : st.aba === 'caixa' ? caixa(st) : st.aba === 'equipe' ? equipe() : st.aba === 'conta' ? conta(st) : aparencia(st);
+    return hero(st, m) + abas(st) + corpo;
+  }
+
+  var INST = [
+    { el: document.getElementById('d-app'), m: false, st: novo({}) },
+    { el: document.getElementById('m1'), m: true, st: novo({}) },
+    { el: document.getElementById('m2'), m: true, st: novo({ corte: '16102026' }), rolarPara: '#wa-sec' }
+  ];
+
+  function renderUm(it) {
+    var a = document.activeElement, foco = null;
+    if (a && it.el.contains(a)) foco = a.hasAttribute('data-corte') ? '[data-corte]' : a.getAttribute('data-campo') ? '[data-campo="' + a.getAttribute('data-campo') + '"]' : null;
+    var top = it.el.scrollTop;
+    it.el.innerHTML = app(it.st, it.m);
+    it.el.scrollTop = top;
+    if (foco) { var n = it.el.querySelector(foco); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
+  }
+  function render() { INST.forEach(renderUm); }
+
+  INST.forEach(function (it) {
+    it.el.addEventListener('click', function (ev) {
+      var t = ev.target, st = it.st;
+      var q = function (s) { return t.closest(s); };
+      if (q('[data-aba]')) { st.aba = q('[data-aba]').dataset.aba; renderUm(it); it.el.scrollTop = 0; return; }
+      if (q('[data-pol]')) { var k = q('[data-pol]').dataset.pol; POL[k] = !POL[k]; render(); return; }
+      if (q('[data-tema]')) { st.tema = q('[data-tema]').dataset.tema; renderUm(it); return; }
+      if (q('[data-copiar]')) {
+        try { navigator.clipboard && navigator.clipboard.writeText(TEXTO.replace('Loja da Lu', st.nome)); } catch (e) {}
+        st.copiado = true; renderUm(it);
+        setTimeout(function () { st.copiado = false; renderUm(it); }, 1800);
+        return;
+      }
+      if (q('[data-salvar]')) {
+        if (!st.dirty) return;
+        st.dirty = false; st.saved = true; renderUm(it);
+        setTimeout(function () { st.saved = false; renderUm(it); }, 1600);
+      }
+    });
+    it.el.addEventListener('input', function (ev) {
+      var t = ev.target, st = it.st;
+      if (t.hasAttribute('data-corte')) { st.corte = digits(t.value).slice(0, 8); renderUm(it); return; }
+      var c = t.getAttribute('data-campo');
+      if (c) {
+        if (c === 'nome') st.nome = t.value || 'sua loja';
+        if (c === 'email') st.email = t.value;
+        var mudou = !st.dirty; st.dirty = true; st.saved = false;
+        if (c === 'nome' || mudou) renderUm(it);
+      }
+    });
+  });
+
+  var FIT = true;
+  function fit() { document.querySelectorAll('.desk').forEach(function (x) { x.style.zoom = FIT ? Math.min(1, x.parentElement.clientWidth / 1442) : 1; }); }
+  window.addEventListener('resize', fit);
+  document.getElementById('ctl').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.fit) {
+      FIT = b.dataset.fit === '1';
+      this.querySelectorAll('[data-fit]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      fit(); return;
+    }
+    G[b.dataset.k] = b.dataset.v;
+    this.querySelectorAll('[data-k="' + b.dataset.k + '"]').forEach(function (x) { x.classList.toggle('on', x === b); });
+    render();
+    posicionar();
+  });
+
+  function posicionar() {
+    INST.forEach(function (it) {
+      if (!it.rolarPara) return;
+      var alvo = it.el.querySelector(it.rolarPara);
+      it.el.scrollTop = alvo ? alvo.offsetTop - 40 : 0;
+    });
+  }
+  render();
+  posicionar();
+  fit();
+  window.addEventListener('load', posicionar);
+})();
+</script>
+</body>
+</html>
