@@ -1,6 +1,6 @@
 # CONTRATO — módulo Matcon (materiais de construção)
 
-**Data:** 22/09/2026 · **Status:** proposto pelo front, aguardando backend
+**Data:** 22/09/2026 · **Status:** proposto pelo front, aguardando backend · chaves de config sincronizadas com `docs/mockups/matcon-modulo.html` (tela 1)
 **Regra da casa:** backend mergeado antes de abrir o PR do front que depende de coluna/rota nova.
 **Contexto:** `docs/matcon-faseamento-po-ux.md` (fases M0–M4) e `docs/matcon-pesquisa-mercado-gap.md`.
 
@@ -18,6 +18,9 @@ O modelo de opt-in é o mesmo da OS (`os_enabled`) e da Ótica (`otica_enabled`,
 | `matcon_default_waste_pct` | number | `10` | perda padrão (%) sugerida na calculadora de ambiente (M3) |
 | `matcon_round_to_package` | boolean | `true` | ao vender unidade fracionada com `purchase_factor`, o front mostra "= N caixas"; **não** altera a quantidade vendida sozinho |
 | `matcon_default_delivery_days` | integer | `2` | prazo padrão de entrega, usado no orçamento (M1) |
+| `matcon_units` | string[] | `["m²","m³","m","sc","br","mlh","ton","pç"]` | unidades do grupo "Materiais" que a loja habilitou ("Minha loja vende em …" na config). O cadastro de produto mostra só essas; as demais de `MATCON_UNITS` ficam atrás de "+ rolo, lata, balde". |
+| `matcon_quote_valid_days` | integer | `7` | validade padrão do orçamento (M1) |
+| `matcon_quote_warn_days` | integer | `3` | quantos dias antes de vencer o orçamento entra em "Vencendo" e avisa o vendedor (M1) |
 
 Nenhuma dessas chaves existe para lojas sem o módulo; o `GET` continua devolvendo só o que está salvo (front tem defaults).
 
