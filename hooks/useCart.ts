@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
 import type { PdvSaleResponse } from "@/services/salesApi";
+import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
@@ -97,6 +98,43 @@ export function useCart() {
   // (docs/CONTRACT_MATCON.md, M3). Zera junto com o carrinho, mesmo padrão
   // de quoteId acima.
   var [referredProfessionalId, setReferredProfessionalId] = useState<string | null>(null);
+
+  // 22/09/2026 (Matcon M4): de quais LOTES sai cada item, por productId do
+  // carrinho (a mesma chave do setQty/removeItem, com o sufixo da variante).
+  // Quem calcula é o carrinho — CartPanel/LoteDoItem, que conhece os saldos;
+  // aqui só viajam os dados até `items[].lot_allocations` no POST da venda.
+  // Item sem alocação NÃO manda o campo: o backend baixa do lote mais antigo
+  // (FIFO), que é o default do contrato. Zera junto com o carrinho.
+  var [lotAllocations, setLotAllocationsMap] = useState<Record<string, LotAllocation[]>>({});
+
+  function mesmasAlocacoes(a: LotAllocation[] | undefined, b: LotAllocation[]): boolean {
+    if (!a) return b.length === 0;
+    if (a.length !== b.length) return false;
+    return a.every(function (x, i) { return x.lot_id === b[i].lot_id && x.quantity === b[i].quantity; });
+  }
+
+  // Idempotente de propósito: o CartPanel reporta a cada recálculo (mudou a
+  // quantidade, o lote preferido ou o saldo), e sem esta comparação o estado
+  // novo a cada render viraria loop de render no item.
+  function setLotAllocations(productId: string, allocations: LotAllocation[]) {
+    var next = allocations || [];
+    setLotAllocationsMap(function (prev) {
+      if (mesmasAlocacoes(prev[productId], next)) return prev;
+      if (next.length === 0) {
+        if (!prev[productId]) return prev;
+        var limpo = { ...prev };
+        delete limpo[productId];
+        return limpo;
+      }
+      var atualizado = { ...prev };
+      atualizado[productId] = next;
+      return atualizado;
+    });
+  }
+
+  function clearLotAllocations() {
+    setLotAllocationsMap(function (prev) { return Object.keys(prev).length === 0 ? prev : {}; });
+  }
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
@@ -295,6 +333,7 @@ export function useCart() {
 
   function removeItem(productId: string) {
     setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); });
+    setLotAllocations(productId, []);
     if (couponApplied) setCouponApplied(null);
   }
 
@@ -348,6 +387,10 @@ export function useCart() {
         var listPrice = (i.listPrice != null && i.listPrice > 0) ? i.listPrice : i.price;
         var unitOriginal = Math.max(listPrice, i.price);
         var itemDiscount = round2(Math.max(0, unitOriginal - i.price) * i.qty);
+        // Matcon M4: soma das alocações = quantity do item (o rateio é
+        // feito em cima da quantidade atual). Sem alocação o campo nem vai
+        // no JSON, e o backend baixa FIFO.
+        var allocs = lotAllocations[i.productId] || [];
         return {
           product_id: decomposed.pid,
           variant_id: decomposed.vid || undefined,
@@ -355,6 +398,9 @@ export function useCart() {
           unit_price: unitOriginal,
           item_discount: itemDiscount > 0 ? itemDiscount : undefined,
           product_name_snapshot: i.name,
+          lot_allocations: allocs.length > 0
+            ? allocs.map(function(a) { return { lot_id: a.lot_id, quantity: a.quantity }; })
+            : undefined,
         };
       }),
       payment_method: primaryPayment,
@@ -420,7 +466,7 @@ export function useCart() {
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber));
-          setCart([]); setQuoteId(null); setReferredProfessionalId(null); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
           // Não desativa splitMode automaticamente — usuário decide se mantém
@@ -440,13 +486,13 @@ export function useCart() {
       });
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
-      setCart([]); setQuoteId(null); setReferredProfessionalId(null); setIsProcessing(false);
+      setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
       if (splitMode) setSplitPayments([]);
     }
   }
 
   function newSale() {
-    setLastSale(null); setCart([]); setQuoteId(null); setReferredProfessionalId(null); setIsProcessing(false);
+    setLastSale(null); setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -459,6 +505,10 @@ export function useCart() {
   return {
     quoteId, setQuoteId,
     referredProfessionalId, setReferredProfessionalId,
+    // Matcon M4 — o pai (usePdvState/cartProps) liga `setLotAllocations` no
+    // `onLotAllocations` do CartPanel; sem isso a linha do lote continua
+    // aparecendo e a venda baixa FIFO.
+    lotAllocations, setLotAllocations, clearLotAllocations,
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,

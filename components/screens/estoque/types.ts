@@ -24,6 +24,11 @@ export type Product = {
   cest?: string | null;
   origem?: number | null;
   icmsStPaid?: boolean | null;
+  // 22/09/2026 (Matcon M4, docs/CONTRACT_MATCON.md §M4): saldo por lote,
+  // devolvido pelo GET /products só quando `matcon_lots_enabled` está
+  // ligado. Com ele a lista mostra "148,48 m² em 2 lotes"; sem ele (todo
+  // mundo hoje) o estoque é o número de sempre.
+  lotsSummary?: { count: number; lots: Array<{ id: string; lot_code: string; qty: number }> } | null;
   brand: string;
   notes: string;
   // Migration 305 — ficha tecnica. Opcionais: a maioria dos catalogos

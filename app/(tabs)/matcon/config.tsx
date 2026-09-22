@@ -39,6 +39,9 @@ type Draft = {
   units: string[];
   wastePct: string;
   roundToPackage: boolean;
+  // M4 — "Controlo lote e tonalidade nos produtos vendidos em m² e m³"
+  // (docs/mockups/matcon-m4-profundidade.html#entrada).
+  lotsEnabled: boolean;
   deliveryDays: string;
   quoteValidDays: string;
   quoteWarnDays: string;
@@ -54,6 +57,7 @@ function draftFromSettings(m: MatconSettings): Draft {
     units: m.matcon_units,
     wastePct: String(m.matcon_default_waste_pct),
     roundToPackage: m.matcon_round_to_package,
+    lotsEnabled: m.matcon_lots_enabled,
     deliveryDays: String(m.matcon_default_delivery_days),
     quoteValidDays: String(m.matcon_quote_valid_days),
     quoteWarnDays: String(m.matcon_quote_warn_days),
@@ -149,6 +153,7 @@ export default function MatconConfigScreen() {
     if (!sameUnits(draft.units, loaded.matcon_units)) patch.matcon_units = draft.units;
     if (wastePct !== loaded.matcon_default_waste_pct) patch.matcon_default_waste_pct = wastePct;
     if (draft.roundToPackage !== loaded.matcon_round_to_package) patch.matcon_round_to_package = draft.roundToPackage;
+    if (draft.lotsEnabled !== loaded.matcon_lots_enabled) patch.matcon_lots_enabled = draft.lotsEnabled;
     if (deliveryDays !== loaded.matcon_default_delivery_days) patch.matcon_default_delivery_days = deliveryDays;
     if (quoteValidDays !== loaded.matcon_quote_valid_days) patch.matcon_quote_valid_days = quoteValidDays;
     if (quoteWarnDays !== loaded.matcon_quote_warn_days) patch.matcon_quote_warn_days = quoteWarnDays;
@@ -252,6 +257,22 @@ export default function MatconConfigScreen() {
                   testID="matcon-cfg-arredondar"
                 />{" "}
                 arredondo para a caixa cheia e mostro a sobra.
+              </Text>
+            </View>
+
+            <View style={st.divider} />
+
+            {/* ── Lote e tonalidade (M4) ── */}
+            <View style={st.frase}>
+              <Text style={st.fraseText}>
+                Controlo lote e tonalidade nos produtos vendidos em m² e m³{" "}
+                <Switch
+                  value={draft.lotsEnabled}
+                  onValueChange={(v) => set({ lotsEnabled: v })}
+                  trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+                  thumbColor={draft.lotsEnabled ? Colors.violet : Colors.ink3}
+                  testID="matcon-cfg-lotes"
+                />
               </Text>
             </View>
 

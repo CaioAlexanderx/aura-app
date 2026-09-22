@@ -57,6 +57,18 @@ function mapApiProduct(p: any): Product {
     cest: p.cest ?? null,
     origem: p.origem === null || p.origem === undefined ? null : (parseInt(p.origem, 10) || 0),
     icmsStPaid: p.icms_st_paid === null || p.icms_st_paid === undefined ? null : p.icms_st_paid === true,
+    // 22/09/2026 (Matcon M4): `lots_summary` só vem com o gate dos lotes
+    // ligado. Ausente -> null, e a lista mostra o estoque de hoje.
+    lotsSummary: p.lots_summary && Array.isArray(p.lots_summary.lots)
+      ? {
+          count: parseInt(p.lots_summary.count, 10) || p.lots_summary.lots.length,
+          lots: p.lots_summary.lots.map((l: any) => ({
+            id: String(l.id),
+            lot_code: String(l.lot_code ?? ""),
+            qty: parseFloat(l.qty) || 0,
+          })),
+        }
+      : null,
     brand: p.brand || "",
     notes: p.notes || p.description || "",
     material: p.material || "",

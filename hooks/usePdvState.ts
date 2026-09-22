@@ -217,6 +217,7 @@ export function usePdvState() {
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale: rawNewSale,
     setQuoteId,
     referredProfessionalId, setReferredProfessionalId,
+    setLotAllocations,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
@@ -789,6 +790,11 @@ export function usePdvState() {
     onInc:             (id: string) => updateQty(id, 1),
     onDec:             (id: string) => updateQty(id, -1),
     onSetQty:          setQty,
+    // 22/09/2026 (Matcon M4): o CartPanel calcula de quais lotes sai cada
+    // item (LoteDoItem) e devolve aqui; o useCart guarda e manda como
+    // `items[].lot_allocations` no POST da venda. Sem lote controlado
+    // nunca é chamado, e a venda baixa FIFO como sempre.
+    onLotAllocations:  setLotAllocations,
     onPriceChange:     setUnitPrice,
     onRemove:          removeItem,
     onClear:           () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },

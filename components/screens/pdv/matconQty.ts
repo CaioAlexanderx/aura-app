@@ -14,6 +14,7 @@
 // ============================================================
 
 import { isFractionalUnit, fmtQty, toPackages } from "@/utils/matconUnits";
+import { usaLote } from "@/utils/matconLots";
 
 // Teto do campo de quantidade. Fora do Matcon continua 999 (3 digitos), que e
 // o que o carrinho sempre teve; com o toggle on sobe pra 6 digitos porque
@@ -84,4 +85,14 @@ export function fraseDeEmbalagem(a: FraseEmbalagemArgs): string | null {
   var frase = "= " + fmtQty(pk.packages) + " " + embalagem + " · " + fmtQty(pk.covered, unit);
   if (pk.leftover > 0) frase += " · sobra " + fmtQty(pk.leftover, unit);
   return frase;
+}
+
+// M4 (docs/CONTRACT_MATCON.md, "Lote / tonalidade"): a linha do lote no item
+// do carrinho. Mesma pergunta das funcoes acima, so que o gate e outro —
+// alem do toggle do Matcon, a frase da config ("Controlo lote e tonalidade
+// nos produtos vendidos em m² e m³"). A regra de unidade vive em
+// utils/matconLots.usaLote; aqui so repassamos, pra que o CartPanel continue
+// perguntando tudo pro mesmo arquivo.
+export function usaLoteNoItem(matconEnabled: boolean, lotsEnabled: boolean, unit?: string | null): boolean {
+  return usaLote({ matcon_enabled: matconEnabled, matcon_lots_enabled: lotsEnabled }, unit);
 }

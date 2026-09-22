@@ -26,6 +26,12 @@ let mockPdvSettings: any = { matcon_enabled: false };
 jest.mock("@/hooks/usePdvSettings", () => ({
   usePdvSettings: () => ({ settings: mockPdvSettings, isLoading: false, error: null, invalidate: jest.fn() }),
 }));
+// M4: o CartPanel passou a montar a linha do lote, que le a empresa do
+// store de auth (mesmo mock de EntregasMatcon.test.tsx).
+jest.mock("@/stores/auth", () => ({
+  useAuthStore: () => ({ company: { id: "empresa-1" }, token: "t", isDemo: false }),
+}));
+
 jest.mock("@/components/screens/pdv/MerchantLogo", () => ({
   MerchantLogo: () => null,
   useMerchantBrand: () => ({ logoUrl: null, name: "Depósito do Zé", initial: "D" }),
