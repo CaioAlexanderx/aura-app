@@ -6,6 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <meta name="google" content="notranslate" />
     <title>Aura.</title>
+
+    <!-- ============================================================
+         PWA (22/09/2026, Fase 1). O manifesto é o que faz o celular
+         enxergar o painel como app instalável; as metas apple-* fazem o
+         mesmo para o iPhone, que ignora parte do manifesto. theme-color
+         = Dark.bg de constants/colors.ts, igual ao background_color do
+         manifesto, para barra de status e tela de abertura lerem como
+         uma coisa só com o app. Ícones: scripts/gerar-icones-pwa.py.
+         ============================================================ -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#060816" />
+    <meta name="application-name" content="Aura" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Aura" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <link rel="apple-touch-icon" href="/aura-icone-180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/aura-icone-192.png" />
+    <!-- O convite de instalação do Chrome (beforeinstallprompt) dispara
+         UMA vez por carregamento, cedo, antes do JS do app. Guardar aqui
+         garante que services/instalarApp.ts o encontre; o preventDefault
+         segura a barrinha automática do Chrome para o card do Painel
+         decidir o momento. -->
+    <script>
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__auraConvite = e;
+      });
+    </script>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */

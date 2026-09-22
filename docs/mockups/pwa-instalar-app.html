@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Aura no celular (PWA Fase 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — PWA Fase 1: instalar a Aura no celular.
+
+     O painel já tem service worker (public/sw.js, 10/09/2026, só Web
+     Push, sem cache offline) e ícones 72/192. Falta o que faz o celular
+     enxergar o painel como app: manifesto, ícone 512 e versão iPhone,
+     meta tags no index.html, e a interface que convida a instalar.
+
+     Este mockup cobre SÓ a interface. Três telas de 390px:
+       A · Android — o card no Painel e o convite nativo do Chrome;
+       B · iPhone  — o mesmo card, mas a Apple não tem convite: abre
+                     o guia passo a passo (Compartilhar › Adicionar à
+                     Tela de Início);
+       C · Instalado — o card em Configurações vira "instalada" e puxa
+                     o aviso de pedido novo, que no iPhone SÓ funciona
+                     com a Aura instalada.
+
+     Padrão: tema escuro, tokens de constants/colors.ts, tipografia de
+     constants/fonts.ts. Tema único de propósito, como os outros
+     mockups de docs/mockups — fundo e cores todos explícitos.
+     ============================================================ */
+  :root {
+    --bg:  #0B0716; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border:  rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink:  #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399;  --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24;  --amberD: rgba(251,191,36,0.10);
+    --red:   #f87171;  --redD:   rgba(248,113,113,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 36px 24px 90px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink); font-family: var(--sans); min-height: 100vh;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--violet3); outline-offset: 2px; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; text-wrap: balance; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 820px; margin: 0 0 22px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--border2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 22px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 38px 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12px; color: var(--ink3); line-height: 1.65; max-width: 390px; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+  .rotulo.amber { color: var(--amber); }
+  .rotulo.violet { color: var(--violet3); }
+
+  /* ---- moldura de celular (390 de largura útil) ---- */
+  .fone { width: 100%; max-width: 390px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 28px; overflow: hidden; position: relative; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+  .status { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-size: 12px; font-weight: 600; color: var(--ink2); }
+  .status.app { background: linear-gradient(180deg, #0a0c1f, #090c1a); }
+  .barra-nav { height: 40px; background: #141830; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .barra-nav .url { flex: 1; background: var(--bg3); border-radius: 999px; padding: 6px 12px; color: var(--ink2); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .barra-nav .url .lock { width: 10px; height: 10px; border: 1.5px solid var(--green); border-radius: 3px; }
+  .conteudo { padding: 14px 14px 22px; min-height: 560px; display: flex; flex-direction: column; gap: 12px; }
+  .topo { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 6px; }
+  .topo .marca { font-family: var(--serif); font-size: 22px; letter-spacing: -0.01em; }
+  .topo .marca span { color: var(--violet); }
+  .topo .loja { font-size: 11.5px; color: var(--ink3); }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+  .kpi .l { font-size: 10.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .kpi .v { font-family: var(--mono); font-size: 18px; margin-top: 6px; }
+  .kpi .v small { font-size: 11px; color: var(--ink3); }
+
+  /* ---- o card de instalar (o objeto deste mockup) ---- */
+  .card-inst { position: relative; background: linear-gradient(135deg, rgba(124,58,237,0.22), rgba(139,92,246,0.08)); border: 1px solid var(--border2); border-radius: 16px; padding: 14px 14px 12px; display: grid; grid-template-columns: 44px 1fr; gap: 12px; }
+  .card-inst .icone { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #8b5cf6, #5b21b6); display: grid; place-items: center; font-family: var(--serif); font-size: 22px; color: #fff; box-shadow: 0 6px 18px rgba(124,58,237,0.35); }
+  .card-inst .t { font-weight: 700; font-size: 14px; line-height: 1.3; }
+  .card-inst .d { font-size: 12px; color: var(--ink2); line-height: 1.5; margin-top: 3px; }
+  .card-inst .acoes { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 4px; }
+  .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 700; }
+  .btn.p { background: var(--violet); color: #fff; }
+  .btn.p:hover { background: var(--violet2); }
+  .btn.g { background: transparent; color: var(--ink2); border: 1px solid var(--border2); font-weight: 600; }
+  .card-inst .fechar { position: absolute; top: 8px; right: 10px; background: none; border: 0; color: var(--ink3); font-size: 16px; line-height: 1; padding: 4px 6px; }
+  .card-inst.ok { background: var(--greenD); border-color: rgba(52,211,153,0.35); }
+  .card-inst.ok .icone { background: linear-gradient(135deg, #34d399, #059669); box-shadow: 0 6px 18px rgba(52,211,153,0.25); }
+  .check { width: 20px; height: 20px; }
+
+  /* ---- configurações (tela C) ---- */
+  .sec-title { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--violet3); margin: 6px 2px 0; }
+  .lista { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .lista .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13px; border-top: 1px solid var(--border); }
+  .lista .row:first-child { border-top: 0; }
+  .lista .row small { color: var(--ink3); font-size: 11.5px; }
+  .pill { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--violetD); color: var(--violet3); border: 1px solid var(--border2); }
+  .pill.on { background: var(--greenD); color: var(--green); border-color: rgba(52,211,153,0.3); }
+  .pill.off { background: var(--amberD); color: var(--amber); border-color: rgba(251,191,36,0.3); }
+
+  /* ---- sheets (convite do Chrome e guia do iPhone) ---- */
+  .veu { position: absolute; inset: 0; background: rgba(4,3,12,0.62); display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+  .veu.aberto { opacity: 1; pointer-events: auto; }
+  .sheet { width: 100%; background: #1a1d33; border-radius: 22px 22px 0 0; padding: 16px 16px 22px; transform: translateY(12px); transition: transform .22s ease; }
+  .veu.aberto .sheet { transform: translateY(0); }
+  .sheet .alca { width: 38px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); margin: 0 auto 14px; }
+  .sheet.chrome { background: #202124; color: #e8eaed; font-family: Roboto, 'DM Sans', system-ui, sans-serif; }
+  .sheet.chrome .cab { display: flex; gap: 12px; align-items: center; }
+  .sheet.chrome .cab .ic { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #8b5cf6, #5b21b6); display: grid; place-items: center; font-family: var(--serif); font-size: 24px; color: #fff; }
+  .sheet.chrome .cab .n { font-size: 16px; font-weight: 500; }
+  .sheet.chrome .cab .o { font-size: 12.5px; color: #9aa0a6; margin-top: 2px; }
+  .sheet.chrome .desc { font-size: 13px; color: #bdc1c6; line-height: 1.5; margin: 14px 0 16px; }
+  .sheet.chrome .acoes { display: flex; justify-content: flex-end; gap: 8px; }
+  .sheet.chrome .acoes button { border: 0; border-radius: 20px; padding: 9px 16px; font-size: 14px; font-weight: 500; }
+  .sheet.chrome .acoes .c { background: transparent; color: #8ab4f8; }
+  .sheet.chrome .acoes .i { background: #8ab4f8; color: #202124; }
+
+  .sheet.ios { background: #1c1c1e; color: #f2f2f7; font-family: -apple-system, 'DM Sans', system-ui, sans-serif; }
+  .sheet.ios h3 { margin: 0 0 4px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .sheet.ios .sub { font-size: 13px; color: #8e8e93; line-height: 1.45; margin-bottom: 14px; }
+  .passos { display: grid; gap: 10px; }
+  .passo { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; background: #2c2c2e; border-radius: 14px; padding: 12px; }
+  .passo .n { width: 40px; height: 40px; border-radius: 12px; background: #3a3a3c; display: grid; place-items: center; }
+  .passo .n svg { width: 22px; height: 22px; }
+  .passo .t { font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .passo .s { font-size: 12px; color: #8e8e93; margin-top: 2px; line-height: 1.4; }
+  .passo .s b { color: #0a84ff; font-weight: 600; }
+  .sheet.ios .rodape { margin-top: 14px; font-size: 12px; color: #8e8e93; line-height: 1.45; }
+  .sheet.ios .ok { margin-top: 12px; width: 100%; border: 0; border-radius: 12px; padding: 12px; background: #0a84ff; color: #fff; font-size: 15px; font-weight: 600; }
+  .safari-bar { height: 46px; background: #1c1c1e; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-around; padding: 0 8px; }
+  .safari-bar svg { width: 22px; height: 22px; }
+  .safari-bar .share { position: relative; }
+  .safari-bar .share .dica { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: #0a84ff; color: #fff; font-size: 11px; font-weight: 600; padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
+  .safari-bar .share .dica::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #0a84ff; }
+
+  /* ---- ícone e abertura ---- */
+  .icones { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .home { width: 100%; max-width: 390px; height: 300px; border-radius: 28px; border: 1px solid var(--border2); background: radial-gradient(ellipse at 50% 20%, #2b1a5e 0%, #0b0716 70%); padding: 26px 22px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 12px; align-content: start; }
+  .app-ic { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 10.5px; color: rgba(255,255,255,0.85); }
+  .app-ic .q { width: 58px; height: 58px; border-radius: 15px; background: rgba(255,255,255,0.12); }
+  .app-ic.aura .q { background: linear-gradient(135deg, #8b5cf6, #5b21b6); display: grid; place-items: center; font-family: var(--serif); font-size: 28px; color: #fff; box-shadow: 0 8px 22px rgba(124,58,237,0.45); position: relative; }
+  .app-ic.aura .q .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; font-family: var(--sans); }
+  .splash { width: 100%; max-width: 390px; height: 300px; border-radius: 28px; border: 1px solid var(--border2); background: #0B0716; display: grid; place-items: center; }
+  .splash .q { width: 96px; height: 96px; border-radius: 26px; background: linear-gradient(135deg, #8b5cf6, #5b21b6); display: grid; place-items: center; font-family: var(--serif); font-size: 48px; color: #fff; box-shadow: 0 14px 40px rgba(124,58,237,0.45); }
+  .splash .n { margin-top: 14px; font-family: var(--serif); font-size: 26px; text-align: center; }
+  .splash .n span { color: var(--violet); }
+
+  /* ---- decisões ---- */
+  .grid-dec { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; max-width: 1200px; }
+  .dec { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; font-size: 12.5px; line-height: 1.6; color: var(--ink2); }
+  .dec b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 4px; }
+  .dec.alerta { border-color: rgba(251,191,36,0.3); }
+  .dec.alerta b { color: var(--amber); }
+  .dec ul { margin: 6px 0 0; padding-left: 18px; }
+  .dec li { margin: 2px 0; }
+
+  @media (prefers-reduced-motion: reduce) { .veu, .sheet { transition: none; } }
+  @media (max-width: 480px) { h1.doc { font-size: 34px; } body { padding: 24px 16px 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Aura no <span>celular</span></h1>
+  <p class="doc-sub">
+    PWA · Fase 1. O painel passa a ser instalável: ícone na tela inicial, abre em tela cheia sem barra de
+    navegador, recebe aviso de pedido. Este mockup mostra <b>a interface que convida o lojista a instalar</b>,
+    nas três situações que existem de verdade: Android, iPhone e já instalado.
+  </p>
+  <div class="nota">
+    <b>O que já existe:</b> service worker (<code>public/sw.js</code>, só Web Push, sem cache offline de propósito) e ícones 72/192.
+    <b>O que a Fase 1 entrega:</b> manifesto, ícone 512 + versão iPhone, meta tags no <code>index.html</code>, o card abaixo em dois
+    lugares e o guia do iPhone. <b>O que ela não faz:</b> não desliga rota, não cacheia o app, não publica em loja.
+  </div>
+
+  <div class="secao">Onde o convite aparece</div>
+  <div class="grid-dec" style="margin-bottom: 8px;">
+    <div class="dec"><b>Painel, só no celular</b> Um card inline na pilha de avisos que já existe no topo do Painel
+      (<code>TrialBanner</code>, <code>ProfileBanner</code>, <code>VerifyEmailBanner</code>). Não flutua, não cobre conteúdo. "Agora não" esconde por 14 dias.
+      Some sozinho quando a Aura já está instalada ou quando está aberta pelo app.</div>
+    <div class="dec"><b>Configurações › Aura no celular</b> Seção nova, sempre disponível, entre "Minha conta" e "Aparência".
+      É onde o lojista volta quando dispensou o card ou quer instalar num segundo aparelho. No computador, mostra o endereço para abrir no celular.</div>
+  </div>
+
+  <div class="secao">Três telas · 390 px</div>
+  <div class="telas">
+
+    <!-- ===================== A · ANDROID ===================== -->
+    <div>
+      <div class="rotulo">A · Android — convite nativo do Chrome</div>
+      <div class="fone" id="foneA">
+        <div class="status"><span>9:41</span><span>▲▲ ▮▮▮ 87%</span></div>
+        <div class="barra-nav"><span>‹</span><div class="url"><span class="lock"></span>app.getaura.com.br</div><span>⋮</span></div>
+        <div class="conteudo">
+          <div class="topo"><div class="marca">Aura<span>.</span></div><div class="loja">Finesse Modas</div></div>
+
+          <div class="card-inst" id="cardA">
+            <button class="fechar" aria-label="Agora não" title="Agora não">×</button>
+            <div class="icone">A.</div>
+            <div>
+              <div class="t">Instalar a Aura no celular</div>
+              <div class="d">Abre em tela cheia, como app, e avisa quando entra pedido. Leva dois toques.</div>
+            </div>
+            <div class="acoes">
+              <button class="btn p" id="instA">Instalar</button>
+              <button class="btn g">Agora não</button>
+            </div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><div class="l">Vendas hoje</div><div class="v">R$ 2.480<small>,00</small></div></div>
+            <div class="kpi"><div class="l">Pedidos</div><div class="v">14</div></div>
+            <div class="kpi"><div class="l">A receber</div><div class="v">R$ 1.130<small>,50</small></div></div>
+            <div class="kpi"><div class="l">Clientes novos</div><div class="v">3</div></div>
+          </div>
+        </div>
+
+        <div class="veu" id="veuA">
+          <div class="sheet chrome" role="dialog" aria-label="Instalar app">
+            <div class="alca"></div>
+            <div class="cab"><div class="ic">A.</div><div><div class="n">Aura.</div><div class="o">app.getaura.com.br</div></div></div>
+            <div class="desc">Este site pode ser instalado como app. Ele abre em uma janela própria e aparece na sua tela inicial.</div>
+            <div class="acoes"><button class="c" id="cancA">Cancelar</button><button class="i" id="okA">Instalar</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="legenda" style="margin-top:12px;">O botão <b>Instalar</b> chama o convite do próprio Chrome (<code>beforeinstallprompt</code>).
+        A Aura não desenha esse convite, só decide <b>quando</b> oferecê-lo. Se o Chrome não tiver oferecido ainda, o card não aparece.</p>
+    </div>
+
+    <!-- ===================== B · IPHONE ===================== -->
+    <div>
+      <div class="rotulo amber">B · iPhone — a Apple não tem convite; o guia é nosso</div>
+      <div class="fone" id="foneB">
+        <div class="status"><span>9:41</span><span>●●● 87%</span></div>
+        <div class="conteudo" style="padding-top: 10px;">
+          <div class="topo"><div class="marca">Aura<span>.</span></div><div class="loja">Finesse Modas</div></div>
+
+          <div class="card-inst">
+            <button class="fechar" aria-label="Agora não" title="Agora não">×</button>
+            <div class="icone">A.</div>
+            <div>
+              <div class="t">Instalar a Aura no iPhone</div>
+              <div class="d">Ícone na tela inicial, tela cheia e aviso de pedido novo, que no iPhone só funciona assim.</div>
+            </div>
+            <div class="acoes">
+              <button class="btn p" id="instB">Ver como instalar</button>
+              <button class="btn g">Agora não</button>
+            </div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi"><div class="l">Vendas hoje</div><div class="v">R$ 2.480<small>,00</small></div></div>
+            <div class="kpi"><div class="l">Pedidos</div><div class="v">14</div></div>
+          </div>
+        </div>
+        <div class="safari-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg>
+          <div class="share">
+            <div class="dica" id="dicaB" hidden>Toque aqui</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M9 4v16"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.8"><rect x="4" y="6" width="16" height="12" rx="2"/><rect x="8" y="3" width="12" height="12" rx="2"/></svg>
+        </div>
+
+        <div class="veu" id="veuB">
+          <div class="sheet ios" role="dialog" aria-label="Como instalar no iPhone">
+            <div class="alca"></div>
+            <h3>Instalar a Aura no iPhone</h3>
+            <div class="sub">O iPhone não mostra um botão de instalar. São três toques no Safari:</div>
+            <div class="passos">
+              <div class="passo">
+                <div class="n"><svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg></div>
+                <div><div class="t">Toque em Compartilhar</div><div class="s">O quadrado com a seta para cima, na barra de baixo do Safari.</div></div>
+              </div>
+              <div class="passo">
+                <div class="n"><svg viewBox="0 0 24 24" fill="none" stroke="#f2f2f7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></div>
+                <div><div class="t">Adicionar à Tela de Início</div><div class="s">Role a lista de opções até achar. Fica depois de "Adicionar aos Favoritos".</div></div>
+              </div>
+              <div class="passo">
+                <div class="n"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+                <div><div class="t">Toque em Adicionar</div><div class="s">Pronto. A Aura aparece como <b>app</b> na tela inicial. Da próxima vez, abra por lá.</div></div>
+              </div>
+            </div>
+            <div class="rodape">Depois de instalar, entre com seu login uma vez. O app instalado tem memória separada do Safari.</div>
+            <button class="ok" id="okB">Entendi</button>
+          </div>
+        </div>
+      </div>
+      <p class="legenda" style="margin-top:12px;">O iPhone não tem <code>beforeinstallprompt</code>. Se o lojista estiver no Safari (e não instalado), o card vira
+        <b>"Ver como instalar"</b> e abre este guia. No Chrome do iPhone, o caminho é o mesmo, então o texto não muda.</p>
+    </div>
+
+    <!-- ===================== C · INSTALADO ===================== -->
+    <div>
+      <div class="rotulo violet">C · Instalado — Configurações › Aura no celular</div>
+      <div class="fone">
+        <div class="status app"><span>9:41</span><span>▲▲ ▮▮▮ 87%</span></div>
+        <div class="conteudo" style="padding-top: 10px;">
+          <div class="topo"><div class="marca">Aura<span>.</span></div><div class="loja">Configurações</div></div>
+
+          <div class="sec-title">Minha conta</div>
+          <div class="lista">
+            <div class="row"><span>caio@finessemodas.com.br</span><small>Dono</small></div>
+            <div class="row"><span>Trocar senha</span><span style="color:var(--ink3)">›</span></div>
+          </div>
+
+          <div class="sec-title">Aura no celular</div>
+          <div class="card-inst ok">
+            <div class="icone"><svg class="check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+            <div>
+              <div class="t">Instalada neste celular</div>
+              <div class="d">Você está usando a Aura pelo app. Atualizações chegam sozinhas.</div>
+            </div>
+          </div>
+          <div class="lista">
+            <div class="row"><div><div>Aviso de pedido novo</div><small>Toca e mostra na tela, mesmo com o app fechado</small></div><span class="pill off">Desligado</span></div>
+            <div class="row"><div><div>Instalar em outro aparelho</div><small>Abra app.getaura.com.br no celular</small></div><span style="color:var(--ink3)">›</span></div>
+          </div>
+
+          <div class="sec-title">Aparência</div>
+          <div class="lista">
+            <div class="row"><span>Tema escuro</span><span class="pill on">Ligado</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="legenda" style="margin-top:12px;">Sem barra de navegador: a Aura abre como app. O card vira <b>"Instalada"</b> e puxa para baixo o
+        <b>aviso de pedido novo</b>, que no iPhone só funciona com a Aura instalada. É o mesmo fluxo de <code>services/webPush.ts</code>, só reposicionado.</p>
+    </div>
+  </div>
+
+  <div class="secao">Ícone e abertura</div>
+  <div class="icones">
+    <div>
+      <div class="rotulo">Tela inicial</div>
+      <div class="home">
+        <div class="app-ic"><div class="q"></div>Fotos</div>
+        <div class="app-ic"><div class="q" style="background:#25d366"></div>WhatsApp</div>
+        <div class="app-ic"><div class="q" style="background:#e1306c"></div>Instagram</div>
+        <div class="app-ic aura"><div class="q">A.<div class="badge">2</div></div>Aura</div>
+        <div class="app-ic"><div class="q"></div>Câmera</div>
+        <div class="app-ic"><div class="q" style="background:#1877f2"></div>Facebook</div>
+        <div class="app-ic"><div class="q"></div>Relógio</div>
+        <div class="app-ic"><div class="q" style="background:#ffcc00"></div>Notas</div>
+      </div>
+      <p class="legenda" style="margin-top:12px;">Ícone gerado a partir de <code>assets/Icon.png</code> (624×617) em 192, 512 e 180 (iPhone), mais uma versão
+        <b>maskable</b> com margem, para o Android recortar em círculo sem cortar o "A.". O número vermelho é o badge de pedidos não vistos, Fase 2.</p>
+    </div>
+    <div>
+      <div class="rotulo">Abertura (Android gera sozinho a partir do manifesto)</div>
+      <div class="splash"><div><div class="q">A.</div><div class="n">Aura<span>.</span></div></div></div>
+      <p class="legenda" style="margin-top:12px;">Fundo <code>#0B0716</code>, cor de tema <code>#7c3aed</code>, nome curto <b>Aura</b>. No iPhone não há tela de abertura sem trabalho extra; fica para depois, se valer.</p>
+    </div>
+  </div>
+
+  <div class="secao">Decisões e limites</div>
+  <div class="grid-dec">
+    <div class="dec"><b>Não mexe no que já funciona</b> O <code>sw.js</code> continua só com Web Push. Nada de cache do app: a decisão de 10/09 (bundle velho depois do deploy) segue valendo. Uma página "sem conexão" amigável entra na Fase 2, sem cachear o painel.</div>
+    <div class="dec"><b>Um hook, uma verdade</b> <code>useInstalarApp()</code> responde: pode instalar? é iPhone? já está instalado? O card do Painel e o de Configurações leem dele. Ninguém mais detecta plataforma na mão.</div>
+    <div class="dec alerta"><b>iPhone instalado: o que degrada</b>
+      <ul>
+        <li>Imprimir etiqueta, carnê, holerite e orçamento usa <code>window.open</code> + <code>print</code>; no app instalado isso abre o Safari por fora ou não imprime.</li>
+        <li>Baixar CSV/PDF não tem "pasta de downloads"; o arquivo abre e não há onde salvar.</li>
+        <li>Checkout e login do Meta abrem janela nova; podem voltar no Safari e não no app.</li>
+      </ul>
+      Nada disso quebra no Android. Correções pontuais na Fase 2, por fluxo.</div>
+    <div class="dec"><b>Login de novo, uma vez</b> App instalado no iPhone tem memória separada do Safari. Quem instalar entra de novo. O guia avisa. Suporte precisa saber.</div>
+    <div class="dec"><b>Medir</b> O evento <code>appinstalled</code> e o modo de abertura (<code>display-mode: standalone</code>) vão para o mesmo lugar dos outros eventos do painel. Sem isso não dá para saber se a demanda por "app" foi atendida.</div>
+    <div class="dec"><b>Regras da casa</b> Nenhuma tela nova, então nenhuma chave <code>mod</code> nova. Multi-CNPJ não muda: o convite é do aparelho, não da empresa. Hover não existe no card: só toque.</div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function q(id) { return document.getElementById(id); }
+    function abre(id) { q(id).classList.add('aberto'); }
+    function fecha(id) { q(id).classList.remove('aberto'); }
+
+    // A · Android: o botão chama o convite do Chrome (aqui, desenhado).
+    q('instA').addEventListener('click', function () { abre('veuA'); });
+    q('cancA').addEventListener('click', function () { fecha('veuA'); });
+    q('okA').addEventListener('click', function () {
+      fecha('veuA');
+      var card = q('cardA');
+      card.classList.add('ok');
+      card.querySelector('.icone').innerHTML = '<svg class="check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>';
+      card.querySelector('.t').textContent = 'Aura instalada';
+      card.querySelector('.d').textContent = 'Procure o ícone na tela inicial. Da próxima vez, abra por lá.';
+      card.querySelector('.acoes').innerHTML = '<button class="btn p">Ativar aviso de pedido novo</button>';
+    });
+
+    // B · iPhone: o botão abre o guia e destaca o Compartilhar do Safari.
+    q('instB').addEventListener('click', function () { abre('veuB'); q('dicaB').hidden = false; });
+    q('okB').addEventListener('click', function () { fecha('veuB'); q('dicaB').hidden = true; });
+
+    // Tocar no véu fecha.
+    ['veuA', 'veuB'].forEach(function (id) {
+      q(id).addEventListener('click', function (e) { if (e.target === q(id)) { fecha(id); if (id === 'veuB') q('dicaB').hidden = true; } });
+    });
+  })();
+</script>
+</body>
+</html>

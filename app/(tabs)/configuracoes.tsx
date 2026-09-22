@@ -14,6 +14,7 @@ import { ThemeSwitchCard } from "@/components/ThemeSwitchCard";
 import { ProfileHero } from "@/components/screens/configuracoes/ProfileHero";
 import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
+import { AuraNoCelularCard } from "@/components/screens/configuracoes/AuraNoCelularCard";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -386,6 +387,12 @@ export default function ConfiguracoesScreen() {
               <Text style={s.accountNoteText}>Para alterar nome ou e-mail, entre em contato com o suporte.</Text>
             </View>
           </Card>
+
+          {/* AURA NO CELULAR — global (e do aparelho, nao da empresa).
+              PWA 22/09/2026: a porta permanente para instalar como app; o
+              card do Painel some depois de "Agora nao", este fica. */}
+          <SectionTitle title="Aura no celular" />
+          <AuraNoCelularCard />
 
           {/* APARENCIA — global (preferencia do user) */}
           <SectionTitle title="Aparencia" />

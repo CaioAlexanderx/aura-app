@@ -13,6 +13,7 @@ import { toast } from "@/components/Toast";
 import { ProfileBanner } from "@/components/ProfileBanner";
 import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
+import { InstallBanner } from "@/components/InstallBanner";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 // 29/08/2026: helper compartilhado de plural (o ranking mostrava "1 vendas").
@@ -266,6 +267,10 @@ export default function DashboardScreen() {
 
         {!consolidatedView && <ProfileBanner />}
         {!isDemo && !consolidatedView && <VerifyEmailBanner />}
+        {/* PWA (22/09/2026): convite para instalar a Aura no celular. Só em
+            tela de celular, só na web, só enquanto não estiver instalada e
+            não tiver sido dispensado; o componente decide sozinho. */}
+        {!isDemo && <InstallBanner />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
         {isEmpty && <DashboardEmptyState name={firstName} data={d} onPress={go} />}
