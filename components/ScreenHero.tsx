@@ -141,16 +141,25 @@ export function ScreenHero({ eyebrow, title, subtitle, live, badge, actions }: S
       </div>
 
       {/* Titulo display + acoes */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 20, flexWrap: "wrap" } as any}>
+      {/* 22/09/2026: o titulo tinha `flex: 1; minWidth: 0` -- no celular ele
+          encolhia ate zero em vez de quebrar a linha e o texto de 38px
+          vazava por baixo dos botoes (visto no QA do Matcon, que e a
+          primeira tela a passar DOIS botoes em `actions`). Agora o titulo
+          reserva uma largura minima e, quando nao cabe ao lado, as acoes
+          descem inteiras para a linha de baixo. No desktop nada muda. */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: IS_WIDE ? 20 : 12, flexWrap: "wrap" } as any}>
         <div style={{
           fontFamily: Fonts.heading, fontSize: titleSize, lineHeight: 0.95,
           color: C.ink, letterSpacing: "-0.025em", fontWeight: 400,
-          flex: 1, minWidth: 0,
+          flex: IS_WIDE ? "1 1 260px" : "1 1 100%", minWidth: 0, overflowWrap: "anywhere",
         } as any}>
           {title}<span style={{ color: accent } as any}>.</span>
         </div>
         {!!actions && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, flexWrap: "wrap" } as any}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, flexWrap: "wrap",
+            flex: IS_WIDE ? "0 0 auto" : "1 1 100%", minWidth: 0,
+          } as any}>
             {actions}
           </div>
         )}
