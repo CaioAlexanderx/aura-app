@@ -13,6 +13,7 @@ import {
   FRACTIONAL_UNITS,
   PURCHASE_UNITS,
   isFractionalUnit,
+  normalizeUnit,
   unitsForProduct,
   parseQtyInput,
   fmtQty,
@@ -170,5 +171,34 @@ describe("unitsForProduct: contrato de zero impacto", () => {
     expect(Array.from(FRACTIONAL_UNITS).sort()).toEqual(
       ["m", "m²", "m³", "kg", "g", "L", "ml", "ton"].sort()
     );
+  });
+});
+
+// 22/09/2026 (QA Matcon): grafias ASCII e da NF-e do fornecedor ("M2",
+// "KG", "LT") sao a mesma unidade pro lojista. Antes, piso salvo como "m2"
+// caia no stepper inteiro, sem calculadora e sem "Compro por".
+describe("isFractionalUnit — grafias ASCII (m2, m3, lt)", () => {
+  test("m2/m3 em ASCII e caixa alta valem como m²/m³", () => {
+    expect(isFractionalUnit("m2")).toBe(true);
+    expect(isFractionalUnit("M2")).toBe(true);
+    expect(isFractionalUnit("m3")).toBe(true);
+    expect(isFractionalUnit(" M3 ")).toBe(true);
+    expect(isFractionalUnit("lt")).toBe(true);
+    expect(isFractionalUnit("litro")).toBe(true);
+  });
+
+  test("normalizeUnit devolve a grafia canonica em minusculas", () => {
+    expect(normalizeUnit("M2")).toBe("m²");
+    expect(normalizeUnit("m3")).toBe("m³");
+    expect(normalizeUnit("KG")).toBe("kg");
+    expect(normalizeUnit("  un ")).toBe("un");
+    expect(normalizeUnit(null)).toBe("");
+    expect(normalizeUnit(undefined)).toBe("");
+  });
+
+  test("unidades inteiras continuam inteiras depois da normalizacao", () => {
+    expect(isFractionalUnit("SC")).toBe(false);
+    expect(isFractionalUnit("mlh")).toBe(false);
+    expect(isFractionalUnit("cx")).toBe(false);
   });
 });
