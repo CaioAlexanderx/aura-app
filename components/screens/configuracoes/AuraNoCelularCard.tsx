@@ -19,6 +19,13 @@
 // O aviso de pedido reaproveita services/webPush.ts, o mesmo fluxo do
 // sino (NotificationPrefs). Nada novo de push aqui.
 // Mockup: docs/mockups/pwa-instalar-app.html, tela C.
+//
+// 22/09/2026 — ganhou a linha "Versão do app" (o botão Atualizar), FORA dos
+// quatro estados acima: ela vale instalada ou não. No app instalado não
+// existe barra de endereço, logo não existe F5 — sem este botão o lojista
+// não tem como sair de um bundle velho. Tirei daqui o "Atualizações chegam
+// sozinhas": elas chegam, mas só na próxima vez que o app abre de verdade,
+// e prometer o que o botão existe para resolver é mentir na cara do usuário.
 // ============================================================
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -29,6 +36,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useInstalarApp } from "@/hooks/useInstalarApp";
 import { GuiaInstalarIphone } from "@/components/GuiaInstalarIphone";
 import { Card, sh } from "@/components/screens/configuracoes/shared";
+import { detalheDaAtualizacao, rotuloDaAtualizacao, useAtualizarApp } from "@/hooks/useAtualizarApp";
 import { ativarAviso, desativarAviso, estadoDoAviso, type EstadoDoAviso } from "@/services/webPush";
 
 export function AuraNoCelularCard() {
@@ -50,75 +58,102 @@ export function AuraNoCelularCard() {
     }
   }
 
-  if (instalado) {
-    return (
-      <Card>
-        <View style={s.linha}>
-          <View style={[s.icone, s.iconeOk]}>
-            <Icon name="check" size={20} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.titulo}>Instalada neste celular</Text>
-            <Text style={s.descricao}>Você está usando a Aura pelo app. Atualizações chegam sozinhas.</Text>
-          </View>
+  const conteudo = instalado ? (
+    <>
+      <View style={s.linha}>
+        <View style={[s.icone, s.iconeOk]}>
+          <Icon name="check" size={20} color="#fff" />
         </View>
-        <View style={sh.fieldDivider} />
-        <LinhaDoAviso companyId={company?.id} />
-        <View style={sh.fieldDivider} />
-        <View style={s.rowInfo}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.rowTitulo}>Instalar em outro aparelho</Text>
-            <Text style={s.rowDetalhe}>Abra {enderecoDoPainel} no celular e toque em Instalar.</Text>
-          </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.titulo}>Instalada neste celular</Text>
+          <Text style={s.descricao}>Você está usando a Aura pelo app.</Text>
         </View>
-      </Card>
-    );
-  }
-
-  if (podeInstalar || ehIphone) {
-    return (
-      <Card>
-        <View style={s.linha}>
-          <View style={s.icone}>
-            <Icon name="download" size={20} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.titulo}>{ehIphone ? "Instalar a Aura no iPhone" : "Instalar a Aura neste aparelho"}</Text>
-            <Text style={s.descricao}>
-              {ehIphone
-                ? "Ícone na tela inicial, tela cheia e aviso de pedido novo, que no iPhone só funciona assim."
-                : "Abre em tela cheia, como app, e avisa quando entra pedido."}
-            </Text>
-          </View>
+      </View>
+      <View style={sh.fieldDivider} />
+      <LinhaDoAviso companyId={company?.id} />
+      <View style={sh.fieldDivider} />
+      <View style={s.rowInfo}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowTitulo}>Instalar em outro aparelho</Text>
+          <Text style={s.rowDetalhe}>Abra {enderecoDoPainel} no celular e toque em Instalar.</Text>
         </View>
-        <Pressable
-          onPress={ehIphone ? () => setGuiaAberto(true) : aoInstalar}
-          style={s.btn}
-          disabled={instalando}
-          accessibilityRole="button"
-        >
-          <Text style={s.btnTexto}>{ehIphone ? "Ver como instalar" : instalando ? "Abrindo..." : "Instalar"}</Text>
-        </Pressable>
-        <GuiaInstalarIphone visible={guiaAberto} onClose={() => setGuiaAberto(false)} />
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
+      </View>
+    </>
+  ) : podeInstalar || ehIphone ? (
+    <>
       <View style={s.linha}>
         <View style={s.icone}>
           <Icon name="download" size={20} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.titulo}>Leve a Aura para o celular</Text>
+          <Text style={s.titulo}>{ehIphone ? "Instalar a Aura no iPhone" : "Instalar a Aura neste aparelho"}</Text>
           <Text style={s.descricao}>
-            Abra <Text style={s.endereco}>{enderecoDoPainel}</Text> no navegador do celular e toque em Instalar.
-            Ícone na tela inicial, tela cheia e aviso de pedido novo.
+            {ehIphone
+              ? "Ícone na tela inicial, tela cheia e aviso de pedido novo, que no iPhone só funciona assim."
+              : "Abre em tela cheia, como app, e avisa quando entra pedido."}
           </Text>
         </View>
       </View>
+      <Pressable
+        onPress={ehIphone ? () => setGuiaAberto(true) : aoInstalar}
+        style={s.btn}
+        disabled={instalando}
+        accessibilityRole="button"
+      >
+        <Text style={s.btnTexto}>{ehIphone ? "Ver como instalar" : instalando ? "Abrindo..." : "Instalar"}</Text>
+      </Pressable>
+      <GuiaInstalarIphone visible={guiaAberto} onClose={() => setGuiaAberto(false)} />
+    </>
+  ) : (
+    <View style={s.linha}>
+      <View style={s.icone}>
+        <Icon name="download" size={20} color="#fff" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.titulo}>Leve a Aura para o celular</Text>
+        <Text style={s.descricao}>
+          Abra <Text style={s.endereco}>{enderecoDoPainel}</Text> no navegador do celular e toque em Instalar.
+          Ícone na tela inicial, tela cheia e aviso de pedido novo.
+        </Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <Card>
+      {conteudo}
+      <View style={sh.fieldDivider} />
+      <LinhaDeAtualizacao />
     </Card>
+  );
+}
+
+// ------------------------------------------------------------
+// Versão do app: verifica e recarrega. Vale para a aba do navegador
+// também, mas é no app instalado que ela é a ÚNICA saída — lá não tem
+// barra de endereço, então não tem recarregar.
+// ------------------------------------------------------------
+function LinhaDeAtualizacao() {
+  const { estado, atualizar, ocupado } = useAtualizarApp();
+
+  return (
+    <View style={s.rowInfo}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.rowTitulo}>Versão do app</Text>
+        <Text style={s.rowDetalhe}>{detalheDaAtualizacao(estado)}</Text>
+      </View>
+      <Pressable
+        onPress={atualizar}
+        disabled={ocupado}
+        style={[s.pill, estado === "atualizado" ? s.pillOn : s.pillNeutro]}
+        accessibilityRole="button"
+        accessibilityLabel="Atualizar a Aura para a versão mais nova"
+      >
+        <Text style={[s.pillTexto, { color: estado === "atualizado" ? Colors.green : Colors.violet3 }]}>
+          {rotuloDaAtualizacao(estado)}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -192,6 +227,7 @@ const s = StyleSheet.create({
   pill: { borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1 },
   pillOn: { backgroundColor: Colors.greenD, borderColor: Colors.green + "55" },
   pillOff: { backgroundColor: Colors.amberD, borderColor: Colors.amber + "55" },
+  pillNeutro: { backgroundColor: Colors.bg3, borderColor: Colors.border2 },
   pillTexto: { fontSize: 11, fontWeight: "700" },
 });
 
