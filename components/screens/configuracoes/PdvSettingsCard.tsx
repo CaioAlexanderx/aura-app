@@ -261,6 +261,45 @@ export function PdvSettingsCard() {
 
       <View style={s.divider} />
 
+      {/* 22/09/2026: Matcon (materiais de construção), migration ainda a
+          definir no backend — ver docs/CONTRACT_MATCON.md. Mesmo desenho de
+          opt-in da Ótica acima: ligado, aparecem unidades fracionadas
+          (m, m², sc...) no Estoque/Carrinho e a linha de config abaixo.
+          M0 (docs/matcon-faseamento-po-ux.md) só traz este toggle + link —
+          "/matcon/config" ainda não existe, chega no próximo PR (M0
+          front, telas).
+          22/09/2026: a descrição só promete o que o M0 entrega (regra do
+          produto, §4b do doc — a tela não vende o que não existe). Ela
+          cresce a cada fase: M1 acrescenta "orçamento que vira pedido,
+          entrega parcial"; M3 acrescenta "clube do profissional". */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Materiais de construção</Text>
+          <Text style={s.rowDesc}>Venda por metro, metro quadrado, saco e milheiro, com estoque fracionado e conversão de caixa para m²</Text>
+        </View>
+        <Switch
+          value={display.matcon_enabled === true}
+          onValueChange={function(v) { toggle("matcon_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={display.matcon_enabled === true ? Colors.violet : Colors.ink3}
+          disabled={saving}
+          testID="pdv-settings-matcon"
+        />
+      </View>
+
+      {display.matcon_enabled === true && (
+        // 22/09/2026: "/matcon/config" ainda não existe — nasce no PR de M0
+        // que traz as telas (unidades habilitadas, perda padrão, arredondar
+        // pra embalagem, prazo de entrega padrão). Link já fica pronto.
+        <Pressable onPress={function() { router.push("/matcon/config" as any); }} style={s.caixaLink}>
+          <Icon name="settings" size={14} color={Colors.violet3} />
+          <Text style={s.caixaLinkText}>Unidades, entrega e clube</Text>
+          <Icon name="chevron_right" size={14} color={Colors.ink3} />
+        </Pressable>
+      )}
+
+      <View style={s.divider} />
+
       {/* 17/08/2026: Taxa da maquininha.
           NAO e gated por vertical de proposito — vale pro shell Negocio e
           pro shell Studio. Ligada, toda venda no cartao lanca sozinha a

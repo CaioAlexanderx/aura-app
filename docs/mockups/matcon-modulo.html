@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — módulo Matcon (materiais de construção)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — módulo Matcon, 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Base: docs/matcon-faseamento-po-ux.md (M0 e M1).
+
+     Matcon NÃO ganha shell próprio nem paleta própria. Vive dentro de
+     app/(tabs), no NAV do varejo, como a Ótica: liga por
+     pdv_settings.matcon_enabled. Caixa, estoque, clientes, crediário e
+     WhatsApp continuam os mesmos — Matcon só ACRESCENTA.
+
+     Seis telas, e as decisões que cada uma existe para validar:
+
+     1. CONFIGURAÇÕES (Caixa) + /matcon/config — o toggle é uma linha no
+        PdvSettingsCard, idêntica à da Ótica, e só depois de ligado
+        aparecem os dois links. Na tela de config, cada ajuste é UMA
+        FRASE em português com o número editável no meio ("considero 8%
+        de perda"), não um formulário com label e campo. Se precisar de
+        tooltip para explicar, está errado.
+
+     2. CADASTRO DE PRODUTO (seção Estoque) — os 9 chips de unidade de
+        hoje ficam intactos; com o toggle on nasce um SEGUNDO grupo,
+        "Materiais", abaixo. A conversão de compra é a frase
+        "Compro por [caixa] de [2,32] m²" — nunca "unidade de compra" e
+        "fator de conversão". Estoque vira decimal só quando a unidade é
+        fracionada. Ao ligar o toggle, o tour leva até aqui com
+        auto-scroll + spotlight + tooltip ancorado (regra 6).
+
+     3. CARRINHO DO CAIXA — a prova do fracionamento dirigido pela
+        unidade: o porcelanato em m² ganha campo decimal (mono tabular,
+        vírgula) e a linha de apoio "= 6 caixas · 13,92 m² · sobra
+        1,42 m²"; o cimento em sc mantém o stepper de hoje (− 10 +).
+        Os dois convivem no mesmo carrinho, na mesma venda. O rodapé
+        ganha "Salvar orçamento" ao lado do imprimir que já existe.
+
+     4. ESTEIRA DE ORÇAMENTOS (/matcon/orcamentos) — não é lista: é
+        esteira, como o Laboratório da Ótica. Abertos → Vencendo (≤ 3
+        dias) → Aprovados → Perdidos, e cada estação mostra O DINHEIRO
+        PARADO, não só a contagem. É o número que faz o dono abrir a
+        tela de manhã. Ações sempre visíveis no card (regra 7).
+
+     5. ESTEIRA DE ENTREGAS (/matcon/entregas) — Separando → Pronto →
+        Saiu → Entregue, agrupada por dia. Item mostra "6 de 10 sc" com
+        selo "saldo a entregar"; "quem entregou" é campo livre; entrega
+        parcial cria a próxima com o saldo.
+
+     6. ACOMPANHAMENTO PÚBLICO (/acompanhar/[token], tipo "entrega") —
+        o mesmo shell da tela pública de hoje, com a marca da loja e os
+        textos trocados: "Seu pedido saiu para entrega". O cliente final
+        também precisa ver algo bonito.
+
+     Fora, de propósito: romaneio de carga, roteirização, MDF-e,
+     motorista cadastrado com app (§3, M1 — um depósito com 1 caminhão
+     não precisa; home center não é o alvo). Fora também: fiscal
+     (CEST/CSOSN, M2), clube do profissional e calculadora de ambiente
+     aberta (M3 — aqui só o botão que a chama), lote/tonalidade,
+     multi-depósito e compras (M4).
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+
+  /* ScreenHero */
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 56px; line-height: .95; letter-spacing: -.025em; margin: 0; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .hero .actions { display: flex; gap: 8px; padding-bottom: 6px; flex-wrap: wrap; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 720px; line-height: 21px; overflow-wrap: anywhere; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .btn { font: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+  .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .btn.ghost { background: transparent; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; }
+  .btn.wa { border-color: rgba(52,211,153,.45); color: var(--green); }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+
+  /* chips */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+  .chip.mono { font-family: var(--mono); }
+  .chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* caixas, seções */
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .box + .box { margin-top: 8px; }
+  .input { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; color: var(--ink); font-size: 13px; }
+  .input.mono { font-family: var(--mono); }
+  .note { font-size: 11px; color: var(--ink3); margin-top: 10px; }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .cols { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
+  .cols > * { min-width: 0; }
+
+  /* linha de configuração com switch (PdvSettingsCard) */
+  .setrow { display: flex; gap: 14px; align-items: flex-start; }
+  .setrow .t { font-size: 14px; font-weight: 700; }
+  .setrow .d { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex-shrink: 0; margin-top: 2px; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink3); transition: .2s; }
+  .sw.on { background: rgba(124,58,237,.40); border-color: var(--violet); }
+  .sw.on::after { left: 21px; background: var(--violet); }
+  .caixalink { display: flex; align-items: center; gap: 8px; padding: 10px 2px; font-size: 13px; color: var(--violet3); font-weight: 600; border-top: 1px solid var(--border); }
+  .caixalink .chev { margin-left: auto; color: var(--ink3); }
+
+  /* frase com número editável no meio */
+  .frase { font-size: 15px; line-height: 2.1; color: var(--ink2); }
+  .frase + .frase { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 3px 9px; margin: 0 2px; }
+  .edit.sel::after { content: " ▾"; color: var(--ink3); font-size: 10px; }
+  .frase .sw { display: inline-block; vertical-align: -8px; margin: 0 4px; }
+
+  /* sidebar do shell de varejo */
+  .with-side { display: grid; grid-template-columns: 216px 1fr; gap: 18px; align-items: start; }
+  .with-side > * { min-width: 0; }
+  .sidebar { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 12px 10px; font-size: 13px; position: sticky; top: 56px; }
+  .sidebar .grp { font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); padding: 12px 8px 6px; }
+  .sidebar .it { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; color: var(--ink2); }
+  .sidebar .it .g { width: 16px; font-family: var(--mono); font-size: 9px; color: var(--ink3); text-align: center; }
+  .sidebar .it.on { background: var(--violetD); color: var(--violet3); font-weight: 700; box-shadow: inset 0 0 0 1px var(--border2); }
+  .sidebar .it.new { color: var(--ink); }
+  .sidebar .newtag { font-size: 9px; font-weight: 800; color: var(--violet3); margin-left: auto; }
+
+  /* esteira */
+  .rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0 20px; }
+  .station { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; position: relative; }
+  .station .n { font-family: var(--serif); font-size: 34px; line-height: 1; }
+  .station .l { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-top: 6px; }
+  .station .money { font-family: var(--mono); font-size: 12px; color: var(--ink2); margin-top: 6px; }
+  .station.on { border-color: var(--violet); background: var(--violetD); }
+  .station.warn { border-color: rgba(251,191,36,.45); }
+  .station.warn .n, .station.warn .money { color: var(--amber); }
+  .station.ready { border-color: rgba(52,211,153,.4); }
+  .station.ready .n { color: var(--green); }
+  .station.lost .n { color: var(--ink3); }
+  .station::after { content: "›"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%); color: var(--ink3); font-size: 18px; }
+  .station:last-child::after { content: ""; }
+
+  .search { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; color: var(--ink3); font-size: 13px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .card > * { min-width: 0; }
+  .card .who { font-weight: 700; font-size: 15px; }
+  .card .meta { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+  .card .meta b { color: var(--ink2); font-weight: 600; }
+  .card .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
+  .card .tot { font-family: var(--mono); font-size: 17px; font-weight: 500; }
+  .card.warn { border-left: 3px solid var(--amber); }
+  .card.lost { opacity: .72; }
+  /* regra 7: nada de hover-reveal. Ações da esteira sempre visíveis. */
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+  .badge { border: 1px solid; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  .b-open { color: var(--violet3); border-color: var(--violet3); }
+  .b-due { color: var(--amber); border-color: var(--amber); }
+  .b-ok { color: var(--green); border-color: var(--green); }
+  .b-lost { color: var(--ink3); border-color: var(--ink3); }
+  .b-saldo { color: var(--amber); border-color: var(--amber); background: var(--amberD); }
+  .empty { border: 1px dashed var(--border2); border-radius: 14px; padding: 26px 18px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .empty .big { font-family: var(--serif); font-size: 24px; color: var(--ink); display: block; margin-bottom: 6px; }
+  .empty .one { color: var(--ink2); }
+
+  /* carrinho do Caixa */
+  .cart { border-radius: 18px; border: 1px solid var(--border2); background: var(--bg3); overflow: hidden; max-width: 420px; }
+  .carthead { padding: 16px 18px; background: linear-gradient(135deg, rgba(124,58,237,.85), rgba(109,40,217,.75)); color: #fff; }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,.65); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; }
+  .carthead .who { font-size: 12px; color: rgba(255,255,255,.85); margin-top: 6px; }
+  .cartbody { padding: 10px 16px; }
+  .ci { padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .ci .l1 { display: flex; align-items: center; gap: 10px; }
+  .ci .av { width: 28px; height: 28px; border-radius: 8px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; font-weight: 800; font-size: 12px; color: var(--violet3); flex-shrink: 0; }
+  .ci .nm { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; }
+  .ci .vl { font-family: var(--mono); font-size: 13px; }
+  .ci .l2 { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-left: 38px; }
+  .ci .un { font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+  .ci .sp { flex: 1; }
+  .dec { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--violet); border-radius: 10px; padding: 6px 10px; }
+  .dec input, .dec .v { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--ink); background: none; border: 0; width: 52px; text-align: right; outline: none; }
+  .dec .u { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+  .step { display: inline-flex; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .step b { width: 30px; height: 32px; display: grid; place-items: center; color: var(--violet3); font-size: 15px; }
+  .step .v { font-family: var(--mono); font-size: 15px; min-width: 34px; text-align: center; }
+  .hint { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; padding: 7px 10px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--border2); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+  .hint .m { font-family: var(--mono); color: var(--violet3); }
+  .hint .calc { margin-left: auto; }
+  .sum { font-size: 12.5px; padding: 10px 0 2px; }
+  .sum div { display: flex; justify-content: space-between; padding: 3px 0; color: var(--ink3); }
+  .sum .t { color: var(--ink); font-weight: 700; font-size: 14px; border-top: 1px solid var(--border); padding-top: 7px; margin-top: 4px; }
+  .sum .v { font-family: var(--mono); }
+  .cartfoot { padding: 12px 16px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .cartfoot .duo { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cartfoot .duo .btn { flex: 1 1 150px; justify-content: center; }
+  .fin { width: 100%; height: 48px; border-radius: 12px; border: 0; background: var(--violet); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+
+  /* tour: auto-scroll + spotlight + tooltip ancorado (regra 6) */
+  .spot { position: relative; border-radius: 12px; box-shadow: 0 0 0 3px var(--violet), 0 0 0 9px rgba(124,58,237,.18); }
+  .tip { background: var(--violet); color: #fff; border-radius: 12px; padding: 10px 14px; font-size: 12.5px; line-height: 1.5; max-width: 320px; position: relative; margin-top: 14px; }
+  .tip::before { content: ""; position: absolute; top: -7px; left: 26px; width: 12px; height: 12px; background: var(--violet); transform: rotate(45deg); }
+  .tip b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .tip .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: rgba(255,255,255,.75); }
+  .tip .row .btn { margin-left: auto; background: #fff; color: var(--violet); border-color: #fff; }
+
+  /* entregas */
+  .day { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; }
+  .day::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .itens { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  .il { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink2); flex-wrap: wrap; }
+  .il .nm { flex: 0 0 165px; min-width: 0; }
+  .il .q { font-family: var(--mono); color: var(--ink); }
+  .il .bar { flex: 1 1 80px; height: 5px; border-radius: 999px; background: var(--bg4); overflow: hidden; max-width: 130px; }
+  .il .bar i { display: block; height: 100%; background: var(--violet); }
+  .il .bar.full i { background: var(--green); }
+  .quem { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .quem label { font-size: 11px; color: var(--ink3); white-space: nowrap; }
+  .quem .input { flex: 1 1 200px; min-width: 0; padding: 8px 10px; }
+
+  /* tela pública no celular */
+  .pub { max-width: 340px; margin: 0 auto; border: 1px solid var(--border2); border-radius: 26px; background: var(--bg2); padding: 18px 16px 22px; }
+  .pub .brand { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 4px; }
+  .pub .logo { height: 44px; border-radius: 12px; display: flex; align-items: center; padding: 0 14px; background: #f3e9dd; color: #7a3f22; font-family: var(--serif); font-size: 18px; }
+  .pub h2 { font-family: var(--serif); font-weight: 400; font-size: 27px; line-height: 1.1; text-align: center; margin: 16px 0 4px; }
+  .pub .ped { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
+  .tl { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; padding: 9px 0; }
+  .tl .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border2); margin-top: 4px; background: var(--bg3); }
+  .tl.done .dot { background: var(--violet); border-color: var(--violet); }
+  .tl.now .dot { border-color: var(--violet); box-shadow: 0 0 0 4px var(--violetD); }
+  .tl .t { font-weight: 600; font-size: 13px; }
+  .tl.now .t { color: var(--violet3); }
+  .tl .d { font-size: 11.5px; color: var(--ink3); }
+
+  @media (max-width: 860px) {
+    .cols, .with-side { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .hero { flex-direction: column; align-items: stretch; gap: 12px; }
+    .hero h1 { font-size: 36px; flex: none; width: 100%; }
+    .hero .actions { padding-bottom: 0; }
+    .hero .actions .btn { flex: 1 1 150px; justify-content: center; }
+    .card { grid-template-columns: 1fr; }
+    .card .right { align-items: stretch; text-align: left; width: 100%; }
+    .card .tot { text-align: left; }
+    .card .right > .badge { align-self: flex-start; }
+    .acts { justify-content: flex-start; width: 100%; }
+    .acts .btn { flex: 1 1 150px; justify-content: center; }
+    .il .nm { flex: 1 1 100%; }
+    .il .bar { max-width: none; }
+    /* esteiras viram colunas roláveis horizontalmente; a PÁGINA não rola de lado */
+    .rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
+    .station { flex: 0 0 62%; scroll-snap-align: start; }
+    .station::after { content: ""; }
+    .cart { max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · módulo <b>Matcon</b> · 6 telas · shell de varejo, violeta <span class="ico">#7c3aed</span>, toggle em Configurações › Caixa
+  <nav><a href="#config">1 config</a><a href="#produto">2 produto</a><a href="#carrinho">3 carrinho</a><a href="#orcamentos">4 orçamentos</a><a href="#entregas">5 entregas</a><a href="#publico">6 público</a></nav>
+  <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. CONFIGURAÇÕES ===================== -->
+<section class="screen" id="config">
+  <div class="mock-label">1 · Configurações › Caixa + /matcon/config</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">M0</span></div>
+  <div class="hero"><h1>Materiais de construção<i>.</i></h1></div>
+  <p class="sub">A linha do toggle é a mesma da Ótica, no mesmo card. Desligada, nada muda em lugar nenhum: <em>o menu não ganha seção, o carrinho não ganha campo, o cadastro não ganha chip</em>.</p>
+
+  <div class="section">Configurações › Caixa — a linha do toggle</div>
+  <div class="box">
+    <div class="setrow">
+      <div style="flex:1">
+        <div class="t">Ótica</div>
+        <div class="d">Receituário do cliente, OS de óculos com etapa de laboratório, sinal na abertura e aviso de "óculos prontos" pelo WhatsApp</div>
+      </div>
+      <div class="sw"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="setrow">
+      <div style="flex:1">
+        <div class="t">Materiais de construção</div>
+        <div class="d">Venda por metro quadrado, saco e milheiro, orçamento com validade e entrega com saldo a entregar</div>
+      </div>
+      <div class="sw on"></div>
+    </div>
+    <div class="caixalink" style="margin-top:10px"><span class="ico">clipboard</span> Abrir orçamentos <span class="chev">›</span></div>
+    <div class="caixalink"><span class="ico">building</span> Unidades, entrega e clube <span class="chev">›</span></div>
+  </div>
+  <p class="note">Os dois links só existem com o toggle ligado (mesma mecânica de <span class="ico">otica_enabled</span>). Em M0 a seção "Matcon" ainda não entra no menu lateral — o único acesso é daqui, para não apontar para rota que não existe.</p>
+
+  <div class="section" style="margin-top:26px">/matcon/config — cada ajuste é uma frase, não um formulário</div>
+  <div class="box">
+    <div class="frase">Minha loja vende em
+      <span class="edit">m²</span><span class="edit">m³</span><span class="edit">m</span><span class="edit">sc</span><span class="edit">br</span><span class="edit">mlh</span><span class="edit">ton</span><span class="edit">pç</span>
+      <span class="chip" style="vertical-align:2px">+ rolo, lata, balde</span>
+    </div>
+    <div class="frase">Em piso e revestimento, considero <span class="edit">8</span>% de perda por quebra e recorte ao calcular o ambiente.</div>
+    <div class="frase">Quando o cliente pede menos que uma embalagem fechada, <span class="sw on"></span> arredondo para a caixa cheia e mostro a sobra.</div>
+    <div class="frase">Prometo a entrega para <span class="edit">2</span> dias depois da venda.</div>
+    <div class="frase">Meus orçamentos valem <span class="edit">7</span> dias e avisam o vendedor <span class="edit">3</span> dias antes de vencer.</div>
+  </div>
+  <p class="note">Sem "fator de conversão", sem "unidade de compra", sem "percentual de quebra técnica". A frase é o rótulo — se precisar de tooltip para explicar, está errado (regra 1 do §4b).</p>
+</section>
+
+<!-- ===================== 2. CADASTRO DE PRODUTO ===================== -->
+<section class="screen" id="produto">
+  <div class="mock-label">2 · Cadastro de item › seção Estoque (SecaoEstoque)</div>
+  <a href="#config" style="font-size:12px;font-weight:600">‹ Configurações</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">Porcelanato Bianco 60×60<i>.</i></h1></div>
+  <p class="sub">Os 9 chips de hoje continuam onde estavam, na mesma ordem. O grupo "Materiais" nasce <em>abaixo</em>, só com o toggle ligado — ninguém que vende camiseta vê "milheiro".</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Estoque</div>
+      <div class="box">
+        <div style="font-size:11px;color:var(--ink3);font-weight:600;margin-bottom:6px">Unidade de venda</div>
+        <div class="chipset"><span class="chip mono">un</span><span class="chip mono">pct</span><span class="chip mono">cx</span><span class="chip mono">kg</span><span class="chip mono">g</span><span class="chip mono">ml</span><span class="chip mono">L</span><span class="chip mono">par</span><span class="chip mono">kit</span></div>
+
+        <div style="font-size:11px;color:var(--ink3);font-weight:600;margin:14px 0 6px">Materiais</div>
+        <div class="chipset spot"><span class="chip mono">m</span><span class="chip mono on">m²</span><span class="chip mono">m³</span><span class="chip mono">sc</span><span class="chip mono">br</span><span class="chip mono">ton</span><span class="chip mono">mlh</span><span class="chip mono">pç</span><span class="chip mono">rolo</span><span class="chip mono">lata</span><span class="chip mono">balde</span></div>
+
+        <div class="tip">
+          <b>Escolha como você vende este produto.</b>
+          Piso e revestimento em m², cimento em saco, vergalhão em barra. É essa escolha que decide se o Caixa mostra vírgula ou o + e −.
+          <div class="row">Passo 1 de 3 <button class="btn sm">Entendi</button></div>
+        </div>
+        <p class="note">O tour do primeiro dia: ao ligar o toggle, a tela rola sozinha até aqui, acende o grupo e ancora o balão no elemento — nunca um banner flutuante solto (regra 6).</p>
+
+        <div class="divider"></div>
+        <div class="frase" style="font-size:15px;line-height:2">Compro por <span class="edit sel">caixa</span> de <span class="edit">2,32</span> m².</div>
+        <p class="note" style="margin-top:2px">A nota do fornecedor vem em caixas; o balcão vende em m². Esta frase é a conversão inteira — a importação do XML já entra convertida.</p>
+
+        <div class="divider"></div>
+        <div class="frase" style="font-size:15px;line-height:2">Tenho <span class="edit">148,48</span> m² em estoque <span style="font-family:var(--mono);font-size:12px;color:var(--ink3)">(= 64 caixas)</span>, e me avise abaixo de <span class="edit">20</span> m².</div>
+        <p class="note" style="margin-top:2px">Estoque em decimal porque m² é unidade fracionada. Em <span class="ico">sc</span>, <span class="ico">br</span> ou <span class="ico">un</span> o campo continua inteiro, como hoje: ninguém tem 2,5 sacos de cimento.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Como isso aparece no Caixa</div>
+      <div class="box">
+        <div style="font-size:12px;color:var(--ink3);line-height:1.7">
+          <b style="color:var(--ink)">m², m³, m, kg, g, L, ml, ton</b> → campo decimal, mono tabular, vírgula.<br>
+          <b style="color:var(--ink)">un, cx, sc, br, mlh, pç, rolo, lata, balde, pct, kit, par</b> → o stepper de hoje, − 1 +.
+        </div>
+        <p class="note">É a unidade do produto que decide, não a loja. Os dois controles convivem no mesmo carrinho (tela 3).</p>
+      </div>
+      <div class="section">Venda</div>
+      <div class="box">
+        <div class="frase" style="font-size:15px">Vendo a <span class="edit">54,90</span> por m².</div>
+        <p class="note">O cliente ouve "R$ 54,90 o metro" e a etiqueta imprime o mesmo. Preço por caixa é conta de ERP, não de balcão.</p>
+      </div>
+      <div class="section">Fora desta fase</div>
+      <div class="box"><p class="note" style="margin:0">Lote e tonalidade, peso por unidade, CEST e "imposto já recolhido" entram em M2/M4. Nada disso bloqueia vender piso por m².</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. CARRINHO DO CAIXA ===================== -->
+<section class="screen" id="carrinho">
+  <div class="mock-label">3 · Caixa › carrinho (CartPanel) — decimal e stepper na mesma venda</div>
+  <a href="#produto" style="font-size:12px;font-weight:600">‹ Cadastro de item</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">O momento "olha isso"<i>.</i></h1></div>
+  <p class="sub">Digitar <em>12,5</em> no piso e ver embaixo, na hora, quantas caixas são e quanto sobra. Nenhum ERP de material de construção faz isso sem uma aba de conversão.</p>
+
+  <div class="cols">
+    <div>
+      <div class="cart">
+        <div class="carthead">
+          <div class="k">Total da venda</div>
+          <div class="tot">R$ 1.093,21</div>
+          <div class="who">Marlene Souza · obra Rua das Acácias · Vendedor: Davi</div>
+        </div>
+        <div class="cartbody">
+          <div class="ci">
+            <div class="l1"><div class="av">P</div><div class="nm">Porcelanato Bianco 60×60 acetinado</div><div class="vl">764,21</div></div>
+            <div class="l2">
+              <span class="un">R$ 54,90 / m²</span><span class="sp"></span>
+              <span class="dec"><span class="v">12,5</span><span class="u">m²</span></span>
+            </div>
+            <div class="hint">
+              <span class="m">= 6 caixas · 13,92 m² · sobra 1,42 m²</span>
+              <button class="btn sm calc"><span class="ico">calculator</span> calcular ambiente</button>
+            </div>
+          </div>
+          <div class="ci">
+            <div class="l1"><div class="av">C</div><div class="nm">Cimento CP-II 50 kg</div><div class="vl">329,00</div></div>
+            <div class="l2">
+              <span class="un">R$ 32,90 / sc</span><span class="sp"></span>
+              <span class="step"><b>−</b><span class="v">10</span><b>+</b></span>
+            </div>
+          </div>
+          <div class="sum">
+            <div><span>2 itens · 13,92 m² + 10 sc</span><span class="v">R$ 1.093,21</span></div>
+            <div><span>Desconto</span><span class="v">—</span></div>
+            <div class="t"><span>Total</span><span class="v">R$ 1.093,21</span></div>
+          </div>
+        </div>
+        <div class="cartfoot">
+          <div class="duo">
+            <button class="btn"><span class="ico">printer</span> Imprimir orçamento</button>
+            <button class="btn primary"><span class="ico">clipboard</span> Salvar orçamento</button>
+          </div>
+          <button class="fin">Finalizar venda</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">O que muda e o que não muda</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">O porcelanato é <b style="color:var(--ink)">m²</b> → campo decimal, sem + e −, teclado numérico com vírgula. O cimento é <b style="color:var(--ink)">sc</b> → o stepper de sempre, porque no balcão se fala "mais dois sacos" e se toca duas vezes no +.</p>
+        <p class="note" style="margin:0 0 10px">A linha de apoio embaixo do piso só aparece quando "arredondar para embalagem fechada" está ligado na config. Desligado, some a linha e o item vai 12,5 m² limpos.</p>
+        <p class="note" style="margin:0">Com o toggle off, os dois itens renderizam o stepper de hoje, com teto de 999. Com o toggle on, o teto sobe para 6 dígitos — 1.200 tijolos cabem.</p>
+      </div>
+
+      <div class="section">Salvar orçamento</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Hoje o botão só imprime. Com o toggle on ele <b style="color:var(--ink)">salva antes de imprimir</b> e abre o "enviar no WhatsApp" com o link da loja. O orçamento nasce do carrinho — não há "tela de novo orçamento".</p>
+        <div class="box" style="background:var(--bg2);margin-top:0">
+          <div style="font-size:12.5px;color:var(--ink2);line-height:1.6">
+            <b style="color:var(--ink)">Orçamento #0342 salvo.</b><br>Vale até 29/09 · R$ 1.093,21
+          </div>
+          <div class="acts" style="justify-content:flex-start;margin-top:10px">
+            <button class="btn sm wa"><span class="ico">send</span> Enviar no WhatsApp</button>
+            <button class="btn sm ghost">Ver na esteira</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">Ainda não</div>
+      <div class="box"><p class="note" style="margin:0">O botão <span class="ico">calculator</span> está desenhado, mas a calculadora de ambiente (bottom sheet com largura × comprimento × ambientes) é M3. Em M0 ele abre um aviso "em breve" ou fica oculto.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. ESTEIRA DE ORÇAMENTOS ===================== -->
+<section class="screen" id="orcamentos">
+  <div class="mock-label">4 · /matcon/orcamentos — esteira, não lista</div>
+  <div class="with-side">
+    <aside class="sidebar">
+      <div class="grp">Negócio</div>
+      <div class="it"><span class="g">▤</span> Início</div>
+      <div class="it"><span class="g">$</span> Caixa</div>
+      <div class="it"><span class="g">▣</span> Estoque</div>
+      <div class="it"><span class="g">◎</span> Clientes</div>
+      <div class="it"><span class="g">≡</span> Vendas</div>
+      <div class="it"><span class="g">◈</span> Financeiro</div>
+      <div class="grp">Matcon</div>
+      <div class="it on"><span class="g">clp</span> Orçamentos <span class="newtag">7</span></div>
+      <div class="it new"><span class="g">trk</span> Entregas <span class="newtag">5</span></div>
+      <div class="grp">Loja</div>
+      <div class="it"><span class="g">⚙</span> Configurações</div>
+      <p class="note" style="padding:0 8px">No celular, "Matcon" entra no menu <b style="color:var(--ink2)">Mais</b>, como a Ótica. <span class="ico">MORE_PRIORIDADE</span> não muda.</p>
+    </aside>
+
+    <div>
+      <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">ao vivo</span></div>
+      <div class="hero">
+        <h1>Orçamentos<i>.</i></h1>
+        <div class="actions"><button class="btn ghost">Entregas</button><button class="btn primary">+ Orçamento no Caixa</button></div>
+      </div>
+      <p class="sub">R$ 124.600 em orçamentos abertos · <em>R$ 18.400 vencem em até 3 dias</em> · 9 aprovados este mês</p>
+
+      <div class="rail">
+        <div class="station on"><div class="n">23</div><div class="l">Abertos</div><div class="money">R$ 61.300</div></div>
+        <div class="station warn"><div class="n">7</div><div class="l">Vencendo ≤ 3 dias</div><div class="money">R$ 18.400</div></div>
+        <div class="station ready"><div class="n">9</div><div class="l">Aprovados</div><div class="money">R$ 44.900</div></div>
+        <div class="station lost"><div class="n">4</div><div class="l">Perdidos</div><div class="money">R$ 9.700</div></div>
+      </div>
+
+      <div class="search">🔍 &nbsp;Número do orçamento, cliente ou obra</div>
+      <div class="chips"><span class="chip on">Vencendo</span><span class="chip">Abertos</span><span class="chip">Aprovados</span><span class="chip">Perdidos</span><span class="chip">Todos</span></div>
+
+      <div class="list">
+        <div class="card warn">
+          <div>
+            <div class="who">Marlene Souza</div>
+            <div class="meta"><b>#0342</b> · 4 itens · piso, cimento e argamassa · obra Rua das Acácias, 233</div>
+            <div class="meta" style="color:var(--amber)">▲ vence amanhã, 23/09 · feito por Davi em 22/09</div>
+          </div>
+          <div class="right">
+            <span class="badge b-due">Vence em 1 dia</span>
+            <span class="tot">R$ 1.093,21</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">send</span> Enviar no WhatsApp</button>
+              <button class="btn sm primary">Converter em pedido</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card warn">
+          <div>
+            <div class="who">Construtora Vale Verde</div>
+            <div class="meta"><b>#0338</b> · 19 itens · estrutura do sobrado · aos cuidados de Seu Aparecido</div>
+            <div class="meta" style="color:var(--amber)">▲ vence 24/09 · aberto no WhatsApp há 2 dias, sem resposta</div>
+          </div>
+          <div class="right">
+            <span class="badge b-due">Vence em 2 dias</span>
+            <span class="tot">R$ 14.280,00</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">send</span> Cobrar no WhatsApp</button>
+              <button class="btn sm primary">Converter em pedido</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="who">Nivaldo Pereira (pedreiro)</div>
+            <div class="meta"><b>#0345</b> · 6 itens · reforma do banheiro da dona Cida</div>
+            <div class="meta">vale até 29/09 · ainda não enviado</div>
+          </div>
+          <div class="right">
+            <span class="badge b-open">Aberto</span>
+            <span class="tot">R$ 3.410,55</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">send</span> Enviar no WhatsApp</button>
+              <button class="btn sm primary">Converter em pedido</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="who">Roberto Alves</div>
+            <div class="meta"><b>#0331</b> · 11 itens · aprovado pelo link às 08:12 de hoje</div>
+            <div class="meta" style="color:var(--green)">o card pulou de "Aberto" para "Aprovado" sozinho</div>
+          </div>
+          <div class="right">
+            <span class="badge b-ok">Aprovado</span>
+            <span class="tot">R$ 7.980,00</span>
+            <div class="acts"><button class="btn sm primary">Converter em pedido</button></div>
+          </div>
+        </div>
+
+        <div class="card lost">
+          <div>
+            <div class="who">Juliana Prado</div>
+            <div class="meta"><b>#0309</b> · venceu em 14/09 sem resposta</div>
+          </div>
+          <div class="right">
+            <span class="badge b-lost">Perdido</span>
+            <span class="tot">R$ 2.140,00</span>
+            <div class="acts"><button class="btn sm ghost">Refazer com preço de hoje</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">Primeiro dia — a esteira vazia ensina</div>
+      <div class="empty">
+        <span class="big">Nenhum orçamento ainda.</span>
+        <span class="one">Monte o carrinho no Caixa e toque em <b style="color:var(--violet3)">Salvar orçamento</b> — ele aparece aqui, em Abertos.</span>
+      </div>
+      <p class="note">Todas as ações ficam visíveis no card, sem hover (regra 7). "Converter em pedido" reserva o estoque e abre o Caixa com o carrinho montado.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. ESTEIRA DE ENTREGAS ===================== -->
+<section class="screen" id="entregas">
+  <div class="mock-label">5 · /matcon/entregas — esteira por estação, agrupada por dia</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon</div>
+  <div class="hero">
+    <h1>Entregas<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Orçamentos</button><button class="btn primary"><span class="ico">truck</span> Nova entrega</button></div>
+  </div>
+  <p class="sub">R$ 42.500 em material vendido esperando caminhão · <em>3 pedidos com saldo a entregar</em> · 1 caminhão, 2 viagens hoje</p>
+
+  <div class="rail">
+    <div class="station on"><div class="n">5</div><div class="l">Separando</div><div class="money">R$ 21.400</div></div>
+    <div class="station"><div class="n">3</div><div class="l">Pronto</div><div class="money">R$ 12.900</div></div>
+    <div class="station warn"><div class="n">2</div><div class="l">Saiu</div><div class="money">R$ 8.200</div></div>
+    <div class="station ready"><div class="n">6</div><div class="l">Entregue hoje</div><div class="money">R$ 19.740</div></div>
+  </div>
+
+  <div class="chips"><span class="chip on">Hoje</span><span class="chip">Amanhã</span><span class="chip">Com saldo a entregar</span><span class="chip">Atrasadas</span></div>
+
+  <div class="day">Hoje · terça, 22/09</div>
+  <div class="list">
+    <div class="card warn">
+      <div>
+        <div class="who">Marlene Souza</div>
+        <div class="meta"><b>Pedido #1204</b> · Rua das Acácias, 233 · Jardim Paulista · (11) 98765-4321</div>
+        <div class="itens">
+          <div class="il"><span class="nm">Cimento CP-II 50 kg</span><span class="q">6 de 10 sc</span><span class="bar"><i style="width:60%"></i></span><span class="badge b-saldo">saldo 4 sc</span></div>
+          <div class="il"><span class="nm">Areia média</span><span class="q">2 de 2 m³</span><span class="bar full"><i style="width:100%"></i></span></div>
+          <div class="il"><span class="nm">Porcelanato Bianco 60×60</span><span class="q">13,92 de 13,92 m²</span><span class="bar full"><i style="width:100%"></i></span></div>
+        </div>
+        <div class="quem"><label>Quem entregou</label><div class="input" style="flex:1">Seu Nivaldo — caminhão da loja</div></div>
+      </div>
+      <div class="right">
+        <span class="badge b-due">Saiu 13:40</span>
+        <span class="tot">R$ 1.093,21</span>
+        <div class="acts">
+          <button class="btn sm">Entrega parcial</button>
+          <button class="btn sm primary">Marcar como entregue</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="who">Construtora Vale Verde</div>
+        <div class="meta"><b>Pedido #1201</b> · Chácara Bela Vista, lote 14 · obra do sobrado</div>
+        <div class="itens">
+          <div class="il"><span class="nm">Vergalhão 10 mm</span><span class="q">0 de 40 br</span><span class="bar"><i style="width:0%"></i></span></div>
+          <div class="il"><span class="nm">Tijolo baiano 9 furos</span><span class="q">0 de 4 mlh</span><span class="bar"><i style="width:0%"></i></span></div>
+        </div>
+        <div class="quem"><label>Quem entregou</label><div class="input" style="flex:1;color:var(--ink3)">o vendedor escreve na hora — sem cadastro de motorista</div></div>
+      </div>
+      <div class="right">
+        <span class="badge b-open">Separando</span>
+        <span class="tot">R$ 14.280,00</span>
+        <div class="acts"><button class="btn sm primary">Marcar pronto</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="day">Amanhã · quarta, 23/09</div>
+  <div class="list">
+    <div class="card">
+      <div>
+        <div class="who">Marlene Souza <span class="badge b-saldo" style="margin-left:6px">saldo a entregar</span></div>
+        <div class="meta"><b>Pedido #1204 · 2ª entrega</b> · criada sozinha com o que faltou da viagem de hoje</div>
+        <div class="itens"><div class="il"><span class="nm">Cimento CP-II 50 kg</span><span class="q">0 de 4 sc</span><span class="bar"><i style="width:0%"></i></span></div></div>
+      </div>
+      <div class="right">
+        <span class="badge b-open">Separando</span>
+        <span class="tot">já pago</span>
+        <div class="acts"><button class="btn sm primary">Marcar pronto</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">Primeiro dia — a esteira vazia ensina</div>
+  <div class="empty">
+    <span class="big">Nenhuma entrega hoje.</span>
+    <span class="one">Converta um orçamento em pedido e a entrega aparece aqui, em <b style="color:var(--violet3)">Separando</b>.</span>
+  </div>
+  <p class="note">"Entrega parcial" grava o que foi e cria a próxima entrega com o saldo — é por isso que o pedido #1204 aparece duas vezes, em dois dias. Nada de "pendência de expedição": o cliente e o vendedor leem "saldo a entregar" (regra 4 do §4b). Sem romaneio, sem rota, sem motorista cadastrado.</p>
+</section>
+
+<!-- ===================== 6. ACOMPANHAMENTO PÚBLICO ===================== -->
+<section class="screen" id="publico">
+  <div class="mock-label">6 · /acompanhar/[token] — tipo "entrega" (bônus)</div>
+  <div class="hero"><h1 style="font-size:38px">O celular do cliente<i>.</i></h1></div>
+  <p class="sub">Mesmo shell da tela pública de hoje: só mudam os textos e as etapas. Sem login, sem app, com a marca da loja — <em>o lojista percebe que a Aura faz a loja dele parecer grande</em>.</p>
+
+  <div class="pub">
+    <div class="brand"><div class="logo">Depósito Santa Rita</div></div>
+    <h2>Seu pedido saiu para entrega</h2>
+    <div class="ped">PEDIDO #1204 · 22/09/2026</div>
+    <div style="margin:18px 0 10px">
+      <div class="tl done"><div class="dot"></div><div><div class="t">Pedido aprovado</div><div class="d">22/09 · 09:14</div></div></div>
+      <div class="tl done"><div class="dot"></div><div><div class="t">Separando o material</div><div class="d">22/09 · 10:02</div></div></div>
+      <div class="tl done"><div class="dot"></div><div><div class="t">Pronto para carregar</div><div class="d">22/09 · 12:30</div></div></div>
+      <div class="tl now"><div class="dot"></div><div><div class="t">Saiu para entrega</div><div class="d">22/09 · 13:40 · com Seu Nivaldo</div></div></div>
+      <div class="tl"><div class="dot"></div><div><div class="t">Entregue</div><div class="d">chega hoje até as 17h</div></div></div>
+    </div>
+    <div class="box" style="background:var(--bg3);padding:12px">
+      <div class="il" style="justify-content:space-between"><span>Porcelanato Bianco 60×60</span><span class="q">13,92 m²</span></div>
+      <div class="il" style="justify-content:space-between;margin-top:6px"><span>Areia média</span><span class="q">2 m³</span></div>
+      <div class="il" style="justify-content:space-between;margin-top:6px"><span>Cimento CP-II 50 kg</span><span class="q">6 de 10 sc</span></div>
+      <div class="note" style="margin-top:8px">Os <b style="color:var(--amber)">4 sacos restantes</b> vão amanhã, na segunda viagem. Você não paga nada a mais por isso.</div>
+    </div>
+    <button class="btn wa" style="width:100%;justify-content:center;margin-top:12px"><span class="ico">send</span> Falar com a loja</button>
+    <p class="note" style="text-align:center">Depósito Santa Rita · (11) 3322-1100 · Av. das Indústrias, 870</p>
+  </div>
+  <p class="note" style="text-align:center;max-width:520px;margin:16px auto 0">Uma coluna estreita, a marca no topo e uma linha do tempo — igual ao acompanhamento de óculos e ao orçamento público do Studio. Rastreio de entrega de material de construção não existe no varejo pequeno; é o que o dono mostra para o vizinho.</p>
+</section>
+</body>
+</html>

@@ -28,8 +28,12 @@ function mapApiProduct(p: any): Product {
   // backend devolve em `variants_stock_total`. Singletons sem variantes
   // continuam usando o stock_qty cru do produto.
   const hasVariants = !!p.has_variants;
-  const rawStock = parseInt(p.stock_qty ?? p.stock_quantity ?? p.stock) || 0;
-  const variantsStock = parseInt(p.variants_stock_total) || 0;
+  // 22/09/2026 (Matcon M0): parseFloat no lugar de parseInt. Neutro pra
+  // quem tem estoque inteiro (12 continua 12); só muda pra quem grava
+  // 12,5 m² depois da migration de stock_qty pra numeric(12,3)
+  // (docs/CONTRACT_MATCON.md §2). A exibição decide se mostra decimais.
+  const rawStock = parseFloat(p.stock_qty ?? p.stock_quantity ?? p.stock) || 0;
+  const variantsStock = parseFloat(p.variants_stock_total) || 0;
   const stock = hasVariants ? variantsStock : rawStock;
 
   return {
@@ -41,8 +45,14 @@ function mapApiProduct(p: any): Product {
     price: parseFloat(p.price || p.sale_price) || 0,
     cost: parseFloat(p.cost || p.cost_price) || 0,
     stock,
-    minStock: parseInt(p.stock_min ?? p.min_stock ?? p.minStock) || 0,
+    minStock: parseFloat(p.stock_min ?? p.min_stock ?? p.minStock) || 0,
     unit: p.unit || "un",
+    // 22/09/2026 (Matcon M0): conversão compra->venda. Base atrás da
+    // migration devolve undefined -> null (mesmo tratamento do
+    // duration_minutes abaixo).
+    purchaseUnit: p.purchase_unit ?? null,
+    purchaseFactor: p.purchase_factor === null || p.purchase_factor === undefined ? null : (parseFloat(p.purchase_factor) || null),
+    weightKg: p.weight_kg === null || p.weight_kg === undefined ? null : (parseFloat(p.weight_kg) || null),
     brand: p.brand || "",
     notes: p.notes || p.description || "",
     material: p.material || "",
@@ -105,6 +115,12 @@ export function useProducts() {
       color: product.color || undefined,
       size: product.size || undefined,
       ncm: product.ncm || undefined,
+      // 22/09/2026 (Matcon M0): `undefined` some do JSON e a coluna nem
+      // entra no UPDATE (loja sem Matcon nunca escreve aqui); `null` é o
+      // jeito de LIMPAR a conversão. Por isso `?? undefined`, não `|| undefined`.
+      purchase_unit: (product as any).purchaseUnit ?? undefined,
+      purchase_factor: (product as any).purchaseFactor ?? undefined,
+      weight_kg: (product as any).weightKg ?? undefined,
       // Migration 305 — ficha tecnica. String vazia LIMPA o campo; por
       // isso nao usa `|| undefined`, que deixaria o valor antigo no banco
       // quando a lojista apagasse o texto.

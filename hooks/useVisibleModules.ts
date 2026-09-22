@@ -87,6 +87,24 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'otica.laboratorio': 'negocio',
   'otica.receitas':    'negocio',
   'otica.config':      'essencial',
+  // 22/09/2026 -- semi-vertical Matcon (materiais de construcao), mesmo
+  // desenho da Otica acima: sem shell proprio, itens entram no NAV do
+  // varejo e o opt-in e o toggle pdv_settings.matcon_enabled (filtrado
+  // no _layout, como a OS e a Otica). Orcamentos/Entregas/Profissionais
+  // sao Negocio (matcon vive de crediario e WhatsApp pro clube do
+  // profissional, que ja sao Negocio); Config e Essencial pra qualquer
+  // plano conseguir abrir /matcon/config e ligar/desligar o modulo. Cada
+  // tela com chave PROPRIA (regra 3 do CLAUDE.md) -- nenhuma herda de
+  // outra. Ver docs/matcon-faseamento-po-ux.md secao 1 (contrato de zero
+  // impacto). M0 so usa 'matcon.config' de fato (a linha do
+  // PdvSettingsCard); as outras tres entram no mapa desde ja porque a
+  // regra da casa e "toda tela nova entra no mapa" (mesmo padrao do
+  // registro de FUNDACAO do Dojo) -- elas so passam a ser navegaveis
+  // quando as telas nascerem em M1/M3.
+  'matcon.orcamentos':   'negocio',
+  'matcon.entregas':     'negocio',
+  'matcon.profissionais':'negocio',
+  'matcon.config':       'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -135,6 +153,10 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 15/09/2026 (Otica): mesma umbrella do food.access. Quando o produto pedir
   // granularidade (ex.: montador so ve o Laboratorio), separar as chaves.
   'otica.access': ['otica.laboratorio','otica.receitas','otica.config'],
+  // 22/09/2026 (Matcon): mesma umbrella do otica.access/food.access. Quando
+  // o produto pedir granularidade (ex.: entregador so ve Entregas), separar
+  // as chaves aqui e em components/MembersSection.tsx.
+  'matcon.access': ['matcon.orcamentos','matcon.entregas','matcon.profissionais','matcon.config'],
 };
 
 // Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,

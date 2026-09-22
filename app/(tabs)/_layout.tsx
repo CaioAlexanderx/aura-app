@@ -19,7 +19,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-
 import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 // ============================================================
@@ -107,6 +107,12 @@ const NAV: NavSection[] = [
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
+  // 22/09/2026 — semi-vertical Matcon: a secao "Matcon" do NAV entra
+  // junto com as telas de orcamentos/entregas/profissionais (M1/M3,
+  // docs/matcon-faseamento-po-ux.md). Em M0 nao ha rota pra apontar, entao
+  // NAO ha item de menu ainda — o unico acesso e o toggle + link em
+  // Configuracoes (PdvSettingsCard). `matconToggle` ja existe no tipo e no
+  // filtro de buildRawNav abaixo pra quando a secao nascer.
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
@@ -225,7 +231,7 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
@@ -237,6 +243,11 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       if (item.osToggle && osEnabled !== true) return false;
       // 15/09/2026 — mesmo desenho para a Otica (pdv_settings.otica_enabled).
       if (item.oticaToggle && oticaEnabled !== true) return false;
+      // 22/09/2026 — mesmo desenho para o Matcon (pdv_settings.
+      // matcon_enabled). Sem item no NAV ainda em M0 (nenhum `matconToggle:
+      // true` declarado acima), mas o filtro ja existe pra quando a secao
+      // "Matcon" nascer em M1.
+      if (item.matconToggle && matconEnabled !== true) return false;
       // 21/09/2026 — feature que ainda nao esta operante fica fora do
       // menu (constants/modulosOcultos.ts). Filtro de APRESENTACAO: o
       // item segue declarado no NAV e o plano/permissao dele continuam
@@ -490,13 +501,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const { settings: pdvSettingsNav } = usePdvSettings();
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
+  const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -759,6 +771,7 @@ function MBar() {
   const { settings: pdvSettingsNav } = usePdvSettings();
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
+  const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
@@ -772,8 +785,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
   );
 
   // filteredNav: aplica layout custom do cliente.

@@ -1,0 +1,76 @@
+// ============================================================
+// AURA. — Matcon no carrinho do Caixa: qual controle e qual frase
+//
+// 22/09/2026 (M0, docs/matcon-faseamento-po-ux.md §2 "fracionamento dirigido
+// pela unidade"). Funcoes puras, sem React — o CartPanel so pergunta.
+//
+// A regra inteira do M0 cabe em duas perguntas:
+//   1) este item usa campo decimal ou o stepper de sempre? -> usaCampoDecimal
+//   2) o que escrevo embaixo do campo decimal?             -> fraseDeEmbalagem
+//
+// As duas respondem "nao/null" quando o toggle esta desligado, que e o
+// contrato de zero impacto (§1): loja sem Matcon renderiza o carrinho de
+// hoje, sem passar por aqui.
+// ============================================================
+
+import { isFractionalUnit, fmtQty, toPackages } from "@/utils/matconUnits";
+
+// Teto do campo de quantidade. Fora do Matcon continua 999 (3 digitos), que e
+// o que o carrinho sempre teve; com o toggle on sobe pra 6 digitos porque
+// 1.200 tijolos e 5.000 blocos sao venda de terca-feira.
+export var QTY_MAXLEN_PADRAO = 3;
+export var QTY_MAXLEN_MATCON = 6;
+// Campo decimal: "1.234,567" cabe em 9 caracteres.
+export var QTY_MAXLEN_DECIMAL = 9;
+
+// Campo decimal so quando o toggle esta ligado E a unidade do produto e
+// fracionavel. Piso em m² sim; saco de cimento nao (ninguem vende 2,5 sc).
+export function usaCampoDecimal(matconEnabled: boolean, unit?: string | null): boolean {
+  if (!matconEnabled) return false;
+  return isFractionalUnit(unit);
+}
+
+export function qtyMaxLength(matconEnabled: boolean, unit?: string | null): number {
+  if (usaCampoDecimal(matconEnabled, unit)) return QTY_MAXLEN_DECIMAL;
+  return matconEnabled ? QTY_MAXLEN_MATCON : QTY_MAXLEN_PADRAO;
+}
+
+export type FraseEmbalagemArgs = {
+  matconEnabled: boolean;
+  roundToPackage: boolean;
+  qty: number;
+  unit?: string | null;
+  purchaseUnit?: string | null;
+  purchaseFactor?: number | null;
+};
+
+// A linha de apoio do mockup (secao "carrinho" de docs/mockups/matcon-modulo
+// .html): "= 6 caixas · 13,92 m² · sobra 1,42 m²".
+//
+// Ela INFORMA, nao arredonda: a quantidade vendida continua sendo o que o
+// vendedor digitou (12,5 m²). Decisao de produto registrada no contrato —
+// quem quiser a caixa cheia digita a caixa cheia.
+//
+// Some quando: toggle off, "arredondar para embalagem" off, unidade nao
+// fracionada ou produto sem fator de compra. Sem sobra, some so o "· sobra".
+export function fraseDeEmbalagem(a: FraseEmbalagemArgs): string | null {
+  if (!a.matconEnabled || !a.roundToPackage) return null;
+  if (!isFractionalUnit(a.unit)) return null;
+
+  var factor = Number(a.purchaseFactor) || 0;
+  if (factor <= 0) return null;
+
+  var qty = Number(a.qty) || 0;
+  if (qty <= 0) return null;
+
+  var pk = toPackages(qty, factor);
+  if (pk.packages <= 0) return null;
+
+  // Sem unidade de compra cadastrada, "caixas" — e como o lojista fala.
+  var embalagem = (a.purchaseUnit || "").trim() || "caixas";
+  var unit = (a.unit || "").trim();
+
+  var frase = "= " + fmtQty(pk.packages) + " " + embalagem + " · " + fmtQty(pk.covered, unit);
+  if (pk.leftover > 0) frase += " · sobra " + fmtQty(pk.leftover, unit);
+  return frase;
+}

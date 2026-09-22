@@ -9,6 +9,13 @@ export type Product = {
   stock: number;
   minStock: number;
   unit: string;
+  // 22/09/2026 (Matcon M0, docs/CONTRACT_MATCON.md §2): unidade em que a
+  // loja COMPRA e quantas unidades de venda cabem em 1 unidade de compra
+  // (caixa de 2,32 m²). null = compra na mesma unidade que vende. Só o
+  // cadastro com matcon_enabled escreve aqui; todo mundo mais ignora.
+  purchaseUnit?: string | null;
+  purchaseFactor?: number | null;
+  weightKg?: number | null;
   brand: string;
   notes: string;
   // Migration 305 — ficha tecnica. Opcionais: a maioria dos catalogos

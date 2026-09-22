@@ -24,7 +24,7 @@
 // (toggle de tema dispara reload via useThemeStore.toggle), entao o
 // ternario dentro de StyleSheet.create resolve corretamente no boot.
 // ============================================================
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -35,11 +35,20 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 
 import { companiesApi } from "@/services/api";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { suggestNcm } from "@/utils/ncm";
+// 22/09/2026 (Matcon M0, docs/matcon-faseamento-po-ux.md secao 3):
+// conferencia do XML vincula item a produto existente com conversao de
+// compra cadastrada e converte qty/custo antes de gravar. Toggle off:
+// matconEnabled fica false e nenhum destes campos e lido — fluxo
+// identico ao de hoje (sempre cria produto novo).
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
+import { convertPurchaseToSale, fmtQty } from "@/utils/matconUnits";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -62,6 +71,13 @@ interface EditableItem extends DanfeItem {
   color: string;
   category: string;
   selected: boolean;
+  // 22/09/2026 (Matcon M0): item casado por nome com um produto já
+  // cadastrado que tem "Compro por" preenchido. Com isso, o Importar não
+  // cria produto novo — soma o estoque convertido no produto existente.
+  linkedProductId: string | null;
+  linkedProductUnit: string | null;   // unidade de VENDA do produto (m², kg…)
+  purchaseUnitLabel: string | null;   // unidade de COMPRA cadastrada (cx, sc…)
+  purchaseFactor: number | null;      // quantas unidades de venda por unidade de compra
 }
 
 interface DanfeImportModalProps {
@@ -107,6 +123,29 @@ export function DanfeImportModal({
   const [markupPct, setMarkupPct] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // 22/09/2026 (Matcon M0). Catálogo atual só é buscado com o toggle
+  // ligado — loja sem Matcon nunca dispara esta query.
+  const { settings: pdvSettings } = usePdvSettings();
+  const matconEnabled = readMatconSettings(pdvSettings as any).matcon_enabled;
+  const { data: catalogoRaw } = useQuery({
+    queryKey: ["danfe-import-catalogo", companyId],
+    queryFn: () => companiesApi.products(companyId),
+    enabled: matconEnabled && !!companyId && visible,
+    staleTime: 60000,
+  });
+  const catalogo: any[] = useMemo(() => {
+    const arr = (catalogoRaw as any)?.products || (catalogoRaw as any)?.rows || catalogoRaw;
+    return Array.isArray(arr) ? arr : [];
+  }, [catalogoRaw]);
+
+  // Casa pelo nome (case-insensitive, sem espaço nas pontas) — a NF-e
+  // deste parser não traz barcode/sku, só a descrição do fornecedor.
+  const acharVinculo = useCallback((descricao: string) => {
+    const alvo = descricao.trim().toLowerCase();
+    if (!alvo) return null;
+    return catalogo.find((p) => String(p.name || "").trim().toLowerCase() === alvo) || null;
+  }, [catalogo]);
+
   const updateItem = useCallback(
     (idx: number, field: keyof EditableItem, value: string | boolean) => {
       setItems(prev =>
@@ -145,16 +184,28 @@ export function DanfeImportModal({
           return;
         }
         setItems(
-          parsed.map(it => ({
-            ...it,
-            name: it.description,
-            price: maskCurrency(String(Math.round(it.unit_value * 100))),
-            cost_edit: maskCurrency(String(Math.round(it.unit_cost * 100))),
-            ncm_edit: it.ncm || "",
-            color: "",
-            category: "Calçados",
-            selected: true,
-          }))
+          parsed.map(it => {
+            // Matcon M0: casa por nome com um produto existente que já
+            // tem "Compro por" preenchido. Sem toggle, ou sem produto com
+            // conversão cadastrada, os campos ficam null — item se importa
+            // exatamente como hoje (cria produto novo).
+            const vinculado = matconEnabled ? acharVinculo(it.description) : null;
+            const fator = vinculado && vinculado.purchase_factor != null ? parseFloat(vinculado.purchase_factor) : null;
+            return {
+              ...it,
+              name: it.description,
+              price: maskCurrency(String(Math.round(it.unit_value * 100))),
+              cost_edit: maskCurrency(String(Math.round(it.unit_cost * 100))),
+              ncm_edit: it.ncm || "",
+              color: "",
+              category: "Calçados",
+              selected: true,
+              linkedProductId: vinculado ? (vinculado.id || vinculado.product_id || null) : null,
+              linkedProductUnit: vinculado ? (vinculado.unit || null) : null,
+              purchaseUnitLabel: vinculado ? (vinculado.purchase_unit || null) : null,
+              purchaseFactor: fator && fator > 0 ? fator : null,
+            };
+          })
         );
         setStep("review");
       } catch {
@@ -177,15 +228,32 @@ export function DanfeImportModal({
         const cost = costCents / 100;
         const priceCents = parseInt(unmaskNumber(it.price) || "0", 10);
         const price = priceCents / 100;
-        await companiesApi.createProduct(companyId, {
-          name: it.name,
-          price,
-          cost,
-          ncm: it.ncm_edit || null,
-          color: it.color || null,
-          category: it.category || null,
-          stock: it.quantity,
-        });
+
+        // 22/09/2026 (Matcon M0): item vinculado a um produto existente
+        // com "Compro por" preenchido — a qtd da nota (unidade de compra)
+        // vira estoque na unidade de venda, e o custo diluído pelo fator.
+        // Soma no estoque atual (não substitui) e ATUALIZA o produto em
+        // vez de criar um duplicado. Sem vínculo, ou toggle off: cria
+        // produto novo, exatamente como hoje.
+        if (matconEnabled && it.linkedProductId && it.purchaseFactor) {
+          const conv = convertPurchaseToSale(it.quantity, cost, it.purchaseFactor);
+          const existente = catalogo.find((p) => (p.id || p.product_id) === it.linkedProductId);
+          const estoqueAtual = existente ? (parseFloat(existente.stock_qty ?? existente.stock ?? "0") || 0) : 0;
+          await companiesApi.updateProduct(companyId, it.linkedProductId, {
+            stock_qty: Math.round((estoqueAtual + conv.qty) * 1000) / 1000,
+            cost_price: conv.unitCost,
+          });
+        } else {
+          await companiesApi.createProduct(companyId, {
+            name: it.name,
+            price,
+            cost,
+            ncm: it.ncm_edit || null,
+            color: it.color || null,
+            category: it.category || null,
+            stock: it.quantity,
+          });
+        }
         count++;
         setImportedCount(count);
       } catch {
@@ -367,15 +435,34 @@ export function DanfeImportModal({
                     </Pressable>
 
                     {/* Nome */}
-                    <TextInput
-                      value={it.name}
-                      onChangeText={v => updateItem(idx, "name", v)}
-                      style={[s.cellInput, s.colName]}
-                      placeholderTextColor={Colors.ink3}
-                    />
+                    <View style={s.colName}>
+                      <TextInput
+                        value={it.name}
+                        onChangeText={v => updateItem(idx, "name", v)}
+                        style={s.cellInput}
+                        placeholderTextColor={Colors.ink3}
+                      />
+                      {/* 22/09/2026 (Matcon M0): item casado com produto
+                          existente — o Importar vai somar no estoque dele
+                          em vez de criar um duplicado. */}
+                      {matconEnabled && it.linkedProductId ? (
+                        <Text style={s.matconLinkedTxt}>produto existente</Text>
+                      ) : null}
+                    </View>
 
                     {/* Qtd */}
-                    <Text style={[s.cellText, s.colQty]}>{it.quantity}</Text>
+                    <View style={s.colQty}>
+                      <Text style={s.cellText}>{it.quantity}</Text>
+                      {/* Conversão de compra->venda (docs/matcon-faseamento-po-ux.md
+                          §3): "10 cx → 23,2 m²", nunca "fator de conversão". */}
+                      {matconEnabled && it.purchaseFactor ? (
+                        <Text style={s.matconConvTxt}>
+                          {fmtQty(it.quantity, it.purchaseUnitLabel || undefined) +
+                            " → " +
+                            fmtQty(convertPurchaseToSale(it.quantity, 0, it.purchaseFactor).qty, it.linkedProductUnit || undefined)}
+                        </Text>
+                      ) : null}
+                    </View>
 
                     {/* Custo NF — Fix #4: editável */}
                     <TextInput
@@ -712,6 +799,11 @@ const s = StyleSheet.create({
     borderColor: IS_DARK_MODE ? "rgba(124,58,237,0.15)" : "rgba(124,58,237,0.25)",
   },
   cellText: { fontSize: 12, color: Colors.ink3 },
+
+  // 22/09/2026 (Matcon M0): vínculo com produto existente + conversão de
+  // unidade de compra -> venda na conferência do XML.
+  matconLinkedTxt: { fontSize: 10, color: Colors.violet, fontWeight: "700", marginTop: 2 },
+  matconConvTxt: { fontSize: 10, color: Colors.violet, marginTop: 2, textAlign: "center" },
 
   // NCM badge
   ncmBadgeCell: {

@@ -5,7 +5,22 @@ import type { PdvSaleResponse } from "@/services/salesApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
-export type CartItem = { productId: string; name: string; price: number; qty: number; listPrice?: number };
+// 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
+// quando existe, a unidade de compra + o fator (caixa de 2,32 m²). Tudo
+// opcional: produto sem unidade cadastrada, ou loja sem o toggle, continua
+// exatamente como antes — quem decide o controle do carrinho é o CartPanel,
+// aqui só viajam os dados. `qty` sempre foi number e continua number: nenhum
+// parseInt/Math.round no caminho até o payload da venda.
+export type CartItem = {
+  productId: string;
+  name: string;
+  price: number;
+  qty: number;
+  listPrice?: number;
+  unit?: string;
+  purchaseUnit?: string | null;
+  purchaseFactor?: number | null;
+};
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
 // O backend mapeia method PDV → tPag SEFAZ (dinheiro→01, cartao→03, debito→04, pix→17,
@@ -198,7 +213,14 @@ export function useCart() {
 
   // ── Cart ops ────────────────────────────────────────────────
 
-  function addToCart(product: { id: string; name: string; price: number }, variant?: { id: string; label: string; price?: number }) {
+  // 22/09/2026 (Matcon M0): os 3 campos novos do produto são opcionais no
+  // tipo do parâmetro — quem chama com o objeto de hoje (o scanner monta um
+  // `{id,name,price}` na mão) continua compilando e o item nasce sem unidade,
+  // ou seja, com o stepper de sempre.
+  function addToCart(
+    product: { id: string; name: string; price: number; unit?: string; purchaseUnit?: string | null; purchaseFactor?: number | null },
+    variant?: { id: string; label: string; price?: number },
+  ) {
     setLastSale(null);
     var cartKey = variant ? product.id + "__" + variant.id : product.id;
     var displayName = variant ? product.name + " (" + variant.label + ")" : product.name;
@@ -207,13 +229,22 @@ export function useCart() {
     setCart(function(prev) {
       var existing = prev.find(function(i) { return i.productId === cartKey; });
       if (existing) return prev.map(function(i) { return i.productId === cartKey ? { ...i, qty: i.qty + 1 } : i; });
-      return [...prev, { productId: cartKey, name: displayName, price: effectivePrice, qty: 1, listPrice: effectivePrice }];
+      return [...prev, {
+        productId: cartKey, name: displayName, price: effectivePrice, qty: 1, listPrice: effectivePrice,
+        unit: product.unit || undefined,
+        purchaseUnit: product.purchaseUnit ?? undefined,
+        purchaseFactor: product.purchaseFactor ?? undefined,
+      }];
     });
     if (couponApplied) setCouponApplied(null);
   }
 
+  // 22/09/2026 (Matcon M0): `qty` pode chegar fracionada (12,5 m²) vinda do
+  // campo decimal do carrinho. Nada aqui trunca — o valor entra no item como
+  // veio e segue assim até `quantity` no POST /pdv/sale. Zero (ou lixo) ainda
+  // remove o item, que é a regra que o stepper já usava.
   function setQty(productId: string, qty: number) {
-    if (qty <= 0) { setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); }); return; }
+    if (!isFinite(qty) || qty <= 0) { setCart(function(prev) { return prev.filter(function(i) { return i.productId !== productId; }); }); return; }
     setCart(function(prev) { return prev.map(function(i) { return i.productId === productId ? { ...i, qty: qty } : i; }); });
     if (couponApplied) setCouponApplied(null);
   }

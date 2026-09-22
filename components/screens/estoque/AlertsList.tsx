@@ -4,6 +4,10 @@ import { Colors } from "@/constants/colors";
 import type { Product } from "./types";
 import { fmt } from "./types";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
+// 22/09/2026 (Matcon M0): a concatenação crua já mostrava decimal quando
+// havia um, mas sem separador de milhar pt-BR. fmtQty é neutro pra
+// estoque inteiro (a imensa maioria hoje) e correto pra fracionado.
+import { fmtQty } from "@/utils/matconUnits";
 
 function AlertRow({ product }: { product: Product }) {
   const [hovered, setHovered] = useState(false);
@@ -14,8 +18,8 @@ function AlertRow({ product }: { product: Product }) {
     <Pressable onHoverIn={isWeb ? () => setHovered(true) : undefined} onHoverOut={isWeb ? () => setHovered(false) : undefined}
       style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}>
       <View style={s.icon}><Text style={s.iconText}>!</Text></View>
-      <View style={{ flex: 1 }}><Text style={s.name}>{product.name}</Text><Text style={s.detail}>Atual: {product.stock} {product.unit} / Minimo: {product.minStock} {product.unit}</Text></View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {deficit} {product.unit}</Text></View><Text style={s.cost}>~{m(fmt(deficit * product.cost))}</Text></View>
+      <View style={{ flex: 1 }}><Text style={s.name}>{product.name}</Text><Text style={s.detail}>Atual: {fmtQty(product.stock)} {product.unit} / Minimo: {fmtQty(product.minStock)} {product.unit}</Text></View>
+      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {fmtQty(deficit)} {product.unit}</Text></View><Text style={s.cost}>~{m(fmt(deficit * product.cost))}</Text></View>
     </Pressable>
   );
 }

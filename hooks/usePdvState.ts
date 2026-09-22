@@ -546,7 +546,9 @@ export function usePdvState() {
       toast.info("Adicione produtos ao carrinho antes de gerar orçamento");
       return;
     }
-    const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price }));
+    // 22/09/2026 (Matcon M0): a unidade vai junto pro orçamento impresso —
+    // "12,5 m²" em vez de "12.5". Item sem unidade imprime como sempre.
+    const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price, unit: i.unit }));
     const discount      = couponApplied ? couponApplied.discount : (manualDiscountAmount || 0);
     const afterDiscount = totalRaw - discount;
     const profile       = (company as any)?.profile || {};
@@ -577,9 +579,16 @@ export function usePdvState() {
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
+  // 22/09/2026 (Matcon M0): unit/purchaseUnit/purchaseFactor descem pro
+  // CartPanel, que decide entre campo decimal e stepper pela unidade do
+  // produto. Item sem unidade (scanner que não achou o produto local) chega
+  // com undefined e cai no stepper de sempre.
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
-    return { productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice };
+    return {
+      productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
+      unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor,
+    };
   });
 
   const subtotal       = totalRaw;
