@@ -13,7 +13,7 @@
 // hoje, sem passar por aqui.
 // ============================================================
 
-import { isFractionalUnit, fmtQty, toPackages } from "@/utils/matconUnits";
+import { isFractionalUnit, fmtQty, toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
 import { usaLote } from "@/utils/matconLots";
 
 // Teto do campo de quantidade. Fora do Matcon continua 999 (3 digitos), que e
@@ -78,11 +78,11 @@ export function fraseDeEmbalagem(a: FraseEmbalagemArgs): string | null {
   var pk = toPackages(qty, factor);
   if (pk.packages <= 0) return null;
 
-  // Sem unidade de compra cadastrada, "caixas" — e como o lojista fala.
-  var embalagem = (a.purchaseUnit || "").trim() || "caixas";
+  // Sem unidade de compra cadastrada, "caixa"/"caixas" no singular certo
+  // (QA 22/09/2026) — e como o lojista fala.
   var unit = (a.unit || "").trim();
 
-  var frase = "= " + fmtQty(pk.packages) + " " + embalagem + " · " + fmtQty(pk.covered, unit);
+  var frase = "= " + rotuloEmbalagem(pk.packages, a.purchaseUnit) + " · " + fmtQty(pk.covered, unit);
   if (pk.leftover > 0) frase += " · sobra " + fmtQty(pk.leftover, unit);
   return frase;
 }

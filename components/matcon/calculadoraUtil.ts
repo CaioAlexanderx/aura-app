@@ -21,7 +21,13 @@
 //      compra não tem caixa: `caixas` vem null e a folha mostra só os m².
 // ============================================================
 
-import { toPackages } from "@/utils/matconUnits";
+import { toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
+
+// Reexportado por compatibilidade — quem já importava rotuloEmbalagem
+// daqui (CalculadoraAmbiente.tsx, testes) continua funcionando. A fonte
+// única da regra de singular/plural é utils/matconUnits.ts (QA 22/09/2026,
+// mesma frase repetida no carrinho, na calculadora e na ficha do produto).
+export { rotuloEmbalagem };
 
 /** Um ambiente da folha: nome em português e as duas medidas em metros.
  *  Medida vazia (o "—" do mockup) é null/undefined — não zero digitado. */
@@ -128,10 +134,3 @@ export function fmtArea(n: number, unit?: string): string {
   return unit ? s + " " + unit : s;
 }
 
-/** "7 caixas" / "1 caixa". Com unidade de compra cadastrada ("cx", "pct"),
- *  usa o que a loja escreveu, sem inventar plural. */
-export function rotuloEmbalagem(n: number, purchaseUnitLabel?: string | null): string {
-  var label = (purchaseUnitLabel || "").trim();
-  if (label) return n + " " + label;
-  return n + (n === 1 ? " caixa" : " caixas");
-}

@@ -19,6 +19,7 @@ import {
   fmtQty,
   toPackages,
   convertPurchaseToSale,
+  rotuloEmbalagem,
 } from "@/utils/matconUnits";
 
 describe("isFractionalUnit", () => {
@@ -200,5 +201,23 @@ describe("isFractionalUnit — grafias ASCII (m2, m3, lt)", () => {
     expect(isFractionalUnit("SC")).toBe(false);
     expect(isFractionalUnit("mlh")).toBe(false);
     expect(isFractionalUnit("cx")).toBe(false);
+  });
+});
+
+// QA 22/09/2026: "1 caixas" no hint do carrinho, na calculadora de
+// ambiente e na ficha do produto — fonte única do singular/plural agora
+// que as três frases chamam esta função.
+describe("rotuloEmbalagem — singular/plural sem unidade de compra cadastrada", () => {
+  test("plural", () => {
+    expect(rotuloEmbalagem(7)).toBe("7 caixas");
+  });
+
+  test("singular", () => {
+    expect(rotuloEmbalagem(1)).toBe("1 caixa");
+  });
+
+  test("com unidade de compra cadastrada, usa o que a loja escreveu (sem inventar plural)", () => {
+    expect(rotuloEmbalagem(7, "cx")).toBe("7 cx");
+    expect(rotuloEmbalagem(1, "cx")).toBe("1 cx");
   });
 });
