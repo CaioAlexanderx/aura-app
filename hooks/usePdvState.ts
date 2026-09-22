@@ -77,6 +77,7 @@ import { creditApi } from "@/services/creditApi";
 import { matconApi } from "@/services/matconApi";
 import { readMatconSettings } from "@/constants/matcon";
 import { useMatconQuote } from "@/hooks/useMatconQuote";
+import { useMatconReferral } from "@/hooks/useMatconReferral";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -213,8 +214,9 @@ export function usePdvState() {
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
-    addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
+    addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale: rawNewSale,
     setQuoteId,
+    referredProfessionalId, setReferredProfessionalId,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
@@ -242,6 +244,31 @@ export function usePdvState() {
     sellerId: selectedEmployeeId,
     discount: matconQuoteDiscount,
   });
+
+  // ── Matcon M3 — "Indicado por" (chip do Caixa) ───────────────────────────
+  // useMatconReferral cuida da busca/seleção do profissional; aqui só
+  // sincronizamos a escolha com o carrinho (referredProfessionalId, que vai
+  // como referred_by_professional_id no POST da venda) e limpamos o chip
+  // quando o carrinho recomeça — mesmo padrão do useMatconQuote acima, uma
+  // única leitura de matcon.* neste hook.
+  const matconReferral = useMatconReferral({
+    companyId: company?.id,
+    matconEnabled: matcon.matcon_enabled,
+    clubEnabled: matcon.matcon_club_enabled,
+    pointsPer100: matcon.matcon_points_per_100,
+  });
+  useEffect(() => {
+    setReferredProfessionalId(matconReferral.referred?.id || null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matconReferral.referred]);
+  // "Nova venda" reabre o balcão do zero — o chip "Indicado por" some junto
+  // com cliente/vendedora/cupom (setCart/setQuoteId já zeram
+  // referredProfessionalId dentro de useCart; aqui só falta esquecer QUEM
+  // era o profissional exibido no chip).
+  function newSale() {
+    matconReferral.clear();
+    rawNewSale();
+  }
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
   // A esteira de Orçamentos (fora deste PR) manda pra cá com `?quote=<id>`
@@ -814,6 +841,8 @@ export function usePdvState() {
     employees, autoEmitNfce,
     // Cart
     payment, setPayment, lastSale, newSale, isProcessing,
+    // Matcon M3 — chip "Indicado por" do Caixa (IndicadoPorChip)
+    referral: matconReferral,
     selectedCustomerId, selectedCustomerName, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,

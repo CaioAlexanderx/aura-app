@@ -89,6 +89,14 @@ export function useCart() {
   // pedido nasceria duas vezes (docs/CONTRACT_MATCON.md, convert). Zera
   // junto com o carrinho.
   var [quoteId, setQuoteId] = useState<string | null>(null);
+
+  // 22/09/2026 (Matcon M3): id do profissional "indicado por" desta venda
+  // (chip do Caixa — IndicadoPorChip via useMatconReferral). Vai como
+  // referred_by_professional_id no POST da venda; o backend credita
+  // floor(total/100) × matcon_points_per_100 no profissional
+  // (docs/CONTRACT_MATCON.md, M3). Zera junto com o carrinho, mesmo padrão
+  // de quoteId acima.
+  var [referredProfessionalId, setReferredProfessionalId] = useState<string | null>(null);
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
@@ -354,6 +362,7 @@ export function useCart() {
       employee_id: selectedEmployeeId || undefined,
       seller_name: effectiveSellerName || undefined,
       quote_id: quoteId || undefined,
+      referred_by_professional_id: referredProfessionalId || undefined,
     };
 
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
@@ -411,7 +420,7 @@ export function useCart() {
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber));
-          setCart([]); setQuoteId(null); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setCart([]); setQuoteId(null); setReferredProfessionalId(null); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
           // Não desativa splitMode automaticamente — usuário decide se mantém
@@ -431,13 +440,13 @@ export function useCart() {
       });
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
-      setCart([]); setQuoteId(null); setIsProcessing(false);
+      setCart([]); setQuoteId(null); setReferredProfessionalId(null); setIsProcessing(false);
       if (splitMode) setSplitPayments([]);
     }
   }
 
   function newSale() {
-    setLastSale(null); setCart([]); setQuoteId(null); setIsProcessing(false);
+    setLastSale(null); setCart([]); setQuoteId(null); setReferredProfessionalId(null); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -449,6 +458,7 @@ export function useCart() {
 
   return {
     quoteId, setQuoteId,
+    referredProfessionalId, setReferredProfessionalId,
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,

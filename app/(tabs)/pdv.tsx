@@ -67,6 +67,7 @@ import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { PdvModals } from "@/components/screens/pdv/PdvModals";
+import { IndicadoPorChip } from "@/components/matcon/IndicadoPorChip";
 
 import { usePdvState } from "@/hooks/usePdvState";
 import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
@@ -107,6 +108,12 @@ function CaixaScreenInner() {
   const { handleScan, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
   const { selectEmployee, setSellerName } = st;
   const { cartProps, cartHeadRef, orderLabel } = st;
+  // 22/09/2026 (Matcon M3): chip "Indicado por" — st.referral vem de
+  // useMatconReferral (busca/seleção do profissional); referral.active já
+  // é matcon_enabled && matcon_club_enabled (única leitura do toggle, em
+  // usePdvState). totalFinal é o total ATUAL do carrinho (subtotal −
+  // descontos), o mesmo número que o CartPanel mostra em "Total".
+  const { referral, totalFinal } = st;
 
   // 16/06/2026: grid de produtos fluido + crediário só como modalidade de
   // pagamento (card removido da toolbar). Gateamos o chip por crediarioEnabled.
@@ -307,6 +314,7 @@ function CaixaScreenInner() {
                   required={precisaVendedora}
                   searchable={employees.length > 5}
                 />
+                <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
                 <ActCoupon
                   value={couponApplied}
                   onChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
@@ -415,6 +423,7 @@ function CaixaScreenInner() {
             required={precisaVendedora}
             searchable={employees.length > 5}
           />
+          <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
           <View style={{ flex: 1, minWidth: 4 }} />
           <ActMais
             coupon={couponApplied}
