@@ -20,6 +20,9 @@ import {
   toPackages,
   convertPurchaseToSale,
   rotuloEmbalagem,
+  ehMilheiro,
+  estoqueEmDecimal,
+  PECAS_POR_MILHEIRO,
 } from "@/utils/matconUnits";
 
 describe("isFractionalUnit", () => {
@@ -144,6 +147,29 @@ describe("convertPurchaseToSale", () => {
 
   test("arredonda custo a 2 casas e quantidade a 3", () => {
     expect(convertPurchaseToSale(3, 10, 3)).toEqual({ qty: 9, unitCost: 3.33 });
+  });
+});
+
+// QA 22/09/2026: tijolo em milheiro vende por peça; o estoque fica em
+// mlh com decimal (19,5 depois de vender 500 tijolos).
+describe("milheiro", () => {
+  test("1 milheiro = 1.000 peças", () => {
+    expect(PECAS_POR_MILHEIRO).toBe(1000);
+  });
+
+  test("ehMilheiro tolera caixa e espaço; nada além de mlh", () => {
+    expect(ehMilheiro("mlh")).toBe(true);
+    expect(ehMilheiro(" MLH ")).toBe(true);
+    expect(ehMilheiro("un")).toBe(false);
+    expect(ehMilheiro(undefined)).toBe(false);
+  });
+
+  test("milheiro NÃO é fracionado no carrinho, mas o estoque dele é decimal na ficha", () => {
+    expect(isFractionalUnit("mlh")).toBe(false);
+    expect(estoqueEmDecimal("mlh")).toBe(true);
+    expect(estoqueEmDecimal("m²")).toBe(true);
+    expect(estoqueEmDecimal("sc")).toBe(false);
+    expect(estoqueEmDecimal("un")).toBe(false);
   });
 });
 

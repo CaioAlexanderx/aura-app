@@ -50,6 +50,25 @@ export function isFractionalUnit(unit: string | null | undefined): boolean {
   return FRACTIONAL_UNITS_LOWER.has(norm);
 }
 
+// 22/09/2026 (QA Matcon em producao): tijolo e bloco se vendem por
+// milheiro ("mlh", R$ 890/mlh), mas o balcao pensa em pecas ("500
+// tijolos"). O Caixa pergunta as pecas e grava a quantidade em milheiro
+// (components/screens/pdv/matconQty.ts); estoque, venda e nota continuam
+// em mlh. 1 milheiro = 1.000 pecas.
+export const PECAS_POR_MILHEIRO = 1000;
+
+export function ehMilheiro(unit: string | null | undefined): boolean {
+  return normalizeUnit(unit) === "mlh";
+}
+
+// Estoque e minimo em decimal na ficha do produto: as unidades
+// fracionaveis e o milheiro. O milheiro nao e fracionado no carrinho (la o
+// vendedor digita pecas inteiras), mas vender 500 tijolos deixa 19,5 mlh no
+// estoque — a ficha precisa ler e salvar esse "19,5" sem virar 19 nem 195.
+export function estoqueEmDecimal(unit: string | null | undefined): boolean {
+  return isFractionalUnit(unit) || ehMilheiro(unit);
+}
+
 // Loja sem Matcon: devolve a MESMA referencia de UNITS (nao um array novo
 // com o mesmo conteudo) — e o que o teste de "nao vaza" verifica com
 // toBe(). Com Matcon ligado, concatena MATCON_UNITS no fim.
