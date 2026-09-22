@@ -26,10 +26,17 @@
 // Se o ruído voltar, a correção estrutural é o backend expor um /version com
 // um campo tipo `notify: true|false` (ou a vertical afetada), e o banner só
 // aparecer quando o deploy for relevante para o usuário logado.
+//
+// 22/09/2026 — a leitura de versão (hash do entry-<hash>.js, aqui e no
+// servidor) saiu daqui para services/atualizarApp.ts, porque o botão
+// "Atualizar" de Configurações usa a MESMA comparação. Este arquivo agora só
+// tem o aviso automático — que segue desligado pelo motivo acima. Enquanto
+// existirem dois jeitos de saber a versão, um dos dois apodrece.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
+import { hashCarregado, hashServido } from "@/services/atualizarApp";
 
 const ENABLED = false;
 
@@ -37,32 +44,6 @@ const IS_WEB = Platform.OS === "web";
 const POLL_MS = 5 * 60 * 1000;
 const FOCUS_THROTTLE_MS = 60 * 1000;
 const FIRST_CHECK_MS = 30 * 1000;
-const ENTRY_RE = /\/_expo\/static\/js\/web\/entry-([a-f0-9]+)\.js/;
-
-/** Hash do bundle atualmente CARREGADO (verdade da aba). */
-function loadedEntryHash(): string | null {
-  try {
-    const scripts = Array.from(document.querySelectorAll("script[src]"));
-    for (const sc of scripts) {
-      const mm = (sc.getAttribute("src") || "").match(/entry-([a-f0-9]+)\.js/);
-      if (mm) return mm[1];
-    }
-  } catch {}
-  return null;
-}
-
-/** Hash do bundle que o servidor está SERVINDO agora. */
-async function servedEntryHash(): Promise<string | null> {
-  try {
-    const res = await fetch("/", { cache: "no-store" });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const mm = html.match(ENTRY_RE);
-    return mm ? mm[1] : null;
-  } catch {
-    return null; // offline/transiente: silêncio, tenta no próximo ciclo
-  }
-}
 
 export function UpdateBanner() {
   const [ready, setReady] = useState(false);
@@ -74,13 +55,13 @@ export function UpdateBanner() {
     // Desligado: não faz baseline, não agenda poll, não faz fetch de "/".
     if (!ENABLED) return;
     if (!IS_WEB || typeof window === "undefined") return;
-    baseline.current = loadedEntryHash();
+    baseline.current = hashCarregado();
     let alive = true;
 
     async function check() {
       if (!alive || shown.current) return;
       lastCheck.current = Date.now();
-      const served = await servedEntryHash();
+      const served = await hashServido();
       if (!alive || !served) return;
       if (!baseline.current) { baseline.current = served; return; }
       if (served !== baseline.current) {

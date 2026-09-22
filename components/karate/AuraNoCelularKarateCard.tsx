@@ -20,6 +20,14 @@
 // Karatê. Nada novo de push aqui.
 //
 // Mockup: docs/mockups/pwa-2b1-karate-instalar.html, tela C.
+//
+// 22/09/2026 — ganhou a linha "Versão do app" (o botão Atualizar), FORA dos
+// quatro estados acima: ela vale instalado ou não. No app instalado não
+// existe barra de endereço, logo não existe F5. A lógica e o TEXTO são os
+// mesmos do varejo (hooks/useAtualizarApp); só a roupa é Shoji. Tirei daqui
+// o "Atualizações chegam sozinhas": elas chegam, mas só na próxima vez que
+// o app abre de verdade, e prometer o que o botão existe para resolver é
+// mentir na cara do sensei.
 // ============================================================
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type TextStyle, type ViewStyle } from "react-native";
@@ -30,6 +38,7 @@ import { KarateColors, KarateFonts, ShojiPalette } from "@/constants/karateTheme
 import { useInstalarApp } from "@/hooks/useInstalarApp";
 import { isMicrositeHost } from "@/utils/microsite";
 import { GuiaInstalarKarate } from "@/components/karate/GuiaInstalarKarate";
+import { detalheDaAtualizacao, rotuloDaAtualizacao, useAtualizarApp } from "@/hooks/useAtualizarApp";
 import { ativarAviso, desativarAviso, estadoDoAviso, type EstadoDoAviso } from "@/services/webPush";
 
 export function AuraNoCelularKarateCard() {
@@ -64,7 +73,7 @@ export function AuraNoCelularKarateCard() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.titulo}>Instalado neste celular</Text>
-              <Text style={s.descricao}>Você está usando o Aura Karatê pelo app. Atualizações chegam sozinhas.</Text>
+              <Text style={s.descricao}>Você está usando o Aura Karatê pelo app.</Text>
             </View>
           </View>
           <LinhaDoAviso companyId={company?.id} />
@@ -110,6 +119,37 @@ export function AuraNoCelularKarateCard() {
           </View>
         </View>
       )}
+
+      <LinhaDeAtualizacao />
+    </View>
+  );
+}
+
+// ------------------------------------------------------------
+// Versão do app: verifica e recarrega. No app instalado é a ÚNICA saída
+// para um bundle velho — lá não tem barra de endereço, não tem recarregar.
+// Mesma lógica e mesmo texto do varejo; só a roupa é Shoji.
+// ------------------------------------------------------------
+function LinhaDeAtualizacao() {
+  const { estado, atualizar, ocupado } = useAtualizarApp();
+
+  return (
+    <View style={s.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.rowTitulo}>Versão do app</Text>
+        <Text style={s.rowDetalhe}>{detalheDaAtualizacao(estado)}</Text>
+      </View>
+      <Pressable
+        onPress={atualizar}
+        disabled={ocupado}
+        style={[s.pill, estado === "atualizado" ? s.pillOn : s.pillNeutro]}
+        accessibilityRole="button"
+        accessibilityLabel="Atualizar o Aura Karatê para a versão mais nova"
+      >
+        <Text style={[s.pillTxt, { color: estado === "atualizado" ? KarateColors.ok : KarateColors.ink2 }]}>
+          {rotuloDaAtualizacao(estado)}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -197,6 +237,7 @@ const s = StyleSheet.create({
   pill: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9, borderWidth: 1 } as ViewStyle,
   pillOn: { backgroundColor: KarateColors.okSoft, borderColor: ShojiPalette.okLine } as ViewStyle,
   pillOff: { backgroundColor: KarateColors.warnSoft, borderColor: ShojiPalette.line2 } as ViewStyle,
+  pillNeutro: { backgroundColor: ShojiPalette.glassHi, borderColor: ShojiPalette.line2 } as ViewStyle,
   pillTxt: { fontFamily: KarateFonts.body, fontSize: 10, fontWeight: "700" } as TextStyle,
 });
 
