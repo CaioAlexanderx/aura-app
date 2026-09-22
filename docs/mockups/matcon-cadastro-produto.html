@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Cadastro de produto por perfil (Matcon primeiro)</title>
+<style>
+  /* ============================================================
+     Mockup standalone — cadastro de produto por subvertical, 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Pedido do Caio (22/09): "alterar a cara do cadastro de produto de
+     acordo com a subvertical selecionada. Achei a experiência de
+     cadastrar o produto meio estranha para matcon."
+     Base: ItemFormModal.tsx + item-form/Secao*.tsx como estão hoje,
+     docs/CONTRACT_MATCON.md (M0 unidades/peso, M2 fiscal, M4 lote) e
+     docs/matcon-faseamento-po-ux.md (§1 zero impacto, §4b sem jargão).
+     Molde visual: docs/mockups/matcon-modulo.html e
+     matcon-m3-clube-calculadora.html — mesmos tokens, sem paleta
+     própria. Sem dependência externa (sem fonte do Google: as famílias
+     caem no fallback do sistema).
+
+     A IDEIA EM UMA LINHA: o modal continua UM só (mesmo shell, mesmo
+     rodapé, um Salvar). O que muda é um PERFIL DE CADASTRO escolhido
+     pela subvertical ligada em pdv_settings — textos, exemplos, ordem,
+     unidades e quais perguntas aparecem. Matcon desligado = perfil
+     padrão = a tela de hoje, byte a byte.
+
+     Quatro telas, e as decisões que cada uma existe para validar:
+
+     1. O MODAL, DOIS PERFIS (desktop) — alterna A "Negócio padrão" e
+        B "Matcon ligado" no mesmo lugar. Os números ①–⑧ no estado B
+        batem com os oito pontos do QA de hoje:
+        ① nome, descrição e ficha com exemplos de material de
+          construção; ② categoria continua "última usada" (quem cadastra
+          30 pisos seguidos agradece) e o código interno nasce do nome
+          (POR-001, não VES-001); ③ a unidade sai do Estoque e vira
+          "Vendo por", ANTES do preço — o preço é por m², e escolher a
+          unidade depois do preço é o que faz o lojista digitar o preço
+          da caixa no campo do metro. Linha principal = un + as unidades
+          da config (matcon_units); o resto em "outras"; ④ "Como chega
+          do fornecedor" sempre visível, com a frase "Compro por [cx] de
+          [2,32] m²" e o "(≈ 64 caixas)" preservado; ⑤ controle de
+          estoque: a UNIDADE decide a segunda opção — m²/m³ com lote
+          ligado na config → "Por lote e tonalidade"; qualquer outra →
+          "Por cor e medida" (fio, cano); ⑥ fotos com texto neutro;
+          ⑦ "Nota fiscal" sobe para o topo da coluna direita, separada
+          dos códigos, com as três perguntas do Simples na língua do
+          balcão; ⑧ peso por unidade num card "Entrega" (weight_kg).
+
+     2. CELULAR 390px (estado B) — uma coluna, rodapé fixo, outro
+        produto (cimento em saco) para provar que a unidade manda: sem
+        lote, estoque inteiro, "do mesmo jeito que vendo". Ordem:
+        o item → vendo por/preço → estoque → entrega → nota fiscal →
+        códigos → fotos → descrição. O que é do balcão vem antes do que
+        é da vitrine.
+
+     3. LOTE OU COR E MEDIDA — o que acontece ao escolher cada uma. Lote
+        no cadastro é só o que JÁ está na prateleira hoje; daí em diante
+        o lote entra sozinho pela nota do fornecedor (M4, "o lote entra
+        na porta"). Com lote desligado na config a opção nem aparece —
+        nada de isca, nada desabilitado.
+
+     4. A MECÂNICA DO PERFIL — tabela do que o perfil troca, seção por
+        seção, e onde a Ótica entraria depois (citada, não desenhada).
+
+     DECISÕES QUE O CAIO PRECISA VALIDAR (curto):
+       a. Unidade antes do preço, num card "Vendo por" (sai do Estoque).
+       b. "Compro por" sempre visível no Matcon — inclusive un/pç
+          (caixa com 100 parafusos). Hoje só aparece em unidade de
+          material (m², sc, br…).
+       c. "Por cor e tamanho" vira "Por cor e medida" no Matcon; lote
+          só em m²/m³ e só com matcon_lots_enabled.
+       d. Ficha técnica: Marca · Medidas · Material · Onde usar e
+          rendimento. A 4ª reaproveita a coluna `cuidados` com outro
+          rótulo — ou vale uma coluna nova? A prévia mostra sozinha
+          "caixa com 2,32 m²" e o peso (saem da Compra e da Entrega).
+       e. "Salvar e cadastrar outro" no Matcon mantém categoria,
+          unidade, "compro por" e as respostas fiscais?
+       f. Loja com duas subverticais ligadas (Matcon + Ótica): qual
+          perfil vence?
+
+     O QUE NÃO MUDA:
+       - Backend: nenhuma migration, nenhuma rota nova. Tudo já existe:
+         products.unit / purchase_unit / purchase_factor / weight_kg
+         (M0, #736), ncm / cest / icms_st_paid / origem (M2), brand /
+         material / medidas / cuidados, product_lots +
+         POST /products/:pid/lots (M4), PUT /variations da grade.
+       - O modal: shell do TrocaModal, um Salvar (POST/PATCH), fila de
+         fotos, aviso de duplicata, grade local, rodapé.
+       - Loja sem Matcon: perfil padrão = a tela de hoje. Mesmos
+         objetos (UNITS inalterado), nenhuma prop nova obrigatória.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    --sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  button { font: inherit; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar .tema { margin-left: auto; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 1060px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: .98; letter-spacing: -.025em; margin: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 760px; line-height: 21px; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .note { font-size: 11.5px; color: var(--ink3); margin-top: 10px; line-height: 1.55; }
+  .note b { color: var(--ink2); }
+  .cols { display: grid; grid-template-columns: 1.1fr .9fr; gap: 14px; }
+  .cols > * { min-width: 0; }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+  .mono { font-family: var(--mono); }
+
+  /* ---- alternador de estado ---- */
+  .seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--border2); margin: 18px 0 14px; flex-wrap: wrap; max-width: 100%; }
+  .seg button { border: 0; background: transparent; color: var(--ink3); padding: 8px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 700; cursor: pointer; min-width: 0; }
+  .seg button.on { background: var(--violet); color: #fff; }
+  .seg-extra { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 12px; color: var(--ink3); cursor: pointer; user-select: none; }
+  .seg-extra .sw { width: 34px; height: 20px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; }
+  .seg-extra .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink3); transition: .15s; }
+  .seg-extra.on .sw { background: rgba(124,58,237,.4); border-color: var(--violet); }
+  .seg-extra.on .sw::after { left: 16px; background: var(--violet); }
+
+  /* ---- o modal ---- */
+  .modal { border: 1px solid var(--border2); border-radius: 18px; background: var(--bg3); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.35); min-width: 0; }
+  .mhead { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .mhead .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; color: var(--violet3); font-family: var(--mono); font-size: 10px; flex: 0 0 auto; }
+  .mhead .tt { flex: 1 1 200px; min-width: 0; }
+  .mhead .t1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mhead .t2 { font-size: 12px; color: var(--ink3); }
+  .perfiltag { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--violet3); border: 1px solid var(--border2); background: var(--violetD); border-radius: 999px; padding: 2px 8px; }
+  .tipo { display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); }
+  .tipo span { padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--ink3); }
+  .tipo span.on { background: var(--violetD); color: var(--violet3); box-shadow: inset 0 0 0 1px var(--border2); }
+  .xbtn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--ink3); }
+  .mbody { background: var(--bg2); padding: 14px; }
+  .mcols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; align-items: start; }
+  .mcols > .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .mfoot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; background: var(--bg3); }
+  .mfoot .info { flex: 1 1 200px; font-size: 12px; color: var(--ink3); display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--ink3); }
+  .btn { font-size: 13px; font-weight: 700; border-radius: 10px; padding: 9px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+  .btn.ok { background: var(--green); border-color: var(--green); color: #05241a; }
+  .btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+  .btn.block { width: 100%; }
+
+  /* seção (card) */
+  .sec { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; position: relative; min-width: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .sec-h .g { width: 22px; height: 22px; border-radius: 7px; background: var(--violetD); color: var(--violet3); font-family: var(--mono); font-size: 9px; display: grid; place-items: center; flex: 0 0 auto; }
+  .sec-h .t { font-size: 13px; font-weight: 700; flex: 1; min-width: 0; }
+  .selo { font-size: 10px; font-weight: 800; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); color: var(--ink3); white-space: nowrap; }
+  .selo.ok { color: var(--green); border-color: rgba(52,211,153,.35); background: var(--greenD); }
+  .selo.rec { color: var(--amber); border-color: rgba(251,191,36,.35); background: var(--amberD); }
+  .sec.destaque { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,.10); }
+
+  .fld { margin-bottom: 12px; min-width: 0; }
+  .fld:last-child { margin-bottom: 0; }
+  .lbl { font-size: 11.5px; font-weight: 600; color: var(--ink2); margin-bottom: 5px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+  .lbl .req { color: var(--red); }
+  .lbl .opt { font-weight: 400; color: var(--ink3); font-size: 11px; }
+  .inp { background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; font-size: 13px; color: var(--ink); min-height: 38px; min-width: 0; overflow-wrap: anywhere; }
+  .inp.big { font-size: 15px; font-weight: 700; }
+  .inp.ph { color: var(--ink3); font-weight: 400; }
+  .inp.area { min-height: 64px; }
+  .inp.pre { display: flex; gap: 8px; align-items: center; }
+  .inp.pre .p { font-size: 12px; font-weight: 700; color: var(--ink3); }
+  .inp.pre .s { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
+  .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .linha2 > * { min-width: 0; }
+  .linha2.btn-at { grid-template-columns: 1fr auto; align-items: center; }
+  .linha4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hint { font-size: 11.5px; color: var(--ink3); margin-top: 5px; line-height: 1.5; }
+  .hint b { color: var(--ink2); }
+  .hint .ok { color: var(--green); }
+  .hint .lk { color: var(--violet3); font-weight: 600; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; cursor: pointer; user-select: none; }
+  .chip.m { font-family: var(--mono); font-weight: 500; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+  .chip.dash { border-style: dashed; background: transparent; }
+  .sub-lbl { font-size: 10.5px; color: var(--ink3); margin: 8px 0 5px; }
+
+  .cat { display: flex; align-items: center; gap: 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; min-width: 0; flex-wrap: wrap; }
+  .cat .n { font-size: 13px; font-weight: 600; }
+  .cat .uu { font-size: 10.5px; color: var(--ink3); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+  .cat .tr { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--violet3); }
+
+  .margem { display: flex; gap: 8px; align-items: center; padding: 8px 11px; border-radius: 9px; background: var(--greenD); border: 1px solid rgba(52,211,153,.3); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+  .margem b { color: var(--green); }
+  .margem.off { background: var(--bg2); border-color: var(--border); color: var(--ink3); }
+
+  .radios { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rd { flex: 1 1 150px; display: flex; gap: 8px; align-items: center; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); cursor: pointer; font-size: 12.5px; min-width: 0; }
+  .rd .o { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--ink3); flex: 0 0 auto; position: relative; }
+  .rd.on { border-color: var(--violet); background: var(--violetD); font-weight: 700; }
+  .rd.on .o { border-color: var(--violet); }
+  .rd.on .o::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--violet); }
+  .rd .d { display: block; font-size: 10.5px; color: var(--ink3); font-weight: 400; }
+
+  /* frase com número editável no meio — o padrão do Matcon */
+  .frase { font-size: 14px; line-height: 2.1; color: var(--ink2); }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 1px 8px; margin: 0 2px; line-height: 1.6; }
+  .edit.sel { cursor: pointer; }
+  .edit.vz { color: var(--ink3); }
+  .pk { font-family: var(--mono); font-size: 12px; color: var(--violet3); }
+
+  .nota { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 10px; font-size: 12px; color: var(--ink2); line-height: 1.5; }
+  .nota.amber { background: var(--amberD); border: 1px solid rgba(251,191,36,.35); }
+  .nota.amber .s { color: var(--amber); }
+  .nota.vio { background: var(--violetD); border: 1px solid var(--border2); }
+  .nota.vio .s { color: var(--violet3); }
+  .nota b { color: var(--ink); }
+  .storenote { font-size: 11.5px; color: var(--ink3); background: var(--bg2); border: 1px dashed var(--border2); border-radius: 9px; padding: 7px 10px; margin-bottom: 12px; }
+
+  /* fiscal */
+  .perg { padding: 10px 0; border-top: 1px solid var(--border); }
+  .perg:first-of-type { border-top: 0; padding-top: 0; }
+  .perg .q { font-size: 13px; font-weight: 700; color: var(--ink); display: flex; gap: 8px; align-items: baseline; }
+  .perg .q .nn { font-family: var(--mono); font-size: 10px; color: var(--violet3); border: 1px solid var(--border2); border-radius: 999px; padding: 0 6px; flex: 0 0 auto; }
+  .perg .qd { font-size: 11.5px; color: var(--ink3); margin: 2px 0 7px; }
+  .cod { display: flex; align-items: center; gap: 8px; }
+  .cod .inp { flex: 1; font-family: var(--mono); display: flex; align-items: center; }
+  .cod .inp .bdg { margin-left: auto; font-family: var(--sans); font-size: 10px; font-weight: 700; border-radius: 5px; padding: 1px 6px; border: 1px solid var(--border); color: var(--ink3); }
+  .cod .inp .bdg.ok { color: var(--green); border-color: rgba(52,211,153,.35); background: var(--greenD); }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .esc { border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); padding: 8px 10px; cursor: pointer; min-width: 0; }
+  .esc .t { font-size: 12.5px; font-weight: 700; }
+  .esc .d { font-size: 10.5px; color: var(--ink3); }
+  .esc.on { background: var(--violetD); border-color: var(--violet); }
+  .esc.on .t { color: var(--violet3); }
+  .sug { display: flex; gap: 6px; margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--violetD); font-size: 11.5px; color: var(--ink2); }
+  .sug b { color: var(--ink); }
+  .origem { font-size: 11.5px; color: var(--ink3); margin-top: 10px; }
+  .origem b { color: var(--violet3); }
+
+  /* fotos */
+  .fotos { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ph-foto { width: 58px; height: 58px; border-radius: 9px; border: 1px dashed var(--border2); background: var(--bg2); display: grid; place-items: center; color: var(--ink3); font-size: 18px; }
+  .ph-foto.capa { border: 0; background: linear-gradient(135deg, #e8e4dc, #cfc8bb 60%, #b9b1a2); position: relative; }
+  .ph-foto.capa.moda { background: linear-gradient(135deg, #f9a8d4, #c084fc); }
+  .ph-foto.capa::after { content: "capa"; position: absolute; bottom: 3px; left: 3px; font-size: 8.5px; font-weight: 800; color: #fff; background: rgba(0,0,0,.45); border-radius: 4px; padding: 0 4px; }
+
+  /* prévia */
+  .pv { margin-top: 10px; border: 1px dashed var(--border2); border-radius: 10px; overflow: hidden; }
+  .pv .h { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--amber); font-weight: 700; padding: 4px 10px; background: var(--amberD); }
+  .pv .b { display: flex; gap: 10px; padding: 10px; background: var(--bg3); }
+  .pv .img { width: 54px; height: 54px; border-radius: 8px; flex: 0 0 auto; background: linear-gradient(135deg, #e8e4dc, #b9b1a2); }
+  .pv .img.moda { background: linear-gradient(135deg, #f9a8d4, #c084fc); }
+  .pv .nm { font-size: 13px; font-weight: 700; }
+  .pv .pr { font-size: 12px; color: var(--violet3); font-weight: 700; margin-bottom: 4px; }
+  .pv .fl { display: grid; grid-template-columns: 96px 1fr; gap: 1px 8px; font-size: 11px; border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px; }
+  .pv .fl span:nth-child(odd) { color: var(--ink3); }
+  .pv .fl .auto { color: var(--violet3); }
+  .pv .vz { font-size: 11.5px; color: var(--ink3); font-style: italic; }
+
+  /* lotes */
+  .lotes { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 4px; }
+  .lrow { display: grid; grid-template-columns: 1fr 1fr 0.8fr 1.1fr; gap: 6px; align-items: center; padding: 7px 9px; border-top: 1px solid var(--border); font-size: 12px; }
+  .lrow:first-child { border-top: 0; }
+  .lrow.hd { background: var(--bg2); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); }
+  .lrow .edit { margin: 0; display: block; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lrow .q { font-family: var(--mono); text-align: right; }
+  .lrow .q small { display: block; font-size: 10px; color: var(--ink3); }
+  .ltotal { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; background: var(--violetD); border-top: 1px solid var(--border2); font-size: 12.5px; }
+  .ltotal .mono { color: var(--violet3); }
+
+  /* grade cor × medida */
+  .grade { display: grid; grid-template-columns: 92px repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 12px; }
+  .grade > div { padding: 6px 8px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); min-width: 0; }
+  .grade > .gh { background: var(--bg2); font-size: 10.5px; color: var(--ink3); font-weight: 700; border-top: 0; }
+  .grade > .gl { border-left: 0; display: flex; align-items: center; gap: 6px; }
+  .grade .dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+  .grade .n { font-family: var(--mono); text-align: center; }
+
+  /* pinos ①–⑧: só no estado B */
+  .pin { position: absolute; top: -9px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: var(--violet); color: #fff; font-family: var(--mono); font-size: 10.5px; display: grid; place-items: center; box-shadow: 0 0 0 3px var(--bg2); z-index: 2; }
+  .pin.inl { position: static; display: inline-grid; box-shadow: none; vertical-align: 1px; margin-right: 4px; flex: 0 0 auto; }
+
+  /* visibilidade por estado */
+  [data-perfil="padrao"] .so-m, [data-perfil="matcon"] .so-p { display: none !important; }
+  [data-vazio="1"] .so-cheio, [data-vazio="0"] .so-vazio { display: none !important; }
+  [data-area="1"] .op-cor, [data-area="0"] .op-lote { display: none !important; }
+  [data-estoque="unica"] .blk-lote, [data-estoque="unica"] .blk-cor,
+  [data-estoque="lote"] .blk-unica, [data-estoque="lote"] .blk-cor,
+  [data-estoque="cor"] .blk-unica, [data-estoque="cor"] .blk-lote { display: none !important; }
+  [data-compra="igual"] .blk-emb, [data-compra="emb"] .blk-igual { display: none !important; }
+  [data-outras="0"] .outras-row { display: none; }
+
+  /* legenda do A→B */
+  .legenda { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin-top: 18px; }
+  .legenda > div { display: flex; gap: 8px; font-size: 12.5px; color: var(--ink2); line-height: 1.5; min-width: 0; }
+  .legenda b { color: var(--ink); }
+
+  /* celular */
+  .phone-wrap { display: grid; grid-template-columns: 390px 1fr; gap: 24px; align-items: start; }
+  .phone-wrap > * { min-width: 0; }
+  .phone { width: min(390px, 100%); height: 800px; border: 1px solid var(--border2); border-radius: 36px; background: var(--bg3); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .phone .status { display: flex; justify-content: space-between; padding: 10px 22px 4px; font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+  .phone .mhead { padding: 10px 14px; }
+  .phone .tipo { width: 100%; }
+  .phone .tipo span { flex: 1; text-align: center; }
+  .phone .scroll { flex: 1; overflow-y: auto; background: var(--bg2); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .phone .mfoot { flex: 0 0 auto; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 14px 18px; }
+  .phone .mfoot .info { flex: 0 0 auto; }
+  .phone .linha2 { grid-template-columns: 1fr; gap: 0; }
+  .phone .linha2.btn-at { grid-template-columns: 1fr auto; gap: 8px; }
+
+  /* tabela do perfil */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tbl th { text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); font-weight: 800; padding: 8px 10px; border-bottom: 1px solid var(--border2); }
+  .tbl td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink2); }
+  .tbl td:first-child { color: var(--ink); font-weight: 600; }
+  .tbl td.arq { font-family: var(--mono); font-size: 11px; color: var(--violet3); }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--bg3); }
+  .fluxo { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+  .fluxo .nó { flex: 1 1 180px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 12px; color: var(--ink2); min-width: 0; }
+  .fluxo .nó b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 2px; }
+  .fluxo .nó.on { border-color: var(--violet); background: var(--violetD); }
+  .fluxo .nó.depois { border-style: dashed; color: var(--ink3); }
+  .fluxo .seta { align-self: center; color: var(--ink3); font-size: 18px; }
+
+  @media (max-width: 900px) {
+    .mcols, .cols, .legenda, .phone-wrap { grid-template-columns: minmax(0, 1fr); }
+    .hero h1 { font-size: 36px; }
+    .phone { margin: 0 auto; height: 720px; }
+    .seg-extra { margin-left: 0; }
+  }
+  @media (max-width: 480px) {
+    .linha2 { grid-template-columns: 1fr; }
+    .linha2.btn-at { grid-template-columns: 1fr auto; }
+    .opts { grid-template-columns: 1fr; }
+    .lrow { grid-template-columns: 1fr 1fr; }
+    .lrow.hd { display: none; }
+    .fluxo .seta { display: none; }
+    .modal .mfoot .btn { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · <b>Cadastro de produto por perfil</b> · Matcon primeiro · 4 telas · violeta <span class="ico">#7c3aed</span>
+  <nav><a href="#modal">1 modal A/B</a><a href="#celular">2 celular</a><a href="#estoque">3 lote ou cor</a><a href="#perfil">4 perfil</a></nav>
+  <button class="tema" onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. O MODAL, DOIS PERFIS ===================== -->
+<section class="screen" id="modal">
+  <div class="mock-label">1 · Estoque › Novo item (ItemFormModal) — o mesmo modal, dois perfis</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Cadastro de item <span class="pill">perfil de cadastro</span></div>
+  <div class="hero"><h1>Cadastrar piso não é cadastrar vestido<i>.</i></h1></div>
+  <p class="sub">Mesmo modal, mesmo rodapé, um Salvar. Com o Matcon ligado, o cadastro fala a língua do depósito: <em>vende por m², compra por caixa, pesa no caminhão e tem imposto já pago na nota</em>. Com ele desligado, nada muda. Troque o estado abaixo e toque nas unidades, no controle de estoque e na pergunta do imposto.</p>
+
+  <div>
+    <div class="seg" role="tablist">
+      <button id="bt-padrao" onclick="perfil('padrao')">A · Negócio padrão <span style="font-weight:400;opacity:.8">(Matcon desligado)</span></button>
+      <button id="bt-matcon" class="on" onclick="perfil('matcon')">B · Matcon ligado</button>
+    </div>
+    <span class="seg-extra" id="bt-vazio" onclick="vazio()"><span class="sw"></span> ver campos vazios (exemplos)</span>
+  </div>
+
+  <div class="modal" id="m1" data-perfil="matcon" data-vazio="0" data-area="1" data-estoque="unica" data-compra="emb" data-outras="0">
+    <div class="mhead">
+      <div class="ic">pkg</div>
+      <div class="tt">
+        <div class="t1">Novo item <span class="perfiltag so-m">materiais de construção</span></div>
+        <div class="t2">Nome e preço bastam. O resto você completa quando quiser.</div>
+      </div>
+      <div class="tipo"><span class="on">Produto</span><span>Serviço</span></div>
+      <div class="xbtn">✕</div>
+    </div>
+
+    <div class="mbody">
+      <div class="mcols">
+        <!-- ============ coluna esquerda ============ -->
+        <div class="col">
+
+          <!-- O item -->
+          <div class="sec">
+            <span class="pin so-m">1</span>
+            <div class="sec-h"><span class="g">pkg</span><span class="t">O item</span><span class="selo ok so-cheio">✓</span></div>
+            <div class="fld">
+              <div class="lbl">Nome do produto <span class="req">*</span></div>
+              <div class="inp big so-p" data-v="Vestido midi floral" data-ph="Ex.: Vestido midi floral"></div>
+              <div class="inp big so-m" data-v="Porcelanato Bianco 60×60 acetinado" data-ph="Ex.: Porcelanato Bianco 60×60 acetinado"></div>
+              <div class="hint so-m">Como está na caixa: o quê, marca e medida. É o que o vendedor procura no Caixa.</div>
+            </div>
+            <div class="fld">
+              <div class="lbl">Categoria <span class="opt">opcional</span></div>
+              <div class="cat so-p"><span class="n">Vestidos</span><span class="uu">última usada</span><span class="tr">Trocar</span></div>
+              <div class="cat so-m"><span class="n">Pisos e revestimentos</span><span class="uu">última usada</span><span class="tr">Trocar</span></div>
+              <div class="hint so-m"><span class="pin inl">2</span>Loja sem categorias ainda? O "Trocar" sugere as do ramo: Pisos e revestimentos, Cimento e argamassa, Tintas, Elétrica, Hidráulica, Ferragens, Telhas e tijolos, Ferramentas.</div>
+            </div>
+          </div>
+
+          <!-- Preço (padrão) -->
+          <div class="sec so-p">
+            <div class="sec-h"><span class="g">R$</span><span class="t">Preço</span></div>
+            <div class="linha2">
+              <div class="fld"><div class="lbl">Preço de venda <span class="req">*</span></div><div class="inp pre"><span class="p">R$</span><span data-v="189,90" data-ph="0,00"></span></div></div>
+              <div class="fld"><div class="lbl">Custo <span class="opt">opcional</span></div><div class="inp pre"><span class="p">R$</span><span data-v="72,00" data-ph="0,00"></span></div></div>
+            </div>
+            <div class="margem so-cheio">✓ Margem <b>62%</b> · lucro <b>R$ 117,90</b> por un.</div>
+            <div class="margem off so-vazio">ⓘ Preencha o preço para ver a margem.</div>
+          </div>
+
+          <!-- Vendo por + preço (matcon) -->
+          <div class="sec so-m">
+            <span class="pin">3</span>
+            <div class="sec-h"><span class="g">R$</span><span class="t">Como você vende</span></div>
+            <div class="fld">
+              <div class="lbl">Vendo por</div>
+              <div class="chips" id="unidades">
+                <span class="chip m" data-u="un">un</span><span class="chip m on" data-u="m²">m²</span><span class="chip m" data-u="m³">m³</span><span class="chip m" data-u="m">m</span><span class="chip m" data-u="sc">sc</span><span class="chip m" data-u="br">br</span><span class="chip m" data-u="pç">pç</span><span class="chip m" data-u="ton">ton</span><span class="chip m" data-u="mlh">mlh</span><span class="chip dash" id="bt-outras">+ outras</span>
+              </div>
+              <div class="outras-row">
+                <div class="sub-lbl">outras</div>
+                <div class="chips">
+                  <span class="chip m" data-u="cx">cx</span><span class="chip m" data-u="pct">pct</span><span class="chip m" data-u="kg">kg</span><span class="chip m" data-u="g">g</span><span class="chip m" data-u="L">L</span><span class="chip m" data-u="ml">ml</span><span class="chip m" data-u="rolo">rolo</span><span class="chip m" data-u="lata">lata</span><span class="chip m" data-u="balde">balde</span><span class="chip m" data-u="par">par</span><span class="chip m" data-u="kit">kit</span>
+                </div>
+              </div>
+              <div class="hint">A linha de cima são as unidades que sua loja usa (Matcon › Configurações). m² e m³ vendem com vírgula no Caixa; saco e barra, inteiros.</div>
+            </div>
+            <div class="linha2">
+              <div class="fld"><div class="lbl">Preço de venda <span class="req">*</span></div><div class="inp pre"><span class="p">R$</span><span data-v="54,90" data-ph="0,00"></span><span class="s">por <span class="u">m²</span></span></div></div>
+              <div class="fld"><div class="lbl">Custo <span class="opt">opcional</span></div><div class="inp pre"><span class="p">R$</span><span data-v="31,20" data-ph="0,00"></span><span class="s">por <span class="u">m²</span></span></div></div>
+            </div>
+            <div class="margem so-cheio">✓ Margem <b>43%</b> · lucro <b>R$ 23,70</b> por <span class="u">m²</span></div>
+            <div class="margem off so-vazio">ⓘ Preencha o preço para ver a margem.</div>
+
+            <div class="fld" style="margin-top:14px">
+              <span class="pin inl">4</span><span class="lbl" style="display:inline-flex">Como chega do fornecedor</span>
+              <div class="radios">
+                <div class="rd" data-compra="igual"><span class="o"></span><span>Do mesmo jeito que vendo<span class="d">compro e vendo em <span class="u">m²</span></span></span></div>
+                <div class="rd on" data-compra="emb"><span class="o"></span><span>Em caixa, saco ou fardo<span class="d">a nota vem numa unidade, o balcão vende em outra</span></span></div>
+              </div>
+              <div class="blk-emb">
+                <div class="frase" style="margin-top:6px">Compro por <span class="edit sel">cx ▾</span> de <span class="edit">2,32</span> <span class="u">m²</span>.</div>
+                <div class="hint so-cheio">A caixa sai a <b>R$ 72,38</b> de custo e <b>R$ 127,37</b> na venda. Com essa frase, a nota do fornecedor entra convertida (10 cx → 23,2 m²) e o estoque mostra as caixas.</div>
+              </div>
+              <div class="blk-igual hint">Nada a converter: a nota do fornecedor entra como está.</div>
+            </div>
+          </div>
+
+          <!-- Estoque -->
+          <div class="sec">
+            <span class="pin so-m">5</span>
+            <div class="sec-h"><span class="g">box</span><span class="t">Estoque</span></div>
+            <!-- padrão: unidade + cor e tamanho -->
+            <div class="so-p">
+              <div class="fld">
+                <div class="lbl">Unidade de venda</div>
+                <div class="chips"><span class="chip m on">un</span><span class="chip m">pct</span><span class="chip m">cx</span><span class="chip m">kg</span><span class="chip m">g</span><span class="chip m">ml</span><span class="chip m">L</span><span class="chip m">par</span><span class="chip m">kit</span></div>
+              </div>
+              <div class="fld">
+                <div class="lbl">Como você controla o estoque?</div>
+                <div class="radios"><div class="rd on"><span class="o"></span>Quantidade única</div><div class="rd"><span class="o"></span>Por cor e tamanho</div></div>
+              </div>
+              <div class="linha2">
+                <div class="fld"><div class="lbl">Quantidade atual</div><div class="inp" data-v="12" data-ph="0"></div></div>
+                <div class="fld"><div class="lbl">Avisar quando chegar em</div><div class="inp" data-v="3" data-ph="0"></div><div class="hint">Estoque mínimo. Aparece na aba Alertas.</div></div>
+              </div>
+            </div>
+            <!-- matcon -->
+            <div class="so-m">
+              <div class="fld">
+                <div class="lbl">Como você controla o estoque?</div>
+                <div class="radios" id="modos">
+                  <div class="rd on" data-modo="unica"><span class="o"></span><span>Quantidade única<span class="d">um saldo só</span></span></div>
+                  <div class="rd op-lote" data-modo="lote"><span class="o"></span><span>Por lote e tonalidade<span class="d">cada pilha tem seu saldo</span></span></div>
+                  <div class="rd op-cor" data-modo="cor"><span class="o"></span><span>Por cor e medida<span class="d">fio, cano, parafuso</span></span></div>
+                </div>
+              </div>
+              <div class="blk-unica">
+                <div class="frase">Tenho <span class="edit so-cheio">148,48</span><span class="edit vz so-vazio">0</span> <span class="u">m²</span> em estoque <span class="pk so-cheio blk-emb">(≈ 64 caixas)</span>, e me avise abaixo de <span class="edit so-cheio">20</span><span class="edit vz so-vazio">0</span> <span class="u">m²</span>.</div>
+                <div class="hint">Estoque mínimo. Aparece na aba Alertas.</div>
+              </div>
+              <div class="blk-lote">
+                <div class="lotes">
+                  <div class="lrow hd"><span>Lote</span><span>Tonalidade</span><span>Bitola</span><span style="text-align:right">Tenho</span></div>
+                  <div class="lrow"><span class="edit">27B</span><span class="edit">A2</span><span class="edit">03</span><span class="q">95,12 m²<small>41 cx</small></span></div>
+                  <div class="lrow"><span class="edit">28A</span><span class="edit vz">—</span><span class="edit">03</span><span class="q">53,36 m²<small>23 cx</small></span></div>
+                  <div class="lrow"><span class="chip dash" style="grid-column:1/-1;justify-self:start">+ outro lote na prateleira</span></div>
+                  <div class="ltotal">Total <span class="mono">148,48 m² em 2 lotes</span> <span class="pk">(= 64 caixas)</span></div>
+                </div>
+                <div class="frase" style="margin-top:6px">Me avise abaixo de <span class="edit">20</span> m².</div>
+                <div class="hint">Só o que já está na prateleira hoje. <b>Daqui pra frente o lote entra sozinho</b> quando você importa a nota do fornecedor. Veja a tela 3.</div>
+              </div>
+              <div class="blk-cor">
+                <div class="nota vio"><span class="s">▦</span><span>Aparecem <b>Cores</b> e <b>Medidas</b> (ex.: 1,5 mm, 2,5 mm, 20 mm, ½") e a grade de quantidades, igual à grade de hoje. Veja a tela 3.</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Entrega (matcon) -->
+          <div class="sec so-m">
+            <span class="pin">8</span>
+            <div class="sec-h"><span class="g">trk</span><span class="t">Entrega</span><span class="selo">opcional</span></div>
+            <div class="frase">Cada <span class="u">m²</span> pesa <span class="edit so-cheio">21,5</span><span class="edit vz so-vazio">0</span> kg.</div>
+            <div class="hint so-cheio"><span class="blk-emb">A caixa: 49,88 kg. </span>100 m² ≈ 2.150 kg. O Aura soma o peso da carga na entrega e o peso vai na nota fiscal.</div>
+            <div class="hint so-vazio">Serve para saber quanto vai no caminhão e sai na nota fiscal da entrega.</div>
+          </div>
+
+          <!-- Descrição e ficha -->
+          <div class="sec">
+            <div class="sec-h"><span class="g">txt</span><span class="t">Descrição e ficha</span></div>
+            <div class="storenote">É o texto que o cliente lê antes de decidir. A prévia atualiza enquanto você escreve.</div>
+            <div class="fld">
+              <div class="lbl">Descrição</div>
+              <div class="inp area so-p" data-v="Viscose leve com forro, fenda lateral e amarração na cintura." data-ph="Do que é feito, como veste, como cuidar."></div>
+              <div class="inp area so-m" data-v="" data-ph="Onde usar, como assentar, o que vem na caixa."></div>
+            </div>
+            <div class="fld so-p">
+              <div class="lbl">Ficha técnica <span class="opt">só aparece o que estiver preenchido</span></div>
+              <div class="linha2" style="grid-template-columns:1fr 1fr 1fr">
+                <div class="inp" data-v="Viscose" data-ph="Material"></div><div class="inp" data-v="P ao GG" data-ph="Medidas"></div><div class="inp" data-v="Lavar à mão" data-ph="Cuidados"></div>
+              </div>
+            </div>
+            <div class="fld so-m">
+              <div class="lbl">Ficha técnica <span class="opt">só aparece o que estiver preenchido</span></div>
+              <div class="linha4">
+                <div><div class="sub-lbl" style="margin-top:0">Marca</div><div class="inp" data-v="Cerâmica Vila Nova" data-ph="Ex.: Cerâmica Vila Nova"></div></div>
+                <div><div class="sub-lbl" style="margin-top:0">Medidas</div><div class="inp" data-v="60 × 60 cm · 9 mm" data-ph="Ex.: 60 × 60 cm, 50 kg, 18 L"></div></div>
+                <div><div class="sub-lbl" style="margin-top:0">Material</div><div class="inp" data-v="" data-ph="Ex.: porcelanato esmaltado"></div></div>
+                <div><div class="sub-lbl" style="margin-top:0">Onde usar e rendimento</div><div class="inp" data-v="" data-ph="Ex.: piso interno, área molhada"></div></div>
+              </div>
+              <div class="hint">Rendimento de piso não precisa digitar: sai da frase "Compro por". Tinta e argamassa escrevem aqui ("rende 250 m² por demão").</div>
+            </div>
+            <div class="pv">
+              <div class="h">Prévia na loja</div>
+              <div class="b so-p"><div class="img moda so-cheio"></div><div style="min-width:0"><div class="nm" data-v="Vestido midi floral" data-ph="Nome do produto"></div><div class="pr">R$ 189,90</div><div class="fl so-cheio"><span>Material</span><span>Viscose</span><span>Medidas</span><span>P ao GG</span><span>Cuidados</span><span>Lavar à mão</span></div></div></div>
+              <div class="b so-m"><div class="img so-cheio"></div><div style="min-width:0"><div class="nm" data-v="Porcelanato Bianco 60×60 acetinado" data-ph="Nome do produto"></div><div class="pr so-cheio">R$ 54,90 / m² · R$ 127,37 a caixa</div><div class="fl so-cheio"><span>Marca</span><span>Cerâmica Vila Nova</span><span>Medidas</span><span>60 × 60 cm · 9 mm</span><span>Caixa</span><span class="auto">2,32 m² (automático)</span><span>Peso</span><span class="auto">21,5 kg por m² (automático)</span></div><div class="vz so-vazio">Sem descrição, a página mostra só a foto e o preço.</div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ coluna direita ============ -->
+        <div class="col">
+
+          <!-- Nota fiscal (matcon, no topo) -->
+          <div class="sec destaque so-m" id="fiscal">
+            <span class="pin">7</span>
+            <div class="sec-h"><span class="g">nf</span><span class="t">Nota fiscal</span><span class="selo rec" id="selo-fiscal">2 de 3</span></div>
+            <div class="nota amber" style="margin-bottom:12px"><span class="s">⚠</span><span><b>Você emite nota.</b> Sem estas três respostas, a nota da venda deste produto pode ser recusada.</span></div>
+            <div class="perg">
+              <div class="q"><span class="nn">1</span>Código do produto na nota (NCM)</div>
+              <div class="qd">8 números. Está na nota do fornecedor, ao lado do nome do produto.</div>
+              <div class="cod"><div class="inp so-cheio">6907.21.00<span class="bdg ok">✓ OK</span></div><div class="inp ph so-vazio">0000.00.00<span class="bdg">vazio</span></div><span class="btn sm">Gerar</span></div>
+              <div class="hint so-cheio"><span class="ok">✓ revestimento cerâmico</span></div>
+              <div class="hint so-vazio">Pelo nome: <span class="lk">revestimento cerâmico · 6907.21.00</span>. Toque em Gerar.</div>
+            </div>
+            <div class="perg">
+              <div class="q"><span class="nn">2</span>Código do imposto antecipado (CEST)</div>
+              <div class="qd">7 números. Cimento, tinta, fio, cano e piso quase sempre têm.</div>
+              <div class="cod"><div class="inp so-cheio">10.032.00<span class="bdg ok">✓ OK</span></div><div class="inp ph so-vazio">00.000.00<span class="bdg">vazio</span></div><span class="btn sm">Gerar</span></div>
+              <div class="hint so-cheio"><span class="ok">✓ revestimento</span> — sugerido pelo NCM acima.</div>
+            </div>
+            <div class="perg">
+              <div class="q"><span class="nn">3</span>O imposto deste produto já veio pago na nota do fornecedor?</div>
+              <div class="opts" id="imposto" style="margin-top:6px">
+                <div class="esc" data-r="sim"><div class="t">Sim, já veio</div><div class="d">o distribuidor pagou antes</div></div>
+                <div class="esc" data-r="nao"><div class="t">Não</div><div class="d">pago na minha venda</div></div>
+              </div>
+              <div class="sug" id="sug-imposto">% <span>Piso e revestimento costumam vir com o imposto já pago — sugerimos <b>Sim</b>.</span></div>
+            </div>
+            <div class="origem">Fabricado no Brasil? <b>Sim</b> · Importado</div>
+            <div class="hint" style="margin-top:8px">Cadastrando pela nota do fornecedor (Estoque › Importar nota), o NCM já vem preenchido. Na dúvida, mostre esta tela ao seu contador.</div>
+          </div>
+
+          <!-- Códigos (matcon: card próprio) -->
+          <div class="sec so-m">
+            <div class="sec-h"><span class="g">|||</span><span class="t">Códigos</span></div>
+            <div class="fld">
+              <div class="lbl">Código de barras</div>
+              <div class="inp ph">Bipe o código da caixa ou digite</div>
+            </div>
+            <div class="fld">
+              <div class="lbl">Código interno <span class="opt">o seu código de prateleira</span></div>
+              <div class="linha2 btn-at"><div class="inp" data-v="" data-ph="POR-001"></div><span class="btn sm">Gerar</span></div>
+              <div class="hint so-m"><span class="pin inl">2</span>O exemplo nasce do nome que você digitou.</div>
+            </div>
+          </div>
+
+          <!-- Fotos -->
+          <div class="sec">
+            <span class="pin so-m">6</span>
+            <div class="sec-h"><span class="g">cam</span><span class="t">Fotos</span></div>
+            <div class="storenote so-p">Aparece na página do produto e no catálogo do WhatsApp. Até 4 por cor; duas já resolvem.</div>
+            <div class="storenote so-m">Aparece na lista, no Caixa e no link do produto que você manda. Até 4; duas já resolvem.</div>
+            <div class="lbl">Fotos principais <span class="opt">1 de 4</span></div>
+            <div class="fotos"><div class="ph-foto capa so-m"></div><div class="ph-foto capa moda so-p"></div><div class="ph-foto">+</div><div class="ph-foto">+</div><div class="ph-foto">+</div></div>
+            <div class="hint">A primeira é a capa — é ela que aparece na lista, no Caixa e no link que você manda.</div>
+            <div class="hint so-p">Tem cores? Marque "por cor e tamanho" em Estoque e cada cor ganha sua fileira aqui.</div>
+            <div class="hint so-m">Foto da caixa e do piso assentado ajudam o cliente a escolher.</div>
+            <div class="hint">As fotos sobem assim que você salvar o produto.</div>
+          </div>
+
+          <!-- Códigos e fiscal (padrão, no fim) -->
+          <div class="sec so-p">
+            <div class="sec-h"><span class="g">|||</span><span class="t">Códigos e fiscal</span></div>
+            <div class="fld"><div class="lbl">Código interno (SKU)</div><div class="linha2 btn-at"><div class="inp" data-v="VES-001" data-ph="VES-001"></div><span class="btn sm">Gerar</span></div></div>
+            <div class="fld"><div class="lbl">Código de barras</div><div class="inp ph">Bipe ou digite</div></div>
+            <div class="fld"><div class="lbl">NCM <span class="opt">só para nota fiscal</span></div><div class="cod"><div class="inp">6204.44.00<span class="bdg ok">✓ OK</span></div><span class="btn sm">Gerar</span></div><div class="hint"><span class="ok">✓ vestidos de fibra artificial</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mfoot">
+      <div class="info"><span class="so-cheio">Pronto para salvar.</span><span class="so-vazio" style="color:var(--amber)">⚠ Falta o nome e o preço.</span> <span class="kbd">Ctrl+Enter salva</span></div>
+      <span class="btn">Cancelar</span>
+      <span class="btn">Salvar e cadastrar outro</span>
+      <span class="btn ok">✓ Salvar produto</span>
+    </div>
+  </div>
+
+  <div class="section" style="margin-top:22px">O que mudou de A para B — os oito pontos do QA de hoje</div>
+  <div class="legenda">
+    <div><span class="pin inl">1</span><span><b>Exemplos de depósito.</b> Nome "Porcelanato Bianco 60×60 acetinado", descrição "onde usar, como assentar, o que vem na caixa", ficha Marca · Medidas · Material · Onde usar e rendimento.</span></div>
+    <div><span class="pin inl">2</span><span><b>Categoria e código.</b> "Última usada" fica (cadastrar 30 pisos seguidos); sugestões do ramo quando a loja não tem categorias. Código interno nasce do nome: POR-001.</span></div>
+    <div><span class="pin inl">3</span><span><b>Unidade antes do preço.</b> "Vendo por" com un + as unidades da loja na linha principal; as genéricas em "outras". Preço e custo dizem "por m²".</span></div>
+    <div><span class="pin inl">4</span><span><b>"Como chega do fornecedor" sempre à vista.</b> Duas opções, e a frase "Compro por cx de 2,32 m²" com o preço da caixa calculado. O "(≈ 64 caixas)" continua no estoque.</span></div>
+    <div><span class="pin inl">5</span><span><b>A unidade decide o controle.</b> m²/m³ → "Por lote e tonalidade"; o resto → "Por cor e medida". Troque a unidade acima para ver.</span></div>
+    <div><span class="pin inl">6</span><span><b>Fotos neutras.</b> Sem "loja online", sem "catálogo do WhatsApp", sem "tem cores?".</span></div>
+    <div><span class="pin inl">7</span><span><b>Nota fiscal no topo da coluna direita</b>, separada dos códigos, com três perguntas numeradas e selo "2 de 3". Nenhuma sigla sem tradução.</span></div>
+    <div><span class="pin inl">8</span><span><b>Peso para a entrega.</b> "Cada m² pesa 21,5 kg" grava <span class="mono" style="font-size:11px">weight_kg</span>, que o bloco de transporte da nota já soma.</span></div>
+  </div>
+</section>
+
+<!-- ===================== 2. CELULAR ===================== -->
+<section class="screen" id="celular">
+  <div class="mock-label">2 · O mesmo modal no celular (390px) — estado B, cimento em saco</div>
+  <div class="hero"><h1 style="font-size:40px">Cadastrar do balcão, com o saco na mão<i>.</i></h1></div>
+  <p class="sub">O lojista cadastra pelo celular, no meio do estoque. Uma coluna, rodapé fixo, teclado de número com vírgula. Outro produto de propósito: <em>cimento em saco não tem lote, não tem vírgula e não tem conversão</em> — e o cadastro se ajusta sozinho pela unidade.</p>
+
+  <div class="phone-wrap" style="margin-top:18px">
+    <div class="phone" data-perfil="matcon" data-vazio="0" data-area="0" data-estoque="unica" data-compra="igual" data-outras="0">
+      <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+      <div class="mhead">
+        <div class="ic">pkg</div>
+        <div class="tt"><div class="t1">Novo item <span class="perfiltag">materiais de construção</span></div><div class="t2">Nome e preço bastam. O resto você completa quando quiser.</div></div>
+        <div class="xbtn">✕</div>
+        <div class="tipo"><span class="on">Produto</span><span>Serviço</span></div>
+      </div>
+      <div class="scroll">
+        <div class="sec">
+          <div class="sec-h"><span class="g">pkg</span><span class="t">O item</span><span class="selo ok">✓</span></div>
+          <div class="fld"><div class="lbl">Nome do produto <span class="req">*</span></div><div class="inp big">Cimento CP-II 50 kg</div></div>
+          <div class="fld"><div class="lbl">Categoria <span class="opt">opcional</span></div><div class="cat"><span class="n">Cimento e argamassa</span><span class="uu">última usada</span><span class="tr">Trocar</span></div></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">R$</span><span class="t">Como você vende</span></div>
+          <div class="fld">
+            <div class="lbl">Vendo por</div>
+            <div class="chips"><span class="chip m">un</span><span class="chip m">m²</span><span class="chip m">m³</span><span class="chip m">m</span><span class="chip m on">sc</span><span class="chip m">br</span><span class="chip m">pç</span><span class="chip m">ton</span><span class="chip m">mlh</span><span class="chip dash">+ outras</span></div>
+          </div>
+          <div class="linha2">
+            <div class="fld"><div class="lbl">Preço de venda <span class="req">*</span></div><div class="inp pre"><span class="p">R$</span>36,90<span class="s">por sc</span></div></div>
+            <div class="fld"><div class="lbl">Custo <span class="opt">opcional</span></div><div class="inp pre"><span class="p">R$</span>27,40<span class="s">por sc</span></div></div>
+          </div>
+          <div class="margem">✓ Margem <b>26%</b> · lucro <b>R$ 9,50</b> por sc</div>
+          <div class="fld" style="margin-top:12px">
+            <div class="lbl">Como chega do fornecedor</div>
+            <div class="radios">
+              <div class="rd on"><span class="o"></span><span>Do mesmo jeito que vendo<span class="d">compro e vendo em sc</span></span></div>
+              <div class="rd"><span class="o"></span><span>Em caixa, saco ou fardo<span class="d">a nota vem numa unidade, o balcão vende em outra</span></span></div>
+            </div>
+            <div class="hint">Nada a converter: a nota do fornecedor entra como está.</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">box</span><span class="t">Estoque</span></div>
+          <div class="fld">
+            <div class="lbl">Como você controla o estoque?</div>
+            <div class="radios">
+              <div class="rd on"><span class="o"></span><span>Quantidade única<span class="d">um saldo só</span></span></div>
+              <div class="rd"><span class="o"></span><span>Por cor e medida<span class="d">fio, cano, parafuso</span></span></div>
+            </div>
+          </div>
+          <div class="frase">Tenho <span class="edit">120</span> sc em estoque, e me avise abaixo de <span class="edit">40</span> sc.</div>
+          <div class="hint">Saco é inteiro: o campo não aceita vírgula. Em m² aceitaria.</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">trk</span><span class="t">Entrega</span><span class="selo">opcional</span></div>
+          <div class="frase">Cada sc pesa <span class="edit">50</span> kg.</div>
+          <div class="hint">Um pedido de 30 sacos = 1.500 kg. O Aura soma o peso da carga e ele vai na nota fiscal.</div>
+        </div>
+
+        <div class="sec destaque">
+          <div class="sec-h"><span class="g">nf</span><span class="t">Nota fiscal</span><span class="selo ok">3 de 3 ✓</span></div>
+          <div class="perg">
+            <div class="q"><span class="nn">1</span>Código do produto na nota (NCM)</div>
+            <div class="cod" style="margin-top:6px"><div class="inp">2523.29.10<span class="bdg ok">✓ OK</span></div><span class="btn sm">Gerar</span></div>
+            <div class="hint"><span class="ok">✓ cimento Portland</span></div>
+          </div>
+          <div class="perg">
+            <div class="q"><span class="nn">2</span>Código do imposto antecipado (CEST)</div>
+            <div class="cod" style="margin-top:6px"><div class="inp">05.001.00<span class="bdg ok">✓ OK</span></div><span class="btn sm">Gerar</span></div>
+            <div class="hint"><span class="ok">✓ cimento</span> — sugerido pelo NCM.</div>
+          </div>
+          <div class="perg">
+            <div class="q"><span class="nn">3</span>O imposto já veio pago na nota do fornecedor?</div>
+            <div class="opts" style="margin-top:6px">
+              <div class="esc on"><div class="t">Sim, já veio</div><div class="d">o distribuidor pagou antes</div></div>
+              <div class="esc"><div class="t">Não</div><div class="d">pago na minha venda</div></div>
+            </div>
+          </div>
+          <div class="origem">Fabricado no Brasil? <b>Sim</b> · Importado</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">|||</span><span class="t">Códigos</span></div>
+          <div class="fld"><div class="lbl">Código de barras</div><div class="linha2 btn-at"><div class="inp ph">Bipe ou digite</div><span class="btn sm">câmera</span></div></div>
+          <div class="fld"><div class="lbl">Código interno <span class="opt">o seu código de prateleira</span></div><div class="linha2 btn-at"><div class="inp ph">CIM-001</div><span class="btn sm">Gerar</span></div></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">cam</span><span class="t">Fotos</span></div>
+          <div class="storenote">Aparece na lista, no Caixa e no link do produto que você manda.</div>
+          <div class="fotos"><div class="ph-foto">+</div><div class="ph-foto">+</div><div class="ph-foto">+</div><div class="ph-foto">+</div></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><span class="g">txt</span><span class="t">Descrição e ficha</span></div>
+          <div class="fld"><div class="lbl">Descrição</div><div class="inp area ph">Onde usar, como aplicar, o que vem no saco.</div></div>
+          <div class="fld"><div class="lbl">Ficha técnica <span class="opt">só aparece o que estiver preenchido</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px"><div class="inp ph">Marca</div><div class="inp ph">Medidas — ex.: 50 kg</div><div class="inp ph">Material — ex.: cimento Portland composto</div><div class="inp ph">Onde usar e rendimento — ex.: reboco, contrapiso</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mfoot">
+        <div class="info">Pronto para salvar.</div>
+        <span class="btn">Salvar e cadastrar outro</span>
+        <span class="btn ok">✓ Salvar produto</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="section" style="margin-top:0">A ordem no celular, e por quê</div>
+      <div class="box">
+        <ol style="margin:0;padding-left:18px;font-size:12.5px;color:var(--ink2);line-height:1.8">
+          <li><b style="color:var(--ink)">O item</b> — nome e categoria.</li>
+          <li><b style="color:var(--ink)">Como você vende</b> — unidade, preço, como chega do fornecedor.</li>
+          <li><b style="color:var(--ink)">Estoque</b> — o que tem na prateleira.</li>
+          <li><b style="color:var(--ink)">Entrega</b> — o peso, uma linha.</li>
+          <li><b style="color:var(--ink)">Nota fiscal</b> — as três perguntas.</li>
+          <li><b style="color:var(--ink)">Códigos</b> — barras (com a câmera) e interno.</li>
+          <li><b style="color:var(--ink)">Fotos</b> e <b style="color:var(--ink)">Descrição</b> — por último.</li>
+        </ol>
+        <p class="note">Hoje a ordem de uma coluna é item → preço → estoque → fotos → descrição → códigos e fiscal: a nota fiscal fica no fundo, depois da vitrine. No depósito o que trava a venda é a nota, não a foto. <b>No perfil padrão a ordem de hoje não muda.</b></p>
+      </div>
+      <div class="section">O que o celular prova</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 8px">Unidade <span class="mono">sc</span> → a segunda opção de estoque é "Por cor e medida", não lote (lote só em m²/m³). O estoque é inteiro. "Do mesmo jeito que vendo" já vem marcado, porque cimento entra e sai em saco.</p>
+        <p class="note" style="margin:0">Com NCM de cimento, o CEST e o "Sim, já veio" chegam sugeridos: o lojista confirma com dois toques. O selo vira "3 de 3 ✓".</p>
+      </div>
+      <div class="section">Toque, não hover</div>
+      <div class="box"><p class="note" style="margin:0">Nenhuma ação escondida atrás de hover (regra 7): "+ outras", "Gerar", "câmera" e "+ outro lote" são botões sempre visíveis, com área de toque de pelo menos 36px.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. LOTE OU COR E MEDIDA ===================== -->
+<section class="screen" id="estoque">
+  <div class="mock-label">3 · Estoque no perfil Matcon — a unidade decide a segunda opção</div>
+  <div class="hero"><h1 style="font-size:40px">Lote no piso, medida no fio<i>.</i></h1></div>
+  <p class="sub">No depósito, "cor e tamanho" só faz sentido para fio, cano e parafuso — e aí o tamanho se chama medida. Para piso e revestimento, o que separa uma pilha da outra é o <em>lote e a tonalidade</em>. A unidade escolhida em "Vendo por" decide qual das duas aparece; nunca as duas juntas.</p>
+
+  <div class="cols" style="margin-top:18px">
+    <div>
+      <div class="section">m² ou m³, com lote ligado na config → "Por lote e tonalidade"</div>
+      <div class="sec">
+        <div class="sec-h"><span class="g">box</span><span class="t">Estoque · Porcelanato Bianco 60×60</span></div>
+        <div class="radios" style="margin-bottom:10px"><div class="rd"><span class="o"></span>Quantidade única</div><div class="rd on"><span class="o"></span>Por lote e tonalidade</div></div>
+        <div class="lotes">
+          <div class="lrow hd"><span>Lote</span><span>Tonalidade</span><span>Bitola</span><span style="text-align:right">Tenho</span></div>
+          <div class="lrow"><span class="edit">27B</span><span class="edit">A2</span><span class="edit">03</span><span class="q">95,12 m²<small>41 cx</small></span></div>
+          <div class="lrow"><span class="edit">28A</span><span class="edit vz">—</span><span class="edit">03</span><span class="q">53,36 m²<small>23 cx</small></span></div>
+          <div class="lrow"><span class="chip dash" style="grid-column:1/-1;justify-self:start">+ outro lote na prateleira</span></div>
+          <div class="ltotal">Total <span class="mono">148,48 m² em 2 lotes</span> <span class="pk">(= 64 caixas)</span></div>
+        </div>
+        <div class="frase" style="margin-top:6px">Me avise abaixo de <span class="edit">20</span> m².</div>
+      </div>
+      <div class="box" style="margin-top:10px">
+        <p class="note" style="margin:0 0 8px"><b>O que acontece ao escolher lote:</b> a frase "Tenho … m²" vira a tabelinha acima. Cada linha é uma pilha que <b>já está na prateleira</b>: lote e bitola como vêm impressos na caixa, tonalidade opcional, e a quantidade em m² (com as caixas ao lado, pela frase "Compro por"). O total é a soma — ninguém digita o estoque duas vezes.</p>
+        <p class="note" style="margin:0 0 8px"><b>No Salvar:</b> o produto nasce com o total (POST de hoje) e cada linha vira um lote (<span class="mono">POST /products/:id/lots</span>, rota do M4 que já existe). Linha em branco é ignorada.</p>
+        <p class="note" style="margin:0"><b>Depois do cadastro ninguém mais digita lote aqui:</b> ele entra com a nota do fornecedor, na importação (decisão do M4, "o lote entra na porta"), e o Caixa escolhe de qual pilha sai. Na edição, a tabela mostra os lotes com saldo, só para ajuste.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Qualquer outra unidade → "Por cor e medida"</div>
+      <div class="sec">
+        <div class="sec-h"><span class="g">box</span><span class="t">Estoque · Fio flexível 750 V rolo 100 m</span></div>
+        <div class="radios" style="margin-bottom:10px"><div class="rd"><span class="o"></span>Quantidade única</div><div class="rd on"><span class="o"></span>Por cor e medida</div></div>
+        <div class="linha2" style="margin-bottom:10px">
+          <div><div class="sub-lbl" style="margin-top:0">Cores</div><div class="chips"><span class="chip">● Azul</span><span class="chip">● Preto</span><span class="chip">● Vermelho</span><span class="chip dash">+ Cor</span></div></div>
+          <div><div class="sub-lbl" style="margin-top:0">Medidas</div><div class="chips"><span class="chip m">1,5 mm</span><span class="chip m">2,5 mm</span><span class="chip m">4 mm</span><span class="chip dash">+ Medida</span></div></div>
+        </div>
+        <div class="grade">
+          <div class="gh"></div><div class="gh">1,5 mm</div><div class="gh">2,5 mm</div><div class="gh">4 mm</div>
+          <div class="gl"><span class="dot" style="background:#3b82f6"></span>Azul</div><div class="n">8</div><div class="n">14</div><div class="n">5</div>
+          <div class="gl"><span class="dot" style="background:#1f2937;border:1px solid var(--border2)"></span>Preto</div><div class="n">6</div><div class="n">12</div><div class="n">4</div>
+          <div class="gl"><span class="dot" style="background:#ef4444"></span>Vermelho</div><div class="n">7</div><div class="n">10</div><div class="n">3</div>
+        </div>
+        <div class="hint">É a mesma grade de hoje (cores × tamanhos, PUT /variations). Muda o nome: "Tamanhos" → "Medidas", exemplo "1,5 mm, 20 mm, ½"". O aviso de produto repetido também diz "outra cor ou medida".</div>
+      </div>
+
+      <div class="section">Lote desligado na config</div>
+      <div class="box">
+        <p class="note" style="margin:0">Se a loja não marcou "Controlo lote e tonalidade" em Matcon › Configurações, o piso mostra só "Quantidade única" e "Por cor e medida". <b>Nada desabilitado, nenhum "ative para usar"</b> — mesma premissa do Essencial: o que a loja não usa some. O caminho para ligar é a config, e o tour do Matcon já passa por lá.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. A MECÂNICA DO PERFIL ===================== -->
+<section class="screen" id="perfil">
+  <div class="mock-label">4 · Perfil de cadastro — a mecânica (para o código, não para o lojista)</div>
+  <div class="hero"><h1 style="font-size:40px">Um modal, um perfil por vertical<i>.</i></h1></div>
+  <p class="sub">A subvertical ligada em <span class="mono">pdv_settings</span> escolhe um perfil; o perfil é só dados (textos, exemplos, ordem, quais perguntas aparecem). As seções recebem o perfil como prop opcional. <em>Chave desligada = perfil padrão = o mesmo objeto de hoje</em>, testado com <span class="mono">toBe</span>, igual ao <span class="mono">unitsForProduct</span>.</p>
+
+  <div class="fluxo" style="margin-top:18px">
+    <div class="nó"><b>pdv_settings</b>readMatconSettings() → matcon_enabled, matcon_units, matcon_lots_enabled</div>
+    <div class="seta">→</div>
+    <div class="nó on"><b>perfilDoCadastro()</b>devolve PERFIL_PADRAO ou PERFIL_MATCON</div>
+    <div class="seta">→</div>
+    <div class="nó"><b>Secao*.tsx</b>prop <span class="mono">perfil?</span> opcional, default = padrão</div>
+    <div class="nó depois"><b>depois: PERFIL_OTICA</b>otica_enabled, mesmo mecanismo — armação, aro/ponte/haste. Citado, não desenhado.</div>
+  </div>
+
+  <div class="section" style="margin-top:22px">O que o perfil troca, seção por seção</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Peça</th><th>Negócio padrão (hoje)</th><th>Matcon</th><th>Arquivo</th></tr></thead>
+      <tbody>
+        <tr><td>Exemplo do nome</td><td>Ex.: Vestido midi floral</td><td>Ex.: Porcelanato Bianco 60×60 acetinado + dica "como está na caixa"</td><td class="arq">SecaoItem</td></tr>
+        <tr><td>Aviso de produto repetido</td><td>"outra cor ou tamanho"</td><td>"outra cor ou medida"</td><td class="arq">SecaoItem</td></tr>
+        <tr><td>Categorias sugeridas</td><td>as de hoje</td><td>Pisos e revestimentos, Cimento e argamassa, Tintas, Elétrica, Hidráulica, Ferragens, Telhas e tijolos, Ferramentas</td><td class="arq">CategorySelector</td></tr>
+        <tr><td>Unidade</td><td>9 chips no Estoque</td><td>"Vendo por" antes do preço: un + matcon_units; o resto em "outras"</td><td class="arq">SecaoPreco · SecaoEstoque</td></tr>
+        <tr><td>Preço e custo</td><td>R$ 0,00</td><td>R$ 0,00 por m² + preço da caixa calculado</td><td class="arq">SecaoPreco</td></tr>
+        <tr><td>Compra</td><td>—</td><td>sempre à vista: "do mesmo jeito que vendo" ou "Compro por cx de 2,32 m²"</td><td class="arq">SecaoEstoque → SecaoPreco</td></tr>
+        <tr><td>Controle de estoque</td><td>Quantidade única / Por cor e tamanho</td><td>Quantidade única / Por lote e tonalidade (m², m³, lote ligado) ou Por cor e medida</td><td class="arq">SecaoEstoque (+ lotes)</td></tr>
+        <tr><td>Peso</td><td>—</td><td>"Cada m² pesa 21,5 kg" → weight_kg</td><td class="arq">SecaoEntrega (nova, só no perfil)</td></tr>
+        <tr><td>Fiscal</td><td>"Códigos e fiscal", fim da coluna direita</td><td>"Nota fiscal" no topo da direita, 3 perguntas numeradas; códigos num card próprio</td><td class="arq">SecaoCodigos (dividida)</td></tr>
+        <tr><td>Código interno</td><td>Código interno (SKU) · VES-001</td><td>Código interno · exemplo gerado do nome</td><td class="arq">SecaoCodigos</td></tr>
+        <tr><td>Fotos</td><td>página do produto, catálogo do WhatsApp, "tem cores?"</td><td>lista, Caixa e link do produto; "foto da caixa e do piso assentado"</td><td class="arq">SecaoFotos</td></tr>
+        <tr><td>Descrição</td><td>"Do que é feito, como veste, como cuidar."</td><td>"Onde usar, como assentar, o que vem na caixa."</td><td class="arq">SecaoDescricao</td></tr>
+        <tr><td>Ficha técnica</td><td>Material · Medidas · Cuidados</td><td>Marca (brand) · Medidas · Material · Onde usar e rendimento (coluna cuidados); caixa e peso automáticos na prévia</td><td class="arq">SecaoDescricao</td></tr>
+        <tr><td>Ordem das seções</td><td>2 colunas de hoje; celular: … fotos, descrição, códigos e fiscal</td><td>direita começa pela nota fiscal; celular: … estoque, entrega, nota fiscal, códigos, fotos, descrição</td><td class="arq">ItemFormModal</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cols" style="margin-top:14px">
+    <div class="box">
+      <div class="section" style="margin-top:0">O que não muda</div>
+      <p class="note" style="margin:0 0 8px"><b>Backend:</b> nenhuma migration, nenhuma rota. Tudo que o perfil Matcon grava já existe: <span class="mono">unit</span>, <span class="mono">purchase_unit</span>, <span class="mono">purchase_factor</span>, <span class="mono">weight_kg</span> (M0), <span class="mono">ncm</span>, <span class="mono">cest</span>, <span class="mono">icms_st_paid</span>, <span class="mono">origem</span> (M2), <span class="mono">brand</span>, <span class="mono">material</span>, <span class="mono">medidas</span>, <span class="mono">cuidados</span>, os lotes do M4 e a grade de variações.</p>
+      <p class="note" style="margin:0"><b>O modal:</b> shell do TrocaModal, um Salvar, fila de fotos, aviso de repetido, grade local, rodapé e atalho. Nada de wizard, nada de passo novo.</p>
+    </div>
+    <div class="box">
+      <div class="section" style="margin-top:0">Regras do mecanismo</div>
+      <p class="note" style="margin:0 0 8px">Perfil é dado, não componente: um objeto com textos, flags e ordem. Seção nova (Entrega) só renderiza se o perfil pedir. Nenhuma prop nova obrigatória (§1 do faseamento).</p>
+      <p class="note" style="margin:0">Uma loja, um perfil. Se um dia Matcon e Ótica estiverem ligados na mesma loja, é preciso uma regra de desempate — pergunta aberta para o Caio.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  var m1 = document.getElementById('m1');
+  function pintar() {
+    var vz = m1.dataset.vazio === '1';
+    document.querySelectorAll('#m1 [data-ph]').forEach(function (el) {
+      var semValor = vz || !el.dataset.v;
+      el.textContent = semValor ? el.dataset.ph : el.dataset.v;
+      el.classList.toggle('ph', semValor);
+    });
+  }
+  function perfil(p) {
+    m1.dataset.perfil = p;
+    document.getElementById('bt-padrao').classList.toggle('on', p === 'padrao');
+    document.getElementById('bt-matcon').classList.toggle('on', p === 'matcon');
+  }
+  function vazio() {
+    m1.dataset.vazio = m1.dataset.vazio === '1' ? '0' : '1';
+    document.getElementById('bt-vazio').classList.toggle('on', m1.dataset.vazio === '1');
+    pintar();
+  }
+  // unidade: troca o rótulo em todo lugar e decide lote × cor e medida
+  document.querySelectorAll('#m1 [data-u]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var u = chip.dataset.u;
+      document.querySelectorAll('#m1 [data-u]').forEach(function (c) { c.classList.toggle('on', c === chip); });
+      document.querySelectorAll('#m1 .u').forEach(function (s) { s.textContent = u; });
+      var area = (u === 'm²' || u === 'm³');
+      m1.dataset.area = area ? '1' : '0';
+      if (!area && m1.dataset.estoque === 'lote') modo('unica');
+      if (area && m1.dataset.estoque === 'cor') modo('unica');
+    });
+  });
+  document.getElementById('bt-outras').addEventListener('click', function () {
+    m1.dataset.outras = m1.dataset.outras === '1' ? '0' : '1';
+  });
+  function modo(v) {
+    m1.dataset.estoque = v;
+    document.querySelectorAll('#modos [data-modo]').forEach(function (r) { r.classList.toggle('on', r.dataset.modo === v); });
+  }
+  document.querySelectorAll('#modos [data-modo]').forEach(function (r) {
+    r.addEventListener('click', function () { modo(r.dataset.modo); });
+  });
+  document.querySelectorAll('#m1 .rd[data-compra]').forEach(function (r) {
+    r.addEventListener('click', function () {
+      m1.dataset.compra = r.dataset.compra;
+      document.querySelectorAll('#m1 .rd[data-compra]').forEach(function (x) { x.classList.toggle('on', x === r); });
+    });
+  });
+  document.querySelectorAll('#imposto .esc').forEach(function (o) {
+    o.addEventListener('click', function () {
+      document.querySelectorAll('#imposto .esc').forEach(function (x) { x.classList.toggle('on', x === o); });
+      document.getElementById('sug-imposto').style.display = 'none';
+      var s = document.getElementById('selo-fiscal');
+      s.textContent = '3 de 3 ✓'; s.className = 'selo ok';
+    });
+  });
+  pintar();
+</script>
+</body>
+</html>
