@@ -59,23 +59,39 @@ Aceitar em `module_overrides` (PUT do ClientsAdmin): `matcon.orcamentos`, `matco
 
 ---
 
-## M1 — Orçamento → Pedido → Entrega (esboço para dimensionar; fecha depois do mockup)
+## M1 — Orçamento → Pedido → Entrega
+
+Client de referência: `services/matconApi.ts` (tipos e rotas abaixo já estão lá; o backend implementa o espelho).
 
 ### `quotes` (orçamentos)
-`id`, `company_id`, `number` (sequencial por empresa), `customer_id` nullable, `seller_id` nullable, `status` ∈ `open | approved | lost | expired`, `valid_until` date, `public_token`, `items[] {product_id, name, unit, quantity numeric(12,3), unit_price, discount}`, `subtotal`, `discount`, `total`, `notes`, `approved_at`, `converted_sale_id` nullable, timestamps.
-Rotas: `GET/POST /companies/:id/matcon/quotes`, `PATCH .../:qid` (status, itens), `POST .../:qid/convert` (cria a venda/pedido e reserva estoque), `GET /orcamento/:token` (público — reaproveita a página pública do Studio; resposta no mesmo formato `PublicQuote` + `shop.*`), `POST /orcamento/:token/accept|decline`.
+`id`, `company_id`, `number` (sequencial por empresa), `status` ∈ `open | approved | lost | expired`, `customer_id`/`customer_name`/`customer_phone` nullable, `seller_id`/`seller_name` nullable, `valid_until` date (default hoje + `matcon_quote_valid_days`), `public_token`, `items[] {product_id, name, unit, quantity numeric(12,3), unit_price, discount}`, `subtotal`, `discount`, `total`, `notes`, `reference` (texto livre: "obra Rua das Acácias" — não é cadastro de obra), `approved_at`, `converted_sale_id`, `sent_at`, timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET /companies/:id/matcon/quotes?status=&q=&limit=` | lista + `summary {open, expiring, approved, lost}` com `{count, total}` cada; `expiring` = `open` com `valid_until ≤ hoje + matcon_quote_warn_days` |
+| `POST .../quotes` | cria (`QuoteCreateBody`) |
+| `PATCH .../quotes/:qid` | status/itens/validade |
+| `POST .../quotes/:qid/sent` | grava `sent_at` (o wa.me é aberto pelo front) |
+| `POST .../quotes/:qid/convert` | `status=approved` + reserva de estoque; devolve `{quote, cart[]}`. **Não cria a venda**: ela nasce no Caixa (POST da venda leva `quote_id`; o backend grava `converted_sale_id`, baixa a reserva e cria a 1ª `delivery`). Decisão 22/09/2026 — evita pedido duplicado. |
+| `GET /orcamento/:token` (público) | mesmo formato `PublicQuote` do Studio + `kind: "matcon"`, `shop.*`; `POST /orcamento/:token/respond` aceita/recusa |
+
 Job diário: `open` com `valid_until < hoje` → `expired`.
 
 ### `deliveries` (entregas)
-`id`, `company_id`, `sale_id`, `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026: sem cadastro de motorista), `items[] {sale_item_id, quantity numeric(12,3)}`, `public_token`, timestamps.
-Regras: soma de `quantity` por `sale_item` nunca excede o vendido; **entrega parcial** = criar a próxima `delivery` com o saldo automaticamente (`POST .../:did/split`). A venda expõe `pending_delivery_qty` por item e `has_pending_delivery` para o selo "saldo a entregar".
-Rotas: `GET/POST /companies/:id/matcon/deliveries`, `PATCH .../:did` (stage, delivered_by, scheduled_for), `POST .../:did/split`.
-Tracker público: `GET /acompanhar/:token` devolve `tipo: "entrega"` com `etapas` = as quatro estações (o front já renderiza `tipo === "oculos"`; `"entrega"` só troca textos).
+`id`, `company_id`, `sale_id`, `sequence` (1ª, 2ª entrega do mesmo pedido), `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026), `customer_name`/`customer_phone`/`address`, `total` (da venda), `has_pending`, `public_token`, `items[] {sale_item_id, name, unit, quantity, sold_quantity, delivered_before}`, `out_at`, `delivered_at`, timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET /companies/:id/matcon/deliveries?day=today|tomorrow|late|pending&stage=` | lista + `summary {separating, ready, out, delivered_today}` `{count,total}` + `pending_orders` |
+| `POST .../deliveries` | `{sale_id, scheduled_for?}` — 1ª entrega de um pedido (a venda com `quote_id` cria sozinha; venda avulsa no Caixa pode criar por aqui) |
+| `PATCH .../deliveries/:did` | `stage`, `delivered_by`, `scheduled_for`; `stage=out` grava `out_at`, `delivered` grava `delivered_at` |
+| `POST .../deliveries/:did/split` | entrega parcial: `{items[{sale_item_id, quantity}], delivered_by?}` → marca esta como `delivered` com o que foi e cria a próxima (`sequence+1`) com o saldo; devolve `{delivered, next}` |
+| `GET /acompanhar/:token` (público) | `tipo: "entrega"`, `etapas` = aprovado/separando/pronto/saiu/entregue, `itens[] {nome, entregue, total, unidade}`, `proxima_entrega` date nullable |
+
+Regras: soma de `quantity` por `sale_item` nunca excede `sold_quantity`; a venda expõe `has_pending_delivery` (selo "saldo a entregar" no detalhe da venda).
 
 ### WhatsApp
-Reaproveita os templates existentes: envio do link do orçamento e "seu pedido saiu para entrega" (mesmo mecanismo do "óculos prontos" da Ótica).
-
----
+O front abre o wa.me (`useWaVarejo`) com o link público; o backend só registra `sent_at`. Template "seu pedido saiu para entrega" reaproveita o mecanismo do "óculos prontos" da Ótica.
 
 ## M2 / M3 — só cabeçalhos (fecham após o piloto do M0+M1)
 

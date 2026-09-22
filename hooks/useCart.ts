@@ -83,6 +83,12 @@ function round2(n: number): number {
 }
 
 export function useCart() {
+  // 22/09/2026 (Matcon M1): id do orçamento que montou este carrinho
+  // (Caixa aberto com ?quote=). Vai como quote_id no POST da venda — o
+  // backend grava converted_sale_id e cria a 1ª entrega; sem isso o
+  // pedido nasceria duas vezes (docs/CONTRACT_MATCON.md, convert). Zera
+  // junto com o carrinho.
+  var [quoteId, setQuoteId] = useState<string | null>(null);
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
@@ -347,6 +353,7 @@ export function useCart() {
       customer_id: selectedCustomerId || undefined,
       employee_id: selectedEmployeeId || undefined,
       seller_name: effectiveSellerName || undefined,
+      quote_id: quoteId || undefined,
     };
 
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
@@ -404,7 +411,7 @@ export function useCart() {
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber));
-          setCart([]); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setCart([]); setQuoteId(null); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
           // Não desativa splitMode automaticamente — usuário decide se mantém
@@ -424,13 +431,13 @@ export function useCart() {
       });
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
-      setCart([]); setIsProcessing(false);
+      setCart([]); setQuoteId(null); setIsProcessing(false);
       if (splitMode) setSplitPayments([]);
     }
   }
 
   function newSale() {
-    setLastSale(null); setCart([]); setIsProcessing(false);
+    setLastSale(null); setCart([]); setQuoteId(null); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -441,6 +448,7 @@ export function useCart() {
   }
 
   return {
+    quoteId, setQuoteId,
     cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,

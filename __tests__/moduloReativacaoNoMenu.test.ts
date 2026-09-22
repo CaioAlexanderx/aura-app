@@ -162,6 +162,8 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
       "Vendas",
       "Clientes e WhatsApp",
       "Ótica",
+      // 22/09/2026 — semi-vertical Matcon entra logo depois da Ótica (M1).
+      "Matcon",
       "Equipe",
       "Crescimento",
       "Admin",

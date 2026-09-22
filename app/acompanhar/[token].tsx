@@ -14,6 +14,19 @@
 //
 // A rota é pública em app/_layout.tsx (segments[0] === "acompanhar") e a
 // chamada usa skipAuth. O token é a credencial.
+//
+// 22/09/2026 (Matcon M1 — docs/matcon-faseamento-po-ux.md §3,
+// docs/CONTRACT_MATCON.md §M1): `tipo === "entrega"` entra do lado de
+// "oculos" (linhas ~108, ~130, ~194, ~232, ~249 de antes desta mudança —
+// procure pelos usos de `dados.tipo`/`rotuloSaldo`/`rotuloItens`/
+// `tituloAcompanhamento`/`rodapePedido` abaixo). Os textos por tipo/etapa
+// viraram funções puras em utils/acompanharTextos.ts (testadas em
+// __tests__/acompanharEntrega.test.ts). Campos do backend assumidos — todos
+// opcionais, documentados também em PublicTrack (services/studioApi.ts):
+//   - `tipo: "entrega"`
+//   - `itens[].entregue`, `itens[].total`, `itens[].unidade` (entrega parcial)
+//   - `proxima_entrega` (data 'YYYY-MM-DD', nullable)
+// Sem esses campos a tela é exatamente a de hoje ("oculos"/encomenda).
 // ============================================================
 import { useEffect, useState } from "react";
 import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, Platform } from "react-native";
@@ -22,6 +35,9 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { studioApi, type PublicTrack } from "@/services/studioApi";
 import { copyToClipboard } from "@/utils/clipboard";
+import {
+  tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega,
+} from "@/utils/acompanharTextos";
 
 const money = (v: number) =>
   "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -117,6 +133,13 @@ export default function AcompanharEncomenda() {
   const etapas = dados.etapas || [];
   const atual = dados.etapa_atual ?? 0;
   const saldo = dados.saldo;
+  const tipo = dados.tipo;
+  const titulo = tituloAcompanhamento({
+    tipo,
+    etapaAtualKey: etapas[atual]?.key ?? null,
+    atual,
+    totalEtapas: etapas.length,
+  });
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: 20, paddingBottom: 48, maxWidth: 560, alignSelf: "center", width: "100%" }}>
@@ -127,9 +150,7 @@ export default function AcompanharEncomenda() {
         Oi, {dados.cliente}!
       </Text>
       <Text style={{ fontSize: 15.5, color: C.ink2, marginTop: 4, lineHeight: 22 }}>
-        {(dados as any).tipo === "oculos"
-          ? (atual >= etapas.length - 1 ? "Seus óculos estão prontos para retirar." : "Acompanhe seus óculos por aqui.")
-          : (atual >= etapas.length - 1 ? "Sua encomenda está pronta." : "Acompanhe sua encomenda por aqui.")}
+        {titulo}
       </Text>
 
       {dados.imagem ? (
@@ -191,7 +212,7 @@ export default function AcompanharEncomenda() {
           valor, a data e o Pix a um toque. */}
       {saldo ? (
         <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 20, marginTop: 18 }}>
-          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{(dados as any).tipo === "oculos" ? "SALDO DOS ÓCULOS" : "SALDO DA ENCOMENDA"}</Text>
+          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{rotuloSaldo(tipo)}</Text>
           <Text style={{ fontSize: 28, fontWeight: "800", color: C.ink, marginTop: 6 }}>{money(saldo.valor)}</Text>
           <Text style={{ fontSize: 14.5, color: C.ink2, marginTop: 2 }}>
             {saldo.vencimento ? `para ${dataPorExtenso(saldo.vencimento)}` : ""}
@@ -229,13 +250,25 @@ export default function AcompanharEncomenda() {
 
       {dados.itens && dados.itens.length > 0 ? (
         <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 20, marginTop: 18 }}>
-          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{(dados as any).tipo === "oculos" ? "SEUS ÓCULOS" : "SEU PEDIDO"}</Text>
-          {dados.itens.map((it, i) => (
-            <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 10 }}>
-              <Text style={{ fontSize: 15, color: C.ink, flex: 1 }}>{it.nome}</Text>
-              <Text style={{ fontSize: 15, color: C.ink2, fontWeight: "700" }}>{it.qtd}×</Text>
-            </View>
-          ))}
+          <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{rotuloItens(tipo)}</Text>
+          {dados.itens.map((it, i) => {
+            // Matcon (entrega parcial): "6 de 10 sc" no lugar de "10×", e a
+            // frase do saldo quando entregue < total. Item sem
+            // entregue/total (óculos/encomenda de sempre) cai no "N×" de
+            // sempre — progresso/saldoFrase vêm null.
+            const { progresso, saldoFrase } = textoItemEntrega(it, dados.proxima_entrega);
+            return (
+              <View key={i} style={{ marginTop: 10 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                  <Text style={{ fontSize: 15, color: C.ink, flex: 1 }}>{it.nome}</Text>
+                  <Text style={{ fontSize: 15, color: C.ink2, fontWeight: "700" }}>{progresso ?? `${it.qtd}×`}</Text>
+                </View>
+                {saldoFrase ? (
+                  <Text style={{ fontSize: 12.5, color: C.warn, marginTop: 4, lineHeight: 17 }}>{saldoFrase}</Text>
+                ) : null}
+              </View>
+            );
+          })}
           {typeof dados.total === "number" ? (
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line }}>
               <Text style={{ fontSize: 14.5, color: C.ink2 }}>Total</Text>
@@ -246,7 +279,7 @@ export default function AcompanharEncomenda() {
       ) : null}
 
       <Text style={{ fontSize: 12, color: C.ink3, textAlign: "center", marginTop: 26 }}>
-        {(dados as any).tipo === "oculos" ? `${dados.pedido} · feito com Aura` : `Pedido #${dados.pedido} · feito com Aura Studio`}
+        {rodapePedido(tipo, dados.pedido)}
       </Text>
     </ScrollView>
   );
