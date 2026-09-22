@@ -2,12 +2,19 @@
 // AURA. — buildQuoteHtml
 // Gera HTML de orcamento para impressao
 // Logo do cliente + itens + total + rodape Aura
+//
+// 22/09/2026 (Matcon M0): o item pode trazer a unidade de venda. Com ela, a
+// coluna Qtd imprime "12,5 m²" (fmtQty, virgula e sufixo); sem ela, imprime
+// o numero cru como sempre imprimiu.
 // ============================================================
+
+import { fmtQty } from "@/utils/matconUnits";
 
 export type QuoteItem = {
   name: string;
   qty: number;
   unitPrice: number;
+  unit?: string | null;
 };
 
 export type QuoteOptions = {
@@ -38,10 +45,11 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
 
   var itemsHtml = opts.items.map(function(item, i) {
     var lineTotal = item.qty * item.unitPrice;
+    var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
     return '<tr>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937">' + (i + 1) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:500">' + escHtml(item.name) + '</td>' +
-      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:center">' + item.qty + '</td>' +
+      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:center">' + escHtml(qtyStr) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:right">' + fmtBrl(item.unitPrice) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:600;text-align:right">' + fmtBrl(lineTotal) + '</td>' +
       '</tr>';

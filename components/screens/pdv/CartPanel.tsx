@@ -30,6 +30,22 @@
 //     clicável mesmo faltando cliente/vendedora/caixa aberto.
 //   · `requiredHints` deixou de ser texto morto: cada aviso pode carregar um
 //     `onPress` que abre o seletor correspondente.
+//
+// 22/09/2026 (Matcon M0 — docs/matcon-faseamento-po-ux.md §2):
+//   · A quantidade do item passa a ser dirigida pela UNIDADE do produto, e só
+//     com `matcon_enabled` ligado. Unidade fracionada (m, m², m³, kg, g, L,
+//     ml, ton) → campo decimal mono tabular com o sufixo da unidade ao lado,
+//     sem os botões − +, porque ninguém clica 25 vezes pra chegar em 12,5 m².
+//     Qualquer outro caso → o stepper de sempre.
+//   · Com o toggle on, o teto do stepper sobe de 3 pra 6 dígitos (1.200
+//     tijolos cabem). Com o toggle OFF nada muda: stepper, parseInt,
+//     replace(/\D/g,"") e maxLength 3, item por item, unidade por unidade.
+//   · Abaixo do campo decimal, e só quando "arredondar para embalagem" está
+//     ligado na config e o produto tem fator de compra, entra a linha
+//     "= 6 caixas · 13,92 m² · sobra 1,42 m²". Ela INFORMA — não mexe na
+//     quantidade vendida (decisão de produto, registrada no contrato).
+//   · O botão "calcular ambiente" do mockup é M3. Não está aqui, nem como
+//     placeholder.
 // ============================================================
 import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -38,6 +54,10 @@ import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency, fmtInt } from "./types";
 import { MerchantLogo, useMerchantBrand } from "./MerchantLogo";
 import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
+import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
+import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem } from "./matconQty";
 
 export type CartDisplayItem = {
   productId: string;
@@ -46,6 +66,11 @@ export type CartDisplayItem = {
   price: number;
   qty: number;
   listPrice?: number;
+  // 22/09/2026 (Matcon M0). Os três são opcionais: item sem unidade — que é
+  // o caso de todo mundo hoje — renderiza o stepper de sempre.
+  unit?: string | null;
+  purchaseUnit?: string | null;
+  purchaseFactor?: number | null;
 };
 
 export type PayChip = { key: string; label: string; icon: string };
@@ -122,6 +147,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   } = props;
 
   const marca = useMerchantBrand();
+  // 22/09/2026 (Matcon M0): o toggle e o "arredondar para embalagem" vêm de
+  // pdv_settings. Loja sem Matcon lê `matcon_enabled: false` (o default do
+  // readMatconSettings) e daqui pra baixo nada do Matcon existe.
+  const { settings: pdvSettings } = usePdvSettings();
+  const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
   const showCpfInput = onCpfNaNotaChange !== undefined;
   const splitAvailable = onToggleSplit !== undefined; // fica off quando o pai não wireou
   const splitOn = !!splitMode && splitAvailable;
@@ -217,7 +247,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         <View style={s.meta}>
           <View>
             <Text style={s.metaK}>Itens</Text>
-            <Text style={s.metaV}>{itemCount}</Text>
+            {/* Com unidade fracionada a soma vira 22,5 — fmtQty escreve em
+                pt-BR. Fora do Matcon fica o número cru de sempre. */}
+            <Text style={s.metaV}>{matcon.matcon_enabled ? fmtQty(itemCount) : itemCount}</Text>
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>
@@ -262,6 +294,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onRemove={() => onRemove(it.productId)}
               onQtySet={qty => onSetQty?.(it.productId, qty)}
               onPriceChange={onPriceChange ? (price => onPriceChange(it.productId, price)) : undefined}
+              matconEnabled={matcon.matcon_enabled}
+              roundToPackage={matcon.matcon_round_to_package}
             />
           ))
         )}
@@ -642,6 +676,7 @@ function parseCurrencyInput(raw: string): number | null {
 
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
+  matconEnabled, roundToPackage,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
@@ -649,7 +684,22 @@ function CartItem({
   onRemove: () => void;
   onQtySet: (qty: number) => void;
   onPriceChange?: (price: number) => void;
+  /** 22/09/2026 (Matcon M0). Opcionais com default = comportamento de hoje:
+   *  quem renderiza o CartItem sem passar nada continua no stepper. */
+  matconEnabled?: boolean;
+  roundToPackage?: boolean;
 }) {
+  // Campo decimal só quando toggle on E a unidade é fracionada (§2 do doc).
+  const decimalQty = usaCampoDecimal(!!matconEnabled, item.unit);
+  const qtyMaxLen = qtyMaxLength(!!matconEnabled, item.unit);
+  const fraseEmbalagem = fraseDeEmbalagem({
+    matconEnabled: !!matconEnabled,
+    roundToPackage: !!roundToPackage,
+    qty: item.qty,
+    unit: item.unit,
+    purchaseUnit: item.purchaseUnit,
+    purchaseFactor: item.purchaseFactor,
+  });
   // Buffer pra edição de qty
   const [inputVal, setInputVal] = useState<string | null>(null);
   const isEditing = inputVal !== null;
@@ -663,14 +713,23 @@ function CartItem({
   const confirmTimer = useRef<any>(null);
 
   function handleFocus() {
-    setInputVal(String(item.qty));
+    // No campo decimal o buffer abre já em pt-BR ("12,5"), que é o que o
+    // vendedor vê — e o parseQtyInput lê de volta a vírgula sem reclamar.
+    setInputVal(decimalQty ? fmtQty(item.qty) : String(item.qty));
   }
 
   function handleCommit() {
     if (inputVal !== null) {
-      const n = parseInt(inputVal, 10);
-      if (!isNaN(n) && n > 0 && n !== item.qty) {
-        onQtySet(n);
+      if (decimalQty) {
+        // parseQtyInput aceita "12,5", "12.5" e "1.200,5"; devolve null pra
+        // vazio/zero/lixo — e aí o campo só volta pro valor que já estava.
+        const dec = parseQtyInput(inputVal);
+        if (dec !== null && dec !== item.qty) onQtySet(dec);
+      } else {
+        const n = parseInt(inputVal, 10);
+        if (!isNaN(n) && n > 0 && n !== item.qty) {
+          onQtySet(n);
+        }
       }
     }
     setInputVal(null);
@@ -791,29 +850,65 @@ function CartItem({
           </Text>
         )}
         <View style={{ flex: 1 }} />
-        <View style={s.qtyCtrl}>
-          <Pressable onPress={onDec} style={s.qtyBtn}>
-            <Text style={s.qtyBtnTxt}>−</Text>
-          </Pressable>
-          <TextInput
-            style={[
-              s.qtyVal,
-              IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
-            ]}
-            value={isEditing ? inputVal! : String(item.qty)}
-            onFocus={handleFocus}
-            onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
-            onBlur={handleCommit}
-            onSubmitEditing={handleCommit}
-            keyboardType="number-pad"
-            selectTextOnFocus
-            maxLength={3}
-          />
-          <Pressable onPress={onInc} style={s.qtyBtn}>
-            <Text style={s.qtyBtnTxt}>+</Text>
-          </Pressable>
-        </View>
+        {decimalQty ? (
+          /* Campo decimal: o número se digita, não se clica. Sem − e +,
+             com o sufixo da unidade em fonte menor ao lado (mockup .dec). */
+          <View style={s.decCtrl}>
+            <TextInput
+              testID={"carrinho-qty-" + item.productId}
+              style={[
+                s.decVal,
+                IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
+              ]}
+              value={isEditing ? inputVal! : fmtQty(item.qty)}
+              onFocus={handleFocus}
+              onChangeText={v => setInputVal(v.replace(/[^\d.,]/g, ""))}
+              onBlur={handleCommit}
+              onSubmitEditing={handleCommit}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+              maxLength={qtyMaxLen}
+            />
+            <Text style={s.decUnit}>{item.unit}</Text>
+          </View>
+        ) : (
+          <View style={s.qtyCtrl}>
+            <Pressable testID={"carrinho-dec-" + item.productId} onPress={onDec} style={s.qtyBtn}>
+              <Text style={s.qtyBtnTxt}>−</Text>
+            </Pressable>
+            <TextInput
+              testID={"carrinho-qty-" + item.productId}
+              style={[
+                s.qtyVal,
+                IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
+              ]}
+              value={isEditing ? inputVal! : String(item.qty)}
+              onFocus={handleFocus}
+              onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
+              onBlur={handleCommit}
+              onSubmitEditing={handleCommit}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={qtyMaxLen}
+            />
+            <Pressable testID={"carrinho-inc-" + item.productId} onPress={onInc} style={s.qtyBtn}>
+              <Text style={s.qtyBtnTxt}>+</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
+
+      {/* Linha 3 (só Matcon): "= 6 caixas · 13,92 m² · sobra 1,42 m²".
+          É o momento "olha isso" do M0 (§4b do doc) — e é só informação:
+          a venda continua sendo os 12,5 m² que o vendedor digitou. */}
+      {fraseEmbalagem ? (
+        <View style={s.itemRow3}>
+          <View style={s.itemIndent} />
+          <Text testID={"carrinho-embalagem-" + item.productId} style={s.pkgHint} numberOfLines={2}>
+            {fraseEmbalagem}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -876,6 +971,33 @@ const s = StyleSheet.create({
     fontSize: 11, color: Colors.ink, fontWeight: "700",
     minWidth: 60, paddingVertical: 0,
     textAlign: "right",
+  },
+  // Linha 3 (Matcon): a frase das embalagens, indentada como a linha 2.
+  itemRow3: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  pkgHint: {
+    flex: 1, minWidth: 0,
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 10.5, color: Colors.violet3, fontWeight: "600", letterSpacing: 0.2,
+    backgroundColor: Colors.violetD,
+    borderWidth: 1, borderColor: Colors.border2, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5,
+  },
+  // Campo decimal do Matcon (mockup .dec): borda violeta, número à direita e
+  // a unidade em fonte menor ao lado. Sem − e + de propósito.
+  decCtrl: {
+    flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0,
+    paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: Glass.lineSoft, borderRadius: 7,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.45)",
+  },
+  decVal: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 13, color: Colors.ink, fontWeight: "700",
+    minWidth: 52, textAlign: "right", paddingVertical: 0,
+  },
+  decUnit: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 10, color: Colors.ink3, fontWeight: "600",
   },
   // qtyCtrl tem espaço próprio na linha 2 — sem aperto.
   qtyCtrl: { flexDirection: "row", alignItems: "center", gap: 4, padding: 2, backgroundColor: Glass.lineSoft, borderRadius: 7, flexShrink: 0 },

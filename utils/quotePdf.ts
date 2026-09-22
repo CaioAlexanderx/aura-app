@@ -14,12 +14,21 @@ import { Platform } from "react-native";
 //   - Footer: "Aura - getaura.com.br"
 //
 // Sem persistencia no DB. Sem migration. Todos os planos.
+//
+// 22/09/2026 (Matcon M0): item pode trazer `unit`. Com ela, a coluna Qtd
+// imprime "12,5 m²" (fmtQty); sem ela, imprime o numero cru de sempre.
+// Este e o caminho que o botao "Imprimir orcamento" do Caixa usa de fato
+// (openQuotePdf) — o components/screens/pdv/buildQuoteHtml.ts recebeu a
+// mesma mudanca pra os dois nao divergirem.
 // ============================================================
+
+import { fmtQty } from "@/utils/matconUnits";
 
 export type QuoteItem = {
   name: string;
   qty: number;
   unitPrice: number;
+  unit?: string | null;
 };
 
 export type QuoteData = {
@@ -59,9 +68,10 @@ export function buildQuoteHtml(data: QuoteData): string {
 
   var itemRows = data.items.map(function(item) {
     var subtotal = item.qty * item.unitPrice;
+    var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
     return '<tr>' +
       '<td>' + escapeHtml(item.name) + '</td>' +
-      '<td class="num">' + item.qty + '</td>' +
+      '<td class="num">' + escapeHtml(qtyStr) + '</td>' +
       '<td class="num">' + fmt(item.unitPrice) + '</td>' +
       '<td class="num">' + fmt(subtotal) + '</td>' +
       '</tr>';
