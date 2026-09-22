@@ -67,7 +67,8 @@ import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
-import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem } from "./matconQty";
+import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente } from "./matconQty";
+import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 
 export type CartDisplayItem = {
   productId: string;
@@ -323,6 +324,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onPriceChange={onPriceChange ? (price => onPriceChange(it.productId, price)) : undefined}
               matconEnabled={matcon.matcon_enabled}
               roundToPackage={matcon.matcon_round_to_package}
+              defaultWastePct={matcon.matcon_default_waste_pct}
             />
           ))
         )}
@@ -756,7 +758,7 @@ function parseCurrencyInput(raw: string): number | null {
 
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
-  matconEnabled, roundToPackage,
+  matconEnabled, roundToPackage, defaultWastePct,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
@@ -768,6 +770,9 @@ function CartItem({
    *  quem renderiza o CartItem sem passar nada continua no stepper. */
   matconEnabled?: boolean;
   roundToPackage?: boolean;
+  /** 22/09/2026 (Matcon M3). Perda padrão da config, sugerida na
+   *  calculadora de ambiente. Só chega aqui com o toggle ligado. */
+  defaultWastePct?: number;
 }) {
   // Campo decimal só quando toggle on E a unidade é fracionada (§2 do doc).
   const decimalQty = usaCampoDecimal(!!matconEnabled, item.unit);
@@ -780,6 +785,12 @@ function CartItem({
     purchaseUnit: item.purchaseUnit,
     purchaseFactor: item.purchaseFactor,
   });
+  // 22/09/2026 (Matcon M3, §4b): o botão "calcular ambiente" só existe em
+  // produto de piso — unidade m², com o toggle ligado. No cimento em "sc"
+  // ele não aparece: ninguém calcula ambiente de saco.
+  const temCalculadora = usaCalculadoraAmbiente(!!matconEnabled, item.unit);
+  const [calcAberta, setCalcAberta] = useState(false);
+
   // Buffer pra edição de qty
   const [inputVal, setInputVal] = useState<string | null>(null);
   const isEditing = inputVal !== null;
@@ -981,13 +992,45 @@ function CartItem({
       {/* Linha 3 (só Matcon): "= 6 caixas · 13,92 m² · sobra 1,42 m²".
           É o momento "olha isso" do M0 (§4b do doc) — e é só informação:
           a venda continua sendo os 12,5 m² que o vendedor digitou. */}
-      {fraseEmbalagem ? (
+      {fraseEmbalagem || temCalculadora ? (
         <View style={s.itemRow3}>
           <View style={s.itemIndent} />
-          <Text testID={"carrinho-embalagem-" + item.productId} style={s.pkgHint} numberOfLines={2}>
-            {fraseEmbalagem}
-          </Text>
+          {fraseEmbalagem ? (
+            <Text testID={"carrinho-embalagem-" + item.productId} style={s.pkgHint} numberOfLines={2}>
+              {fraseEmbalagem}
+            </Text>
+          ) : (
+            <View style={{ flex: 1, minWidth: 0 }} />
+          )}
+          {/* Sempre visível (regra 7 do CLAUDE.md): nada de hover-reveal —
+              no balcão a venda é no dedo, em tela de toque. */}
+          {temCalculadora ? (
+            <Pressable
+              testID={"carrinho-calcular-" + item.productId}
+              onPress={() => setCalcAberta(true)}
+              style={s.calcBtn}
+              accessibilityLabel={"Calcular ambiente de " + item.name}
+            >
+              <Icon name="calculator" size={11} color={Colors.violet3} />
+              <Text style={s.calcBtnTxt} numberOfLines={1}>calcular ambiente</Text>
+            </Pressable>
+          ) : null}
         </View>
+      ) : null}
+
+      {/* A folha do M3: sobe no celular, vira balão no computador. Devolve a
+          quantidade pelo mesmo caminho do campo decimal (onQtySet). */}
+      {temCalculadora ? (
+        <CalculadoraAmbiente
+          visible={calcAberta}
+          onClose={() => setCalcAberta(false)}
+          productName={item.name}
+          unit={item.unit || "m²"}
+          purchaseUnitLabel={item.purchaseUnit}
+          purchaseFactor={item.purchaseFactor}
+          defaultWastePct={defaultWastePct ?? 0}
+          onUse={qty => onQtySet(qty)}
+        />
       ) : null}
     </View>
   );
@@ -1062,6 +1105,16 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 5,
   },
+  // Botão "calcular ambiente" (M3): mesma linha da frase das embalagens,
+  // encolhe antes dela e nunca some.
+  calcBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0,
+    marginLeft: 6,
+    paddingHorizontal: 9, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.border2,
+    backgroundColor: Colors.bg3,
+  },
+  calcBtnTxt: { fontSize: 10.5, fontWeight: "700", color: Colors.violet3, letterSpacing: 0.2 },
   // Campo decimal do Matcon (mockup .dec): borda violeta, número à direita e
   // a unidade em fonte menor ao lado. Sem − e + de propósito.
   decCtrl: {

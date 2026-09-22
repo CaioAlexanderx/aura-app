@@ -30,6 +30,17 @@ export function usaCampoDecimal(matconEnabled: boolean, unit?: string | null): b
   return isFractionalUnit(unit);
 }
 
+// M3 (docs/matcon-faseamento-po-ux.md §4b): o botao "calcular ambiente" do
+// item do carrinho. Calcula-se ambiente de PISO — m², e so m². Piso em m²
+// sim; cabo em m e concreto em m³ nao (a folha pergunta largura x
+// comprimento, que so faz sentido em area). Herda a regra do campo decimal:
+// sem toggle, nem existe.
+export function usaCalculadoraAmbiente(matconEnabled: boolean, unit?: string | null): boolean {
+  if (!usaCampoDecimal(matconEnabled, unit)) return false;
+  var norm = (unit || "").trim().toLowerCase();
+  return norm === "m²" || norm === "m2";
+}
+
 export function qtyMaxLength(matconEnabled: boolean, unit?: string | null): number {
   if (usaCampoDecimal(matconEnabled, unit)) return QTY_MAXLEN_DECIMAL;
   return matconEnabled ? QTY_MAXLEN_MATCON : QTY_MAXLEN_PADRAO;
