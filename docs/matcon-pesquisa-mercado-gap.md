@@ -171,7 +171,7 @@ Você pediu "atender materiais de construção **na totalidade**". Eu acho que "
 2. **O gargalo real não é matcon, é a fundação.** Estoque fracionado + unidade de medida + conversão é um refactor transversal que toca estoque, variantes, PDV, NF-e e relatórios. Se fizer isso bem, **as outras verticais ganham junto** (Food em kg, Studio em metro). Se fizer só as telas de matcon por cima do estoque inteiro, você cria dívida técnica em cima de dívida técnica.
 3. **Mercado estável pede prova, não aposta.** Com 51% das lojas com faturamento parado, o jeito certo é: fundação + 3 features matadoras, colocar em 5 lojas piloto, e deixar as 5 lojas dizerem o que falta. Elas vão pedir coisas que nenhum blog de ERP lista.
 
-**O que eu faria no lugar de "totalidade":**
+**O que eu faria no lugar de "totalidade"** (faseamento detalhado e revisado com chapéu de PO + UX em `docs/matcon-faseamento-po-ux.md`)**:**
 
 | Fase | O que entra | Por quê |
 |---|---|---|
