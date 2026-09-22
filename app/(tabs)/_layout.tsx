@@ -112,8 +112,10 @@ const NAV: NavSection[] = [
   // da Otica: opt-in por pdv_settings.matcon_enabled (`matconToggle`, filtrado
   // em buildRawNav), sem shell nem paleta propria. Cada item com `mod`
   // PROPRIO (regra 3 do CLAUDE.md), ja cadastrado em MODULE_PLAN_MAP e em
-  // PERM_TO_MODULES sob a umbrella matcon.access. "Profissionais" (M3,
-  // ranking do Clube do Profissional) entra depois de Entregas — o gate
+  // PERM_TO_MODULES sob a umbrella matcon.access. "Clube do pedreiro" (M3,
+  // ranking do clube; rota /matcon/profissionais, rotulo trocado em
+  // 22/09/2026 porque "Profissionais" nao dizia nada pro dono da loja)
+  // entra depois de Entregas — o gate
   // fino de matcon_club_enabled fica dentro da propria tela, nao aqui:
   // o item so some com matconToggle (Matcon desligado), nunca so porque o
   // clube esta desligado. No celular estes itens caem no menu "Mais", como
@@ -122,7 +124,7 @@ const NAV: NavSection[] = [
   // tela nova de M4 (lote e devolucao de sobra entram em telas que ja
   // existem, docs/CONTRACT_MATCON.md §M4). Mesmo desenho: mod PROPRIO
   // (matcon.compras, ja em MODULE_PLAN_MAP/PERM_TO_MODULES) e matconToggle.
-  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais", ic: "building", mod: "matcon.profissionais", matconToggle: true },{ r: "/matcon/compras", l: "Compras", ic: "package", mod: "matcon.compras", matconToggle: true }]},
+  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Clube do pedreiro", ic: "building", mod: "matcon.profissionais", matconToggle: true },{ r: "/matcon/compras", l: "Compras", ic: "package", mod: "matcon.compras", matconToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
