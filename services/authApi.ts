@@ -117,6 +117,15 @@ export type PdvSettings = {
   // definir -- ver docs/CONTRACT_MATCON.md (M0 depende dela antes do PR
   // de front poder ser fechado; ate la o campo so existe no tipo).
   matcon_enabled?: boolean;
+  // 22/09/2026 -- demais chaves do Matcon (docs/CONTRACT_MATCON.md §1).
+  // Defaults e leitura com fallback em constants/matcon.ts
+  // (readMatconSettings); nenhuma tela le estas chaves cruas.
+  matcon_units?: string[];
+  matcon_default_waste_pct?: number;
+  matcon_round_to_package?: boolean;
+  matcon_default_delivery_days?: number;
+  matcon_quote_valid_days?: number;
+  matcon_quote_warn_days?: number;
 };
 
 export var authApi = {
