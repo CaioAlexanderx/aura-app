@@ -160,6 +160,25 @@ Lote/tonalidade/bitola (campo de lote na entrada + alerta "lote misturado" na ve
 
 ---
 
+## 4b. Onde o diferencial brilha — "bonito e fácil" como critério de aceite
+
+O concorrente de matcon é feio, cinza e cheio de formulário (CISS, GestãoFlex, o legado de desktop). O genérico bonito (Bling/Tiny) não entende m². A Aura só ganha se cada fase tiver **um momento em que o dono da loja mostra a tela para o vizinho**. Esses momentos viram critério de aceite do PR — sem eles, a fase não fecha.
+
+| Fase | O momento "olha isso" | Por que nenhum concorrente faz |
+|---|---|---|
+| **M0** | Digitar `12,5` no piso e ver embaixo, na hora, **"= 6 caixas · 13,92 m² · sobra 1,42 m²"**. Ligar o toggle e um **tour com spotlight** (regra 6) leva o dono direto ao produto para escolher a unidade — sem manual. | ERP de matcon exige cadastrar "fator de conversão" numa aba fiscal. Aqui é uma frase. |
+| **M1** | O cliente recebe no WhatsApp um **orçamento com a marca da loja**, abre no celular, aprova com um toque — e o vendedor vê o card pular de "Aberto" para "Aprovado" na esteira. Depois: **"seu pedido saiu para entrega"** com link, como o rastreio de e-commerce. | O padrão do setor é orçamento em papel que o cliente perde. Rastreio de entrega de material de construção **não existe** no varejo pequeno. |
+| **M2** | Em vez de "CSOSN 500 / CST 60", uma pergunta: **"O imposto desse produto já veio recolhido na nota do fornecedor?"** — com o sistema sugerindo a resposta pelo NCM. | O concorrente joga a tabela do contador na cara do lojista. |
+| **M3** | O vendedor toca em **"calcular ambiente"** no piso, digita 3,5 × 4,2, o sistema devolve as caixas — e o pedreiro que indicou recebe **no WhatsApp** "você ganhou 120 pontos com a compra da dona Marlene". | Clube do profissional é coisa de Leroy Merlin. A lojinha de bairro nunca teve. |
+
+Regras que sustentam isso (e que o mockup precisa provar):
+
+1. **Uma frase, não um formulário.** Conversão de unidade, fiscal, perda — cada configuração é uma frase em português com um número editável no meio (`Compro por [caixa] de [2,32] m²`). Se precisar de tooltip para explicar, está errado.
+2. **A esteira mostra o dinheiro.** Cabeçalho de Orçamentos e Entregas com o valor parado em cada estação (`R$ 18.400 em 7 orçamentos vencendo`). É o número que faz o dono abrir a tela de manhã.
+3. **O cliente final também vê algo bonito.** Orçamento público e rastreio de entrega com a marca da loja (já existe o shell no Studio). O lojista percebe que a Aura faz a loja *dele* parecer grande.
+4. **Zero jargão de ERP nas telas.** "Saldo a entregar", não "pendência de expedição". "Já veio com imposto recolhido", não "ST". "Compro por caixa", não "unidade de compra / fator".
+5. **Primeiro dia sem tela vazia.** Ao ligar o toggle: tour com spotlight até o cadastro de produto; esteiras vazias ensinam o primeiro passo em uma linha.
+
 ## 5. O que mudou vs. a proposta anterior — resumo
 
 | Antes | Agora | Motivo |
