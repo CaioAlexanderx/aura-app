@@ -33,6 +33,13 @@
 //      a lojista clicar em Salvar pra ver a foto aparecer seria mentira).
 //
 // Shell copiado do TrocaModal (DNA canônica de modal, CLAUDE.md).
+//
+// 22/09/2026 — PERFIL DE CADASTRO (item-form/perfis.ts, mockup
+// docs/mockups/matcon-cadastro-produto.html). A subvertical ligada no
+// pdv_settings escolhe textos, exemplos, ordem e perguntas. Matcon: "Vendo
+// por" antes do preço, "Como chega do fornecedor", estoque por lote ou por
+// cor e medida, Entrega (peso), Nota fiscal no topo da direita e Códigos
+// num card próprio. Sem Matcon: PERFIL_PADRAO e o modal de antes.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -62,17 +69,35 @@ import { SecaoPreco } from "./item-form/SecaoPreco";
 import { SecaoEstoque } from "./item-form/SecaoEstoque";
 import { SecaoDescricao } from "./item-form/SecaoDescricao";
 import { SecaoFotos } from "./item-form/SecaoFotos";
-import { SecaoCodigos } from "./item-form/SecaoCodigos";
+import { SecaoCodigos, SecaoNotaFiscal } from "./item-form/SecaoCodigos";
+import { SecaoEntrega } from "./item-form/SecaoEntrega";
 import { CategoriaSheet, useBreadcrumbLabel } from "./item-form/CategorySelector";
 import { useGaleriaDoProduto } from "./item-form/GaleriaDeFotos";
+import { PERFIL_PADRAO, perfilDoCadastro } from "./item-form/perfis";
+import { usaLote } from "@/utils/matconLots";
+import { matconApi } from "@/services/matconApi";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico, gravarUltimaCategoria,
   lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
-  usaDuasColunas, valorDaMascara,
-  type CorDoItem, type FotoPendente, type ItemType, type StockMode,
+  usaDuasColunas, valorDaMascara, novaLinhaDeLote, lotesParaGravar, totalDosLotes,
+  type CorDoItem, type FotoPendente, type ItemType, type LinhaDeLote, type StockMode,
 } from "./item-form/types";
+
+// "Salvar e cadastrar outro" no perfil Matcon: o que passa para o próximo
+// produto (decisão do Caio, 22/09/2026). A categoria já passa sozinha
+// (última usada); o resto — nome, preço, custo, estoque, fotos, descrição —
+// começa limpo.
+type Manter = {
+  unidade: string;
+  purchaseUnit: string | null;
+  purchaseFactorTxt: string;
+  ncm: string;
+  cest: string;
+  icmsStPaid: boolean | null;
+  origem: number | null;
+};
 
 const VAZIO: CategorySelection = { primaryCategoryId: null, alsoInIds: [] };
 
@@ -112,10 +137,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const { byId: categoriaPorId, assignProductCategories } = useCategories();
   const breadcrumbLabel = useBreadcrumbLabel();
   // 22/09/2026 (Matcon M0): única leitura das configs do módulo neste
-  // modal. Loja sem o toggle nunca lê matconUnits/purchaseUnit — os
-  // props ficam undefined e SecaoEstoque renderiza exatamente como hoje.
+  // modal. Loja sem o toggle recebe o perfil padrão e as seções
+  // renderizam exatamente como antes do Matcon.
   const { settings: pdvSettings } = usePdvSettings();
   const matcon = readMatconSettings(pdvSettings);
+  // 22/09/2026 — perfil de cadastro (item-form/perfis.ts). Loja sem Matcon:
+  // PERFIL_PADRAO, e o modal é o de hoje. Vem do pdv_settings da empresa
+  // ativa (usePdvSettings), então no multi-CNPJ cada loja tem a sua cara.
+  const perfilDaLoja = perfilDoCadastro(pdvSettings);
 
   // Alvo da edição: vem da prop, mas o banner de duplicata pode TROCAR
   // pra edição do produto que já existe sem fechar o modal.
@@ -144,12 +173,17 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [barcode, setBarcode] = useState("");
   const [ncm, setNcm] = useState("");
   // 22/09/2026 (Matcon M2, docs/CONTRACT_MATCON.md §M2): fiscal do Simples.
-  // Só a seção lê `matcon.matcon_enabled` (SecaoCodigos com matconOn); a
+  // Só o perfil Matcon mostra as perguntas (SecaoNotaFiscal); a
   // semente/gravação abaixo é neutra pra loja sem o módulo (ncm/cest
   // seguem o mesmo padrão: string vazia no estado, null no PATCH).
   const [cest, setCest] = useState("");
   const [icmsStPaid, setIcmsStPaid] = useState<boolean | null>(null);
   const [origem, setOrigem] = useState<number | null>(null);
+  // 22/09/2026 (perfil Matcon): marca da ficha, peso por unidade (Entrega,
+  // weight_kg) e as pilhas que já estão na prateleira (lotes do M4).
+  const [marca, setMarca] = useState("");
+  const [pesoTxt, setPesoTxt] = useState("");
+  const [lotes, setLotes] = useState<LinhaDeLote[]>([]);
   const [cores, setCores] = useState<CorDoItem[]>([]);
   const [tamanhos, setTamanhos] = useState<string[]>([]);
   const [celulas, setCelulas] = useState<Record<string, string>>({});
@@ -182,6 +216,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const modoEdicao = !!alvo;
   const productId = alvo?.id || null;
   const isProduto = type === "product";
+  // O perfil é de produto: serviço usa sempre o padrão.
+  const perfil = isProduto ? perfilDaLoja : PERFIL_PADRAO;
+  // "Por lote e tonalidade": perfil Matcon + lote ligado na config + m²/m³,
+  // e só no cadastro (depois, o lote entra pela nota do fornecedor).
+  const lotesDisponiveis = isProduto && !modoEdicao && perfil.estoque.lotes && usaLote(matcon, unidade);
 
   const filaRef = useRef<FotoPendente[]>([]);
   const panelRef = useRef<any>(null);
@@ -271,14 +310,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     : (primeiraPendente ? "data:" + primeiraPendente.contentType + ";base64," + primeiraPendente.base64 : null);
 
   // ── semear / limpar ──────────────────────────────────────
-  const semear = useCallback((prod: Product | null, tipo: ItemType) => {
+  const semear = useCallback((prod: Product | null, tipo: ItemType, manter?: Manter | null) => {
     const t: ItemType = prod ? (prod.unit === "srv" ? "service" : "product") : tipo;
     setAlvo(prod);
     setType(t);
     setNome(prod?.name || "");
     setPreco(prod ? mascaraDeValor(prod.price) : "");
     setCusto(prod ? mascaraDeValor(prod.cost) : "");
-    setUnidade(prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un");
+    setUnidade(manter ? manter.unidade : (prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un"));
     // Matcon M0: estoque/mínimo em decimal com vírgula quando a unidade é
     // fracionada e o toggle está ligado — senão, o mesmo String(inteiro)
     // de sempre (fmtQty de um inteiro sem unit é só o número).
@@ -286,8 +325,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const decimalNaSemente = matcon.matcon_enabled && estoqueEmDecimal(unidadeSemente);
     setEstoqueTxt(prod ? (decimalNaSemente ? fmtQty(prod.stock) : String(prod.stock)) : "");
     setMinimoTxt(prod ? (decimalNaSemente ? fmtQty(prod.minStock) : String(prod.minStock)) : "");
-    setPurchaseUnit((prod as any)?.purchaseUnit ?? null);
-    setPurchaseFactorTxt((prod as any)?.purchaseFactor != null ? fmtQty((prod as any).purchaseFactor) : "");
+    setPurchaseUnit(manter ? manter.purchaseUnit : ((prod as any)?.purchaseUnit ?? null));
+    setPurchaseFactorTxt(manter ? manter.purchaseFactorTxt : ((prod as any)?.purchaseFactor != null ? fmtQty((prod as any).purchaseFactor) : ""));
+    setMarca(prod?.brand || "");
+    setPesoTxt(prod?.weightKg != null && prod.weightKg > 0 ? fmtQty(prod.weightKg) : "");
+    setLotes([]);
     const bruto = prod?.notes || "";
     if (t === "service") {
       // A coluna manda; sem coluna, o sufixo antigo da descrição é lido e
@@ -306,10 +348,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setCuidados((prod as any)?.cuidados || "");
     setSku(prod && prod.code && prod.code !== "---" ? prod.code : "");
     setBarcode(prod?.barcode || "");
-    setNcm(prod?.ncm || "");
-    setCest((prod as any)?.cest || "");
-    setIcmsStPaid((prod as any)?.icmsStPaid ?? null);
-    setOrigem((prod as any)?.origem ?? null);
+    setNcm(manter ? manter.ncm : (prod?.ncm || ""));
+    setCest(manter ? manter.cest : ((prod as any)?.cest || ""));
+    setIcmsStPaid(manter ? manter.icmsStPaid : ((prod as any)?.icmsStPaid ?? null));
+    setOrigem(manter ? manter.origem : ((prod as any)?.origem ?? null));
     setCores([]);
     setTamanhos([]);
     setCelulas({});
@@ -408,6 +450,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const estoqueSimples = estoqueFracionado ? (parseQtyInput(estoqueTxt) ?? 0) : (parseInt(estoqueTxt, 10) || 0);
     const minimoSimples = estoqueFracionado ? (parseQtyInput(minimoTxt) ?? 0) : (parseInt(minimoTxt, 10) || 0);
     const fatorCompra = purchaseFactorTxt.trim() ? parseQtyInput(purchaseFactorTxt) : null;
+    // 22/09/2026 (perfil Matcon): por lote, o estoque do produto é a soma
+    // das pilhas — ninguém digita o total duas vezes. Cada pilha vira um
+    // lote depois do POST (gravarLotes).
+    const porLote = isProduto && stockMode === "lots";
+    const estoqueDosLotes = porLote ? totalDosLotes(lotes, parseQtyInput) : 0;
     return {
       id,
       name: nome.trim(),
@@ -422,7 +469,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // Com variações e grade que NÃO vai ser gravada, stock fica undefined
       // e some do JSON: o PATCH não toca no estoque do pai, que é a soma
       // das variações gravada pelo último PUT (auditoria 10/09).
-      stock: !isProduto ? 0 : (temVariantes ? (vaiGravarGrade ? estoqueDaGrade : (undefined as any)) : estoqueSimples),
+      stock: !isProduto ? 0 : (temVariantes ? (vaiGravarGrade ? estoqueDaGrade : (undefined as any)) : (porLote ? estoqueDosLotes : estoqueSimples)),
       minStock: isProduto ? minimoSimples : 0,
       unit: isProduto ? unidade : "srv",
       // 22/09/2026 (Matcon M0): "Compro por [x] de [n] u." — fator vazio
@@ -450,6 +497,13 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       cest: isProduto && cest.trim() ? cest.trim() : null,
       icmsStPaid: isProduto ? icmsStPaid : null,
       origem: isProduto ? origem : null,
+      // 22/09/2026 (perfil Matcon). Fora do perfil os dois ficam undefined,
+      // somem do JSON e o POST/PATCH não toca nas colunas — igual a hoje.
+      // Dentro dele, vazio vira null (limpa), como o purchaseFactor.
+      weightKg: isProduto && perfil.entrega
+        ? (pesoTxt.trim() ? parseQtyInput(pesoTxt) : null)
+        : undefined,
+      marca: isProduto && perfil.descricao.ficha.some((l) => l.campo === "brand") ? marca.trim() : undefined,
     } as Product;
   }
 
@@ -477,6 +531,25 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     } catch (e: any) {
       toast.error(e?.message || "Erro ao salvar cores e tamanhos");
       return false;
+    }
+  }
+
+  async function gravarLotes(id: string) {
+    if (!company?.id) return;
+    const linhas = lotesParaGravar(lotes, parseQtyInput);
+    let falhas = 0;
+    for (const l of linhas) {
+      try {
+        await matconApi.createLot(company.id, id, l);
+      } catch (_) {
+        falhas++;
+      }
+    }
+    if (linhas.length > 0) qc.invalidateQueries({ queryKey: ["products", company.id] });
+    if (falhas > 0) {
+      toast.error(falhas === 1
+        ? "O produto foi salvo com o estoque total, mas um lote não foi gravado."
+        : "O produto foi salvo com o estoque total, mas " + falhas + " lotes não foram gravados.");
     }
   }
 
@@ -599,6 +672,13 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         }
       }
 
+      // Perfil Matcon, por lote: o produto já nasceu com o total; cada pilha
+      // vira um lote (POST /products/:id/lots, M4). Linha em branco não
+      // grava nada. Falha não desfaz o produto — avisa.
+      if (isProduto && stockMode === "lots") {
+        await gravarLotes(String(criado.id));
+      }
+
       onSaved?.();
       // O Salvar termina aqui. As fotos sobem soltas a partir do ref: fechar
       // ou começar o próximo item não espera o upload nem é atropelado por
@@ -606,7 +686,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       void subirFila(criado.id);
 
       if (cadastrarOutro) {
-        semear(null, type);
+        // Perfil Matcon: categoria (já vem sozinha), unidade, "compro por" e
+        // as respostas fiscais passam para o próximo produto.
+        semear(null, type, perfil.manterNoProximo ? {
+          unidade, purchaseUnit, purchaseFactorTxt, ncm, cest, icmsStPaid, origem,
+        } : null);
         toast.success("Salvo. Próximo item");
       } else {
         onClose();
@@ -638,6 +722,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       preco: precoNum, custo: valorDaMascara(custo), pendentes: pendentes.length,
       cores: cores.length, tamanhos: tamanhos.length, estoque: estoqueTxt,
       descricao, sku, barcode, ncm, duracao, cest,
+      lotes: stockMode === "lots" ? lotes.filter((l) => (l.codigo + l.qtd + l.tonalidade + l.bitola).trim()).length : 0,
     };
   }
   // Na edição, foto de cor nova esperando na fila também é algo a perder.
@@ -741,6 +826,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       : resumoDoItem({
           nome, preco: precoNum, isProduto, stockMode, cores, tamanhos,
           minutos: duracaoParaMinutos(duracao),
+          abreviacaoDoTamanho: perfil.estoque.abreviacaoDoTamanho,
         }));
   const atalho = modoEdicao ? "Ctrl+Enter" : "Enter";
 
@@ -785,8 +871,18 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
       autoFocus={!modoEdicao}
       narrow={narrow}
+      perfil={perfil}
     />
   );
+
+  // Trocar a unidade: se o estoque estava "por lote" e a unidade nova não
+  // tem lote (só m²/m³), volta para a quantidade única — as linhas de lote
+  // ainda não foram gravadas, nada se perde no servidor.
+  function mudarUnidade(v: string) {
+    setUnidade(v);
+    setSujo(true);
+    if (stockMode === "lots" && !usaLote(matcon, v)) setStockMode("single");
+  }
 
   const secPreco = (
     <SecaoPreco
@@ -796,6 +892,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       custo={custo} onCusto={(v) => { setCusto(v); setSujo(true); }}
       duracao={duracao} onDuracao={(v) => { setDuracao(v); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
+      perfil={perfil}
+      unidade={unidade} onUnidade={mudarUnidade}
+      unidadesDaLoja={matcon.matcon_units}
+      purchaseUnit={purchaseUnit} onPurchaseUnit={(v) => { setPurchaseUnit(v); setSujo(true); }}
+      purchaseFactor={purchaseFactorTxt} onPurchaseFactor={(v) => { setPurchaseFactorTxt(v); setSujo(true); }}
     />
   );
 
@@ -804,11 +905,17 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       narrow={narrow}
       modoEdicao={modoEdicao}
       avisoDoPai={stockMode === "variants" ? avisoPai : null}
-      unidade={unidade} onUnidade={(v) => { setUnidade(v); setSujo(true); }}
+      unidade={unidade} onUnidade={mudarUnidade}
       stockMode={stockMode} onStockMode={(v) => {
         if (v === stockMode) return;
-        if (v === "single" && modoEdicao && servidorTemVariacoes && (cores.length > 0 || tamanhos.length > 0)) {
-          toast.info("Para voltar à quantidade única, remova antes as cores e os tamanhos.");
+        if (v !== "variants" && modoEdicao && servidorTemVariacoes && (cores.length > 0 || tamanhos.length > 0)) {
+          toast.info("Para voltar à quantidade única, remova antes as cores e os " + perfil.estoque.rotuloDosTamanhos.toLowerCase() + ".");
+          return;
+        }
+        // Por lote: nasce com uma linha em branco para a primeira pilha.
+        if (v === "lots") {
+          if (lotes.length === 0) setLotes([novaLinhaDeLote()]);
+          setStockMode(v); setSujo(true);
           return;
         }
         setStockMode(v); setSujo(true); gradeTocadaRef.current = true; setGradeSuja(true);
@@ -820,10 +927,22 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       celulas={celulas} onCelula={(k, v) => { setCelulas((c) => ({ ...c, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       barras={barras} onBarra={(k, v) => { setBarras((b) => ({ ...b, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
-      matconEnabled={matcon.matcon_enabled}
-      matconUnits={matcon.matcon_units}
-      purchaseUnit={purchaseUnit} onPurchaseUnit={(v) => { setPurchaseUnit(v); setSujo(true); }}
-      purchaseFactor={purchaseFactorTxt} onPurchaseFactor={(v) => { setPurchaseFactorTxt(v); setSujo(true); }}
+      perfil={perfil}
+      purchaseUnit={purchaseUnit}
+      purchaseFactor={purchaseFactorTxt}
+      lotesDisponiveis={lotesDisponiveis}
+      lotes={lotes} onLotes={(v) => { setLotes(v); setSujo(true); }}
+    />
+  ) : null;
+
+  // Perfil Matcon: "Cada m² pesa [21,5] kg." (weight_kg).
+  const secEntrega = isProduto && perfil.entrega ? (
+    <SecaoEntrega
+      unidade={unidade}
+      peso={pesoTxt} onPeso={(v) => { setPesoTxt(v); setSujo(true); }}
+      purchaseUnit={purchaseUnit}
+      purchaseFactor={purchaseFactorTxt}
+      onSubmit={() => { if (!modoEdicao) salvar(false); }}
     />
   ) : null;
 
@@ -838,6 +957,12 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       material={material} onMaterial={(v) => { setMaterial(v); setSujo(true); }}
       medidas={medidas} onMedidas={(v) => { setMedidas(v); setSujo(true); }}
       cuidados={cuidados} onCuidados={(v) => { setCuidados(v); setSujo(true); }}
+      perfil={perfil}
+      marca={marca} onMarca={(v) => { setMarca(v); setSujo(true); }}
+      unidade={unidade}
+      purchaseUnit={purchaseUnit}
+      purchaseFactor={purchaseFactorTxt}
+      peso={pesoTxt}
     />
   );
 
@@ -858,6 +983,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       onFotoMudou={() => { /* na edição a foto já está salva; nada a marcar */ }}
       coresSalvas={(variacoes?.colors || []).map((c) => chaveDaCor(c.hex))}
       cores={stockMode === "variants" ? cores : []}
+      perfil={perfil}
     />
   );
 
@@ -874,7 +1000,20 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       sku={sku} onSku={(v) => { setSku(v); setSujo(true); }}
       barcode={barcode} onBarcode={(v) => { setBarcode(v); setSujo(true); }}
       ncm={ncm} onNcm={(v) => { setNcm(v); setSujo(true); }}
-      matconOn={matcon.matcon_enabled}
+      perfil={perfil}
+    />
+  ) : null;
+
+  // Perfil Matcon: "Nota fiscal" sai dos códigos e sobe para o topo da
+  // coluna direita (no celular, logo depois da entrega). Com o M2, o CEST,
+  // a pergunta do imposto e a origem moram só aqui.
+  const secNotaFiscal = isProduto && perfil.notaFiscalSeparada ? (
+    <SecaoNotaFiscal
+      emiteNota={emiteNota}
+      nome={nome}
+      categoriaEscolhida={categoriaEscolhida}
+      material={material}
+      ncm={ncm} onNcm={(v) => { setNcm(v); setSujo(true); }}
       cest={cest} onCest={(v) => { setCest(v); setSujo(true); }}
       icmsStPaid={icmsStPaid} onIcmsStPaid={(v) => { setIcmsStPaid(v); setSujo(true); }}
       origem={origem} onOrigem={(v) => { setOrigem(v); setSujo(true); }}
@@ -899,7 +1038,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               <Icon name={isProduto ? "package" : "star"} size={16} color={Colors.violet3} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.headerTitle} numberOfLines={1}>{tituloDoModal(type, modoEdicao)}</Text>
+              {perfil.etiqueta ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <Text style={s.headerTitle} numberOfLines={1}>{tituloDoModal(type, modoEdicao)}</Text>
+                  <View style={s.etiqueta}><Text style={s.etiquetaTxt}>{perfil.etiqueta}</Text></View>
+                </View>
+              ) : (
+                <Text style={s.headerTitle} numberOfLines={1}>{tituloDoModal(type, modoEdicao)}</Text>
+              )}
               <Text style={s.headerSub} numberOfLines={narrow ? 2 : 1}>{subtituloDoModal(modoEdicao)}</Text>
             </View>
           </View>
@@ -925,7 +1071,36 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
         {/* corpo — as seções nunca desmontam; a ScrollView é uma só */}
         <ScrollView style={s.body} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
-          {duasColunas ? (
+          {perfil.notaFiscalSeparada ? (
+            // Perfil Matcon: o que é do balcão vem antes do que é da vitrine.
+            duasColunas ? (
+              <View style={s.cols}>
+                <View style={s.colEsq}>
+                  {secItem}
+                  {secPreco}
+                  {secEstoque}
+                  {secEntrega}
+                  {secDescricao}
+                </View>
+                <View style={s.colDir}>
+                  {secNotaFiscal}
+                  {secCodigos}
+                  {secFotos}
+                </View>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {secItem}
+                {secPreco}
+                {secEstoque}
+                {secEntrega}
+                {secNotaFiscal}
+                {secCodigos}
+                {secFotos}
+                {secDescricao}
+              </View>
+            )
+          ) : duasColunas ? (
             <View style={s.cols}>
               <View style={s.colEsq}>
                 {secItem}
@@ -1010,6 +1185,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             onChangeLegado={(v) => { setLegado(v); setUltimaUsada(false); setSujo(true); }}
             categoriasLegado={categoriasLegado}
             onClose={() => setCatSheet(false)}
+            sugeridas={perfil.item.categoriasSugeridas.length ? perfil.item.categoriasSugeridas : undefined}
           />
         )}
       </View>
@@ -1022,7 +1198,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             </Text>
             <Text style={s.exitMsg}>
               {dupPendente
-                ? "O que você preencheu aqui (preço, grade, fotos, códigos) será descartado. Se for a mesma peça em outra cor ou tamanho, é no produto existente que ela entra."
+                ? "O que você preencheu aqui (preço, grade, fotos, códigos) será descartado. Se for a mesma peça em outra " + perfil.item.eixoDaDuplicata + ", é no produto existente que ela entra."
                 : modoEdicao
                   ? "Você tem alterações não salvas."
                   : "Você começou a cadastrar um " + nomeDoTipo(type) + ". Se sair agora, o que preencheu será perdido."}
@@ -1085,6 +1261,12 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: "700", color: Colors.ink, letterSpacing: -0.2 },
   headerSub: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
+  // Perfil de cadastro: "materiais de construção" ao lado do título.
+  etiqueta: {
+    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2,
+    backgroundColor: "rgba(124,58,237,0.14)", borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
+  },
+  etiquetaTxt: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.violet3 },
   // Tipo: um segmentado pequeno no cabeçalho, não dois cartões grandes.
   tipo: {
     flexDirection: "row", alignItems: "center", gap: 2, padding: 2, borderRadius: 9,

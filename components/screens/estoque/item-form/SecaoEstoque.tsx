@@ -16,6 +16,16 @@
 // Enter quer dizer outra coisa (adicionar tamanho, o Enter que o leitor
 // de código de barras manda depois do bipe, andar na grade) leva essa
 // marca — senão um bipe salvava o produto no meio do cadastro.
+//
+// 22/09/2026 — PERFIL MATCON (docs/mockups/matcon-cadastro-produto.html,
+// ponto ⑤ e tela 3). A unidade e o "Compro por" saíram daqui para o card
+// "Como você vende" (SecaoPreco). O estoque vira a frase "Tenho [x] m² em
+// estoque (≈ 64 caixas), e me avise abaixo de [y] m²." em qualquer unidade
+// (vírgula só nas fracionadas), e a UNIDADE decide a segunda opção:
+// m²/m³ com lote ligado → "Por lote e tonalidade" (só no cadastro: as
+// pilhas que já estão na prateleira); o resto → "Por cor e medida" (a
+// grade de hoje, com outro nome). Sem lote ligado, a opção de lote nem
+// aparece. Sem o perfil, a seção é a de hoje.
 // ============================================================
 import { useCallback, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
@@ -24,13 +34,13 @@ import { Icon } from "@/components/Icon";
 import { hexToName } from "@/utils/colorNames";
 import { matrixKey } from "@/services/productsVariationsApi";
 import { UNITS } from "../types";
-import { Campo, Chip, Entrada, Nota, Secao, IS_WEB, s } from "./ui";
-import { statusEstoque, type CorDoItem, type StockMode } from "./types";
-// 22/09/2026 (Matcon M0, docs/matcon-faseamento-po-ux.md secao 2 e 4b):
-// grupo "Materiais" + frase "Compro por" + estoque decimal — tudo atras
-// de `matconEnabled`. Sem ele, nenhuma destas importacoes muda o render:
-// UNITS continua a unica fonte dos 9 chips de hoje.
-import { MATCON_UNITS, PURCHASE_UNITS, estoqueEmDecimal, ehMilheiro, parseQtyInput, toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
+import { Campo, Chip, Entrada, Nota, Radio, Secao, IS_WEB, fr, s } from "./ui";
+import {
+  novaLinhaDeLote, statusEstoque, totalDosLotes, lotesParaGravar,
+  type CorDoItem, type LinhaDeLote, type StockMode,
+} from "./types";
+import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
+import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty } from "@/utils/matconUnits";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -56,25 +66,18 @@ type Props = {
   // Texto do modal quando havia cor/tamanho gravado no próprio produto
   // (sem variação). Só aparece no modo "Por cor e tamanho".
   avisoDoPai?: string | null;
-  // 22/09/2026 (Matcon M0): tudo opcional, default = comportamento de
-  // hoje. Com `matconEnabled` false/undefined nada abaixo é lido —
-  // contrato de zero impacto (regra do doc §1).
-  matconEnabled?: boolean;
-  // Unidades habilitadas na config (`matcon_units`, ordem da config). As
-  // demais de MATCON_UNITS ficam atrás do chip "+ …".
-  matconUnits?: readonly string[];
-  purchaseUnit?: string | null; onPurchaseUnit?: (v: string | null) => void;
-  purchaseFactor?: string; onPurchaseFactor?: (v: string) => void;
+  // 22/09/2026 (perfil de cadastro) — tudo opcional, default = a seção de
+  // hoje. Só o perfil Matcon lê o que vem abaixo.
+  perfil?: PerfilDoCadastro;
+  // "(≈ 64 caixas)" ao lado do estoque: a frase "Compro por" do card
+  // "Como você vende".
+  purchaseUnit?: string | null;
+  purchaseFactor?: string;
+  // A opção "Por lote e tonalidade" existe? (usaLote: Matcon + lote ligado
+  // na config + m²/m³ — e só no cadastro.) Sem ela, a opção some.
+  lotesDisponiveis?: boolean;
+  lotes?: LinhaDeLote[]; onLotes?: (v: LinhaDeLote[]) => void;
 };
-
-function Radio({ ativo, titulo, onPress }: { ativo: boolean; titulo: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[st.rd, ativo && st.rdAtivo]} accessibilityLabel={titulo}>
-      <View style={[st.rad, ativo && st.radAtivo]}>{ativo ? <View style={st.radDot} /> : null}</View>
-      <Text style={[st.rdTxt, ativo && { fontWeight: "700" }]}>{titulo}</Text>
-    </Pressable>
-  );
-}
 
 // Check escuro em cor clara (branco, amarelo), claro no resto.
 function corClara(hex: string) {
@@ -89,12 +92,7 @@ export function SecaoEstoque(p: Props) {
   const [abrirTam, setAbrirTam] = useState(false);
   const [novoTam, setNovoTam] = useState("");
   const [abrirBarras, setAbrirBarras] = useState(false);
-  // 22/09/2026 (Matcon M0): "+ rolo, lata, balde" revela o resto de
-  // MATCON_UNITS que a config não habilitou (mesmo padrão do "+ Cor").
-  const [maisMateriais, setMaisMateriais] = useState(false);
-  // "Compro por [x ▾] de …": a lista de unidades de compra abre/fecha
-  // como a paleta de cor, não é um <select> nativo (RN Web não tem um).
-  const [abrirUnidadeCompra, setAbrirUnidadeCompra] = useState(false);
+  const perfil = p.perfil || PERFIL_PADRAO;
 
   function temCor(hex: string) {
     const h = hex.toUpperCase();
@@ -163,140 +161,198 @@ export function SecaoEstoque(p: Props) {
     if (el) el.focus();
   }
 
-  // 22/09/2026 (Matcon M0). `matconOn` false/undefined -> nada abaixo é
-  // lido, os 9 chips de UNITS continuam a única coisa que renderiza.
-  const matconOn = !!p.matconEnabled;
-  const materiaisHabilitados = p.matconUnits || [];
-  const materiaisExtras = MATCON_UNITS.filter((u) => materiaisHabilitados.indexOf(u) < 0);
-  // A frase "Compro por" só faz sentido pra unidade que É de material
-  // (m², sc, br…) — um produto em "un" não precisa de conversão.
-  const ehUnidadeMaterial = MATCON_UNITS.indexOf(p.unidade as any) >= 0;
-  const mostrarCompraPor = matconOn && ehUnidadeMaterial;
+  // 22/09/2026 (perfil de cadastro). Perfil padrão: nada abaixo muda o
+  // render — os 9 chips de UNITS, as duas opções e as duas caixas de hoje.
+  const matcon = perfil.vendoPorNoPreco;
   // Milheiro também vai em decimal aqui: vender 500 tijolos deixa 19,5 mlh
   // no estoque, e a ficha precisa ler e salvar o "19,5" (QA 22/09/2026).
-  const fracionado = matconOn && estoqueEmDecimal(p.unidade);
-  const milheiro = matconOn && ehMilheiro(p.unidade);
+  const fracionado = matcon && estoqueEmDecimal(p.unidade);
+  const filtroQtd = (v: string) => (fracionado ? v.replace(/[^0-9.,]/g, "") : v.replace(/\D/g, ""));
+  const tecladoQtd = fracionado ? "decimal-pad" : "number-pad";
+  const lerQtd = (v: string) => (fracionado ? parseQtyInput(v) : (parseInt(v, 10) || null));
   const fatorNum = p.purchaseFactor ? parseQtyInput(p.purchaseFactor) : null;
+  const caixas = (qtd: number) => {
+    const pk = fatorNum && qtd > 0 ? toPackages(qtd, fatorNum) : null;
+    return pk ? rotuloEmbalagem(pk.packages, p.purchaseUnit) : null;
+  };
   const estoqueNum = parseQtyInput(p.estoque || "") || 0;
-  const pacotes = fatorNum ? toPackages(estoqueNum, fatorNum) : null;
+  const caixasDoEstoque = caixas(estoqueNum);
+
+  // Lote só com a loja pedindo (config) E a unidade certa (m²/m³). "Por cor
+  // e medida" some quando o lote aparece — a não ser que o produto já tenha
+  // grade: aí a opção fica, pra nunca esconder o que está gravado.
+  const comLote = perfil.estoque.lotes && !!p.lotesDisponiveis;
+  const comGrade = !comLote || p.stockMode === "variants";
+  const lotes = p.lotes || [];
+  const lotesValidos = lotesParaGravar(lotes, lerQtd);
+  const totalLotes = totalDosLotes(lotes, lerQtd);
+  const caixasDosLotes = caixas(totalLotes);
+
+  function mudarLote(id: string, campo: "codigo" | "tonalidade" | "bitola" | "qtd", v: string) {
+    p.onLotes?.(lotes.map((l) => (l.id === id ? { ...l, [campo]: campo === "qtd" ? filtroQtd(v) : v } : l)));
+  }
+
+  const minimoNaFrase = (
+    <Entrada
+      value={p.minimo}
+      onChangeText={(v: string) => p.onMinimo(filtroQtd(v))}
+      onSubmitEditing={p.onSubmit}
+      placeholder="0"
+      keyboardType={tecladoQtd}
+      accessibilityLabel="Estoque mínimo"
+      style={fr.fraseInput}
+    />
+  );
 
   return (
-    <Secao icon="box" titulo="Estoque" selo={statusEstoque(p.stockMode, C, Z, p.estoque)}>
-      <Campo label="Unidade de venda">
-        <View style={s.chips}>
-          {UNITS.map((u) => (
-            <Chip key={u} label={u} active={p.unidade === u} onPress={() => p.onUnidade(u)} />
-          ))}
-        </View>
-      </Campo>
-
-      {matconOn ? (
-        <Campo label="Materiais">
+    <Secao
+      icon="box"
+      titulo="Estoque"
+      selo={matcon
+        ? statusEstoque(p.stockMode, C, Z, p.estoque, {
+            tamanhos: perfil.estoque.rotuloDosTamanhos.toLowerCase(),
+            abreviacao: perfil.estoque.abreviacaoDoTamanho,
+            lotes: lotesValidos.length,
+          })
+        : statusEstoque(p.stockMode, C, Z, p.estoque)}
+    >
+      {!matcon && (
+        <Campo label="Unidade de venda">
           <View style={s.chips}>
-            {materiaisHabilitados.map((u) => (
+            {UNITS.map((u) => (
               <Chip key={u} label={u} active={p.unidade === u} onPress={() => p.onUnidade(u)} />
             ))}
-            {materiaisExtras.length > 0 ? (
-              <Chip
-                label={"+ " + materiaisExtras.join(", ")}
-                dashed
-                onPress={() => setMaisMateriais(!maisMateriais)}
-              />
-            ) : null}
           </View>
-          {maisMateriais && materiaisExtras.length > 0 ? (
-            <View style={[s.chips, { marginTop: 6 }]}>
-              {materiaisExtras.map((u) => (
-                <Chip key={u} label={u} active={p.unidade === u} onPress={() => p.onUnidade(u)} />
-              ))}
-            </View>
-          ) : null}
-          {milheiro ? (
-            <Text style={s.hint} testID="ficha-milheiro-dica">
-              1 milheiro = 1.000 unidades. No Caixa o vendedor digita a quantidade de peças.
-            </Text>
-          ) : null}
         </Campo>
-      ) : null}
-
-      {mostrarCompraPor ? (
-        <Campo label="Compra">
-          <View style={st.frase}>
-            <Text style={st.fraseTxt}>Compro por</Text>
-            <Pressable
-              onPress={() => setAbrirUnidadeCompra(!abrirUnidadeCompra)}
-              style={st.fraseChip}
-              accessibilityLabel="Escolher unidade de compra"
-            >
-              <Text style={st.fraseChipTxt}>{(p.purchaseUnit || "cx") + " ▾"}</Text>
-            </Pressable>
-            <Text style={st.fraseTxt}>de</Text>
-            <Entrada
-              value={p.purchaseFactor ?? ""}
-              onChangeText={(v: string) => p.onPurchaseFactor?.(v.replace(/[^0-9.,]/g, ""))}
-              placeholder="0"
-              keyboardType="decimal-pad"
-              accessibilityLabel="Quantas unidades de venda cabem em 1 unidade de compra"
-              dataSet={ENTER_LOCAL}
-              style={st.fraseInput}
-            />
-            <Text style={st.fraseTxt}>{p.unidade + "."}</Text>
-          </View>
-          {abrirUnidadeCompra ? (
-            <View style={[s.chips, { marginTop: 8 }]}>
-              {PURCHASE_UNITS.map((u) => (
-                <Chip
-                  key={u}
-                  label={u}
-                  active={(p.purchaseUnit || "cx") === u}
-                  onPress={() => { p.onPurchaseUnit?.(u); setAbrirUnidadeCompra(false); }}
-                />
-              ))}
-            </View>
-          ) : null}
-          <Text style={s.hint}>
-            {"A nota do fornecedor vem em " + (p.purchaseUnit || "caixa") + "; o balcão vende em " + p.unidade + ". Deixe em branco se você compra na mesma unidade que vende."}
-          </Text>
-        </Campo>
-      ) : null}
+      )}
 
       <Campo label="Como você controla o estoque?">
-        <View style={[st.radios, p.narrow && { flexDirection: "column" }]}>
-          <Radio ativo={p.stockMode === "single"} titulo="Quantidade única" onPress={() => p.onStockMode("single")} />
-          <Radio ativo={p.stockMode === "variants"} titulo="Por cor e tamanho" onPress={() => p.onStockMode("variants")} />
-        </View>
+        {matcon ? (
+          <View style={[fr.radios, p.narrow && { flexDirection: "column" }]}>
+            <Radio ativo={p.stockMode === "single"} titulo="Quantidade única" descricao="um saldo só" onPress={() => p.onStockMode("single")} />
+            {comLote ? (
+              <Radio ativo={p.stockMode === "lots"} titulo="Por lote e tonalidade" descricao="cada pilha tem seu saldo" onPress={() => p.onStockMode("lots")} />
+            ) : null}
+            {comGrade ? (
+              <Radio ativo={p.stockMode === "variants"} titulo={perfil.estoque.rotuloDaGrade} descricao="fio, cano, parafuso" onPress={() => p.onStockMode("variants")} />
+            ) : null}
+          </View>
+        ) : (
+          <View style={[fr.radios, p.narrow && { flexDirection: "column" }]}>
+            <Radio ativo={p.stockMode === "single"} titulo="Quantidade única" onPress={() => p.onStockMode("single")} />
+            <Radio ativo={p.stockMode === "variants"} titulo="Por cor e tamanho" onPress={() => p.onStockMode("variants")} />
+          </View>
+        )}
       </Campo>
 
-      {p.stockMode === "single" ? (
-        fracionado ? (
-          // 22/09/2026 (Matcon M0): unidade fracionada (m², kg…) com o
-          // toggle ligado — estoque e mínimo em decimal, na frase do
-          // mockup aprovado, em vez das duas caixas separadas de hoje.
+      {matcon && p.stockMode === "lots" ? (
+        <View style={{ marginBottom: 12 }}>
+          <View style={st.grade}>
+            {!p.narrow && (
+              <View style={[st.linha, st.linhaCab]}>
+                <Text style={[st.cab, { flex: 1 }]}>Lote</Text>
+                <Text style={[st.cab, { flex: 1 }]}>Tonalidade</Text>
+                <Text style={[st.cab, { flex: 0.8 }]}>Bitola</Text>
+                <Text style={[st.cab, { flex: 1.1, textAlign: "right" }]}>{"Tenho (" + p.unidade + ")"}</Text>
+                <View style={{ width: 22 }} />
+              </View>
+            )}
+            {lotes.map((l, i) => {
+              const q = lerQtd(l.qtd || "");
+              const cx = q ? caixas(q) : null;
+              return (
+                <View key={l.id} style={[st.linha, p.narrow && { flexWrap: "wrap" as const }]}>
+                  <Entrada
+                    value={l.codigo}
+                    onChangeText={(v: string) => mudarLote(l.id, "codigo", v)}
+                    placeholder="Lote"
+                    accessibilityLabel={"Lote da linha " + (i + 1)}
+                    dataSet={ENTER_LOCAL}
+                    style={[p.narrow ? st.loteMeia : { flex: 1 }, st.celula]}
+                  />
+                  <Entrada
+                    value={l.tonalidade}
+                    onChangeText={(v: string) => mudarLote(l.id, "tonalidade", v)}
+                    placeholder="Tonalidade"
+                    accessibilityLabel={"Tonalidade da linha " + (i + 1)}
+                    dataSet={ENTER_LOCAL}
+                    style={[p.narrow ? st.loteMeia : { flex: 1 }, st.celula]}
+                  />
+                  <Entrada
+                    value={l.bitola}
+                    onChangeText={(v: string) => mudarLote(l.id, "bitola", v)}
+                    placeholder="Bitola"
+                    accessibilityLabel={"Bitola da linha " + (i + 1)}
+                    dataSet={ENTER_LOCAL}
+                    style={[p.narrow ? st.loteMeia : { flex: 0.8 }, st.celula]}
+                  />
+                  <View style={p.narrow ? st.loteMeia : { flex: 1.1 }}>
+                    <Entrada
+                      value={l.qtd}
+                      onChangeText={(v: string) => mudarLote(l.id, "qtd", v)}
+                      placeholder="0"
+                      keyboardType={tecladoQtd}
+                      accessibilityLabel={"Quanto tenho na linha " + (i + 1)}
+                      dataSet={ENTER_LOCAL}
+                      style={[st.celula, { textAlign: "right" }]}
+                    />
+                    {cx ? <Text style={st.loteCaixas}>{cx}</Text> : null}
+                  </View>
+                  {lotes.length > 1 ? (
+                    <Pressable
+                      onPress={() => p.onLotes?.(lotes.filter((x) => x.id !== l.id))}
+                      hitSlop={8}
+                      style={st.loteRm}
+                      accessibilityLabel={"Tirar a linha " + (i + 1)}
+                    >
+                      <Text style={s.chipRm}>×</Text>
+                    </Pressable>
+                  ) : <View style={{ width: 22 }} />}
+                </View>
+              );
+            })}
+            <View style={[st.linha, { borderBottomWidth: 0 }]}>
+              <Chip label="+ outro lote na prateleira" dashed onPress={() => p.onLotes?.([...lotes, novaLinhaDeLote()])} />
+            </View>
+            <View style={st.loteTotal}>
+              <Text style={fr.fraseTxt}>
+                {"Total " + fmtQty(totalLotes, p.unidade) + " em " + lotesValidos.length + (lotesValidos.length === 1 ? " lote" : " lotes")}
+              </Text>
+              {caixasDosLotes ? <Text style={fr.fraseMono}>{"(= " + caixasDosLotes + ")"}</Text> : null}
+            </View>
+          </View>
+          <View style={[fr.frase, { marginTop: 8 }]}>
+            <Text style={fr.fraseTxt}>Me avise abaixo de</Text>
+            {minimoNaFrase}
+            <Text style={fr.fraseTxt}>{p.unidade + "."}</Text>
+          </View>
+          <Text style={s.hint}>
+            Só o que já está na prateleira hoje. Daqui pra frente o lote entra sozinho quando você importa a nota do fornecedor.
+          </Text>
+        </View>
+      ) : p.stockMode === "single" ? (
+        matcon ? (
+          // Perfil Matcon: a frase do mockup em qualquer unidade — com
+          // vírgula nas fracionadas (m², kg…), inteira no saco e na barra.
           <View style={{ marginBottom: 12 }}>
-            <View style={st.frase}>
-              <Text style={st.fraseTxt}>Tenho</Text>
+            <View style={fr.frase}>
+              <Text style={fr.fraseTxt}>Tenho</Text>
               <Entrada
                 value={p.estoque}
-                onChangeText={(v: string) => p.onEstoque(v.replace(/[^0-9.,]/g, ""))}
+                onChangeText={(v: string) => p.onEstoque(filtroQtd(v))}
                 onSubmitEditing={p.onSubmit}
                 placeholder="0"
-                keyboardType="decimal-pad"
-                style={st.fraseInput}
+                keyboardType={tecladoQtd}
+                accessibilityLabel="Quanto tenho em estoque"
+                style={fr.fraseInput}
               />
-              <Text style={st.fraseTxt}>{p.unidade + " em estoque"}</Text>
-              {pacotes ? (
-                <Text style={st.fraseMono}>{"(= " + rotuloEmbalagem(pacotes.packages, p.purchaseUnit) + ")"}</Text>
+              <Text style={fr.fraseTxt}>{p.unidade + " em estoque"}</Text>
+              {caixasDoEstoque ? (
+                <Text style={fr.fraseMono}>{"(≈ " + caixasDoEstoque + ")"}</Text>
               ) : null}
-              <Text style={st.fraseTxt}>, e me avise abaixo de</Text>
-              <Entrada
-                value={p.minimo}
-                onChangeText={(v: string) => p.onMinimo(v.replace(/[^0-9.,]/g, ""))}
-                onSubmitEditing={p.onSubmit}
-                placeholder="0"
-                keyboardType="decimal-pad"
-                style={st.fraseInput}
-              />
-              <Text style={st.fraseTxt}>{p.unidade + "."}</Text>
+              <Text style={fr.fraseTxt}>, e me avise abaixo de</Text>
+              {minimoNaFrase}
+              <Text style={fr.fraseTxt}>{p.unidade + "."}</Text>
             </View>
             <Text style={s.hint}>Estoque mínimo. Aparece na aba Alertas.</Text>
           </View>
@@ -414,12 +470,12 @@ export function SecaoEstoque(p: Props) {
               )}
             </Campo>
 
-            <Campo label="Tamanhos" style={{ flex: 1 }}>
+            <Campo label={perfil.estoque.rotuloDosTamanhos} style={{ flex: 1 }}>
               <View style={s.chips}>
                 {Z.map((z) => (
                   <Chip key={z} label={z} onRemove={() => p.onTamanhos(Z.filter((x) => x !== z))} removeLabel={"Remover " + z} />
                 ))}
-                <Chip label="+ Tamanho" dashed onPress={() => setAbrirTam(!abrirTam)} />
+                <Chip label={perfil.estoque.botaoDeTamanho} dashed onPress={() => setAbrirTam(!abrirTam)} />
               </View>
               {abrirTam && (
                 <View style={[s.linha2, { marginTop: 8 }]}>
@@ -427,7 +483,7 @@ export function SecaoEstoque(p: Props) {
                     value={novoTam}
                     onChangeText={setNovoTam}
                     onSubmitEditing={addTam}
-                    placeholder="P, M, G, 38, 500ml…"
+                    placeholder={perfil.estoque.exemploDeTamanho}
                     style={{ flex: 1 }}
                     dataSet={ENTER_LOCAL}
                     autoFocus
@@ -519,7 +575,7 @@ export function SecaoEstoque(p: Props) {
           {umEixo && (
             <View style={st.grade}>
               <View style={[st.linha, st.linhaCab]}>
-                <Text style={[st.cab, { flex: 1 }]}>{C.length ? "Cor" : "Tamanho"}</Text>
+                <Text style={[st.cab, { flex: 1 }]}>{C.length ? "Cor" : (matcon ? "Medida" : "Tamanho")}</Text>
                 <Text style={[st.cab, { width: 72 }]}>Estoque</Text>
                 {!p.narrow && <Text style={[st.cab, { flex: 1 }]}>Cód. barras</Text>}
               </View>
@@ -567,35 +623,16 @@ export function SecaoEstoque(p: Props) {
 }
 
 const st = {
-  // 22/09/2026 (Matcon M0) — "frase com número editável no meio" do
-  // mockup (docs/mockups/matcon-modulo.html): uma linha que se lê como
-  // português, não um formulário. Usada em "Compro por" e no estoque
-  // decimal.
-  frase: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 6 },
-  fraseTxt: { fontSize: 13, color: Colors.ink2 },
-  fraseMono: { fontSize: 11.5, color: Colors.ink3, fontFamily: IS_WEB ? ("monospace" as const) : undefined },
-  fraseChip: {
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet,
+  // 22/09/2026 (Matcon M4 no cadastro) — tabela de lotes. A frase e as
+  // opções de rádio moraram aqui e foram para ui.tsx (`fr`, `Radio`).
+  loteMeia: { width: "46%" as any, flexGrow: 1 },
+  loteCaixas: { fontSize: 10, color: Colors.ink3, textAlign: "right" as const, marginTop: 2 },
+  loteRm: { width: 22, alignItems: "center" as const, justifyContent: "center" as const, minHeight: 36 },
+  loteTotal: {
+    flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 8,
+    paddingHorizontal: 10, paddingVertical: 8, backgroundColor: Colors.violetD,
+    borderTopWidth: 1, borderTopColor: Colors.border2,
   },
-  fraseChipTxt: { fontSize: 12.5, fontWeight: "700" as const, color: Colors.violet3 },
-  fraseInput: {
-    width: 70, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, textAlign: "center" as const,
-  },
-  radios: { flexDirection: "row" as const, gap: 6 },
-  rd: {
-    flex: 1, flexDirection: "row" as const, gap: 8, alignItems: "center" as const,
-    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 9,
-    backgroundColor: Colors.bg3, borderWidth: 1.5, borderColor: Colors.border,
-  },
-  rdAtivo: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
-  rdTxt: { fontSize: 12.5, color: Colors.ink, flexShrink: 1 },
-  rad: {
-    width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: Colors.border2,
-    alignItems: "center" as const, justifyContent: "center" as const,
-  },
-  radAtivo: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  radDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#fff" },
   grade: {
     marginTop: 4, borderWidth: 1, borderColor: Colors.border, borderRadius: 9,
     backgroundColor: Colors.bg3, overflow: "hidden" as const,

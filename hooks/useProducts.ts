@@ -147,6 +147,10 @@ export function useProducts() {
       material: (product as any).material ?? undefined,
       medidas:  (product as any).medidas  ?? undefined,
       cuidados: (product as any).cuidados ?? undefined,
+      // 22/09/2026 (perfil Matcon do cadastro): a marca da ficha. Só o
+      // ItemFormModal no perfil Matcon preenche `marca`; em qualquer outro
+      // caso é undefined e some do JSON (loja sem Matcon nunca manda).
+      brand: (product as any).marca ?? undefined,
       // Migration 323 — duração do serviço. `undefined` some do JSON e a
       // coluna nem entra no UPDATE: produto nunca escreve aqui. Serviço
       // manda número OU null, e null é o jeito de APAGAR a duração —

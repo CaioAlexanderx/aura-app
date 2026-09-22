@@ -214,6 +214,7 @@ Regras que sustentam isso (e que o mockup precisa provar):
 3. **Piloto antes do M2.** Sugiro 3–5 lojas rodando M0+M1 por 30 dias antes de fechar o escopo do M2/M3. As lojas decidem se o próximo é fiscal ou clube.
 4. ~~Nome da seção~~ — **decidido: "Matcon"** (22/09/2026).
 5. ~~Motoristas~~ — **decidido: campo livre "quem entregou"** (22/09/2026).
+6. **Onde a loja ganha a subvertical.** Hoje a subvertical (Matcon, Ótica) é um toggle em Configurações, e é ele que decide a cara do cadastro de produto. Com Matcon e Ótica ligados na mesma loja, o perfil Matcon prevalece no cadastro (decisão de 22/09/2026). O Caio quer, no futuro, escolher a subvertical no signup ou atribuí-la pela gestão Aura, porque a atribuição em Configurações "em algum momento pode nos dar problema". Sem data.
 
 ---
 

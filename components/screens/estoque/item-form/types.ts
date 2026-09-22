@@ -17,7 +17,8 @@ import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import type { ProductImage } from "@/services/productImagesApi";
 
 export type ItemType = "product" | "service";
-export type StockMode = "single" | "variants";
+// "lots" só existe no perfil Matcon, no cadastro de m²/m³ com lote ligado.
+export type StockMode = "single" | "variants" | "lots";
 export type CorDoItem = { hex: string; name: string };
 
 // Os chips de duração, em MINUTOS. O rótulo é derivado (minutosParaRotulo)
@@ -397,15 +398,57 @@ export function statusEstoque(
   stockMode: StockMode,
   cores: CorDoItem[] | null | undefined,
   tamanhos: string[] | null | undefined,
-  quantidade: string
+  quantidade: string,
+  // 22/09/2026 (perfil de cadastro): o Matcon diz "medidas"/"med." e conta
+  // lotes. Sem o 5º argumento, o selo é o de hoje.
+  extra?: { tamanhos?: string; abreviacao?: string; lotes?: number }
 ): Selo {
   if (stockMode === "variants") {
     const nc = (cores || []).length;
     const nz = (tamanhos || []).length;
-    if (nc + nz === 0) return { tom: "rec", texto: "adicione cores ou tamanhos" };
-    return { tom: "ok", texto: nc + (nc === 1 ? " cor · " : " cores · ") + nz + " tam." };
+    if (nc + nz === 0) return { tom: "rec", texto: "adicione cores ou " + (extra?.tamanhos || "tamanhos") };
+    return { tom: "ok", texto: nc + (nc === 1 ? " cor · " : " cores · ") + nz + " " + (extra?.abreviacao || "tam.") };
+  }
+  if (stockMode === "lots") {
+    const n = extra?.lotes || 0;
+    return n > 0 ? { tom: "ok", texto: n + (n === 1 ? " lote" : " lotes") } : null;
   }
   return (quantidade || "").trim() ? { tom: "ok", texto: "preenchido" } : null;
+}
+
+// ── lotes do cadastro (Matcon M4) ───────────────────────────
+// Uma linha por pilha que JÁ está na prateleira: lote e bitola como vêm
+// na caixa, tonalidade opcional, quantidade na unidade de venda. Texto
+// livre enquanto se digita; o Salvar converte.
+export type LinhaDeLote = { id: string; codigo: string; tonalidade: string; bitola: string; qtd: string };
+
+export function novaLinhaDeLote(): LinhaDeLote {
+  return { id: String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7), codigo: "", tonalidade: "", bitola: "", qtd: "" };
+}
+
+/** Linhas que viram lote no Salvar: com código e quantidade > 0. A linha
+ *  em branco (ou pela metade) é ignorada, como no mockup. */
+export function lotesParaGravar(
+  linhas: LinhaDeLote[] | null | undefined,
+  parse: (txt: string) => number | null
+): Array<{ lot_code: string; shade: string | null; caliber: string | null; qty: number }> {
+  const out: Array<{ lot_code: string; shade: string | null; caliber: string | null; qty: number }> = [];
+  (linhas || []).forEach((l) => {
+    const codigo = (l.codigo || "").trim();
+    const qty = parse(l.qtd || "");
+    if (!codigo || qty == null || !(qty > 0)) return;
+    out.push({ lot_code: codigo, shade: (l.tonalidade || "").trim() || null, caliber: (l.bitola || "").trim() || null, qty });
+  });
+  return out;
+}
+
+/** Estoque total = soma das linhas válidas (ninguém digita o estoque duas vezes). */
+export function totalDosLotes(
+  linhas: LinhaDeLote[] | null | undefined,
+  parse: (txt: string) => number | null
+): number {
+  const soma = lotesParaGravar(linhas, parse).reduce((s, l) => s + l.qty, 0);
+  return Math.round(soma * 1000) / 1000;
 }
 
 export function statusDescricao(descricao: string): Selo {
@@ -467,13 +510,15 @@ export function resumoDoItem(o: {
   cores: CorDoItem[];
   tamanhos: string[];
   minutos: number | null;
+  // 22/09/2026 (perfil de cadastro): "med." no Matcon; sem ele, "tam.".
+  abreviacaoDoTamanho?: string;
 }): string {
   const partes = [(o.nome || "").trim(), fmtBRL(o.preco)];
   if (o.isProduto) {
     const nc = (o.cores || []).length;
     const nz = (o.tamanhos || []).length;
     if (o.stockMode === "variants" && nc + nz > 0) {
-      partes.push(nc + (nc === 1 ? " cor" : " cores") + " · " + nz + " tam.");
+      partes.push(nc + (nc === 1 ? " cor" : " cores") + " · " + nz + " " + (o.abreviacaoDoTamanho || "tam."));
     }
   } else {
     const dur = minutosParaRotulo(o.minutos);
@@ -731,6 +776,8 @@ export function gravacaoDaDuracao(descricao: string, duracaoTxt: string): { note
 export type CamposDoCadastro = {
   preco: number; custo: number; pendentes: number; cores: number; tamanhos: number;
   estoque: string; descricao: string; sku: string; barcode: string; ncm: string; duracao: string;
+  // 22/09/2026 (Matcon): linhas de lote com algo digitado.
+  lotes?: number;
 };
 
 /**
@@ -743,6 +790,7 @@ export function temProgressoAlemDoNome(c: CamposDoCadastro): boolean {
   return (Number(c.preco) || 0) > 0
     || (Number(c.custo) || 0) > 0
     || (c.pendentes || 0) > 0 || (c.cores || 0) > 0 || (c.tamanhos || 0) > 0
+    || (c.lotes || 0) > 0
     || !!String(c.estoque || "").trim()
     || !!String(c.descricao || "").trim()
     || !!String(c.sku || "").trim()

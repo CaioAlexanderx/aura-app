@@ -81,14 +81,46 @@ export function Nota({ children, tom = "violet", icon = "info" }: { children: Re
   );
 }
 
-// Aviso âmbar "isto vai para a sua loja online".
-export function StoreNote({ texto }: { texto: string }) {
+// Aviso âmbar "isto vai para a sua loja online". 22/09/2026 (perfil de
+// cadastro): `lojaOnline={false}` tira a frase da loja online e deixa só
+// o texto — o Matcon não fala em loja online nas fotos.
+export function StoreNote({ texto, lojaOnline = true }: { texto: string; lojaOnline?: boolean }) {
   return (
     <Nota tom="amber" icon="shopping_bag">
-      <Text style={s.notaTxt}>
-        <Text style={s.notaForte}>Vai para a sua loja online.</Text> {texto}
-      </Text>
+      {lojaOnline ? (
+        <Text style={s.notaTxt}>
+          <Text style={s.notaForte}>Vai para a sua loja online.</Text> {texto}
+        </Text>
+      ) : (
+        <Text style={s.notaTxt}>{texto}</Text>
+      )}
     </Nota>
+  );
+}
+
+// ── opção de rádio ──────────────────────────────────────────
+// Um cartão com bolinha. `descricao` (opcional) é a linha pequena de baixo.
+// Sempre um botão à vista: nada depende de hover.
+export function Radio({
+  ativo, titulo, descricao, onPress,
+}: {
+  ativo: boolean;
+  titulo: string;
+  descricao?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[fr.rd, ativo && fr.rdAtivo]} accessibilityLabel={titulo}>
+      <View style={[fr.rad, ativo && fr.radAtivo]}>{ativo ? <View style={fr.radDot} /> : null}</View>
+      {descricao ? (
+        <View style={{ flexShrink: 1 }}>
+          <Text style={[fr.rdTxt, ativo && { fontWeight: "700" }]}>{titulo}</Text>
+          <Text style={fr.rdDesc}>{descricao}</Text>
+        </View>
+      ) : (
+        <Text style={[fr.rdTxt, ativo && { fontWeight: "700" }]}>{titulo}</Text>
+      )}
+    </Pressable>
   );
 }
 
@@ -215,5 +247,38 @@ export const s = StyleSheet.create({
   miniOff: { backgroundColor: Colors.bg3, borderColor: Colors.border },
   miniTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
 });
+
+// 22/09/2026 (Matcon M0, perfil de cadastro) — a "frase com número
+// editável no meio" (docs/mockups/matcon-modulo.html): uma linha que se lê
+// como português, não um formulário. "Compro por", "Tenho … em estoque",
+// "Cada m² pesa …". E as opções de rádio.
+export const fr = {
+  frase: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 6 },
+  fraseTxt: { fontSize: 13, color: Colors.ink2 },
+  fraseMono: { fontSize: 11.5, color: Colors.ink3, fontFamily: IS_WEB ? ("monospace" as const) : undefined },
+  fraseChip: {
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet,
+  },
+  fraseChipTxt: { fontSize: 12.5, fontWeight: "700" as const, color: Colors.violet3 },
+  fraseInput: {
+    width: 70, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, textAlign: "center" as const,
+  },
+  radios: { flexDirection: "row" as const, gap: 6 },
+  rd: {
+    flex: 1, flexDirection: "row" as const, gap: 8, alignItems: "center" as const,
+    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 9,
+    backgroundColor: Colors.bg3, borderWidth: 1.5, borderColor: Colors.border,
+  },
+  rdAtivo: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  rdTxt: { fontSize: 12.5, color: Colors.ink, flexShrink: 1 },
+  rdDesc: { fontSize: 10.5, color: Colors.ink3, marginTop: 1 },
+  rad: {
+    width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: Colors.border2,
+    alignItems: "center" as const, justifyContent: "center" as const,
+  },
+  radAtivo: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  radDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#fff" },
+};
 
 export default s;

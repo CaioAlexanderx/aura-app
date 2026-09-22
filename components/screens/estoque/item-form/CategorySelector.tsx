@@ -57,6 +57,7 @@ export function CategoriaSeletor({
 
 export function CategoriaSheet({
   type, selecao, onChangeSelecao, legado, onChangeLegado, categoriasLegado, productId, onClose,
+  sugeridas,
 }: {
   type: ItemType;
   selecao: CategorySelection;
@@ -66,6 +67,9 @@ export function CategoriaSheet({
   categoriasLegado: string[];
   productId?: string;
   onClose: () => void;
+  // 22/09/2026 (perfil de cadastro): categorias do ramo, oferecidas só a
+  // quem ainda não tem nenhuma. Sem a prop, a folha é a de hoje.
+  sugeridas?: readonly string[];
 }) {
   const isProduto = type === "product";
   const { tree } = useCategories();
@@ -84,6 +88,7 @@ export function CategoriaSheet({
     if (!isProduto && !set.has("servicos")) nomes.push("Servicos");
     return nomes;
   }, [gerenciadas, categoriasLegado, isProduto]);
+  const doRamo = isProduto && lista.length === 0 ? (sugeridas || []) : [];
 
   const corPorNome = useMemo(() => {
     const map: Record<string, string | null> = {};
@@ -125,6 +130,16 @@ export function CategoriaSheet({
             />
           ) : (
             <View>
+              {doRamo.length > 0 ? (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={[s.hint, { marginTop: 0, marginBottom: 6 }]}>Sugestões do seu ramo — toque para usar:</Text>
+                  <View style={s.chips}>
+                    {doRamo.map((c) => (
+                      <Chip key={"ramo-" + c} label={c} onPress={() => escolherLegado(c)} />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               <View style={s.chips}>
                 {lista.map((c) => (
                   <Chip
