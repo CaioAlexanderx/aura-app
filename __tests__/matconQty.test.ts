@@ -58,6 +58,11 @@ describe("fraseDeEmbalagem — a frase do momento 'olha isso'", () => {
     expect(fraseDeEmbalagem({ ...base, purchaseUnit: "cx" })).toBe("= 6 cx · 13,92 m² · sobra 1,42 m²");
   });
 
+  it("QA 22/09/2026 — 1 caixa no singular, não '1 caixas'", () => {
+    // Caixa de 2,5 m², quantidade 1: fecha em 1 caixa só, com sobra.
+    expect(fraseDeEmbalagem({ ...base, qty: 1, purchaseFactor: 2.5 })).toBe("= 1 caixa · 2,5 m² · sobra 1,5 m²");
+  });
+
   it("sem sobra, some o '· sobra' (quantidade fecha na embalagem cheia)", () => {
     expect(fraseDeEmbalagem({ ...base, qty: 4.64 })).toBe("= 2 caixas · 4,64 m²");
   });

@@ -168,39 +168,45 @@ export function CalculadoraAmbiente({
           const area = areaDoAmbiente(parseQtyInput(l.largura), parseQtyInput(l.comprimento));
           return (
             <View key={l.id} style={s.amb} testID={"matcon-calc-ambiente-" + i}>
-              <TextInput
-                testID={"matcon-calc-nome-" + i}
-                style={s.ambNome}
-                value={l.nome}
-                onChangeText={v => setCampo(l.id, "nome", v)}
-                placeholder={nomeSugerido(i)}
-                placeholderTextColor={Colors.ink3}
-                maxLength={18}
-              />
-              <TextInput
-                testID={"matcon-calc-largura-" + i}
-                style={s.ambCampo}
-                value={l.largura}
-                onChangeText={v => setCampo(l.id, "largura", v.replace(/[^\d.,]/g, ""))}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={Colors.ink3}
-                maxLength={7}
-                selectTextOnFocus
-              />
-              <Text style={s.ambX}>×</Text>
-              <TextInput
-                testID={"matcon-calc-comprimento-" + i}
-                style={s.ambCampo}
-                value={l.comprimento}
-                onChangeText={v => setCampo(l.id, "comprimento", v.replace(/[^\d.,]/g, ""))}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={Colors.ink3}
-                maxLength={7}
-                selectTextOnFocus
-              />
-              <Text style={s.ambM}>m</Text>
+              {/* QA 22/09/2026: rótulo + 2 campos + "×"/"m" nunca quebram
+                  entre si — só o resultado ("= 14,00 m²") cai pra linha de
+                  baixo quando não cabe. Por isso o grupo fica isolado num
+                  nowrap; o wrap continua só no .amb de fora. */}
+              <View style={s.ambCore}>
+                <TextInput
+                  testID={"matcon-calc-nome-" + i}
+                  style={s.ambNome}
+                  value={l.nome}
+                  onChangeText={v => setCampo(l.id, "nome", v)}
+                  placeholder={nomeSugerido(i)}
+                  placeholderTextColor={Colors.ink3}
+                  maxLength={18}
+                />
+                <TextInput
+                  testID={"matcon-calc-largura-" + i}
+                  style={s.ambCampo}
+                  value={l.largura}
+                  onChangeText={v => setCampo(l.id, "largura", v.replace(/[^\d.,]/g, ""))}
+                  keyboardType="decimal-pad"
+                  placeholder="—"
+                  placeholderTextColor={Colors.ink3}
+                  maxLength={7}
+                  selectTextOnFocus
+                />
+                <Text style={s.ambX}>×</Text>
+                <TextInput
+                  testID={"matcon-calc-comprimento-" + i}
+                  style={s.ambCampo}
+                  value={l.comprimento}
+                  onChangeText={v => setCampo(l.id, "comprimento", v.replace(/[^\d.,]/g, ""))}
+                  keyboardType="decimal-pad"
+                  placeholder="—"
+                  placeholderTextColor={Colors.ink3}
+                  maxLength={7}
+                  selectTextOnFocus
+                />
+                <Text style={s.ambM}>m</Text>
+              </View>
               {area > 0 ? (
                 <Text style={s.ambEq} testID={"matcon-calc-area-" + i}>= {fmtArea(area, unit)}</Text>
               ) : null}
@@ -313,25 +319,35 @@ const s = StyleSheet.create({
 
   body: { flexGrow: 0, flexShrink: 1, paddingHorizontal: 16 },
 
-  // .amb do mockup: uma linha em português, que quebra em 390px sem cortar.
+  // .amb do mockup: uma linha em português. QA 22/09/2026 — em 390px o
+  // rótulo e os dois campos nunca podem quebrar entre si (formulário
+  // ilegível); só o resultado ("= 14,00 m²") cai pra linha de baixo
+  // quando falta espaço. Por isso o grupo nowrap (ambCore) é um único
+  // item do flex-wrap de fora.
   amb: {
     flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6,
     paddingVertical: 9, borderTopWidth: 1, borderTopColor: Colors.border,
   },
+  ambCore: {
+    flexDirection: "row", alignItems: "center", flexWrap: "nowrap", gap: 6,
+    flexShrink: 0,
+  },
   ambNome: {
     fontSize: 14, fontWeight: "600", color: Colors.ink,
-    minWidth: 62, maxWidth: 120, paddingVertical: 0,
+    width: 70, flexShrink: 0, paddingVertical: 0,
   },
+  // ≈64px cada (QA): cabem "12,50" com sobra, e os dois nunca disputam
+  // espaço com o rótulo ou entre si.
   ambCampo: {
     fontFamily: MONO, fontSize: 13, fontWeight: "600", color: Colors.ink,
-    minWidth: 52, textAlign: "center",
-    paddingHorizontal: 8, paddingVertical: 4,
+    width: 64, flexShrink: 0, textAlign: "center",
+    paddingHorizontal: 6, paddingVertical: 4,
     backgroundColor: Colors.bg3, borderRadius: 8,
     borderWidth: 1, borderColor: Colors.border2,
     borderBottomWidth: 2, borderBottomColor: Colors.violet,
   },
-  ambX: { fontSize: 13, color: Colors.ink2 },
-  ambM: { fontSize: 13, color: Colors.ink2 },
+  ambX: { fontSize: 13, color: Colors.ink2, flexShrink: 0 },
+  ambM: { fontSize: 13, color: Colors.ink2, flexShrink: 0 },
   ambEq: {
     fontFamily: MONO, fontSize: 12, color: Colors.violet3,
     marginLeft: "auto" as any, flexShrink: 0,

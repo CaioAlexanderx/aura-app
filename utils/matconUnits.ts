@@ -111,6 +111,17 @@ export function toPackages(qty: number, factor: number): { packages: number; cov
 // crescer isto é decisão de PO, não digitação livre.
 export const PURCHASE_UNITS = ["cx", "pct", "sc", "rolo", "lata", "balde", "mlh", "un"] as const;
 
+// QA 22/09/2026: "1 caixas" no hint do carrinho (CartPanel), na calculadora
+// de ambiente e na ficha do produto — as três frases contam embalagem e
+// as três erravam o singular na mesma forma. Fonte única: "7 caixas" / "1
+// caixa" sem unidade de compra cadastrada; com unidade cadastrada ("cx",
+// "pct"...), usa o que a loja escreveu, sem inventar plural.
+export function rotuloEmbalagem(n: number, purchaseUnitLabel?: string | null): string {
+  var label = (purchaseUnitLabel || "").trim();
+  if (label) return n + " " + label;
+  return n + (n === 1 ? " caixa" : " caixas");
+}
+
 // Importacao de XML (M0, docs/matcon-faseamento-po-ux.md secao 3): a nota
 // do fornecedor vem na unidade de COMPRA (ex.: 10 caixas); o produto vende
 // na unidade de VENDA (ex.: m²). `factor` e quantas unidades de venda cabem

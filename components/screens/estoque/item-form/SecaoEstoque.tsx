@@ -30,7 +30,7 @@ import { statusEstoque, type CorDoItem, type StockMode } from "./types";
 // grupo "Materiais" + frase "Compro por" + estoque decimal — tudo atras
 // de `matconEnabled`. Sem ele, nenhuma destas importacoes muda o render:
 // UNITS continua a unica fonte dos 9 chips de hoje.
-import { MATCON_UNITS, PURCHASE_UNITS, isFractionalUnit, parseQtyInput, fmtQty, toPackages } from "@/utils/matconUnits";
+import { MATCON_UNITS, PURCHASE_UNITS, isFractionalUnit, parseQtyInput, toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -277,7 +277,7 @@ export function SecaoEstoque(p: Props) {
               />
               <Text style={st.fraseTxt}>{p.unidade + " em estoque"}</Text>
               {pacotes ? (
-                <Text style={st.fraseMono}>{"(= " + fmtQty(pacotes.packages) + " " + (p.purchaseUnit || "caixas") + ")"}</Text>
+                <Text style={st.fraseMono}>{"(= " + rotuloEmbalagem(pacotes.packages, p.purchaseUnit) + ")"}</Text>
               ) : null}
               <Text style={st.fraseTxt}>, e me avise abaixo de</Text>
               <Entrada
