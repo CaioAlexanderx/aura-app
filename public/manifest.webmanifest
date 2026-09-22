@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Aura.",
+  "short_name": "Aura",
+  "description": "O painel da sua loja no celular: caixa, vendas, estoque, clientes e financeiro.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060816",
+  "theme_color": "#060816",
+  "icons": [
+    { "src": "/aura-icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/aura-icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/aura-icone-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
