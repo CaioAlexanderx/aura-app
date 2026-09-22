@@ -98,6 +98,8 @@ import { useShojiFonts } from "@/components/karate/shoji";
 import { FederationLogo } from "@/components/karate/FederationLogo";
 import { useAuthStore } from "@/stores/auth";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InstalarKarateCard } from "@/components/karate/InstalarKarateCard";
+import { useCorDaBarraDeStatus } from "@/hooks/useCorDaBarraDeStatus";
 
 // roles=null → visível para todos os papéis da federação.
 // roles=[...] → visível só para os papéis listados.
@@ -529,6 +531,9 @@ function BottomTabNav() {
 
 export function KarateShell() {
   useShojiFonts();   // carrega as fontes Shoji (web) em todo o shell
+  // PWA 2b.1 (22/09/2026): barra de status no tom do papel enquanto o shell
+  // do Karatê estiver montado. Ver o mesmo bloco em DojoShell.
+  useCorDaBarraDeStatus(ShojiPalette.paperWarm);
   const { width } = useWindowDimensions();
   // Topbar mobile: marca e nome da federação logada (ver FederationLogo).
   const { federationName, federationLogoUrl } = useKarateFederation();
@@ -567,6 +572,9 @@ export function KarateShell() {
         {/* Topbar mobile é clara (KarateColors.glass) — sino no tom default */}
         <NotificationBell />
       </View>
+      {/* PWA 2b.1 (22/09/2026): convite para instalar o app. Ver o mesmo
+          bloco em DojoShell — a federação também não passa pelas abas. */}
+      <InstalarKarateCard contexto="federacao" />
       <View style={styles.content}>
         <PageTransition>
           <Slot />

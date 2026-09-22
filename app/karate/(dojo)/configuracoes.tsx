@@ -65,6 +65,7 @@ import { ContaAuraCard } from "@/components/karate/dojoMensalidades/contaAura/Co
 import { QrSettingsCard } from "@/components/karate/dojoTurmas/QrSettingsCard";
 import { DojoQrCard } from "@/components/karate/dojoTurmas/DojoQrCard";
 import { TagsConfigCard } from "@/components/karate/dojoTags/TagsConfigCard";
+import { AuraNoCelularKarateCard } from "@/components/karate/AuraNoCelularKarateCard";
 import { isoToBR, brToISO, maskDateBR, isValidEmail } from "@/components/karate/dojoAlunos/helpers";
 import { maskCnpj, maskPhone, onlyDigits } from "@/utils/masks";
 
@@ -476,6 +477,10 @@ export default function DojoConfiguracoes() {
 
       {/* F9: QR único do dojô — exibe/imprime o cartaz (mesmo bloco do toggle acima) */}
       {!!federationId && <DojoQrCard federationId={federationId} dojoName={dojoName} />}
+
+      {/* PWA 2b.1 (22/09/2026): a porta permanente para instalar o app no
+          celular. O card do shell some depois de "Agora não"; este fica. */}
+      <AuraNoCelularKarateCard />
     </ScrollView>
   );
 }
