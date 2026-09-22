@@ -150,6 +150,45 @@ Payload igual ao de hoje (`POST/PATCH /products`): `cest`, `origem`, `icms_st_pa
 ### Config fiscal da empresa
 `nfce_config.regime` ∈ `simples | presumido | real` (se ainda não existir): decide CSOSN vs CST. Front mostra a pergunta "imposto já veio recolhido" só quando `regime = simples` (default quando ausente).
 
+## M4 — Profundidade (lote/tonalidade, devolução de sobra, compras)
+
+Mockup: `docs/mockups/matcon-m4-profundidade.html`. Fora, de propósito: multi-depósito, kits/composições, cotação com vários fornecedores, alçada de desconto, classe A/B/C, inventário com coletor.
+
+### Lote / tonalidade
+Gate: `pdv_settings.matcon_lots_enabled` (boolean, default `false`) — "Controlo lote e tonalidade nos produtos vendidos em m² e m³". Só produtos com `unit` ∈ `m²`, `m³`.
+
+`product_lots`: `id`, `company_id`, `product_id`, `lot_code` (texto livre: "27B"), `shade` (tonalidade, texto livre, nullable), `caliber` (bitola, texto livre, nullable), `qty` numeric(12,3) (saldo do lote na unidade de venda), `received_at`, `source_invoice` (número do XML), timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET /companies/:id/products/:pid/lots` | lotes com saldo > 0, do mais antigo para o mais novo |
+| `POST .../products/:pid/lots` | `{lot_code, shade?, caliber?, qty, source_invoice?}` — criado pela conferência do XML (`DanfeImportModal`) |
+| `PATCH .../lots/:lid` | ajuste de saldo/tonalidade |
+| venda (`POST /pdv/sale`) | `items[].lot_allocations[] {lot_id, quantity}` opcional; o backend baixa por lote e, sem alocação, baixa do mais antigo (FIFO). Soma das alocações = `quantity`. |
+| entrega | `deliveries.items[].lot_code` derivado das alocações (o romaneio mostra o lote) |
+| devolução | item devolvido com `lot_id` volta ao saldo daquele lote |
+
+`GET /products` devolve `lots_summary: { count, lots: [{id, lot_code, qty}] }` quando o gate está ligado (a lista mostra "148,48 m² em 2 lotes").
+
+### Devolução de sobra de obra (delta no wizard de troca)
+- `returns.items[].quantity` aceita numeric(12,3); item de unidade fracionada com `purchase_factor`: só múltiplos de caixa fechada voltam ao estoque — `restock_qty = floor(quantity / purchase_factor) × purchase_factor`; o resto é `not_restocked_qty` (R$ 0, registrado para auditoria). Sem fator: volta tudo.
+- `returns.items[].lot_id` opcional (volta ao lote de origem).
+- Fluxo "não vai levar nada": a troca fecha sem itens novos com `settlement` ∈ `store_credit | refund` (o crédito na loja é o vale que já existe no crediário). Nada novo de tabela além das colunas acima.
+
+### Compras
+Chave de módulo `matcon.compras` (Negócio). Fornecedor = `supplier_name`/`supplier_cnpj` do último XML importado daquele produto (`products.last_supplier_name`, `last_supplier_cnpj`, `last_purchase_unit_cost`, `last_purchase_at` — gravados pelo import).
+
+`GET /companies/:id/matcon/purchase-suggestions` → `{ suggestions: [{ product_id, name, unit, stock, min_stock, weekly_sales (últimos 30 dias ÷ 4,3), suggested_qty, est_cost, supplier_name, supplier_cnpj, days_to_stockout }], summary: { total_est_cost, items_below_min, suppliers } }`. Regra da sugestão: `suggested_qty = max(min_stock × 1,5, weekly_sales × 3) − stock`, arredondada para cima na unidade de compra quando houver `purchase_factor`.
+
+`purchase_orders`: `id`, `company_id`, `number` ("C-0042"), `status` ∈ `draft | sent | received | cancelled`, `supplier_name`, `supplier_cnpj`, `supplier_phone`, `items[] {product_id, name, unit, quantity, unit_cost_est, received_qty}`, `total_est`, `sent_at`, `received_at`, `received_invoice` (número do XML), timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET .../purchase-orders?status=` | lista + `summary {draft, sent, received_7d}` `{count, total}` |
+| `POST .../purchase-orders` | cria de uma seleção de sugestões (status `draft`) |
+| `PATCH .../purchase-orders/:oid` | itens/quantidades, `status: sent` grava `sent_at` (o WhatsApp é aberto pelo front com o texto do pedido) |
+| import de XML | quando o XML tem `supplier_cnpj` igual ao de um pedido `sent`, o backend casa itens por `product_id`, grava `received_qty`, e fecha (`received`) quando tudo chegou; parcial fica `sent` com `received_qty` |
+
 ## Checklist de aceite do backend (M0)
 
 - [ ] `pdv_settings.matcon_enabled` persiste via PUT parcial e volta no GET / `auth/me`

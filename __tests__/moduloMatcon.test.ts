@@ -23,13 +23,14 @@ jest.mock("@tanstack/react-query", () => ({ useQuery: jest.fn() }));
 
 import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
 
-const MODS = ["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.config"] as const;
+const MODS = ["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.compras", "matcon.config"] as const;
 
 describe("módulo Matcon: chaves próprias nos dois mapas", () => {
   test("plano mínimo por tela", () => {
     expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("negocio");
     expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("negocio");
     expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("negocio");
     expect(MODULE_PLAN_MAP["matcon.config"]).toBe("essencial");
   });
 

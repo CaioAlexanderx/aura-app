@@ -104,6 +104,8 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'matcon.orcamentos':   'negocio',
   'matcon.entregas':     'negocio',
   'matcon.profissionais':'negocio',
+  // 22/09/2026 (M4): compras (sugestao + pedido de compra) com chave propria.
+  'matcon.compras':      'negocio',
   'matcon.config':       'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
@@ -156,7 +158,7 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 22/09/2026 (Matcon): mesma umbrella do otica.access/food.access. Quando
   // o produto pedir granularidade (ex.: entregador so ve Entregas), separar
   // as chaves aqui e em components/MembersSection.tsx.
-  'matcon.access': ['matcon.orcamentos','matcon.entregas','matcon.profissionais','matcon.config'],
+  'matcon.access': ['matcon.orcamentos','matcon.entregas','matcon.profissionais','matcon.compras','matcon.config'],
 };
 
 // Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,
