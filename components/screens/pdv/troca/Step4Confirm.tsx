@@ -20,8 +20,15 @@
 //   - Chip simples permanece como caminho padrao (auto-preenche 100%
 //     do valor em um unico split). Toggle avancado habilita edicao
 //     granular de splits.
+//
+// 22/09/2026 (Matcon M4 — "devolução de sobra de obra"):
+//   - devolverValor (prop do TrocaModal, estado explícito do wizard):
+//     quando true, no mount pré-seleciona o refund method
+//     crediario_credito ("Crédito na loja") caso ainda não haja
+//     refundSplits — só quando netAmount < 0 (há algo a devolver). Vem
+//     do botão âmbar "Não vai levar nada — devolver o valor" do Step3.
 // ============================================================
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   View, Text, Pressable, StyleSheet, useWindowDimensions,
 } from "react-native";
@@ -48,6 +55,9 @@ type Props = {
   onChangePaymentSplits: (next: PaymentSplit[]) => void;
   onChangeRefundSplits: (next: RefundSplit[]) => void;
   onChangeAddress: (next: CustomerAddress) => void;
+  /** 22/09/2026 (M4): true quando o cliente veio pelo botão âmbar "Não
+   *  vai levar nada — devolver o valor" do Step3. */
+  devolverValor?: boolean;
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
@@ -176,6 +186,7 @@ export function Step4Confirm({
   returnedValue, newValue, netAmount,
   paymentSplits, refundSplits,
   onChangePaymentSplits, onChangeRefundSplits,
+  devolverValor,
 }: Props) {
   const { width } = useWindowDimensions();
   const isWide = width > 880;
@@ -202,6 +213,19 @@ export function Step4Confirm({
   // Toggle modo avancado (split multi-metodo)
   const [showPaySplit, setShowPaySplit] = useState(false);
   const [showRefundSplit, setShowRefundSplit] = useState(false);
+
+  // 22/09/2026 (M4) — no mount, se devolverValor (prop do TrocaModal)
+  // veio true: pré-seleciona "Crédito na loja" (crediario_credito) —
+  // caminho "não vai levar nada" do Step3. Só uma vez por montagem do
+  // Step4 (Step3/Step4 são irmãos condicionais — cada visita ao Step4
+  // remonta o componente) e só quando ainda não há refundSplits, pra não
+  // sobrescrever uma escolha manual do vendedor.
+  useEffect(() => {
+    if (netAmount < 0 && refundSplits.length === 0 && devolverValor) {
+      onChangeRefundSplits([{ method: "crediario_credito", amount: parseFloat(Math.abs(netAmount).toFixed(2)) }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function pickPay(method: PaymentMethod) {
     // Chip simples: substitui splits por um unico com valor total.

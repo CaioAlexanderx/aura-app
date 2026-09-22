@@ -42,6 +42,7 @@ import { useAuthStore } from "@/stores/auth";
 import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow, PaymentSplit } from "./types";
 import { fmtBRL } from "./types";
+import { resumoSucesso } from "./devolucaoUtil";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
 type Props = {
@@ -119,6 +120,23 @@ export function Step5Success({
       quantity: Number(it.quantity) || 1,
       unit_price: Number(it.unit_price) || 0,
     }));
+
+  // 22/09/2026 (M4 — docs/CONTRACT_MATCON.md §"Devolução de sobra de obra",
+  // docs/mockups/matcon-m4-profundidade.html §"Confirmação e sucesso"):
+  // "estoque +2 cx no lote 27B · vale de R$ 254,74". Leitura tolerante de
+  // result.returns.items[] — backend antigo/sem Matcon não manda o campo
+  // e nenhuma linha nova aparece (mesmo comportamento de hoje).
+  const restockItemsRaw: any[] = Array.isArray(result?.returns?.items) ? result.returns.items : [];
+  const restockResumo = resumoSucesso(restockItemsRaw.map((it: any) => {
+    const factor = Number(it?.purchase_factor);
+    const restockQty = Number(it?.restock_qty);
+    const caixasFechadas = factor > 0 && Number.isFinite(restockQty) ? Math.round(restockQty / factor) : null;
+    const credito = Number(
+      it?.restock_credit ?? it?.credit_amount ??
+      (Number.isFinite(restockQty) ? restockQty * Number(it?.unit_price || 0) : 0)
+    ) || 0;
+    return { caixasFechadas, lotCode: it?.lot_code || null, credito };
+  }));
 
   const customerName = result?.sale?.customer_name || null;
   const customerPhone = result?.sale?.customer_phone || null;
@@ -285,6 +303,13 @@ export function Step5Success({
         )}
       </View>
 
+      {restockResumo ? (
+        <View style={s.restockLine}>
+          <Icon name="check" size={13} color="#34d399" />
+          <Text style={s.restockLineTxt}>{restockResumo}</Text>
+        </View>
+      ) : null}
+
       {/* C6.2 — botao Reemitir nota quando ha falha ou pendente */}
       {perOriginLocal.some((i) => i.status === "falha" || i.status === "pendente") && (
         <Pressable
@@ -440,6 +465,15 @@ const s = StyleSheet.create({
     alignSelf: "center",
   },
   reemitirTxt: { color: "#a78bfa", fontSize: 13, fontWeight: "700" },
+  // 22/09/2026 (M4)
+  restockLine: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(16,185,129,0.10)",
+    borderWidth: 1, borderColor: "rgba(16,185,129,0.3)",
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    marginTop: 14, maxWidth: 520, width: "100%",
+  },
+  restockLineTxt: { color: "#6ee7b7", fontSize: 12.5, flex: 1 },
   xfilial: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(37,99,235,0.12)",
