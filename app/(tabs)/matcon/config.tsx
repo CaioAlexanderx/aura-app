@@ -42,6 +42,11 @@ type Draft = {
   deliveryDays: string;
   quoteValidDays: string;
   quoteWarnDays: string;
+  // M3 — Clube do Profissional (docs/mockups/matcon-m3-clube-calculadora.html#config).
+  clubEnabled: boolean;
+  pointsPer100: string;
+  pointsToCoupon: string;
+  couponValue: string;
 };
 
 function draftFromSettings(m: MatconSettings): Draft {
@@ -52,6 +57,10 @@ function draftFromSettings(m: MatconSettings): Draft {
     deliveryDays: String(m.matcon_default_delivery_days),
     quoteValidDays: String(m.matcon_quote_valid_days),
     quoteWarnDays: String(m.matcon_quote_warn_days),
+    clubEnabled: m.matcon_club_enabled,
+    pointsPer100: String(m.matcon_points_per_100),
+    pointsToCoupon: String(m.matcon_points_to_coupon),
+    couponValue: String(m.matcon_coupon_value),
   };
 }
 
@@ -118,6 +127,23 @@ export default function MatconConfigScreen() {
       return;
     }
 
+    const pointsPer100 = parseInt(draft.pointsPer100.replace(/\D/g, ""), 10);
+    const pointsToCoupon = parseInt(draft.pointsToCoupon.replace(/\D/g, ""), 10);
+    const couponValue = parseInt(draft.couponValue.replace(/\D/g, ""), 10);
+
+    if (!isFinite(pointsPer100) || pointsPer100 < 1 || pointsPer100 > 10000) {
+      toast.error("Os pontos por R$ 100 têm que ficar entre 1 e 10.000");
+      return;
+    }
+    if (!isFinite(pointsToCoupon) || pointsToCoupon < 1 || pointsToCoupon > 100000) {
+      toast.error("Os pontos por cupom têm que ficar entre 1 e 100.000");
+      return;
+    }
+    if (!isFinite(couponValue) || couponValue < 1 || couponValue > 10000) {
+      toast.error("O valor do cupom tem que ficar entre R$ 1 e R$ 10.000");
+      return;
+    }
+
     // Só manda pro PUT (merge parcial) as chaves que mudaram de fato.
     const patch: Partial<PdvSettings> = {};
     if (!sameUnits(draft.units, loaded.matcon_units)) patch.matcon_units = draft.units;
@@ -126,6 +152,10 @@ export default function MatconConfigScreen() {
     if (deliveryDays !== loaded.matcon_default_delivery_days) patch.matcon_default_delivery_days = deliveryDays;
     if (quoteValidDays !== loaded.matcon_quote_valid_days) patch.matcon_quote_valid_days = quoteValidDays;
     if (quoteWarnDays !== loaded.matcon_quote_warn_days) patch.matcon_quote_warn_days = quoteWarnDays;
+    if (draft.clubEnabled !== loaded.matcon_club_enabled) patch.matcon_club_enabled = draft.clubEnabled;
+    if (pointsPer100 !== loaded.matcon_points_per_100) patch.matcon_points_per_100 = pointsPer100;
+    if (pointsToCoupon !== loaded.matcon_points_to_coupon) patch.matcon_points_to_coupon = pointsToCoupon;
+    if (couponValue !== loaded.matcon_coupon_value) patch.matcon_coupon_value = couponValue;
 
     if (Object.keys(patch).length === 0) { setDirty(false); return; }
 
@@ -269,6 +299,69 @@ export default function MatconConfigScreen() {
                 dias antes de vencer.
               </Text>
             </View>
+
+            <View style={st.divider} />
+
+            {/* ── Clube do profissional (M3) ── */}
+            <View style={st.frase}>
+              <Text style={st.fraseText}>
+                Tenho clube do profissional{" "}
+                <Switch
+                  value={draft.clubEnabled}
+                  onValueChange={(v) => set({ clubEnabled: v })}
+                  trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+                  thumbColor={draft.clubEnabled ? Colors.violet : Colors.ink3}
+                  testID="matcon-cfg-clube"
+                />{" "}
+                e ele vale para pedreiro, pintor, eletricista e quem mais eu marcar.
+              </Text>
+            </View>
+
+            {draft.clubEnabled && (
+              <>
+                <View style={st.divider} />
+
+                <View style={st.frase}>
+                  <Text style={st.fraseText}>
+                    A cada R$ 100 em compras indicadas, o profissional ganha{" "}
+                    <TextInput
+                      style={st.editSmall}
+                      value={draft.pointsPer100}
+                      onChangeText={(v) => set({ pointsPer100: v.replace(/\D/g, "").slice(0, 5) })}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      testID="matcon-cfg-pontos-por-100"
+                    />{" "}
+                    pontos.
+                  </Text>
+                </View>
+
+                <View style={st.divider} />
+
+                <View style={st.frase}>
+                  <Text style={st.fraseText}>
+                    <TextInput
+                      style={st.editSmall}
+                      value={draft.pointsToCoupon}
+                      onChangeText={(v) => set({ pointsToCoupon: v.replace(/\D/g, "").slice(0, 6) })}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      testID="matcon-cfg-pontos-por-cupom"
+                    />{" "}
+                    pontos viram um cupom de R${" "}
+                    <TextInput
+                      style={st.editSmall}
+                      value={draft.couponValue}
+                      onChangeText={(v) => set({ couponValue: v.replace(/\D/g, "").slice(0, 5) })}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      testID="matcon-cfg-valor-cupom"
+                    />{" "}
+                    para ele usar na loja.
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           <Text style={st.note}>Sem "fator de conversão", sem "unidade de compra". Se precisasse de um manual, estaria errado.</Text>

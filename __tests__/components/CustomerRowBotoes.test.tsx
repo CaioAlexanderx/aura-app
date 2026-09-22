@@ -13,6 +13,10 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// Matcon M3 (22/09/2026): CustomerRow agora importa MarcarProfissionalModal,
+// que usa Icon — e react-native-svg não passa pelo transformIgnorePatterns
+// do projeto (mesmo mock de __tests__/components/CartPanelMatcon.test.tsx).
+jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("@/hooks/usePdvSettings", () => ({

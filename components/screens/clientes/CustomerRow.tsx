@@ -18,6 +18,9 @@ import {
 } from "./customerActions";
 import { ReceberPagamentoModal } from "./ReceberPagamentoModal";
 import { HistoricoComprasModal } from "./HistoricoComprasModal";
+import { readMatconSettings } from "@/constants/matcon";
+import { MarcarProfissionalModal } from "@/components/matcon/MarcarProfissionalModal";
+import { TRADE_LABELS, type Professional, type ProfessionalTrade } from "@/services/matconApi";
 
 // Resolve o TokenCor (indireção de ./segmentos.ts — módulo puro, sem
 // import de react-native) pra cor real. O laranja de "Devendo" nunca
@@ -80,6 +83,12 @@ export function CustomerRow({
     : `última compra há ${pluralize(diasUltimaCompra, "dia")}`;
   const { settings: pdvSettings } = usePdvSettings();
   const oticaEnabled = pdvSettings.otica_enabled === true;
+  // 22/09/2026 (Matcon M3): "Marcar como profissional" e a linha
+  // "Profissional · ..." só existem com o clube ligado — matcon_club_enabled
+  // desliga só o clube sem desligar o resto do Matcon (docs/CONTRACT_MATCON.md).
+  const matcon = readMatconSettings(pdvSettings);
+  const matconClubOn = matcon.matcon_enabled && matcon.matcon_club_enabled;
+  const [showMarcarProfissional, setShowMarcarProfissional] = useState(false);
   const showBadge = showCompanyBadge && c.company_name;
   const hasCredit = (c.creditBalance || 0) > 0;
   const qc = useQueryClient();
@@ -115,6 +124,13 @@ export function CustomerRow({
     // Invalida lista de clientes (tem credit_balance) + saldos de credit
     qc.invalidateQueries({ queryKey: ["customers"] });
     qc.invalidateQueries({ queryKey: ["credit-balances"] });
+  }
+
+  function handleProfessionalMarked(_p: Professional) {
+    // MarcarProfissionalModal já mostra o toast de sucesso; aqui só
+    // invalidamos pra ficha reler `c.professional` (GET /customers, M3).
+    qc.invalidateQueries({ queryKey: ["customers"] });
+    setShowMarcarProfissional(false);
   }
 
   return (
@@ -180,6 +196,23 @@ export function CustomerRow({
               </View>
             )}
           </View>
+          {/* 22/09/2026 — Matcon M3: `c.professional` vem do GET
+              /companies/:id/customers com o clube ligado (docs/CONTRACT_MATCON.md,
+              "Venda indicada") — sem chamada extra. referrals_count é opcional
+              hoje (contrato só promete id/trade/points_balance); some do texto
+              quando o backend ainda não manda. */}
+          {c.professional && (
+            <View style={s.professionalLine} testID={`cliente-profissional-${c.id}`}>
+              <Text style={s.professionalText}>
+                <Text style={s.professionalStrong}>Profissional</Text>
+                {" · " + (TRADE_LABELS[c.professional.trade as ProfessionalTrade] || c.professional.trade)}
+                {" · " + c.professional.points_balance.toLocaleString("pt-BR") + " pontos"}
+                {typeof c.professional.referrals_count === "number"
+                  ? " · " + c.professional.referrals_count + (c.professional.referrals_count === 1 ? " indicação" : " indicações")
+                  : ""}
+              </Text>
+            </View>
+          )}
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
           <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}><Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} /></View></View>
           <View style={s.actions}>
@@ -224,6 +257,14 @@ export function CustomerRow({
                 <Text style={s.actionText}>Receitas (ótica)</Text>
               </Pressable>
             )}
+            {/* 22/09/2026 — Matcon M3: profissional é um cliente marcado, não
+                um segundo cadastro. Some quando já é profissional (a linha
+                abaixo já mostra o status; marcar de novo não faz sentido). */}
+            {matconClubOn && !c.professional && (
+              <Pressable onPress={() => setShowMarcarProfissional(true)} style={s.actionBtn} testID={`cliente-marcar-profissional-${c.id}`}>
+                <Text style={s.actionText}>Marcar como profissional</Text>
+              </Pressable>
+            )}
             {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}
             {onDelete && <Pressable onPress={() => onDelete(c.id)} style={s.deleteBtn}><Text style={s.deleteText}>Excluir cliente</Text></Pressable>}
           </View>
@@ -245,6 +286,14 @@ export function CustomerRow({
             customerId={c.id}
             customerName={c.name}
           />
+          {matconClubOn && (
+            <MarcarProfissionalModal
+              visible={showMarcarProfissional}
+              onClose={() => setShowMarcarProfissional(false)}
+              onMarked={handleProfessionalMarked}
+              presetCustomer={{ id: c.id, name: c.name, phone: c.phone }}
+            />
+          )}
         </View>
       )}
     </View>
@@ -299,6 +348,13 @@ const s = StyleSheet.create({
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 6, gap: 3 },
   detailLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   detailValue: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  // Matcon M3 — linha "Profissional · ofício · N pontos · M indicações"
+  professionalLine: {
+    marginTop: 10, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+  },
+  professionalText: { fontSize: 11.5, color: Colors.ink2 },
+  professionalStrong: { fontWeight: "700", color: Colors.violet3 },
   notes: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   detailTags: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, gap: 6 },
   detailTagsLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },

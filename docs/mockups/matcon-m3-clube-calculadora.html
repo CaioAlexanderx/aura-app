@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Matcon M3: Clube do Profissional e calculadora de ambiente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Matcon M3, 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Base: docs/matcon-faseamento-po-ux.md (§3 M3, §4 e §4b) e
+     docs/CONTRACT_MATCON.md ("M3 clube"). Molde visual:
+     docs/mockups/matcon-modulo.html — mesmos tokens, mesma
+     linguagem, mesmo shell de varejo. Nada de paleta própria.
+
+     O momento "olha isso" do M3 é um só, em duas pontas: o vendedor
+     toca em "calcular ambiente" no piso, digita 3,5 × 4,2 e o sistema
+     devolve as caixas — e o pedreiro que indicou a dona Marlene recebe
+     no WhatsApp "você ganhou 120 pontos". Clube do profissional é
+     coisa de Leroy Merlin (Leroy Com Você, Maiolini, Matergi); a
+     lojinha de bairro nunca teve.
+
+     Seis telas, e as decisões que cada uma existe para validar:
+
+     1. CALCULADORA DE AMBIENTE (Caixa › carrinho › ResponsiveSheet) —
+        não é tela nova nem aba de conversão: é a mesma folha que sobe
+        no celular e vira balão no desktop, aberta pelo botão
+        "calculator" que o M0 já desenhou no item em m². Ambiente é uma
+        LINHA em português ("Sala 3,5 × 4,2 m = 14,70 m²"), a perda é a
+        frase da config e o resultado é grande: m², caixas e sobra. O
+        botão devolve a quantidade ao carrinho — quem arredonda para a
+        caixa cheia continua sendo o M0. Números: o §5.8 da pesquisa usa
+        10% de perda e chega a 16,17 m²; aqui a loja está com os 8% da
+        config do M0, então a conta honesta é 15,88 m² → 7 caixas.
+
+     2. CAIXA › INDICADO POR — o chip nasce ao lado de "Cliente" e
+        "Vendedor", na mesma barra, só com o toggle on. Vazio ele é um
+        convite ("+ indicar profissional"), não um campo obrigatório na
+        frente da fila. Embaixo, uma linha diz o que vai acontecer ANTES
+        de acontecer — "Seu Nivaldo ganha 120 pontos com esta venda" —
+        porque o vendedor precisa prometer isso em voz alta.
+
+     3. FICHA DO CLIENTE › PROFISSIONAL — profissional não é cadastro
+        paralelo: é um cliente marcado com um ofício, no mesmo lugar e
+        com o mesmo peso do "Receitas (ótica)" da Ótica. Marcar é
+        escolher o ofício numa folha de chips; marcado, a ficha ganha
+        UMA linha com pontos e indicações.
+
+     4. /matcon/profissionais — não é lista de cadastro: é o ranking do
+        mês, e o cabeçalho mostra o dinheiro que entrou por indicação —
+        o número que faz o dono abrir a tela. Ações sempre visíveis no
+        card (regra 7). Estado vazio que ensina o primeiro passo.
+
+     5. REGRAS DO CLUBE (/matcon/config) — duas frases a mais no padrão
+        do M0, não um formulário de regras. Chaves:
+        matcon_points_per_100 (pontos a cada R$ 100 indicados),
+        matcon_points_to_coupon (pontos que viram cupom) e
+        matcon_coupon_value (valor do cupom em reais). O resgate usa a
+        tabela de cupons que já existe.
+
+     6. O WHATSAPP DO PEDREIRO (bônus) — o profissional não instala
+        nada: recebe o extrato e o link de resgate no WhatsApp, como o
+        cliente da Ótica recebe "óculos prontos".
+
+     Números batem entre as telas de propósito: a venda da Marlene é de
+     R$ 1.220,58 → 12 faixas de R$ 100 → 120 pontos; Seu Nivaldo fica
+     com 1.240 pontos, que dão um cupom de R$ 120 e sobram 40.
+
+     Fora, de propósito: níveis e medalhas do clube, catálogo de
+     prêmios, app do profissional, comissão para arquiteto e tabela de
+     preço por perfil (§5.10, M4). No M3 existem só duas coisas:
+     ponto por compra indicada e cupom no resgate.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 56px; line-height: .95; letter-spacing: -.025em; margin: 0; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .hero .actions { display: flex; gap: 8px; padding-bottom: 6px; flex-wrap: wrap; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 720px; line-height: 21px; overflow-wrap: anywhere; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .btn { font: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+  .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .btn.ghost { background: transparent; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; }
+  .btn.wa { border-color: rgba(52,211,153,.45); color: var(--green); }
+  .btn.block { width: 100%; justify-content: center; }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+  .chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .box + .box { margin-top: 8px; }
+  .note { font-size: 11px; color: var(--ink3); margin-top: 10px; }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .cols { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
+  .cols > * { min-width: 0; }
+
+  /* frase com número editável no meio — a config do Matcon é assim */
+  .frase { font-size: 15px; line-height: 2.1; color: var(--ink2); }
+  .frase + .frase { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 3px 9px; margin: 0 2px; }
+  .edit.vazio { color: var(--ink3); }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex-shrink: 0; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink3); transition: .2s; }
+  .sw.on { background: rgba(124,58,237,.40); border-color: var(--violet); }
+  .sw.on::after { left: 21px; background: var(--violet); }
+  .frase .sw { display: inline-block; vertical-align: -8px; margin: 0 4px; }
+
+  /* shell de varejo */
+  .with-side { display: grid; grid-template-columns: 216px 1fr; gap: 18px; align-items: start; }
+  .with-side > * { min-width: 0; }
+  .sidebar { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 12px 10px; font-size: 13px; position: sticky; top: 56px; }
+  .sidebar .grp { font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); padding: 12px 8px 6px; }
+  .sidebar .it { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; color: var(--ink2); }
+  .sidebar .it .g { width: 16px; font-family: var(--mono); font-size: 9px; color: var(--ink3); text-align: center; }
+  .sidebar .it.on { background: var(--violetD); color: var(--violet3); font-weight: 700; box-shadow: inset 0 0 0 1px var(--border2); }
+  .sidebar .it.new { color: var(--ink); }
+  .sidebar .newtag { font-size: 9px; font-weight: 800; color: var(--violet3); margin-left: auto; }
+
+  /* esteira / ranking */
+  .rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0 20px; }
+  .station { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; position: relative; min-width: 0; }
+  .station .n { font-family: var(--serif); font-size: 34px; line-height: 1; overflow-wrap: anywhere; }
+  .station .l { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-top: 6px; }
+  .station .money { font-family: var(--mono); font-size: 12px; color: var(--ink2); margin-top: 6px; }
+  .station.on { border-color: var(--violet); background: var(--violetD); }
+  .station.warn { border-color: rgba(251,191,36,.45); }
+  .station.warn .n, .station.warn .money { color: var(--amber); }
+  .station.lost .n { color: var(--ink3); }
+
+  .search { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; color: var(--ink3); font-size: 13px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .card > * { min-width: 0; }
+  .card .who { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card .meta { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+  .card .meta b { color: var(--ink2); font-weight: 600; }
+  .card .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
+  .card .tot { font-family: var(--mono); font-size: 17px; font-weight: 500; }
+  .card.warn { border-left: 3px solid var(--amber); }
+  /* regra 7: nada de hover-reveal. Ações do card sempre visíveis. */
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+  .badge { border: 1px solid; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  .b-open { color: var(--violet3); border-color: var(--violet3); }
+  .b-due { color: var(--amber); border-color: var(--amber); background: var(--amberD); }
+  .b-new { color: var(--green); border-color: var(--green); background: var(--greenD); }
+  .empty { border: 1px dashed var(--border2); border-radius: 14px; padding: 26px 18px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .empty .big { font-family: var(--serif); font-size: 24px; color: var(--ink); display: block; margin-bottom: 6px; }
+  .empty .one { color: var(--ink2); }
+
+  /* item do carrinho (o gatilho da calculadora, desenhado no M0) */
+  .ci { padding: 11px 0; }
+  .ci .l1 { display: flex; align-items: center; gap: 10px; }
+  .ci .av { width: 28px; height: 28px; border-radius: 8px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; font-weight: 800; font-size: 12px; color: var(--violet3); flex-shrink: 0; }
+  .ci .nm { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; }
+  .ci .vl { font-family: var(--mono); font-size: 13px; }
+  .ci .l2 { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-left: 38px; flex-wrap: wrap; }
+  .ci .un { font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+  .ci .sp { flex: 1; }
+  .dec { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--violet); border-radius: 10px; padding: 6px 10px; }
+  .dec .v { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--ink); width: 52px; text-align: right; }
+  .dec .u { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+  .hint { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; padding: 7px 10px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--border2); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+  .hint .m { font-family: var(--mono); color: var(--violet3); }
+  .hint .calc { margin-left: auto; }
+
+  /* folha da calculadora (bottom sheet no touch, popover no desktop) */
+  .sheet { max-width: 360px; border: 1px solid var(--border2); border-radius: 22px 22px 18px 18px; background: var(--bg2); padding: 8px 16px 18px; min-width: 0; }
+  .sheet .grab { width: 44px; height: 4px; border-radius: 999px; background: var(--border2); margin: 6px auto 12px; }
+  .sheet h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; margin: 0 0 2px; }
+  .sheet .lede { font-size: 12px; color: var(--ink3); margin: 0 0 12px; }
+  .amb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 9px 0; border-top: 1px solid var(--border); font-size: 14px; color: var(--ink2); min-width: 0; }
+  .amb .nm { font-weight: 600; color: var(--ink); flex: 0 0 auto; min-width: 0; }
+  .amb .eq { font-family: var(--mono); font-size: 12px; color: var(--violet3); margin-left: auto; white-space: nowrap; }
+  .amb .rm { font-size: 11px; color: var(--ink3); flex: 0 0 auto; }
+  .amb.vazio .nm, .amb.vazio { color: var(--ink3); }
+  .res { margin-top: 12px; border: 1px solid var(--violet); background: var(--violetD); border-radius: 14px; padding: 14px; }
+  .res .linha { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .res .n { font-family: var(--serif); font-size: 34px; line-height: 1.05; overflow-wrap: anywhere; }
+  .res .seta { color: var(--ink3); font-size: 20px; }
+  .res .cx { font-family: var(--serif); font-size: 34px; line-height: 1.05; color: var(--violet3); }
+  .res .d { font-family: var(--mono); font-size: 12px; color: var(--ink2); margin-top: 8px; }
+  .res .d b { color: var(--amber); font-weight: 500; }
+  .sheetfoot { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+  /* barra de ações do Caixa (Cliente · Vendedor · Indicado por) */
+  .actbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .abtn { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 6px 12px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--ink); min-width: 0; }
+  .abtn .rot { color: var(--ink3); font-weight: 500; font-size: 12px; }
+  .abtn.filled { background: rgba(124,58,237,.14); border-color: var(--border2); }
+  .abtn.convite { border-style: dashed; color: var(--violet3); background: transparent; }
+  .abtn .x { color: var(--ink3); font-size: 12px; }
+  .pop { max-width: 380px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 14px; padding: 12px; margin-top: 10px; min-width: 0; }
+  .pop h4 { margin: 0 0 8px; font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 10px; min-width: 0; }
+  .row .n { font-size: 13px; font-weight: 600; }
+  .row .m { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .row .u { margin-left: auto; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--ink2); white-space: nowrap; }
+  .row:hover { background: var(--bg4); }
+  /* regra 7: no touch não existe hover — a linha inteira é o alvo do toque */
+  @media (hover: none) { .row:hover { background: transparent; } .row { border-bottom: 1px solid var(--border); border-radius: 0; } }
+  .aviso { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--greenD); border: 1px solid rgba(52,211,153,.35); font-size: 12.5px; color: var(--ink2); flex-wrap: wrap; }
+  .aviso b { color: var(--green); }
+
+  /* ficha do cliente */
+  .fhead { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; min-width: 0; }
+  .fhead .av { width: 44px; height: 44px; border-radius: 14px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; font-family: var(--serif); font-size: 20px; color: var(--violet3); flex: 0 0 auto; }
+  .fhead h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; margin: 0; line-height: 1.1; }
+  .fhead .fmeta { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+  .prolinha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--violetD); border: 1px solid var(--border2); font-size: 13px; }
+  .prolinha .pts { font-family: var(--mono); color: var(--violet3); }
+
+  /* balão do WhatsApp */
+  .zap { max-width: 340px; margin: 0 auto; border: 1px solid var(--border2); border-radius: 26px; background: var(--bg2); padding: 16px 14px 18px; }
+  .zap .top { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink3); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .zap .top .av { width: 30px; height: 30px; border-radius: 50%; background: var(--greenD); border: 1px solid rgba(52,211,153,.35); display: grid; place-items: center; color: var(--green); font-weight: 800; font-size: 12px; }
+  .bal { margin-top: 14px; background: var(--greenD); border: 1px solid rgba(52,211,153,.35); border-radius: 14px 14px 14px 4px; padding: 12px 14px; font-size: 13.5px; line-height: 1.55; color: var(--ink2); }
+  .bal b { color: var(--ink); }
+  .bal .link { display: block; margin-top: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--violet3); overflow-wrap: anywhere; }
+  .bal .hora { display: block; text-align: right; font-size: 10px; color: var(--ink3); margin-top: 6px; }
+
+  @media (max-width: 860px) {
+    .cols, .with-side { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .hero { flex-direction: column; align-items: stretch; gap: 12px; }
+    .hero h1 { font-size: 36px; flex: none; width: 100%; }
+    .hero .actions { padding-bottom: 0; }
+    .hero .actions .btn { flex: 1 1 150px; justify-content: center; }
+    .card { grid-template-columns: 1fr; }
+    .card .right { align-items: stretch; text-align: left; width: 100%; }
+    .card .tot { text-align: left; }
+    .card .right > .badge { align-self: flex-start; }
+    .acts { justify-content: flex-start; width: 100%; }
+    .acts .btn { flex: 1 1 150px; justify-content: center; }
+    /* o ranking vira coluna rolável; a PÁGINA não rola de lado */
+    .rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
+    .station { flex: 0 0 62%; scroll-snap-align: start; }
+    .sheet, .pop, .zap { max-width: none; }
+    .amb .eq { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · Matcon <b>M3</b> · clube do profissional e calculadora · 6 telas · shell de varejo, violeta <span class="ico">#7c3aed</span>
+  <nav><a href="#calculadora">1 calculadora</a><a href="#caixa">2 caixa</a><a href="#ficha">3 ficha</a><a href="#profissionais">4 profissionais</a><a href="#config">5 regras</a><a href="#whatsapp">6 whatsapp</a></nav>
+  <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. CALCULADORA DE AMBIENTE ===================== -->
+<section class="screen" id="calculadora">
+  <div class="mock-label">1 · Caixa › carrinho › calcular ambiente (ResponsiveSheet)</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">M3</span></div>
+  <div class="hero"><h1>Quantas caixas dá<i>?</i></h1></div>
+  <p class="sub">O vendedor toca em <em>calcular ambiente</em> no piso, digita 3,5 × 4,2 e o sistema devolve as caixas. Sem tela nova, sem aba de conversão: a folha sobe no celular, vira balão no computador e some quando termina.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">O gatilho — o botão que o M0 já desenhou</div>
+      <div class="box">
+        <div class="ci">
+          <div class="l1"><div class="av">P</div><div class="nm">Porcelanato Bianco 60×60 acetinado</div><div class="vl">891,58</div></div>
+          <div class="l2"><span class="un">R$ 54,90 / m²</span><span class="sp"></span><span class="dec"><span class="v">16,24</span><span class="u">m²</span></span></div>
+          <div class="hint">
+            <span class="m">= 7 caixas · 16,24 m² · sobra 0,36 m²</span>
+            <button class="btn sm calc"><span class="ico">calculator</span> calcular ambiente</button>
+          </div>
+        </div>
+        <p class="note" style="margin-top:4px">O botão só existe em produto de unidade fracionada com compra por embalagem (m², m³, m) e com o toggle ligado. No cimento em <span class="ico">sc</span> ele não aparece: ninguém calcula ambiente de saco.</p>
+      </div>
+
+      <div class="section">No celular — a folha que sobe</div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <h3>Calcular ambiente</h3>
+        <p class="lede">Porcelanato Bianco 60×60 · caixa com 2,32 m²</p>
+
+        <div class="amb"><span class="nm">Sala</span> <span class="edit">3,5</span> × <span class="edit">4,2</span> m <span class="eq">= 14,70 m²</span></div>
+        <div class="amb vazio"><span class="nm">Cozinha</span> <span class="edit vazio">—</span> × <span class="edit vazio">—</span> m <span class="rm">remover</span></div>
+        <div class="amb" style="border-top:1px solid var(--border)"><span class="chip">+ ambiente</span><span class="eq">14,70 m² somados</span></div>
+
+        <div class="frase" style="font-size:14px;line-height:1.9;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">considero <span class="edit">8</span> % de perda por quebra e recorte.</div>
+
+        <div class="res">
+          <div class="linha"><span class="n">15,88 m²</span><span class="seta">→</span><span class="cx">7 caixas</span></div>
+          <div class="d">7 caixas fechadas dão <b>16,24 m²</b> · sobra 0,36 m²</div>
+        </div>
+
+        <div class="sheetfoot">
+          <button class="btn primary block">Usar 15,88 m²</button>
+          <button class="btn block">Usar 7 caixas fechadas</button>
+        </div>
+      </div>
+      <p class="note">No computador é exatamente este conteúdo dentro de um balão ancorado no botão <span class="ico">calculator</span> — mesmo componente, mesmos campos, nenhuma linha de texto diferente.</p>
+    </div>
+
+    <div>
+      <div class="section">Por que assim</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Ambiente é uma <b style="color:var(--ink)">linha em português</b>, não um formulário com "largura" e "comprimento" empilhados. O vendedor lê em voz alta para o cliente enquanto digita: "sala, três e meio por quatro e vinte".</p>
+        <p class="note" style="margin:0 0 10px">A perda é a mesma frase da config (<span class="ico">matcon_default_waste_pct</span>), já preenchida. O vendedor pode subir para 10% numa obra com muito recorte — e volta ao padrão na próxima venda.</p>
+        <p class="note" style="margin:0">Os dois botões existem porque as duas conversas existem no balcão: "me vê o que dá o ambiente" e "me vê só caixa fechada". Quem arredonda e mostra a sobra continua sendo o M0 — a calculadora só devolve a quantidade.</p>
+      </div>
+
+      <div class="section">O que ela não faz</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Não guarda o ambiente, não vira cadastro de obra, não calcula argamassa nem rejunte a partir do piso. Um número entra no carrinho e a folha fecha. Rodapé, parede e escada entram quando um piloto pedir.</p>
+        <p class="note" style="margin:0">A conta: 3,5 × 4,2 = 14,70 m² · +8% = 15,88 m² · ÷ 2,32 = 6,84 → 7 caixas = 16,24 m².</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. CAIXA › INDICADO POR ===================== -->
+<section class="screen" id="caixa">
+  <div class="mock-label">2 · Caixa › identificar cliente — chip "Indicado por"</div>
+  <a href="#calculadora" style="font-size:12px;font-weight:600">‹ Calculadora</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">Quem mandou o cliente<i>.</i></h1></div>
+  <p class="sub">A barra de "Cliente · Vendedor" ganha um terceiro chip, e só isso. <em>A venda fecha sem ele</em> — o chip é um convite, nunca um campo obrigatório na frente da fila.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Sem profissional ainda — o convite</div>
+      <div class="box">
+        <div class="actbar">
+          <div class="abtn filled"><span class="rot">Cliente:</span> Marlene Souza</div>
+          <div class="abtn filled"><span class="rot">Vendedor:</span> Davi</div>
+          <div class="abtn convite">+ indicar profissional</div>
+        </div>
+      </div>
+
+      <div class="section">Tocou — busca pelo nome, pelo telefone ou pelo ofício</div>
+      <div class="box">
+        <div class="search">🔍 &nbsp;niva</div>
+        <div class="pop" style="margin-top:0;max-width:none">
+          <h4>3 profissionais</h4>
+          <div class="row"><div><div class="n">Nivaldo Pereira</div><div class="m">pedreiro · (11) 97722-3344 · 9 indicações</div></div><div class="u">1.120 pts</div></div>
+          <div class="row"><div><div class="n">Nivaldo dos Santos</div><div class="m">azulejista · (11) 96110-8820 · 1 indicação</div></div><div class="u">80 pts</div></div>
+          <div class="row"><div><div class="n">Ivanilda Rocha</div><div class="m">pintora · (11) 98812-4455 · 4 indicações</div></div><div class="u">460 pts</div></div>
+          <div class="divider"></div>
+          <div class="acts" style="justify-content:flex-start"><button class="btn sm"><span class="ico">users</span> Cadastrar profissional</button><button class="btn sm ghost">Marcar um cliente que já existe</button></div>
+        </div>
+        <p class="note">Cadastrar aqui abre o mesmo cadastro rápido de cliente de sempre, com um campo a mais: o ofício. Profissional não é uma segunda agenda de gente.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Escolhido — e o que vai acontecer, dito antes</div>
+      <div class="box">
+        <div class="actbar">
+          <div class="abtn filled"><span class="rot">Cliente:</span> Marlene Souza</div>
+          <div class="abtn filled"><span class="rot">Indicado por:</span> Seu Nivaldo · pedreiro <span class="x">✕</span></div>
+        </div>
+        <div class="aviso"><span class="ico">tag</span> <span><b>Seu Nivaldo ganha 120 pontos</b> com esta venda de R$ 1.220,58.</span></div>
+        <p class="note">O vendedor consegue prometer em voz alta, e o cliente entende por que o pedreiro mandou ele aqui. Se a venda for cancelada, os pontos voltam junto.</p>
+      </div>
+
+      <div class="section">Regras de encaixe</div>
+      <div class="box">
+        <p class="note" style="margin:0">O chip só existe com o toggle ligado; desligado, a barra é exatamente a de hoje. Uma venda tem no máximo um profissional indicando, e o mesmo pedreiro pode ser cliente e comprar para ele: dois papéis da mesma ficha, não dois cadastros.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. FICHA DO CLIENTE › PROFISSIONAL ===================== -->
+<section class="screen" id="ficha">
+  <div class="mock-label">3 · Clientes › ficha (CustomerRow expandido) — marcar como profissional</div>
+  <a href="#caixa" style="font-size:12px;font-weight:600">‹ Caixa</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">Um cliente com ofício<i>.</i></h1></div>
+  <p class="sub">Profissional é um cliente marcado, na mesma posição e com o mesmo peso do botão "Receitas (ótica)" da Ótica. <em>Sem tela de cadastro paralela</em>, sem lista separada de gente.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Antes — a ficha de sempre, com um botão a mais</div>
+      <div class="box">
+        <div class="fhead">
+          <div class="av">N</div>
+          <div style="flex:1;min-width:0">
+            <h2>Nivaldo Pereira</h2>
+            <div class="fmeta"><span style="font-family:var(--mono)">(11) 97722-3344</span> · cliente desde 03/2024 · 6 compras</div>
+          </div>
+        </div>
+        <div class="acts" style="justify-content:flex-start;margin-top:12px">
+          <button class="btn sm">Nova venda</button>
+          <button class="btn sm"><span class="ico">clipboard</span> Orçamentos</button>
+          <button class="btn sm"><span class="ico">tool</span> Marcar como profissional</button>
+          <button class="btn sm ghost">Editar</button>
+        </div>
+        <p class="note">Os dois botões com <span class="ico">matcon</span> só aparecem com o toggle ligado — o acréscimo condicional de uma linha, igual ao da Ótica.</p>
+      </div>
+
+      <div class="section">Tocou — escolher o ofício e pronto</div>
+      <div class="box">
+        <div style="font-size:14px;font-weight:600;margin-bottom:8px">Qual é o ofício dele?</div>
+        <div class="chipset">
+          <span class="chip on">pedreiro</span><span class="chip">mestre de obras</span><span class="chip">eletricista</span><span class="chip">encanador</span><span class="chip">pintor</span><span class="chip">gesseiro</span><span class="chip">azulejista</span><span class="chip">arquiteto</span><span class="chip">engenheiro</span><span class="chip">marceneiro</span>
+        </div>
+        <div class="acts" style="justify-content:flex-start;margin-top:12px"><button class="btn sm primary">Marcar como profissional</button><button class="btn sm ghost">Cancelar</button></div>
+        <p class="note">Uma escolha, um toque, nenhum campo obrigatório a mais. O telefone do clube é o telefone que já está na ficha.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Depois — uma linha, no alto da ficha</div>
+      <div class="box">
+        <div class="fhead">
+          <div class="av">N</div>
+          <div style="flex:1;min-width:0">
+            <h2>Nivaldo Pereira</h2>
+            <div class="fmeta"><span style="font-family:var(--mono)">(11) 97722-3344</span> · cliente desde 03/2024</div>
+          </div>
+        </div>
+        <div class="prolinha"><span class="ico">tool</span> <b>Profissional</b> · pedreiro · <span class="pts">1.240 pontos</span> · 9 indicações <span class="badge b-open" style="margin-left:auto">no clube</span></div>
+        <div class="acts" style="justify-content:flex-start;margin-top:10px">
+          <button class="btn sm wa"><span class="ico">whatsapp</span> Avisar no WhatsApp</button>
+          <button class="btn sm"><span class="ico">percent</span> Gerar cupom de resgate</button>
+          <button class="btn sm ghost">Ver indicações</button>
+        </div>
+        <p class="note">As mesmas duas ações do ranking, nas mesmas palavras. O dono acha o pedreiro pela ficha ou pela tela do clube — e encontra os mesmos botões nos dois lugares.</p>
+      </div>
+
+      <p class="note">Desmarcar tira o ofício e para de somar pontos; o extrato e os cupons já gerados continuam de pé. Ninguém perde o que ganhou porque o dono mudou de ideia.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. /matcon/profissionais ===================== -->
+<section class="screen" id="profissionais">
+  <div class="mock-label">4 · /matcon/profissionais — ranking do mês, não lista de cadastro</div>
+  <div class="with-side">
+    <aside class="sidebar">
+      <div class="grp">Negócio</div>
+      <div class="it"><span class="g">▤</span> Início</div>
+      <div class="it"><span class="g">$</span> Caixa</div>
+      <div class="it"><span class="g">▣</span> Estoque</div>
+      <div class="it"><span class="g">◎</span> Clientes</div>
+      <div class="it"><span class="g">≡</span> Vendas</div>
+      <div class="it"><span class="g">◈</span> Financeiro</div>
+      <div class="grp">Matcon</div>
+      <div class="it"><span class="g">clp</span> Orçamentos <span class="newtag">7</span></div>
+      <div class="it"><span class="g">trk</span> Entregas <span class="newtag">5</span></div>
+      <div class="it on new"><span class="g">bld</span> Profissionais <span class="newtag">23</span></div>
+      <div class="grp">Loja</div>
+      <div class="it"><span class="g">⚙</span> Configurações</div>
+      <p class="note" style="padding:0 8px">Chave própria <span class="ico">matcon.profissionais</span> (Negócio), nunca herdada de Orçamentos — regra 3. No celular entra no menu <b style="color:var(--ink2)">Mais</b>, como as outras.</p>
+    </aside>
+
+    <div>
+      <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">setembro</span></div>
+      <div class="hero">
+        <h1>Profissionais<i>.</i></h1>
+        <div class="actions"><button class="btn ghost">Orçamentos</button><button class="btn primary"><span class="ico">users</span> + Profissional</button></div>
+      </div>
+      <p class="sub">R$ 48.300 vendidos por indicação este mês · 23 profissionais ativos · <em>3 resgates pendentes</em></p>
+
+      <div class="rail">
+        <div class="station on"><div class="n">R$ 48.300</div><div class="l">Vendido por indicação</div><div class="money">31 vendas · setembro</div></div>
+        <div class="station"><div class="n">23</div><div class="l">Profissionais ativos</div><div class="money">+4 este mês</div></div>
+        <div class="station warn"><div class="n">3</div><div class="l">Resgates pendentes</div><div class="money">R$ 260 em cupons</div></div>
+        <div class="station lost"><div class="n">8</div><div class="l">Sem compra há 60 dias</div><div class="money">R$ 9.100 no ano passado</div></div>
+      </div>
+
+      <div class="search">🔍 &nbsp;Nome, telefone ou ofício</div>
+      <div class="chips"><span class="chip on">Ativos</span><span class="chip">Sem compra há 60 dias</span><span class="chip">Novos</span></div>
+
+      <div class="list">
+        <div class="card warn">
+          <div>
+            <div class="who">Nivaldo Pereira <span class="badge b-due">resgate pedido</span></div>
+            <div class="meta"><b>pedreiro</b> · 9 indicações · R$ 12.480 trazidos este mês</div>
+            <div class="meta">últimas: Marlene Souza R$ 1.220,58 (hoje) · Cida Ramos R$ 412,90 (18/09) · Roberto Alves R$ 7.980,00 (11/09)</div>
+          </div>
+          <div class="right">
+            <span class="tot">1.240 pts</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">whatsapp</span> Avisar no WhatsApp</button>
+              <button class="btn sm primary"><span class="ico">percent</span> Gerar cupom de resgate</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="who">Ivanilda Rocha</div>
+            <div class="meta"><b>pintora</b> · 4 indicações · R$ 4.600 trazidos este mês</div>
+            <div class="meta">últimas: Sérgio Bento R$ 980,00 (19/09) · Dona Zélia R$ 1.310,40 (09/09)</div>
+          </div>
+          <div class="right">
+            <span class="tot">460 pts</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">whatsapp</span> Avisar no WhatsApp</button>
+              <button class="btn sm"><span class="ico">percent</span> Gerar cupom de resgate</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="who">Aparecido Lima <span class="badge b-new">novo</span></div>
+            <div class="meta"><b>mestre de obras</b> · 2 indicações · R$ 15.900 trazidos este mês</div>
+            <div class="meta">últimas: Construtora Vale Verde R$ 14.280,00 (16/09) · Juliana Prado R$ 1.620,00 (12/09)</div>
+          </div>
+          <div class="right">
+            <span class="tot">1.590 pts</span>
+            <div class="acts">
+              <button class="btn sm wa"><span class="ico">whatsapp</span> Avisar no WhatsApp</button>
+              <button class="btn sm"><span class="ico">percent</span> Gerar cupom de resgate</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="opacity:.75">
+          <div>
+            <div class="who">Sebastião Duarte</div>
+            <div class="meta"><b>encanador</b> · 6 indicações · nenhuma compra desde 14/07</div>
+            <div class="meta">tem 730 pontos parados — dá um cupom de R$ 70</div>
+          </div>
+          <div class="right">
+            <span class="tot">730 pts</span>
+            <div class="acts"><button class="btn sm wa"><span class="ico">whatsapp</span> Chamar de volta</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">Primeiro dia — a tela vazia ensina</div>
+      <div class="empty">
+        <span class="big">Nenhum profissional ainda.</span>
+        <span class="one">Marque um pedreiro como profissional na ficha dele e indique-o na próxima venda — <b style="color:var(--violet3)">ele aparece aqui</b>.</span>
+      </div>
+      <p class="note">Os dois botões ficam visíveis no card, sem hover (regra 7). "Gerar cupom de resgate" cria um cupom na tela de Cupons que já existe, no nome dele, e abre o WhatsApp com o código.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. REGRAS DO CLUBE (/matcon/config) ===================== -->
+<section class="screen" id="config">
+  <div class="mock-label">5 · /matcon/config — as regras do clube, em duas frases</div>
+  <div class="hero"><h1 style="font-size:38px">Duas frases, não um painel de regras<i>.</i></h1></div>
+  <p class="sub">O M0 deixou a config como um texto que se lê em voz alta. O clube entra do mesmo jeito: <em>dois números no meio de duas frases</em>, no fim da mesma tela.</p>
+
+  <div class="cols">
+    <div>
+      <div class="box">
+        <div class="frase" style="color:var(--ink3)">Em piso e revestimento, considero <span class="edit">8</span>% de perda por quebra e recorte ao calcular o ambiente.</div>
+        <div class="frase" style="color:var(--ink3)">Prometo a entrega para <span class="edit">2</span> dias depois da venda.</div>
+        <div class="frase">Tenho clube do profissional <span class="sw on"></span> e ele vale para pedreiro, pintor, eletricista e quem mais eu marcar.</div>
+        <div class="frase">A cada R$ <span class="edit">100</span> em compras indicadas, o profissional ganha <span class="edit">10</span> pontos.</div>
+        <div class="frase"><span class="edit">100</span> pontos viram um cupom de R$ <span class="edit">10</span> para ele usar na loja.</div>
+      </div>
+      <p class="note">As duas primeiras já existiam (tela 1 do mockup do M0). As três de baixo são o M3 inteiro em configuração: <span class="ico">matcon_points_per_100</span>, <span class="ico">matcon_points_to_coupon</span> e <span class="ico">matcon_coupon_value</span> — o toggle do clube fica junto de <span class="ico">matcon_enabled</span>.</p>
+    </div>
+
+    <div>
+      <div class="section">Como o lojista lê isso</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">"A cada cem reais, dez pontos; cem pontos, dez reais." Dá para explicar no balcão em uma frase e o pedreiro entende de primeira. Nenhuma tela fala em percentual, em saldo ou em regra de acúmulo.</p>
+        <p class="note" style="margin:0">Com os padrões acima, a venda de R$ 1.220,58 da dona Marlene vira <b style="color:var(--ink)">120 pontos</b> para Seu Nivaldo: 12 faixas de R$ 100 completas, e o troco não conta.</p>
+      </div>
+
+      <div class="section">Fora destas frases</div>
+      <div class="box"><p class="note" style="margin:0">Níveis, medalhas, catálogo de prêmios, prêmio por volume e comissão para arquiteto ficam fora do M3. Duas regras, um cupom. Se os pilotos pedirem mais, cada pedido vira uma frase nova — nunca um painel.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 6. O WHATSAPP DO PEDREIRO ===================== -->
+<section class="screen" id="whatsapp">
+  <div class="mock-label">6 · O WhatsApp do profissional (bônus)</div>
+  <div class="hero"><h1 style="font-size:38px">A outra ponta do "olha isso"<i>.</i></h1></div>
+  <p class="sub">O profissional não instala nada e não tem senha. Ele recebe o extrato no WhatsApp da loja, como o cliente da Ótica recebe "seus óculos ficaram prontos" — <em>e volta ao balcão para gastar o cupom</em>.</p>
+
+  <div class="zap">
+    <div class="top"><div class="av">DS</div><div><div style="color:var(--ink);font-weight:600;font-size:13px">Depósito Santa Rita</div><div>(11) 3322-1100</div></div></div>
+    <div class="bal">
+      Seu Nivaldo, você ganhou <b>120 pontos</b> com a compra da dona Marlene no Depósito Santa Rita.<br><br>
+      Você tem <b>1.240 pontos</b> — já dá um cupom de <b>R$ 120</b> para usar na loja. Quer resgatar?
+      <span class="link">aura.app/clube/dsr-nivaldo-1240</span>
+      <span class="hora">hoje · 14:07 ✓✓</span>
+    </div>
+    <p class="note" style="text-align:center">Enviado do WhatsApp da loja, pelo botão "Avisar no WhatsApp" — o mesmo disparo do orçamento e da entrega.</p>
+  </div>
+
+  <div class="box" style="max-width:560px;margin:20px auto 0">
+    <div class="section" style="margin-top:0">Por que no WhatsApp, e de onde saem os R$ 120</div>
+    <p class="note" style="margin:0">Pedreiro não instala app de loja de bairro, e o clube morre no dia em que exigir senha: o link abre uma página só de leitura com o extrato e o botão de pedir o resgate. A conta é a das frases da config — 1.240 pontos, a R$ 10 por 100 pontos, dão R$ 120 de cupom e sobram 40 para a próxima obra. A mensagem mostra sempre o que ele já pode pegar, nunca o que falta.</p>
+  </div>
+  <p class="note" style="text-align:center;max-width:560px;margin:16px auto 0">Quando ele responde "quero", o card dele sobe para "resgate pedido" no ranking (tela 4) e o dono toca em "Gerar cupom de resgate". O cupom nasce na tela de Cupons que já existe.</p>
+</section>
+</body>
+</html>

@@ -98,6 +98,19 @@ function mapApiCustomer(c: any): Customer {
     company_name: c.company_name || null,
     // Crediario: saldo > 0 = cliente deve. Backend retorna 0 quando nao ha lancamentos.
     creditBalance: parseFloat(c.credit_balance ?? c.creditBalance) || 0,
+    // 22/09/2026 (Matcon M3 — docs/CONTRACT_MATCON.md, seção M3): com o
+    // clube ligado, o GET de clientes devolve `professional
+    // {id, trade, points_balance} | null` por cliente — CustomerRow usa
+    // isso pra mostrar "Profissional · pedreiro · 1.240 pontos" sem
+    // segunda chamada. Loja sem o toggle nunca manda esse campo.
+    professional: c.professional
+      ? {
+          id: c.professional.id,
+          trade: c.professional.trade,
+          points_balance: parseFloat(c.professional.points_balance) || 0,
+          referrals_count: c.professional.referrals_count != null ? parseInt(c.professional.referrals_count) : undefined,
+        }
+      : null,
   };
 }
 

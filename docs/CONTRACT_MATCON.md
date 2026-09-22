@@ -93,12 +93,42 @@ Regras: soma de `quantity` por `sale_item` nunca excede `sold_quantity`; a venda
 ### WhatsApp
 O front abre o wa.me (`useWaVarejo`) com o link público; o backend só registra `sent_at`. Template "seu pedido saiu para entrega" reaproveita o mecanismo do "óculos prontos" da Ótica.
 
-## M2 / M3 — só cabeçalhos (fecham após o piloto do M0+M1)
+## M3 — Clube do Profissional + calculadora de ambiente
 
-- **M2 fiscal (Simples):** `products.cest`, `products.origem` (0–8), `products.icms_st_paid` boolean (→ CSOSN 500 vs 102 na emissão); NF-e com bloco `transp` (peso a partir de `weight_kg`, volumes, transportadora "própria" default) gerado a partir de uma `delivery`.
-- **M3 clube:** `professionals` (`customer_id`, `trade`, `points`), `sales.referred_by_professional_id`, regras de pontos em `pdv_settings.matcon_points_*`, resgate gera cupom na tabela de cupons existente.
+Client de referência: `services/matconApi.ts` (seção Profissionais). A calculadora é 100% front (só preenche a quantidade em m²).
 
----
+### `pdv_settings` (novas chaves, merge parcial)
+| Chave | Tipo | Default | Frase na config |
+|---|---|---|---|
+| `matcon_club_enabled` | boolean | `true` | "Tenho clube do profissional **[on]**" — desliga o chip do Caixa e a tela sem desligar o Matcon |
+| `matcon_points_per_100` | integer | `10` | "A cada R$ **100** em compras indicadas, o profissional ganha **10** pontos." |
+| `matcon_points_to_coupon` | integer | `100` | "**100** pontos viram um cupom de R$ **10** para ele usar na loja." |
+| `matcon_coupon_value` | number | `10` | idem |
+
+### `professionals`
+`id`, `company_id`, `customer_id` (1:1 com o cliente — o profissional **é** um cliente marcado), `trade` ∈ `pedreiro | mestre_de_obras | eletricista | encanador | pintor | gesseiro | azulejista | arquiteto | engenheiro | marceneiro | outro`, `points_balance` integer, `points_earned_total`, `referrals_count`, `referred_sales_total` numeric, `last_referral_at`, `active` boolean, timestamps.
+
+### Venda indicada
+A lista de clientes (`GET /companies/:id/customers`) passa a devolver, com o toggle ligado, `professional: { id, trade, points_balance } | null` por cliente — a ficha usa isso para mostrar "Profissional · pedreiro · 1.240 pontos" sem segunda chamada.
+
+`sales.referred_by_professional_id` nullable (o Caixa manda `referred_by_professional_id` no POST da venda). Ao gravar: pontos = `floor(total / 100) × matcon_points_per_100`, creditados no profissional com um lançamento em `professional_points_ledger` (`professional_id`, `sale_id` nullable, `delta`, `reason` ∈ `sale | redeem | adjust`, `created_at`). Cancelamento da venda estorna.
+
+### Resgate
+`POST .../professionals/:pid/redeem` → debita `matcon_points_to_coupon` pontos e cria um cupom na tabela de cupons existente (valor `matcon_coupon_value`, uso único, vinculado ao `customer_id` do profissional); devolve `{ coupon_code, points_balance }`. 400 se saldo insuficiente.
+
+| Rota | Faz |
+|---|---|
+| `GET /companies/:id/matcon/professionals?filter=active|inactive_60d|new&q=` | lista + `summary { referred_total_month, active_count, pending_redeems }` |
+| `POST .../professionals` | `{customer_id, trade}` — marca o cliente como profissional |
+| `PATCH .../professionals/:pid` | `trade`, `active` |
+| `GET .../professionals/:pid` | ficha + `ledger[]` (últimos 20) + `last_referrals[] {sale_id, customer_name, total, created_at}` |
+| `POST .../professionals/:pid/redeem` | resgate → cupom |
+| `GET .../professionals/search?q=` | busca por nome/telefone para o chip "Indicado por" do Caixa |
+
+WhatsApp: o front abre o wa.me com o extrato ("você tem N pontos — já dá um cupom de R$ X"); o backend não envia nada no M3.
+
+## M2 — Fiscal do Simples (cabeçalho; fecha após o piloto)
+`products.cest`, `products.origem` (0–8), `products.icms_st_paid` boolean (→ CSOSN 500 vs 102 na emissão); NF-e com bloco `transp` (peso a partir de `weight_kg`, volumes, transportadora "própria" default) gerado a partir de uma `delivery`.
 
 ## Checklist de aceite do backend (M0)
 

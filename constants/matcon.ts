@@ -25,6 +25,12 @@ export type MatconSettings = {
   // em "Vencendo" (M1).
   matcon_quote_valid_days: number;
   matcon_quote_warn_days: number;
+  // M3 — regras do Clube do Profissional (docs/CONTRACT_MATCON.md, M3).
+  // Liga/desliga o clube sem desligar o Matcon (frase da config no mockup M3).
+  matcon_club_enabled: boolean;
+  matcon_points_per_100: number;
+  matcon_points_to_coupon: number;
+  matcon_coupon_value: number;
 };
 
 export const MATCON_SETTINGS_DEFAULTS: MatconSettings = {
@@ -35,6 +41,10 @@ export const MATCON_SETTINGS_DEFAULTS: MatconSettings = {
   matcon_default_delivery_days: 2,
   matcon_quote_valid_days: 7,
   matcon_quote_warn_days: 3,
+  matcon_club_enabled: true,
+  matcon_points_per_100: 10,
+  matcon_points_to_coupon: 100,
+  matcon_coupon_value: 10,
 };
 
 // Lê as configurações do Matcon de um pdv_settings parcial, aplicando os
@@ -56,5 +66,9 @@ export function readMatconSettings(pdv: Partial<MatconSettings> | null | undefin
     matcon_default_delivery_days: num(p.matcon_default_delivery_days, MATCON_SETTINGS_DEFAULTS.matcon_default_delivery_days),
     matcon_quote_valid_days: num(p.matcon_quote_valid_days, MATCON_SETTINGS_DEFAULTS.matcon_quote_valid_days),
     matcon_quote_warn_days: num(p.matcon_quote_warn_days, MATCON_SETTINGS_DEFAULTS.matcon_quote_warn_days),
+    matcon_club_enabled: p.matcon_club_enabled === undefined ? MATCON_SETTINGS_DEFAULTS.matcon_club_enabled : p.matcon_club_enabled === true,
+    matcon_points_per_100: num(p.matcon_points_per_100, MATCON_SETTINGS_DEFAULTS.matcon_points_per_100),
+    matcon_points_to_coupon: num(p.matcon_points_to_coupon, MATCON_SETTINGS_DEFAULTS.matcon_points_to_coupon),
+    matcon_coupon_value: num(p.matcon_coupon_value, MATCON_SETTINGS_DEFAULTS.matcon_coupon_value),
   };
 }

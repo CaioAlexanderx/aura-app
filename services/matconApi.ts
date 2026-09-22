@@ -155,6 +155,44 @@ export type DeliverySplitBody = {
 };
 export type DeliverySplitResponse = { delivered: Delivery; next: Delivery | null };
 
+
+// ── Profissionais (M3 — Clube do Profissional) ──────────────
+export type ProfessionalTrade =
+  | "pedreiro" | "mestre_de_obras" | "eletricista" | "encanador" | "pintor"
+  | "gesseiro" | "azulejista" | "arquiteto" | "engenheiro" | "marceneiro" | "outro";
+
+export const TRADE_LABELS: Record<ProfessionalTrade, string> = {
+  pedreiro: "pedreiro", mestre_de_obras: "mestre de obras", eletricista: "eletricista",
+  encanador: "encanador", pintor: "pintor", gesseiro: "gesseiro", azulejista: "azulejista",
+  arquiteto: "arquiteto", engenheiro: "engenheiro", marceneiro: "marceneiro", outro: "profissional",
+};
+
+export type Professional = {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  trade: ProfessionalTrade;
+  points_balance: number;
+  points_earned_total: number;
+  referrals_count: number;
+  referred_sales_total: number;
+  last_referral_at: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export type ProfessionalDetail = {
+  professional: Professional;
+  ledger: Array<{ id: string; sale_id: string | null; delta: number; reason: "sale" | "redeem" | "adjust"; created_at: string }>;
+  last_referrals: Array<{ sale_id: string; customer_name: string | null; total: number; created_at: string }>;
+};
+
+export type ProfessionalListResponse = {
+  professionals: Professional[];
+  summary: { referred_total_month: number; active_count: number; pending_redeems: number };
+};
+
 function qs(params: Record<string, string | number | undefined>): string {
   var parts: string[] = [];
   Object.keys(params).forEach(function (k) {
@@ -199,5 +237,26 @@ export var matconApi = {
   },
   splitDelivery: function (companyId: string, deliveryId: string, body: DeliverySplitBody) {
     return request<DeliverySplitResponse>("/companies/" + companyId + "/matcon/deliveries/" + deliveryId + "/split", { method: "POST", body: body, retry: 0 });
+  },
+  // Profissionais (M3)
+  listProfessionals: function (companyId: string, f: { filter?: "active" | "inactive_60d" | "new" | "all"; q?: string } = {}) {
+    return request<ProfessionalListResponse>("/companies/" + companyId + "/matcon/professionals" + qs({ filter: f.filter, q: f.q }), { retry: 1 });
+  },
+  searchProfessionals: function (companyId: string, q: string) {
+    return request<{ professionals: Professional[] }>("/companies/" + companyId + "/matcon/professionals/search" + qs({ q: q }), { retry: 0 });
+  },
+  getProfessional: function (companyId: string, professionalId: string) {
+    return request<ProfessionalDetail>("/companies/" + companyId + "/matcon/professionals/" + professionalId);
+  },
+  createProfessional: function (companyId: string, body: { customer_id: string; trade: ProfessionalTrade }) {
+    return request<{ professional: Professional }>("/companies/" + companyId + "/matcon/professionals", { method: "POST", body: body, retry: 0 });
+  },
+  updateProfessional: function (companyId: string, professionalId: string, body: Partial<{ trade: ProfessionalTrade; active: boolean }>) {
+    return request<{ professional: Professional }>("/companies/" + companyId + "/matcon/professionals/" + professionalId, { method: "PATCH", body: body, retry: 0 });
+  },
+  // Resgate: debita matcon_points_to_coupon pontos e cria um cupom (tabela de
+  // cupons existente) no valor de matcon_coupon_value.
+  redeemProfessional: function (companyId: string, professionalId: string) {
+    return request<{ coupon_code: string; points_balance: number }>("/companies/" + companyId + "/matcon/professionals/" + professionalId + "/redeem", { method: "POST", retry: 0 });
   },
 };
